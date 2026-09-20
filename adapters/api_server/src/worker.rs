@@ -166,6 +166,7 @@ pub(crate) async fn start_worker_loop(
         }
 
         let job_id = job.job_id.clone();
+        let file_path = job.file_path.clone();
         let job_manager = shared_job_manager.clone();
         let models_dir = shared_models_dir.clone();
         let defaults = transcription_defaults.clone();
@@ -175,6 +176,10 @@ pub(crate) async fn start_worker_loop(
 
         let handle = tokio::spawn(async move {
             let _permit = permit;
+            if job_manager.get_job(&job.job_id).await.is_none() {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+                return;
+            }
             job_manager
                 .update_job(&job.job_id, JobStatus::Processing)
                 .await;
@@ -211,6 +216,10 @@ pub(crate) async fn start_worker_loop(
                 }
             };
 
+            if job_manager.get_job(&job.job_id).await.is_none() {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+                return;
+            }
             job_manager
                 .update_job(&job.job_id, final_status.clone())
                 .await;
@@ -227,9 +236,14 @@ pub(crate) async fn start_worker_loop(
                 let _ = tokio::fs::remove_file(&job.file_path).await;
             }
         });
-        shared_job_manager
-            .set_abort_handle(&job_id, handle.abort_handle())
+        let handle_abort = handle.abort_handle();
+        let was_set = shared_job_manager
+            .set_abort_handle(&job_id, handle_abort)
             .await;
+        if !was_set {
+            handle.abort();
+            let _ = tokio::fs::remove_file(&file_path).await;
+        }
     }
 }
 

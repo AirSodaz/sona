@@ -88,9 +88,16 @@ impl JobManager {
             }
         }
     }
-    pub async fn set_abort_handle(&self, job_id: &str, abort_handle: tokio::task::AbortHandle) {
+    pub async fn set_abort_handle(
+        &self,
+        job_id: &str,
+        abort_handle: tokio::task::AbortHandle,
+    ) -> bool {
         if let Some(entry) = self.jobs.write().await.get_mut(job_id) {
             entry.abort_handle = Some(abort_handle);
+            true
+        } else {
+            false
         }
     }
 

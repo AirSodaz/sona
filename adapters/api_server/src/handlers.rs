@@ -113,10 +113,12 @@ pub fn extract_api_key_from_request<'a>(req: &'a Request) -> Option<Cow<'a, str>
     }
     // Restrict query-based API keys to endpoints that genuinely require it (e.g. HTML5 audio, streaming, or test paths)
     let path = req.uri().path();
-    let allow_query_token = path.ends_with("/audio")
-        || path.ends_with("/streaming")
-        || path == "/test"
-        || path == "/api/test";
+    let is_audio_endpoint = (path.starts_with("/v1/transcriptions/")
+        || path.starts_with("/transcriptions/"))
+        && path.ends_with("/audio");
+    let is_streaming_endpoint = path == "/v1/streaming" || path == "/streaming";
+    let allow_query_token =
+        is_audio_endpoint || is_streaming_endpoint || path == "/test" || path == "/api/test";
 
     if allow_query_token && let Some(query) = req.uri().query() {
         for pair in query.split('&') {

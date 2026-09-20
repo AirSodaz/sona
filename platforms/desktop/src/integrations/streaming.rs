@@ -83,7 +83,17 @@ pub(crate) async fn handle_streaming(
     let token_from_header = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|val| val.to_str().ok())
-        .and_then(|val| val.strip_prefix("Bearer "));
+        .and_then(|auth_str| {
+            let trimmed = auth_str.trim();
+            if trimmed.len() >= 7
+                && trimmed[..6].eq_ignore_ascii_case("bearer")
+                && trimmed.as_bytes()[6] == b' '
+            {
+                Some(trimmed[7..].trim())
+            } else {
+                None
+            }
+        });
     let token = params
         .get("token")
         .or_else(|| params.get("api_key"))

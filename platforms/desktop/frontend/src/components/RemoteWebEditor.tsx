@@ -104,6 +104,13 @@ export function RemoteWebEditor(): React.JSX.Element {
   const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
   const [tempApiKey, setTempApiKey] = useState<string>(apiKey);
   const [showExportMenu, setShowExportMenu] = useState<boolean>(false);
+  const [exportMode, setExportMode] = useState<'original' | 'translation' | 'bilingual'>(
+    'original'
+  );
+  const hasTranslation = useMemo(
+    () => segments.some((s) => Boolean(s.translation?.trim())),
+    [segments]
+  );
 
   // Theme State
   const [themePreference, setThemePreference] = useState<'auto' | 'light' | 'dark'>(() => {
@@ -469,10 +476,13 @@ export function RemoteWebEditor(): React.JSX.Element {
       );
 
       clearInterval(pollTimerRef.current as number);
+      let consecutiveErrors = 0;
+      const MAX_CONSECUTIVE_ERRORS = 5;
 
       pollTimerRef.current = window.setInterval(async () => {
         try {
           const status = await apiServerClient.getJobStatus(jobId);
+          consecutiveErrors = 0;
           if (status === 'Pending') {
             setTranscribeProgress(
               t('web.transcribe_pending', { defaultValue: 'Queued, waiting to process...' })
@@ -508,17 +518,20 @@ export function RemoteWebEditor(): React.JSX.Element {
             );
           }
         } catch (pollErr: unknown) {
-          clearInterval(pollTimerRef.current as number);
-          pollTimerRef.current = null;
-          setIsTranscribing(false);
-          setTranscribeProgress(null);
-          const errMsg = pollErr instanceof Error ? pollErr.message : String(pollErr);
-          setTranscribeError(
-            t('web.query_status_failed', {
-              error: errMsg,
-              defaultValue: `Failed to query status: ${errMsg}`,
-            })
-          );
+          consecutiveErrors += 1;
+          if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+            clearInterval(pollTimerRef.current as number);
+            pollTimerRef.current = null;
+            setIsTranscribing(false);
+            setTranscribeProgress(null);
+            const errMsg = pollErr instanceof Error ? pollErr.message : String(pollErr);
+            setTranscribeError(
+              t('web.query_status_failed', {
+                error: errMsg,
+                defaultValue: `Failed to query status: ${errMsg}`,
+              })
+            );
+          }
         }
       }, 1500);
     } catch (err: unknown) {
@@ -552,28 +565,30 @@ export function RemoteWebEditor(): React.JSX.Element {
     let content = '';
     const ext = format;
     let mime = 'text/plain;charset=utf-8';
+    const mode = hasTranslation ? exportMode : 'original';
 
     switch (format) {
       case 'srt':
-        content = exportToSrt(segments);
+        content = exportToSrt(segments, mode);
         break;
       case 'vtt':
-        content = exportToVtt(segments);
+        content = exportToVtt(segments, mode);
         mime = 'text/vtt;charset=utf-8';
         break;
       case 'txt':
-        content = exportToTxt(segments);
+        content = exportToTxt(segments, mode);
         break;
       case 'json':
         content = JSON.stringify(segments, null, 2);
         mime = 'application/json;charset=utf-8';
         break;
       case 'md':
-        content = exportToMarkdown(segments);
+        content = exportToMarkdown(segments, mode);
         mime = 'text/markdown;charset=utf-8';
         break;
     }
-    downloadFile(content, `${baseName}.${ext}`, mime);
+    const modeSuffix = hasTranslation && mode !== 'original' ? `.${mode}` : '';
+    downloadFile(content, `${baseName}${modeSuffix}.${ext}`, mime);
     setShowExportMenu(false);
   };
 
@@ -1019,6 +1034,74 @@ export function RemoteWebEditor(): React.JSX.Element {
 
                       {showExportMenu && (
                         <div className="export-dropdown">
+                          {hasTranslation && (
+                            <div
+                              style={{
+                                padding: '6px 8px',
+                                borderBottom: '1px solid var(--color-border-subtle)',
+                                display: 'flex',
+                                gap: '4px',
+                              }}
+                            >
+                              <button
+                                type="button"
+                                className={`export-dropdown-item ${exportMode === 'original' ? 'selected' : ''}`}
+                                onClick={() => setExportMode('original')}
+                                style={{
+                                  flex: 1,
+                                  justifyContent: 'center',
+                                  padding: '4px 6px',
+                                  fontSize: '11px',
+                                  borderRadius: '4px',
+                                  background:
+                                    exportMode === 'original'
+                                      ? 'var(--color-bg-tertiary)'
+                                      : 'transparent',
+                                  fontWeight: exportMode === 'original' ? 600 : 400,
+                                }}
+                              >
+                                {t('export.mode_original', { defaultValue: '原文' })}
+                              </button>
+                              <button
+                                type="button"
+                                className={`export-dropdown-item ${exportMode === 'translation' ? 'selected' : ''}`}
+                                onClick={() => setExportMode('translation')}
+                                style={{
+                                  flex: 1,
+                                  justifyContent: 'center',
+                                  padding: '4px 6px',
+                                  fontSize: '11px',
+                                  borderRadius: '4px',
+                                  background:
+                                    exportMode === 'translation'
+                                      ? 'var(--color-bg-tertiary)'
+                                      : 'transparent',
+                                  fontWeight: exportMode === 'translation' ? 600 : 400,
+                                }}
+                              >
+                                {t('export.mode_translation', { defaultValue: '译文' })}
+                              </button>
+                              <button
+                                type="button"
+                                className={`export-dropdown-item ${exportMode === 'bilingual' ? 'selected' : ''}`}
+                                onClick={() => setExportMode('bilingual')}
+                                style={{
+                                  flex: 1,
+                                  justifyContent: 'center',
+                                  padding: '4px 6px',
+                                  fontSize: '11px',
+                                  borderRadius: '4px',
+                                  background:
+                                    exportMode === 'bilingual'
+                                      ? 'var(--color-bg-tertiary)'
+                                      : 'transparent',
+                                  fontWeight: exportMode === 'bilingual' ? 600 : 400,
+                                }}
+                              >
+                                {t('export.mode_bilingual', { defaultValue: '双语' })}
+                              </button>
+                            </div>
+                          )}
                           <button
                             type="button"
                             className="export-dropdown-item"
