@@ -178,6 +178,7 @@ pub async fn start_api_server(
     let online_asr_config = controller.online_asr_config();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
     let streaming_context = platform.streaming_context();
+    let ffmpeg_path = crate::platform::api_server_config::load_ffmpeg_path_for_app(&app);
     let resolved = resolve_serve_runtime_options(
         ServeRuntimeArgs {
             host: Some(host),
@@ -191,6 +192,7 @@ pub async fn start_api_server(
             max_upload_size_mb: Some(max_upload_size_mb),
             job_ttl_minutes: Some(job_ttl_minutes),
             gpu_acceleration: Some(gpu_acceleration),
+            ffmpeg_path,
             ..Default::default()
         },
         None,
@@ -265,9 +267,12 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 };
             let temp_dir = runtime_dirs.temp_dir;
             let models_dir = runtime_dirs.models_dir;
+            let ffmpeg_path =
+                crate::platform::api_server_config::load_ffmpeg_path_for_app(&app_handle);
             let resolved = match resolve_serve_runtime_options(
                 ServeRuntimeArgs {
                     default_models_dir: Some(models_dir),
+                    ffmpeg_path,
                     ..Default::default()
                 },
                 Some(settings.config),

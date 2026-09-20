@@ -80,6 +80,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             gpu_acceleration: args.gpu_acceleration,
             vad_model_id: args.vad_model_id,
             punctuation_model_id: args.punctuation_model_id,
+            ffmpeg_path: None,
         },
         config,
     )
@@ -109,6 +110,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await
         .map_err(|error| match error {

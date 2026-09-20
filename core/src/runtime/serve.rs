@@ -32,6 +32,7 @@ pub struct ServeRuntimeArgs {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -39,6 +40,7 @@ pub struct ServeTranscriptionDefaults {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -123,6 +125,7 @@ pub fn resolve_serve_runtime_options(
                 .punctuation_model_id
                 .or(config.punctuation_model_id)
                 .or_else(|| Some(DEFAULT_PUNCTUATION_MODEL_ID.to_string())),
+            ffmpeg_path: args.ffmpeg_path,
         },
     })
 }

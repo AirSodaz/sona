@@ -683,6 +683,7 @@ mod tests {
                 sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
             ),
             punctuation_model_id: None,
+            ffmpeg_path: Some("/custom/ffmpeg".to_string()),
         };
 
         let options = build_local_transcribe_options(&job, &models_dir, &defaults);
@@ -695,6 +696,7 @@ mod tests {
         assert!(options.punctuation_model_id.is_none());
         assert_eq!(options.input, input_path);
         assert_eq!(options.hotwords.as_deref(), Some("Sona"));
+        assert_eq!(options.ffmpeg_path.as_deref(), Some("/custom/ffmpeg"));
     }
 
     #[test]
@@ -795,6 +797,7 @@ mod tests {
                     gpu_acceleration: Some("cuda".to_string()),
                     vad_model_id: Some("vad-model".to_string()),
                     punctuation_model_id: Some("punct-model".to_string()),
+                    ffmpeg_path: None,
                 },
             },
             temp_dir: temp_dir.clone(),

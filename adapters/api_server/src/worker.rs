@@ -227,6 +227,7 @@ pub fn build_local_transcribe_options(
         save_wav: None,
         quiet: true,
         force: true,
+        ffmpeg_path: defaults.ffmpeg_path.clone(),
     }
 }
 

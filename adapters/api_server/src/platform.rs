@@ -21,6 +21,7 @@ pub struct ApiServerTranscriptionDefaults {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+    pub ffmpeg_path: Option<String>,
 }
 
 impl Default for ApiServerTranscriptionDefaults {
@@ -33,6 +34,7 @@ impl Default for ApiServerTranscriptionDefaults {
             punctuation_model_id: Some(
                 sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID.to_string(),
             ),
+            ffmpeg_path: None,
         }
     }
 }

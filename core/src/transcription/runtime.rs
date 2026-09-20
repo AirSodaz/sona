@@ -56,6 +56,7 @@ pub struct BatchTranscribeOptions {
     pub save_wav: Option<PathBuf>,
     pub quiet: bool,
     pub force: bool,
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -479,7 +480,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
-        ffmpeg_path: None,
+        ffmpeg_path: options.ffmpeg_path,
     })
 }
 

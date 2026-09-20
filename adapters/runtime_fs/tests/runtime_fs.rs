@@ -94,6 +94,7 @@ fn runtime_capability_batch_plan_resolver_preserves_resolution_errors() {
             save_wav: None,
             quiet: true,
             force: true,
+            ffmpeg_path: None,
         })
         .unwrap_err();
 

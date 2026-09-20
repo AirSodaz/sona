@@ -117,6 +117,30 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
         .unwrap_or_default()
 }
 
+pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
+    load_app_config_for_server(provider).and_then(|config| {
+        config
+            .get("ffmpegPath")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    })
+}
+
+pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
+    let provider = TauriPathProvider::from_app(app);
+    let database = crate::platform::database::try_sqlite_database(app).ok();
+    load_app_config_for_server_with_database(&provider, database).and_then(|config| {
+        config
+            .get("ffmpegPath")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -231,6 +231,7 @@ pub fn prepare_runtime_config(
                 gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
                 vad_model_id: resolved.transcription_defaults.vad_model_id,
                 punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
+                ffmpeg_path: resolved.transcription_defaults.ffmpeg_path,
             },
             batch_transcriber,
             media_validator,

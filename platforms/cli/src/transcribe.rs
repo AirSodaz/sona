@@ -93,6 +93,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         save_wav: args.save_wav,
         quiet: args.quiet,
         force: args.force,
+        ffmpeg_path: None,
     };
 
     let plan =
