@@ -167,6 +167,22 @@ impl JobManager {
         processing > 0 || pending > 0
     }
 
+    pub async fn abort_all_active(&self) -> usize {
+        let mut count = 0;
+        let mut jobs = self.jobs.write().await;
+        for entry in jobs.values_mut() {
+            if matches!(entry.status, JobStatus::Processing | JobStatus::Pending) {
+                if let Some(abort) = entry.abort_handle.take() {
+                    abort.abort();
+                    count += 1;
+                }
+                entry.status = JobStatus::Failed("Server shutdown aborted the task".to_string());
+                entry.completed_at = Some(std::time::Instant::now());
+            }
+        }
+        count
+    }
+
     pub async fn clean_expired_jobs(&self, ttl_duration: std::time::Duration) {
         let mut to_delete = Vec::new();
         self.jobs.write().await.retain(|_, entry| {

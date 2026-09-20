@@ -305,10 +305,11 @@ pub async fn start_api_server(
     .map_err(|error| error.to_string())?;
 
     let previous_server = controller.take_running_server().await;
-    if let Some(server) = previous_server
-        && let Err(error) = server.stop().await
-    {
-        log::warn!("Previous HTTP API Server stopped with error: {}", error);
+    if let Some(server) = previous_server {
+        server.dashboard.abort_all_active().await;
+        if let Err(error) = server.stop().await {
+            log::warn!("Previous HTTP API Server stopped with error: {}", error);
+        }
     }
 
     refresh_online_asr_config(
@@ -351,6 +352,10 @@ pub async fn stop_api_server(
     }
     let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
+        if force {
+            let aborted = server.dashboard.abort_all_active().await;
+            log::info!("Forced stop aborted {} active task(s)", aborted);
+        }
         server.stop().await.map_err(|error| error.to_string())?;
         log::info!("Sent shutdown signal to API server.");
     }

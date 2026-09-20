@@ -1339,6 +1339,60 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn abort_all_active_aborts_running_tasks_and_marks_failed() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        });
+
+        job_manager.jobs.write().await.insert(
+            "job-proc".to_string(),
+            JobEntry {
+                status: JobStatus::Processing,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: Some(handle.abort_handle()),
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "job-pend".to_string(),
+            JobEntry {
+                status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "job-done".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        let aborted = job_manager.abort_all_active().await;
+        assert_eq!(aborted, 1);
+
+        let jobs = job_manager.jobs.read().await;
+        assert!(matches!(jobs["job-proc"].status, JobStatus::Failed(_)));
+        assert!(matches!(jobs["job-pend"].status, JobStatus::Failed(_)));
+        assert!(matches!(jobs["job-done"].status, JobStatus::Completed(_)));
+
+        let res = handle.await;
+        assert!(res.unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test]
     async fn delete_job_removes_entry_and_file() {
         let (tx, _rx) = mpsc::channel(10);
         let job_manager = JobManager::new(tx);

@@ -128,20 +128,6 @@ pub(crate) async fn start_worker_loop(
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
     loop {
-        let permit = tokio::select! {
-            biased;
-            _ = &mut shutdown_rx => {
-                log::info!("[Server] worker loop received shutdown signal");
-                break;
-            }
-            permit = semaphore.clone().acquire_owned() => {
-                match permit {
-                    Ok(p) => p,
-                    Err(_) => break,
-                }
-            }
-        };
-
         let job = tokio::select! {
             biased;
             _ = &mut shutdown_rx => {
@@ -157,6 +143,25 @@ pub(crate) async fn start_worker_loop(
         };
 
         if shared_job_manager.get_job(&job.job_id).await.is_none() {
+            continue;
+        }
+
+        let permit = tokio::select! {
+            biased;
+            _ = &mut shutdown_rx => {
+                log::info!("[Server] worker loop received shutdown signal");
+                break;
+            }
+            permit = semaphore.clone().acquire_owned() => {
+                match permit {
+                    Ok(p) => p,
+                    Err(_) => break,
+                }
+            }
+        };
+
+        if shared_job_manager.get_job(&job.job_id).await.is_none() {
+            drop(permit);
             continue;
         }
 

@@ -197,6 +197,9 @@ impl ApiServerDashboardHandle {
     pub async fn has_active_jobs(&self) -> bool {
         self.state.job_manager.has_active_jobs().await
     }
+    pub async fn abort_all_active(&self) -> usize {
+        self.state.job_manager.abort_all_active().await
+    }
 }
 
 pub fn format_bind_error(error: std::io::Error, address: &str) -> ApiServerBindError {
@@ -529,6 +532,15 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let start_wait = std::time::Instant::now();
     while clean_job_manager.has_active_jobs().await && start_wait.elapsed() < wait_timeout {
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    if clean_job_manager.has_active_jobs().await {
+        log::warn!(
+            "Graceful shutdown wait timeout reached; aborting all remaining active tasks..."
+        );
+        clean_job_manager.abort_all_active().await;
+        // Brief pause to allow aborted task drops to release OS file locks
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
     }
 
     log::info!(

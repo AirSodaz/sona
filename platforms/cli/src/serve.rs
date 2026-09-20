@@ -1,5 +1,6 @@
 use clap::Args;
 use std::collections::HashMap;
+use std::io::IsTerminal;
 use std::path::PathBuf;
 use std::sync::Arc;
 
@@ -132,7 +133,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
                     ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
                     let (processing, pending) = dashboard.active_job_count().await;
                     let total_active = processing + pending;
-                    if total_active > 0 {
+                    if total_active > 0 && std::io::stdin().is_terminal() {
                         use std::io::Write;
                         eprint!(
                             "\nWarning: There are {} active/pending transcription task(s) (processing: {}, pending: {}).\nAre you sure you want to exit? [y/N]: ",
@@ -142,19 +143,28 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
 
                         let mut read_task = tokio::task::spawn_blocking(|| {
                             let mut line = String::new();
-                            let _ = std::io::stdin().read_line(&mut line);
-                            line
+                            match std::io::stdin().read_line(&mut line) {
+                                Ok(0) => None,
+                                Ok(_) => Some(line),
+                                Err(_) => None,
+                            }
                         });
 
                         tokio::select! {
                             read_res = &mut read_task => {
-                                let line = read_res.unwrap_or_default();
-                                let trimmed = line.trim();
-                                if trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes") {
-                                    // Confirmed exit
-                                } else {
-                                    eprintln!("Exit cancelled. Continuing Sona API server...");
-                                    continue;
+                                match read_res.ok().flatten() {
+                                    Some(line) => {
+                                        let trimmed = line.trim();
+                                        if trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes") {
+                                            // Confirmed exit
+                                        } else {
+                                            eprintln!("Exit cancelled. Continuing Sona API server...");
+                                            continue;
+                                        }
+                                    }
+                                    None => {
+                                        // EOF or read error, proceed with exit
+                                    }
                                 }
                             }
                             ctrl_c_again = tokio::signal::ctrl_c() => {
@@ -162,6 +172,11 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
                                 eprintln!("\nForced exit.");
                             }
                         }
+                    } else if total_active > 0 {
+                        eprintln!(
+                            "\nShutting down Sona API server with {} active/pending task(s)...",
+                            total_active
+                        );
                     }
                     if let Some(sender) = shutdown_tx.take() {
                         let _ = sender.send(());
