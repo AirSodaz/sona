@@ -221,7 +221,9 @@ pub async fn handle_health(State(state): State<ServerState>) -> Json<HealthRespo
     Json(build_health_response(&state).await)
 }
 
-pub async fn handle_info(State(state): State<ServerState>) -> Result<Json<InfoResponse>, ApiError> {
+pub async fn handle_info(
+    State(state): State<ServerState>,
+) -> Result<Json<InfoResponse>, (StatusCode, String)> {
     let configs = state.online_asr_config.read().await.clone();
     let info = build_info_response(
         Arc::clone(&state.gpu_availability),
@@ -237,7 +239,7 @@ pub async fn handle_info(State(state): State<ServerState>) -> Result<Json<InfoRe
 pub async fn handle_job_status(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
-) -> Result<Json<JobStatus>, ApiError> {
+) -> Result<Json<JobStatus>, (StatusCode, String)> {
     let status = state
         .job_manager
         .get_job(&job_id)
@@ -295,7 +297,7 @@ pub async fn handle_list_jobs(
 pub async fn handle_transcribe(
     State(state): State<ServerState>,
     multipart: Multipart,
-) -> Result<Json<serde_json::Value>, ApiError> {
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let mut temp_file_path = None;
     let result = handle_transcribe_inner(&state, multipart, &mut temp_file_path).await;
     if result.is_err()
@@ -303,7 +305,7 @@ pub async fn handle_transcribe(
     {
         let _ = tokio::fs::remove_file(path).await;
     }
-    result
+    result.map_err(|e| (e.status, e.message))
 }
 
 async fn handle_transcribe_inner(
