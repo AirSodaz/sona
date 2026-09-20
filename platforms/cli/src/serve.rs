@@ -98,6 +98,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             normalized_ip_whitelist,
             mut shutdown_tx,
             mut join_handle,
+            dashboard,
             ..
         } = start_api_server_runtime(ApiServerServiceParts {
             resolved,
@@ -125,23 +126,58 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             host, port, normalized_ip_whitelist
         );
 
-        tokio::select! {
-            ctrl_c = tokio::signal::ctrl_c() => {
-                ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
-                if let Some(sender) = shutdown_tx.take() {
-                    let _ = sender.send(());
+        loop {
+            tokio::select! {
+                ctrl_c = tokio::signal::ctrl_c() => {
+                    ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+                    let (processing, pending) = dashboard.active_job_count().await;
+                    let total_active = processing + pending;
+                    if total_active > 0 {
+                        use std::io::Write;
+                        eprint!(
+                            "\nWarning: There are {} active/pending transcription task(s) (processing: {}, pending: {}).\nAre you sure you want to exit? [y/N]: ",
+                            total_active, processing, pending
+                        );
+                        let _ = std::io::stderr().flush();
+
+                        let mut read_task = tokio::task::spawn_blocking(|| {
+                            let mut line = String::new();
+                            let _ = std::io::stdin().read_line(&mut line);
+                            line
+                        });
+
+                        tokio::select! {
+                            read_res = &mut read_task => {
+                                let line = read_res.unwrap_or_default();
+                                let trimmed = line.trim();
+                                if trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes") {
+                                    // Confirmed exit
+                                } else {
+                                    eprintln!("Exit cancelled. Continuing Sona API server...");
+                                    continue;
+                                }
+                            }
+                            ctrl_c_again = tokio::signal::ctrl_c() => {
+                                ctrl_c_again.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+                                eprintln!("\nForced exit.");
+                            }
+                        }
+                    }
+                    if let Some(sender) = shutdown_tx.take() {
+                        let _ = sender.send(());
+                    }
+                    join_handle
+                        .await
+                        .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
+                        .map_err(|error| CliError::Other(error.to_string()))?;
+                    return Ok(CliOutput::stderr("Stopped Sona API server".to_string()));
                 }
-                join_handle
-                    .await
-                    .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                    .map_err(|error| CliError::Other(error.to_string()))?;
-                Ok(CliOutput::stderr("Stopped Sona API server".to_string()))
-            }
-            result = &mut join_handle => {
-                result
-                    .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                    .map_err(|error| CliError::Other(error.to_string()))?;
-                Ok(CliOutput::stderr("API server stopped".to_string()))
+                result = &mut join_handle => {
+                    result
+                        .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
+                        .map_err(|error| CliError::Other(error.to_string()))?;
+                    return Ok(CliOutput::stderr("API server stopped".to_string()));
+                }
             }
         }
     })

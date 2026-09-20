@@ -104,7 +104,7 @@ pub struct RunningApiServer {
     pub normalized_ip_whitelist: String,
     pub shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     pub join_handle: tokio::task::JoinHandle<Result<(), ApiServerRuntimeError>>,
-    pub(crate) dashboard: ApiServerDashboardHandle,
+    pub dashboard: ApiServerDashboardHandle,
 }
 
 #[derive(serde::Serialize)]
@@ -137,6 +137,13 @@ impl RunningApiServer {
 
     pub fn dashboard_handle(&self) -> ApiServerDashboardHandle {
         self.dashboard.clone()
+    }
+    pub async fn active_job_count(&self) -> (usize, usize) {
+        self.dashboard.active_job_count().await
+    }
+
+    pub async fn has_active_jobs(&self) -> bool {
+        self.dashboard.has_active_jobs().await
     }
 
     pub fn signal_shutdown(&mut self) -> Result<(), ApiServerStopError> {
@@ -182,6 +189,13 @@ impl ApiServerDashboardHandle {
         let jobs = self.state.job_manager.list_jobs().await;
 
         Ok(ApiServerDashboardSnapshot { health, info, jobs })
+    }
+    pub async fn active_job_count(&self) -> (usize, usize) {
+        self.state.job_manager.active_job_count().await
+    }
+
+    pub async fn has_active_jobs(&self) -> bool {
+        self.state.job_manager.has_active_jobs().await
     }
 }
 

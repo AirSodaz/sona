@@ -174,7 +174,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
             });
           });
       } else {
-        invokeTauri(TauriCommand.apiServer.stop).catch((e) => {
+        invokeTauri(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
           logger.error('[ApiServer] Failed to stop server:', e);
         });
       }
@@ -194,6 +194,38 @@ export function SettingsApiServerTab(): React.JSX.Element {
     setConfig,
     t,
   ]);
+  const handleToggleEnabled = async (checked: boolean) => {
+    if (!checked) {
+      try {
+        const activeInfo = await invokeTauri(TauriCommand.apiServer.hasActiveJobs);
+        if (activeInfo?.hasActive) {
+          const count = (activeInfo.processing ?? 0) + (activeInfo.pending ?? 0);
+          const confirmed = await useDialogStore.getState().confirm(
+            t('settings.api_server.stop_warning_message', {
+              defaultValue: `There are still ${count} active transcription task(s). Stopping the API server will terminate these tasks. Are you sure you want to stop?`,
+              count,
+            }),
+            {
+              title: t('settings.api_server.stop_warning_title', {
+                defaultValue: 'Active Tasks Running',
+              }),
+              variant: 'warning',
+              confirmLabel: t('settings.api_server.stop_confirm', {
+                defaultValue: 'Stop Server',
+              }),
+              cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+            }
+          );
+          if (!confirmed) {
+            return;
+          }
+        }
+      } catch (e) {
+        logger.error('[ApiServer] Failed to check active jobs:', e);
+      }
+    }
+    setConfig({ httpServerEnabled: checked });
+  };
 
   return (
     <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
@@ -216,7 +248,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
         >
           <Switch
             checked={config.httpServerEnabled ?? false}
-            onChange={(checked) => setConfig({ httpServerEnabled: checked })}
+            onChange={handleToggleEnabled}
             aria-label={t('settings.api_server.enable_label', {
               defaultValue: 'Enable API Server',
             })}

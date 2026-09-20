@@ -68,6 +68,18 @@ impl ApiServerController {
             .await
             .map_err(|error| error.to_string())
     }
+    pub(crate) async fn active_job_count(&self) -> (usize, usize) {
+        if let Some(server) = &*self.running_server.lock().await {
+            server.active_job_count().await
+        } else {
+            (0, 0)
+        }
+    }
+
+    pub(crate) async fn has_active_jobs(&self) -> bool {
+        let (processing, pending) = self.active_job_count().await;
+        processing > 0 || pending > 0
+    }
 }
 
 #[derive(Clone)]
@@ -331,7 +343,12 @@ pub async fn start_api_server(
 
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
+    force: bool,
 ) -> Result<(), String> {
+    if !force && controller.has_active_jobs().await {
+        let (processing, pending) = controller.active_job_count().await;
+        return Err(format!("ACTIVE_JOBS_RUNNING:{}:{}", processing, pending));
+    }
     let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
         server.stop().await.map_err(|error| error.to_string())?;

@@ -110,6 +110,23 @@ impl JobManager {
             .map(|(k, v)| (k.clone(), v.status.clone()))
             .collect()
     }
+    pub async fn active_job_count(&self) -> (usize, usize) {
+        let jobs = self.jobs.read().await;
+        let processing = jobs
+            .values()
+            .filter(|entry| matches!(entry.status, JobStatus::Processing))
+            .count();
+        let pending = jobs
+            .values()
+            .filter(|entry| matches!(entry.status, JobStatus::Pending))
+            .count();
+        (processing, pending)
+    }
+
+    pub async fn has_active_jobs(&self) -> bool {
+        let (processing, pending) = self.active_job_count().await;
+        processing > 0 || pending > 0
+    }
 
     pub async fn clean_expired_jobs(&self, ttl_duration: std::time::Duration) {
         let mut to_delete = Vec::new();
