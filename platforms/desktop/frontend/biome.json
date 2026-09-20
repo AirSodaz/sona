@@ -11,6 +11,7 @@
       "**/*",
       "!src/bindings.ts",
       "!**/dist",
+      "!**/dist-web",
       "!**/playwright-report",
       "!**/test-results"
     ]

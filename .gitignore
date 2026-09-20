@@ -37,6 +37,7 @@ __pycache__/
 playwright-report/
 test-results/
 platforms/desktop/frontend/dist/
+platforms/desktop/frontend/dist-web/
 platforms/desktop/frontend/playwright-report/
 platforms/desktop/frontend/test-results/
 

@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sona_api_server::{
     ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerPlatformError, ApiServerServiceParts,
-    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, RunningApiServer, build_streaming_router,
-    start_api_server_runtime,
+    LLM_POLISH_UNAVAILABLE, LLM_TRANSLATE_UNAVAILABLE, ONLINE_ASR_BATCH_UNAVAILABLE,
+    OnlineBatchRequest, RunningApiServer, build_streaming_router, start_api_server_runtime,
 };
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
 use std::collections::HashMap;
@@ -67,6 +67,18 @@ impl ApiServerController {
             .snapshot()
             .await
             .map_err(|error| error.to_string())
+    }
+    pub(crate) async fn active_job_count(&self) -> (usize, usize) {
+        if let Some(server) = &*self.running_server.lock().await {
+            server.active_job_count().await
+        } else {
+            (0, 0)
+        }
+    }
+
+    pub(crate) async fn has_active_jobs(&self) -> bool {
+        let (processing, pending) = self.active_job_count().await;
+        processing > 0 || pending > 0
     }
 }
 
@@ -146,6 +158,99 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         .await
         .map_err(|error| ApiServerPlatformError::transcription(error.to_string()))
     }
+
+    async fn polish_segments(
+        &self,
+        segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
+        config: Option<sona_core::llm::requests::LlmConfig>,
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
+    {
+        let Some(app_handle) = self.streaming_context.app_handle() else {
+            return Err(ApiServerPlatformError::unavailable(LLM_POLISH_UNAVAILABLE));
+        };
+
+        let llm_config = match config {
+            Some(c) => c,
+            None => crate::platform::api_server_config::load_feature_llm_config_for_app(
+                app_handle, "polish",
+            )
+            .ok_or_else(|| {
+                ApiServerPlatformError::unavailable(
+                    "No LLM configuration provided or configured for polish",
+                )
+            })?,
+        };
+
+        let request = sona_core::llm::requests::PolishSegmentsRequest {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            config: llm_config,
+            segments: sona_core::llm::jobs::segment_inputs_from_transcript(&segments),
+            chunk_size: None,
+            context: None,
+            keywords: None,
+            mode: None,
+        };
+
+        let polished_items = crate::integrations::llm::polish_transcript_segments_command(
+            app_handle.clone(),
+            request,
+        )
+        .await
+        .map_err(ApiServerPlatformError::unavailable)?;
+
+        let segments =
+            sona_core::llm::jobs::merge_polished_items_into_segments(segments, &polished_items);
+        Ok(segments)
+    }
+
+    async fn translate_segments(
+        &self,
+        segments: Vec<sona_core::transcription::transcript::TranscriptSegment>,
+        target_language: String,
+        config: Option<sona_core::llm::requests::LlmConfig>,
+    ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
+    {
+        let Some(app_handle) = self.streaming_context.app_handle() else {
+            return Err(ApiServerPlatformError::unavailable(
+                LLM_TRANSLATE_UNAVAILABLE,
+            ));
+        };
+
+        let llm_config = match config {
+            Some(c) => c,
+            None => crate::platform::api_server_config::load_feature_llm_config_for_app(
+                app_handle,
+                "translation",
+            )
+            .ok_or_else(|| {
+                ApiServerPlatformError::unavailable(
+                    "No LLM configuration provided or configured for translation",
+                )
+            })?,
+        };
+
+        let request = sona_core::llm::requests::TranslateSegmentsRequest {
+            task_id: uuid::Uuid::new_v4().to_string(),
+            config: llm_config,
+            segments: sona_core::llm::jobs::segment_inputs_from_transcript(&segments),
+            chunk_size: None,
+            target_language,
+            target_language_name: None,
+            context: None,
+            keywords: None,
+        };
+
+        let translated_items = crate::integrations::llm::translate_transcript_segments_command(
+            app_handle.clone(),
+            request,
+        )
+        .await
+        .map_err(ApiServerPlatformError::unavailable)?;
+
+        let segments =
+            sona_core::llm::jobs::merge_translated_items_into_segments(segments, &translated_items);
+        Ok(segments)
+    }
 }
 
 pub async fn refresh_online_asr_config(
@@ -178,6 +283,7 @@ pub async fn start_api_server(
     let online_asr_config = controller.online_asr_config();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
     let streaming_context = platform.streaming_context();
+    let ffmpeg_path = crate::platform::api_server_config::load_ffmpeg_path_for_app(&app);
     let resolved = resolve_serve_runtime_options(
         ServeRuntimeArgs {
             host: Some(host),
@@ -191,6 +297,7 @@ pub async fn start_api_server(
             max_upload_size_mb: Some(max_upload_size_mb),
             job_ttl_minutes: Some(job_ttl_minutes),
             gpu_acceleration: Some(gpu_acceleration),
+            ffmpeg_path,
             ..Default::default()
         },
         None,
@@ -198,10 +305,11 @@ pub async fn start_api_server(
     .map_err(|error| error.to_string())?;
 
     let previous_server = controller.take_running_server().await;
-    if let Some(server) = previous_server
-        && let Err(error) = server.stop().await
-    {
-        log::warn!("Previous HTTP API Server stopped with error: {}", error);
+    if let Some(server) = previous_server {
+        server.dashboard.abort_all_active().await;
+        if let Err(error) = server.stop().await {
+            log::warn!("Previous HTTP API Server stopped with error: {}", error);
+        }
     }
 
     refresh_online_asr_config(
@@ -224,6 +332,7 @@ pub async fn start_api_server(
             build_streaming_router(crate::integrations::streaming::handle_streaming)
                 .layer(axum::Extension(streaming_context)),
         ),
+        web_dist_dir: runtime_dirs.web_dist_dir,
     })
     .await
     .map_err(|error| error.to_string())?;
@@ -235,9 +344,18 @@ pub async fn start_api_server(
 
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
+    force: bool,
 ) -> Result<(), String> {
+    if !force && controller.has_active_jobs().await {
+        let (processing, pending) = controller.active_job_count().await;
+        return Err(format!("ACTIVE_JOBS_RUNNING:{}:{}", processing, pending));
+    }
     let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
+        if force {
+            let aborted = server.dashboard.abort_all_active().await;
+            log::info!("Forced stop aborted {} active task(s)", aborted);
+        }
         server.stop().await.map_err(|error| error.to_string())?;
         log::info!("Sent shutdown signal to API server.");
     }
@@ -264,9 +382,12 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 };
             let temp_dir = runtime_dirs.temp_dir;
             let models_dir = runtime_dirs.models_dir;
+            let ffmpeg_path =
+                crate::platform::api_server_config::load_ffmpeg_path_for_app(&app_handle);
             let resolved = match resolve_serve_runtime_options(
                 ServeRuntimeArgs {
                     default_models_dir: Some(models_dir),
+                    ffmpeg_path,
                     ..Default::default()
                 },
                 Some(settings.config),
@@ -302,6 +423,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                     build_streaming_router(crate::integrations::streaming::handle_streaming)
                         .layer(axum::Extension(streaming_context)),
                 ),
+                web_dist_dir: runtime_dirs.web_dist_dir,
             })
             .await
             {

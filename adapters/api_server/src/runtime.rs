@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -15,10 +15,7 @@ use sona_core::ports::runtime::{
 };
 use sona_core::runtime::serve::ResolvedServeRuntimeOptions;
 use tokio::sync::{RwLock, mpsc};
-use tower_http::{
-    cors::{Any as CorsAny, CorsLayer},
-    validate_request::ValidateRequestHeaderLayer,
-};
+use tower_http::cors::{Any as CorsAny, CorsLayer};
 
 use crate::ApiServerBindError;
 use crate::ApiServerConfigurationError;
@@ -27,8 +24,9 @@ use crate::ApiServerRuntimeError;
 use crate::ApiServerStartError;
 use crate::ApiServerStopError;
 use crate::handlers::{
-    handle_health, handle_info, handle_job_status, handle_list_jobs, handle_transcribe,
-    ip_whitelist_middleware,
+    handle_delete_job, handle_export_job, handle_health, handle_info, handle_job_audio,
+    handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
+    handle_transcribe, ip_whitelist_middleware,
 };
 use crate::info::{HealthResponse, InfoResponse, build_health_response, build_info_response};
 use crate::ip_whitelist::parse_ip_whitelist;
@@ -58,6 +56,7 @@ pub struct ApiServerRuntimeConfig {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
         tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
@@ -75,6 +74,7 @@ pub struct ApiServerRuntimeParts {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
         tokio::sync::oneshot::Sender<Result<ApiServerDashboardHandle, ApiServerRuntimeError>>,
@@ -97,13 +97,14 @@ pub struct ApiServerServiceParts {
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
     pub streaming_router: Option<Router<ServerState>>,
+    pub web_dist_dir: Option<PathBuf>,
 }
 
 pub struct RunningApiServer {
     pub normalized_ip_whitelist: String,
     pub shutdown_tx: Option<tokio::sync::oneshot::Sender<()>>,
     pub join_handle: tokio::task::JoinHandle<Result<(), ApiServerRuntimeError>>,
-    pub(crate) dashboard: ApiServerDashboardHandle,
+    pub dashboard: ApiServerDashboardHandle,
 }
 
 #[derive(serde::Serialize)]
@@ -136,6 +137,13 @@ impl RunningApiServer {
 
     pub fn dashboard_handle(&self) -> ApiServerDashboardHandle {
         self.dashboard.clone()
+    }
+    pub async fn active_job_count(&self) -> (usize, usize) {
+        self.dashboard.active_job_count().await
+    }
+
+    pub async fn has_active_jobs(&self) -> bool {
+        self.dashboard.has_active_jobs().await
     }
 
     pub fn signal_shutdown(&mut self) -> Result<(), ApiServerStopError> {
@@ -182,6 +190,16 @@ impl ApiServerDashboardHandle {
 
         Ok(ApiServerDashboardSnapshot { health, info, jobs })
     }
+    pub async fn active_job_count(&self) -> (usize, usize) {
+        self.state.job_manager.active_job_count().await
+    }
+
+    pub async fn has_active_jobs(&self) -> bool {
+        self.state.job_manager.has_active_jobs().await
+    }
+    pub async fn abort_all_active(&self) -> usize {
+        self.state.job_manager.abort_all_active().await
+    }
 }
 
 pub fn format_bind_error(error: std::io::Error, address: &str) -> ApiServerBindError {
@@ -202,6 +220,7 @@ pub fn prepare_runtime_config(
         batch_plan_resolver,
         platform,
         streaming_router,
+        web_dist_dir,
         shutdown_rx,
         bind_tx,
     } = parts;
@@ -226,11 +245,7 @@ pub fn prepare_runtime_config(
             max_streaming: resolved.max_streaming,
             ip_whitelist: Arc::new(parsed_whitelist),
             online_asr_config,
-            transcription_defaults: ApiServerTranscriptionDefaults {
-                gpu_acceleration: resolved.transcription_defaults.gpu_acceleration,
-                vad_model_id: resolved.transcription_defaults.vad_model_id,
-                punctuation_model_id: resolved.transcription_defaults.punctuation_model_id,
-            },
+            transcription_defaults: resolved.transcription_defaults,
             batch_transcriber,
             media_validator,
             gpu_availability,
@@ -238,6 +253,7 @@ pub fn prepare_runtime_config(
             batch_plan_resolver,
             platform,
             streaming_router,
+            web_dist_dir,
             shutdown_rx,
             bind_tx,
         },
@@ -261,6 +277,7 @@ pub async fn start_api_server_runtime(
         batch_plan_resolver: parts.batch_plan_resolver,
         platform: parts.platform,
         streaming_router: parts.streaming_router,
+        web_dist_dir: parts.web_dist_dir,
         shutdown_rx,
         bind_tx: Some(bind_tx),
     })
@@ -329,6 +346,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         batch_plan_resolver,
         platform,
         streaming_router,
+        web_dist_dir,
         shutdown_rx,
         bind_tx,
     } = config;
@@ -360,9 +378,11 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let worker_batch_plan_resolver = batch_plan_resolver.clone();
     let worker_platform = platform.clone();
 
+    let (shutdown_worker_tx, shutdown_worker_rx) = tokio::sync::oneshot::channel::<()>();
     tokio::spawn(async move {
         start_worker_loop(
             rx,
+            shutdown_worker_rx,
             TranscriptionWorkerDeps {
                 job_manager: job_manager_clone,
                 models_dir: models_dir_clone,
@@ -416,7 +436,8 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     let cors = CorsLayer::new()
         .allow_origin(CorsAny)
         .allow_methods(CorsAny)
-        .allow_headers(CorsAny);
+        .allow_headers(CorsAny)
+        .expose_headers(CorsAny);
 
     let router = Router::new().route("/health", get(handle_health));
 
@@ -424,10 +445,16 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         .route("/info", get(handle_info))
         .route("/v1/transcriptions", post(handle_transcribe))
         .route("/v1/transcriptions/jobs", get(handle_list_jobs))
-        .route("/v1/transcriptions/{job_id}", get(handle_job_status))
-        .with_state(state.clone())
+        .route(
+            "/v1/transcriptions/{job_id}",
+            get(handle_job_status).delete(handle_delete_job),
+        )
+        .route("/v1/transcriptions/{job_id}/audio", get(handle_job_audio))
+        .route("/v1/transcriptions/{job_id}/export", get(handle_export_job))
+        .route("/v1/llm/polish", post(handle_llm_polish))
+        .route("/v1/llm/translate", post(handle_llm_translate))
         .layer(axum::middleware::from_fn_with_state(
-            ip_whitelist,
+            state.clone(),
             ip_whitelist_middleware,
         ));
 
@@ -439,19 +466,33 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         ));
     }
 
-    #[allow(deprecated)]
-    if !api_key.is_empty() {
-        api_router = api_router.route_layer(ValidateRequestHeaderLayer::bearer(&api_key));
-    }
-
     let streaming_router = streaming_router
         .unwrap_or_default()
         .with_state(state.clone());
-    let router = router
-        .merge(streaming_router)
-        .merge(api_router)
-        .layer(cors)
-        .with_state(state.clone());
+    let mut router = router.merge(streaming_router).merge(api_router);
+
+    if let Some(static_dir) = web_dist_dir {
+        if static_dir.exists() {
+            let index_path = static_dir.join("index.html");
+            let serve_dir = tower_http::services::ServeDir::new(&static_dir)
+                .append_index_html_on_directories(true)
+                .fallback(tower_http::services::ServeFile::new(index_path));
+            log::info!(
+                "[ApiServer] Serving web static files from: {}",
+                static_dir.display()
+            );
+            router = router.fallback_service(serve_dir);
+        } else {
+            log::warn!(
+                "[ApiServer] Configured web_dist_dir does not exist: {}",
+                static_dir.display()
+            );
+        }
+    } else {
+        log::info!("[ApiServer] No web_dist_dir configured or found");
+    }
+
+    let router = router.layer(cors).with_state(state.clone());
     let addr = format!("{}:{}", host, port);
     let listener = match tokio::net::TcpListener::bind(&addr).await {
         Ok(l) => l,
@@ -471,6 +512,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
 
     log::info!("Starting HTTP API server on {}", addr);
     let clean_temp_dir = temp_dir.clone();
+    let clean_job_manager = state.job_manager.clone();
     let serve_res = axum::serve(
         listener,
         router.into_make_service_with_connect_info::<SocketAddr>(),
@@ -478,12 +520,28 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
     .with_graceful_shutdown(async move {
         let _ = shutdown_rx.await;
         let _ = shutdown_ttl_tx.send(());
+        let _ = shutdown_worker_tx.send(());
         log::info!("HTTP API server shutting down gracefully");
     })
     .await
     .map_err(|error| ApiServerRuntimeError::Serve {
         reason: error.to_string(),
     });
+
+    let wait_timeout = std::time::Duration::from_secs(30);
+    let start_wait = std::time::Instant::now();
+    while clean_job_manager.has_active_jobs().await && start_wait.elapsed() < wait_timeout {
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+
+    if clean_job_manager.has_active_jobs().await {
+        log::warn!(
+            "Graceful shutdown wait timeout reached; aborting all remaining active tasks..."
+        );
+        clean_job_manager.abort_all_active().await;
+        // Brief pause to allow aborted task drops to release OS file locks
+        tokio::time::sleep(std::time::Duration::from_millis(150)).await;
+    }
 
     log::info!(
         "Cleaning up API server temporary directory: {:?}",

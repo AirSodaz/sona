@@ -4,7 +4,7 @@ import { useDialogStore } from '../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { logger } from '../utils/logger';
-import { forceExit, hasActiveDownloads } from './tauri/app';
+import { forceExit, hasActiveApiServerJobs, hasActiveDownloads } from './tauri/app';
 
 type TranscriptQuitTaskSnapshot = Pick<
   ReturnType<typeof useTranscriptRuntimeStore.getState>,
@@ -63,11 +63,22 @@ export async function shouldWarnBeforeQuit(
   }
 
   try {
-    return await hasActiveDownloads();
+    if (await hasActiveDownloads()) {
+      return true;
+    }
   } catch (error) {
     logger.error('Failed to check downloads before quit:', error);
-    return false;
   }
+
+  try {
+    if (await hasActiveApiServerJobs()) {
+      return true;
+    }
+  } catch (error) {
+    logger.error('Failed to check API server jobs before quit:', error);
+  }
+
+  return false;
 }
 
 export async function runGuardedQuit(onExit: () => Promise<void>): Promise<boolean> {

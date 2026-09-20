@@ -427,6 +427,14 @@ export async function getPathStatuses(paths: string[]): Promise<RuntimePathStatu
 export async function hasActiveDownloads(): Promise<boolean> {
   return invokeTauri(TauriCommand.app.hasActiveDownloads);
 }
+export async function hasActiveApiServerJobs(): Promise<boolean> {
+  try {
+    const res = await invokeTauri(TauriCommand.apiServer.hasActiveJobs);
+    return res?.hasActive ?? false;
+  } catch {
+    return false;
+  }
+}
 
 export async function forceExit(): Promise<void> {
   await invokeTauri(TauriCommand.app.forceExit);

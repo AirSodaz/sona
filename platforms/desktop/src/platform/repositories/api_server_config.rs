@@ -1,4 +1,4 @@
-﻿use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
+use crate::platform::paths::{PathKind, PathPort, TauriPathProvider};
 use sona_core::config::ConfigError;
 use sona_core::runtime::serve::{
     ServeStartupSettings, online_asr_config_from_app_config, serve_startup_settings_from_app_config,
@@ -115,6 +115,115 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
     load_app_config_for_server_with_database(&provider, database)
         .map(|config| serve_startup_settings_from_app_config(&config))
         .unwrap_or_default()
+}
+
+pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
+    load_app_config_for_server(provider).and_then(|config| {
+        config
+            .get("ffmpegPath")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    })
+}
+
+pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) -> Option<String> {
+    let provider = TauriPathProvider::from_app(app);
+    let database = crate::platform::database::try_sqlite_database(app).ok();
+    load_app_config_for_server_with_database(&provider, database).and_then(|config| {
+        config
+            .get("ffmpegPath")
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(String::from)
+    })
+}
+
+pub fn load_feature_llm_config_for_app<R: tauri::Runtime>(
+    app: &tauri::AppHandle<R>,
+    feature: &str,
+) -> Option<sona_core::llm::requests::LlmConfig> {
+    let provider = TauriPathProvider::from_app(app);
+    let database = crate::platform::database::try_sqlite_database(app).ok();
+    load_app_config_for_server_with_database(&provider, database)
+        .and_then(|config| resolve_feature_llm_config_from_app_config(&config, feature))
+}
+
+pub fn resolve_feature_llm_config_from_app_config(
+    config: &serde_json::Value,
+    feature: &str,
+) -> Option<sona_core::llm::requests::LlmConfig> {
+    // 1. Try modern llmSettings
+    if let Some(llm_settings) = config.get("llmSettings") {
+        let feature_key = match feature {
+            "polish" => "polishModelId",
+            "translation" | "translate" => "translationModelId",
+            "summary" => "summaryModelId",
+            _ => "polishModelId",
+        };
+        let model_id = llm_settings
+            .get("selections")
+            .and_then(|s| s.get(feature_key))
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                llm_settings
+                    .get("modelOrder")
+                    .and_then(|arr| arr.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|v| v.as_str())
+            });
+
+        if let Some(m_id) = model_id
+            && let Some(model_entry) = llm_settings.get("models").and_then(|m| m.get(m_id))
+            && let Some(provider_str) = model_entry.get("provider").and_then(|p| p.as_str())
+            && let Some(model_str) = model_entry.get("model").and_then(|m| m.as_str())
+        {
+            let provider_settings = llm_settings
+                .get("providers")
+                .and_then(|p| p.get(provider_str));
+            let api_host = provider_settings
+                .and_then(|s| s.get("apiHost"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+            let api_key = provider_settings
+                .and_then(|s| s.get("apiKey"))
+                .and_then(|v| v.as_str())
+                .unwrap_or_default();
+
+            let provider: Result<sona_core::domain::LlmProvider, _> =
+                serde_json::from_value(serde_json::Value::String(provider_str.to_string()));
+            if let Ok(prov) = provider {
+                let strategy = sona_core::llm::tasks::LlmProviderStrategy::from_provider(&prov);
+                return Some(sona_core::llm::requests::LlmConfig {
+                    strategy,
+                    provider: prov,
+                    base_url: api_host.to_string(),
+                    api_key: api_key.to_string(),
+                    model: model_str.to_string(),
+                    api_path: None,
+                    api_version: None,
+                    temperature: None,
+                    reasoning_enabled: None,
+                    reasoning_level: None,
+                    timeout_seconds: config
+                        .get("llmRequestTimeoutSeconds")
+                        .and_then(|v| v.as_u64()),
+                });
+            }
+        }
+    }
+
+    // 2. Try legacy llm config
+    if let Some(llm) = config.get("llm")
+        && let Ok(llm_config) =
+            serde_json::from_value::<sona_core::llm::requests::LlmConfig>(llm.clone())
+    {
+        return Some(llm_config);
+    }
+
+    None
 }
 
 #[cfg(test)]

@@ -15,6 +15,7 @@ axum = { workspace = true, features = ["multipart", "macros", "ws"] }
 futures-util = { workspace = true }
 hex = { workspace = true }
 hmac = "0.13.0"
+indexmap = { version = "2", features = ["serde"] }
 ipnet = "2.10"
 log = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "rustls", "json", "multipart"] }
@@ -23,6 +24,7 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 sona-core = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tower = { workspace = true }
 tower-http = { version = "0.6", features = ["cors", "auth", "fs"] }
 thiserror = { workspace = true }
 uuid = { workspace = true }

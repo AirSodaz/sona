@@ -1071,6 +1071,24 @@ pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+pub fn find_ffmpeg_in_path() -> Option<PathBuf> {
+    let path_var = std::env::var_os("PATH")?;
+    #[cfg(windows)]
+    let candidate_names = ["ffmpeg.exe", "ffmpeg.cmd", "ffmpeg.bat"];
+    #[cfg(not(windows))]
+    let candidate_names = ["ffmpeg"];
+
+    for dir in std::env::split_paths(&path_var) {
+        for name in &candidate_names {
+            let candidate = dir.join(name);
+            if candidate.is_file() {
+                return Some(candidate);
+            }
+        }
+    }
+    None
+}
+
 pub fn resolve_ffmpeg_sidecar_path_from_exe(exe_path: &Path) -> Result<PathBuf, AsrPortError> {
     let exe_dir = exe_path.parent().ok_or_else(|| {
         AsrPortError::new(
@@ -1104,24 +1122,47 @@ pub fn resolve_ffmpeg_path_from_exe(
             ));
         }
     }
-    resolve_ffmpeg_sidecar_path_from_exe(exe_path)
+
+    // 1. Check sidecar next to exe
+    let sidecar = resolve_ffmpeg_sidecar_path_from_exe(exe_path)?;
+    if sidecar.is_file() {
+        return Ok(sidecar);
+    }
+
+    // 2. Check resources/ directory next to exe (common in packaged apps)
+    if let Some(exe_dir) = exe_path.parent() {
+        #[cfg(windows)]
+        let sidecar_name = "ffmpeg.exe";
+        #[cfg(not(windows))]
+        let sidecar_name = "ffmpeg";
+
+        let res_path = exe_dir.join("resources").join(sidecar_name);
+        if res_path.is_file() {
+            return Ok(res_path);
+        }
+        let res_bin = exe_dir.join("resources").join("bin").join(sidecar_name);
+        if res_bin.is_file() {
+            return Ok(res_bin);
+        }
+    }
+
+    // 3. Check system PATH
+    if let Some(path) = find_ffmpeg_in_path() {
+        return Ok(path);
+    }
+
+    // 4. Default to sidecar path so existing error messages or tests expecting a path remain informative
+    Ok(sidecar)
 }
 
 pub fn resolve_ffmpeg_path(custom_path: Option<&Path>) -> Result<PathBuf, AsrPortError> {
-    if let Some(path) = custom_path {
-        let trimmed = path.to_string_lossy().trim().to_string();
-        if !trimmed.is_empty() {
-            let candidate = PathBuf::from(trimmed);
-            if candidate.exists() {
-                return Ok(candidate);
-            }
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::FileSystem,
-                format!("Custom FFmpeg path does not exist: {}", path.display()),
-            ));
-        }
-    }
-    resolve_ffmpeg_sidecar_path()
+    let exe_path = std::env::current_exe().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Could not determine path to current executable: {error}"),
+        )
+    })?;
+    resolve_ffmpeg_path_from_exe(custom_path, &exe_path)
 }
 
 pub fn resolve_ffmpeg_sidecar_path() -> Result<PathBuf, AsrPortError> {

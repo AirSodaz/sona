@@ -687,8 +687,16 @@ type ManualTauriCommandContractMap = {
     result: string;
   };
   [TauriCommand.apiServer.stop]: {
-    args: undefined;
+    args: { force?: boolean } | undefined;
     result: undefined;
+  };
+  [TauriCommand.apiServer.hasActiveJobs]: {
+    args: undefined;
+    result: {
+      hasActive: boolean;
+      processing: number;
+      pending: number;
+    };
   };
   [TauriCommand.apiServer.dashboardSnapshot]: {
     args: undefined;

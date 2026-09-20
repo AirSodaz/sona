@@ -159,4 +159,6 @@ pub enum ApiServerDashboardError {
 pub enum ApiServerJobError {
     #[error("API server job queue is closed for job {job_id}")]
     QueueClosed { job_id: String },
+    #[error("API server job queue is full for job {job_id}")]
+    QueueFull { job_id: String },
 }

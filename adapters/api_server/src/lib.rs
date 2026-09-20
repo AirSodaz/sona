@@ -11,14 +11,18 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    handle_health, handle_info, handle_job_status, handle_list_jobs, handle_transcribe,
+    api_key_auth_middleware, extract_api_key_from_request, handle_health, handle_info,
+    handle_job_status, handle_list_jobs, handle_transcribe,
 };
-pub use info::{HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response};
+pub use info::{
+    ApiServerModelInfo, HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response,
+};
 pub use ip_whitelist::parse_ip_whitelist;
 pub use jobs::{JobEntry, JobManager, JobStatus, TranscriptionJob};
 pub use platform::{
     ApiServerPlatform, ApiServerTranscriptionDefaults, DefaultApiServerPlatform,
-    ONLINE_ASR_BATCH_UNAVAILABLE, OnlineBatchRequest, online_batch_request_to_core_request,
+    LLM_POLISH_UNAVAILABLE, LLM_TRANSLATE_UNAVAILABLE, ONLINE_ASR_BATCH_UNAVAILABLE,
+    OnlineBatchRequest, online_batch_request_to_core_request,
 };
 pub use runtime::{
     ApiServerDashboardHandle, ApiServerDashboardSnapshot, ApiServerRuntimeConfig,
@@ -32,12 +36,14 @@ pub use worker::build_local_transcribe_options;
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::handlers::{handle_delete_job, handle_export_job};
     use crate::runtime::startup_channel_closed_error;
     use crate::worker::{TranscriptionWorkerDeps, start_worker_loop};
     use async_trait::async_trait;
     use axum::{
         Router,
         body::Body,
+        extract::ConnectInfo,
         http::{Request, StatusCode},
         routing::{get, post},
     };
@@ -56,6 +62,7 @@ mod tests {
     use sona_core::transcription::transcript::TranscriptSegment;
     use std::collections::HashMap;
     use std::fs;
+    use std::net::SocketAddr;
     use std::path::{Path as StdPath, PathBuf};
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -70,7 +77,6 @@ mod tests {
             false
         }
     }
-
     struct AcceptingMediaValidator;
 
     #[async_trait]
@@ -284,12 +290,15 @@ mod tests {
 
         assert_eq!(info.platform, std::env::consts::OS);
         assert!(info.gpu_available);
-        assert_eq!(
-            info.models,
-            vec![
-                "sherpa-onnx-whisper-turbo".to_string(),
-                DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
-            ]
+        assert_eq!(info.models.len(), 1);
+        assert_eq!(info.models[0].id, "sherpa-onnx-whisper-turbo");
+        assert_eq!(info.models[0].name, "Whisper (Large Turbo)");
+        assert!(!info.models[0].languages.is_empty());
+        assert!(
+            !info
+                .models
+                .iter()
+                .any(|m| m.id == DEFAULT_SILERO_VAD_MODEL_ID)
         );
         assert!(info.vad_installed);
         assert!(!info.punctuation_installed);
@@ -328,8 +337,10 @@ mod tests {
         let transcriber_calls = Arc::new(AtomicUsize::new(0));
         let (tx, rx) = mpsc::channel(1);
         let job_manager = JobManager::new(tx);
+        let (_shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
         let worker = tokio::spawn(start_worker_loop(
             rx,
+            shutdown_rx,
             TranscriptionWorkerDeps {
                 job_manager: job_manager.clone(),
                 models_dir: PathBuf::from("models"),
@@ -434,21 +445,30 @@ mod tests {
             "expired-job".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now() - std::time::Duration::from_secs(120)),
+                file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "fresh-job".to_string(),
             JobEntry {
                 status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
                 completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+                abort_handle: None,
             },
         );
         job_manager.jobs.write().await.insert(
             "pending-job".to_string(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
+                file_path: None,
+                abort_handle: None,
             },
         );
 
@@ -610,7 +630,10 @@ mod tests {
             "test-job-id".to_string(),
             JobEntry {
                 status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
                 completed_at: None,
+                file_path: None,
+                abort_handle: None,
             },
         );
         let state = ServerState {
@@ -654,6 +677,144 @@ mod tests {
         assert_eq!(body["test-job-id"], "Pending");
     }
 
+    #[tokio::test]
+    async fn list_jobs_filters_by_status_and_pagination() {
+        let (tx, _rx) = mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+        job_manager.jobs.write().await.insert(
+            "job-1".to_string(),
+            JobEntry {
+                status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+        job_manager.jobs.write().await.insert(
+            "job-2".to_string(),
+            JobEntry {
+                status: JobStatus::Processing,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+        job_manager.jobs.write().await.insert(
+            "job-3".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+
+        let app = Router::new()
+            .route("/v1/transcriptions/jobs", get(handle_list_jobs))
+            .with_state(state.clone());
+
+        // Filter by status=completed
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs?status=completed")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body: HashMap<String, serde_json::Value> = serde_json::from_slice(
+            &axum::body::to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body.len(), 1);
+        assert!(body.contains_key("job-3"));
+
+        // Pagination with limit=1
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs?limit=1")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let body: HashMap<String, serde_json::Value> = serde_json::from_slice(
+            &axum::body::to_bytes(res.into_body(), usize::MAX)
+                .await
+                .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(body.len(), 1);
+
+        // Verify IndexMap preserves chronological order
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/jobs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body: indexmap::IndexMap<String, serde_json::Value> =
+            serde_json::from_slice(&bytes).unwrap();
+        let keys: Vec<_> = body.keys().map(String::as_str).collect();
+        assert_eq!(keys, vec!["job-1", "job-2", "job-3"]);
+    }
+
+    #[tokio::test]
+    async fn transcribe_rejects_invalid_webhook_url_and_cleans_up() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let boundary = "sona-test-boundary";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"model_id\"\r\n\r\nsensevoice\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"webhook_url\"\r\n\r\nfile:///etc/passwd\r\n--{boundary}--\r\n"
+        );
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+
     #[test]
     fn local_transcribe_request_uses_server_defaults() {
         let temp = tempfile::tempdir().unwrap();
@@ -678,6 +839,7 @@ mod tests {
                 sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
             ),
             punctuation_model_id: None,
+            ffmpeg_path: Some("/custom/ffmpeg".to_string()),
         };
 
         let options = build_local_transcribe_options(&job, &models_dir, &defaults);
@@ -690,6 +852,7 @@ mod tests {
         assert!(options.punctuation_model_id.is_none());
         assert_eq!(options.input, input_path);
         assert_eq!(options.hotwords.as_deref(), Some("Sona"));
+        assert_eq!(options.ffmpeg_path.as_deref(), Some("/custom/ffmpeg"));
     }
 
     #[test]
@@ -721,16 +884,26 @@ mod tests {
     fn authorize_streaming_request_rejects_non_whitelisted_clients() {
         let state = streaming_authorization_state("secret", 1, "127.0.0.0/8");
 
-        let error = match authorize_streaming_request(
-            &state,
-            "10.0.0.1:14200".parse().unwrap(),
-            Some("secret"),
-        ) {
-            Ok(_) => panic!("non-whitelisted streaming client should be rejected"),
-            Err(error) => error,
-        };
+        let error =
+            match authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), None) {
+                Ok(_) => panic!("non-whitelisted streaming client without key should be rejected"),
+                Err(error) => error,
+            };
 
         assert_eq!(error, StatusCode::FORBIDDEN);
+
+        // Non-whitelisted with wrong key -> FORBIDDEN
+        let err_wrong =
+            authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), Some("wrong"))
+                .unwrap_err();
+        assert_eq!(err_wrong, StatusCode::FORBIDDEN);
+
+        // Non-whitelisted with valid key -> Forbidden (Defense in Depth: network perimeter enforced)
+        assert_eq!(
+            authorize_streaming_request(&state, "10.0.0.1:14200".parse().unwrap(), Some("secret"),)
+                .unwrap_err(),
+            StatusCode::FORBIDDEN
+        );
     }
 
     #[test]
@@ -790,6 +963,7 @@ mod tests {
                     gpu_acceleration: Some("cuda".to_string()),
                     vad_model_id: Some("vad-model".to_string()),
                     punctuation_model_id: Some("punct-model".to_string()),
+                    ffmpeg_path: None,
                 },
             },
             temp_dir: temp_dir.clone(),
@@ -801,6 +975,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
         })
@@ -872,6 +1047,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: None,
         }) {
@@ -917,6 +1093,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
         };
@@ -969,6 +1146,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await;
 
@@ -1011,6 +1189,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await;
 
@@ -1054,6 +1233,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             streaming_router: None,
+            web_dist_dir: None,
         })
         .await
         .unwrap();
@@ -1065,5 +1245,565 @@ mod tests {
         assert_eq!(snapshot.health.pending_jobs, 0);
         assert!(snapshot.jobs.is_empty());
         server.stop().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn api_key_auth_middleware_accepts_bearer_and_query_token_and_rejects_invalid() {
+        let (tx, _rx) = mpsc::channel(1);
+        let state = ServerState {
+            job_manager: JobManager::new(tx),
+            temp_dir: PathBuf::from("temp"),
+            models_dir: PathBuf::from("models"),
+            start_time: std::time::Instant::now(),
+            api_key: "secret-token".to_string(),
+            streaming_semaphore: Arc::new(tokio::sync::Semaphore::new(1)),
+            ip_whitelist: Arc::new(vec![]),
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
+            platform: Arc::new(DefaultApiServerPlatform),
+            transcription_defaults: Default::default(),
+        };
+
+        let app = Router::new()
+            .route("/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                api_key_auth_middleware,
+            ))
+            .with_state(state);
+
+        // 1. Missing auth -> 401
+        let res = app
+            .clone()
+            .oneshot(Request::builder().uri("/test").body(Body::empty()).unwrap())
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 2. Invalid Bearer -> 401
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test")
+                    .header("Authorization", "Bearer wrong")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 3. Valid Bearer -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test")
+                    .header("Authorization", "Bearer secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 4. Valid query token -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test?token=secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+
+        // 5. Valid query api_key -> 200
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/test?api_key=secret-token")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn abort_all_active_aborts_running_tasks_and_marks_failed() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+        });
+
+        job_manager.jobs.write().await.insert(
+            "job-proc".to_string(),
+            JobEntry {
+                status: JobStatus::Processing,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: Some(handle.abort_handle()),
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "job-pend".to_string(),
+            JobEntry {
+                status: JobStatus::Pending,
+                created_at: std::time::Instant::now(),
+                completed_at: None,
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        job_manager.jobs.write().await.insert(
+            "job-done".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        let aborted = job_manager.abort_all_active().await;
+        assert_eq!(aborted, 1);
+
+        let jobs = job_manager.jobs.read().await;
+        assert!(matches!(jobs["job-proc"].status, JobStatus::Failed(_)));
+        assert!(matches!(jobs["job-pend"].status, JobStatus::Failed(_)));
+        assert!(matches!(jobs["job-done"].status, JobStatus::Completed(_)));
+
+        let res = handle.await;
+        assert!(res.unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn delete_job_removes_entry_and_file() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+        let temp_file = tempfile::NamedTempFile::new().unwrap();
+        let path = temp_file.path().to_path_buf();
+        assert!(path.exists());
+
+        job_manager.jobs.write().await.insert(
+            "job-del".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(vec![]),
+                created_at: std::time::Instant::now(),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: Some(path.clone()),
+                abort_handle: None,
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+        state.temp_dir = path.parent().unwrap().to_path_buf();
+
+        let app = Router::new()
+            .route(
+                "/v1/transcriptions/{job_id}",
+                axum::routing::delete(handle_delete_job),
+            )
+            .with_state(state.clone());
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("DELETE")
+                    .uri("/v1/transcriptions/job-del")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::NO_CONTENT);
+        assert!(!path.exists());
+        assert!(state.job_manager.get_job("job-del").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn export_job_returns_formatted_subtitles() {
+        let (tx, _rx) = mpsc::channel(10);
+        let job_manager = JobManager::new(tx);
+        let segments = vec![TranscriptSegment {
+            id: "seg-1".to_string(),
+            start: 0.0,
+            end: 2.5,
+            text: "Hello world".to_string(),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        }];
+
+        job_manager.jobs.write().await.insert(
+            "job-exp".to_string(),
+            JobEntry {
+                status: JobStatus::Completed(segments),
+                created_at: std::time::Instant::now(),
+                completed_at: Some(std::time::Instant::now()),
+                file_path: None,
+                abort_handle: None,
+            },
+        );
+
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.job_manager = job_manager;
+
+        let app = Router::new()
+            .route(
+                "/v1/transcriptions/{job_id}/export",
+                axum::routing::get(handle_export_job),
+            )
+            .with_state(state);
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/transcriptions/job-exp/export?format=srt")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        assert_eq!(
+            res.headers().get("content-disposition").unwrap(),
+            "attachment; filename=\"job-exp.srt\""
+        );
+        let body = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8(body.to_vec()).unwrap();
+        assert!(text.contains("00:00:00,000 --> 00:00:02,500"));
+        assert!(text.contains("Hello world"));
+    }
+
+    #[tokio::test]
+    async fn streaming_auth_enforces_ip_whitelist_and_key() {
+        let state = streaming_authorization_state("my-secret-key", 1, "127.0.0.1/32");
+
+        // 1. Foreign IP without key -> Forbidden
+        let foreign_addr = "192.168.1.50:12345".parse().unwrap();
+        let err = authorize_streaming_request(&state, foreign_addr, None).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 2. Foreign IP with invalid key -> Forbidden (non-whitelist IP)
+        let err = authorize_streaming_request(&state, foreign_addr, Some("wrong-key")).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 3. Foreign IP with valid key -> Forbidden (Defense in Depth: IP not in whitelist)
+        let err =
+            authorize_streaming_request(&state, foreign_addr, Some("my-secret-key")).unwrap_err();
+        assert_eq!(err, StatusCode::FORBIDDEN);
+
+        // 4. Whitelisted IP with invalid key -> Unauthorized
+        let local_addr = "127.0.0.1:12345".parse().unwrap();
+        let err_local =
+            authorize_streaming_request(&state, local_addr, Some("wrong-key")).unwrap_err();
+        assert_eq!(err_local, StatusCode::UNAUTHORIZED);
+
+        // 5. Whitelisted IP with valid key -> Success (permit acquired)
+        let permit = authorize_streaming_request(&state, local_addr, Some("my-secret-key"));
+        assert!(permit.is_ok());
+    }
+
+    #[tokio::test]
+    async fn http_ip_whitelist_middleware_enforces_auth_and_network_perimeter() {
+        let state = streaming_authorization_state("secret-key", 1, "127.0.0.1/32");
+        let app = Router::new()
+            .route("/api/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::handlers::ip_whitelist_middleware,
+            ))
+            .with_state(state);
+
+        let foreign_ip: SocketAddr = "192.168.1.50:12345".parse().unwrap();
+        let local_ip: SocketAddr = "127.0.0.1:12345".parse().unwrap();
+
+        // 1. Foreign IP without key -> 403 Forbidden
+        let req = Request::builder()
+            .uri("/api/test")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 2. Foreign IP with invalid key -> 403 Forbidden
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer wrong-key")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 3. Foreign IP with valid key -> 403 Forbidden (Defense in Depth: network perimeter enforced)
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer secret-key")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::FORBIDDEN);
+
+        // 4. Whitelisted IP with invalid key -> 401 Unauthorized
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer wrong-key")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 5. Whitelisted IP without key (when key required) -> 401 Unauthorized
+        let req = Request::builder()
+            .uri("/api/test")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::UNAUTHORIZED);
+
+        // 6. Whitelisted IP with valid key -> 200 OK
+        let req = Request::builder()
+            .uri("/api/test")
+            .header("Authorization", "Bearer secret-key")
+            .extension(ConnectInfo(local_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.clone().oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+    #[tokio::test]
+    async fn query_token_handles_percent_encoded_special_chars() {
+        let state = streaming_authorization_state("my+secret token=123", 1, "10.0.0.1/32");
+        let app = Router::new()
+            .route("/api/test", get(|| async { "ok" }))
+            .layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::handlers::ip_whitelist_middleware,
+            ))
+            .with_state(state);
+
+        let foreign_ip: SocketAddr = "10.0.0.1:12345".parse().unwrap();
+        // URL-encoded "my+secret token=123" -> "my%2Bsecret%20token%3D123"
+        let req = Request::builder()
+            .uri("/api/test?token=my%2Bsecret%20token%3D123")
+            .extension(ConnectInfo(foreign_ip))
+            .body(Body::empty())
+            .unwrap();
+        let res = app.oneshot(req).await.unwrap();
+        assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[test]
+    fn constant_time_eq_str_verifies_equality_correctly() {
+        use crate::handlers::constant_time_eq_str;
+        assert!(constant_time_eq_str("password123", "password123"));
+        assert!(!constant_time_eq_str("password123", "password124"));
+        assert!(!constant_time_eq_str("short", "longer_password"));
+        assert!(!constant_time_eq_str("", "not_empty"));
+        assert!(constant_time_eq_str("", ""));
+    }
+
+    #[test]
+    fn validate_webhook_url_rejects_link_local_and_invalid_schemes() {
+        use crate::handlers::validate_webhook_url;
+        assert!(validate_webhook_url("http://localhost:3000/webhook").is_ok());
+        assert!(validate_webhook_url("https://api.example.com/callback").is_ok());
+        assert!(validate_webhook_url("http://192.168.1.100:8080/hook").is_ok());
+        // Block cloud metadata / link-local addresses, unspecified, broadcast
+        assert!(validate_webhook_url("http://169.254.169.254/latest/meta-data").is_err());
+        assert!(validate_webhook_url("http://169.254.1.1/hook").is_err());
+        assert!(validate_webhook_url("http://0.0.0.0/hook").is_err());
+        assert!(validate_webhook_url("http://255.255.255.255/hook").is_err());
+        assert!(validate_webhook_url("file:///etc/passwd").is_err());
+        assert!(validate_webhook_url("ftp://example.com/file").is_err());
+        assert!(validate_webhook_url("not-a-url").is_err());
+    }
+    #[test]
+    fn extract_api_key_handles_case_insensitive_bearer_prefix() {
+        use crate::handlers::extract_api_key_from_request;
+        let req_lower = Request::builder()
+            .header("Authorization", "bearer test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_lower).as_deref(),
+            Some("test-key-123")
+        );
+
+        let req_upper = Request::builder()
+            .header("Authorization", "BEARER test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_upper).as_deref(),
+            Some("test-key-123")
+        );
+
+        let req_mixed = Request::builder()
+            .header("Authorization", "Bearer test-key-123")
+            .body(Body::empty())
+            .unwrap();
+        assert_eq!(
+            extract_api_key_from_request(&req_mixed).as_deref(),
+            Some("test-key-123")
+        );
+    }
+
+    #[tokio::test]
+    async fn submit_job_returns_queue_full_when_capacity_reached() {
+        let (tx, _rx) = mpsc::channel(1);
+        let job_manager = JobManager::new(tx);
+        let job1 = TranscriptionJob {
+            job_id: "job-1".to_string(),
+            file_path: PathBuf::from("job1.wav"),
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "Local".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        let job2 = TranscriptionJob {
+            job_id: "job-2".to_string(),
+            file_path: PathBuf::from("job2.wav"),
+            model_id: "model".to_string(),
+            language: "auto".to_string(),
+            hotwords: None,
+            webhook_url: None,
+            webhook_secret: None,
+            engine: "Local".to_string(),
+            online_provider_id: None,
+            online_provider_config: None,
+        };
+        assert!(job_manager.submit_job(job1).await.is_ok());
+        let err = job_manager.submit_job(job2).await.unwrap_err();
+        assert!(matches!(err, ApiServerJobError::QueueFull { .. }));
+    }
+
+    #[tokio::test]
+    async fn transcribe_rejects_duplicate_file_fields() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let boundary = "sona-duplicate-test";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample1.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data 1\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample2.wav\"\r\nContent-Type: audio/wav\r\n\r\naudio data 2\r\n--{boundary}--\r\n"
+        );
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state);
+
+        let response = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        // Confirm all files were cleaned up
+        assert_eq!(fs::read_dir(temp.path()).unwrap().count(), 0);
+    }
+
+    #[tokio::test]
+    async fn llm_polish_and_translate_reject_empty_payloads() {
+        let state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        let app = Router::new()
+            .route("/v1/llm/polish", post(crate::handlers::handle_llm_polish))
+            .route(
+                "/v1/llm/translate",
+                post(crate::handlers::handle_llm_translate),
+            )
+            .with_state(state);
+
+        // Polish with empty segments -> 400 Bad Request
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/polish")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"segments":[]}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        // Translate with empty segments -> 400 Bad Request
+        let res = app
+            .clone()
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/translate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(r#"{"segments":[],"target_language":"en"}"#))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+        // Translate with empty target_language -> 400 Bad Request
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/llm/translate")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"segments":[{"id":"1","start":0.0,"end":1.0,"text":"hi","isFinal":true}],"target_language":"   "}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
     }
 }

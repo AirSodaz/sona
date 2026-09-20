@@ -166,6 +166,7 @@ fn temp_transcribe_options() -> BatchTranscribeOptions {
         save_wav: None,
         quiet: false,
         force: false,
+        ffmpeg_path: None,
     }
 }
 

@@ -223,6 +223,7 @@ export const TauriCommand = {
     start: 'start_api_server',
     stop: 'stop_api_server',
     dashboardSnapshot: 'get_api_server_dashboard_snapshot',
+    hasActiveJobs: 'has_active_api_server_jobs',
   },
   cudaAddon: {
     getStatus: 'get_cuda_addon_status',

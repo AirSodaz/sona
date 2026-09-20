@@ -369,11 +369,32 @@ pub async fn start_api_server(
     .await
 }
 
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiServerActiveJobsInfo {
+    pub has_active: bool,
+    pub processing: usize,
+    pub pending: usize,
+}
+
+#[tauri::command]
+pub async fn has_active_api_server_jobs(
+    controller: State<'_, crate::app::server::ApiServerController>,
+) -> Result<ApiServerActiveJobsInfo, String> {
+    let (processing, pending) = controller.active_job_count().await;
+    Ok(ApiServerActiveJobsInfo {
+        has_active: processing > 0 || pending > 0,
+        processing,
+        pending,
+    })
+}
+
 #[tauri::command]
 pub async fn stop_api_server(
     controller: State<'_, crate::app::server::ApiServerController>,
+    force: Option<bool>,
 ) -> Result<(), String> {
-    crate::app::server::stop_api_server(controller).await
+    crate::app::server::stop_api_server(controller, force.unwrap_or(false)).await
 }
 
 #[tauri::command]

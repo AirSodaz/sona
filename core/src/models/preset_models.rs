@@ -460,6 +460,24 @@ impl PresetModel {
             .iter()
             .any(|item| item.eq_ignore_ascii_case(code))
     }
+
+    /// Returns true when this preset model is an ASR model.
+    pub fn is_asr(&self) -> bool {
+        self.modes.as_ref().map(|m| !m.is_empty()).unwrap_or(false)
+            && self.model_type != "punctuation"
+            && self.model_type != "vad"
+            && self.model_type != "speaker-segmentation"
+            && self.model_type != "speaker-embedding"
+            && self.model_type != "alignment"
+    }
+
+    /// Returns the human-readable selection label for this preset model.
+    pub fn selection_label(&self) -> String {
+        match &self.version_label {
+            Some(version_label) => format!("{} ({})", self.name, version_label),
+            None => self.name.clone(),
+        }
+    }
 }
 
 fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSection> {
@@ -729,18 +747,33 @@ impl ModelCatalogModel {
         }
     }
 
-    fn supports_mode(&self, mode: &str) -> bool {
+    pub fn supports_mode(&self, mode: &str) -> bool {
         self.modes
             .as_ref()
             .map(|modes| modes.iter().any(|item| item == mode))
             .unwrap_or(false)
     }
 
-    fn has_recognition_mode(&self) -> bool {
+    pub fn has_recognition_mode(&self) -> bool {
         self.modes
             .as_ref()
             .map(|modes| !modes.is_empty())
             .unwrap_or(false)
+    }
+
+    /// Returns true when this catalog model is an ASR model.
+    pub fn is_asr(&self) -> bool {
+        self.modes.as_ref().map(|m| !m.is_empty()).unwrap_or(false)
+            && self.model_type != "punctuation"
+            && self.model_type != "vad"
+            && self.model_type != "speaker-segmentation"
+            && self.model_type != "speaker-embedding"
+            && self.model_type != "alignment"
+    }
+
+    /// Returns the human-readable selection label for this catalog model.
+    pub fn selection_label(&self) -> String {
+        model_selection_label(self)
     }
 }
 

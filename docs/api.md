@@ -51,7 +51,14 @@ Retrieve server platform information, hardware status, installed models, and ava
 {
   "platform": "win32",
   "gpuAvailable": true,
-  "models": ["sensevoice", "sherpa-onnx-whisper-turbo"],
+  "models": [
+    {
+      "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+      "name": "SenseVoice (Int8)",
+      "languages": ["en", "ja", "ko", "yue", "zh"],
+      "languageMode": "auto"
+    }
+  ],
   "vadInstalled": true,
   "punctuationInstalled": true,
   "onlineAsrProviders": [
@@ -95,10 +102,18 @@ Query the current status of all transcription jobs in the manager.
 - **URL**: `/v1/transcriptions/jobs`
 - **Method**: `GET`
 
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `status` | String | No | - | Filter jobs by status: `pending`, `processing`, `completed`, `failed`. Case-insensitive. |
+| `limit` | Integer | No | - | Maximum number of jobs to return. |
+| `offset` | Integer | No | `0` | Number of jobs to skip before collecting results. |
+| `full` | Boolean | No | `false` | When `false`, completed jobs return empty segment arrays `[]` to conserve bandwidth. Set `true` to return full completed segments. |
+
 #### Response (`200 OK`)
 
-Returns a map of `job_id` to their current `JobStatus`.
-
+Returns an ordered map (chronological by task creation time) of `job_id` to their current `JobStatus`.
 ```json
 {
   "c86e0c65-2746-4e56-9141-866d51bbca43": "Pending",
@@ -208,6 +223,185 @@ curl http://127.0.0.1:14200/v1/transcriptions/c86e0c65-2746-4e56-9141-866d51bbca
   -H "Authorization: Bearer your_secure_key"
 ```
 
+---
+
+### 6. Delete / Cancel Job
+
+Cancel an ongoing transcription or remove a completed/failed job and its associated audio file.
+
+- **URL**: `/v1/transcriptions/:job_id`
+- **Method**: `DELETE`
+
+#### Response (`204 No Content`)
+
+The job and temporary audio file are removed immediately, and any ongoing processing task is aborted.
+
+#### Curl Example
+```bash
+curl -X DELETE http://127.0.0.1:14200/v1/transcriptions/c86e0c65-2746-4e56-9141-866d51bbca43 \
+  -H "Authorization: Bearer your_secure_key"
+```
+
+---
+
+### 7. Retrieve Job Audio
+
+Stream or download the original audio file submitted with the job. Supports HTTP Range headers for seekable media player playback.
+
+- **URL**: `/v1/transcriptions/:job_id/audio`
+- **Method**: `GET`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `token` | String | No | Alternative to Bearer token header for HTML5 `<audio>` / `<video>` tags. |
+
+#### Response (`200 OK` or `206 Partial Content`)
+
+Returns binary audio stream with appropriate `Content-Type` (e.g. `audio/wav`, `audio/mpeg`).
+
+---
+
+### 8. Export Job Subtitles
+
+Export completed transcription segments formatted as subtitles or formatted text.
+
+- **URL**: `/v1/transcriptions/:job_id/export`
+- **Method**: `GET`
+
+#### Query Parameters
+
+| Parameter | Type | Required | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `format` | String | No | `srt` | Subtitle/export format: `srt`, `vtt`, `json`, `txt`, `md`. |
+| `mode` | String | No | `original` | Text mode: `original` (source transcription), `translation` (translated text only), `bilingual` (source followed by translation). |
+
+#### Response (`200 OK`)
+
+Includes `Content-Disposition: attachment; filename="{job_id}.{format}"` and corresponding content type.
+
+---
+
+### 9. LLM Segment Polish
+
+Polish raw speech segments using the configured desktop LLM provider.
+
+- **URL**: `/v1/llm/polish`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### Request Body
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "uh hello world",
+      "isFinal": true
+    }
+  ]
+}
+```
+
+#### Response (`200 OK`)
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "Hello, world.",
+      "isFinal": true
+    }
+  ]
+}
+```
+
+---
+
+### 10. LLM Segment Translation
+
+Translate transcription segments to a target language.
+
+- **URL**: `/v1/llm/translate`
+- **Method**: `POST`
+- **Content-Type**: `application/json`
+
+#### Request Body
+
+```json
+{
+  "segments": [
+    {
+      "id": "seg-0",
+      "start": 0.0,
+      "end": 2.5,
+      "text": "Hello, world.",
+      "isFinal": true
+    }
+  ],
+  "target_language": "zh"
+}
+```
+
+#### Response (`200 OK`)
+
+Returns segments with the `translation` field populated.
+
+---
+
+### 11. WebSocket Real-Time Audio Streaming
+
+Real-time speech recognition stream via WebSocket.
+
+- **URL**: `/v1/streaming` (or `ws://127.0.0.1:14200/v1/streaming?token=your_secure_key`)
+- **Protocol**: WebSocket
+
+#### Handshake Authentication
+Pass API key in query (`?token=...` or `?api_key=...`) or `Authorization: Bearer <key>` header.
+
+#### Protocol Flow
+1. **Client -> Server (Text JSON)**:
+   ```json
+   {
+     "type": "start",
+     "model_id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+     "language": "auto",
+     "hotwords": null,
+     "vad_model_id": "silero-vad"
+   }
+   ```
+2. **Server -> Client (Text JSON)**:
+   ```json
+   {
+     "type": "started",
+     "session_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+   }
+   ```
+3. **Client -> Server (Binary)**:
+   Raw PCM 16kHz 16-bit little-endian mono audio chunks (`pcm_s16le`).
+4. **Server -> Client (Text JSON)**:
+   Incremental recognized segments:
+   ```json
+   {
+     "type": "segment",
+     "segment": {
+       "id": "...",
+       "text": "Hello world",
+       "start": 0.0,
+       "end": 1.8,
+       "isFinal": false
+     }
+   }
+   ```
+5. **Client -> Server (Text JSON)**:
+   `{"type": "stop"}` to finalize and close stream.
 ---
 
 ## Webhooks & Verification

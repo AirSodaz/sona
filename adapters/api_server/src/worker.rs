@@ -1,4 +1,4 @@
-﻿use std::path::{Path as StdPath, PathBuf};
+use std::path::{Path as StdPath, PathBuf};
 use std::sync::Arc;
 
 use hmac::{Hmac, KeyInit, Mac};
@@ -53,8 +53,15 @@ pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
 
     let payload_str = serde_json::to_string(&payload).unwrap_or_default();
 
-    static WEBHOOK_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
-    let client = WEBHOOK_CLIENT.get_or_init(reqwest::Client::new);
+    static WEBHOOK_CLIENT: std::sync::LazyLock<reqwest::Client> = std::sync::LazyLock::new(|| {
+        reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
+            .timeout(std::time::Duration::from_secs(15))
+            .redirect(reqwest::redirect::Policy::none())
+            .build()
+            .unwrap_or_default()
+    });
+    let client = &*WEBHOOK_CLIENT;
 
     let mut request = client
         .post(webhook_url)
@@ -106,6 +113,7 @@ pub(crate) struct TranscriptionWorkerDeps {
 
 pub(crate) async fn start_worker_loop(
     mut receiver: mpsc::Receiver<TranscriptionJob>,
+    mut shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     deps: TranscriptionWorkerDeps,
 ) {
     let TranscriptionWorkerDeps {
@@ -119,33 +127,62 @@ pub(crate) async fn start_worker_loop(
     } = deps;
     let semaphore = Arc::new(tokio::sync::Semaphore::new(max_concurrent));
 
-    while let Some(job) = receiver.recv().await {
+    loop {
+        let job = tokio::select! {
+            biased;
+            _ = &mut shutdown_rx => {
+                log::info!("[Server] worker loop received shutdown signal");
+                break;
+            }
+            job = receiver.recv() => {
+                match job {
+                    Some(j) => j,
+                    None => break,
+                }
+            }
+        };
+
+        if shared_job_manager.get_job(&job.job_id).await.is_none() {
+            continue;
+        }
+
+        let permit = tokio::select! {
+            biased;
+            _ = &mut shutdown_rx => {
+                log::info!("[Server] worker loop received shutdown signal");
+                break;
+            }
+            permit = semaphore.clone().acquire_owned() => {
+                match permit {
+                    Ok(p) => p,
+                    Err(_) => break,
+                }
+            }
+        };
+
+        if shared_job_manager.get_job(&job.job_id).await.is_none() {
+            drop(permit);
+            continue;
+        }
+
+        let job_id = job.job_id.clone();
+        let file_path = job.file_path.clone();
         let job_manager = shared_job_manager.clone();
         let models_dir = shared_models_dir.clone();
-        let semaphore = semaphore.clone();
         let defaults = transcription_defaults.clone();
         let batch_transcriber = shared_batch_transcriber.clone();
         let batch_plan_resolver = shared_batch_plan_resolver.clone();
         let platform = shared_platform.clone();
 
-        tokio::spawn(async move {
-            let _permit = match semaphore.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => {
-                    log::error!("[Server] semaphore closed, job {} abandoned", job.job_id);
-                    job_manager
-                        .update_job(
-                            &job.job_id,
-                            JobStatus::Failed("Internal: worker pool closed".to_string()),
-                        )
-                        .await;
-                    return;
-                }
-            };
+        let handle = tokio::spawn(async move {
+            let _permit = permit;
+            if job_manager.get_job(&job.job_id).await.is_none() {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+                return;
+            }
             job_manager
                 .update_job(&job.job_id, JobStatus::Processing)
                 .await;
-
             let final_status = if job.engine == "Online" {
                 if let Some(provider_id) = job.online_provider_id.clone() {
                     let request = OnlineBatchRequest {
@@ -179,6 +216,10 @@ pub(crate) async fn start_worker_loop(
                 }
             };
 
+            if job_manager.get_job(&job.job_id).await.is_none() {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+                return;
+            }
             job_manager
                 .update_job(&job.job_id, final_status.clone())
                 .await;
@@ -191,8 +232,18 @@ pub(crate) async fn start_worker_loop(
                 });
             }
 
-            let _ = tokio::fs::remove_file(&job.file_path).await;
+            if matches!(final_status, JobStatus::Failed(_)) {
+                let _ = tokio::fs::remove_file(&job.file_path).await;
+            }
         });
+        let handle_abort = handle.abort_handle();
+        let was_set = shared_job_manager
+            .set_abort_handle(&job_id, handle_abort)
+            .await;
+        if !was_set {
+            handle.abort();
+            let _ = tokio::fs::remove_file(&file_path).await;
+        }
     }
 }
 
@@ -201,8 +252,7 @@ pub fn build_local_transcribe_options(
     models_dir: &StdPath,
     defaults: &ApiServerTranscriptionDefaults,
 ) -> BatchTranscribeOptions {
-    let (vad_model_id, punctuation_model_id) =
-        companion_defaults_for_model(&job.model_id, defaults);
+    let (vad_model_id, punctuation_model_id) = defaults.companion_models_for(&job.model_id);
     BatchTranscribeOptions {
         input: job.file_path.clone(),
         output: None,
@@ -225,37 +275,6 @@ pub fn build_local_transcribe_options(
         save_wav: None,
         quiet: true,
         force: true,
+        ffmpeg_path: defaults.ffmpeg_path.clone(),
     }
-}
-
-fn companion_defaults_for_model(
-    model_id: &str,
-    defaults: &ApiServerTranscriptionDefaults,
-) -> (Option<String>, Option<String>) {
-    let rules = sona_core::models::preset_models::find_preset_model(model_id)
-        .map(|model| model.resolved_rules());
-
-    let vad_model_id = match defaults.vad_model_id.as_deref() {
-        Some(id)
-            if rules.map(|rules| rules.requires_vad).unwrap_or(true)
-                || id != sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    let punctuation_model_id = match defaults.punctuation_model_id.as_deref() {
-        Some(id)
-            if rules
-                .map(|rules| rules.requires_punctuation)
-                .unwrap_or(true)
-                || id != sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID =>
-        {
-            Some(id.to_string())
-        }
-        _ => None,
-    };
-
-    (vad_model_id, punctuation_model_id)
 }

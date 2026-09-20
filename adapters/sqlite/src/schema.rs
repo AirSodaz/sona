@@ -763,7 +763,7 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![8]);
+        assert_eq!(schema_versions(&db), vec![9]);
     }
 
     #[test]
@@ -939,7 +939,7 @@ mod tests {
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (9)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (10)", [])?;
             Ok(())
         })
         .unwrap();
@@ -948,11 +948,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 9,
-                current: 8
+                found: 10,
+                current: 9
             }
         ));
-        assert_eq!(schema_versions(&db), vec![8, 9]);
+        assert_eq!(schema_versions(&db), vec![9, 10]);
     }
 
     #[test]
@@ -1029,7 +1029,7 @@ mod tests {
         drop(disk_conn);
 
         let db = Database::open(temp.path()).unwrap();
-        assert_eq!(schema_versions(&db), vec![7, 8]);
+        assert_eq!(schema_versions(&db), vec![7, 8, 9]);
 
         db.with_connection(|conn| {
             let pipelines_count: i64 = conn.query_row(
@@ -1378,11 +1378,11 @@ mod tests {
                     "id",
                     "name",
                     "enabled",
-                    "scope",
-                    "project_ids",
                     "sort_order",
                     "created_at",
                     "updated_at",
+                    "scope",
+                    "project_ids",
                 ]
             );
             assert_eq!(

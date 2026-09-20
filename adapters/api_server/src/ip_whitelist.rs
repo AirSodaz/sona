@@ -15,6 +15,14 @@ pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, ApiServerCo
         if rule == "localhost" {
             nets.push("127.0.0.0/8".parse().unwrap());
             nets.push("::1/128".parse().unwrap());
+        } else if rule == "lan" || rule == "private" {
+            nets.push("127.0.0.0/8".parse().unwrap());
+            nets.push("::1/128".parse().unwrap());
+            nets.push("10.0.0.0/8".parse().unwrap());
+            nets.push("172.16.0.0/12".parse().unwrap());
+            nets.push("192.168.0.0/16".parse().unwrap());
+            nets.push("fc00::/7".parse().unwrap());
+            nets.push("fe80::/10".parse().unwrap());
         } else if let Ok(net) = rule.parse::<IpNet>() {
             nets.push(net);
         } else if let Ok(exact_ip) = rule.parse::<IpAddr>() {
@@ -66,4 +74,25 @@ pub fn parse_ip_whitelist(whitelist_str: &str) -> Result<Vec<IpNet>, ApiServerCo
     }
 
     Ok(nets)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lan_whitelist_includes_ipv6_private_and_link_local() {
+        let nets = parse_ip_whitelist("lan").unwrap();
+        let ula: IpAddr = "fd12:3456:789a::1".parse().unwrap();
+        let link_local: IpAddr = "fe80::1".parse().unwrap();
+        let ipv4_private: IpAddr = "192.168.1.100".parse().unwrap();
+        let public_ipv4: IpAddr = "8.8.8.8".parse().unwrap();
+        let public_ipv6: IpAddr = "2001:4860:4860::8888".parse().unwrap();
+
+        assert!(nets.iter().any(|net| net.contains(&ula)));
+        assert!(nets.iter().any(|net| net.contains(&link_local)));
+        assert!(nets.iter().any(|net| net.contains(&ipv4_private)));
+        assert!(!nets.iter().any(|net| net.contains(&public_ipv4)));
+        assert!(!nets.iter().any(|net| net.contains(&public_ipv6)));
+    }
 }
