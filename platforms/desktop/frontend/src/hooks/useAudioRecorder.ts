@@ -197,7 +197,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
             useProjectStore.getState().projects,
             effectiveConfig
           );
-          if (!pipeline.enabled) {
+          const hasAnyPostProcess =
+            pipeline.autoPolish ||
+            pipeline.autoTranslate ||
+            pipeline.autoSummary ||
+            (pipeline.enabled && pipeline.autoExport);
+          if (!hasAnyPostProcess) {
             return segments;
           }
           try {

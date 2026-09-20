@@ -256,18 +256,23 @@ export function VoiceTypingOverlay() {
   const isSegment = phase === 'segment' && text.trim().length > 0;
   const isError = phase === 'error';
   const isPolishing = phase === 'polishing';
+  const isTranslating = phase === 'translating';
   const isSelection = Boolean(overlayState.hasSelection);
   const displayText = isPolishing
     ? isSelection
       ? t('voice_typing.polishing_selection', { defaultValue: 'AI rewriting selection...' })
       : t('voice_typing.polishing', { defaultValue: 'AI polishing...' })
-    : isSegment || isError
-      ? text
-      : phase === 'preparing'
-        ? t('common.preparing')
-        : isSelection
-          ? t('voice_typing.listening_selection', { defaultValue: 'Speak editing instruction...' })
-          : t('common.listening');
+    : isTranslating
+      ? t('voice_typing.translating', { defaultValue: 'Translating...' })
+      : isSegment || isError
+        ? text
+        : phase === 'preparing'
+          ? t('common.preparing')
+          : isSelection
+            ? t('voice_typing.listening_selection', {
+                defaultValue: 'Speak editing instruction...',
+              })
+            : t('common.listening');
 
   useEffect(() => {
     if (phase !== 'segment') {

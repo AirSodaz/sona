@@ -230,12 +230,16 @@ export interface LlmAssistantConfig {
   llmSettings?: LlmSettings;
   /** Whether Summary is available in the transcript editor. Default: true. */
   summaryEnabled?: boolean;
+  /** Whether to automatically generate summary after transcription. Default: false. */
+  autoSummary?: boolean;
   /** Selected global summary template id. */
   summaryTemplateId?: SummaryTemplateId;
   /** User-defined summary templates. */
   summaryCustomTemplates?: SummaryCustomTemplate[];
   /** Target translation language. Default: 'zh'. */
   translationLanguage?: string;
+  /** Whether to automatically translate transcript after completion. Default: false. */
+  autoTranslate?: boolean;
   /** Keywords for polishing. */
   polishKeywords?: string;
   /** Selected global polish preset id. */
@@ -377,6 +381,10 @@ export interface VoiceTypingConfig {
   voiceTypingEnabled?: boolean;
   /** Global shortcut to trigger voice typing. Default: 'Alt+V'. */
   voiceTypingShortcut?: string;
+  /** Global shortcut to trigger voice typing with translation. Default: 'Alt+Shift+V'. */
+  voiceTypingTranslateShortcut?: string;
+  /** Target language for voice typing translation. Default: 'en'. */
+  voiceTypingTargetLanguage?: string;
   /** Interaction mode: 'hold' (Push-to-Talk) or 'toggle'. Default: 'hold'. */
   voiceTypingMode?: 'hold' | 'toggle';
   /** Processing mode: 'raw' (fast direct output) or 'polish' (smart LLM rewrite). Default: 'raw'. */

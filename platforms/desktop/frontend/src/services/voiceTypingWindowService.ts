@@ -21,6 +21,7 @@ export type VoiceTypingOverlayPhase =
   | 'listening'
   | 'segment'
   | 'polishing'
+  | 'translating'
   | 'recall'
   | 'error';
 

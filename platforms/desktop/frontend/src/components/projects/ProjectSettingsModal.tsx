@@ -228,7 +228,18 @@ export function ProjectSettingsModal({
                 })}
               />
             </div>
-
+            <div
+              style={{
+                fontSize: '0.8rem',
+                color: 'var(--color-text-secondary)',
+                marginBottom: '12px',
+              }}
+            >
+              {t('projects.pipeline_hint', {
+                defaultValue:
+                  'Customize auto-polish, translation language, and summary template for transcripts in this project. When disabled, global vocabulary defaults are used.',
+              })}
+            </div>
             {pipeline.enabled && (
               <div className="project-pipeline-options">
                 {/* Auto Polish */}

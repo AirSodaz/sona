@@ -14,8 +14,9 @@ import {
   X,
 } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import { DEFAULT_VOICE_TYPING_CONTEXT_RULES } from '../../services/voiceTyping/voiceTypingContext';
 import {
@@ -28,6 +29,7 @@ import { useProjectStore } from '../../stores/projectStore';
 import { useVoiceTypingHistoryStore } from '../../stores/voiceTypingHistoryStore';
 import type { VoiceTypingRuntimeErrorSource } from '../../stores/voiceTypingRuntimeStore';
 import type { VoiceTypingContextPreset } from '../../types/config';
+import { getLocalizedLanguageName } from '../../utils/languageUtils';
 import { logger } from '../../utils/logger';
 import {
   addTermToYamlDictionary,
@@ -93,10 +95,19 @@ function getFailureSourceLabel(
 }
 
 function VoiceTypingSettingsSection(): React.JSX.Element {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const vtConfig = useVoiceTypingConfig();
   const updateConfig = useSetConfig();
   const readiness = useVoiceTypingReadiness();
+
+  const languageOptions = useMemo(
+    () =>
+      LANGUAGE_OPTIONS.map((lang) => ({
+        value: lang.code,
+        label: getLocalizedLanguageName(lang.code, i18n?.language || 'zh'),
+      })),
+    [i18n?.language]
+  );
   const isAvailable = readiness.state === 'ready';
   const hasFailureReason = readiness.state === 'failed' && Boolean(readiness.lastErrorMessage);
   const failureSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
@@ -142,6 +153,21 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
           <SettingsShortcutInput
             value={vtConfig.voiceTypingShortcut ?? 'Alt+V'}
             onChange={(val) => updateConfig({ voiceTypingShortcut: val })}
+          />
+        </SettingsItem>
+
+        <SettingsItem
+          title={t('settings.voice_typing_translate_shortcut', {
+            defaultValue: 'Translation Shortcut',
+          })}
+          hint={t('settings.voice_typing_translate_shortcut_hint', {
+            defaultValue:
+              'Global shortcut to activate voice typing with translation (inherits polish switch)',
+          })}
+        >
+          <SettingsShortcutInput
+            value={vtConfig.voiceTypingTranslateShortcut ?? 'Alt+Shift+V'}
+            onChange={(val) => updateConfig({ voiceTypingTranslateShortcut: val })}
           />
         </SettingsItem>
 
@@ -295,6 +321,24 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             />
           </SettingsItem>
         )}
+        <SettingsItem
+          title={t('settings.voice_typing_target_language', {
+            defaultValue: 'Translation Target Language',
+          })}
+          hint={t('settings.voice_typing_target_language_hint', {
+            defaultValue:
+              'Target language used when activating voice typing via the translation shortcut',
+          })}
+        >
+          <div style={{ width: '220px' }}>
+            <Dropdown
+              id="vt-target-language-select"
+              value={vtConfig.voiceTypingTargetLanguage || 'en'}
+              onChange={(val) => updateConfig({ voiceTypingTargetLanguage: val })}
+              options={languageOptions}
+            />
+          </div>
+        </SettingsItem>
       </SettingsSection>
 
       {/* 3. 排版与反馈 (Typography & Audio Feedback) */}

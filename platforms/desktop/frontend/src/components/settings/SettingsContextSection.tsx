@@ -14,8 +14,8 @@ import {
 } from '../../utils/polishPresets';
 import { Dropdown } from '../Dropdown';
 import { FileTextIcon } from '../Icons';
+import { Switch } from '../Switch';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
-
 export function SettingsContextSection(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -91,13 +91,73 @@ export function SettingsContextSection(): React.JSX.Element {
   return (
     <>
       <SettingsSection
-        title={t('settings.context_default_title', { defaultValue: 'Default Polish Preset' })}
+        title={t('settings.context_default_title', { defaultValue: 'Polish Automation & Presets' })}
         description={t('settings.context_default_description', {
           defaultValue:
-            'Choose which preset text polishing should use when no automation profile overrides it.',
+            'Configure automatic polishing, live frequency, and default preset selection.',
         })}
         icon={<FileTextIcon width={20} height={20} />}
       >
+        <SettingsItem
+          title={t('settings.polish_auto_title', { defaultValue: 'Auto Polish' })}
+          hint={t('settings.polish_auto_hint', {
+            defaultValue: 'Automatically polish text after transcription or batch import.',
+          })}
+        >
+          <Switch
+            checked={config.autoPolish ?? false}
+            onChange={(val) => updateConfig({ autoPolish: val })}
+          />
+        </SettingsItem>
+
+        {config.autoPolish && (
+          <SettingsItem
+            title={t('settings.polish_auto_frequency_title', {
+              defaultValue: 'Live Recording Polish Frequency',
+            })}
+            hint={t('settings.polish_auto_frequency_hint', {
+              defaultValue:
+                'Number of segments accumulated before triggering background polish in live recording.',
+            })}
+          >
+            <div style={{ width: '180px', maxWidth: '100%' }}>
+              <Dropdown
+                value={String(config.autoPolishFrequency ?? 5)}
+                onChange={(val) => updateConfig({ autoPolishFrequency: Number(val) || 5 })}
+                options={[
+                  {
+                    value: '3',
+                    label: t('polish.every_n_segments', {
+                      count: 3,
+                      defaultValue: 'Every 3 segments',
+                    }),
+                  },
+                  {
+                    value: '5',
+                    label: t('polish.every_n_segments', {
+                      count: 5,
+                      defaultValue: 'Every 5 segments',
+                    }),
+                  },
+                  {
+                    value: '10',
+                    label: t('polish.every_n_segments', {
+                      count: 10,
+                      defaultValue: 'Every 10 segments',
+                    }),
+                  },
+                  {
+                    value: '15',
+                    label: t('polish.every_n_segments', {
+                      count: 15,
+                      defaultValue: 'Every 15 segments',
+                    }),
+                  },
+                ]}
+              />
+            </div>
+          </SettingsItem>
+        )}
         <SettingsItem
           title={t('projects.polish_preset', { defaultValue: 'Default Polish Preset' })}
           hint={t('settings.context_default_hint', {

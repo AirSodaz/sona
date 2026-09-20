@@ -3,10 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
+import { resolveItemPipeline } from '../services/projectPipeline';
 import { translationService } from '../services/translationService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -80,6 +83,16 @@ export function TranslateButton({
   const config = useEffectiveConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const segments = useTranscriptSessionStore((state) => state.segments);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const projects = useProjectStore((state) => state.projects);
+  const historyItems = useHistoryStore((state) => state.items);
+  const currentItem =
+    sourceHistoryId && sourceHistoryId !== 'current'
+      ? historyItems.find((i) => i.id === sourceHistoryId)
+      : null;
+  const projectId = currentItem?.projectId ?? activeProjectId;
+  const projectPipeline = resolveItemPipeline(projectId, projects, config);
+  const effectiveTargetLang = projectPipeline.targetLanguage || config.translationLanguage || 'zh';
 
   const hasTranslation = segments.some(
     (seg) => typeof seg.translation === 'string' && seg.translation.trim().length > 0
@@ -393,7 +406,7 @@ export function TranslateButton({
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
                 {commonLanguages.map((lang) => {
-                  const isSelected = (config.translationLanguage || 'zh') === lang;
+                  const isSelected = effectiveTargetLang === lang;
                   return (
                     <button
                       key={`common-${lang}`}
@@ -469,7 +482,7 @@ export function TranslateButton({
                 </div>
               ) : (
                 filteredLanguages.map((lang) => {
-                  const isSelected = (config.translationLanguage || 'zh') === lang.code;
+                  const isSelected = effectiveTargetLang === lang.code;
                   return (
                     <button
                       key={lang.code}

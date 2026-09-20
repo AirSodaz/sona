@@ -243,6 +243,13 @@ describe('SettingsSubtitleTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingShortcut: 'Ctrl+Alt+V' });
 
     fireEvent.change(shortcutInputs[1], {
+      target: { value: 'Ctrl+Shift+T' },
+    });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      voiceTypingTranslateShortcut: 'Ctrl+Shift+T',
+    });
+
+    fireEvent.change(shortcutInputs[2], {
       target: { value: 'Ctrl+Shift+H' },
     });
     expect(mockUpdateConfig).toHaveBeenCalledWith({

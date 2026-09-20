@@ -1,20 +1,24 @@
 import type React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { usePolishActions } from '../hooks/usePolishActions';
+import { resolveItemPipeline } from '../services/projectPipeline';
+import { useConfigStore } from '../stores/configStore';
+import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
+import { coercePolishPresetId, getPolishPresetOptions } from '../utils/polishPresets';
 import {
+  CheckIcon,
   ChevronDownIcon,
   FileTextIcon,
   ProcessingIcon,
   RedoIcon,
   RestoreIcon,
-  SettingsIcon,
   SparklesIcon,
 } from './Icons';
-import { PolishSettingsModal } from './PolishSettingsModal';
 
 /** Props for PolishButton. */
 interface PolishButtonProps {
@@ -32,7 +36,6 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const { t } = useTranslation();
   const [isOpen, setIsOpen] = useState(false);
   const [position, setPosition] = useState<'bottom' | 'top'>('bottom');
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -51,6 +54,10 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   } = usePolishActions();
 
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
+  const config = useEffectiveConfigStore((state) => state.config);
+  const setConfig = useConfigStore((state) => state.setConfig);
+  const activeProjectId = useProjectStore((state) => state.activeProjectId);
+  const projects = useProjectStore((state) => state.projects);
 
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const currentHistoryItem = useHistoryStore((state) =>
@@ -59,7 +66,22 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   const canRetranscribeCurrentHistory =
     !!currentHistoryItem && !isHistoryItemDraft(currentHistoryItem);
 
-  // Close dropdown when clicking outside
+  const projectId = currentHistoryItem?.projectId ?? activeProjectId;
+  const projectPipeline = resolveItemPipeline(projectId, projects, config);
+  const currentPresetId = coercePolishPresetId(
+    projectPipeline.polishPresetId || config.polishPresetId,
+    config.polishCustomPresets
+  );
+  const presetOptions = useMemo(
+    () => getPolishPresetOptions(config.polishCustomPresets, t),
+    [config.polishCustomPresets, t]
+  );
+
+  const handlePresetSelect = (presetId: string) => {
+    setConfig({ polishPresetId: presetId });
+    setIsOpen(false);
+    triggerRef.current?.focus();
+  };
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
@@ -165,7 +187,6 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
   } else if (isPolishing) {
     tooltipText = t('polish.polishing');
   }
-
   return (
     <div
       className={`export-menu ${className}`}
@@ -276,34 +297,54 @@ export function PolishButton({ className = '' }: PolishButtonProps): React.JSX.E
               <span>{t('polish.redo')}</span>
             </button>
           )}
+          <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
 
           <div
             style={{
-              borderTop: '1px solid var(--color-border)',
-              marginTop: '4px',
-              paddingTop: '4px',
+              padding: '8px 12px 4px 12px',
+              fontSize: '0.75rem',
+              fontWeight: 600,
+              color: 'var(--color-text-secondary)',
             }}
           >
-            <button
-              type="button"
-              className="export-dropdown-item"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setIsSettingsOpen(true);
-                setIsOpen(false);
-              }}
-              role="menuitem"
-              tabIndex={-1}
-            >
-              <SettingsIcon />
-              <span>{t('polish.advanced_settings')}</span>
-            </button>
+            {t('polish.mode_label', { defaultValue: 'Polish Mode' })}
           </div>
+
+          {presetOptions.map((option) => {
+            const isSelected = currentPresetId === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                className="export-dropdown-item"
+                onClick={() => handlePresetSelect(option.value)}
+                role="menuitemradio"
+                aria-checked={isSelected}
+                tabIndex={-1}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  width: '100%',
+                  gap: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    width: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  {isSelected && <CheckIcon />}
+                </span>
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
         </div>
       )}
-
-      <PolishSettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
     </div>
   );
 }

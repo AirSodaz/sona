@@ -184,32 +184,22 @@ describe('PolishButton', () => {
     expect(useTranscriptStore.getState().segments).toEqual(polishedSegments);
   });
 
-  it('opens advanced settings modal when clicked', () => {
+  it('renders polish mode options in the menu', () => {
     render(<PolishButton />);
     fireEvent.click(screen.getByRole('button', { expanded: false }));
-    fireEvent.click(screen.getByText('polish.advanced_settings'));
 
-    // Check if modal elements appear (using localized keys from mock)
-    screen.getByText('polish.advanced_settings');
-    screen.getByText('polish.mode_label');
+    expect(screen.getByText('polish.mode_label')).toBeDefined();
+    expect(screen.getByText('polish.modes.clean')).toBeDefined();
+    expect(screen.getByText('polish.modes.verbatim')).toBeDefined();
+    expect(screen.getByText('polish.modes.formal')).toBeDefined();
   });
 
-  it('renders advanced settings overlay at document body level when opened from the detail header', () => {
-    render(
-      <div className="projects-detail-header">
-        <PolishButton />
-      </div>
-    );
-
+  it('selects polish mode and updates config', () => {
+    render(<PolishButton />);
     fireEvent.click(screen.getByRole('button', { expanded: false }));
-    fireEvent.click(screen.getByText('polish.advanced_settings'));
 
-    const bodyOverlay = Array.from(document.body.children).find((element) =>
-      element.classList.contains('shared-modal-overlay')
-    );
+    fireEvent.click(screen.getByText('polish.modes.formal'));
 
-    expect(bodyOverlay).toBeDefined();
-    screen.getByText('polish.advanced_settings');
-    screen.getByText('polish.mode_label');
+    expect(useConfigStore.getState().config.polishPresetId).toBe('formal');
   });
 });

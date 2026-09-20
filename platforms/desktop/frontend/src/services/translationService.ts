@@ -1,5 +1,7 @@
 import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
@@ -12,6 +14,7 @@ import type {
   TranslatedSegment,
   TranslateSegmentsRequest,
 } from './llmTaskTypes';
+import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
@@ -95,7 +98,15 @@ export class TranslationService {
       throw new Error('LLM Service not fully configured.');
     }
 
-    const resolvedTargetLanguage = targetLanguage || config.translationLanguage || 'zh';
+    const activeProjectId = useProjectStore.getState().activeProjectId;
+    const currentItem =
+      historyId && historyId !== 'current'
+        ? useHistoryStore.getState().items.find((i) => i.id === historyId)
+        : null;
+    const projectId = currentItem?.projectId ?? activeProjectId;
+    const pipeline = resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
+    const resolvedTargetLanguage =
+      targetLanguage || pipeline.targetLanguage || config.translationLanguage || 'zh';
     await this.ports.runTranscriptSegmentTaskJob({
       taskType: 'translate',
       segments,

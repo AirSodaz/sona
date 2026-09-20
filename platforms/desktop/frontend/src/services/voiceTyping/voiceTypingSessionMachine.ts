@@ -54,8 +54,14 @@ interface VoiceTypingSessionMachineOptions {
     rawText: string;
     polishedText?: string;
     injectedText: string;
-    mode: 'raw' | 'polish';
+    mode: 'raw' | 'polish' | 'translate';
   }) => void;
+  translateText?: (
+    text: string,
+    targetLanguage: string,
+    onError?: (error: unknown) => void
+  ) => Promise<string>;
+  getTargetLanguage?: () => string;
   onTransformFailed?: (entry: { originalText: string; instruction: string }) => void;
   onPolishFailed?: (entry: { originalText: string }) => void;
   getFocusedSelectionText?: () => Promise<string | null>;
@@ -121,18 +127,20 @@ export class VoiceTypingSessionMachine {
   private accumulatedPolishText: string[] = [];
   private selectionContext: string | null = null;
   private currentContext: VoiceTypingContextState | null = null;
+  private isTranslateSession = false;
   private manualStopPending = false;
-  // long-lived aux windows never treat a new session as stale state.
   private revision = 0;
   private readonly committedSegmentIds = new Set<string>();
   private segmentProcessingChain: Promise<void> = Promise.resolve();
 
   constructor(private readonly options: VoiceTypingSessionMachineOptions) {}
 
-  async start() {
+  async start(options?: { isTranslate?: boolean }) {
     if (this.isActive()) {
       return;
     }
+
+    this.isTranslateSession = Boolean(options?.isTranslate);
 
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
@@ -378,6 +386,97 @@ export class VoiceTypingSessionMachine {
       await this.closeSession(sessionId);
       return;
     }
+
+    if (this.isTranslateSession) {
+      const rawFullText = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
+      if (rawFullText) {
+        const mode = this.options.getProcessingMode?.() || 'raw';
+        let intermediateText = rawFullText;
+
+        // 1. Inherit polish logic if polish mode is enabled
+        if (mode === 'polish' && this.options.polishText) {
+          await this.publishOverlay({
+            sessionId,
+            phase: 'polishing',
+            text: rawFullText,
+          });
+
+          try {
+            intermediateText = await this.options.polishText(
+              rawFullText,
+              this.currentContext,
+              (err) => {
+                logger.warn(
+                  '[VoiceTypingSessionMachine] Polish before translate failed, fallback to raw',
+                  err
+                );
+              }
+            );
+          } catch (err) {
+            logger.warn(
+              '[VoiceTypingSessionMachine] Polish before translate failed, fallback to raw',
+              err
+            );
+          }
+        }
+
+        // 2. Translate step
+        await this.publishOverlay({
+          sessionId,
+          phase: 'translating',
+          text: intermediateText,
+        });
+
+        let translatedText = intermediateText;
+        const targetLanguage = this.options.getTargetLanguage?.() || 'en';
+        if (this.options.translateText) {
+          try {
+            translatedText = await this.options.translateText(
+              intermediateText,
+              targetLanguage,
+              (err) => {
+                logger.warn('[VoiceTypingSessionMachine] Translation failed', err);
+              }
+            );
+          } catch (err) {
+            logger.warn(
+              '[VoiceTypingSessionMachine] Translation failed, using intermediate text',
+              err
+            );
+          }
+        }
+
+        const finalText = this.formatFinalText(translatedText);
+        this.options.onTextCommitted?.({
+          rawText: rawFullText,
+          polishedText: mode === 'polish' ? intermediateText : undefined,
+          injectedText: finalText,
+          mode: 'translate',
+        });
+
+        try {
+          await this.options.injectText(finalText);
+          this.playSound('commit');
+        } catch (error) {
+          if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(finalText).catch(() => {});
+          }
+          logger.error('[VoiceTypingSessionMachine] Failed to inject translated text:', error);
+          if (this.isCurrentSession(sessionId)) {
+            await this.handleSessionError(
+              sessionId,
+              this.startRequestId,
+              extractErrorMessage(error)
+            );
+          }
+          return;
+        }
+      }
+
+      await this.closeSession(sessionId);
+      return;
+    }
+
     const mode = this.options.getProcessingMode?.() || 'raw';
     if (mode === 'polish') {
       const rawFullText = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
@@ -448,6 +547,7 @@ export class VoiceTypingSessionMachine {
     const sessionId = this.activeSessionId;
     this.sessionState = 'stopping';
     this.manualStopPending = true;
+    this.isTranslateSession = false;
     this.currentText = '';
     this.currentSegmentId = null;
     this.options.overlayPresenter.clearListeningReset();
@@ -588,7 +688,7 @@ export class VoiceTypingSessionMachine {
     } = analyzeCandidateText(segment.text, enableCjkSpacing);
 
     const mode = this.options.getProcessingMode?.() || 'raw';
-    if (this.selectionContext || mode === 'polish') {
+    if (this.selectionContext || mode === 'polish' || this.isTranslateSession) {
       if (segment.isFinal) {
         if (text) {
           this.accumulatedPolishText.push(text);

@@ -13,8 +13,8 @@ import {
 } from '../../utils/summaryTemplates';
 import { Dropdown } from '../Dropdown';
 import { SummaryIcon } from '../Icons';
+import { Switch } from '../Switch';
 import { SettingsItem, SettingsSection } from './SettingsLayout';
-
 export function SettingsSummaryTemplateSection(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -97,14 +97,26 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
     <>
       <SettingsSection
         title={t('settings.summary_templates_default_title', {
-          defaultValue: 'Default Summary Template',
+          defaultValue: 'Summary Automation & Templates',
         })}
         description={t('settings.summary_templates_default_description', {
           defaultValue:
-            'Choose which summary template is used when no automation profile overrides it.',
+            'Configure automatic summarization and choose which summary template is used by default.',
         })}
         icon={<SummaryIcon width={20} height={20} />}
       >
+        <SettingsItem
+          title={t('settings.summary_auto_title', { defaultValue: 'Auto Summarize' })}
+          hint={t('settings.summary_auto_hint', {
+            defaultValue: 'Automatically generate summary after transcription and polishing.',
+          })}
+        >
+          <Switch
+            checked={config.autoSummary ?? false}
+            onChange={(val) => updateConfig({ autoSummary: val })}
+          />
+        </SettingsItem>
+
         <SettingsItem
           title={t('projects.summary_template', { defaultValue: 'Default Summary Template' })}
           hint={t('settings.summary_templates_default_hint', {

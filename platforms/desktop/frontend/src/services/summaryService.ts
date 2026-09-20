@@ -1,4 +1,6 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
@@ -14,6 +16,7 @@ import { coerceSummaryTemplateId, resolveSummaryTemplate } from '../utils/summar
 import { getFeatureLlmConfig, isSummaryLlmConfigComplete } from './llm/configUtils';
 import { runTranscriptLlmTaskJob } from './llm/segmentTask';
 import type { SummaryTranscriptLlmJobRequest } from './llmTaskTypes';
+import { resolveItemPipeline } from './projectPipeline';
 import { summarySidecarService } from './summarySidecarService';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
@@ -189,10 +192,20 @@ export class SummaryService {
     }
 
     const jobHistoryId = historyId || 'current';
-    const resolvedTemplate = resolveSummaryTemplate(
+    const activeProjectId = useProjectStore.getState().activeProjectId;
+    const currentItem =
+      historyId && historyId !== 'current'
+        ? useHistoryStore.getState().items.find((i) => i.id === historyId)
+        : null;
+    const projectId = currentItem?.projectId ?? activeProjectId;
+    const pipeline = resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
+    const candidateTemplateId =
       templateId ??
-        sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ??
-        config.summaryTemplateId,
+      sidecarStore.getSummaryState(jobHistoryId).activeTemplateId ??
+      pipeline.summaryTemplateId ??
+      config.summaryTemplateId;
+    const resolvedTemplate = resolveSummaryTemplate(
+      candidateTemplateId,
       config.summaryCustomTemplates
     );
     const activeTemplateId = resolvedTemplate.id;

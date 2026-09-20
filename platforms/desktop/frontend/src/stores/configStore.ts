@@ -122,9 +122,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   // LLM Assistant
   llmSettings: createLlmSettings(),
   summaryEnabled: true,
+  autoSummary: false,
   summaryTemplateId: 'general',
   summaryCustomTemplates: [],
   translationLanguage: 'zh',
+  autoTranslate: false,
   polishKeywords: '',
   polishPresetId: 'general',
   polishCustomPresets: [],
@@ -135,6 +137,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   // Voice Typing
   voiceTypingEnabled: false,
   voiceTypingShortcut: 'Alt+V',
+  voiceTypingTranslateShortcut: 'Alt+Shift+V',
+  voiceTypingTargetLanguage: 'en',
   voiceTypingMode: 'hold',
   voiceTypingProcessingMode: 'raw',
   voiceTypingSoundEnabled: true,
@@ -257,7 +261,9 @@ const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
 const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'llmSettings',
   'summaryEnabled',
+  'autoSummary',
   'translationLanguage',
+  'autoTranslate',
   'summaryTemplateId',
   'summaryCustomTemplates',
   'polishKeywords',
@@ -267,7 +273,6 @@ const LLM_KEYS: (keyof LlmAssistantConfig)[] = [
   'autoPolishFrequency',
   'llmRequestTimeoutSeconds',
 ];
-
 const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
   'textReplacementSets',
   'hotwordSets',
@@ -280,6 +285,8 @@ const VOCABULARY_KEYS: (keyof VocabularyConfig)[] = [
 const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingEnabled',
   'voiceTypingShortcut',
+  'voiceTypingTranslateShortcut',
+  'voiceTypingTargetLanguage',
   'voiceTypingMode',
   'voiceTypingProcessingMode',
   'voiceTypingSoundEnabled',
@@ -291,8 +298,8 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingContextPreset',
   'voiceTypingContextRules',
 ];
+
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
-  'httpServerEnabled',
   'httpServerHost',
   'httpServerPort',
   'httpServerApiKey',

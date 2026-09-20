@@ -8,8 +8,8 @@ import { SettingsContextSection } from './SettingsContextSection';
 import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
 import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
 import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
+import { SettingsTranslationSection } from './SettingsTranslationSection';
 import { UnifiedDictionarySection } from './vocabulary/UnifiedDictionarySection';
-
 export type VocabularySubTab = 'recognition' | 'prompts' | 'speakers';
 
 export interface SettingsVocabularyTabProps {
@@ -159,6 +159,7 @@ export function SettingsVocabularyTab({
           }}
         >
           <SettingsContextSection />
+          <SettingsTranslationSection />
           <SettingsSummaryTemplateSection />
         </div>
       )}

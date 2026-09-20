@@ -6,7 +6,7 @@ export interface VoiceTypingHistoryItem {
   rawText: string;
   polishedText?: string;
   injectedText: string;
-  mode: 'raw' | 'polish';
+  mode: 'raw' | 'polish' | 'translate';
 }
 
 const STORAGE_KEY = 'sona:voice-typing:history';

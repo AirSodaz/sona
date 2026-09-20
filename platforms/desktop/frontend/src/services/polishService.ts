@@ -1,4 +1,6 @@
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useHistoryStore } from '../stores/historyStore';
+import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
@@ -13,6 +15,7 @@ import type {
   PolishSegmentsRequest,
   TranscriptLlmJobResult,
 } from './llmTaskTypes';
+import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { runTranscriptLlmJob } from './tauri/llm';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
@@ -20,6 +23,7 @@ import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 interface RetryPolishTranscriptJobOptions {
   segments: TranscriptSegment[];
   historyId: string | null;
+  polishPresetId?: string;
 }
 
 function buildPolishedSegmentMap(polishedChunk: PolishedSegment[]): Map<string, PolishedSegment> {
@@ -93,10 +97,8 @@ export class PolishService {
     });
   }
 
-  async retryPolishTranscriptJob({
-    segments,
-    historyId,
-  }: RetryPolishTranscriptJobOptions): Promise<void> {
+  async retryPolishTranscriptJob(options: RetryPolishTranscriptJobOptions): Promise<void> {
+    const { segments, historyId, polishPresetId } = options;
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = this.ports.getEffectiveConfigSnapshot();
     const llm = getFeatureLlmConfig(config, 'polish');
@@ -118,7 +120,19 @@ export class PolishService {
         this.ports.getTranscriptSidecarStore().updateLlmState({ polishProgress }, jobHistoryId);
       },
       runTask: async (taskId, jobHistoryId) => {
-        const preset = resolvePolishPreset(config.polishPresetId, config.polishCustomPresets);
+        const activeProjectId = useProjectStore.getState().activeProjectId;
+        const currentItem =
+          jobHistoryId && jobHistoryId !== 'current'
+            ? useHistoryStore.getState().items.find((i) => i.id === jobHistoryId)
+            : null;
+        const projectId = currentItem?.projectId ?? activeProjectId;
+        const pipeline = resolveItemPipeline(
+          projectId,
+          useProjectStore.getState().projects,
+          config
+        );
+        const resolvedPresetId = polishPresetId || pipeline.polishPresetId || config.polishPresetId;
+        const preset = resolvePolishPreset(resolvedPresetId, config.polishCustomPresets);
         const unlistenJobUpdates = await this.ports.listenToTranscriptLlmJobUpdates(
           taskId,
           'polish',

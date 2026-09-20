@@ -199,3 +199,79 @@ export async function transformSelectedText(
     return trimmedInstruction;
   }
 }
+
+export async function translateVoiceTypingText(
+  text: string,
+  targetLanguage: string,
+  options?: {
+    timeoutMs?: number;
+    onError?: (error: unknown) => void;
+  }
+): Promise<string> {
+  const trimmed = (text || '').trim();
+  if (!trimmed) {
+    return '';
+  }
+
+  const config = useConfigStore.getState().config;
+  const llmConfig = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
+
+  if (!llmConfig?.provider) {
+    logger.warn('[VoiceTypingTranslate] No active LLM provider configured, using raw text');
+    options?.onError?.(new Error('No active LLM provider configured'));
+    return trimmed;
+  }
+
+  const systemPrompt = `You are a professional translator. Translate the user input into ${targetLanguage}.
+Rules:
+1. Output the translated text only.
+2. Do not include any explanations, prefixes, markdown code blocks, or notes.
+3. Preserve the original meaning and tone accurately.`;
+
+  const timeoutMs = options?.timeoutMs ?? POLISH_TIMEOUT_MS;
+
+  try {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      setTimeout(
+        () => reject(new Error(`LLM translate timed out after ${timeoutMs}ms`)),
+        timeoutMs
+      );
+    });
+
+    const completionPromise = completeLlm({
+      config: {
+        ...llmConfig,
+        temperature: 0.2,
+      },
+      systemPrompt,
+      input: trimmed,
+      options: {
+        maxOutputTokens: 2048,
+      },
+    });
+
+    const response = await Promise.race([completionPromise, timeoutPromise]);
+    const translated = cleanPolishedOutput(response.text);
+
+    if (!translated) {
+      logger.warn(
+        '[VoiceTypingTranslate] Empty output from LLM translate, falling back to input text'
+      );
+      options?.onError?.(new Error('Empty output from LLM translate'));
+      return trimmed;
+    }
+    logger.info('[VoiceTypingTranslate] Text successfully translated', {
+      originalLength: trimmed.length,
+      translatedLength: translated.length,
+      targetLanguage,
+    });
+    return translated;
+  } catch (error) {
+    logger.warn(
+      '[VoiceTypingTranslate] LLM translate failed or timed out, falling back to input text:',
+      error
+    );
+    options?.onError?.(error);
+    return trimmed;
+  }
+}

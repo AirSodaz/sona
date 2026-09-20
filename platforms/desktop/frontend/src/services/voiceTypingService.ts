@@ -34,6 +34,7 @@ import { VoiceTypingOverlayPresenter } from './voiceTyping/voiceTypingOverlayPre
 import {
   polishVoiceTypingText,
   transformSelectedText,
+  translateVoiceTypingText,
 } from './voiceTyping/voiceTypingPolishService';
 import { VoiceTypingSessionMachine } from './voiceTyping/voiceTypingSessionMachine';
 import { VoiceTypingShortcutController } from './voiceTyping/voiceTypingShortcutController';
@@ -95,6 +96,12 @@ export class VoiceTypingService {
       isCjkSpacingEnabled: () => this.ports.getConfig().voiceTypingCjkSpacingEnabled ?? true,
       getProcessingMode: () => this.ports.getConfig().voiceTypingProcessingMode ?? 'raw',
       polishText: (text, context, onError) => polishVoiceTypingText(text, { context, onError }),
+      translateText: (text, targetLanguage, onError) =>
+        translateVoiceTypingText(text, targetLanguage, { onError }),
+      getTargetLanguage: () =>
+        this.ports.getConfig().voiceTypingTargetLanguage ||
+        this.ports.getConfig().translationLanguage ||
+        'en',
       onPolishFailed: () => {
         const now = Date.now();
         void useTaskLedgerStore.getState().upsertTask({
@@ -158,7 +165,7 @@ export class VoiceTypingService {
     this.shortcutController = new VoiceTypingShortcutController({
       getMode: () => this.getVoiceTypingMode(),
       isListening: () => this.sessionMachine.isActive(),
-      startListening: () => this.startListening(),
+      startListening: (options) => this.startListening(options),
       stopListening: () => this.stopListening(),
     });
   }
@@ -216,8 +223,11 @@ export class VoiceTypingService {
           enabled: nextSnapshot.enabled,
           shortcut: nextSnapshot.shortcut,
         });
-        void this.updateShortcutRegistration(nextSnapshot.enabled, nextSnapshot.shortcut);
-
+        void this.updateShortcutRegistration(
+          nextSnapshot.enabled,
+          nextSnapshot.shortcut,
+          nextSnapshot.translateShortcut
+        );
         if (!nextSnapshot.enabled) {
           void this.stopMicrophoneCapture();
         }
@@ -247,7 +257,8 @@ export class VoiceTypingService {
 
     void this.updateShortcutRegistration(
       this.lastConfigSnapshot.enabled,
-      this.lastConfigSnapshot.shortcut
+      this.lastConfigSnapshot.shortcut,
+      this.lastConfigSnapshot.translateShortcut
     );
     void this.updateQuickRecallShortcutRegistration(
       this.lastConfigSnapshot.enabled,
@@ -357,13 +368,17 @@ export class VoiceTypingService {
     await this.microphoneRuntime.stop();
   }
 
-  private async updateShortcutRegistration(enabled: boolean, shortcut: string) {
-    await this.shortcutController.update(enabled, shortcut);
+  private async updateShortcutRegistration(
+    enabled: boolean,
+    shortcut: string,
+    translateShortcut?: string
+  ) {
+    await this.shortcutController.update(enabled, shortcut, translateShortcut);
   }
 
-  private async startListening() {
+  private async startListening(options?: { isTranslate?: boolean }) {
     this.configureTranscriptionService();
-    await this.sessionMachine.start();
+    await this.sessionMachine.start(options);
   }
 
   private async stopListening() {
