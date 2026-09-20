@@ -15,7 +15,9 @@ pub use handlers::{
     handle_job_audio, handle_job_status, handle_list_jobs, handle_llm_polish, handle_llm_translate,
     handle_transcribe,
 };
-pub use info::{HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response};
+pub use info::{
+    ApiServerModelInfo, HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response,
+};
 pub use ip_whitelist::parse_ip_whitelist;
 pub use jobs::{JobEntry, JobManager, JobStatus, TranscriptionJob};
 pub use platform::{
@@ -287,12 +289,15 @@ mod tests {
 
         assert_eq!(info.platform, std::env::consts::OS);
         assert!(info.gpu_available);
-        assert_eq!(
-            info.models,
-            vec![
-                "sherpa-onnx-whisper-turbo".to_string(),
-                DEFAULT_SILERO_VAD_MODEL_ID.to_string(),
-            ]
+        assert_eq!(info.models.len(), 1);
+        assert_eq!(info.models[0].id, "sherpa-onnx-whisper-turbo");
+        assert_eq!(info.models[0].name, "Whisper (Large Turbo)");
+        assert!(!info.models[0].languages.is_empty());
+        assert!(
+            !info
+                .models
+                .iter()
+                .any(|m| m.id == DEFAULT_SILERO_VAD_MODEL_ID)
         );
         assert!(info.vad_installed);
         assert!(!info.punctuation_installed);

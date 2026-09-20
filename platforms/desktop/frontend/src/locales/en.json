@@ -2548,6 +2548,7 @@
     "connect_server_first": "Connect to server first",
     "no_models_available": "No models available",
     "select_model": "Select model...",
+    "online_badge": "Online",
     "no_models_warning": "No installed local model or online ASR found. Please download models in the desktop client.",
     "start_transcribe": "Start Transcription",
     "transcribing": "Transcribing...",

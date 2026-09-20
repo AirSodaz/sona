@@ -2548,6 +2548,7 @@
     "connect_server_first": "請先連線服務",
     "no_models_available": "暫無可用模型",
     "select_model": "選擇模型...",
+    "online_badge": "在線",
     "no_models_warning": "未偵測到已安裝的本機模型或線上 ASR，請在用戶端下載模型",
     "start_transcribe": "開始轉寫",
     "transcribing": "轉寫中...",

@@ -51,7 +51,14 @@ Retrieve server platform information, hardware status, installed models, and ava
 {
   "platform": "win32",
   "gpuAvailable": true,
-  "models": ["sensevoice", "sherpa-onnx-whisper-turbo"],
+  "models": [
+    {
+      "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+      "name": "SenseVoice (Int8)",
+      "languages": ["en", "ja", "ko", "yue", "zh"],
+      "languageMode": "auto"
+    }
+  ],
   "vadInstalled": true,
   "punctuationInstalled": true,
   "onlineAsrProviders": [

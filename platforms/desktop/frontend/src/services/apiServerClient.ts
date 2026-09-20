@@ -11,6 +11,7 @@ export interface ApiServerModelInfo {
   name: string;
   description?: string;
   languages?: string[];
+  languageMode?: string;
   installed?: boolean;
 }
 

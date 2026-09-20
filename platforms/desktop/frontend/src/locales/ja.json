@@ -2548,6 +2548,7 @@
     "connect_server_first": "先にサーバーに接続してください",
     "no_models_available": "利用可能なモデルがありません",
     "select_model": "モデルを選択...",
+    "online_badge": "オンライン",
     "no_models_warning": "ローカルモデルまたはオンライン ASR が見つかりません。デスクトップ版でモデルをダウンロードしてください。",
     "start_transcribe": "文字起こしを開始",
     "transcribing": "処理中...",

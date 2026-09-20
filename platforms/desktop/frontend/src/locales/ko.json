@@ -2548,6 +2548,7 @@
     "connect_server_first": "서버에 먼저 연결하세요",
     "no_models_available": "사용 가능한 모델 없음",
     "select_model": "모델 선택...",
+    "online_badge": "온라인",
     "no_models_warning": "설치된 로컬 모델 또는 온라인 ASR이 없습니다. 데스크톱 클라이언트에서 모델을 다운로드하세요.",
     "start_transcribe": "전사 시작",
     "transcribing": "전사 중...",

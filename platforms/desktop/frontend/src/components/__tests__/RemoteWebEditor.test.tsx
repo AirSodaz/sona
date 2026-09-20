@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { apiServerClient } from '../../services/apiServerClient';
 import { RemoteWebEditor } from '../RemoteWebEditor';
 
 const mockChangeLanguage = vi.fn();
@@ -182,6 +183,144 @@ describe('RemoteWebEditor Language and Theme Controls', () => {
 
     await waitFor(() => {
       expect(screen.queryByRole('button', { name: /English/i })).toBeNull();
+    });
+  });
+});
+
+describe('RemoteWebEditor ASR Model Selection', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+  });
+
+  it('renders readable model names and filters out non-ASR models from string IDs', async () => {
+    vi.mocked(apiServerClient.getInfo).mockResolvedValueOnce({
+      models: [
+        'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+        'silero-v5-vad',
+        'sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12',
+        'sherpa-onnx-whisper-turbo',
+        '3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
+      ],
+      gpuAvailable: true,
+    });
+
+    render(<RemoteWebEditor />);
+
+    await waitFor(() => {
+      expect(apiServerClient.getInfo).toHaveBeenCalled();
+    });
+
+    // SenseVoice is the first ASR model, so it should be selected by default with readable name
+    const dropdownTrigger = await screen.findByRole('button', { name: /SenseVoice \(Int8\)/i });
+    expect(dropdownTrigger.textContent).toContain('SenseVoice (Int8)');
+    expect(dropdownTrigger.textContent).not.toContain('sherpa-onnx-sense-voice');
+
+    // Open dropdown to inspect options
+    fireEvent.click(dropdownTrigger);
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      const optionTexts = options.map((opt) => opt.textContent);
+
+      // Readable ASR model names must be present
+      expect(optionTexts.some((txt) => txt?.includes('SenseVoice (Int8)'))).toBe(true);
+      expect(optionTexts.some((txt) => txt?.includes('Whisper (Large Turbo)'))).toBe(true);
+
+      // Raw model IDs should NOT be the option labels
+      expect(
+        optionTexts.some((txt) => txt === 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17')
+      ).toBe(false);
+      expect(optionTexts.some((txt) => txt === 'sherpa-onnx-whisper-turbo')).toBe(false);
+
+      // Non-ASR models must NOT appear in the options
+      expect(optionTexts.some((txt) => txt?.includes('silero'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('Silero'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('punct'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('Punctuation'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('3dspeaker'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('CAMPPlus'))).toBe(false);
+    });
+  });
+
+  it('renders readable model names from ApiServerModelInfo objects and filters non-ASR models', async () => {
+    vi.mocked(apiServerClient.getInfo).mockResolvedValueOnce({
+      models: [
+        {
+          id: 'sherpa-onnx-whisper-turbo',
+          name: 'Whisper (Large Turbo)',
+          languages: ['zh', 'en'],
+        },
+        {
+          id: 'silero-v5-vad',
+          name: 'Silero V5 - VAD',
+          languages: [],
+        },
+      ],
+      gpuAvailable: false,
+    });
+
+    render(<RemoteWebEditor />);
+
+    await waitFor(() => {
+      expect(apiServerClient.getInfo).toHaveBeenCalled();
+    });
+
+    const dropdownTrigger = await screen.findByRole('button', { name: /Whisper \(Large Turbo\)/i });
+    expect(dropdownTrigger.textContent).toContain('Whisper (Large Turbo)');
+
+    fireEvent.click(dropdownTrigger);
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      const optionTexts = options.map((opt) => opt.textContent);
+      expect(optionTexts.some((txt) => txt?.includes('Whisper (Large Turbo)'))).toBe(true);
+      expect(optionTexts.some((txt) => txt?.includes('Silero'))).toBe(false);
+    });
+  });
+
+  it('renders friendly names for configured batch online ASR providers', async () => {
+    vi.mocked(apiServerClient.getInfo).mockResolvedValueOnce({
+      models: [],
+      onlineAsrProviders: [
+        {
+          id: 'volcengine-doubao',
+          languages: ['zh', 'en'],
+          configured: true,
+          supportsBatch: true,
+          supportsStreaming: true,
+        },
+        {
+          id: 'groq-whisper',
+          languages: ['en'],
+          configured: true,
+          supportsBatch: true,
+          supportsStreaming: false,
+        },
+      ],
+      gpuAvailable: false,
+    });
+
+    render(<RemoteWebEditor />);
+
+    await waitFor(() => {
+      expect(apiServerClient.getInfo).toHaveBeenCalled();
+    });
+
+    const dropdownTrigger = await screen.findByRole('button', { name: /豆包语音 \(火山\)/i });
+    // Default fallback to first configured batch online provider with friendly name
+    expect(dropdownTrigger.textContent).toContain('豆包语音 (火山)');
+    expect(dropdownTrigger.textContent).not.toContain('在线: volcengine-doubao');
+
+    fireEvent.click(dropdownTrigger);
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      const optionTexts = options.map((opt) => opt.textContent);
+      expect(optionTexts.some((txt) => txt?.includes('豆包语音 (火山)'))).toBe(true);
+      expect(optionTexts.some((txt) => txt?.includes('Whisper (Groq)'))).toBe(true);
+      expect(optionTexts.some((txt) => txt === '在线: volcengine-doubao')).toBe(false);
+      expect(optionTexts.some((txt) => txt === '在线: groq-whisper')).toBe(false);
     });
   });
 });

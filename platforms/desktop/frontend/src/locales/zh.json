@@ -2548,6 +2548,7 @@
     "connect_server_first": "请先连接服务",
     "no_models_available": "暂无可用模型",
     "select_model": "选择模型...",
+    "online_badge": "在线",
     "no_models_warning": "未检测到已安装的本地模型或在线 ASR，请在客户端下载模型",
     "start_transcribe": "开始转录",
     "transcribing": "转录中...",

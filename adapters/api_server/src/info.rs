@@ -30,12 +30,23 @@ pub struct OnlineAsrProviderInfo {
     pub supports_streaming: bool,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiServerModelInfo {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub languages: Vec<String>,
+    pub language_mode: sona_core::models::preset_models::LanguageMode,
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
     pub platform: String,
     pub gpu_available: bool,
-    pub models: Vec<String>,
+    pub models: Vec<ApiServerModelInfo>,
     pub vad_installed: bool,
     pub punctuation_installed: bool,
     pub online_asr_providers: Vec<OnlineAsrProviderInfo>,
@@ -61,8 +72,14 @@ pub async fn build_info_response(
     let installed_models = snapshot
         .models
         .iter()
-        .filter(|m| m.is_installed)
-        .map(|m| m.id.clone())
+        .filter(|m| m.is_installed && m.is_asr())
+        .map(|m| ApiServerModelInfo {
+            id: m.id.clone(),
+            name: m.selection_label(),
+            description: Some(m.description.clone()),
+            languages: m.languages.clone(),
+            language_mode: m.language_mode,
+        })
         .collect::<Vec<_>>();
     let vad_installed = snapshot.models.iter().any(|m| {
         m.id == sona_core::models::preset_models::DEFAULT_SILERO_VAD_MODEL_ID && m.is_installed

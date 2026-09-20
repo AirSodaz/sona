@@ -3,15 +3,79 @@ import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_LANGUAGE_OPTIONS, resolveAppLanguagePreference } from '../constants/appLanguages';
-import { type ApiServerInfo, apiServerClient } from '../services/apiServerClient';
+import {
+  type ApiServerInfo,
+  type ApiServerModelInfo,
+  apiServerClient,
+} from '../services/apiServerClient';
+import { ONLINE_ASR_PROVIDER_DEFINITIONS } from '../services/onlineAsrProviders';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { PRESET_MODELS_MAP } from '../types/modelCatalog';
 import { exportToMarkdown, exportToSrt, exportToTxt, exportToVtt } from '../utils/webExport';
 import { AudioPlayer } from './AudioPlayer';
 import { Dropdown, type DropdownOption } from './Dropdown';
 import { CloseIcon, DownloadIcon, FileTextIcon, UploadIcon } from './Icons';
 import { TranscriptEditor } from './transcript/TranscriptEditor';
 
+function isAsrModel(model: string | ApiServerModelInfo): boolean {
+  const id = typeof model === 'string' ? model : model.id;
+  const preset = PRESET_MODELS_MAP.get(id);
+  if (preset) {
+    if (
+      preset.type === 'vad' ||
+      preset.type === 'punctuation' ||
+      preset.type === 'speaker-segmentation' ||
+      preset.type === 'speaker-embedding' ||
+      preset.type === 'alignment'
+    ) {
+      return false;
+    }
+    return Boolean(preset.modes && preset.modes.length > 0);
+  }
+  if (typeof model === 'object' && model !== null) {
+    const raw = model as unknown as Record<string, unknown>;
+    const type = (raw.type || raw.modelType) as string | undefined;
+    if (
+      type === 'vad' ||
+      type === 'punctuation' ||
+      type === 'speaker-segmentation' ||
+      type === 'speaker-embedding' ||
+      type === 'alignment'
+    ) {
+      return false;
+    }
+  }
+  const lowerId = id.toLowerCase();
+  if (
+    lowerId.includes('vad') ||
+    lowerId.includes('punctuation') ||
+    lowerId.includes('punct') ||
+    lowerId.includes('segmentation') ||
+    lowerId.includes('embedding')
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function getModelLabel(model: string | ApiServerModelInfo): string {
+  const id = typeof model === 'string' ? model : model.id;
+  const preset = PRESET_MODELS_MAP.get(id);
+
+  if (typeof model === 'object' && model !== null && model.name) {
+    if (preset?.versionLabel && !model.name.includes(preset.versionLabel)) {
+      return `${model.name} (${preset.versionLabel})`;
+    }
+    return model.name;
+  }
+
+  if (preset) {
+    return preset.versionLabel ? `${preset.name} (${preset.versionLabel})` : preset.name;
+  }
+
+  return id;
+}
 export function RemoteWebEditor(): React.JSX.Element {
   const { t, i18n } = useTranslation();
   // Stores
@@ -91,9 +155,12 @@ export function RemoteWebEditor(): React.JSX.Element {
 
       let defaultModel = '';
       if (info.models?.length > 0) {
-        const first = info.models[0];
-        defaultModel = typeof first === 'string' ? first : first.id || '';
-      } else if (info.onlineAsrProviders?.length) {
+        const first = info.models.find(isAsrModel);
+        if (first) {
+          defaultModel = typeof first === 'string' ? first : first.id || '';
+        }
+      }
+      if (!defaultModel && info.onlineAsrProviders?.length) {
         const configuredBatch = info.onlineAsrProviders.find(
           (p) => p.configured && p.supportsBatch
         );
@@ -241,26 +308,44 @@ export function RemoteWebEditor(): React.JSX.Element {
     const options: DropdownOption[] = [];
     if (serverInfo?.models) {
       for (const m of serverInfo.models) {
-        if (typeof m === 'string') {
-          options.push({ value: m, label: m });
-        } else if (m && typeof m === 'object') {
-          options.push({ value: m.id, label: m.name || m.id });
+        if (!isAsrModel(m)) {
+          continue;
         }
+        const modelId = typeof m === 'string' ? m : m.id;
+        const label = getModelLabel(m);
+        options.push({
+          value: modelId,
+          label,
+          ariaLabel: label,
+        });
       }
     }
     if (serverInfo?.onlineAsrProviders) {
       for (const p of serverInfo.onlineAsrProviders) {
         if (p.configured && p.supportsBatch) {
-          options.push({ value: p.id, label: `在线: ${p.id}` });
+          const providerDef = ONLINE_ASR_PROVIDER_DEFINITIONS.find((def) => def.id === p.id);
+          const providerName = providerDef
+            ? t(providerDef.optionLabelKey, { defaultValue: providerDef.optionDefaultLabel })
+            : p.id;
+          const onlineBadge = t('web.online_badge', { defaultValue: '在线' });
+          const label = `${providerName} (${onlineBadge})`;
+          options.push({
+            value: p.id,
+            label,
+            ariaLabel: label,
+          });
         }
       }
     }
     return options;
-  }, [serverInfo]);
+  }, [serverInfo, t]);
 
   useEffect(() => {
-    if (!selectedModel && modelOptions.length > 0) {
-      setSelectedModel(modelOptions[0].value);
+    if (modelOptions.length > 0) {
+      const isValid = modelOptions.some((opt) => opt.value === selectedModel);
+      if (!isValid) {
+        setSelectedModel(modelOptions[0].value);
+      }
     }
   }, [selectedModel, modelOptions]);
 
