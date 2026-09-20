@@ -776,18 +776,20 @@ export function UnifiedDictionarySection({
           {/* Hotwords Card */}
           <div className="dict-card">
             <div className="dict-card-header">
-              <div className="dict-card-title">
-                <span className="dict-card-title-icon">
-                  <Sparkles size={15} />
-                </span>
-                {t('settings.dict_hotwords_title', { defaultValue: 'Hotwords & Vocabulary' })}
-                <span className="dict-card-count">{hotwordsList.length}</span>
-              </div>
-              <div className="dict-card-desc">
-                {t('settings.dict_hotwords_desc', {
-                  defaultValue:
-                    'Bias speech recognition accuracy for specific names, jargon, or keywords.',
-                })}
+              <span className="dict-card-title-icon">
+                <Sparkles size={16} />
+              </span>
+              <div className="dict-card-header-copy">
+                <div className="dict-card-title">
+                  {t('settings.dict_hotwords_title', { defaultValue: 'Hotwords & Vocabulary' })}
+                  <span className="dict-card-count">{hotwordsList.length}</span>
+                </div>
+                <div className="dict-card-desc">
+                  {t('settings.dict_hotwords_desc', {
+                    defaultValue:
+                      'Bias speech recognition accuracy for specific names, jargon, or keywords.',
+                  })}
+                </div>
               </div>
             </div>
 
@@ -844,20 +846,22 @@ export function UnifiedDictionarySection({
           {/* Replacements Card */}
           <div className="dict-card">
             <div className="dict-card-header">
-              <div className="dict-card-title">
-                <span className="dict-card-title-icon">
-                  <ArrowRight size={15} />
-                </span>
-                {t('settings.dict_replacements_title', {
-                  defaultValue: 'Text Replacements & Corrections',
-                })}
-                <span className="dict-card-count">{replacementsList.length}</span>
-              </div>
-              <div className="dict-card-desc">
-                {t('settings.dict_replacements_desc', {
-                  defaultValue:
-                    'Automatically correct misrecognitions and expand snippets upon transcription.',
-                })}
+              <span className="dict-card-title-icon">
+                <ArrowRight size={16} />
+              </span>
+              <div className="dict-card-header-copy">
+                <div className="dict-card-title">
+                  {t('settings.dict_replacements_title', {
+                    defaultValue: 'Text Replacements & Corrections',
+                  })}
+                  <span className="dict-card-count">{replacementsList.length}</span>
+                </div>
+                <div className="dict-card-desc">
+                  {t('settings.dict_replacements_desc', {
+                    defaultValue:
+                      'Automatically correct misrecognitions and expand snippets upon transcription.',
+                  })}
+                </div>
               </div>
             </div>
 
