@@ -14,7 +14,6 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use futures_util::stream::StreamExt;
-use sha2::{Digest, Sha256};
 use sona_core::llm::requests::LlmConfig;
 use sona_core::ports::asr::find_online_asr_provider;
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -63,10 +62,13 @@ impl From<(StatusCode, &'static str)> for ApiError {
 }
 
 pub fn constant_time_eq_str(a: &str, b: &str) -> bool {
-    let hash_a = Sha256::digest(a.as_bytes());
-    let hash_b = Sha256::digest(b.as_bytes());
+    let a_bytes = a.as_bytes();
+    let b_bytes = b.as_bytes();
+    if a_bytes.len() != b_bytes.len() {
+        return false;
+    }
     let mut diff = 0u8;
-    for (x, y) in hash_a.iter().zip(hash_b.iter()) {
+    for (&x, &y) in a_bytes.iter().zip(b_bytes.iter()) {
         diff |= x ^ y;
     }
     diff == 0
@@ -334,13 +336,28 @@ async fn handle_transcribe_inner(
                 )
                     .into());
             }
-            let extension = field
+            let raw_ext = field
                 .file_name()
                 .and_then(|name| std::path::Path::new(name).extension())
                 .and_then(|ext| ext.to_str())
                 .map(|ext| ext.to_lowercase())
-                .filter(|ext| !ext.is_empty() && ext.chars().all(|c| c.is_ascii_alphanumeric()))
-                .unwrap_or_else(|| "wav".to_string());
+                .unwrap_or_default();
+            let extension = match raw_ext.as_str() {
+                "wav" => "wav",
+                "mp3" => "mp3",
+                "m4a" => "m4a",
+                "ogg" => "ogg",
+                "flac" => "flac",
+                "aac" => "aac",
+                "opus" => "opus",
+                "webm" => "webm",
+                "mp4" => "mp4",
+                "mkv" => "mkv",
+                "avi" => "avi",
+                "mov" => "mov",
+                "wma" => "wma",
+                _ => "wav",
+            };
             let file_path = state.temp_dir.join(format!("{}.{}", job_id, extension));
             let mut file = tokio::fs::File::create(&file_path)
                 .await

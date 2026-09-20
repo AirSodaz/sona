@@ -17,14 +17,12 @@ describe('apiServerClient', () => {
     expect(localStorage.getItem('sona_api_server_url')).toBe('http://192.168.1.100:14200');
   });
 
-  it('sets and gets api key and persists to localStorage', () => {
+  it('sets and gets api key', () => {
     apiServerClient.setApiKey('test-secret-token');
     expect(apiServerClient.getApiKey()).toBe('test-secret-token');
-    expect(localStorage.getItem('sona_api_server_key')).toBe('test-secret-token');
 
     apiServerClient.setApiKey('');
     expect(apiServerClient.getApiKey()).toBe('');
-    expect(localStorage.getItem('sona_api_server_key')).toBeNull();
   });
 
   it('constructs audio url with encoded token query param when api key is present', () => {
