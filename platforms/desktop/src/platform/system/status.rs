@@ -40,7 +40,7 @@ pub fn resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(
         let exists = path.is_file();
         (path, exists)
     } else {
-        let path = sona_sherpa_onnx::audio::resolve_ffmpeg_sidecar_path()
+        let path = sona_sherpa_onnx::audio::resolve_ffmpeg_path(None)
             .map_err(|error| error.to_string())?;
         let exists = path.is_file();
         (path, exists)
