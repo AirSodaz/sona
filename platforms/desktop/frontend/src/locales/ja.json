@@ -2317,6 +2317,16 @@
       "loading_body": "許可を要求し、利用可能なデバイスをロードしています。",
       "permission_title": "マイクの許可はまだ必要です",
       "permission_body": "マイクへのアクセスを許可してセットアップを完了し、最初の Live Record を使えるようにします。"
+    },
+    "download_notification": {
+      "downloading_title": "モデルをダウンロード中…",
+      "downloading_body": "推奨モデルをバックグラウンドでダウンロードしています。",
+      "completed_title": "モデル準備完了",
+      "completed_body": "ローカル文字起こしモデルがインストールされ、使用可能です。",
+      "failed_title": "モデルのダウンロードに失敗",
+      "failed_body": "推奨モデルのダウンロードを完了できませんでした。",
+      "retry": "再試行",
+      "dismiss": "閉じる"
     }
   },
   "tray": {

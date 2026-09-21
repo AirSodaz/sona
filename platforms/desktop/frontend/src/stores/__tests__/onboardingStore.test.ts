@@ -20,6 +20,9 @@ describe('onboardingStore', () => {
       entryContext: 'startup',
       isOpen: false,
       focusStartRecordingToken: 0,
+      modelDownloadStatus: 'idle',
+      modelDownloadProgress: 0,
+      modelDownloadError: '',
     });
   });
 

@@ -9,6 +9,9 @@ interface OnboardingStoreState {
   entryContext: OnboardingEntryContext;
   isOpen: boolean;
   focusStartRecordingToken: number;
+  modelDownloadStatus: 'idle' | 'downloading' | 'completed' | 'failed';
+  modelDownloadProgress: number;
+  modelDownloadError: string;
   open: (step?: OnboardingStep, context?: OnboardingEntryContext) => void;
   close: () => void;
   setStep: (step: OnboardingStep) => void;
@@ -17,6 +20,11 @@ interface OnboardingStoreState {
   dismissReminder: () => void;
   reopen: (step?: OnboardingStep, context?: OnboardingEntryContext) => void;
   setPersistedState: (state: OnboardingState, configHasModels: boolean) => void;
+  setModelDownloadStatus: (
+    status: 'idle' | 'downloading' | 'completed' | 'failed',
+    progress?: number,
+    error?: string
+  ) => void;
 }
 
 const defaultState: OnboardingState = { version: 1, status: 'pending' };
@@ -24,10 +32,13 @@ const defaultState: OnboardingState = { version: 1, status: 'pending' };
 /** Shared store for onboarding visibility, progress, and completion state. */
 export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
   persistedState: defaultState,
-  currentStep: 'microphone',
+  currentStep: 'models',
   entryContext: 'startup',
   isOpen: false,
   focusStartRecordingToken: 0,
+  modelDownloadStatus: 'idle' as const,
+  modelDownloadProgress: 0,
+  modelDownloadError: '',
 
   setPersistedState: (state: OnboardingState, configHasModels: boolean) => {
     // We mock a partial config just for `getResumeOnboardingStep` to know if models exist.
@@ -41,7 +52,7 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     });
   },
 
-  open: (step = 'microphone', context = 'startup') =>
+  open: (step = 'models', context = 'startup') =>
     set({
       currentStep: step,
       entryContext: context,
@@ -90,6 +101,9 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
       isOpen: false,
       entryContext: 'startup',
       focusStartRecordingToken: state.focusStartRecordingToken + 1,
+      modelDownloadStatus: 'idle' as const,
+      modelDownloadProgress: 0,
+      modelDownloadError: '',
     }));
 
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
@@ -113,5 +127,13 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
 
   reopen: (step = get().currentStep, context = 'startup') => {
     get().open(step, context);
+  },
+
+  setModelDownloadStatus: (status, progress?, error?) => {
+    set({
+      modelDownloadStatus: status,
+      modelDownloadProgress: progress ?? get().modelDownloadProgress,
+      modelDownloadError: error ?? '',
+    });
   },
 }));

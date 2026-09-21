@@ -2317,6 +2317,16 @@
       "loading_body": "正在請求權限並載入可用裝置。",
       "permission_title": "仍需麥克風權限",
       "permission_body": "請允許存取麥克風以完成設置，並使首次即時錄音路徑生效。"
+    },
+    "download_notification": {
+      "downloading_title": "正在下載模型…",
+      "downloading_body": "推薦模型正在背景下載。",
+      "completed_title": "模型就緒",
+      "completed_body": "本機轉錄模型已安裝並可以使用。",
+      "failed_title": "模型下載失敗",
+      "failed_body": "未能完成推薦模型的下載。",
+      "retry": "重試",
+      "dismiss": "關閉"
     }
   },
   "tray": {

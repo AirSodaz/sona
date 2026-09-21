@@ -36,6 +36,9 @@ const onboardingState = {
   persistedState: { version: 1, status: 'completed' },
   dismissReminder: vi.fn(),
   reopen: vi.fn(),
+  modelDownloadStatus: 'idle' as 'idle' | 'downloading' | 'completed' | 'failed',
+  modelDownloadProgress: 0,
+  modelDownloadError: '',
 };
 
 const configState = {
@@ -219,6 +222,9 @@ describe('NotificationCenter task center', () => {
     automationState.notifications = [];
     onboardingState.isOpen = false;
     onboardingState.persistedState = { version: 1, status: 'completed' };
+    onboardingState.modelDownloadStatus = 'idle';
+    onboardingState.modelDownloadProgress = 0;
+    onboardingState.modelDownloadError = '';
     vi.mocked(shouldShowOnboardingReminder).mockReturnValue(false);
     retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
@@ -727,5 +733,55 @@ describe('NotificationCenter task center', () => {
     expect(screen.queryByRole('menu', { name: 'Clear options' })).toBeNull();
     // Panel remains open
     expect(screen.getByRole('dialog', { name: 'Task Center' })).toBeDefined();
+  });
+
+  it('renders a model download in-progress notification when downloading in background', () => {
+    onboardingState.isOpen = false;
+    onboardingState.modelDownloadStatus = 'downloading';
+    onboardingState.modelDownloadProgress = 42;
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('Downloading models…');
+    screen.getByText('Recommended models are being downloaded in the background.');
+    screen.getByText('42%');
+  });
+
+  it('renders a model download completed notification with dismiss button', () => {
+    onboardingState.isOpen = false;
+    onboardingState.modelDownloadStatus = 'completed';
+    onboardingState.modelDownloadProgress = 100;
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('Models ready');
+    screen.getByText('Local transcription models are installed and ready to use.');
+    screen.getByRole('button', { name: 'Dismiss' });
+  });
+
+  it('renders a model download failed notification with retry button', () => {
+    onboardingState.isOpen = false;
+    onboardingState.modelDownloadStatus = 'failed';
+    onboardingState.modelDownloadError = 'Network timeout';
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('Model download failed');
+    screen.getByText('Network timeout');
+    const retryBtn = screen.getByRole('button', { name: 'Retry' });
+    fireEvent.click(retryBtn);
+    expect(onboardingState.reopen).toHaveBeenCalled();
   });
 });

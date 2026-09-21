@@ -2317,6 +2317,16 @@
       "loading_body": "正在请求权限并加载可用设备。",
       "permission_title": "仍需麦克风权限",
       "permission_body": "请允许访问麦克风以完成设置，并使首次实时录音路径生效。"
+    },
+    "download_notification": {
+      "downloading_title": "正在下载模型…",
+      "downloading_body": "推荐模型正在后台下载。",
+      "completed_title": "模型就绪",
+      "completed_body": "本地转录模型已安装并可以使用。",
+      "failed_title": "模型下载失败",
+      "failed_body": "未能完成推荐模型的下载。",
+      "retry": "重试",
+      "dismiss": "关闭"
     }
   },
   "tray": {

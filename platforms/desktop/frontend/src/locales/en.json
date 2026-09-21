@@ -2317,6 +2317,16 @@
       "loading_body": "We're requesting permission and loading available devices.",
       "permission_title": "Microphone permission is still needed",
       "permission_body": "Allow microphone access to finish setup and make the first live recording path work."
+    },
+    "download_notification": {
+      "downloading_title": "Downloading models…",
+      "downloading_body": "Recommended models are being downloaded in the background.",
+      "completed_title": "Models ready",
+      "completed_body": "Local transcription models are installed and ready to use.",
+      "failed_title": "Model download failed",
+      "failed_body": "Could not finish downloading the recommended models.",
+      "retry": "Retry",
+      "dismiss": "Dismiss"
     }
   },
   "tray": {

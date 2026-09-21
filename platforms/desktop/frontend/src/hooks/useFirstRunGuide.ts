@@ -29,9 +29,9 @@ export interface DownloadProgressState {
 
 function getActiveStepIndex(currentStep: OnboardingStep): number {
   switch (currentStep) {
-    case 'microphone':
-      return 0;
     case 'models':
+      return 0;
+    case 'microphone':
       return 1;
     default:
       return 0;
@@ -57,15 +57,17 @@ export function useFirstRunGuide() {
   const config = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const { isOpen, currentStep, setStep, defer, complete } = useOnboardingStore(
-    useShallow((state) => ({
-      isOpen: state.isOpen,
-      currentStep: state.currentStep,
-      setStep: state.setStep,
-      defer: state.defer,
-      complete: state.complete,
-    }))
-  );
+  const { isOpen, currentStep, setStep, defer, complete, setModelDownloadStatus } =
+    useOnboardingStore(
+      useShallow((state) => ({
+        isOpen: state.isOpen,
+        currentStep: state.currentStep,
+        setStep: state.setStep,
+        defer: state.defer,
+        complete: state.complete,
+        setModelDownloadStatus: state.setModelDownloadStatus,
+      }))
+    );
 
   const recommendedModels = useMemo(() => getRecommendedOnboardingModels(), []);
   const [modelStepStatus, setModelStepStatus] = useState<ModelStepStatus>('idle');
@@ -137,11 +139,14 @@ export function useFirstRunGuide() {
 
   async function handleModelDownload(): Promise<void> {
     setModelStepStatus('downloading');
+    setModelDownloadStatus('downloading', 0);
     setModelError('');
 
     const initialProgress: Record<string, DownloadProgressState> = {};
+    const progressTracker: Record<string, number> = {};
     recommendedModels.forEach((model) => {
       initialProgress[model.id] = { percentage: 0, status: t('first_run.models.preparing') };
+      progressTracker[model.id] = 0;
     });
     setDownloads(initialProgress);
 
@@ -155,14 +160,21 @@ export function useFirstRunGuide() {
             isFinished: update.isFinished,
           },
         }));
+        progressTracker[update.modelId] = update.percentage;
+        const values = Object.values(progressTracker);
+        const overall = values.reduce((sum, v) => sum + v, 0) / values.length;
+        setModelDownloadStatus('downloading', Math.round(overall));
       });
 
       setConfig(getRecommendedOnboardingConfig(paths));
       setModelStepStatus('idle');
+      setModelDownloadStatus('completed', 100);
     } catch (error) {
       logger.error('[Onboarding] Failed to download recommended models:', error);
       setModelStepStatus('error');
-      setModelError(error instanceof Error ? error.message : t('first_run.models.error_detail'));
+      const errorMsg = error instanceof Error ? error.message : t('first_run.models.error_detail');
+      setModelError(errorMsg);
+      setModelDownloadStatus('failed', 0, errorMsg);
     }
   }
 
@@ -171,19 +183,19 @@ export function useFirstRunGuide() {
     setMicrophoneRefreshToken((currentValue) => currentValue + 1);
   }
 
-  function handleContinueFromMicrophone(): void {
-    setConfig({ microphoneId: selectedMicrophoneId });
-    setStep('models');
+  function handleContinueFromModels(): void {
+    setStep('microphone');
   }
 
   function handleFinish(): void {
+    setConfig({ microphoneId: selectedMicrophoneId });
     setMode('live');
     complete();
   }
 
   function handleBack(): void {
-    if (currentStep === 'models') {
-      setStep('microphone');
+    if (currentStep === 'microphone') {
+      setStep('models');
     }
   }
 
@@ -209,7 +221,7 @@ export function useFirstRunGuide() {
     noopClose,
     handleModelDownload,
     handleRetryPermission,
-    handleContinueFromMicrophone,
+    handleContinueFromModels,
     handleFinish,
     handleBack,
     setStep,

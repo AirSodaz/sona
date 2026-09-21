@@ -51,6 +51,7 @@ class ApiServerClient {
         this.baseUrl = savedUrl.trim().replace(/\/+$/, '');
       } else if (
         (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+        window.location.port !== '1420' &&
         window.location.port !== '5173' &&
         window.location.port !== '5174' &&
         window.location.port !== '4173'

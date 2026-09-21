@@ -5,31 +5,14 @@ import type { OnboardingStep } from '../types/onboarding';
 import { Dropdown } from './Dropdown';
 import { CheckIcon, DownloadIcon } from './Icons';
 import { LanguageBadges } from './LanguageBadges';
-import { Modal } from './Modal';
-
-interface OnboardingActionsProps {
-  backLabel: string;
-  laterLabel: string;
-  onBack?: () => void;
-  onLater: () => void;
-  primaryAction: {
-    disabled?: boolean;
-    label: React.ReactNode;
-    onClick: () => void;
-  };
-  secondaryActionsDisabled?: boolean;
-}
 
 type OnboardingTranslate = (key: string) => string;
 
 function getSecondaryActionsDisabled(
   currentStep: OnboardingStep,
-  modelStepStatus: ModelStepStatus,
   isLoadingDevices: boolean
 ): boolean {
   switch (currentStep) {
-    case 'models':
-      return modelStepStatus === 'downloading';
     case 'microphone':
       return isLoadingDevices;
     default:
@@ -68,8 +51,8 @@ function getModelPrimaryActionLabel({
   modelStepStatus: ModelStepStatus;
   t: OnboardingTranslate;
 }): React.ReactNode {
-  if (hasModelsConfigured) {
-    return t('first_run.actions.finish');
+  if (hasModelsConfigured || modelStepStatus === 'downloading') {
+    return t('first_run.actions.continue');
   }
 
   return (
@@ -80,65 +63,46 @@ function getModelPrimaryActionLabel({
   );
 }
 
-function StepIndicator({
-  stepNumber,
-  title,
-  isActive,
-  isComplete,
-}: {
-  stepNumber: number;
-  title: string;
-  isActive: boolean;
-  isComplete: boolean;
-}): React.JSX.Element {
-  return (
-    <div
-      className={`onboarding-step-chip ${isActive ? 'active' : ''} ${isComplete ? 'complete' : ''}`}
-    >
-      <div className="onboarding-step-dot" aria-hidden="true">
-        {isComplete ? <CheckIcon /> : <span>{stepNumber}</span>}
-      </div>
-      <span>{title}</span>
-    </div>
-  );
-}
+const STEPS: OnboardingStep[] = ['models', 'microphone'];
 
-function OnboardingActions({
-  backLabel,
-  laterLabel,
-  onBack,
-  onLater,
-  primaryAction,
-  secondaryActionsDisabled = false,
-}: OnboardingActionsProps): React.JSX.Element {
+function StepNav({
+  currentStep,
+  t,
+}: {
+  currentStep: OnboardingStep;
+  t: OnboardingTranslate;
+}): React.JSX.Element {
+  const activeIndex = STEPS.indexOf(currentStep);
+
   return (
-    <>
-      <button
-        className="btn btn-secondary"
-        style={{ marginInlineEnd: 'auto' }}
-        onClick={onLater}
-        disabled={secondaryActionsDisabled}
-      >
-        {laterLabel}
-      </button>
-      {onBack && (
-        <button className="btn btn-secondary" onClick={onBack} disabled={secondaryActionsDisabled}>
-          {backLabel}
-        </button>
-      )}
-      <button
-        className="btn btn-primary"
-        onClick={primaryAction.onClick}
-        disabled={primaryAction.disabled}
-      >
-        {primaryAction.label}
-      </button>
-    </>
+    <nav className="welcome-steps" aria-label={t('first_run.stepper_label')}>
+      {STEPS.map((step, index) => {
+        const isActive = index === activeIndex;
+        const isComplete = index < activeIndex;
+        const state = isActive ? 'active' : isComplete ? 'complete' : 'upcoming';
+
+        return (
+          <div
+            key={step}
+            className={`welcome-step-item welcome-step-${state}`}
+            aria-current={isActive ? 'step' : undefined}
+          >
+            <div className="welcome-step-indicator" aria-hidden="true">
+              {isComplete ? <CheckIcon /> : <span>{index + 1}</span>}
+            </div>
+            <div className="welcome-step-text">
+              <span className="welcome-step-label">{t(`first_run.steps.${step}`)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
 /**
  * Blocking first-run onboarding wizard for recommended offline transcription setup.
+ * Full-screen split layout: branded hero panel on the left, step content on the right.
  */
 export function FirstRunGuide(): React.JSX.Element | null {
   const { t } = useTranslation();
@@ -157,12 +121,10 @@ export function FirstRunGuide(): React.JSX.Element | null {
     isLoadingDevices,
     permissionState,
     hasModelsConfigured,
-    activeStepIndex,
     isMicrophoneReady,
-    noopClose,
     handleModelDownload,
     handleRetryPermission,
-    handleContinueFromMicrophone,
+    handleContinueFromModels,
     handleFinish,
     handleBack,
   } = useFirstRunGuide();
@@ -171,216 +133,213 @@ export function FirstRunGuide(): React.JSX.Element | null {
     return null;
   }
 
-  const areSecondaryActionsDisabled = getSecondaryActionsDisabled(
-    currentStep,
-    modelStepStatus,
-    isLoadingDevices
-  );
+  const areSecondaryActionsDisabled = getSecondaryActionsDisabled(currentStep, isLoadingDevices);
+
   const modelPrimaryActionLabel = getModelPrimaryActionLabel({
     hasModelsConfigured,
     modelStepStatus,
     t,
   });
+
   const selectedMicrophoneLabel = getSelectedMicrophoneLabel(
     selectedMicrophoneId,
     t('settings.mic_auto')
   );
 
-  let footer: React.ReactNode = null;
-  if (currentStep === 'microphone') {
-    footer = (
-      <OnboardingActions
-        backLabel={t('first_run.actions.back')}
-        laterLabel={t('first_run.actions.later')}
-        onLater={defer}
-        primaryAction={{
-          disabled: isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady),
-          label:
-            permissionState === 'denied'
-              ? t('first_run.actions.retry_permission')
-              : t('first_run.actions.continue'),
-          onClick:
-            permissionState === 'denied' ? handleRetryPermission : handleContinueFromMicrophone,
-        }}
-        secondaryActionsDisabled={areSecondaryActionsDisabled}
-      />
-    );
-  } else if (currentStep === 'models') {
-    footer = (
-      <OnboardingActions
-        backLabel={t('first_run.actions.back')}
-        laterLabel={t('first_run.actions.later')}
-        onBack={handleBack}
-        onLater={defer}
-        primaryAction={{
-          disabled: modelStepStatus === 'downloading',
-          label: modelPrimaryActionLabel,
-          onClick: hasModelsConfigured ? handleFinish : handleModelDownload,
-        }}
-        secondaryActionsDisabled={areSecondaryActionsDisabled}
-      />
-    );
-  }
-
   return (
-    <Modal
-      isOpen={isOpen}
-      onClose={noopClose}
-      closeOnEsc={false}
-      closeOnOverlayClick={false}
-      hideCloseButton
-      size="lg"
-      className="onboarding-modal"
-      title={
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', whiteSpace: 'nowrap' }}>
-          <img src="/sona.svg" alt="" width={22} height={22} />
-          <span>{t('first_run.title')}</span>
+    <div className="welcome-screen" role="dialog" aria-label={t('first_run.title')}>
+      {/* Left: Brand panel */}
+      <div className="welcome-brand">
+        <div className="welcome-brand-content">
+          <div className="welcome-brand-logo">
+            <img src="/sona.svg" alt="" width={48} height={48} />
+          </div>
+          <h1 className="welcome-brand-title">{t('first_run.title')}</h1>
+          <p className="welcome-brand-subtitle">{t('first_run.description')}</p>
         </div>
-      }
-      footer={footer}
-    >
-      <div className="onboarding-body">
-        <p style={{ color: 'var(--color-text-secondary)', marginBottom: 'var(--spacing-lg)' }}>
-          {t('first_run.description')}
-        </p>
-        <div
-          className="onboarding-stepper"
-          aria-label={t('first_run.stepper_label')}
-          style={{ marginBottom: 'var(--spacing-xl)' }}
-        >
-          <StepIndicator
-            stepNumber={1}
-            title={t('first_run.steps.microphone')}
-            isActive={activeStepIndex === 0}
-            isComplete={activeStepIndex > 0}
-          />
-          <StepIndicator
-            stepNumber={2}
-            title={t('first_run.steps.models')}
-            isActive={activeStepIndex === 1}
-            isComplete={activeStepIndex > 1}
-          />
+        <div className="welcome-brand-motif" aria-hidden="true">
+          <svg viewBox="0 0 200 400" fill="none">
+            <path
+              d="M144 50 C90 50 20 70 20 135 C20 205 144 185 144 255 C144 325 80 355 24 325"
+              stroke="currentColor"
+              strokeWidth="20"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              opacity="0.07"
+            />
+          </svg>
         </div>
-
-        {currentStep === 'microphone' && (
-          <section className="onboarding-panel">
-            <div className="onboarding-panel-header">
-              <span className="onboarding-eyebrow">{t('first_run.steps.microphone')}</span>
-              <h3>{t('first_run.microphone.heading')}</h3>
-              <p>{t('first_run.microphone.body')}</p>
-            </div>
-
-            <div className="onboarding-summary-card">
-              <div>
-                <span className="onboarding-summary-label">
-                  {t('first_run.microphone.default_source_label')}
-                </span>
-                <strong>{t('first_run.microphone.default_source_value')}</strong>
-              </div>
-              <div>
-                <span className="onboarding-summary-label">
-                  {t('first_run.microphone.device_label')}
-                </span>
-                <strong>{selectedMicrophoneLabel}</strong>
-              </div>
-            </div>
-
-            <div className="settings-item" style={{ marginBottom: 'var(--spacing-lg)' }}>
-              <label className="settings-label" htmlFor="onboarding-microphone-select">
-                {t('settings.microphone_selection')}
-              </label>
-              <Dropdown
-                id="onboarding-microphone-select"
-                value={selectedMicrophoneId}
-                onChange={(value) => setSelectedMicrophoneId(value)}
-                options={deviceOptions}
-                style={{ width: '100%' }}
-              />
-              <div className="settings-hint">{t('first_run.microphone.device_hint')}</div>
-            </div>
-
-            {isLoadingDevices && (
-              <div className="onboarding-inline-alert" aria-live="polite">
-                <strong>{t('first_run.microphone.loading_title')}</strong>
-                <span>{t('first_run.microphone.loading_body')}</span>
-              </div>
-            )}
-
-            {permissionState === 'denied' && !isLoadingDevices && (
-              <div className="onboarding-inline-alert onboarding-inline-alert-error" role="alert">
-                <strong>{t('first_run.microphone.permission_title')}</strong>
-                <span>{t('first_run.microphone.permission_body')}</span>
-              </div>
-            )}
-          </section>
-        )}
-
-        {currentStep === 'models' && (
-          <section className="onboarding-panel">
-            <div className="onboarding-panel-header">
-              <span className="onboarding-eyebrow">{t('first_run.steps.models')}</span>
-              <h3>{t('first_run.models.heading')}</h3>
-              <p>{t('first_run.models.body')}</p>
-            </div>
-
-            <div className="onboarding-model-list" role="list">
-              {recommendedModels.map((model) => {
-                const downloadState = downloads[model.id];
-                const isDone = downloadState?.isFinished;
-                return (
-                  <div className="onboarding-model-card" role="listitem" key={model.id}>
-                    <div className="onboarding-model-meta">
-                      <div className="onboarding-model-name-row">
-                        <strong>{model.name}</strong>
-                        <div className="onboarding-model-badges">
-                          <span className="model-tag">{model.size}</span>
-                          <LanguageBadges languages={model.languages} />
-                        </div>
-                      </div>
-                      <span>{t(model.description)}</span>
-                    </div>
-
-                    {downloadState && (
-                      <div className="progress-container-mini">
-                        <div className="progress-info-mini" aria-live="polite">
-                          <span style={{ color: 'var(--color-text-muted)', fontSize: '0.75rem' }}>
-                            {downloadState.status}
-                          </span>
-                          <span className={isDone ? 'success-text' : ''}>
-                            {isDone
-                              ? t('first_run.models.ready')
-                              : `${Math.round(downloadState.percentage)}%`}
-                          </span>
-                        </div>
-                        <div
-                          className="progress-bar-mini"
-                          role="progressbar"
-                          aria-valuenow={Math.round(downloadState.percentage)}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label={`${t('common.download')} ${model.name}`}
-                        >
-                          <div
-                            className="progress-fill"
-                            style={{ width: `${downloadState.percentage}%` }}
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {modelStepStatus === 'error' && (
-              <div className="onboarding-inline-alert onboarding-inline-alert-error" role="alert">
-                <strong>{t('first_run.models.error')}</strong>
-                <span>{modelError || t('first_run.models.error_detail')}</span>
-              </div>
-            )}
-          </section>
-        )}
       </div>
-    </Modal>
+
+      {/* Right: Content panel */}
+      <div className="welcome-content">
+        <div className="welcome-content-inner">
+          <StepNav currentStep={currentStep} t={t} />
+
+          <div className="welcome-panel-wrapper">
+            {currentStep === 'microphone' && (
+              <section className="welcome-panel" key="microphone">
+                <div className="welcome-panel-header">
+                  <h2>{t('first_run.microphone.heading')}</h2>
+                  <p>{t('first_run.microphone.body')}</p>
+                </div>
+
+                <div className="welcome-summary-card">
+                  <div>
+                    <span className="welcome-summary-label">
+                      {t('first_run.microphone.default_source_label')}
+                    </span>
+                    <strong>{t('first_run.microphone.default_source_value')}</strong>
+                  </div>
+                  <div>
+                    <span className="welcome-summary-label">
+                      {t('first_run.microphone.device_label')}
+                    </span>
+                    <strong>{selectedMicrophoneLabel}</strong>
+                  </div>
+                </div>
+
+                <div className="welcome-field">
+                  <label className="welcome-field-label" htmlFor="onboarding-microphone-select">
+                    {t('settings.microphone_selection')}
+                  </label>
+                  <Dropdown
+                    id="onboarding-microphone-select"
+                    value={selectedMicrophoneId}
+                    onChange={(value) => setSelectedMicrophoneId(value)}
+                    options={deviceOptions}
+                    style={{ width: '100%' }}
+                  />
+                  <div className="welcome-field-hint">{t('first_run.microphone.device_hint')}</div>
+                </div>
+
+                {isLoadingDevices && (
+                  <div className="welcome-alert" aria-live="polite">
+                    <strong>{t('first_run.microphone.loading_title')}</strong>
+                    <span>{t('first_run.microphone.loading_body')}</span>
+                  </div>
+                )}
+
+                {permissionState === 'denied' && !isLoadingDevices && (
+                  <div className="welcome-alert welcome-alert-error" role="alert">
+                    <strong>{t('first_run.microphone.permission_title')}</strong>
+                    <span>{t('first_run.microphone.permission_body')}</span>
+                  </div>
+                )}
+              </section>
+            )}
+
+            {currentStep === 'models' && (
+              <section className="welcome-panel" key="models">
+                <div className="welcome-panel-header">
+                  <h2>{t('first_run.models.heading')}</h2>
+                  <p>{t('first_run.models.body')}</p>
+                </div>
+
+                <div className="welcome-model-list" role="list">
+                  {recommendedModels.map((model) => {
+                    const downloadState = downloads[model.id];
+                    const isDone = downloadState?.isFinished;
+                    return (
+                      <div className="welcome-model-card" role="listitem" key={model.id}>
+                        <div className="welcome-model-meta">
+                          <div className="welcome-model-name-row">
+                            <strong>{model.name}</strong>
+                            <div className="welcome-model-badges">
+                              <span className="model-tag">{model.size}</span>
+                              <LanguageBadges languages={model.languages} />
+                            </div>
+                          </div>
+                          <span>{t(model.description)}</span>
+                        </div>
+
+                        {downloadState && (
+                          <div className="welcome-progress">
+                            <div className="welcome-progress-info" aria-live="polite">
+                              <span className="welcome-progress-status">
+                                {downloadState.status}
+                              </span>
+                              <span className={isDone ? 'welcome-progress-done' : ''}>
+                                {isDone
+                                  ? t('first_run.models.ready')
+                                  : `${Math.round(downloadState.percentage)}%`}
+                              </span>
+                            </div>
+                            <div
+                              className="welcome-progress-bar"
+                              role="progressbar"
+                              aria-valuenow={Math.round(downloadState.percentage)}
+                              aria-valuemin={0}
+                              aria-valuemax={100}
+                              aria-label={`${t('common.download')} ${model.name}`}
+                            >
+                              <div
+                                className="welcome-progress-fill"
+                                style={{ width: `${downloadState.percentage}%` }}
+                              />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {modelStepStatus === 'error' && (
+                  <div className="welcome-alert welcome-alert-error" role="alert">
+                    <strong>{t('first_run.models.error')}</strong>
+                    <span>{modelError || t('first_run.models.error_detail')}</span>
+                  </div>
+                )}
+              </section>
+            )}
+          </div>
+        </div>
+
+        {/* Footer actions */}
+        <div className="welcome-footer">
+          <button
+            className="btn btn-secondary"
+            style={{ marginInlineEnd: 'auto' }}
+            onClick={defer}
+            disabled={areSecondaryActionsDisabled}
+          >
+            {t('first_run.actions.later')}
+          </button>
+          {currentStep === 'microphone' && (
+            <button
+              className="btn btn-secondary"
+              onClick={handleBack}
+              disabled={areSecondaryActionsDisabled}
+            >
+              {t('first_run.actions.back')}
+            </button>
+          )}
+          <button
+            className="btn btn-primary"
+            onClick={
+              currentStep === 'models'
+                ? hasModelsConfigured || modelStepStatus === 'downloading'
+                  ? handleContinueFromModels
+                  : handleModelDownload
+                : permissionState === 'denied'
+                  ? handleRetryPermission
+                  : handleFinish
+            }
+            disabled={
+              currentStep === 'models'
+                ? false
+                : isLoadingDevices || (permissionState !== 'denied' && !isMicrophoneReady)
+            }
+          >
+            {currentStep === 'models'
+              ? modelPrimaryActionLabel
+              : permissionState === 'denied'
+                ? t('first_run.actions.retry_permission')
+                : t('first_run.actions.finish')}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

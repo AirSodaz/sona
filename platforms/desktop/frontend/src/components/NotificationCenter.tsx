@@ -65,11 +65,26 @@ interface OnboardingTaskEntry {
   body: string;
 }
 
-type TaskCenterEntry = LedgerTaskEntry | UpdateTaskEntry | OnboardingTaskEntry;
+interface OnboardingModelDownloadEntry {
+  source: 'onboarding-download';
+  id: 'onboarding-download';
+  section: 'active' | 'recent';
+  title: string;
+  body: string | null;
+  progress: number;
+  status: 'downloading' | 'completed' | 'failed';
+}
+
+type TaskCenterEntry =
+  | LedgerTaskEntry
+  | UpdateTaskEntry
+  | OnboardingTaskEntry
+  | OnboardingModelDownloadEntry;
 type NotificationTone =
   | 'update'
   | 'recovery'
   | 'onboarding'
+  | 'onboarding-download'
   | 'automation-failure'
   | 'automation-success'
   | 'task-active'
@@ -340,12 +355,18 @@ export function NotificationCenter({
     persistedState: onboardingState,
     dismissReminder: dismissOnboardingReminder,
     reopen: reopenOnboarding,
+    modelDownloadStatus,
+    modelDownloadProgress,
+    modelDownloadError,
   } = useOnboardingStore(
     useShallow((state) => ({
       isOpen: state.isOpen,
       persistedState: state.persistedState,
       dismissReminder: state.dismissReminder,
       reopen: state.reopen,
+      modelDownloadStatus: state.modelDownloadStatus,
+      modelDownloadProgress: state.modelDownloadProgress,
+      modelDownloadError: state.modelDownloadError,
     }))
   );
 
@@ -461,11 +482,50 @@ export function NotificationCenter({
       });
     }
 
+    if (!isOnboardingOpen && modelDownloadStatus && modelDownloadStatus !== 'idle') {
+      nextEntries.push({
+        source: 'onboarding-download',
+        id: 'onboarding-download',
+        section: modelDownloadStatus === 'downloading' ? 'active' : 'recent',
+        title:
+          modelDownloadStatus === 'downloading'
+            ? t('first_run.download_notification.downloading_title', {
+                defaultValue: 'Downloading models…',
+              })
+            : modelDownloadStatus === 'completed'
+              ? t('first_run.download_notification.completed_title', {
+                  defaultValue: 'Models ready',
+                })
+              : t('first_run.download_notification.failed_title', {
+                  defaultValue: 'Model download failed',
+                }),
+        body:
+          modelDownloadStatus === 'downloading'
+            ? t('first_run.download_notification.downloading_body', {
+                defaultValue: 'Recommended models are being downloaded in the background.',
+              })
+            : modelDownloadStatus === 'completed'
+              ? t('first_run.download_notification.completed_body', {
+                  defaultValue: 'Local transcription models are installed and ready to use.',
+                })
+              : modelDownloadError ||
+                t('first_run.download_notification.failed_body', {
+                  defaultValue: 'Could not finish downloading the recommended models.',
+                }),
+        progress: modelDownloadProgress,
+        status: modelDownloadStatus as 'downloading' | 'completed' | 'failed',
+      });
+    }
+
     const getUpdatedAt = (entry: TaskCenterEntry): number => {
       if (entry.source === 'ledger') {
         return entry.task.updatedAt;
       }
-      if (entry.source === 'update' || entry.source === 'onboarding') {
+      if (
+        entry.source === 'update' ||
+        entry.source === 'onboarding' ||
+        entry.source === 'onboarding-download'
+      ) {
         return Number.MAX_SAFE_INTEGER;
       }
       return 0;
@@ -485,6 +545,9 @@ export function NotificationCenter({
     isOnboardingOpen,
     config,
     onboardingState,
+    modelDownloadStatus,
+    modelDownloadProgress,
+    modelDownloadError,
   ]);
 
   const groupedEntries = useMemo(
@@ -699,6 +762,51 @@ export function NotificationCenter({
     );
   };
 
+  const renderModelDownloadEntry = (entry: OnboardingModelDownloadEntry) => {
+    const isActive = entry.status === 'downloading';
+    const isSuccess = entry.status === 'completed';
+    const isError = entry.status === 'failed';
+    const actions = isError
+      ? renderActions([
+          {
+            id: 'retry',
+            label: t('first_run.download_notification.retry', { defaultValue: 'Retry' }),
+            variant: 'primary' as const,
+            run: () => {
+              reopenOnboarding(
+                getResumeOnboardingStep(config, 'startup', onboardingState),
+                'startup'
+              );
+            },
+          },
+        ])
+      : isSuccess
+        ? renderActions([
+            {
+              id: 'dismiss',
+              label: t('first_run.download_notification.dismiss', { defaultValue: 'Dismiss' }),
+              variant: 'secondarySoft' as const,
+              run: () => {
+                useOnboardingStore.getState().setModelDownloadStatus('idle');
+              },
+            },
+          ])
+        : null;
+
+    return (
+      <NotificationCard
+        key={entry.id}
+        tone="onboarding-download"
+        itemClassName={`notification-center-item-download${isError ? ' notification-center-item-error' : ''}`}
+        icon={isSuccess ? <CheckIcon /> : <DownloadIcon />}
+        title={entry.title}
+        body={entry.body}
+        support={isActive ? renderProgress(entry.progress) : null}
+        actions={actions}
+      />
+    );
+  };
+
   const renderEntry = (entry: TaskCenterEntry) => {
     if (entry.source === 'update') {
       return renderUpdateEntry(entry);
@@ -706,6 +814,10 @@ export function NotificationCenter({
 
     if (entry.source === 'onboarding') {
       return renderOnboardingEntry(entry);
+    }
+
+    if (entry.source === 'onboarding-download') {
+      return renderModelDownloadEntry(entry);
     }
 
     return renderLedgerTask(entry);

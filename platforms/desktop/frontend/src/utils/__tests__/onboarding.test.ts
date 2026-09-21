@@ -103,13 +103,13 @@ describe('onboarding utils', () => {
     ).toBe('microphone');
   });
 
-  it('starts at microphone for brand new users', () => {
+  it('starts at models for brand new users', () => {
     expect(
       getResumeOnboardingStep({ streamingModelPath: '', batchModelPath: '' }, 'startup', {
         version: 1,
         status: 'pending',
       })
-    ).toBe('microphone');
+    ).toBe('models');
   });
 
   it('returns models if microphone is likely done but models are missing', () => {

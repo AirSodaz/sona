@@ -61,10 +61,17 @@ const isCaptionWindow = window.location.search.includes('window=caption');
 const isVoiceTypingWindow = window.location.search.includes('window=voice-typing');
 const isTauri =
   typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
+const isExplicitWebMode =
+  window.location.search.includes('mode=web') || window.location.pathname.startsWith('/web');
+const isExplicitAppMode = window.location.search.includes('mode=app');
+const isDevFrontendPort =
+  window.location.port === '1420' ||
+  window.location.port === '5173' ||
+  window.location.port === '5174';
+
 const isWebMode =
-  window.location.search.includes('mode=web') ||
-  window.location.pathname.startsWith('/web') ||
-  !isTauri;
+  !isExplicitAppMode &&
+  (isExplicitWebMode || import.meta.env.MODE === 'web' || (!isTauri && !isDevFrontendPort));
 
 let rootComponent = <App />;
 if (isVoiceTypingWindow) {

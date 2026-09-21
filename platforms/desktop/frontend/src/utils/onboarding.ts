@@ -115,17 +115,20 @@ export function shouldShowOnboardingReminder(
  */
 export function getResumeOnboardingStep(
   config?: Partial<AppConfig> | null,
-  entryContext: OnboardingEntryContext = 'startup',
-  state?: OnboardingState | null
+  _entryContext: OnboardingEntryContext = 'startup',
+  _state?: OnboardingState | null
 ): OnboardingStep {
+  // Models already configured → skip straight to microphone
   if (hasRequiredOnboardingModels(config)) {
     return 'microphone';
   }
 
-  if (entryContext === 'startup' && state?.status === 'pending') {
-    return 'microphone';
+  // Microphone already configured → skip straight to models
+  if (config?.microphoneId && config.microphoneId !== 'default') {
+    return 'models';
   }
 
+  // Default: start from models (first step)
   return 'models';
 }
 

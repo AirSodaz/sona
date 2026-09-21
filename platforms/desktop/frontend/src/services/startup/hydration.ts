@@ -133,5 +133,10 @@ export async function hydrateAppStartupState(): Promise<void> {
     });
   } catch (error) {
     logger.error('[Startup] Failed to hydrate app startup state:', error);
+    // Ensure onboarding opens if pending even if Tauri hydration fails (e.g. browser dev)
+    const current = useOnboardingStore.getState();
+    if (current.persistedState.status === 'pending') {
+      current.setPersistedState(current.persistedState, false);
+    }
   }
 }
