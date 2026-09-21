@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ChevronDownIcon } from './Icons';
 import { ModalPortal } from './ModalPortal';
 
@@ -47,48 +47,121 @@ export function Dropdown({
   const dropdownRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const initialTriggerRectRef = useRef<DOMRect | null>(null);
 
   const showSearch = options.length > 10;
   const selectedOption = options.find((opt) => opt.value === value);
 
+  const calculatePosition = useCallback((): {
+    position: 'bottom' | 'top';
+    style: React.CSSProperties;
+  } | null => {
+    if (!dropdownRef.current) return null;
+    const rect = dropdownRef.current.getBoundingClientRect();
+    const menuMaxHeight = 280;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const spaceAbove = rect.top;
+
+    let newPosition: 'bottom' | 'top' = 'bottom';
+    if (spaceBelow < menuMaxHeight + 20 && spaceAbove > spaceBelow) {
+      newPosition = 'top';
+    }
+
+    const style: React.CSSProperties = {
+      position: 'fixed',
+      left: rect.left,
+      width: rect.width,
+      zIndex: 2500,
+    };
+
+    if (newPosition === 'top') {
+      style.bottom = window.innerHeight - rect.top + 4;
+    } else {
+      style.top = rect.bottom + 4;
+    }
+
+    return { position: newPosition, style };
+  }, []);
+
+  const updatePosition = useCallback(() => {
+    const calculated = calculatePosition();
+    if (calculated) {
+      setPosition(calculated.position);
+      setMenuStyle(calculated.style);
+    }
+  }, [calculatePosition]);
+
+  const openMenu = useCallback(() => {
+    if (disabled) return;
+    setSearchQuery('');
+    updatePosition();
+    if (dropdownRef.current) {
+      initialTriggerRectRef.current = dropdownRef.current.getBoundingClientRect();
+    }
+    setIsOpen(true);
+  }, [disabled, updatePosition]);
+
+  const closeMenu = useCallback(() => {
+    setIsOpen(false);
+    setSearchQuery('');
+    initialTriggerRectRef.current = null;
+  }, []);
+
   useEffect(() => {
     if (disabled) {
-      const frameId = requestAnimationFrame(() => setIsOpen(false));
+      const frameId = requestAnimationFrame(() => closeMenu());
       return () => cancelAnimationFrame(frameId);
     }
     return undefined;
-  }, [disabled]);
+  }, [disabled, closeMenu]);
 
   useEffect(() => {
+    if (!isOpen) {
+      return undefined;
+    }
+
     const handleClickOutside = (event: MouseEvent) => {
+      const targetNode = event.target as Node | null;
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        !menuRef.current?.contains(event.target as Node)
+        targetNode instanceof Node &&
+        (dropdownRef.current.contains(targetNode) || menuRef.current?.contains(targetNode))
       ) {
-        setIsOpen(false);
+        return;
       }
+      closeMenu();
     };
 
     const handleScroll = (event: Event) => {
       const targetNode = event.target as Node | null;
       if (
         menuRef.current &&
-        targetNode &&
+        targetNode instanceof Node &&
         (menuRef.current === targetNode || menuRef.current.contains(targetNode))
       ) {
         return;
       }
-      setIsOpen(false);
+
+      if (dropdownRef.current && initialTriggerRectRef.current) {
+        const currentRect = dropdownRef.current.getBoundingClientRect();
+        const hasMoved =
+          Math.abs(currentRect.top - initialTriggerRectRef.current.top) > 1 ||
+          Math.abs(currentRect.left - initialTriggerRectRef.current.left) > 1;
+        if (!hasMoved) {
+          return;
+        }
+      }
+
+      closeMenu();
     };
 
     document.addEventListener('mousedown', handleClickOutside);
-    window.addEventListener('scroll', handleScroll, true); // Capture to catch any scroll
+    window.addEventListener('scroll', handleScroll, true);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('scroll', handleScroll, true);
     };
-  }, []);
+  }, [isOpen, closeMenu]);
 
   // Focus management when opening
   useEffect(() => {
@@ -97,7 +170,7 @@ export function Dropdown({
         const searchInput =
           menuRef.current.querySelector<HTMLInputElement>('.dropdown-search-input');
         if (searchInput) {
-          requestAnimationFrame(() => searchInput.focus());
+          requestAnimationFrame(() => searchInput.focus({ preventScroll: true }));
           return;
         }
       }
@@ -106,56 +179,36 @@ export function Dropdown({
         '.selected:not(:disabled)'
       );
       if (selectedBtn) {
-        requestAnimationFrame(() => selectedBtn.focus());
+        requestAnimationFrame(() => selectedBtn.focus({ preventScroll: true }));
       } else {
         const firstButton = menuRef.current.querySelector<HTMLButtonElement>(
           '.dropdown-item:not(:disabled)'
         );
         if (firstButton) {
-          requestAnimationFrame(() => firstButton.focus());
+          requestAnimationFrame(() => firstButton.focus({ preventScroll: true }));
         }
       }
     }
   }, [isOpen, showSearch]);
 
-  React.useLayoutEffect(() => {
-    if (isOpen && dropdownRef.current) {
-      const rect = dropdownRef.current.getBoundingClientRect();
-      const menuMaxHeight = 280;
-      const spaceBelow = window.innerHeight - rect.bottom;
-      const spaceAbove = rect.top;
-
-      let newPosition: 'bottom' | 'top' = 'bottom';
-      if (spaceBelow < menuMaxHeight + 20 && spaceAbove > spaceBelow) {
-        newPosition = 'top';
+  useLayoutEffect(() => {
+    if (isOpen) {
+      updatePosition();
+      if (dropdownRef.current && !initialTriggerRectRef.current) {
+        initialTriggerRectRef.current = dropdownRef.current.getBoundingClientRect();
       }
-
-      const style: React.CSSProperties = {
-        position: 'fixed',
-        left: rect.left,
-        width: rect.width,
-        zIndex: 2500,
-      };
-
-      if (newPosition === 'top') {
-        style.bottom = window.innerHeight - rect.top + 4;
-      } else {
-        style.top = rect.bottom + 4;
-      }
-
-      setPosition(newPosition);
-      setMenuStyle(style);
+    } else {
+      initialTriggerRectRef.current = null;
     }
-  }, [isOpen]);
+  }, [isOpen, updatePosition]);
 
   const handleSelect = (option: DropdownOption) => {
     if (option.disabled) {
       return;
     }
     onChange(option.value);
-    setIsOpen(false);
-    setSearchQuery('');
-    triggerRef.current?.focus();
+    closeMenu();
+    triggerRef.current?.focus({ preventScroll: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -165,17 +218,15 @@ export function Dropdown({
 
     if (e.key === 'Escape') {
       e.preventDefault();
-      setIsOpen(false);
-      setSearchQuery('');
-      triggerRef.current?.focus();
+      closeMenu();
+      triggerRef.current?.focus({ preventScroll: true });
       return;
     }
 
     if (!isOpen) {
       if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
         e.preventDefault();
-        setSearchQuery('');
-        setIsOpen(true);
+        openMenu();
       }
       return;
     }
@@ -237,7 +288,7 @@ export function Dropdown({
           break;
 
         case 'Tab':
-          setIsOpen(false);
+          closeMenu();
           break;
 
         default: {
@@ -280,10 +331,11 @@ export function Dropdown({
           if (disabled) {
             return;
           }
-          if (!isOpen) {
-            setSearchQuery('');
+          if (isOpen) {
+            closeMenu();
+          } else {
+            openMenu();
           }
-          setIsOpen(!isOpen);
         }}
         disabled={disabled}
         aria-haspopup="listbox"
@@ -302,7 +354,11 @@ export function Dropdown({
             ref={menuRef}
             className={`dropdown-menu position-${position}`}
             role="listbox"
-            style={menuStyle}
+            style={{
+              position: 'fixed',
+              visibility: menuStyle.left !== undefined ? 'visible' : 'hidden',
+              ...menuStyle,
+            }}
             onKeyDown={(e) => {
               e.stopPropagation();
               handleKeyDown(e);
@@ -337,7 +393,6 @@ export function Dropdown({
                     color: 'var(--text-primary)',
                   }}
                   onClick={(e) => e.stopPropagation()} // Prevent clicking search from triggering select/close
-                  autoFocus
                 />
               </div>
             )}

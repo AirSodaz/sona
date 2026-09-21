@@ -214,4 +214,74 @@ describe('Dropdown', () => {
       expect(searchInput.value).toBe('x');
     });
   });
+
+  describe('Scroll resilience and positioning', () => {
+    const largeOptions = Array.from({ length: 12 }, (_, i) => ({
+      value: `opt${i + 1}`,
+      label: `Language Option ${i + 1}`,
+    }));
+
+    it('search input does not have native autofocus attribute', () => {
+      render(<Dropdown value="" onChange={mockOnChange} options={largeOptions} />);
+      const trigger = screen.getByRole('button', { expanded: false });
+      fireEvent.click(trigger);
+
+      const searchInput = screen.getByPlaceholderText('Search...');
+      expect(searchInput.hasAttribute('autofocus')).toBe(false);
+    });
+
+    it('does not close on scroll event if trigger position has not moved', () => {
+      render(<Dropdown value="" onChange={mockOnChange} options={largeOptions} />);
+      const trigger = screen.getByRole('button', { expanded: false });
+      fireEvent.click(trigger);
+
+      expect(screen.getByRole('listbox')).toBeDefined();
+
+      // Simulate a scroll event on window where trigger has not moved
+      fireEvent.scroll(window);
+      expect(screen.getByRole('listbox')).toBeDefined();
+    });
+
+    it('closes on scroll event if trigger position has moved', () => {
+      const { container } = render(
+        <Dropdown value="" onChange={mockOnChange} options={largeOptions} />
+      );
+      const trigger = screen.getByRole('button', { expanded: false });
+      const dropdownContainer = container.querySelector('.dropdown-container') as HTMLElement;
+
+      // Mock initial getBoundingClientRect
+      let top = 100;
+      vi.spyOn(dropdownContainer, 'getBoundingClientRect').mockImplementation(
+        () =>
+          ({
+            top,
+            bottom: top + 30,
+            left: 50,
+            right: 250,
+            width: 200,
+            height: 30,
+          }) as DOMRect
+      );
+
+      fireEvent.click(trigger);
+      expect(screen.getByRole('listbox')).toBeDefined();
+
+      // Simulate container scrolling by changing the trigger's top coordinate
+      top = 150;
+      fireEvent.scroll(window);
+
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+
+    it('closes on click outside', () => {
+      render(<Dropdown value="" onChange={mockOnChange} options={largeOptions} />);
+      const trigger = screen.getByRole('button', { expanded: false });
+      fireEvent.click(trigger);
+
+      expect(screen.getByRole('listbox')).toBeDefined();
+
+      fireEvent.mouseDown(document.body);
+      expect(screen.queryByRole('listbox')).toBeNull();
+    });
+  });
 });

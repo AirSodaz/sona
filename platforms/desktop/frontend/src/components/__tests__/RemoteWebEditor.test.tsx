@@ -335,4 +335,53 @@ describe('RemoteWebEditor ASR Model Selection', () => {
       expect(optionTexts.some((txt) => txt === '在线: groq-whisper')).toBe(false);
     });
   });
+
+  it('renders model icons for local ASR models and online providers', async () => {
+    vi.mocked(apiServerClient.getInfo).mockResolvedValueOnce({
+      models: [
+        'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+        'sherpa-onnx-whisper-turbo',
+      ],
+      onlineAsrProviders: [
+        {
+          id: 'volcengine-doubao',
+          languages: ['zh', 'en'],
+          configured: true,
+          supportsBatch: true,
+          supportsStreaming: true,
+        },
+      ],
+      gpuAvailable: false,
+    });
+
+    render(<RemoteWebEditor />);
+
+    await waitFor(() => {
+      expect(apiServerClient.getInfo).toHaveBeenCalled();
+    });
+
+    const dropdownTrigger = await screen.findByRole('button', { name: /SenseVoice \(Int8\)/i });
+    expect(dropdownTrigger.querySelector('.model-dropdown-option-icon')).not.toBeNull();
+    expect(dropdownTrigger.querySelector('img.model-brand-logo')).not.toBeNull();
+
+    fireEvent.click(dropdownTrigger);
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      expect(options.length).toBe(3);
+
+      // Verify icons in options
+      const icons = options.map((opt) => opt.querySelector('.model-dropdown-option-icon'));
+      expect(icons.every((icon) => icon !== null)).toBe(true);
+
+      // Local models have brand logo img
+      const logoImgs = options.map((opt) => opt.querySelector('img.model-brand-logo'));
+      expect(logoImgs[0]).not.toBeNull();
+      expect(logoImgs[1]).not.toBeNull();
+
+      // Online provider has SVG icon
+      const onlineSvg = options[2].querySelector('svg');
+      expect(onlineSvg).not.toBeNull();
+    });
+  });
 });

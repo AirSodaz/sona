@@ -17,7 +17,8 @@ import { AudioPlayer } from './AudioPlayer';
 import { Dropdown, type DropdownOption } from './Dropdown';
 import { ErrorDialog } from './ErrorDialog';
 import { GlobalDialog } from './GlobalDialog';
-import { CloseIcon, DownloadIcon, FileTextIcon, UploadIcon } from './Icons';
+import { CloseIcon, DownloadIcon, FileTextIcon, OnlineIcon, UploadIcon } from './Icons';
+import { ModelBrandLogo } from './icons/ModelLogos';
 import { TranscriptEditor } from './transcript/TranscriptEditor';
 
 function isAsrModel(model: string | ApiServerModelInfo): boolean {
@@ -340,10 +341,26 @@ export function RemoteWebEditor(): React.JSX.Element {
         }
         const modelId = typeof m === 'string' ? m : m.id;
         const label = getModelLabel(m);
+        const modelName = typeof m === 'object' && m !== null ? m.name : undefined;
+        const preset = PRESET_MODELS_MAP.get(modelId);
         options.push({
           value: modelId,
-          label,
           ariaLabel: label,
+          label: (
+            <span className="model-dropdown-option">
+              <span className="model-dropdown-option-icon">
+                <ModelBrandLogo
+                  model={{
+                    id: modelId,
+                    name: modelName || preset?.name || label,
+                    type: preset?.type,
+                  }}
+                  size={16}
+                />
+              </span>
+              <span>{label}</span>
+            </span>
+          ),
         });
       }
     }
@@ -358,8 +375,18 @@ export function RemoteWebEditor(): React.JSX.Element {
           const label = `${providerName} (${onlineBadge})`;
           options.push({
             value: p.id,
-            label,
             ariaLabel: label,
+            label: (
+              <span className="model-dropdown-option">
+                <span
+                  className="model-dropdown-option-icon"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  <OnlineIcon />
+                </span>
+                <span>{label}</span>
+              </span>
+            ),
           });
         }
       }

@@ -32,10 +32,10 @@ pub fn find_web_dist_dir(
 
     // 3. Development paths relative to current working directory
     let candidates = [
-        "frontend/dist",
         "frontend/dist-web",
-        "platforms/desktop/frontend/dist",
         "platforms/desktop/frontend/dist-web",
+        "frontend/dist",
+        "platforms/desktop/frontend/dist",
     ];
     for candidate in candidates {
         let path = PathBuf::from(candidate);

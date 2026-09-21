@@ -60,10 +60,12 @@ class ApiServerClient {
       } else {
         this.baseUrl = 'http://127.0.0.1:14200';
       }
+      const savedKey = localStorage.getItem('sona_api_server_key');
+      this.apiKey = savedKey?.trim() || '';
     } else {
       this.baseUrl = 'http://127.0.0.1:14200';
+      this.apiKey = '';
     }
-    this.apiKey = '';
   }
 
   getBaseUrl(): string {
@@ -87,6 +89,13 @@ class ApiServerClient {
 
   setApiKey(key: string): void {
     this.apiKey = key.trim();
+    if (typeof window !== 'undefined') {
+      if (this.apiKey) {
+        localStorage.setItem('sona_api_server_key', this.apiKey);
+      } else {
+        localStorage.removeItem('sona_api_server_key');
+      }
+    }
   }
 
   private getHeaders(extra?: Record<string, string>): HeadersInit {
