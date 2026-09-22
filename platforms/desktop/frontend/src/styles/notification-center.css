@@ -281,6 +281,27 @@
   --notification-center-accent: #64748b;
 }
 
+/* Semantic tones (new) */
+.notification-center-item-tone-info {
+  --notification-center-accent: #64748b;
+}
+
+.notification-center-item-tone-success {
+  --notification-center-accent: #10b981;
+}
+
+.notification-center-item-tone-warning {
+  --notification-center-accent: #f59e0b;
+}
+
+.notification-center-item-tone-error {
+  --notification-center-accent: #ef4444;
+}
+
+.notification-center-item-tone-accent {
+  --notification-center-accent: #2563eb;
+}
+
 .notification-center-item-header {
   display: flex;
   align-items: flex-start;

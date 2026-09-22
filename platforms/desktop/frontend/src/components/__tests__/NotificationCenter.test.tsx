@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
+import { useNotificationPanelStore } from '../../stores/notificationPanelStore';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 import { shouldShowOnboardingReminder } from '../../utils/onboarding';
 import { NotificationCenter } from '../NotificationCenter';
@@ -228,6 +229,7 @@ describe('NotificationCenter task center', () => {
     vi.mocked(shouldShowOnboardingReminder).mockReturnValue(false);
     retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
+    useNotificationPanelStore.getState().close();
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
       await onExit();
       return true;
