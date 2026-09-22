@@ -1,8 +1,16 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  addLlmModel,
+  buildLlmConfigPatch,
+  createLlmSettings,
+  setFeatureModelSelection,
+  updateProviderSetting,
+} from '../../../services/llm/state';
 import { useAutomationStore } from '../../../stores/automationStore';
 import { useConfigStore } from '../../../stores/configStore';
 import { useProjectStore } from '../../../stores/projectStore';
+import { SettingsNavigationProvider } from '../SettingsNavigationContext';
 import { SettingsVocabularyTab } from '../SettingsVocabularyTab';
 
 vi.mock('../../../services/automation/automationRepository', () => ({
@@ -361,5 +369,88 @@ describe('SettingsVocabularyTab', () => {
 
     fireEvent.keyDown(promptsTablist, { key: 'ArrowLeft' });
     expect(screen.getByRole('tab', { name: 'Summary' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('renders unified project data-tooltips on prompts sub-tabs instead of title attribute', () => {
+    render(<SettingsVocabularyTab initialSubTab="prompts" />);
+
+    const polishTab = screen.getByRole('tab', { name: 'Polish' });
+    expect(polishTab.getAttribute('data-tooltip')).toBe('Auto polish and style presets');
+    expect(polishTab.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(polishTab.getAttribute('title')).toBeNull();
+
+    const translationTab = screen.getByRole('tab', { name: 'Translation' });
+    expect(translationTab.getAttribute('data-tooltip')).toBe(
+      'Auto translation and default target language'
+    );
+    expect(translationTab.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(translationTab.getAttribute('title')).toBeNull();
+
+    const summaryTab = screen.getByRole('tab', { name: 'Summary' });
+    expect(summaryTab.getAttribute('data-tooltip')).toBe('Auto summary and custom templates');
+    expect(summaryTab.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(summaryTab.getAttribute('title')).toBeNull();
+  });
+
+  it('renders LLM service configuration status and navigates to LLM settings when clicked', () => {
+    const navigateToTab = vi.fn();
+    render(
+      <SettingsNavigationProvider value={{ activeTab: 'vocabulary', navigateToTab }}>
+        <SettingsVocabularyTab initialSubTab="prompts" initialPromptsSubTab="polish" />
+      </SettingsNavigationProvider>
+    );
+
+    const llmBtn = document.getElementById('settings-vocab-llm-status-btn');
+    expect(llmBtn).not.toBeNull();
+    expect(llmBtn?.classList.contains('unconfigured')).toBe(true);
+    expect(llmBtn?.textContent).toContain('LLM Service: Not Configured');
+    expect(llmBtn?.getAttribute('data-tooltip')).toBe(
+      'LLM service is not configured for this feature. Click to open LLM Service settings.'
+    );
+    expect(llmBtn?.getAttribute('data-tooltip-pos')).toBe('top');
+
+    fireEvent.click(llmBtn!);
+    expect(navigateToTab).toHaveBeenCalledWith('llm_service');
+  });
+
+  it('updates LLM service status and model badge when LLM service is configured and subtabs change', () => {
+    let llmSettings = createLlmSettings('open_ai');
+    llmSettings = updateProviderSetting(llmSettings, 'open_ai', { apiKey: 'test-key' });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'open_ai',
+      model: 'gpt-4o-mini',
+      metadata: { displayName: 'GPT-4o Mini' },
+    });
+    llmSettings = setFeatureModelSelection(llmSettings, 'polish', llmSettings.modelOrder[0]);
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        ...buildLlmConfigPatch(llmSettings),
+      },
+    });
+
+    const navigateToTab = vi.fn();
+    render(
+      <SettingsNavigationProvider value={{ activeTab: 'vocabulary', navigateToTab }}>
+        <SettingsVocabularyTab initialSubTab="prompts" initialPromptsSubTab="polish" />
+      </SettingsNavigationProvider>
+    );
+
+    const llmBtn = document.getElementById('settings-vocab-llm-status-btn');
+    expect(llmBtn?.classList.contains('configured')).toBe(true);
+    expect(llmBtn?.textContent).toContain('LLM Service: Configured');
+    expect(llmBtn?.textContent).toContain('GPT-4o Mini');
+    expect(llmBtn?.getAttribute('data-tooltip')).toContain('GPT-4o Mini');
+
+    // Switch to Translation tab (which has no model selected)
+    fireEvent.click(screen.getByRole('tab', { name: 'Translation' }));
+    expect(llmBtn?.classList.contains('unconfigured')).toBe(true);
+    expect(llmBtn?.textContent).toContain('LLM Service: Not Configured');
+
+    // Switch back to Polish tab
+    fireEvent.click(screen.getByRole('tab', { name: 'Polish' }));
+    expect(llmBtn?.classList.contains('configured')).toBe(true);
+    expect(llmBtn?.textContent).toContain('GPT-4o Mini');
   });
 });

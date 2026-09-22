@@ -1,11 +1,14 @@
-import { Languages, Sparkles, SpellCheck, Users } from 'lucide-react';
+import { ArrowRight, Bot, Languages, Sparkles, SpellCheck, Users } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useSetConfig, useVocabularyConfig } from '../../stores/configStore';
+import { isFeatureLlmConfigComplete } from '../../services/llm/configUtils';
+import { getFeatureModelEntry } from '../../services/llm/state';
+import { useLlmAssistantConfig, useSetConfig, useVocabularyConfig } from '../../stores/configStore';
 import { BookIcon, SummaryIcon } from '../Icons';
 import { SettingsContextSection } from './SettingsContextSection';
 import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
+import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
 import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
 import { SettingsTranslationSection } from './SettingsTranslationSection';
@@ -74,6 +77,34 @@ export function SettingsVocabularyTab({
   const { t } = useTranslation();
   const config = useVocabularyConfig();
   const updateConfig = useSetConfig();
+  const llmConfig = useLlmAssistantConfig();
+  const navContext = useOptionalSettingsNavigation();
+
+  const isLlmConfigured = isFeatureLlmConfigComplete(llmConfig, activePromptsSubTab);
+  const activeModelEntry = getFeatureModelEntry(llmConfig, activePromptsSubTab);
+  const modelDisplayName = activeModelEntry?.metadata?.displayName || activeModelEntry?.model;
+
+  const llmStatusLabel = isLlmConfigured
+    ? t('settings.vocabulary_prompts_llm_status_configured', {
+        defaultValue: 'LLM Service: Configured',
+      })
+    : t('settings.vocabulary_prompts_llm_status_unconfigured', {
+        defaultValue: 'LLM Service: Not Configured',
+      });
+
+  const llmStatusTooltip = isLlmConfigured
+    ? modelDisplayName
+      ? t('settings.vocabulary_prompts_llm_tooltip_configured', {
+          model: modelDisplayName,
+          defaultValue: `Model configured for this feature (${modelDisplayName}). Click to open LLM Service settings.`,
+        })
+      : t('settings.vocabulary_prompts_llm_tooltip_configured_no_model', {
+          defaultValue: 'LLM service is configured. Click to open LLM Service settings.',
+        })
+    : t('settings.vocabulary_prompts_llm_tooltip_unconfigured', {
+        defaultValue:
+          'LLM service is not configured for this feature. Click to open LLM Service settings.',
+      });
 
   const sets = config.textReplacementSets || [];
   const hotwordSets = config.hotwordSets || [];
@@ -186,60 +217,84 @@ export function SettingsVocabularyTab({
             animation: 'fadeIn var(--transition-normal, 0.2s) ease-in-out',
           }}
         >
-          <div
-            id="settings-vocab-prompts-subtabs"
-            className="settings-subtab-nav"
-            role="tablist"
-            aria-label={t('settings.vocabulary_prompts_categories', {
-              defaultValue: 'AI prompt and template categories',
-            })}
-            onKeyDown={handlePromptsTabKeyDown}
-          >
-            {[
-              {
-                value: 'polish' as const,
-                label: t('settings.vocabulary_prompts_tab_polish', { defaultValue: 'Polish' }),
-                description: t('settings.vocabulary_prompts_tab_polish_desc', {
-                  defaultValue: 'Auto polish and style presets',
-                }),
-                icon: <Sparkles size={15} />,
-              },
-              {
-                value: 'translation' as const,
-                label: t('settings.vocabulary_prompts_tab_translation', {
-                  defaultValue: 'Translation',
-                }),
-                description: t('settings.vocabulary_prompts_tab_translation_desc', {
-                  defaultValue: 'Auto translation and default target language',
-                }),
-                icon: <Languages size={15} />,
-              },
-              {
-                value: 'summary' as const,
-                label: t('settings.vocabulary_prompts_tab_summary', { defaultValue: 'Summary' }),
-                description: t('settings.vocabulary_prompts_tab_summary_desc', {
-                  defaultValue: 'Auto summary and custom templates',
-                }),
-                icon: <SummaryIcon width={15} height={15} />,
-              },
-            ].map((tab) => (
-              <button
-                id={`settings-prompts-tab-${tab.value}`}
-                key={tab.value}
-                type="button"
-                role="tab"
-                aria-selected={activePromptsSubTab === tab.value}
-                aria-controls={`settings-prompts-panel-${tab.value}`}
-                aria-label={tab.label}
-                title={tab.description}
-                tabIndex={activePromptsSubTab === tab.value ? 0 : -1}
-                className={`settings-subtab-btn${activePromptsSubTab === tab.value ? ' active' : ''}`}
-                onClick={() => setActivePromptsSubTab(tab.value)}
-              >
-                <span className="settings-subtab-icon">{tab.icon}</span>
-                <span className="settings-subtab-label">{tab.label}</span>
-              </button>
-            ))}
+          <div className="settings-vocab-prompts-header">
+            <div
+              id="settings-vocab-prompts-subtabs"
+              className="settings-subtab-nav"
+              role="tablist"
+              aria-label={t('settings.vocabulary_prompts_categories', {
+                defaultValue: 'AI prompt and template categories',
+              })}
+              onKeyDown={handlePromptsTabKeyDown}
+            >
+              {[
+                {
+                  value: 'polish' as const,
+                  label: t('settings.vocabulary_prompts_tab_polish', { defaultValue: 'Polish' }),
+                  description: t('settings.vocabulary_prompts_tab_polish_desc', {
+                    defaultValue: 'Auto polish and style presets',
+                  }),
+                  icon: <Sparkles size={15} />,
+                },
+                {
+                  value: 'translation' as const,
+                  label: t('settings.vocabulary_prompts_tab_translation', {
+                    defaultValue: 'Translation',
+                  }),
+                  description: t('settings.vocabulary_prompts_tab_translation_desc', {
+                    defaultValue: 'Auto translation and default target language',
+                  }),
+                  icon: <Languages size={15} />,
+                },
+                {
+                  value: 'summary' as const,
+                  label: t('settings.vocabulary_prompts_tab_summary', { defaultValue: 'Summary' }),
+                  description: t('settings.vocabulary_prompts_tab_summary_desc', {
+                    defaultValue: 'Auto summary and custom templates',
+                  }),
+                  icon: <SummaryIcon width={15} height={15} />,
+                },
+              ].map((tab) => (
+                <button
+                  id={`settings-prompts-tab-${tab.value}`}
+                  key={tab.value}
+                  type="button"
+                  role="tab"
+                  aria-selected={activePromptsSubTab === tab.value}
+                  aria-controls={`settings-prompts-panel-${tab.value}`}
+                  aria-label={tab.label}
+                  data-tooltip={tab.description}
+                  data-tooltip-pos="top"
+                  tabIndex={activePromptsSubTab === tab.value ? 0 : -1}
+                  className={`settings-subtab-btn${activePromptsSubTab === tab.value ? ' active' : ''}`}
+                  onClick={() => setActivePromptsSubTab(tab.value)}
+                >
+                  <span className="settings-subtab-icon">{tab.icon}</span>
+                  <span className="settings-subtab-label">{tab.label}</span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              id="settings-vocab-llm-status-btn"
+              type="button"
+              className={`settings-vocab-llm-btn ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
+              onClick={() => navContext?.navigateToTab('llm_service')}
+              data-tooltip={llmStatusTooltip}
+              data-tooltip-pos="top"
+              aria-label={`${llmStatusLabel}. ${t('settings.vocabulary_prompts_llm_jump_aria', { defaultValue: 'Jump to LLM Service settings' })}`}
+            >
+              <Bot size={15} className="settings-vocab-llm-icon" aria-hidden="true" />
+              <span
+                className={`settings-vocab-llm-dot ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
+                aria-hidden="true"
+              />
+              <span className="settings-vocab-llm-label">{llmStatusLabel}</span>
+              {isLlmConfigured && modelDisplayName && (
+                <span className="settings-vocab-llm-model-badge">{modelDisplayName}</span>
+              )}
+              <ArrowRight size={13} className="settings-vocab-llm-arrow" aria-hidden="true" />
+            </button>
           </div>
 
           {activePromptsSubTab === 'polish' && (

@@ -355,6 +355,147 @@
   }
 }
 
+/* --- Prompts Sub-Tab Header Row & LLM Status Navigation --- */
+.settings-vocab-prompts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 16px);
+  flex-wrap: wrap;
+}
+
+.settings-subtab-btn[data-tooltip]::after {
+  white-space: nowrap;
+}
+
+.settings-subtab-btn:first-child[data-tooltip]::after {
+  left: 0;
+  transform: none;
+}
+
+.settings-subtab-btn:first-child[data-tooltip]:hover::after,
+.settings-subtab-btn:first-child[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
+}
+
+.settings-vocab-llm-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border-radius: var(--radius-md, 10px);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  color: var(--color-text-secondary);
+  font-family: inherit;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease,
+    border-color var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease;
+}
+
+.settings-vocab-llm-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover, var(--color-border));
+  box-shadow: var(--apple-control-shadow-rest, 0 1px 2px rgba(0, 0, 0, 0.04));
+}
+
+.settings-vocab-llm-btn:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 48%, transparent);
+  outline-offset: 2px;
+}
+
+.settings-vocab-llm-btn[data-tooltip]::after {
+  left: auto;
+  right: 0;
+  transform: none;
+  white-space: nowrap;
+}
+
+.settings-vocab-llm-btn[data-tooltip]:hover::after,
+.settings-vocab-llm-btn[data-tooltip]:focus-visible::after {
+  transform: translateY(-4px);
+}
+
+.settings-vocab-llm-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  transition: color var(--transition-fast, 0.15s) ease;
+}
+
+.settings-vocab-llm-btn:hover .settings-vocab-llm-icon {
+  color: var(--color-text-primary);
+}
+
+.settings-vocab-llm-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+.settings-vocab-llm-dot.configured {
+  background-color: var(--color-success, #4ea067);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success, #4ea067) 24%, transparent);
+}
+
+.settings-vocab-llm-dot.unconfigured {
+  background-color: var(--color-warning, #dfab01);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning, #dfab01) 24%, transparent);
+}
+
+.settings-vocab-llm-label {
+  font-weight: 500;
+  line-height: 1;
+}
+
+.settings-vocab-llm-model-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm, 4px);
+  background: color-mix(in srgb, var(--color-bg-secondary) 80%, var(--color-bg-primary));
+  border: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+  font-size: 0.75rem;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.settings-vocab-llm-arrow {
+  color: var(--color-text-tertiary, var(--color-text-secondary));
+  transition:
+    transform var(--transition-fast, 0.15s) ease,
+    color var(--transition-fast, 0.15s) ease;
+}
+
+.settings-vocab-llm-btn:hover .settings-vocab-llm-arrow {
+  color: var(--color-text-primary);
+  transform: translateX(2px);
+}
+
+@media (max-width: 640px) {
+  .settings-vocab-prompts-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .settings-vocab-llm-btn {
+    justify-content: center;
+    width: 100%;
+  }
+}
+
 /* --- Speaker Diarization Feature Section --- */
 .settings-speaker-panel {
   display: flex;
