@@ -1,5 +1,9 @@
 package com.sona.android.app.feature.home
 
+import android.app.Activity
+import android.content.ContextWrapper
+import android.content.pm.PackageManager
+import android.os.Build
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -18,6 +22,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.NotificationsOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -29,9 +34,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -44,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
+import com.sona.android.app.notification.SonaNotificationChannels
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AudioImportFailure
 import com.sona.android.application.recording.AudioImportJobState
@@ -68,6 +77,40 @@ internal fun FileTranscriptionScreen(
     var selectedName by rememberSaveable { mutableStateOf<String?>(null) }
     var selectedSize by rememberSaveable { mutableStateOf<Long?>(null) }
     var preparingNew by rememberSaveable { mutableStateOf(false) }
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var notificationPermissionRevision by remember { mutableIntStateOf(0) }
+    val notificationPermissionGranted = remember(notificationPermissionRevision, context) {
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            context.checkSelfPermission(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+    }
+    val shouldShowNotificationRationale = remember(notificationPermissionRevision, context) {
+        val activity = generateSequence(context) { (it as? ContextWrapper)?.baseContext }
+            .filterIsInstance<Activity>()
+            .firstOrNull()
+        activity?.shouldShowRequestPermissionRationale(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS) == true
+    }
+    val notificationLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        hasRequestedNotificationPermission = true
+        notificationPermissionRevision += 1
+        preparingNew = false
+        selectedLocator?.let(onStart)
+    }
+    val startTranscription: () -> Unit = {
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !notificationPermissionGranted &&
+            !hasRequestedNotificationPermission
+        ) {
+            hasRequestedNotificationPermission = true
+            notificationLauncher.launch(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS)
+        } else {
+            preparingNew = false
+            selectedLocator?.let { onStart(it) }
+        }
+    }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let {
             val metadata = context.documentMetadata(it)
@@ -119,6 +162,45 @@ internal fun FileTranscriptionScreen(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !notificationPermissionGranted &&
+            hasRequestedNotificationPermission
+        ) {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                ),
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(
+                        Icons.Rounded.NotificationsOff,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = stringResource(
+                            if (shouldShowNotificationRationale) {
+                                R.string.notification_permission_rationale
+                            } else {
+                                R.string.notification_permission_notice
+                            },
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { SonaNotificationChannels.openNotificationSettings(context) }) {
+                        Text(stringResource(R.string.action_open_app_settings))
+                    }
+                }
+            }
+        }
         when (displayedState) {
             is AudioImportJobState.Running -> RunningImport(displayedState, onCancel)
             is AudioImportJobState.Completed -> CompletedImport(
@@ -150,10 +232,7 @@ internal fun FileTranscriptionScreen(
                     Text(stringResource(R.string.file_select_audio))
                 }
                 Button(
-                    onClick = {
-                        preparingNew = false
-                        selectedLocator?.let(onStart)
-                    },
+                    onClick = startTranscription,
                     enabled = selectedLocator != null && configurationAvailable,
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(R.string.file_start_transcription)) }
@@ -225,7 +304,7 @@ private fun FailedImport(
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         SelectedFileCard(selectedName, selectedSize)
         Text(
-            text = stringResource(state.reason?.messageRes() ?: R.string.home_status_failed),
+            text = stringResource(state.reason?.messageRes() ?: R.string.audio_import_notification_failed),
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodyMedium,
         )

@@ -10,6 +10,7 @@ import android.os.Build
 import android.content.pm.ServiceInfo
 import android.provider.OpenableColumns
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -252,6 +253,7 @@ class AudioImportWorker internal constructor(
                 recovery.resolve(job.id).item?.filePath?.let {
                     deleteRecoverySource(applicationContext, it)
                 }
+                showCompletionNotification(displayName, outcome.historyId)
                 Result.success(workDataOf(
                     KEY_JOB_ID to job.id,
                     KEY_HISTORY_ID to outcome.historyId,
@@ -284,6 +286,7 @@ class AudioImportWorker internal constructor(
                         attemptCount = runAttemptCount + 1,
                     ),
                 )
+                showFailureNotification(displayName, outcome.reason)
                 Result.failure(failureData(outcome.reason, job.id))
             }
         }
@@ -331,14 +334,84 @@ class AudioImportWorker internal constructor(
 
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-        val manager = applicationContext.getSystemService(NotificationManager::class.java)
-        manager.createNotificationChannel(
-            NotificationChannel(
-                NOTIFICATION_CHANNEL_ID,
-                "Audio imports",
-                NotificationManager.IMPORTANCE_LOW,
-            ),
-        )
+        val manager = applicationContext.getSystemService(NotificationManager::class.java) ?: return
+        if (manager.getNotificationChannel(NOTIFICATION_CHANNEL_ID) == null) {
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    NOTIFICATION_CHANNEL_ID,
+                    "Audio transcription",
+                    NotificationManager.IMPORTANCE_LOW,
+                ).apply {
+                    description = "Progress and completion status for audio file transcription"
+                    setShowBadge(false)
+                },
+            )
+        }
+    }
+
+    private fun showCompletionNotification(displayName: String?, historyId: String) {
+        if (!NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) return
+        createNotificationChannel()
+        val launchIntent = applicationContext.packageManager
+            .getLaunchIntentForPackage(applicationContext.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                putExtra(EXTRA_HISTORY_ID, historyId)
+            }
+        val pendingIntent = launchIntent?.let {
+            PendingIntent.getActivity(
+                applicationContext,
+                historyId.hashCode(),
+                it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+        val appName = applicationContext.applicationInfo.loadLabel(applicationContext.packageManager).toString()
+        val title = displayName?.takeIf(String::isNotBlank) ?: appName
+        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_sys_upload_done)
+            .setContentTitle(title)
+            .setContentText("Transcription completed")
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        try {
+            val notificationId = COMPLETION_NOTIFICATION_ID_BASE + (historyId.hashCode() and 0x7fff)
+            NotificationManagerCompat.from(applicationContext).notify(notificationId, notification)
+        } catch (_: SecurityException) {
+            // Ignored if POST_NOTIFICATIONS was revoked
+        }
+    }
+
+    private fun showFailureNotification(displayName: String?, reason: AudioImportFailure) {
+        if (!NotificationManagerCompat.from(applicationContext).areNotificationsEnabled()) return
+        createNotificationChannel()
+        val launchIntent = applicationContext.packageManager
+            .getLaunchIntentForPackage(applicationContext.packageName)?.apply {
+                flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
+            }
+        val pendingIntent = launchIntent?.let {
+            PendingIntent.getActivity(
+                applicationContext,
+                0,
+                it,
+                PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
+            )
+        }
+        val appName = applicationContext.applicationInfo.loadLabel(applicationContext.packageManager).toString()
+        val title = displayName?.takeIf(String::isNotBlank) ?: appName
+        val notification = NotificationCompat.Builder(applicationContext, NOTIFICATION_CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.stat_notify_error)
+            .setContentTitle(title)
+            .setContentText("Transcription failed")
+            .setAutoCancel(true)
+            .setContentIntent(pendingIntent)
+            .build()
+        try {
+            val notificationId = FAILURE_NOTIFICATION_ID_BASE + ((displayName ?: "").hashCode() and 0x7fff)
+            NotificationManagerCompat.from(applicationContext).notify(notificationId, notification)
+        } catch (_: SecurityException) {
+            // Ignored if POST_NOTIFICATIONS was revoked
+        }
     }
 }
 
@@ -633,3 +706,6 @@ private const val NO_PROGRESS = -1
 private const val NOTIFICATION_CHANNEL_ID = "audio_imports"
 private const val NOTIFICATION_ID = 4102
 private const val ENQUEUED_AT_TAG_PREFIX = "sona-audio-import-enqueued-at:"
+private const val COMPLETION_NOTIFICATION_ID_BASE = 5000
+private const val FAILURE_NOTIFICATION_ID_BASE = 6000
+private const val EXTRA_HISTORY_ID = "historyId"

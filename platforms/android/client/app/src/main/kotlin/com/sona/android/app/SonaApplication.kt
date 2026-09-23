@@ -3,6 +3,7 @@ package com.sona.android.app
 import android.app.Application
 import androidx.work.Configuration
 import com.sona.android.app.composition.SonaAppContainer
+import com.sona.android.app.notification.SonaNotificationChannels
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -13,6 +14,7 @@ class SonaApplication : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        SonaNotificationChannels.createChannels(this)
         container.syncWork.schedulePeriodic()
         CoroutineScope(SupervisorJob() + Dispatchers.Default).launch {
             container.audioImportJobsController.reconcileAndSchedule()

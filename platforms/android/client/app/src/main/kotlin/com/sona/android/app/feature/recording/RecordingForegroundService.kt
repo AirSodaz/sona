@@ -186,7 +186,10 @@ class RecordingForegroundService : Service() {
                 NOTIFICATION_CHANNEL_ID,
                 getString(R.string.recording_notification_channel),
                 NotificationManager.IMPORTANCE_LOW,
-            ),
+            ).apply {
+                description = getString(R.string.recording_notification_channel_description)
+                setShowBadge(false)
+            },
         )
     }
 

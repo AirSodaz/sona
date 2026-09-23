@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.Settings
+import com.sona.android.app.notification.SonaNotificationChannels
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
@@ -118,6 +119,9 @@ internal fun RecordScreen(
     }
     val shouldShowRationale = remember(permissionRevision, activity) {
         activity?.shouldShowRequestPermissionRationale(Manifest.permission.RECORD_AUDIO) == true
+    }
+    val shouldShowNotificationRationale = remember(permissionRevision, activity) {
+        activity?.shouldShowRequestPermissionRationale(POST_NOTIFICATIONS_PERMISSION) == true
     }
     val notificationPermissionGranted = remember(permissionRevision, context) {
         Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -275,6 +279,11 @@ internal fun RecordScreen(
             } else {
                 onConfigureRecognition
             },
+            showNotificationNotice = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+                !notificationPermissionGranted &&
+                hasRequestedNotificationPermission,
+            onOpenNotificationSettings = { SonaNotificationChannels.openNotificationSettings(context) },
+            shouldShowNotificationRationale = shouldShowNotificationRationale,
         )
 
         TranscriptList(
@@ -425,6 +434,9 @@ private fun RecordingNotices(
     onRetryPermission: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onConfigureCredential: () -> Unit,
+    showNotificationNotice: Boolean = false,
+    onOpenNotificationSettings: () -> Unit = {},
+    shouldShowNotificationRationale: Boolean = false,
 ) {
     val needsConfiguration = state is LiveRecordingState.NeedsConfiguration ||
         (state is LiveRecordingState.Idle && configurationMissing)
@@ -503,6 +515,25 @@ private fun RecordingNotices(
         MicrophonePermissionDecision.REQUEST_PERMISSION,
         null,
         -> Unit
+    }
+    if (permissionIssue == null && showNotificationNotice) {
+        NoticeRow(
+            text = stringResource(
+                if (shouldShowNotificationRationale) {
+                    R.string.notification_permission_rationale
+                } else {
+                    R.string.notification_permission_notice
+                },
+            ),
+            isWarning = false,
+        )
+        Spacer(Modifier.height(4.dp))
+        FilledTonalButton(
+            onClick = onOpenNotificationSettings,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Text(stringResource(R.string.action_enable_notifications))
+        }
     }
 }
 
