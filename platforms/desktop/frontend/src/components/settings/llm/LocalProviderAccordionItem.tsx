@@ -247,6 +247,7 @@ export function LocalProviderAccordionItem({
         size: '~2.7 GB',
         parameters: '4B',
         quantization: 'Q4_K_M',
+        modalities: ['text', 'image', 'video'],
         languages: ['zh', 'en', 'ja', 'ko'],
         capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
         isRecommended: true,
@@ -350,9 +351,10 @@ export function LocalProviderAccordionItem({
             type="button"
             className="btn btn-secondary btn-sm"
             onClick={handleImportCustomFile}
-            title={t('settings.llm.import_custom_model_hint', {
+            data-tooltip={t('settings.llm.import_custom_model_hint', {
               defaultValue: '导入本地已有的 GGUF 格式模型文件',
             })}
+            data-tooltip-pos="top"
           >
             <Plus size={14} />
             <span>{t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}</span>
@@ -362,7 +364,8 @@ export function LocalProviderAccordionItem({
             className="btn btn-icon btn-secondary-soft btn-sm"
             onClick={fetchCards}
             disabled={isLoading}
-            title={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+            data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+            data-tooltip-pos="top"
             aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
           >
             <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />

@@ -34,6 +34,8 @@ pub struct LocalLlmPreset {
     pub parameters: Option<String>,
     pub quantization: Option<String>,
     #[serde(default)]
+    pub modalities: Vec<String>,
+    #[serde(default)]
     pub languages: Vec<String>,
     #[serde(default)]
     pub capabilities: Vec<String>,
@@ -104,6 +106,11 @@ impl LocalLlmPreset {
             size: self.size.clone(),
             parameters: self.parameters.clone(),
             quantization: self.quantization.clone(),
+            modalities: if self.modalities.is_empty() {
+                vec!["text".to_string()]
+            } else {
+                self.modalities.clone()
+            },
             languages: self.languages.clone(),
             capabilities: self.capabilities.clone(),
             is_recommended: self.is_recommended,
@@ -133,6 +140,8 @@ pub struct LocalLlmModelCard {
     pub size: String,
     pub parameters: Option<String>,
     pub quantization: Option<String>,
+    #[serde(default)]
+    pub modalities: Vec<String>,
     pub languages: Vec<String>,
     pub capabilities: Vec<String>,
     pub is_recommended: bool,

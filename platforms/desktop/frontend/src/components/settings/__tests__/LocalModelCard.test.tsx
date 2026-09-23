@@ -15,6 +15,7 @@ const mockCard: LocalLlmModelCardType = {
   size: '~2.7 GB',
   parameters: '4B',
   quantization: 'Q4_K_M',
+  modalities: ['text', 'image', 'video'],
   languages: ['zh', 'en', 'ja', 'ko'],
   capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
   isRecommended: true,
@@ -52,9 +53,17 @@ describe('LocalModelCard', () => {
     expect(screen.getAllByText('Q4_K_M').length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText('256K (262,144 tokens)')).toBeTruthy();
     expect(screen.getByText('~2.7 GB')).toBeTruthy();
+    expect(screen.getByText('文本')).toBeTruthy();
+    expect(screen.getByText('图像')).toBeTruthy();
+    expect(screen.getByText('视频')).toBeTruthy();
+    expect(screen.queryByText('文本润色')).toBeNull();
+    expect(screen.queryByText('长文总结')).toBeNull();
+    expect(screen.queryByText('多语翻译')).toBeNull();
 
     const downloadBtn = screen.getByRole('button', { name: /点击下载/i });
     expect(downloadBtn).toBeTruthy();
+    expect(downloadBtn.textContent).not.toContain(mockCard.size);
+    expect(screen.queryByText('ZH')).toBeNull();
     fireEvent.click(downloadBtn);
     expect(onDownload).toHaveBeenCalledWith(mockCard);
   });
@@ -124,6 +133,9 @@ describe('LocalModelCard', () => {
 
     const deleteBtn = screen.getByRole('button', { name: /删除模型/i });
     expect(deleteBtn).toBeTruthy();
+    expect(deleteBtn.getAttribute('data-tooltip')).toBe('删除模型');
+    expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(deleteBtn.getAttribute('title')).toBeNull();
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith(installedCard);
   });
@@ -141,6 +153,7 @@ describe('LocalModelCard', () => {
       size: '~1.8 GB',
       parameters: '2B',
       quantization: 'Q4_K_M',
+      modalities: ['text', 'image', 'audio', 'video'],
       languages: ['en', 'zh', 'ja'],
       capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
       isRecommended: false,
@@ -167,5 +180,11 @@ describe('LocalModelCard', () => {
     expect(screen.getByText('2B')).toBeTruthy();
     expect(screen.getByText('128K (131,072 tokens)')).toBeTruthy();
     expect(screen.getByText('~1.8 GB')).toBeTruthy();
+    expect(screen.getByText('文本')).toBeTruthy();
+    expect(screen.getByText('图像')).toBeTruthy();
+    expect(screen.getByText('音频')).toBeTruthy();
+    expect(screen.getByText('视频')).toBeTruthy();
+    expect(screen.queryByText('长文总结')).toBeNull();
+    expect(screen.queryByText('多语翻译')).toBeNull();
   });
 });

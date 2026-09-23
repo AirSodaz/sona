@@ -154,9 +154,9 @@ pub async fn list_local_llm_cards(
                     size: formatted_size,
                     parameters: None,
                     quantization: quant,
+                    modalities: vec!["text".to_string()],
                     languages: vec!["auto".to_string()],
                     capabilities: vec![
-                        "chat".to_string(),
                         "polish".to_string(),
                         "summary".to_string(),
                         "translate".to_string(),

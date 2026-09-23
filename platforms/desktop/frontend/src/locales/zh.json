@@ -2154,7 +2154,7 @@
       "refresh_local_models": "刷新模型",
       "import_custom_model": "导入本地 GGUF",
       "import_custom_model_hint": "选择本地现有的 .gguf 文件",
-      "download_model": "下载模型",
+      "download_model": "下载",
       "download_model_with_size": "点击下载 ({{size}})",
       "delete_model": "删除模型",
       "delete_model_confirm": "确定要删除本地模型 {{name}} 吗？删除后将释放磁盘空间。",

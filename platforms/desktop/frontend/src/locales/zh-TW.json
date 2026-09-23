@@ -2183,7 +2183,7 @@
       "refresh_local_models": "重新整理模型",
       "import_custom_model": "匯入本地 GGUF",
       "import_custom_model_hint": "選擇本地現有的 .gguf 檔案",
-      "download_model": "下載模型",
+      "download_model": "下載",
       "download_model_with_size": "點擊下載 ({{size}})",
       "delete_model": "刪除模型",
       "delete_model_confirm": "確定要刪除本地模型 {{name}} 嗎？刪除後將釋放磁碟空間。",

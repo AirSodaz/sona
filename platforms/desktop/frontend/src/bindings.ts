@@ -1636,6 +1636,7 @@ export type LocalLlmModelCard = {
 	size: string,
 	parameters: string | null,
 	quantization: string | null,
+	modalities?: string[],
 	languages: string[],
 	capabilities: string[],
 	isRecommended: boolean,
