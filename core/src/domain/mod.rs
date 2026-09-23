@@ -156,6 +156,8 @@ pub enum BuiltinLlmProvider {
         alias = "open_ai_compatible"
     )]
     CustomOpenAiCompatible,
+    #[serde(rename = "local", alias = "llama_cpp", alias = "local_model")]
+    Local,
 }
 
 impl BuiltinLlmProvider {
@@ -191,14 +193,14 @@ impl BuiltinLlmProvider {
             Self::Venice => "https://api.venice.ai/api/v1",
             Self::Hyperbolic => "https://api.hyperbolic.xyz",
             Self::Llamafile => "http://127.0.0.1:8080",
-            Self::CustomOpenAiCompatible => "",
+            Self::CustomOpenAiCompatible | Self::Local => "",
         }
     }
 
     pub fn requires_api_key(&self) -> bool {
         !matches!(
             self,
-            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio | Self::Llamafile
+            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio | Self::Llamafile | Self::Local
         )
     }
 }

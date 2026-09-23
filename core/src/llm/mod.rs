@@ -1,4 +1,5 @@
 pub mod jobs;
+pub mod local_models;
 pub mod model_catalog;
 pub mod provider_protocol;
 pub mod providers;

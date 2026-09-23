@@ -48,6 +48,8 @@ const PROVIDER_ALIASES: Readonly<Record<string, CoreBuiltinLlmProvider>> = {
   github_copilot: 'copilot',
   openai_compatible: 'custom-openai-compatible',
   open_ai_compatible: 'custom-openai-compatible',
+  llama_cpp: 'local',
+  local_model: 'local',
 };
 
 function finiteNumber(value: number, path: string): number {

@@ -75,6 +75,8 @@ pub enum LlmProviderStrategy {
     GoogleTranslateFree,
     OpenAiCompatible,
     OpenAiCompatibleCustomPath,
+    #[serde(rename = "local")]
+    Local,
 }
 
 impl LlmProviderStrategy {
@@ -115,6 +117,7 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
                 BuiltinLlmProvider::CustomOpenAiCompatible => Self::OpenAiCompatible,
+                BuiltinLlmProvider::Local => Self::Local,
             },
         }
     }
@@ -163,6 +166,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "open_ai_compatible_custom_path" | "openai_compatible_custom_path" => {
                 Self::OpenAiCompatibleCustomPath
             }
+            "local" | "llama_cpp" | "local_model" => Self::Local,
             _ => Self::OpenAiCompatible,
         })
     }

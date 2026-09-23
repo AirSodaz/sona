@@ -829,7 +829,10 @@
       "hyperbolic": "Hyperbolic",
       "llamafile": "Llamafile",
       "google_translate": "谷歌翻译",
-      "google_translate_free": "谷歌翻译 (免费)"
+      "google_translate_free": "谷歌翻译 (免费)",
+      "local": "本地模型 (llama.cpp)",
+      "local_model_path": "模型路径 / GGUF 文件",
+      "local_model_name": "模型名称"
     },
     "automation": "自动化",
     "voice_typing": "语音输入",

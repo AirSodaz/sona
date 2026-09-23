@@ -492,6 +492,30 @@
         "requiresApiKey": false,
         "editableApiHost": true
       }
+    },
+    {
+      "id": "local",
+      "aliases": [
+        "llama_cpp",
+        "local_model"
+      ],
+      "strategy": "local",
+      "ui": {
+        "labelKey": "settings.llm_providers.local",
+        "labelDefault": "Local (llama.cpp)",
+        "apiHostLabelKey": "settings.llm_providers.local_model_path",
+        "apiHostLabelDefault": "Model Path / GGUF File",
+        "modelLabelKey": "settings.llm_providers.local_model_name",
+        "modelLabelDefault": "Model Name"
+      },
+      "defaults": {
+        "apiHost": ""
+      },
+      "capabilities": {
+        "supportsModelListing": true,
+        "requiresApiKey": false,
+        "editableApiHost": true
+      }
     }
   ]
 }

@@ -104,6 +104,8 @@ const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
   openai: 'open_ai',
   silicon_flow: 'silicon_flow',
   siliconflow: 'silicon_flow',
+  llama_cpp: 'local',
+  local_model: 'local',
 };
 
 function isBuiltInProvider(value: unknown): value is BuiltInLlmProvider {

@@ -57,13 +57,21 @@ pub async fn run_transcript_llm_job(
 }
 
 #[tauri::command]
-pub async fn list_llm_models(request: LlmModelsRequest) -> Result<Vec<LlmModelSummary>, String> {
-    crate::integrations::llm::list_llm_models_command(request).await
+pub async fn list_llm_models(
+    app: AppHandle,
+    request: LlmModelsRequest,
+) -> Result<Vec<LlmModelSummary>, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    crate::integrations::llm::list_llm_models_with_models_dir(request, models_dir).await
 }
 
 #[tauri::command]
-pub async fn describe_llm_model(config: LlmConfig) -> Result<Option<LlmModelSummary>, String> {
-    crate::integrations::llm::describe_llm_model_command(config).await
+pub async fn describe_llm_model(
+    app: AppHandle,
+    config: LlmConfig,
+) -> Result<Option<LlmModelSummary>, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    crate::integrations::llm::describe_llm_model_with_models_dir(config, models_dir).await
 }
 
 #[tauri::command]

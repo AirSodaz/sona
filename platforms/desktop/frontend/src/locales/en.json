@@ -829,7 +829,10 @@
       "hyperbolic": "Hyperbolic",
       "llamafile": "Llamafile",
       "google_translate": "Google Translate",
-      "google_translate_free": "Google Translate (Free)"
+      "google_translate_free": "Google Translate (Free)",
+      "local": "Local Model (llama.cpp)",
+      "local_model_path": "Model Path / GGUF File",
+      "local_model_name": "Model Name"
     },
     "automation": "Automation",
     "voice_typing": "Voice Typing",

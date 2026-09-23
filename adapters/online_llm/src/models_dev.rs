@@ -284,6 +284,7 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::Venice => "venice",
         LlmProviderStrategy::Hyperbolic => "hyperbolic",
         LlmProviderStrategy::Llamafile
+        | LlmProviderStrategy::Local
         | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::GoogleTranslate
         | LlmProviderStrategy::GoogleTranslateFree

@@ -99,8 +99,9 @@ struct DesktopTaskRuntime {
 
 impl DesktopTaskRuntime {
     fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
+        let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
         Self {
-            inner: DesktopLlmAdapter,
+            inner: DesktopLlmAdapter::new(models_dir),
             usage: UsageRecorder::new(app, config, category),
         }
     }
@@ -248,8 +249,10 @@ pub(crate) async fn complete_llm_command(
     request: LlmCompletionRequest,
 ) -> Result<LlmCompletionResponse, String> {
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
-    let usage = UsageRecorder::new(app, request.config.clone(), category);
-    let response = complete_llm_with_port(request, DesktopLlmAdapter).await?;
+    let usage = UsageRecorder::new(app.clone(), request.config.clone(), category);
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    let adapter = DesktopLlmAdapter::new(models_dir);
+    let response = complete_llm_with_port(request, adapter).await?;
     usage.record_usage(response.usage.clone());
     Ok(response)
 }
@@ -331,21 +334,37 @@ pub(crate) async fn summarize_transcript_command(
         .map_err(|error| error.to_string())
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter;
-    LlmRuntimeService::new(&adapter, adapter)
+    list_llm_models_with_models_dir(request, None).await
+}
+
+pub(crate) async fn list_llm_models_with_models_dir(
+    request: LlmModelsRequest,
+    models_dir: Option<std::path::PathBuf>,
+) -> Result<Vec<LlmModelSummary>, String> {
+    let adapter = DesktopLlmAdapter::new(models_dir);
+    LlmRuntimeService::new(&adapter, adapter.clone())
         .list_models(request)
         .await
         .map_err(|error| error.to_string())
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) async fn describe_llm_model_command(
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter;
-    LlmRuntimeService::new(&adapter, adapter)
+    describe_llm_model_with_models_dir(config, None).await
+}
+
+pub(crate) async fn describe_llm_model_with_models_dir(
+    config: LlmConfig,
+    models_dir: Option<std::path::PathBuf>,
+) -> Result<Option<LlmModelSummary>, String> {
+    let adapter = DesktopLlmAdapter::new(models_dir);
+    LlmRuntimeService::new(&adapter, adapter.clone())
         .describe_model(&config)
         .await
         .map_err(|error| error.to_string())

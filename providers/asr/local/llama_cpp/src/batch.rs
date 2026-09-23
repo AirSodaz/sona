@@ -661,7 +661,7 @@ pub(crate) enum GpuOffload {
 /// Whether the linked ggml runtime registered a non-CPU device — a bundled
 /// Metal/Vulkan/CUDA backend backed by a usable driver. CPU-only builds always
 /// report `false`.
-pub(crate) fn gpu_backend_available() -> bool {
+pub fn gpu_backend_available() -> bool {
     static GPU_BACKEND_AVAILABLE: LazyLock<bool> =
         LazyLock::new(|| LlamaModelParams::default().devices().len() > 1);
     *GPU_BACKEND_AVAILABLE
@@ -750,16 +750,20 @@ fn validate_supported_options(
     })
 }
 
-pub(crate) fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
+pub fn get_llama_backend() -> Result<&'static LlamaBackend, String> {
     BACKEND
         .get_or_init(|| LlamaBackend::init().map_err(|error| error.to_string()))
         .as_ref()
-        .map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::Unavailable,
-                format!("Failed to initialize llama.cpp backend: {error}"),
-            )
-        })
+        .map_err(|error| error.clone())
+}
+
+pub(crate) fn backend() -> Result<&'static LlamaBackend, AsrPortError> {
+    get_llama_backend().map_err(|error| {
+        AsrPortError::new(
+            AsrPortErrorKind::Unavailable,
+            format!("Failed to initialize llama.cpp backend: {error}"),
+        )
+    })
 }
 
 /// Loads the model and multimodal projector. `n_gpu_layers` is explicit so

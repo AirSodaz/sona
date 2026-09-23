@@ -12,7 +12,7 @@ use sona_core::llm::provider_protocol::StandardLlmResponse;
 use sona_core::llm::runtime::{LlmCompletionOptions, LlmCompletionRequest, LlmResponseFormat};
 use sona_core::llm::usage::TokenUsage;
 use sona_core::ports::llm::{
-    LlmCompletionPort, LlmModelMetadataPort, LlmPortError, LlmPortErrorKind,
+    LlmCompletionPort, LlmModelDiscoveryPort, LlmModelMetadataPort, LlmPortError, LlmPortErrorKind,
 };
 use std::{
     sync::{
@@ -1048,4 +1048,77 @@ fn llm_api_url_client_builds_for_https_and_local_or_lan_with_various_timeouts() 
         assert!(url.client(timeout_seconds).is_ok());
         assert!(url.client(timeout_seconds).is_ok());
     }
+}
+
+#[tokio::test]
+async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
+    let adapter = DesktopLlmAdapter::new(None);
+
+    let local_config = LlmConfig {
+        provider: sona_core::domain::LlmProvider::Builtin(
+            sona_core::domain::BuiltinLlmProvider::Local,
+        ),
+        strategy: sona_core::llm::tasks::LlmProviderStrategy::Local,
+        base_url: "".to_string(),
+        api_key: "".to_string(),
+        model: "Qwen/Qwen3.5-4B".to_string(),
+        api_path: None,
+        api_version: None,
+        temperature: Some(0.7),
+        reasoning_enabled: None,
+        reasoning_level: None,
+        timeout_seconds: None,
+    };
+
+    assert!(DesktopLlmAdapter::is_local_config(&local_config));
+
+    let models = adapter
+        .list_models(LlmModelsRequest {
+            provider: sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::Local,
+            ),
+            strategy: Some(sona_core::llm::tasks::LlmProviderStrategy::Local),
+            base_url: "".to_string(),
+            api_key: "".to_string(),
+        })
+        .await
+        .expect("listing local models should succeed");
+
+    assert!(
+        models.iter().any(|m| m.model == "Qwen/Qwen3.5-4B"),
+        "local models list should include default Qwen/Qwen3.5-4B"
+    );
+}
+
+#[tokio::test]
+async fn desktop_llm_adapter_fails_informative_error_when_model_missing() {
+    let adapter = DesktopLlmAdapter::new(None);
+
+    let err = adapter
+        .complete(LlmCompletionRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::Local,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "non_existent_qwen_model.gguf".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: Some(0.7),
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            system_prompt: None,
+            input: "hello".to_string(),
+            options: LlmCompletionOptions::default(),
+            source: None,
+        })
+        .await
+        .expect_err("should fail when local model does not exist");
+
+    assert!(err.message.contains("Local model"));
+    assert!(err.message.contains("Qwen3.5-4B-Q4_K_M.gguf"));
 }
