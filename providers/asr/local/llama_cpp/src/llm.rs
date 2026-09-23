@@ -308,12 +308,11 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
         for entry in entries.flatten() {
             let p = entry.path();
             if p.is_file() && is_gguf_file(&p) {
-                if let Some(file_name) = p.file_name().and_then(|s| s.to_str()) {
-                    if let Some(preset) = matched_preset
-                        && file_name.eq_ignore_ascii_case(&preset.filename)
-                    {
-                        return Some(p);
-                    }
+                if let Some(file_name) = p.file_name().and_then(|s| s.to_str())
+                    && let Some(preset) = matched_preset
+                    && file_name.eq_ignore_ascii_case(&preset.filename)
+                {
+                    return Some(p);
                 }
                 if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
                     if let Some(preset) = matched_preset
