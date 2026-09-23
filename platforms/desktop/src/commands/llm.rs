@@ -179,7 +179,7 @@ pub async fn list_local_llm_cards(
 }
 #[tauri::command]
 pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Result<String, String> {
-    let source = std::path::Path::new(&source_path);
+    let source = std::path::PathBuf::from(&source_path);
     if !source.is_file() {
         return Err(format!("File does not exist: {}", source_path));
     }
@@ -192,26 +192,35 @@ pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Resul
     let file_name = source
         .file_name()
         .and_then(|f| f.to_str())
-        .ok_or_else(|| "Invalid source filename".to_string())?;
+        .ok_or_else(|| "Invalid source filename".to_string())?
+        .to_string();
 
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
-    std::fs::create_dir_all(&models_dir).map_err(|e| e.to_string())?;
 
-    let target_path = models_dir.join(file_name);
-    if let (Ok(can_source), Ok(can_target)) = (source.canonicalize(), target_path.canonicalize()) {
-        if can_source == can_target {
-            return Ok(target_path.to_string_lossy().into_owned());
+    tokio::task::spawn_blocking(move || {
+        std::fs::create_dir_all(&models_dir).map_err(|e| e.to_string())?;
+
+        let target_path = models_dir.join(&file_name);
+        if let (Ok(can_source), Ok(can_target)) =
+            (source.canonicalize(), target_path.canonicalize())
+        {
+            if can_source == can_target {
+                return Ok(target_path.to_string_lossy().into_owned());
+            }
         }
-    }
 
-    let temp_target = models_dir.join(format!("{file_name}.importing"));
-    std::fs::copy(source, &temp_target).map_err(|e| format!("Failed to copy model file: {e}"))?;
-    std::fs::rename(&temp_target, &target_path).map_err(|e| {
-        let _ = std::fs::remove_file(&temp_target);
-        format!("Failed to finalize imported model: {e}")
-    })?;
+        let temp_target = models_dir.join(format!("{file_name}.importing"));
+        std::fs::copy(&source, &temp_target)
+            .map_err(|e| format!("Failed to copy model file: {e}"))?;
+        std::fs::rename(&temp_target, &target_path).map_err(|e| {
+            let _ = std::fs::remove_file(&temp_target);
+            format!("Failed to finalize imported model: {e}")
+        })?;
 
-    Ok(target_path.to_string_lossy().into_owned())
+        Ok(target_path.to_string_lossy().into_owned())
+    })
+    .await
+    .map_err(|e| format!("Model import task failed: {e}"))?
 }
 
 fn extract_quantization_from_filename(filename: &str) -> Option<String> {

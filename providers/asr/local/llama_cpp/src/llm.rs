@@ -438,8 +438,15 @@ fn run_llama_generation(
     let delta_sender = gen_ctx.delta_sender;
 
     let n_ctx_train = model.n_ctx_train();
-    let needed = (prompt_tokens.len() as u32).saturating_add(max_output_tokens as u32);
-    let resolved_ctx = needed.max(2048).min(n_ctx_train.max(8192)).min(32_768);
+    let max_ctx = if n_ctx_train > 0 {
+        n_ctx_train.min(32_768).max(2048)
+    } else {
+        32_768
+    };
+    let prompt_len = prompt_tokens.len() as u32;
+    let needed = prompt_len.saturating_add(max_output_tokens as u32);
+    let min_ctx = prompt_len.saturating_add(1).max(2048).min(max_ctx);
+    let resolved_ctx = needed.clamp(min_ctx, max_ctx);
     let context_size = NonZeroU32::new(resolved_ctx).unwrap_or(NonZeroU32::new(4096).unwrap());
 
     let num_threads = std::thread::available_parallelism()
@@ -601,7 +608,12 @@ impl LlamaCppLlmEngine {
                 "Prompt resulted in empty token sequence",
             ));
         }
-        let max_supported_tokens = 32_768usize;
+        let n_ctx_train = model.n_ctx_train() as usize;
+        let max_supported_tokens = if n_ctx_train > 0 {
+            n_ctx_train.min(32_768)
+        } else {
+            32_768
+        };
         if prompt_tokens.len() >= max_supported_tokens {
             return Err(LlmPortError::new(
                 LlmPortErrorKind::InvalidRequest,

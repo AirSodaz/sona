@@ -217,6 +217,10 @@ pub async fn delete_preset_model<R: tauri::Runtime>(
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file()
+                        && path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .is_some_and(|e| e.eq_ignore_ascii_case("gguf"))
                         && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                         && (stem.eq_ignore_ascii_case(target_stem)
                             || stem.eq_ignore_ascii_case(model_id))

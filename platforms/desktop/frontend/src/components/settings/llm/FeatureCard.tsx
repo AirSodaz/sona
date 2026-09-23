@@ -261,7 +261,9 @@ export function FeatureCard({
         return;
       }
 
-      const setting = latestLlmState.providers[provider];
+      const setting =
+        latestLlmState.providers[provider] ??
+        (provider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
       if (
         !getProviderDefinition(provider, latestLlmState.customProviders).supportsModelListing ||
         !setting
@@ -345,7 +347,9 @@ export function FeatureCard({
     nextState = setFeatureModelSelection(nextState, featureId, entryId);
     applyTrackedLlmSettings(nextState);
 
-    const providerSetting = nextState.providers[providerToSave];
+    const providerSetting =
+      nextState.providers[providerToSave] ??
+      (providerToSave === 'local' ? { apiHost: '', apiKey: '' } : undefined);
     if (
       !isManualAddition ||
       !providerSetting ||
