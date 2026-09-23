@@ -166,6 +166,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::llm::generate_llm_text,
         crate::commands::llm::list_llm_models,
         crate::commands::llm::list_local_llm_cards,
+        crate::commands::llm::import_local_llm_file,
         crate::commands::llm::llm_usage_ensure_storage,
         crate::commands::llm::llm_usage_read_raw,
         crate::commands::llm::llm_usage_replace_raw,

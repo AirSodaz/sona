@@ -280,7 +280,7 @@ export function LocalModelCard({
           <span className="local-model-spec-label">
             {t('settings.llm.specs_quantization', { defaultValue: '量化' })}
           </span>
-          <span className="local-model-spec-value">{card.quantization || 'Q4_K_M'}</span>
+          <span className="local-model-spec-value">{card.quantization || '-'}</span>
         </div>
       </div>
 

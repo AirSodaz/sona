@@ -187,4 +187,45 @@ describe('LocalModelCard', () => {
     expect(screen.queryByText('长文总结')).toBeNull();
     expect(screen.queryByText('多语翻译')).toBeNull();
   });
+
+  it('renders custom model with dash fallback when quantization is unknown', () => {
+    const customCard: LocalLlmModelCardType = {
+      id: 'custom-my-model',
+      name: 'my-model',
+      model: 'my-model',
+      filename: 'my-model.gguf',
+      description: 'settings.descriptions.custom_local_model',
+      backend: 'llama.cpp',
+      contextWindow: 131072,
+      maxOutputTokens: 4096,
+      size: '3.5 GB',
+      parameters: null,
+      quantization: null,
+      modalities: ['text'],
+      languages: ['auto'],
+      capabilities: ['polish', 'summary', 'translate'],
+      isRecommended: false,
+      isInstalled: true,
+      installedPath: '/models/my-model.gguf',
+      installedSizeBytes: 3758096384,
+      downloadUrl: null,
+      downloadSizeBytes: null,
+    };
+
+    render(
+      <LocalModelCard
+        card={customCard}
+        activeFeatures={{ polish: false, translation: false, summary: false }}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onApplyFeature={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    expect(screen.getByText('my-model')).toBeTruthy();
+    expect(screen.getByText('-')).toBeTruthy();
+    expect(screen.queryByText('Q4_K_M')).toBeNull();
+  });
 });

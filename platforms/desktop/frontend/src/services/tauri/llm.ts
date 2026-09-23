@@ -538,3 +538,7 @@ export async function translateTranscriptSegments(
 export async function listLocalLlmCards(): Promise<LocalLlmCardsResponse> {
   return invokeTauri(TauriCommand.llm.listLocalCards);
 }
+
+export async function importLocalLlmFile(sourcePath: string): Promise<string> {
+  return invokeTauri(TauriCommand.llm.importLocalLlmFile, { sourcePath });
+}

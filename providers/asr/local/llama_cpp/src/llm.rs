@@ -119,15 +119,25 @@ impl LlamaCppLlmEngine {
             .as_ref()
             .map(|p| p.display().to_string())
             .unwrap_or_else(|| "models".to_string());
+        let matched_preset = sona_core::llm::local_models::find_local_llm_model(target_model);
+        let expected_filename = matched_preset
+            .map(|p| p.filename.as_str())
+            .unwrap_or(DEFAULT_LOCAL_LLM_FILENAME);
+        let download_hint = matched_preset
+            .and_then(|p| p.download.as_ref())
+            .map(|d| format!("Model download: {}", d.url))
+            .unwrap_or_else(|| {
+                "Model download: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF or https://hf-mirror.com/unsloth/Qwen3.5-4B-GGUF".to_string()
+            });
 
         Err(LlmPortError::new(
             LlmPortErrorKind::Unavailable,
             format!(
                 "Local model '{target_model}' not found.\n\
                  Searched in:\n  - {}\n\
-                 Please place the model file '{DEFAULT_LOCAL_LLM_FILENAME}' in '{dir_display}', \
+                 Please place the model file '{expected_filename}' in '{dir_display}', \
                  or specify the full GGUF file path in the 'Model Path' field of Local provider settings.\n\
-                 Model download: https://huggingface.co/unsloth/Qwen3.5-4B-GGUF or https://hf-mirror.com/unsloth/Qwen3.5-4B-GGUF",
+                 {download_hint}",
                 searched_locations.join("\n  - ")
             ),
         ))
@@ -175,19 +185,11 @@ impl LlamaCppLlmEngine {
             scan_dir_for_gguf(dir, 3, &mut add_model_entry);
         }
 
-        // 3. Ensure default recommended preset Qwen/Qwen3.5-4B is present
-        if seen_names.insert(DEFAULT_LOCAL_LLM_MODEL.to_string()) {
-            models.insert(
-                0,
-                LlmModelSummary {
-                    model: DEFAULT_LOCAL_LLM_MODEL.to_string(),
-                    context_window: Some(262_144),
-                    max_output_tokens: Some(4096),
-                    input_modalities: vec![LlmModality::Text],
-                    output_modalities: vec![LlmModality::Text],
-                    ..Default::default()
-                },
-            );
+        // 3. Ensure all presets from sona_core::llm::local_models are present
+        for preset in sona_core::llm::local_models::local_llm_models() {
+            if seen_names.insert(preset.model.clone()) {
+                models.push(preset.to_model_summary());
+            }
         }
 
         models
@@ -222,7 +224,27 @@ where
 }
 
 fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
-    // Exact file
+    // 1. Check if target or its bare name matches any preset from local_models registry
+    let bare_name = target.split('/').next_back().unwrap_or(target);
+    let matched_preset = sona_core::llm::local_models::find_local_llm_model(target)
+        .or_else(|| sona_core::llm::local_models::find_local_llm_model(bare_name));
+
+    if let Some(preset) = matched_preset {
+        let preset_candidates = [
+            dir.join(&preset.filename),
+            dir.join(&preset.id).join(&preset.filename),
+            dir.join(format!("{}.gguf", preset.id)),
+            dir.join(format!("{}-gguf", preset.id))
+                .join(&preset.filename),
+        ];
+        for c in preset_candidates {
+            if c.is_file() {
+                return Some(c);
+            }
+        }
+    }
+
+    // 2. Exact file or with .gguf extension
     let candidate = dir.join(target);
     if candidate.is_file() {
         return Some(candidate);
@@ -232,8 +254,6 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
         return Some(with_ext);
     }
 
-    // Normalized bare name without prefix if it has org/name format (e.g. Qwen/Qwen3.5-4B)
-    let bare_name = target.split('/').next_back().unwrap_or(target);
     let candidate_bare = dir.join(bare_name);
     if candidate_bare.is_file() {
         return Some(candidate_bare);
@@ -243,7 +263,7 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
         return Some(candidate_bare_ext);
     }
 
-    // Check known standard files for Qwen3.5-4B
+    // 3. Check known standard files for Qwen3.5-4B fallback
     let is_qwen3_5_4b = target.eq_ignore_ascii_case("Qwen/Qwen3.5-4B")
         || target.eq_ignore_ascii_case("qwen3.5-4b")
         || target.eq_ignore_ascii_case("Qwen3.5-4B")
@@ -265,30 +285,50 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
         }
     }
 
-    // Subdirectory matching bare name
-    let subdir = dir.join(bare_name.to_lowercase());
-    if subdir.is_dir()
-        && let Ok(entries) = std::fs::read_dir(&subdir)
-    {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.is_file() && is_gguf_file(&p) {
-                return Some(p);
+    // 4. Subdirectory matching bare name or preset id
+    let mut subdirs = vec![dir.join(bare_name.to_lowercase())];
+    if let Some(preset) = matched_preset {
+        subdirs.push(dir.join(preset.id.to_lowercase()));
+    }
+    for subdir in subdirs {
+        if subdir.is_dir()
+            && let Ok(entries) = std::fs::read_dir(&subdir)
+        {
+            for entry in entries.flatten() {
+                let p = entry.path();
+                if p.is_file() && is_gguf_file(&p) {
+                    return Some(p);
+                }
             }
         }
     }
 
-    // Search top-level files matching target or bare name
+    // 5. Search top-level files matching target, bare name, or preset metadata
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_file()
-                && is_gguf_file(&p)
-                && let Some(stem) = p.file_stem().and_then(|s| s.to_str())
-                && (stem.eq_ignore_ascii_case(bare_name)
-                    || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b")))
-            {
-                return Some(p);
+            if p.is_file() && is_gguf_file(&p) {
+                if let Some(file_name) = p.file_name().and_then(|s| s.to_str()) {
+                    if let Some(preset) = matched_preset {
+                        if file_name.eq_ignore_ascii_case(&preset.filename) {
+                            return Some(p);
+                        }
+                    }
+                }
+                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
+                    if let Some(preset) = matched_preset {
+                        if stem.eq_ignore_ascii_case(&preset.id)
+                            || stem.to_ascii_lowercase().contains(&preset.id)
+                        {
+                            return Some(p);
+                        }
+                    }
+                    if stem.eq_ignore_ascii_case(bare_name)
+                        || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b"))
+                    {
+                        return Some(p);
+                    }
+                }
             }
         }
     }
@@ -483,7 +523,10 @@ fn run_llama_generation(
 
         generated_text.push_str(&piece);
         if let Some(tx) = &delta_sender {
-            let _ = tx.send(piece);
+            if tx.send(piece).is_err() {
+                // Stream receiver has disconnected or cancelled
+                break;
+            }
         }
         generated_tokens += 1;
 
@@ -558,9 +601,20 @@ impl LlamaCppLlmEngine {
                 "Prompt resulted in empty token sequence",
             ));
         }
+        let max_supported_tokens = 32_768usize;
+        if prompt_tokens.len() >= max_supported_tokens {
+            return Err(LlmPortError::new(
+                LlmPortErrorKind::InvalidRequest,
+                format!(
+                    "Prompt token length ({}) exceeds maximum local context size ({})",
+                    prompt_tokens.len(),
+                    max_supported_tokens
+                ),
+            ));
+        }
 
         let max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
-        let temperature = request.options.temperature.unwrap_or(0.7);
+        let temperature = request.effective_temperature().unwrap_or(0.7);
 
         let gen_ctx = GenerationContext {
             model,
@@ -636,10 +690,13 @@ impl LlmModelMetadataPort for LlamaCppLlmEngine {
         } else {
             model_name
         };
+        if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(target) {
+            return Ok(Some(preset.to_model_summary()));
+        }
 
         Ok(Some(LlmModelSummary {
             model: target.to_string(),
-            context_window: Some(262_144),
+            context_window: Some(131_072),
             max_output_tokens: Some(4096),
             input_modalities: vec![LlmModality::Text],
             output_modalities: vec![LlmModality::Text],
@@ -682,8 +739,56 @@ mod tests {
         let engine = LlamaCppLlmEngine::new();
         let list = engine.scan_local_models(None);
         assert!(list.iter().any(|m| m.model == DEFAULT_LOCAL_LLM_MODEL));
+        assert!(list.iter().any(|m| m.model == "google/gemma-4-e2b"));
     }
 
+    #[tokio::test]
+    async fn describe_model_returns_correct_metadata_for_presets() {
+        let engine = LlamaCppLlmEngine::new();
+        let qwen_summary = engine
+            .describe_model(&LlmConfig {
+                model: "Qwen/Qwen3.5-4B".to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(qwen_summary.context_window, Some(262_144));
+
+        let gemma_summary = engine
+            .describe_model(&LlmConfig {
+                model: "google/gemma-4-e2b".to_string(),
+                ..Default::default()
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(gemma_summary.context_window, Some(131_072));
+    }
+
+    #[test]
+    fn resolves_gemma_4_e2b_preset_in_models_dir() {
+        let temp_dir = std::env::temp_dir().join(format!("models_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let gemma_file = temp_dir.join("gemma-4-E2B-it-Q4_K_M.gguf");
+        std::fs::write(&gemma_file, b"dummy").unwrap();
+
+        let engine = LlamaCppLlmEngine::with_models_dir(Some(temp_dir.clone()));
+
+        // Resolving by canonical model ID
+        let resolved_by_model = engine
+            .resolve_model_path("google/gemma-4-e2b", None)
+            .expect("should resolve gemma by model name");
+        assert_eq!(resolved_by_model, gemma_file);
+
+        // Resolving by preset id
+        let resolved_by_id = engine
+            .resolve_model_path("gemma-4-e2b", None)
+            .expect("should resolve gemma by preset id");
+        assert_eq!(resolved_by_id, gemma_file);
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
     #[test]
     fn resolves_existing_file_directly() {
         let temp_path =

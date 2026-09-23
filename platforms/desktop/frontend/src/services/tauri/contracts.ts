@@ -385,6 +385,10 @@ type ManualTauriCommandContractMap = {
     args: undefined;
     result: LocalLlmCardsResponse;
   };
+  [TauriCommand.llm.importLocalLlmFile]: {
+    args: { sourcePath: string };
+    result: string;
+  };
   [TauriCommand.llm.polishTranscriptSegments]: {
     args: { request: CorePolishSegmentsRequest };
     result: PolishedSegment[];

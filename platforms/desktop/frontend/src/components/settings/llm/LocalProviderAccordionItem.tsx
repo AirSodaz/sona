@@ -17,7 +17,11 @@ import {
   downloadPresetModel,
 } from '../../../services/tauri/app';
 import { TauriEvent } from '../../../services/tauri/events';
-import { generateLlmText, listLocalLlmCards } from '../../../services/tauri/llm';
+import {
+  generateLlmText,
+  importLocalLlmFile,
+  listLocalLlmCards,
+} from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
 import { useConfigStore } from '../../../stores/configStore';
@@ -186,7 +190,7 @@ export function LocalProviderAccordionItem({
         filters: [{ name: 'GGUF Models', extensions: ['gguf'] }],
       });
       if (typeof selected === 'string' && selected) {
-        // User picked a GGUF file. Refresh local cards to see if it's detected
+        await importLocalLlmFile(selected);
         await fetchCards();
       }
     } catch (err) {
