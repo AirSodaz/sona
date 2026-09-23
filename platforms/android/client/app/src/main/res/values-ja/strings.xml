@@ -185,7 +185,6 @@
     <string name="local_model_installed_heading">インストール済みモデル</string>
     <string name="local_model_catalog_heading">モデルをダウンロード</string>
     <string name="local_model_details">%1$s - %2$s</string>
-    <string name="local_catalog_model_details">%1$s - %2$s</string>
     <string name="local_model_operation_failed">モデル操作を完了できませんでした。</string>
     <string name="local_model_downloaded">インストール済み</string>
     <string name="local_model_downloading">ダウンロード中</string>
@@ -195,6 +194,10 @@
     <string name="local_model_invalid">モデルは無効です</string>
     <string name="local_model_delete_title">モデルを削除しますか？</string>
     <string name="local_model_delete_message">このデバイスから %1$s を削除しますか？</string>
+    <string name="local_model_recommended">おすすめ</string>
+    <string name="local_model_quantization_int8">INT8</string>
+    <string name="local_model_source_android_tag">モバイル最適化</string>
+    <string name="local_model_in_use">使用中</string>
     <string name="local_device_tier_limited">制限あり</string>
     <string name="local_device_tier_standard">標準</string>
     <string name="local_device_tier_high">高性能</string>

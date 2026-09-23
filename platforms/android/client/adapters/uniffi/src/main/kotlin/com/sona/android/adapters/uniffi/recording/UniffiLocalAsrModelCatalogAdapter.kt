@@ -9,24 +9,59 @@ import uniffi.sona_uniffi_bind.FfiLanguageMode
 import uniffi.sona_uniffi_bind.FfiPresetModel
 import uniffi.sona_uniffi_bind.presetModels
 
-class UniffiLocalAsrModelCatalogAdapter : LocalAsrModelCatalogPort {
+class UniffiLocalAsrModelCatalogAdapter(
+    private val modelSources: AndroidModelSourceRepository = AndroidModelSourceRepository(),
+) : LocalAsrModelCatalogPort {
     override suspend fun loadModels(): List<LocalAsrCatalogModel> {
-        val presets = presetModels()
-        return presets
-            .asSequence()
-            .filter { it.engine == "sherpa-onnx" }
-            .map { it.toApplication() }
-            .filter { it.supportedModes.isNotEmpty() }
-            .toList()
+        val presets = presetModels().associateBy { it.id }
+        val sources = modelSources.loadSources()
+        return sources.mapNotNull { source ->
+            val preset = presets[source.id]
+            if (preset != null) {
+                preset.toApplication(source)
+            } else {
+                source.toApplication()
+            }
+        }.filter { it.supportedModes.isNotEmpty() }
     }
 
-    private fun FfiPresetModel.toApplication(): LocalAsrCatalogModel =
+    private fun FfiPresetModel.toApplication(source: AndroidModelSource? = null): LocalAsrCatalogModel =
         LocalAsrCatalogModel(
             id = id,
-            displayName = listOfNotNull(name, versionLabel).distinct().joinToString(" "),
+            displayName = source?.name?.ifBlank { null }
+                ?: listOfNotNull(name, versionLabel).distinct().joinToString(" "),
+            modelType = modelType,
+            languages = if (source != null && source.languages.isNotEmpty()) source.languages else languages,
+            languageMode = languageMode.toApplication(),
+            sizeLabel = if (source != null && source.size.isNotBlank()) source.size else size,
+            estimatedSizeBytes = parseSizeBytes(if (source != null && source.size.isNotBlank()) source.size else size),
+            isRecommended = source?.isRecommended ?: isRecommended,
+            supportedModes = modes.mapNotNullTo(mutableSetOf()) {
+                when (it) {
+                    "streaming" -> AsrMode.STREAMING
+                    "batch" -> AsrMode.BATCH
+                    else -> null
+                }
+            },
+            config = LocalSherpaConfig(
+                modelPath = "",
+                numThreads = 2,
+                modelType = modelType,
+            ),
+        )
+
+    private fun AndroidModelSource.toApplication(): LocalAsrCatalogModel =
+        LocalAsrCatalogModel(
+            id = id,
+            displayName = name,
             modelType = modelType,
             languages = languages,
-            languageMode = languageMode.toApplication(),
+            languageMode = when (languageMode.lowercase()) {
+                "selectable" -> LanguageMode.SELECTABLE
+                "fixed" -> LanguageMode.FIXED
+                "none" -> LanguageMode.NONE
+                else -> LanguageMode.AUTO
+            },
             sizeLabel = size,
             estimatedSizeBytes = parseSizeBytes(size),
             isRecommended = isRecommended,

@@ -7,20 +7,27 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DeleteOutline
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -309,132 +316,304 @@ private fun LocalRecognitionSettings(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        state.installedModels.forEachIndexed { index, model ->
-            if (index > 0) HorizontalDivider()
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(model.displayName, style = MaterialTheme.typography.bodyMedium)
-                    Text(
-                        text = stringResource(
-                            R.string.local_model_details,
-                            model.config.modelType,
-                            formatBytes(model.sizeBytes),
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                state.validationByModelId[model.id]?.let { valid ->
-                    Icon(
-                        imageVector = if (valid) Icons.Rounded.CheckCircle else Icons.Rounded.WarningAmber,
-                        contentDescription = stringResource(
-                            if (valid) R.string.local_model_valid else R.string.local_model_invalid,
-                        ),
-                        tint = if (valid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
-                        modifier = Modifier.size(20.dp),
-                    )
-                }
-                IconButton(
-                    onClick = { onValidateModel(model.id) },
-                    enabled = !busy,
-                ) {
-                    Icon(
-                        Icons.Rounded.CheckCircle,
-                        contentDescription = stringResource(R.string.action_validate_model),
-                    )
-                }
-                IconButton(
-                    onClick = { pendingDeleteModelId = model.id },
-                    enabled = !busy,
-                ) {
-                    Icon(
-                        Icons.Rounded.DeleteOutline,
-                        contentDescription = stringResource(R.string.action_delete_model),
-                    )
+        } else {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                state.installedModels.forEach { model ->
+                    val inUse = state.liveSelection == AsrModelSelection.Local(model.id) ||
+                        state.batchSelection == AsrModelSelection.Local(model.id)
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Text(
+                                        text = model.displayName,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    if (inUse) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.secondaryContainer,
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.local_model_in_use),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                fontWeight = FontWeight.Medium,
+                                                modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(Modifier.height(2.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.local_model_details,
+                                        model.config.modelType,
+                                        formatBytes(model.sizeBytes),
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
+                            state.validationByModelId[model.id]?.let { valid ->
+                                Icon(
+                                    imageVector = if (valid) Icons.Rounded.CheckCircle else Icons.Rounded.WarningAmber,
+                                    contentDescription = stringResource(
+                                        if (valid) R.string.local_model_valid else R.string.local_model_invalid,
+                                    ),
+                                    tint = if (valid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                                Spacer(Modifier.width(4.dp))
+                            }
+                            IconButton(
+                                onClick = { onValidateModel(model.id) },
+                                enabled = !busy,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.CheckCircle,
+                                    contentDescription = stringResource(R.string.action_validate_model),
+                                )
+                            }
+                            IconButton(
+                                onClick = { pendingDeleteModelId = model.id },
+                                enabled = !busy,
+                            ) {
+                                Icon(
+                                    Icons.Rounded.DeleteOutline,
+                                    contentDescription = stringResource(R.string.action_delete_model),
+                                    tint = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        HorizontalDivider()
-        Text(
-            text = stringResource(R.string.local_model_catalog_heading),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-        )
+        HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(R.string.local_model_catalog_heading),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+            )
+            Surface(
+                shape = RoundedCornerShape(8.dp),
+                color = MaterialTheme.colorScheme.tertiaryContainer,
+            ) {
+                Text(
+                    text = stringResource(R.string.local_model_source_android_tag),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    fontWeight = FontWeight.Medium,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+        }
+
         if (state.catalogLoading) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Center,
             ) {
-                CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
+                CircularProgressIndicator(Modifier.size(24.dp), strokeWidth = 2.5.dp)
             }
         }
-        state.catalogModels.forEachIndexed { index, model ->
-            if (index > 0) HorizontalDivider()
-            val installed = state.installedModels.any { it.id == model.id }
-            val downloading = state.operationModelId == model.id && state.downloadProgress != null
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Row(
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            state.catalogModels.forEach { model ->
+                val installed = state.installedModels.any { it.id == model.id }
+                val downloading = state.operationModelId == model.id && state.downloadProgress != null
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(model.displayName, style = MaterialTheme.typography.bodyMedium)
-                        Text(
-                            text = stringResource(
-                                R.string.local_catalog_model_details,
-                                model.languageSummary(),
-                                model.sizeLabel,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Button(
-                        onClick = { onDownloadModel(model.id) },
-                        enabled = !busy && !installed &&
-                            state.deviceCapabilities?.supported != false,
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Icon(Icons.Rounded.Download, contentDescription = null)
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            stringResource(
-                                if (installed) R.string.local_model_downloaded
-                                else R.string.action_download_model,
-                            ),
-                        )
-                    }
-                }
-                if (downloading) {
-                    val progress = checkNotNull(state.downloadProgress)
-                    val fraction = if (progress.totalBytes > 0) {
-                        (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
-                    } else {
-                        null
-                    }
-                    if (fraction == null) {
-                        LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
-                    } else {
-                        LinearProgressIndicator(
-                            progress = { fraction },
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
-                        )
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Text(
+                                        text = model.displayName,
+                                        style = MaterialTheme.typography.titleSmall,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    if (model.isRecommended) {
+                                        Surface(
+                                            shape = RoundedCornerShape(6.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer,
+                                        ) {
+                                            Text(
+                                                text = stringResource(R.string.local_model_recommended),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                            )
+                                        }
+                                    }
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = MaterialTheme.colorScheme.surfaceVariant,
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.local_model_quantization_int8),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            fontWeight = FontWeight.Medium,
+                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
+                                Spacer(Modifier.height(4.dp))
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Text(
+                                        text = model.sizeLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    Text(
+                                        text = "·",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                    Text(
+                                        text = model.languageSummary(),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(8.dp))
+
+                            if (installed) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Check,
+                                            contentDescription = stringResource(R.string.local_model_downloaded),
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
+                                }
+                            } else if (downloading) {
+                                Box(
+                                    modifier = Modifier.size(36.dp),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.5.dp,
+                                    )
+                                }
+                            } else {
+                                FilledTonalIconButton(
+                                    onClick = { onDownloadModel(model.id) },
+                                    enabled = !busy && state.deviceCapabilities?.supported != false,
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Rounded.Download,
+                                        contentDescription = stringResource(R.string.action_download_model),
+                                        modifier = Modifier.size(20.dp),
+                                    )
+                                }
+                            }
+                        }
+
+                        if (downloading) {
+                            val progress = checkNotNull(state.downloadProgress)
+                            val fraction = if (progress.totalBytes > 0) {
+                                (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
+                            } else {
+                                null
+                            }
+                            Spacer(Modifier.height(2.dp))
+                            if (fraction == null) {
+                                LinearProgressIndicator(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                )
+                            } else {
+                                LinearProgressIndicator(
+                                    progress = { fraction },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(6.dp)
+                                        .clip(RoundedCornerShape(3.dp)),
+                                )
+                            }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = stringResource(
+                                        when (progress.stage) {
+                                            LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
+                                            LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
+                                            LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
+                                        },
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                                if (progress.totalBytes > 0) {
+                                    Text(
+                                        text = "${(fraction?.times(100))?.toInt() ?: 0}% · ${formatBytes(progress.downloadedBytes.toLong())} / ${formatBytes(progress.totalBytes.toLong())}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
                     }
-                    Text(
-                        text = stringResource(
-                            when (progress.stage) {
-                                LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
-                                LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
-                                LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
                 }
             }
         }

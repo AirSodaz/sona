@@ -1,0 +1,174 @@
+{
+  "version": "1.0.0",
+  "engine": "sherpa-onnx",
+  "quantization": "int8",
+  "models": [
+    {
+      "id": "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17",
+      "name": "SenseVoice (Int8)",
+      "modelType": "sensevoice",
+      "quantization": "int8",
+      "size": "~240 MB",
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "yue"
+      ],
+      "languageMode": "auto",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": true,
+      "description": "Multi-language (Chinese, English, Japanese, Korean, Cantonese) high-accuracy recognition, recommended for mobile devices"
+    },
+    {
+      "id": "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+      "name": "Moonshine Tiny EN (Int8)",
+      "modelType": "moonshine",
+      "quantization": "int8",
+      "size": "~44 MB",
+      "languages": [
+        "en"
+      ],
+      "languageMode": "fixed",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "Ultra-lightweight English speech recognition model (approx. 44 MB), ideal for low-spec mobile environments"
+    },
+    {
+      "id": "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+      "name": "Moonshine Base ZH (Int8)",
+      "modelType": "moonshine",
+      "quantization": "int8",
+      "size": "~141 MB",
+      "languages": [
+        "zh"
+      ],
+      "languageMode": "fixed",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "Lightweight Chinese speech recognition model, low energy consumption and fast response"
+    },
+    {
+      "id": "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
+      "name": "Moonshine Base EN (Int8)",
+      "modelType": "moonshine",
+      "quantization": "int8",
+      "size": "~141 MB",
+      "languages": [
+        "en"
+      ],
+      "languageMode": "fixed",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "Lightweight English speech recognition model, balancing accuracy and inference speed"
+    },
+    {
+      "id": "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+      "name": "Paraformer Trilingual (Int8)",
+      "modelType": "paraformer",
+      "quantization": "int8",
+      "size": "~238 MB",
+      "languages": [
+        "zh",
+        "yue",
+        "en"
+      ],
+      "languageMode": "auto",
+      "modes": [
+        "streaming"
+      ],
+      "isRecommended": false,
+      "description": "Trilingual streaming recognition model for Chinese, Cantonese, and English with low latency"
+    },
+    {
+      "id": "sherpa-onnx-dolphin-small-ctc-multi-lang-int8-2025-04-02",
+      "name": "Dolphin Small Multi-Lang (Int8)",
+      "modelType": "dolphin",
+      "quantization": "int8",
+      "size": "~250 MB",
+      "languages": [
+        "zh",
+        "en",
+        "ja",
+        "ko",
+        "de",
+        "es",
+        "fr",
+        "ru"
+      ],
+      "languageMode": "auto",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "Compact multilingual CTC speech recognition model with low memory footprint"
+    },
+    {
+      "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+      "name": "Parakeet TDT 0.6B (Int8)",
+      "modelType": "parakeet-tdt",
+      "quantization": "int8",
+      "size": "~670 MB",
+      "languages": [
+        "en"
+      ],
+      "languageMode": "fixed",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "High-accuracy English Fast Conformer Transducer model"
+    },
+    {
+      "id": "sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25",
+      "name": "Qwen3 ASR 0.6B (Int8)",
+      "modelType": "qwen3-asr",
+      "quantization": "int8",
+      "size": "~943 MB",
+      "languages": [
+        "zh",
+        "en",
+        "yue"
+      ],
+      "languageMode": "auto",
+      "modes": [
+        "streaming",
+        "batch"
+      ],
+      "isRecommended": false,
+      "description": "Qwen3 architecture compact on-device ASR model (Int8 quantized)"
+    },
+    {
+      "id": "sherpa-onnx-funasr-nano-int8-2025-12-30",
+      "name": "FunASR Nano (Int8)",
+      "modelType": "funasr-nano",
+      "quantization": "int8",
+      "size": "~994 MB",
+      "languages": [
+        "zh",
+        "en"
+      ],
+      "languageMode": "auto",
+      "modes": [
+        "streaming"
+      ],
+      "isRecommended": false,
+      "description": "FunASR lightweight streaming model with Qwen-0.6B backbone"
+    }
+  ]
+}
