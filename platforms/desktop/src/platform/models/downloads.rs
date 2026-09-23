@@ -200,16 +200,13 @@ pub async fn delete_preset_model<R: tauri::Runtime>(
             };
 
             let candidate_path = models_dir.join(&candidate_filename);
-            if candidate_path.is_file() {
-                if let (Ok(can_models_dir), Ok(can_candidate)) =
+            if candidate_path.is_file()
+                && let (Ok(can_models_dir), Ok(can_candidate)) =
                     (models_dir.canonicalize(), candidate_path.canonicalize())
-                {
-                    if can_candidate.starts_with(&can_models_dir) {
-                        remove_model_install_path(&candidate_path)
-                            .map_err(|error| error.to_string())?;
-                        return Ok(());
-                    }
-                }
+                && can_candidate.starts_with(&can_models_dir)
+            {
+                remove_model_install_path(&candidate_path).map_err(|error| error.to_string())?;
+                return Ok(());
             }
 
             // Also scan models_dir for matching file stem
@@ -224,16 +221,12 @@ pub async fn delete_preset_model<R: tauri::Runtime>(
                         && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
                         && (stem.eq_ignore_ascii_case(target_stem)
                             || stem.eq_ignore_ascii_case(model_id))
-                    {
-                        if let (Ok(can_models_dir), Ok(can_path)) =
+                        && let (Ok(can_models_dir), Ok(can_path)) =
                             (models_dir.canonicalize(), path.canonicalize())
-                        {
-                            if can_path.starts_with(&can_models_dir) {
-                                remove_model_install_path(&path)
-                                    .map_err(|error| error.to_string())?;
-                                return Ok(());
-                            }
-                        }
+                        && can_path.starts_with(&can_models_dir)
+                    {
+                        remove_model_install_path(&path).map_err(|error| error.to_string())?;
+                        return Ok(());
                     }
                 }
             }

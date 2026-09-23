@@ -203,10 +203,9 @@ pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Resul
         let target_path = models_dir.join(&file_name);
         if let (Ok(can_source), Ok(can_target)) =
             (source.canonicalize(), target_path.canonicalize())
+            && can_source == can_target
         {
-            if can_source == can_target {
-                return Ok(target_path.to_string_lossy().into_owned());
-            }
+            return Ok(target_path.to_string_lossy().into_owned());
         }
 
         let temp_target = models_dir.join(format!("{file_name}.importing"));

@@ -754,8 +754,10 @@ mod tests {
 
     fn test_config(model: &str) -> LlmConfig {
         LlmConfig {
-            provider: sona_core::domain::BuiltinLlmProvider::Local.into(),
-            strategy: sona_core::domain::LlmProviderStrategy::Local,
+            provider: sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::Local,
+            ),
+            strategy: sona_core::llm::tasks::LlmProviderStrategy::Local,
             base_url: String::new(),
             api_key: String::new(),
             model: model.to_string(),
