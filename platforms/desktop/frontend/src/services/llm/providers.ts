@@ -36,7 +36,29 @@ export type CustomLlmProviderInput = Omit<CustomLlmProvider, 'id'> & {
 
 // This registry is the durable source for provider-specific defaults. Feature configs
 // derive from it later, so adding or changing provider behavior should start here.
+const rawManifestDefinitions: LlmProviderDefinition[] = llmProvidersManifest.providers.map((p) => ({
+  id: p.id as LlmProvider,
+  labelKey: p.ui.labelKey,
+  labelDefault: p.ui.labelDefault,
+  strategy: p.strategy as LlmProviderStrategy,
+  defaultApiHost: p.defaults.apiHost,
+  defaultApiPath: p.defaults.apiPath,
+  defaultApiVersion: p.defaults.apiVersion,
+  supportsModelListing: p.capabilities.supportsModelListing,
+  requiresApiKey: p.capabilities.requiresApiKey,
+  editableApiHost: p.capabilities.editableApiHost,
+  apiHostLabelKey: p.ui.apiHostLabelKey,
+  apiHostLabelDefault: p.ui.apiHostLabelDefault,
+  modelLabelKey: p.ui.modelLabelKey,
+  modelLabelDefault: p.ui.modelLabelDefault,
+}));
+
+const localDefinition = rawManifestDefinitions.find((p) => p.id === 'local');
+const nonLocalManifestDefinitions = rawManifestDefinitions.filter((p) => p.id !== 'local');
+
 export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
+  ...(localDefinition ? [localDefinition] : []),
+  ...nonLocalManifestDefinitions,
   {
     id: 'google_translate_free',
     labelKey: 'settings.llm_providers.google_translate_free',
@@ -57,22 +79,6 @@ export const BUILT_IN_LLM_PROVIDER_DEFINITIONS: LlmProviderDefinition[] = [
     requiresApiKey: true,
     editableApiHost: false,
   },
-  ...llmProvidersManifest.providers.map((p) => ({
-    id: p.id as LlmProvider,
-    labelKey: p.ui.labelKey,
-    labelDefault: p.ui.labelDefault,
-    strategy: p.strategy as LlmProviderStrategy,
-    defaultApiHost: p.defaults.apiHost,
-    defaultApiPath: p.defaults.apiPath,
-    defaultApiVersion: p.defaults.apiVersion,
-    supportsModelListing: p.capabilities.supportsModelListing,
-    requiresApiKey: p.capabilities.requiresApiKey,
-    editableApiHost: p.capabilities.editableApiHost,
-    apiHostLabelKey: p.ui.apiHostLabelKey,
-    apiHostLabelDefault: p.ui.apiHostLabelDefault,
-    modelLabelKey: p.ui.modelLabelKey,
-    modelLabelDefault: p.ui.modelLabelDefault,
-  })),
 ];
 
 export const LLM_PROVIDER_DEFINITIONS = BUILT_IN_LLM_PROVIDER_DEFINITIONS;
@@ -104,6 +110,8 @@ const LEGACY_PROVIDER_MAP: Record<string, LlmProvider> = {
   openai: 'open_ai',
   silicon_flow: 'silicon_flow',
   siliconflow: 'silicon_flow',
+  llama_cpp: 'local',
+  local_model: 'local',
 };
 
 function isBuiltInProvider(value: unknown): value is BuiltInLlmProvider {

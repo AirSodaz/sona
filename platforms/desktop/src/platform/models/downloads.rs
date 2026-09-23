@@ -166,24 +166,74 @@ pub async fn delete_preset_model<R: tauri::Runtime>(
     use sona_core::models::downloads::resolve_model_download;
     use sona_model_downloads::{remove_model_install_path, temporary_download_path};
 
+    // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
+    sona_llama_cpp::prune_idle_llm_models();
+    sona_llama_cpp::prune_idle_llama_models();
+
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
-    let resolved =
-        resolve_model_download(model_id, &models_dir).map_err(|error| error.to_string())?;
 
-    remove_model_install_path(&resolved.install_path).map_err(|error| error.to_string())?;
+    // 1. Try resolving as a known preset model
+    match resolve_model_download(model_id, &models_dir) {
+        Ok(resolved) => {
+            remove_model_install_path(&resolved.install_path).map_err(|error| error.to_string())?;
 
-    let mut staging = resolved.install_path.as_os_str().to_os_string();
-    staging.push(".installing");
-    let staging_path = std::path::PathBuf::from(staging);
-    let _ = remove_model_install_path(&staging_path);
+            let mut staging = resolved.install_path.as_os_str().to_os_string();
+            staging.push(".installing");
+            let staging_path = std::path::PathBuf::from(staging);
+            let _ = remove_model_install_path(&staging_path);
 
-    if resolved.download_path != resolved.install_path {
-        let _ = remove_model_install_path(&resolved.download_path);
+            if resolved.download_path != resolved.install_path {
+                let _ = remove_model_install_path(&resolved.download_path);
+            }
+            let temp_download = temporary_download_path(&resolved.download_path);
+            let _ = remove_model_install_path(&temp_download);
+
+            Ok(())
+        }
+        Err(err) => {
+            // 2. Fallback: handle custom local models (e.g. "custom-{stem}" or filename)
+            let target_stem = model_id.strip_prefix("custom-").unwrap_or(model_id);
+            let candidate_filename = if target_stem.ends_with(".gguf") {
+                target_stem.to_string()
+            } else {
+                format!("{target_stem}.gguf")
+            };
+
+            let candidate_path = models_dir.join(&candidate_filename);
+            if candidate_path.is_file()
+                && let (Ok(can_models_dir), Ok(can_candidate)) =
+                    (models_dir.canonicalize(), candidate_path.canonicalize())
+                && can_candidate.starts_with(&can_models_dir)
+            {
+                remove_model_install_path(&candidate_path).map_err(|error| error.to_string())?;
+                return Ok(());
+            }
+
+            // Also scan models_dir for matching file stem
+            if let Ok(entries) = std::fs::read_dir(&models_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file()
+                        && path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .is_some_and(|e| e.eq_ignore_ascii_case("gguf"))
+                        && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                        && (stem.eq_ignore_ascii_case(target_stem)
+                            || stem.eq_ignore_ascii_case(model_id))
+                        && let (Ok(can_models_dir), Ok(can_path)) =
+                            (models_dir.canonicalize(), path.canonicalize())
+                        && can_path.starts_with(&can_models_dir)
+                    {
+                        remove_model_install_path(&path).map_err(|error| error.to_string())?;
+                        return Ok(());
+                    }
+                }
+            }
+
+            Err(err.to_string())
+        }
     }
-    let temp_download = temporary_download_path(&resolved.download_path);
-    let _ = remove_model_install_path(&temp_download);
-
-    Ok(())
 }
 
 pub fn get_cuda_addon_status<R: tauri::Runtime>(

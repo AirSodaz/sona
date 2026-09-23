@@ -81,6 +81,15 @@ export function FeatureCard({
       return 'google_translate_free' as LlmProvider;
     }
 
+    const active = currentLlmState.activeProvider;
+    if (
+      active !== 'google_translate' &&
+      active !== 'google_translate_free' &&
+      isProviderConfiguredForConfig(config, active, currentLlmState.providers[active])
+    ) {
+      return active;
+    }
+
     const definitions = listProviderDefinitions(currentLlmState.customProviders);
     return (
       definitions.find(
@@ -94,7 +103,13 @@ export function FeatureCard({
           )
       )?.id ?? 'open_ai'
     );
-  }, [config, currentLlmState.customProviders, currentLlmState.providers, featureId]);
+  }, [
+    config,
+    currentLlmState.activeProvider,
+    currentLlmState.customProviders,
+    currentLlmState.providers,
+    featureId,
+  ]);
   const selectedProvider = modelEntry?.provider || configuredProvider;
   const selectedModel = modelEntry?.model || '';
   const temperature =
@@ -246,7 +261,9 @@ export function FeatureCard({
         return;
       }
 
-      const setting = latestLlmState.providers[provider];
+      const setting =
+        latestLlmState.providers[provider] ??
+        (provider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
       if (
         !getProviderDefinition(provider, latestLlmState.customProviders).supportsModelListing ||
         !setting
@@ -330,7 +347,9 @@ export function FeatureCard({
     nextState = setFeatureModelSelection(nextState, featureId, entryId);
     applyTrackedLlmSettings(nextState);
 
-    const providerSetting = nextState.providers[providerToSave];
+    const providerSetting =
+      nextState.providers[providerToSave] ??
+      (providerToSave === 'local' ? { apiHost: '', apiKey: '' } : undefined);
     if (
       !isManualAddition ||
       !providerSetting ||

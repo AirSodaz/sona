@@ -127,7 +127,8 @@ export function isLlmConfigComplete(llmConfig: LlmConfig | null): boolean {
   }
 
   const definition = getProviderDefinition(llmConfig.provider, customProviderFromConfig(llmConfig));
-  const hasApiHost = Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);
+  const hasApiHost =
+    definition.id === 'local' || Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(llmConfig.apiKey?.trim());
   const hasModel = Boolean(llmConfig.model?.trim());
 
@@ -143,7 +144,8 @@ export function isProviderConfigComplete(
   >['customProviders']
 ): boolean {
   const definition = getProviderDefinition(provider, customProviders);
-  const hasApiHost = Boolean(setting?.apiHost?.trim() || definition.defaultApiHost);
+  const hasApiHost =
+    definition.id === 'local' || Boolean(setting?.apiHost?.trim() || definition.defaultApiHost);
   const hasApiKey = !definition.requiresApiKey || Boolean(setting?.apiKey?.trim());
 
   return hasApiHost && hasApiKey;

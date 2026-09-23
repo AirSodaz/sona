@@ -212,7 +212,8 @@ pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Opt
         | LlmProviderStrategy::Together
         | LlmProviderStrategy::Venice
         | LlmProviderStrategy::Hyperbolic
-        | LlmProviderStrategy::Llamafile => Some(false),
+        | LlmProviderStrategy::Llamafile
+        | LlmProviderStrategy::Local => Some(false),
         _ => None,
     }
 }

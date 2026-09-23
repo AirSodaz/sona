@@ -131,6 +131,8 @@ export const TauriCommand = {
     describeModel: 'describe_llm_model',
     generateText: 'generate_llm_text',
     listModels: 'list_llm_models',
+    listLocalCards: 'list_local_llm_cards',
+    importLocalLlmFile: 'import_local_llm_file',
     polishTranscriptSegments: 'polish_transcript_segments',
     runTranscriptJob: 'run_transcript_llm_job',
     summarizeTranscript: 'summarize_transcript',

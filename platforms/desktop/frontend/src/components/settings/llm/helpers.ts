@@ -52,6 +52,8 @@ export function getModelPlaceholder(provider: LlmProvider): string {
       return 'meta-llama/Llama-3.3-70B-Instruct';
     case 'llamafile':
       return 'default';
+    case 'local':
+      return 'Qwen/Qwen3.5-4B';
     case 'google_translate':
     case 'google_translate_free':
       return 'default';

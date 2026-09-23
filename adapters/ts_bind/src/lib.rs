@@ -83,6 +83,7 @@ pub use sona_core::llm::tasks::{
     TranscriptSummaryResult, TranslatedSegment,
 };
 pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+pub use sona_core::llm::{LocalLlmCardsResponse, LocalLlmModelCard};
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::models::preset_models::{
     ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,
@@ -578,6 +579,8 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmTaskProgressPayload>()
         .register::<LlmTaskChunkPayload<PolishedSegment>>()
         .register::<LlmTaskTextPayload>()
+        .register::<LocalLlmModelCard>()
+        .register::<LocalLlmCardsResponse>()
         .register::<DashboardUsageBucket>()
         .register::<UsageBreakdown>()
         .register::<UsageTrendPoint>()

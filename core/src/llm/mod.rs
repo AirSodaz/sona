@@ -1,4 +1,5 @@
 pub mod jobs;
+pub mod local_models;
 pub mod model_catalog;
 pub mod provider_protocol;
 pub mod providers;
@@ -7,3 +8,4 @@ pub mod runtime;
 pub mod streaming_protocol;
 pub mod tasks;
 pub mod usage;
+pub use local_models::{LocalLlmCardsResponse, LocalLlmModelCard, LocalLlmPreset};

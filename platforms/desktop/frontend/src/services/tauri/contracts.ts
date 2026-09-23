@@ -19,6 +19,7 @@ import type {
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
   ExportTranscriptFileResult,
+  LocalLlmCardsResponse,
   RustTauriCommandContractMap,
   StorageUsageSnapshot_Serialize,
   WebviewBrowsingDataClearResult,
@@ -379,6 +380,14 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.llm.listModels]: {
     args: { request: CoreLlmModelsRequest };
     result: CoreLlmModelSummary[];
+  };
+  [TauriCommand.llm.listLocalCards]: {
+    args: undefined;
+    result: LocalLlmCardsResponse;
+  };
+  [TauriCommand.llm.importLocalLlmFile]: {
+    args: { sourcePath: string };
+    result: string;
   };
   [TauriCommand.llm.polishTranscriptSegments]: {
     args: { request: CorePolishSegmentsRequest };

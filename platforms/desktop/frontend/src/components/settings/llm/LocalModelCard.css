@@ -1,0 +1,226 @@
+.local-model-cards-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+}
+
+.local-model-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 20px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-sm);
+  transition:
+    border-color var(--transition-fast, 150ms) ease,
+    box-shadow var(--transition-fast, 150ms) ease;
+}
+
+.local-model-card:hover {
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.local-model-card.is-installed {
+  border-color: color-mix(in srgb, var(--color-success) 24%, var(--color-border));
+}
+
+.local-model-card.is-installed:hover {
+  border-color: color-mix(in srgb, var(--color-success) 40%, var(--color-border-hover));
+}
+
+.local-model-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.local-model-card-identity {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+
+/* Hover scale effect on logo badge aligned with ModelCard */
+.local-model-card:hover .model-card-logo-badge {
+  transform: scale(1.05);
+}
+/* Modality tags beside the title */
+.local-model-modality-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.local-model-card .model-tag-modality {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  line-height: 1.4;
+  cursor: default;
+}
+
+.local-model-card .model-tag-modality svg {
+  color: var(--color-text-muted);
+}
+
+.local-model-card .model-tag-modality-text {
+  background: color-mix(in srgb, var(--color-accent, #3b82f6) 8%, var(--color-bg-secondary));
+  border-color: color-mix(in srgb, var(--color-accent, #3b82f6) 24%, var(--color-border));
+  color: var(--color-text-primary);
+}
+
+.local-model-card .model-tag-modality-image {
+  background: color-mix(in srgb, #8b5cf6 10%, var(--color-bg-secondary));
+  border-color: color-mix(in srgb, #8b5cf6 25%, var(--color-border));
+  color: color-mix(in srgb, #8b5cf6 85%, var(--color-text-primary) 15%);
+}
+
+.local-model-card .model-tag-modality-audio {
+  background: color-mix(in srgb, #f59e0b 10%, var(--color-bg-secondary));
+  border-color: color-mix(in srgb, #f59e0b 25%, var(--color-border));
+  color: color-mix(in srgb, #f59e0b 85%, var(--color-text-primary) 15%);
+}
+
+.local-model-card .model-tag-modality-video {
+  background: color-mix(in srgb, #ec4899 10%, var(--color-bg-secondary));
+  border-color: color-mix(in srgb, #ec4899 25%, var(--color-border));
+  color: color-mix(in srgb, #ec4899 85%, var(--color-text-primary) 15%);
+}
+
+/* Semantic tag styling extensions for LLM parameters & quant & capabilities */
+.local-model-card .model-tag-param {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  font-weight: 600;
+  border-color: var(--color-border);
+}
+
+.local-model-card .model-tag-quant {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono, monospace);
+  border-color: var(--color-border);
+}
+
+.local-model-card .model-tag-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border-color: transparent;
+}
+
+.local-model-card .model-tag-cap svg {
+  color: var(--color-text-muted);
+}
+
+/* Retain badge styling for accordion title header badge */
+.local-model-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.local-model-badge-rec {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  color: color-mix(in srgb, var(--color-warning) 62%, var(--color-text-primary) 38%);
+  font-weight: 600;
+}
+
+/* Specs Grid - clean 3-column metadata card */
+.local-model-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+}
+
+.local-model-spec-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.local-model-spec-label {
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+}
+
+.local-model-spec-value {
+  color: var(--color-text-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 640px) {
+  .local-model-specs-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Progress mini integration */
+.local-model-card .progress-container-mini {
+  margin-top: 2px;
+  margin-bottom: 2px;
+}
+
+/* Footer & Actions */
+.local-model-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--color-border);
+}
+
+.local-apply-buttons-group {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.local-model-path-hint {
+  font-size: 0.75rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-muted);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.local-model-filename-hint {
+  font-size: 0.78rem;
+  font-family: var(--font-mono, monospace);
+  color: var(--color-text-muted);
+}
