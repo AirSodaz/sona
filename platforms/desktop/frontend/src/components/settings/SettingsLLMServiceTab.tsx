@@ -32,6 +32,7 @@ import {
   getCurrentLlmState,
   isProviderConfiguredForConfig,
 } from './llm/helpers';
+import { LocalProviderAccordionItem } from './llm/LocalProviderAccordionItem';
 import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import {
   SettingsItem,
@@ -110,6 +111,8 @@ export function SettingsLLMServiceTab({
   const orderedProviderDefinitions = useMemo(
     () =>
       [...providerDefinitions].sort((a, b) => {
+        if (a.id === 'local') return -1;
+        if (b.id === 'local') return 1;
         const aIsCustom = a.id.startsWith('custom-');
         const bIsCustom = b.id.startsWith('custom-');
         if (aIsCustom && !bIsCustom) return 1;
@@ -123,14 +126,17 @@ export function SettingsLLMServiceTab({
       orderedProviderDefinitions.filter(
         (def) =>
           def.id !== 'google_translate_free' &&
-          isProviderConfiguredForConfig(config, def.id, currentLlmState.providers[def.id])
+          (def.id === 'local' ||
+            isProviderConfiguredForConfig(config, def.id, currentLlmState.providers[def.id]))
       ),
     [config, currentLlmState.providers, orderedProviderDefinitions]
   );
   const availableProviderDefinitions = useMemo(
     () =>
       orderedProviderDefinitions.filter(
-        (def) => !isProviderConfiguredForConfig(config, def.id, currentLlmState.providers[def.id])
+        (def) =>
+          def.id !== 'local' &&
+          !isProviderConfiguredForConfig(config, def.id, currentLlmState.providers[def.id])
       ),
     [config, currentLlmState.providers, orderedProviderDefinitions]
   );
@@ -350,22 +356,39 @@ export function SettingsLLMServiceTab({
         icon={<Settings2 size={20} />}
         contentClassName="accordion-container"
       >
-        {configuredProviderDefinitions.map((def) => (
-          <ProviderAccordionItem
-            key={def.id}
-            provider={def.id}
-            config={config}
-            isOpen={effectiveExpandedProvider === def.id}
-            onToggle={() =>
-              setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)
-            }
-            applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
-            onOpenDetails={onOpenProviderDetails ? () => onOpenProviderDetails(def.id) : undefined}
-            onEdit={def.id.startsWith('custom-') ? () => openEditProvider(def.id) : undefined}
-            onDelete={def.id.startsWith('custom-') ? () => handleDeleteProvider(def.id) : undefined}
-            t={t}
-          />
-        ))}
+        {configuredProviderDefinitions.map((def) =>
+          def.id === 'local' ? (
+            <LocalProviderAccordionItem
+              key={def.id}
+              config={config}
+              isOpen={effectiveExpandedProvider === def.id}
+              onToggle={() =>
+                setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)
+              }
+              applyLlmSettings={applyLlmSettings}
+              t={t}
+            />
+          ) : (
+            <ProviderAccordionItem
+              key={def.id}
+              provider={def.id}
+              config={config}
+              isOpen={effectiveExpandedProvider === def.id}
+              onToggle={() =>
+                setExpandedProvider(effectiveExpandedProvider === def.id ? null : def.id)
+              }
+              applyProviderUpdates={(updates) => applyProviderUpdates(def.id, updates)}
+              onOpenDetails={
+                onOpenProviderDetails ? () => onOpenProviderDetails(def.id) : undefined
+              }
+              onEdit={def.id.startsWith('custom-') ? () => openEditProvider(def.id) : undefined}
+              onDelete={
+                def.id.startsWith('custom-') ? () => handleDeleteProvider(def.id) : undefined
+              }
+              t={t}
+            />
+          )
+        )}
         {configuredProviderDefinitions.length === 0 && (
           <div className="settings-model-empty provider-empty-state">
             {t('settings.llm.no_configured_providers', {

@@ -11,6 +11,10 @@
       "contextWindow": 262144,
       "maxOutputTokens": 4096,
       "size": "~2.7 GB",
+      "parameters": "4B",
+      "quantization": "Q4_K_M",
+      "languages": ["zh", "en", "ja", "ko", "es", "fr", "de", "ru"],
+      "capabilities": ["chat", "reasoning", "polish", "summary", "translate"],
       "isRecommended": true,
       "download": {
         "url": "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/main/Qwen3.5-4B-Q4_K_M.gguf",

@@ -34,10 +34,14 @@ pub fn resolve_model_download(
     models_dir: &Path,
 ) -> Result<ResolvedModelDownload, RuntimeValidationError> {
     let model = find_preset_model(model_id)
+        .cloned()
+        .or_else(|| {
+            crate::llm::local_models::find_local_llm_model(model_id)
+                .map(|m| m.to_preset_model())
+        })
         .ok_or_else(|| {
             RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
-        })?
-        .clone();
+        })?;
     let download_path = model.resolve_download_path(models_dir);
     let install_path = model.resolve_install_path(models_dir);
     if model.artifacts.is_empty() {
@@ -56,7 +60,11 @@ pub fn resolve_model_download(
                 filename: artifact.filename.clone(),
                 sha256: artifact.sha256.clone(),
                 size_bytes: artifact.size_bytes,
-                install_path: install_path.join(&artifact.filename),
+                install_path: if model.filename.is_some() && !model.is_archive() && !model.is_multi_file() {
+                    install_path.clone()
+                } else {
+                    install_path.join(&artifact.filename)
+                },
             })
         })
         .collect::<Result<Vec<_>, RuntimeValidationError>>()?;

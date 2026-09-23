@@ -15,6 +15,8 @@ import type {
   TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
   TranscriptSegment_Serialize as CoreTranscriptSegment,
   TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
+  LocalLlmCardsResponse,
+  LocalLlmModelCard,
 } from '../../bindings';
 import type { LlmGenerateCommandRequest } from '../../types/dashboard';
 import type {
@@ -35,6 +37,9 @@ import type {
   LlmJsonValue,
   LlmResponseFormat,
 } from '../../types/transcript';
+
+export type { LocalLlmCardsResponse, LocalLlmModelCard };
+
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -528,4 +533,8 @@ export async function translateTranscriptSegments(
   return invokeTauri(TauriCommand.llm.translateTranscriptSegments, {
     request: normalizeTranslateRequest(request),
   });
+}
+
+export async function listLocalLlmCards(): Promise<LocalLlmCardsResponse> {
+  return invokeTauri(TauriCommand.llm.listLocalCards);
 }

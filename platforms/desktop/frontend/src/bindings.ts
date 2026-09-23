@@ -1619,6 +1619,33 @@ export type LlmUsageEventPayload_Serialize = {
 
 export type LocalAsrEngine = "sherpa-onnx" | "llama-cpp";
 
+export type LocalLlmCardsResponse = {
+	modelsDir: string,
+	cards: LocalLlmModelCard[],
+};
+
+export type LocalLlmModelCard = {
+	id: string,
+	name: string,
+	model: string,
+	filename: string,
+	description: string,
+	backend: string,
+	contextWindow: number,
+	maxOutputTokens: number,
+	size: string,
+	parameters: string | null,
+	quantization: string | null,
+	languages: string[],
+	capabilities: string[],
+	isRecommended: boolean,
+	isInstalled: boolean,
+	installedPath: string | null,
+	installedSizeBytes: number | null,
+	downloadUrl: string | null,
+	downloadSizeBytes: number | null,
+};
+
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
 
 export type ModelCatalogGroup_Deserialize = {

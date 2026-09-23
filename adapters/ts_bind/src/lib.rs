@@ -63,6 +63,7 @@ pub use sona_core::history::{
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
     TranscriptSummaryRecordPayload,
 };
+pub use sona_core::llm::{LocalLlmCardsResponse, LocalLlmModelCard};
 pub use sona_core::llm::provider_protocol::{
     LlmModality, LlmModelMetadataSource, LlmModelSummary, MessageRole, StandardLlmRequest,
     StandardLlmResponse, StandardMessage,
@@ -578,6 +579,8 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmTaskProgressPayload>()
         .register::<LlmTaskChunkPayload<PolishedSegment>>()
         .register::<LlmTaskTextPayload>()
+        .register::<LocalLlmModelCard>()
+        .register::<LocalLlmCardsResponse>()
         .register::<DashboardUsageBucket>()
         .register::<UsageBreakdown>()
         .register::<UsageTrendPoint>()

@@ -8,3 +8,4 @@ pub mod runtime;
 pub mod streaming_protocol;
 pub mod tasks;
 pub mod usage;
+pub use local_models::{LocalLlmCardsResponse, LocalLlmModelCard, LocalLlmPreset};

@@ -81,6 +81,15 @@ export function FeatureCard({
       return 'google_translate_free' as LlmProvider;
     }
 
+    const active = currentLlmState.activeProvider;
+    if (
+      active !== 'google_translate' &&
+      active !== 'google_translate_free' &&
+      isProviderConfiguredForConfig(config, active, currentLlmState.providers[active])
+    ) {
+      return active;
+    }
+
     const definitions = listProviderDefinitions(currentLlmState.customProviders);
     return (
       definitions.find(
@@ -94,7 +103,13 @@ export function FeatureCard({
           )
       )?.id ?? 'open_ai'
     );
-  }, [config, currentLlmState.customProviders, currentLlmState.providers, featureId]);
+  }, [
+    config,
+    currentLlmState.activeProvider,
+    currentLlmState.customProviders,
+    currentLlmState.providers,
+    featureId,
+  ]);
   const selectedProvider = modelEntry?.provider || configuredProvider;
   const selectedModel = modelEntry?.model || '';
   const temperature =
