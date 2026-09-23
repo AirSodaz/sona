@@ -1495,7 +1495,8 @@ export type LlmModelSummary = {
 	supportsMultimodal: boolean | null,
 	supportsTools: boolean | null,
 	supportsReasoning: boolean | null,
-	supportsStructuredOutput?: boolean | null,
+	supportsTemperature?: boolean | null,
+	supportsStructuredOutput: boolean | null,
 	supportsPromptCaching?: boolean | null,
 	metadataSources?: LlmModelMetadataSource[],
 };
@@ -1535,9 +1536,20 @@ export type LlmSegmentInput = {
 	text: string,
 };
 
-export type LlmStreamDelta = {
+export type LlmStreamDelta = LlmStreamDelta_Serialize | LlmStreamDelta_Deserialize;
+
+export type LlmStreamDeltaKind = "thought" | "content";
+
+export type LlmStreamDelta_Deserialize = {
 	text: string,
 	delta: string,
+	kind?: LlmStreamDeltaKind | null,
+};
+
+export type LlmStreamDelta_Serialize = {
+	text: string,
+	delta: string,
+	kind?: LlmStreamDeltaKind | null,
 };
 
 export type LlmTaskChunkPayload<T> = {

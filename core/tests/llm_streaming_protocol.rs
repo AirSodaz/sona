@@ -143,3 +143,64 @@ fn openai_chat_payload_preserves_stream_and_reasoning_options() {
         .expect("temperature should be numeric");
     assert!((azure_temperature - 0.7).abs() < 0.000_001);
 }
+
+#[test]
+fn openai_chat_payload_omits_temperature_for_prohibited_models() {
+    for model in [
+        "o1",
+        "o1-mini",
+        "o1-preview",
+        "o3-mini",
+        "deepseek-reasoner",
+    ] {
+        let payload = build_openai_chat_payload(
+            OpenAiChatPayloadConfig {
+                strategy: LlmProviderStrategy::OpenAi,
+                model,
+                temperature: Some(0.5),
+                reasoning_enabled: true,
+                reasoning_level: Some("high"),
+            },
+            "hello",
+            true,
+        );
+        assert!(
+            payload.get("temperature").is_none(),
+            "model {model} must not include temperature"
+        );
+        assert_eq!(payload["reasoning_effort"], "high");
+    }
+}
+
+#[test]
+fn dual_stream_accumulator_separates_thought_and_content() {
+    use sona_core::llm::runtime::LlmStreamDelta;
+    use sona_core::llm::streaming_protocol::DualStreamAccumulator;
+
+    let mut events = Vec::new();
+    let mut emit = |delta: LlmStreamDelta| {
+        events.push(delta);
+        Ok::<(), ()>(())
+    };
+    let mut accumulator = DualStreamAccumulator::new(&mut emit);
+
+    accumulator.push_thought("Thinking step 1...").unwrap();
+    accumulator.push_thought("Thinking step 2...").unwrap();
+    accumulator.push_content("Final ").unwrap();
+    accumulator.push_content("Answer").unwrap();
+
+    assert_eq!(
+        accumulator.thought_text(),
+        "Thinking step 1...Thinking step 2..."
+    );
+    assert_eq!(accumulator.content_text(), "Final Answer");
+    assert_eq!(events.len(), 4);
+    assert!(events[0].is_thought());
+    assert_eq!(events[0].delta, "Thinking step 1...");
+    assert!(events[1].is_thought());
+    assert_eq!(events[1].delta, "Thinking step 2...");
+    assert!(!events[2].is_thought());
+    assert_eq!(events[2].delta, "Final ");
+    assert!(!events[3].is_thought());
+    assert_eq!(events[3].delta, "Answer");
+}

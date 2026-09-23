@@ -673,10 +673,7 @@ impl LlmStreamingPort for LlamaCppLlmEngine {
         // Forward tokens to the emit_delta callback as they arrive
         while let Some(delta) = rx.recv().await {
             accumulated.push_str(&delta);
-            emit_delta(LlmStreamDelta {
-                text: accumulated.clone(),
-                delta,
-            })?;
+            emit_delta(LlmStreamDelta::content(accumulated.clone(), delta))?;
         }
 
         completion_handle.await.map_err(|error| {

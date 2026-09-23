@@ -16,9 +16,19 @@ where
 {
     match request.config.strategy {
         LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree => Ok(None),
-        _ => crate::rig_adapter::execute_rig_stream(request, accumulator)
-            .await
-            .map(Some),
+        _ => {
+            let mut bridge = |delta: sona_core::llm::runtime::LlmStreamDelta| {
+                if !delta.is_thought() {
+                    accumulator.push(&delta.delta)
+                } else {
+                    Ok(())
+                }
+            };
+            let mut dual =
+                sona_core::llm::streaming_protocol::DualStreamAccumulator::new(&mut bridge);
+            let response = crate::stream::execute_native_stream(request, &mut dual).await?;
+            Ok(Some(response))
+        }
     }
 }
 

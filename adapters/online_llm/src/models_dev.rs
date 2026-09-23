@@ -234,6 +234,9 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
         supports_multimodal,
         supports_tools: model.tool_call,
         supports_reasoning: model.reasoning,
+        supports_temperature: Some(
+            !sona_core::llm::streaming_protocol::is_temperature_prohibited_for_model(&model.id),
+        ),
         supports_structured_output: model.structured_output,
         supports_prompt_caching: (cache_read_price.is_some() || cache_write_price.is_some())
             .then_some(true),

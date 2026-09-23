@@ -43,6 +43,10 @@ fn merge_summary(target: &mut LlmModelSummary, source: &LlmModelSummary) {
     fill(&mut target.supports_tools, &source.supports_tools);
     fill(&mut target.supports_reasoning, &source.supports_reasoning);
     fill(
+        &mut target.supports_temperature,
+        &source.supports_temperature,
+    );
+    fill(
         &mut target.supports_structured_output,
         &source.supports_structured_output,
     );

@@ -129,19 +129,13 @@ impl LlmStreamingPort for FakeRuntime {
                 .stream_failures_after_delta
                 .load(Ordering::SeqCst)
         {
-            emit_delta(LlmStreamDelta {
-                text: "partial".to_string(),
-                delta: "partial".to_string(),
-            })?;
+            emit_delta(LlmStreamDelta::content("partial", "partial"))?;
             return Err(LlmPortError::new(
                 LlmPortErrorKind::Network,
                 "stream interrupted",
             ));
         }
-        emit_delta(LlmStreamDelta {
-            text: "final summary".to_string(),
-            delta: "final summary".to_string(),
-        })?;
+        emit_delta(LlmStreamDelta::content("final summary", "final summary"))?;
         Ok(StandardLlmResponse {
             text: "final summary".to_string(),
             usage: None,

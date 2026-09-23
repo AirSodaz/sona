@@ -112,6 +112,7 @@ pub struct LlmModelSummary {
     pub supports_tools: Option<bool>,
     pub supports_reasoning: Option<bool>,
     #[serde(default)]
+    pub supports_temperature: Option<bool>,
     pub supports_structured_output: Option<bool>,
     #[serde(default)]
     pub supports_prompt_caching: Option<bool>,

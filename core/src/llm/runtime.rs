@@ -106,6 +106,18 @@ impl LlmCompletionRequest {
             self.options.reasoning_level = self.config.reasoning_level.clone();
         }
     }
+
+    pub fn effective_thinking_level(&self) -> ThinkingLevel {
+        ThinkingLevel::from_legacy_options(
+            self.options
+                .reasoning_enabled
+                .or(self.config.reasoning_enabled),
+            self.options
+                .reasoning_level
+                .as_deref()
+                .or(self.config.reasoning_level.as_deref()),
+        )
+    }
 }
 
 impl From<LlmGenerateRequest> for LlmCompletionRequest {
@@ -169,12 +181,120 @@ pub struct LlmCompletionResponse {
     pub execution: LlmExecutionMetadata,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum LlmStreamDeltaKind {
+    Thought,
+    Content,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct LlmStreamDelta {
     pub text: String,
     pub delta: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<LlmStreamDeltaKind>,
+}
+
+impl LlmStreamDelta {
+    pub fn content(text: impl Into<String>, delta: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            delta: delta.into(),
+            kind: Some(LlmStreamDeltaKind::Content),
+        }
+    }
+
+    pub fn thought(text: impl Into<String>, delta: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            delta: delta.into(),
+            kind: Some(LlmStreamDeltaKind::Thought),
+        }
+    }
+
+    pub fn is_thought(&self) -> bool {
+        matches!(self.kind, Some(LlmStreamDeltaKind::Thought))
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(tag = "mode", content = "value", rename_all = "snake_case")]
+pub enum ThinkingLevel {
+    None,
+    Auto,
+    Low,
+    Medium,
+    High,
+    Budget(u32),
+}
+
+impl ThinkingLevel {
+    pub fn from_legacy_options(enabled: Option<bool>, level: Option<&str>) -> Self {
+        match enabled {
+            Some(false) => ThinkingLevel::None,
+            Some(true) => match level {
+                Some("none") => ThinkingLevel::None,
+                Some("auto") => ThinkingLevel::Auto,
+                Some("low") => ThinkingLevel::Low,
+                Some("medium") => ThinkingLevel::Medium,
+                Some("high") => ThinkingLevel::High,
+                Some(s) => {
+                    if let Ok(b) = s.parse::<u32>() {
+                        ThinkingLevel::Budget(b)
+                    } else {
+                        ThinkingLevel::Medium
+                    }
+                }
+                None => ThinkingLevel::Auto,
+            },
+            None => match level {
+                Some("none") => ThinkingLevel::None,
+                Some("auto") => ThinkingLevel::Auto,
+                Some("low") => ThinkingLevel::Low,
+                Some("medium") => ThinkingLevel::Medium,
+                Some("high") => ThinkingLevel::High,
+                Some(s) => {
+                    if let Ok(b) = s.parse::<u32>() {
+                        ThinkingLevel::Budget(b)
+                    } else {
+                        ThinkingLevel::Auto
+                    }
+                }
+                None => ThinkingLevel::Auto,
+            },
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        !matches!(self, ThinkingLevel::None)
+    }
+
+    pub fn as_effort_str(&self) -> Option<&'static str> {
+        match self {
+            ThinkingLevel::None => Some("none"),
+            ThinkingLevel::Auto => None,
+            ThinkingLevel::Low => Some("low"),
+            ThinkingLevel::Medium => Some("medium"),
+            ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Budget(_) => None,
+        }
+    }
+
+    pub fn resolve_budget_tokens(&self, low: u32, medium: u32, high: u32) -> Option<u32> {
+        match self {
+            ThinkingLevel::None => None,
+            ThinkingLevel::Auto => None,
+            ThinkingLevel::Low => Some(low),
+            ThinkingLevel::Medium => Some(medium),
+            ThinkingLevel::High => Some(high),
+            ThinkingLevel::Budget(tokens) => Some(*tokens),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]

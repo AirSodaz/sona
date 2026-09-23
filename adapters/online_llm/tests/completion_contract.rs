@@ -2,7 +2,6 @@ use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::thread;
 
-use rig_core::completion::Usage;
 use serde_json::json;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
@@ -12,6 +11,7 @@ use sona_core::llm::runtime::{
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind, LlmStreamingPort};
+use sona_online_llm::Usage;
 use sona_online_llm::{
     LlmApiUrl, OnlineLlmAdapter, build_anthropic_payload_for_request,
     build_gemini_payload_for_request, build_openai_chat_payload_for_request,
@@ -225,7 +225,7 @@ fn request_reasoning_option_overrides_legacy_config() {
 }
 
 #[test]
-fn rig_model_from_request_supports_azure_openai() {
+fn native_provider_from_request_supports_azure_openai() {
     let mut azure_request = request();
     azure_request.config.strategy = LlmProviderStrategy::AzureOpenAi;
     azure_request.config.base_url = "https://example.openai.azure.com/".into();
@@ -233,11 +233,14 @@ fn rig_model_from_request_supports_azure_openai() {
     azure_request.config.model = "gpt-4o".into();
     azure_request.config.api_version = Some("2024-10-21".into());
 
-    let model = sona_online_llm::rig_adapter::RigModel::from_request(&azure_request);
-    assert!(matches!(
-        model,
-        Ok(sona_online_llm::rig_adapter::RigModel::Azure(_))
-    ));
+    let (url, headers) =
+        sona_online_llm::native_completion::resolve_strategy_url_and_headers(&azure_request, false)
+            .unwrap();
+    assert_eq!(
+        url.as_str(),
+        "https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"
+    );
+    assert_eq!(headers, vec![("api-key", "azure-key".to_string())]);
 }
 
 #[test]
@@ -528,8 +531,8 @@ async fn native_rig_providers_post_to_expected_endpoint_paths() {
 }
 
 #[test]
-fn native_rig_models_build_successfully_from_default_configurations() {
-    use sona_online_llm::rig_adapter::RigModel;
+fn native_providers_build_successfully_from_default_configurations() {
+    use sona_online_llm::native_completion::resolve_strategy_url_and_headers;
 
     let strategies = [
         LlmProviderStrategy::OpenAi,
@@ -557,13 +560,97 @@ fn native_rig_models_build_successfully_from_default_configurations() {
     for strategy in strategies {
         let mut req = request();
         req.config.strategy = strategy;
-        req.config.base_url = String::new(); // use rig default
-        let model = RigModel::from_request(&req);
+        req.config.base_url = String::new();
+        let res = resolve_strategy_url_and_headers(&req, false);
         assert!(
-            model.is_ok(),
-            "RigModel::from_request failed for strategy {:?}: {:?}",
+            res.is_ok(),
+            "resolve_strategy_url_and_headers failed for strategy {:?}: {:?}",
             strategy,
-            model.err()
+            res.err()
         );
     }
+}
+
+#[tokio::test]
+async fn native_stream_separates_thought_and_content_from_sse() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _request_str = read_http_request(&mut stream);
+        let sse_body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Thinking step 1... \"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"Thinking step 2...\\n\"}}]}\n\n",
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Final result\"}}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut deltas = Vec::new();
+    let mut emit = |delta: LlmStreamDelta| {
+        deltas.push(delta);
+        Ok(())
+    };
+
+    let mut req = request();
+    req.config.base_url = format!("http://{address}");
+    let res = OnlineLlmAdapter
+        .stream_completion(req, &mut emit)
+        .await
+        .unwrap();
+    server.join().unwrap();
+
+    assert_eq!(res.text, "Final result");
+    assert_eq!(deltas.len(), 3);
+    assert!(deltas[0].is_thought());
+    assert_eq!(deltas[0].delta, "Thinking step 1... ");
+    assert!(deltas[1].is_thought());
+    assert_eq!(deltas[1].delta, "Thinking step 2...\n");
+    assert!(!deltas[2].is_thought());
+    assert_eq!(deltas[2].delta, "Final result");
+}
+
+#[tokio::test]
+async fn native_stream_demuxes_inline_think_tags_from_sse() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _request_str = read_http_request(&mut stream);
+        let sse_body = concat!(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"<think>Local reasoning</think>Hello world\"}}]}\n\n",
+            "data: [DONE]\n\n"
+        );
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut deltas = Vec::new();
+    let mut emit = |delta: LlmStreamDelta| {
+        deltas.push(delta);
+        Ok(())
+    };
+
+    let mut req = request();
+    req.config.base_url = format!("http://{address}");
+    let res = OnlineLlmAdapter
+        .stream_completion(req, &mut emit)
+        .await
+        .unwrap();
+    server.join().unwrap();
+
+    assert_eq!(res.text, "Hello world");
+    assert_eq!(deltas.len(), 2);
+    assert!(deltas[0].is_thought());
+    assert_eq!(deltas[0].delta, "Local reasoning");
+    assert!(!deltas[1].is_thought());
+    assert_eq!(deltas[1].delta, "Hello world");
 }

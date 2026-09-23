@@ -1,19 +1,19 @@
 mod anthropic;
 mod completion;
+pub mod demuxer;
 mod gemini;
 mod model_discovery;
 mod models_dev;
+pub mod native_completion;
 mod openai_compatible;
 mod providers;
 mod responses;
-pub mod rig_adapter;
+pub mod stream;
 mod streaming;
 mod transport;
-
 pub use anthropic::build_anthropic_payload_for_request;
 pub use completion::{
-    build_standard_user_input, complete_with_provider, extract_text_response,
-    token_usage_from_rig_usage,
+    Usage, build_standard_user_input, complete_with_provider, token_usage_from_rig_usage,
 };
 pub use gemini::{
     GeminiGenerateContentRequestParts, build_gemini_generate_content_request_parts_for_reqwest,
@@ -51,7 +51,6 @@ use async_trait::async_trait;
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
-use sona_core::llm::streaming_protocol::StreamTextAccumulator;
 use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelListerPort, LlmModelMetadataPort,
     LlmPortError, LlmStreamingPort, LlmTaskDelayPort, LlmTextGeneratorPort, LlmTranslationPort,
@@ -90,19 +89,12 @@ impl LlmStreamingPort for OnlineLlmAdapter {
         request: LlmCompletionRequest,
         emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
     ) -> Result<StandardLlmResponse, LlmPortError> {
-        let mut bridge = |text: &str, delta: &str| {
-            emit_delta(LlmStreamDelta {
-                text: text.to_string(),
-                delta: delta.to_string(),
-            })
-        };
-        let mut accumulator = StreamTextAccumulator::new(&mut bridge);
-        let stream_result = try_stream_completion_with_provider(&request, &mut accumulator).await;
-        let emitted_any = accumulator.emitted_any();
-        drop(accumulator);
+        let mut dual = sona_core::llm::streaming_protocol::DualStreamAccumulator::new(emit_delta);
+        let stream_result = stream::execute_native_stream(&request, &mut dual).await;
+        let emitted_any = dual.emitted_any();
+        drop(dual);
         match stream_result {
-            Ok(Some(response)) => Ok(response),
-            Ok(None) => complete_with_provider(request).await,
+            Ok(response) => Ok(response),
             Err(error)
                 if !emitted_any
                     && error.kind == sona_core::ports::llm::LlmPortErrorKind::Unsupported =>
