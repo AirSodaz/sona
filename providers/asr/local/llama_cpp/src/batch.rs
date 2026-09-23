@@ -750,7 +750,7 @@ fn validate_supported_options(
     })
 }
 
-pub fn get_llama_backend() -> Result<&'static LlamaBackend, String> {
+pub(crate) fn get_llama_backend() -> Result<&'static LlamaBackend, String> {
     BACKEND
         .get_or_init(|| LlamaBackend::init().map_err(|error| error.to_string()))
         .as_ref()

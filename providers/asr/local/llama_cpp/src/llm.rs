@@ -309,19 +309,18 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
             let p = entry.path();
             if p.is_file() && is_gguf_file(&p) {
                 if let Some(file_name) = p.file_name().and_then(|s| s.to_str()) {
-                    if let Some(preset) = matched_preset {
-                        if file_name.eq_ignore_ascii_case(&preset.filename) {
-                            return Some(p);
-                        }
+                    if let Some(preset) = matched_preset
+                        && file_name.eq_ignore_ascii_case(&preset.filename)
+                    {
+                        return Some(p);
                     }
                 }
                 if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                    if let Some(preset) = matched_preset {
-                        if stem.eq_ignore_ascii_case(&preset.id)
-                            || stem.to_ascii_lowercase().contains(&preset.id)
-                        {
-                            return Some(p);
-                        }
+                    if let Some(preset) = matched_preset
+                        && (stem.eq_ignore_ascii_case(&preset.id)
+                            || stem.to_ascii_lowercase().contains(&preset.id))
+                    {
+                        return Some(p);
                     }
                     if stem.eq_ignore_ascii_case(bare_name)
                         || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b"))
@@ -439,7 +438,7 @@ fn run_llama_generation(
 
     let n_ctx_train = model.n_ctx_train();
     let max_ctx = if n_ctx_train > 0 {
-        n_ctx_train.min(32_768).max(2048)
+        n_ctx_train.clamp(2048, 32_768)
     } else {
         32_768
     };
@@ -529,11 +528,11 @@ fn run_llama_generation(
             })?;
 
         generated_text.push_str(&piece);
-        if let Some(tx) = &delta_sender {
-            if tx.send(piece).is_err() {
-                // Stream receiver has disconnected or cancelled
-                break;
-            }
+        if let Some(tx) = &delta_sender
+            && tx.send(piece).is_err()
+        {
+            // Stream receiver has disconnected or cancelled
+            break;
         }
         generated_tokens += 1;
 
@@ -754,24 +753,34 @@ mod tests {
         assert!(list.iter().any(|m| m.model == "google/gemma-4-e2b"));
     }
 
+    fn test_config(model: &str) -> LlmConfig {
+        LlmConfig {
+            provider: sona_core::domain::BuiltinLlmProvider::Local.into(),
+            strategy: sona_core::domain::LlmProviderStrategy::Local,
+            base_url: String::new(),
+            api_key: String::new(),
+            model: model.to_string(),
+            api_path: None,
+            api_version: None,
+            temperature: None,
+            reasoning_enabled: None,
+            reasoning_level: None,
+            timeout_seconds: None,
+        }
+    }
+
     #[tokio::test]
     async fn describe_model_returns_correct_metadata_for_presets() {
         let engine = LlamaCppLlmEngine::new();
         let qwen_summary = engine
-            .describe_model(&LlmConfig {
-                model: "Qwen/Qwen3.5-4B".to_string(),
-                ..Default::default()
-            })
+            .describe_model(&test_config("Qwen/Qwen3.5-4B"))
             .await
             .unwrap()
             .unwrap();
         assert_eq!(qwen_summary.context_window, Some(262_144));
 
         let gemma_summary = engine
-            .describe_model(&LlmConfig {
-                model: "google/gemma-4-e2b".to_string(),
-                ..Default::default()
-            })
+            .describe_model(&test_config("google/gemma-4-e2b"))
             .await
             .unwrap()
             .unwrap();
