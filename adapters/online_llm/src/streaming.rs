@@ -43,7 +43,7 @@ where
     try_stream_completion_with_provider(&completion_request, accumulator).await
 }
 
-fn update_anthropic_stream_usage(usage: &mut TokenUsage, event: &Value) {
+pub(crate) fn update_anthropic_stream_usage(usage: &mut TokenUsage, event: &Value) {
     let source = event
         .get("message")
         .and_then(|m| m.get("usage"))
@@ -72,7 +72,7 @@ fn update_anthropic_stream_usage(usage: &mut TokenUsage, event: &Value) {
     }
 }
 
-fn finish_anthropic_stream_usage(mut usage: TokenUsage) -> Option<TokenUsage> {
+pub(crate) fn finish_anthropic_stream_usage(mut usage: TokenUsage) -> Option<TokenUsage> {
     usage.total_tokens = usage
         .prompt_tokens
         .saturating_add(usage.completion_tokens)

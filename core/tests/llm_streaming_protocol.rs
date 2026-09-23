@@ -152,6 +152,9 @@ fn openai_chat_payload_omits_temperature_for_prohibited_models() {
         "o1-preview",
         "o3-mini",
         "deepseek-reasoner",
+        "openai/o1-preview",
+        "openai/o3-mini",
+        "deepseek/deepseek-r1",
     ] {
         let payload = build_openai_chat_payload(
             OpenAiChatPayloadConfig {
@@ -170,6 +173,20 @@ fn openai_chat_payload_omits_temperature_for_prohibited_models() {
         );
         assert_eq!(payload["reasoning_effort"], "high");
     }
+
+    // When reasoning_level is "auto" or budget tokens, do not send invalid reasoning_effort to OpenAI
+    let payload = build_openai_chat_payload(
+        OpenAiChatPayloadConfig {
+            strategy: LlmProviderStrategy::OpenAi,
+            model: "o3-mini",
+            temperature: Some(0.5),
+            reasoning_enabled: true,
+            reasoning_level: Some("auto"),
+        },
+        "hello",
+        true,
+    );
+    assert!(payload.get("reasoning_effort").is_none());
 }
 
 #[test]

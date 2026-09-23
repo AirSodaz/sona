@@ -654,3 +654,82 @@ async fn native_stream_demuxes_inline_think_tags_from_sse() {
     assert!(!deltas[1].is_thought());
     assert_eq!(deltas[1].delta, "Hello world");
 }
+
+#[tokio::test]
+async fn native_stream_handles_multibyte_utf8_split_across_chunks() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _request_str = read_http_request(&mut stream);
+        let headers =
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n";
+        stream.write_all(headers.as_bytes()).unwrap();
+
+        // Chinese character "好" is 3 bytes: 0xE5 0xA5 0xBD
+        let part1 = "data: {\"choices\":[{\"delta\":{\"content\":\"\u{4f60}";
+        stream.write_all(part1.as_bytes()).unwrap();
+        stream.flush().unwrap();
+
+        // Write first 2 bytes of "好"
+        let hao_bytes = "好".as_bytes();
+        stream.write_all(&hao_bytes[..2]).unwrap();
+        stream.flush().unwrap();
+
+        // Write remainder of "好" + closing json
+        let mut part2 = Vec::new();
+        part2.extend_from_slice(&hao_bytes[2..]);
+        part2.extend_from_slice(b"\"}}]}\n\ndata: [DONE]\n\n");
+        stream.write_all(&part2).unwrap();
+        stream.flush().unwrap();
+    });
+
+    let mut deltas = Vec::new();
+    let mut emit = |delta: LlmStreamDelta| {
+        deltas.push(delta);
+        Ok(())
+    };
+
+    let mut req = request();
+    req.config.base_url = format!("http://{address}");
+    let res = OnlineLlmAdapter
+        .stream_completion(req, &mut emit)
+        .await
+        .unwrap();
+    server.join().unwrap();
+
+    assert_eq!(res.text, "你好");
+}
+
+#[tokio::test]
+async fn native_stream_propagates_upstream_error_event() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let _request_str = read_http_request(&mut stream);
+        let sse_body = "data: {\"error\":{\"message\":\"Upstream context window exceeded\"}}\n\n";
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nConnection: close\r\n\r\n{sse_body}"
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut emit = |_delta: LlmStreamDelta| Ok(());
+
+    let mut req = request();
+    req.config.base_url = format!("http://{address}");
+    let err = OnlineLlmAdapter
+        .stream_completion(req, &mut emit)
+        .await
+        .unwrap_err();
+    server.join().unwrap();
+
+    assert!(
+        err.message.contains("Upstream context window exceeded"),
+        "expected error message to contain upstream error, got: {}",
+        err.message
+    );
+}

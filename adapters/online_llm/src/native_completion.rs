@@ -145,17 +145,26 @@ pub fn resolve_strategy_url_and_headers(
         _ => {
             let default_host = match strategy {
                 LlmProviderStrategy::OpenAi => "https://api.openai.com",
+                LlmProviderStrategy::DeepSeek => "https://api.deepseek.com",
+                LlmProviderStrategy::Groq => "https://api.groq.com/openai/v1",
                 LlmProviderStrategy::Together => "https://api.together.xyz",
                 LlmProviderStrategy::Hyperbolic => "https://api.hyperbolic.xyz",
                 LlmProviderStrategy::Llamafile => "http://127.0.0.1:8080",
                 LlmProviderStrategy::MistralAi => "https://api.mistral.ai",
-                LlmProviderStrategy::MoonshotAi => "https://api.moonshot.ai",
+                LlmProviderStrategy::MoonshotAi => "https://api.moonshot.ai/v1",
                 LlmProviderStrategy::MoonshotCn | LlmProviderStrategy::Kimi => {
-                    "https://api.moonshot.cn"
+                    "https://api.moonshot.cn/v1"
                 }
-                LlmProviderStrategy::OpenRouter => "https://openrouter.ai/api",
+                LlmProviderStrategy::OpenRouter => "https://openrouter.ai/api/v1",
                 LlmProviderStrategy::XAi => "https://api.x.ai",
-                LlmProviderStrategy::Venice => "https://api.venice.ai/api",
+                LlmProviderStrategy::Venice => "https://api.venice.ai/api/v1",
+                LlmProviderStrategy::SiliconFlow => "https://api.siliconflow.cn/v1",
+                LlmProviderStrategy::Qwen => "https://dashscope.aliyuncs.com/compatible-mode/v1",
+                LlmProviderStrategy::QwenPortal => "https://portal.qwen.ai/v1",
+                LlmProviderStrategy::MinimaxGlobal => "https://api.minimaxi.chat/v1",
+                LlmProviderStrategy::MinimaxCn => "https://api.minimax.chat/v1",
+                LlmProviderStrategy::Copilot => "https://api.githubcopilot.com",
+                LlmProviderStrategy::Cohere => "https://api.cohere.ai",
                 _ => "https://api.openai.com",
             };
             let host = if base_url.is_empty() {

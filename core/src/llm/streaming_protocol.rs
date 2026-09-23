@@ -113,11 +113,12 @@ where
 pub fn is_temperature_prohibited_for_model(model: &str) -> bool {
     let lower = model.to_lowercase();
     let trimmed = lower.trim();
-    trimmed.starts_with("o1")
-        || trimmed.starts_with("o3")
-        || trimmed.starts_with("o4")
-        || trimmed.contains("deepseek-reasoner")
-        || trimmed.contains("deepseek-r1")
+    let core_model = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    core_model.starts_with("o1")
+        || core_model.starts_with("o3")
+        || core_model.starts_with("o4")
+        || core_model.contains("deepseek-reasoner")
+        || core_model.contains("deepseek-r1")
 }
 
 /// Reassembles transport chunks into complete lines before higher-level
@@ -284,7 +285,11 @@ pub fn build_openai_chat_payload(
     if config.reasoning_enabled
         && let Some(level) = config.reasoning_level
     {
-        payload["reasoning_effort"] = json!(level);
+        let thinking =
+            crate::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), Some(level));
+        if let Some(effort) = thinking.as_effort_str() {
+            payload["reasoning_effort"] = json!(effort);
+        }
     }
 
     payload
