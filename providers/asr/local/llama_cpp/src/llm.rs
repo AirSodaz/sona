@@ -10,9 +10,7 @@ use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
 use llama_cpp_2::model::{AddBos, LlamaChatMessage, LlamaModel};
 use llama_cpp_2::sampling::LlamaSampler;
-use sona_core::llm::provider_protocol::{
-    LlmModality, LlmModelSummary, StandardLlmResponse,
-};
+use sona_core::llm::provider_protocol::{LlmModality, LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmModelsRequest};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
 use sona_core::llm::usage::TokenUsage;
@@ -89,20 +87,19 @@ impl LlamaCppLlmEngine {
             if host_path.is_file() {
                 return Ok(host_path.to_path_buf());
             }
-            if host_path.is_dir() {
-                if let Some(found) = find_model_in_dir(host_path, target_model) {
-                    return Ok(found);
-                }
+            if host_path.is_dir()
+                && let Some(found) = find_model_in_dir(host_path, target_model)
+            {
+                return Ok(found);
             }
         }
 
         // 3. Check models_dir
-        if let Some(dir) = &self.models_dir {
-            if dir.is_dir() {
-                if let Some(found) = find_model_in_dir(dir, target_model) {
-                    return Ok(found);
-                }
-            }
+        if let Some(dir) = &self.models_dir
+            && dir.is_dir()
+            && let Some(found) = find_model_in_dir(dir, target_model)
+        {
+            return Ok(found);
         }
 
         // Model not found - build a descriptive error message with search paths
@@ -172,10 +169,10 @@ impl LlamaCppLlmEngine {
         }
 
         // 2. Scan models_dir
-        if let Some(dir) = &self.models_dir {
-            if dir.is_dir() {
-                scan_dir_for_gguf(dir, 3, &mut add_model_entry);
-            }
+        if let Some(dir) = &self.models_dir
+            && dir.is_dir()
+        {
+            scan_dir_for_gguf(dir, 3, &mut add_model_entry);
         }
 
         // 3. Ensure default recommended preset Qwen/Qwen3.5-4B is present
@@ -236,7 +233,7 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
     }
 
     // Normalized bare name without prefix if it has org/name format (e.g. Qwen/Qwen3.5-4B)
-    let bare_name = target.split('/').last().unwrap_or(target);
+    let bare_name = target.split('/').next_back().unwrap_or(target);
     let candidate_bare = dir.join(bare_name);
     if candidate_bare.is_file() {
         return Some(candidate_bare);
@@ -270,13 +267,13 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
 
     // Subdirectory matching bare name
     let subdir = dir.join(bare_name.to_lowercase());
-    if subdir.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&subdir) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.is_file() && is_gguf_file(&p) {
-                    return Some(p);
-                }
+    if subdir.is_dir()
+        && let Ok(entries) = std::fs::read_dir(&subdir)
+    {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_file() && is_gguf_file(&p) {
+                return Some(p);
             }
         }
     }
@@ -285,14 +282,13 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         for entry in entries.flatten() {
             let p = entry.path();
-            if p.is_file() && is_gguf_file(&p) {
-                if let Some(stem) = p.file_stem().and_then(|s| s.to_str()) {
-                    if stem.eq_ignore_ascii_case(bare_name)
-                        || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b"))
-                    {
-                        return Some(p);
-                    }
-                }
+            if p.is_file()
+                && is_gguf_file(&p)
+                && let Some(stem) = p.file_stem().and_then(|s| s.to_str())
+                && (stem.eq_ignore_ascii_case(bare_name)
+                    || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b")))
+            {
+                return Some(p);
             }
         }
     }
@@ -354,10 +350,10 @@ fn format_prompt(
 ) -> Result<String, LlmPortError> {
     if let Ok(template) = model.chat_template(None) {
         let mut chat_messages = Vec::new();
-        if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty()) {
-            if let Ok(msg) = LlamaChatMessage::new("system".to_string(), sys.to_string()) {
-                chat_messages.push(msg);
-            }
+        if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty())
+            && let Ok(msg) = LlamaChatMessage::new("system".to_string(), sys.to_string())
+        {
+            chat_messages.push(msg);
         }
         if let Ok(msg) = LlamaChatMessage::new("user".to_string(), input.to_string()) {
             chat_messages.push(msg);
@@ -417,12 +413,14 @@ fn run_llama_generation(
         .with_n_threads(num_threads)
         .with_n_threads_batch(num_threads);
 
-    let mut context = model.new_context(backend, context_params).map_err(|error| {
-        LlmPortError::new(
-            LlmPortErrorKind::Unavailable,
-            format!("Failed to create llama.cpp context: {error}"),
-        )
-    })?;
+    let mut context = model
+        .new_context(backend, context_params)
+        .map_err(|error| {
+            LlmPortError::new(
+                LlmPortErrorKind::Unavailable,
+                format!("Failed to create llama.cpp context: {error}"),
+            )
+        })?;
 
     // Ingest prompt tokens in batches
     let mut batch = LlamaBatch::new(N_BATCH, 1);
@@ -457,10 +455,7 @@ fn run_llama_generation(
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as u32)
             .unwrap_or(12345);
-        LlamaSampler::chain_simple([
-            LlamaSampler::temp(temperature),
-            LlamaSampler::dist(seed),
-        ])
+        LlamaSampler::chain_simple([LlamaSampler::temp(temperature), LlamaSampler::dist(seed)])
     };
 
     let mut decoder = encoding_rs::UTF_8.new_decoder();
@@ -493,12 +488,14 @@ fn run_llama_generation(
         generated_tokens += 1;
 
         batch.clear();
-        batch.add(token, current_pos as i32, &[0], true).map_err(|error| {
-            LlmPortError::new(
-                LlmPortErrorKind::Unavailable,
-                format!("Failed to add generated token to batch: {error}"),
-            )
-        })?;
+        batch
+            .add(token, current_pos as i32, &[0], true)
+            .map_err(|error| {
+                LlmPortError::new(
+                    LlmPortErrorKind::Unavailable,
+                    format!("Failed to add generated token to batch: {error}"),
+                )
+            })?;
         context.decode(&mut batch).map_err(|error| {
             LlmPortError::new(
                 LlmPortErrorKind::Unavailable,
@@ -563,7 +560,7 @@ impl LlamaCppLlmEngine {
         }
 
         let max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
-        let temperature = request.options.temperature.unwrap_or(0.7) as f32;
+        let temperature = request.options.temperature.unwrap_or(0.7);
 
         let gen_ctx = GenerationContext {
             model,
@@ -605,7 +602,9 @@ impl LlmStreamingPort for LlamaCppLlmEngine {
 
         let engine = self.clone();
         let completion_handle =
-            tokio::spawn(async move { engine.execute_completion_internal(request, Some(tx)).await });
+            tokio::spawn(
+                async move { engine.execute_completion_internal(request, Some(tx)).await },
+            );
         let mut accumulated = String::new();
         // Forward tokens to the emit_delta callback as they arrive
         while let Some(delta) = rx.recv().await {
@@ -687,10 +686,13 @@ mod tests {
 
     #[test]
     fn resolves_existing_file_directly() {
-        let temp_path = std::env::temp_dir().join(format!("test_model_{}.gguf", uuid::Uuid::new_v4()));
+        let temp_path =
+            std::env::temp_dir().join(format!("test_model_{}.gguf", uuid::Uuid::new_v4()));
         std::fs::write(&temp_path, b"test").unwrap();
         let engine = LlamaCppLlmEngine::new();
-        let resolved = engine.resolve_model_path(temp_path.to_str().unwrap(), None).unwrap();
+        let resolved = engine
+            .resolve_model_path(temp_path.to_str().unwrap(), None)
+            .unwrap();
         assert_eq!(resolved, temp_path);
         let _ = std::fs::remove_file(temp_path);
     }

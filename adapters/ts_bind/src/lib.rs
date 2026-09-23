@@ -63,7 +63,6 @@ pub use sona_core::history::{
     TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
     TranscriptSummaryRecordPayload,
 };
-pub use sona_core::llm::{LocalLlmCardsResponse, LocalLlmModelCard};
 pub use sona_core::llm::provider_protocol::{
     LlmModality, LlmModelMetadataSource, LlmModelSummary, MessageRole, StandardLlmRequest,
     StandardLlmResponse, StandardMessage,
@@ -84,6 +83,7 @@ pub use sona_core::llm::tasks::{
     TranscriptSummaryResult, TranslatedSegment,
 };
 pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage};
+pub use sona_core::llm::{LocalLlmCardsResponse, LocalLlmModelCard};
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::models::preset_models::{
     ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,

@@ -53,6 +53,8 @@ export function LocalModelCard({
     activeFeatures.polish && activeFeatures.translation && activeFeatures.summary;
 
   const isQwen = card.id.toLowerCase().includes('qwen') || card.name.toLowerCase().includes('qwen');
+  const isGemma =
+    card.id.toLowerCase().includes('gemma') || card.name.toLowerCase().includes('gemma');
 
   return (
     <div
@@ -64,6 +66,27 @@ export function LocalModelCard({
           <div className="local-model-logo-box">
             {isQwen ? (
               <ModelBrandLogo brand="qwen" size={36} />
+            ) : isGemma ? (
+              <svg width="30" height="30" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <path
+                  d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"
+                  fill="url(#gemma-gradient)"
+                />
+                <defs>
+                  <linearGradient
+                    id="gemma-gradient"
+                    x1="2"
+                    y1="2"
+                    x2="22"
+                    y2="22"
+                    gradientUnits="userSpaceOnUse"
+                  >
+                    <stop stopColor="#4285F4" />
+                    <stop offset="0.5" stopColor="#9B72CB" />
+                    <stop offset="1" stopColor="#EA4335" />
+                  </linearGradient>
+                </defs>
+              </svg>
             ) : (
               <Cpu size={24} className="text-secondary" />
             )}

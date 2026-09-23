@@ -1,14 +1,4 @@
-import {
-  Check,
-  Cpu,
-  FolderOpen,
-  HardDrive,
-  Loader2,
-  Plus,
-  RefreshCw,
-  ShieldCheck,
-  X,
-} from 'lucide-react';
+import { Check, Cpu, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -30,7 +20,6 @@ import { TauriEvent } from '../../../services/tauri/events';
 import { generateLlmText, listLocalLlmCards } from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
-import { storageOpenPath } from '../../../services/tauri/storage';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
 import type { LlmAssistantConfig } from '../../../types/config';
@@ -190,15 +179,6 @@ export function LocalProviderAccordionItem({
     [confirm, fetchCards, t]
   );
 
-  const handleOpenFolder = useCallback(async () => {
-    if (!data.modelsDir) return;
-    try {
-      await storageOpenPath(data.modelsDir);
-    } catch (err) {
-      console.error('Failed to open storage directory:', err);
-    }
-  }, [data.modelsDir]);
-
   const handleImportCustomFile = useCallback(async () => {
     try {
       const selected = await openDialog({
@@ -344,7 +324,7 @@ export function LocalProviderAccordionItem({
     <SettingsAccordion
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{t('settings.llm_providers.local', { defaultValue: 'Local (llama.cpp)' })}</span>
+          <span>{t('settings.llm_providers.local', { defaultValue: '本地模型' })}</span>
           <span className="local-model-badge local-model-badge-rec" style={{ fontSize: '0.7rem' }}>
             {t('settings.llm.local_engine_badge', { defaultValue: '离线端侧' })}
           </span>
@@ -356,70 +336,38 @@ export function LocalProviderAccordionItem({
       contentTestId="provider-accordion-content-local"
     >
       <div className="local-model-cards-container">
-        {/* Overview Banner */}
-        <div className="local-models-overview-banner">
-          <div className="local-models-overview-info">
-            <div className="local-models-overview-title">
-              <ShieldCheck size={18} className="text-accent" />
-              <span>
-                {t('settings.llm.local_engine_title', { defaultValue: '本地模型引擎 (llama.cpp)' })}
-              </span>
-            </div>
-            <div className="local-models-overview-desc">
-              {t('settings.llm.local_privacy_hint', {
-                defaultValue:
-                  '完全在您的电脑本地运行，无需 API 密钥或网络连接，数据不离开本地设备。',
-              })}
-            </div>
-          </div>
+        {/* Actions bar */}
+        <div
+          style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            alignItems: 'center',
+            marginBottom: '8px',
+            gap: '8px',
+          }}
+        >
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            onClick={handleImportCustomFile}
+            title={t('settings.llm.import_custom_model_hint', {
+              defaultValue: '导入本地已有的 GGUF 格式模型文件',
+            })}
+          >
+            <Plus size={14} />
+            <span>{t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}</span>
+          </button>
+          <button
+            type="button"
+            className="btn btn-icon btn-secondary-soft btn-sm"
+            onClick={fetchCards}
+            disabled={isLoading}
+            title={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+            aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+          </button>
         </div>
-
-        {/* Directory Row */}
-        <div className="local-models-dir-row">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0 }}>
-            <HardDrive size={16} className="text-secondary" style={{ flexShrink: 0 }} />
-            <span style={{ fontWeight: 500, flexShrink: 0 }}>
-              {t('settings.llm.models_storage_dir', { defaultValue: '模型目录' })}:
-            </span>
-            <span className="local-models-dir-path" title={data.modelsDir}>
-              {data.modelsDir || '...'}
-            </span>
-          </div>
-
-          <div className="local-models-dir-actions">
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleOpenFolder}
-              title={t('settings.llm.open_models_dir')}
-            >
-              <FolderOpen size={14} />
-              <span>{t('settings.llm.open_models_dir', { defaultValue: '打开目录' })}</span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary btn-sm"
-              onClick={handleImportCustomFile}
-              title={t('settings.llm.import_custom_model_hint')}
-            >
-              <Plus size={14} />
-              <span>
-                {t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}
-              </span>
-            </button>
-            <button
-              type="button"
-              className="btn btn-icon btn-secondary-soft btn-sm"
-              onClick={fetchCards}
-              disabled={isLoading}
-              title={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-              aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-            >
-              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-            </button>
-          </div>
-        </div>
-
         {/* Model Cards List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {cards.map((card) => {

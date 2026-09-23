@@ -61,7 +61,8 @@ pub async fn list_llm_models(
     app: AppHandle,
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    let models_dir =
+        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
     crate::integrations::llm::list_llm_models_with_models_dir(request, models_dir).await
 }
 
@@ -70,7 +71,8 @@ pub async fn describe_llm_model(
     app: AppHandle,
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    let models_dir =
+        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
     crate::integrations::llm::describe_llm_model_with_models_dir(config, models_dir).await
 }
 
@@ -109,12 +111,12 @@ pub async fn list_local_llm_cards(
         let mut found_path = None;
         let mut found_size = None;
         for path in &candidate_paths {
-            if path.is_file() {
-                if let Ok(meta) = std::fs::metadata(path) {
-                    found_path = Some(path.to_string_lossy().into_owned());
-                    found_size = Some(meta.len());
-                    break;
-                }
+            if path.is_file()
+                && let Ok(meta) = std::fs::metadata(path)
+            {
+                found_path = Some(path.to_string_lossy().into_owned());
+                found_size = Some(meta.len());
+                break;
             }
         }
 
@@ -126,40 +128,46 @@ pub async fn list_local_llm_cards(
     if let Ok(entries) = std::fs::read_dir(&models_dir) {
         for entry in entries.flatten() {
             let path = entry.path();
-            if path.is_file() {
-                if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                    if ext.eq_ignore_ascii_case("gguf") {
-                        if let Some(file_name) = path.file_name().and_then(|f| f.to_str()) {
-                            if !seen_filenames.contains(&file_name.to_lowercase()) {
-                                let stem = path.file_stem().and_then(|s| s.to_str()).unwrap_or(file_name);
-                                let file_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
-                                let formatted_size = format!("{:.1} GB", file_size as f64 / (1024.0 * 1024.0 * 1024.0));
-                                let quant = extract_quantization_from_filename(file_name);
-                                cards.push(sona_core::llm::local_models::LocalLlmModelCard {
-                                    id: format!("custom-{}", stem),
-                                    name: stem.to_string(),
-                                    model: stem.to_string(),
-                                    filename: file_name.to_string(),
-                                    description: "settings.descriptions.custom_local_model".to_string(),
-                                    backend: "llama.cpp".to_string(),
-                                    context_window: 131072,
-                                    max_output_tokens: 4096,
-                                    size: formatted_size,
-                                    parameters: None,
-                                    quantization: quant,
-                                    languages: vec!["auto".to_string()],
-                                    capabilities: vec!["chat".to_string(), "polish".to_string(), "summary".to_string(), "translate".to_string()],
-                                    is_recommended: false,
-                                    is_installed: true,
-                                    installed_path: Some(path.to_string_lossy().into_owned()),
-                                    installed_size_bytes: Some(file_size),
-                                    download_url: None,
-                                    download_size_bytes: None,
-                                });
-                            }
-                        }
-                    }
-                }
+            if path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && ext.eq_ignore_ascii_case("gguf")
+                && let Some(file_name) = path.file_name().and_then(|f| f.to_str())
+                && !seen_filenames.contains(&file_name.to_lowercase())
+            {
+                let stem = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(file_name);
+                let file_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let formatted_size =
+                    format!("{:.1} GB", file_size as f64 / (1024.0 * 1024.0 * 1024.0));
+                let quant = extract_quantization_from_filename(file_name);
+                cards.push(sona_core::llm::local_models::LocalLlmModelCard {
+                    id: format!("custom-{}", stem),
+                    name: stem.to_string(),
+                    model: stem.to_string(),
+                    filename: file_name.to_string(),
+                    description: "settings.descriptions.custom_local_model".to_string(),
+                    backend: "llama.cpp".to_string(),
+                    context_window: 131072,
+                    max_output_tokens: 4096,
+                    size: formatted_size,
+                    parameters: None,
+                    quantization: quant,
+                    languages: vec!["auto".to_string()],
+                    capabilities: vec![
+                        "chat".to_string(),
+                        "polish".to_string(),
+                        "summary".to_string(),
+                        "translate".to_string(),
+                    ],
+                    is_recommended: false,
+                    is_installed: true,
+                    installed_path: Some(path.to_string_lossy().into_owned()),
+                    installed_size_bytes: Some(file_size),
+                    download_url: None,
+                    download_size_bytes: None,
+                });
             }
         }
     }
@@ -172,7 +180,10 @@ pub async fn list_local_llm_cards(
 
 fn extract_quantization_from_filename(filename: &str) -> Option<String> {
     let lower = filename.to_lowercase();
-    let quants = ["q4_k_m", "q4_k_s", "q4_0", "q4_1", "q5_k_m", "q5_k_s", "q5_0", "q5_1", "q8_0", "q2_k", "q3_k_m", "q6_k", "f16", "f32"];
+    let quants = [
+        "q4_k_m", "q4_k_s", "q4_0", "q4_1", "q5_k_m", "q5_k_s", "q5_0", "q5_1", "q8_0", "q2_k",
+        "q3_k_m", "q6_k", "f16", "f32",
+    ];
     for q in quants {
         if lower.contains(q) {
             return Some(q.to_uppercase());

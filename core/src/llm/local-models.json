@@ -22,6 +22,28 @@
         "sha256": "00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4",
         "sizeBytes": 2740937888
       }
+    },
+    {
+      "id": "gemma-4-e2b",
+      "name": "Gemma 4 E2B",
+      "model": "google/gemma-4-e2b",
+      "filename": "gemma-4-E2B-it-Q4_K_M.gguf",
+      "description": "settings.descriptions.gemma_4_e2b",
+      "backend": "llama.cpp",
+      "contextWindow": 131072,
+      "maxOutputTokens": 4096,
+      "size": "~1.8 GB",
+      "parameters": "2B",
+      "quantization": "Q4_K_M",
+      "languages": ["en", "zh", "ja", "ko", "es", "fr", "de", "it"],
+      "capabilities": ["chat", "reasoning", "polish", "summary", "translate"],
+      "isRecommended": false,
+      "download": {
+        "url": "https://huggingface.co/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
+        "mirrorUrl": "https://hf-mirror.com/unsloth/gemma-4-E2B-it-GGUF/resolve/main/gemma-4-E2B-it-Q4_K_M.gguf",
+        "sha256": "4b918b958c8942b0370d03b0c512cfc80b5e91d5eb856a5c102a3a14e9f7830f",
+        "sizeBytes": 1932735283
+      }
     }
   ]
 }

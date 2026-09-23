@@ -33,8 +33,10 @@ impl DesktopLlmAdapter {
     }
 
     pub(crate) fn is_local_config(config: &LlmConfig) -> bool {
-        matches!(config.provider, LlmProvider::Builtin(BuiltinLlmProvider::Local))
-            || config.strategy == LlmProviderStrategy::Local
+        matches!(
+            config.provider,
+            LlmProvider::Builtin(BuiltinLlmProvider::Local)
+        ) || config.strategy == LlmProviderStrategy::Local
     }
 }
 
@@ -97,8 +99,10 @@ impl LlmModelDiscoveryPort for DesktopLlmAdapter {
         &self,
         request: LlmModelsRequest,
     ) -> Result<Vec<LlmModelSummary>, LlmPortError> {
-        let is_local = matches!(request.provider, LlmProvider::Builtin(BuiltinLlmProvider::Local))
-            || matches!(request.strategy, Some(LlmProviderStrategy::Local));
+        let is_local = matches!(
+            request.provider,
+            LlmProvider::Builtin(BuiltinLlmProvider::Local)
+        ) || matches!(request.strategy, Some(LlmProviderStrategy::Local));
         if is_local {
             self.local.list_models(request).await
         } else {

@@ -830,7 +830,7 @@
       "llamafile": "Llamafile",
       "google_translate": "Google Translate",
       "google_translate_free": "Google Translate(Free)",
-      "local": "로컬 모델 (llama.cpp)",
+      "local": "로컬 모델",
       "local_model_path": "모델 경로 / GGUF 파일",
       "local_model_name": "모델 이름"
     },
@@ -1763,6 +1763,7 @@
       "itn_zh": "Inverse Text Normalization 모델 for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
       "mms_300m_fa": "Meta MMS-300M 다국어 CTC 강제 정렬 모델. 토큰 수준 타임스탬프 생성과 화자 분할 최적화 지원.",
       "qwen3_5_4b": "Alibaba Qwen 팀 개발. 262K 장문 컨텍스트 및 하이브리드 선형 주의 메커니즘을 지원하는 차세대 4B 엣지 LLM. 윤문, 번역, 요약 및 대화에서 탁월한 성능을 발휘합니다.",
+      "gemma_4_e2b": "Google DeepMind에서 개발한 차세대 엣지 최적화 초경량 멀티모달 모델. 2B 유효 파라미터, 극소 메모리 점유, 128K 컨텍스트 및 강력한 온디바이스 추론 기능을 제공합니다.",
       "custom_local_model": "로컬에서 가져오거나 검색된 GGUF 형식 모델 파일입니다."
     },
     "recognition_models": "Recognition 모델",

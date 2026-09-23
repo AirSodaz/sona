@@ -36,8 +36,7 @@ pub fn resolve_model_download(
     let model = find_preset_model(model_id)
         .cloned()
         .or_else(|| {
-            crate::llm::local_models::find_local_llm_model(model_id)
-                .map(|m| m.to_preset_model())
+            crate::llm::local_models::find_local_llm_model(model_id).map(|m| m.to_preset_model())
         })
         .ok_or_else(|| {
             RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
@@ -60,7 +59,10 @@ pub fn resolve_model_download(
                 filename: artifact.filename.clone(),
                 sha256: artifact.sha256.clone(),
                 size_bytes: artifact.size_bytes,
-                install_path: if model.filename.is_some() && !model.is_archive() && !model.is_multi_file() {
+                install_path: if model.filename.is_some()
+                    && !model.is_archive()
+                    && !model.is_multi_file()
+                {
                     install_path.clone()
                 } else {
                     install_path.join(&artifact.filename)

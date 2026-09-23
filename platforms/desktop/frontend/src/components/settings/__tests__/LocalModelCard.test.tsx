@@ -127,4 +127,45 @@ describe('LocalModelCard', () => {
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith(installedCard);
   });
+
+  it('renders Gemma 4 E2B model card with specs', () => {
+    const gemmaCard: LocalLlmModelCardType = {
+      id: 'gemma-4-e2b',
+      name: 'Gemma 4 E2B',
+      model: 'google/gemma-4-e2b',
+      filename: 'gemma-4-E2B-it-Q4_K_M.gguf',
+      description: 'settings.descriptions.gemma_4_e2b',
+      backend: 'llama.cpp',
+      contextWindow: 131072,
+      maxOutputTokens: 4096,
+      size: '~1.8 GB',
+      parameters: '2B',
+      quantization: 'Q4_K_M',
+      languages: ['en', 'zh', 'ja'],
+      capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
+      isRecommended: false,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      downloadUrl: 'https://example.com/gemma.gguf',
+      downloadSizeBytes: 1932735283,
+    };
+
+    render(
+      <LocalModelCard
+        card={gemmaCard}
+        activeFeatures={{ polish: false, translation: false, summary: false }}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onApplyFeature={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    expect(screen.getByText('Gemma 4 E2B')).toBeTruthy();
+    expect(screen.getByText('2B')).toBeTruthy();
+    expect(screen.getByText('128K (131,072 tokens)')).toBeTruthy();
+    expect(screen.getByText('~1.8 GB')).toBeTruthy();
+  });
 });

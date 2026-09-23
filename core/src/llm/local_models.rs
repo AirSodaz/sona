@@ -1,7 +1,7 @@
-use std::sync::LazyLock;
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
 use specta::Type;
+use std::sync::LazyLock;
 
 use crate::llm::provider_protocol::{LlmModality, LlmModelSummary};
 
@@ -162,8 +162,8 @@ struct LocalModelsManifest {
 }
 
 static LOCAL_MODELS: LazyLock<Vec<LocalLlmPreset>> = LazyLock::new(|| {
-    let manifest: LocalModelsManifest = serde_json::from_str(LOCAL_MODELS_JSON)
-        .expect("local LLM models JSON must be valid");
+    let manifest: LocalModelsManifest =
+        serde_json::from_str(LOCAL_MODELS_JSON).expect("local LLM models JSON must be valid");
     manifest.models
 });
 

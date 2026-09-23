@@ -10,7 +10,7 @@
       "strategy": "local",
       "ui": {
         "labelKey": "settings.llm_providers.local",
-        "labelDefault": "Local (llama.cpp)",
+        "labelDefault": "Local Model",
         "apiHostLabelKey": "settings.llm_providers.local_model_path",
         "apiHostLabelDefault": "Model Path / GGUF File",
         "modelLabelKey": "settings.llm_providers.local_model_name",

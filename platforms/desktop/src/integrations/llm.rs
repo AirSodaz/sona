@@ -37,8 +37,6 @@ pub(crate) use commands::{
     list_llm_models_with_models_dir, polish_transcript_segments_command,
     summarize_transcript_command, translate_transcript_segments_command,
 };
-#[cfg(test)]
-pub(crate) use commands::{describe_llm_model_command, list_llm_models_command};
 pub(crate) use jobs::run_transcript_llm_job_command;
 pub(crate) use providers::*;
 #[cfg(test)]

@@ -99,7 +99,8 @@ struct DesktopTaskRuntime {
 
 impl DesktopTaskRuntime {
     fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
-        let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+        let models_dir =
+            crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
         Self {
             inner: DesktopLlmAdapter::new(models_dir),
             usage: UsageRecorder::new(app, config, category),
@@ -250,7 +251,8 @@ pub(crate) async fn complete_llm_command(
 ) -> Result<LlmCompletionResponse, String> {
     let category = request.source.unwrap_or(LlmGenerateSource::Generic).into();
     let usage = UsageRecorder::new(app.clone(), request.config.clone(), category);
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+    let models_dir =
+        crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
     let adapter = DesktopLlmAdapter::new(models_dir);
     let response = complete_llm_with_port(request, adapter).await?;
     usage.record_usage(response.usage.clone());
@@ -334,7 +336,7 @@ pub(crate) async fn summarize_transcript_command(
         .map_err(|error| error.to_string())
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) async fn list_llm_models_command(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, String> {
@@ -352,7 +354,7 @@ pub(crate) async fn list_llm_models_with_models_dir(
         .map_err(|error| error.to_string())
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(dead_code)]
 pub(crate) async fn describe_llm_model_command(
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {

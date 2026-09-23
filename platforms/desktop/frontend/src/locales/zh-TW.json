@@ -830,7 +830,7 @@
       "llamafile": "Llamafile",
       "google_translate": "Google翻譯",
       "google_translate_free": "Google翻譯 (免費)",
-      "local": "本地模型 (llama.cpp)",
+      "local": "本地模型",
       "local_model_path": "模型路徑 / GGUF 檔案",
       "local_model_name": "模型名稱"
     },
@@ -1763,6 +1763,7 @@
       "itn_zh": "中文逆文本標準化模型。將口語數字（如“一二三”）轉換為數字（“123”）。",
       "mms_300m_fa": "由 Meta 開發的 MMS-300M 多語言 CTC 強制對齊模型，用於高精度字词級時間戳對齊與說話者切分優化。",
       "qwen3_5_4b": "由阿里巴巴 Qwen 團隊開發。最新一代 4B 端側大模型，支援 262K 長上下文與混合線性注意力架構，具備卓越的潤色、翻譯、總結與多語言對話能力。",
+      "gemma_4_e2b": "由 Google DeepMind 開發的新一代超輕量端側多模態架構模型，2B 有效參數量，極小記憶體佔用，支援 128K 上下文，具備優秀的輕量推理與多任務處理能力。",
       "custom_local_model": "本地匯入或掃描發現的 GGUF 格式模型檔案。"
     },
     "recognition_models": "辨識模型",

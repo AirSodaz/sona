@@ -200,7 +200,11 @@ impl BuiltinLlmProvider {
     pub fn requires_api_key(&self) -> bool {
         !matches!(
             self,
-            Self::GoogleTranslateFree | Self::Ollama | Self::LmStudio | Self::Llamafile | Self::Local
+            Self::GoogleTranslateFree
+                | Self::Ollama
+                | Self::LmStudio
+                | Self::Llamafile
+                | Self::Local
         )
     }
 }

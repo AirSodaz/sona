@@ -830,7 +830,7 @@
       "llamafile": "Llamafile",
       "google_translate": "Google Translate",
       "google_translate_free": "Google Translate (Free)",
-      "local": "Local Model (llama.cpp)",
+      "local": "Local Model",
       "local_model_path": "Model Path / GGUF File",
       "local_model_name": "Model Name"
     },
@@ -1763,6 +1763,7 @@
       "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
       "mms_300m_fa": "Developed by Meta. MMS-300M multilingual CTC forced alignment model for token-level timestamps and speaker refinement.",
       "qwen3_5_4b": "Developed by Alibaba Qwen team. Next-gen 4B edge LLM featuring 262K context window and hybrid linear attention, excelling at polish, translation, summary, and dialogue.",
+      "gemma_4_e2b": "Developed by Google DeepMind. Next-gen edge-optimized lightweight multimodal model with 2B effective parameters, ultra-low memory footprint, 128K context, and strong on-device reasoning.",
       "custom_local_model": "Locally imported or scanned GGUF model file."
     },
     "recognition_models": "Recognition Models",

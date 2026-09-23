@@ -62,6 +62,7 @@ pub enum FfiLlmProviderStrategy {
     GoogleTranslateFree,
     OpenAiCompatible,
     OpenAiCompatibleCustomPath,
+    Local,
 }
 
 /// `api_key` is an opaque handle so the generated Kotlin `data class`
@@ -233,6 +234,7 @@ pub fn llm_provider_strategy_to_ffi(strategy: LlmProviderStrategy) -> FfiLlmProv
         LlmProviderStrategy::OpenAiCompatibleCustomPath => {
             FfiLlmProviderStrategy::OpenAiCompatibleCustomPath
         }
+        LlmProviderStrategy::Local => FfiLlmProviderStrategy::Local,
     }
 }
 
@@ -461,6 +463,7 @@ fn llm_provider_strategy_from_ffi(strategy: FfiLlmProviderStrategy) -> LlmProvid
         FfiLlmProviderStrategy::OpenAiCompatibleCustomPath => {
             LlmProviderStrategy::OpenAiCompatibleCustomPath
         }
+        FfiLlmProviderStrategy::Local => LlmProviderStrategy::Local,
     }
 }
 
