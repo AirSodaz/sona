@@ -147,7 +147,8 @@ pub fn resolve_strategy_url_and_headers(
         _ => {
             let default_host = match strategy {
                 LlmProviderStrategy::OpenAi => "https://api.openai.com",
-                LlmProviderStrategy::DeepSeek => "https://api.deepseek.com",
+                LlmProviderStrategy::Chatglm => "https://open.bigmodel.cn/api/paas/v4",
+                LlmProviderStrategy::Volcengine => "https://ark.cn-beijing.volces.com/api/v3",
                 LlmProviderStrategy::Groq => "https://api.groq.com/openai/v1",
                 LlmProviderStrategy::Together => "https://api.together.xyz",
                 LlmProviderStrategy::Hyperbolic => "https://api.hyperbolic.xyz",

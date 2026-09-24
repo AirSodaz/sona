@@ -426,6 +426,7 @@ mod tests {
                     record: Some(TranscriptSummaryRecordPayload {
                         template_id: "general".to_string(),
                         content: "Backup summary".to_string(),
+                        thought: None,
                         generated_at: "2026-07-14T00:00:00.000Z".to_string(),
                         source_fingerprint: "backup-source".to_string(),
                     }),

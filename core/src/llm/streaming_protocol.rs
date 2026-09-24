@@ -245,6 +245,22 @@ pub fn build_openai_stream_url(config: OpenAiStreamUrlConfig<'_>) -> String {
     }
 }
 
+pub fn strategy_supports_stream_options(strategy: LlmProviderStrategy) -> bool {
+    matches!(
+        strategy,
+        LlmProviderStrategy::OpenAi
+            | LlmProviderStrategy::DeepSeek
+            | LlmProviderStrategy::Groq
+            | LlmProviderStrategy::OpenRouter
+            | LlmProviderStrategy::SiliconFlow
+            | LlmProviderStrategy::MoonshotAi
+            | LlmProviderStrategy::MoonshotCn
+            | LlmProviderStrategy::XAi
+            | LlmProviderStrategy::MistralAi
+            | LlmProviderStrategy::Together
+    )
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct OpenAiChatPayloadConfig<'a> {
     pub strategy: LlmProviderStrategy,
@@ -282,7 +298,7 @@ pub fn build_openai_chat_payload(
 
     if stream {
         payload["stream"] = json!(true);
-        if config.strategy != LlmProviderStrategy::AzureOpenAi {
+        if strategy_supports_stream_options(config.strategy) {
             payload["stream_options"] = json!({"include_usage": true});
         }
     }
@@ -304,7 +320,9 @@ pub fn build_openai_chat_payload(
         let clamped = if is_openai_o_series {
             match thinking {
                 crate::llm::runtime::ThinkingLevel::None
-                | crate::llm::runtime::ThinkingLevel::Auto => thinking,
+                | crate::llm::runtime::ThinkingLevel::Auto => {
+                    crate::llm::runtime::ThinkingLevel::Auto
+                }
                 _ => thinking
                     .clamp_to_supported(&[
                         crate::llm::runtime::ThinkingLevel::Low,

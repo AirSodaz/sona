@@ -305,6 +305,14 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
                     sona_core::llm::runtime::ThinkingLevel::High,
                 ],
             )
+        } else if normalized.contains("deepseek-r1")
+            || normalized.contains("deepseek-reasoner")
+            || normalized.contains("qwq")
+        {
+            (
+                Some(sona_core::llm::runtime::ReasoningMode::None),
+                Vec::new(),
+            )
         } else {
             (
                 Some(sona_core::llm::runtime::ReasoningMode::Effort {
@@ -417,8 +425,23 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
     })
 }
 
-pub fn should_enrich_model_metadata(_provider: &LlmProvider, base_url: &str) -> bool {
-    let Ok(url) = reqwest::Url::parse(base_url) else {
+pub fn should_enrich_model_metadata(provider: &LlmProvider, base_url: &str) -> bool {
+    let trimmed = base_url.trim();
+    if trimmed.is_empty() {
+        return match provider {
+            LlmProvider::Builtin(b) => !matches!(
+                b,
+                sona_core::domain::BuiltinLlmProvider::Local
+                    | sona_core::domain::BuiltinLlmProvider::Ollama
+                    | sona_core::domain::BuiltinLlmProvider::Llamafile
+                    | sona_core::domain::BuiltinLlmProvider::LmStudio
+                    | sona_core::domain::BuiltinLlmProvider::GoogleTranslate
+                    | sona_core::domain::BuiltinLlmProvider::GoogleTranslateFree
+            ),
+            LlmProvider::Custom(_) => false,
+        };
+    }
+    let Ok(url) = reqwest::Url::parse(trimmed) else {
         return false;
     };
     !is_local_or_lan_host(&url)

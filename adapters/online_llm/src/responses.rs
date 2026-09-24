@@ -50,17 +50,22 @@ pub fn build_openai_responses_payload(request: &LlmCompletionRequest, stream: bo
     }
     if request.effective_reasoning_enabled() {
         let thinking = request.effective_thinking_level();
-        let effort = thinking
-            .clamp_to_supported(&[
-                sona_core::llm::runtime::ThinkingLevel::Low,
-                sona_core::llm::runtime::ThinkingLevel::Medium,
-                sona_core::llm::runtime::ThinkingLevel::High,
-            ])
-            .and_then(|t| t.as_effort_str())
-            .unwrap_or("medium");
-        payload["reasoning"] = json!({
-            "effort": effort
-        });
+        let effort = match thinking {
+            sona_core::llm::runtime::ThinkingLevel::None
+            | sona_core::llm::runtime::ThinkingLevel::Auto => None,
+            _ => thinking
+                .clamp_to_supported(&[
+                    sona_core::llm::runtime::ThinkingLevel::Low,
+                    sona_core::llm::runtime::ThinkingLevel::Medium,
+                    sona_core::llm::runtime::ThinkingLevel::High,
+                ])
+                .and_then(|t| t.as_effort_str()),
+        };
+        if let Some(effort) = effort {
+            payload["reasoning"] = json!({
+                "effort": effort
+            });
+        }
     }
     let schema_format = match &request.options.response_format {
         LlmResponseFormat::Text => None,

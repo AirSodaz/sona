@@ -1,3 +1,4 @@
+pub mod demuxer;
 pub mod jobs;
 pub mod local_models;
 pub mod model_catalog;

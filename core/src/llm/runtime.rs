@@ -171,6 +171,8 @@ pub struct LlmExecutionMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct LlmCompletionResponse {
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "specta",
@@ -285,8 +287,7 @@ impl ThinkingLevel {
 
     pub fn as_effort_str(&self) -> Option<&'static str> {
         match self {
-            ThinkingLevel::None => Some("none"),
-            ThinkingLevel::Auto => None,
+            ThinkingLevel::None | ThinkingLevel::Auto => None,
             ThinkingLevel::Minimal => Some("minimal"),
             ThinkingLevel::Low => Some("low"),
             ThinkingLevel::Medium => Some("medium"),
@@ -439,6 +440,7 @@ pub fn finish_response(
     let json = parse_output(&response.text, &validation_format)?;
     Ok(LlmCompletionResponse {
         text: response.text,
+        thought: response.thought,
         json,
         usage: response.usage,
         execution: LlmExecutionMetadata {

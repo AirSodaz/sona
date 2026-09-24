@@ -235,7 +235,14 @@ export class SummaryService {
           generationProgress,
         });
       },
-      onText: ({ text, isThought }, textHistoryId) => {
+      onText: ({ text, isThought, reset }, textHistoryId) => {
+        if (reset) {
+          this.updateJobSummaryState(textHistoryId, {
+            streamingContent: '',
+            streamingThought: '',
+          });
+          return;
+        }
         if (isThought) {
           this.updateJobSummaryState(textHistoryId, {
             streamingThought: text,
@@ -271,6 +278,7 @@ export class SummaryService {
             config.summaryCustomTemplates
           ),
           content: summaryRecord.content,
+          thought: summaryRecord.thought ?? undefined,
           generatedAt: summaryRecord.generatedAt,
           sourceFingerprint:
             summaryRecord.sourceFingerprint || computeSummarySourceFingerprint(segments),

@@ -52,8 +52,8 @@ where
         .post(url.reqwest_url())
         .header("Content-Type", "application/json");
 
-    for (k, v) in headers {
-        req_builder = req_builder.header(k, v);
+    for (k, v) in &headers {
+        req_builder = req_builder.header(*k, v);
     }
 
     let response = req_builder
@@ -63,12 +63,67 @@ where
         .map_err(reqwest_port_error)?;
 
     let status = response.status();
-    if !status.is_success() {
+    let response = if status == reqwest::StatusCode::BAD_REQUEST {
+        let headers_clone = response.headers().clone();
+        let text = response.text().await.map_err(reqwest_port_error)?;
+        let lower_err = text.to_ascii_lowercase();
+        let mut retry_needed = false;
+        let mut cleaned_payload = payload.clone();
+
+        if lower_err.contains("stream_options") && cleaned_payload.get("stream_options").is_some() {
+            cleaned_payload
+                .as_object_mut()
+                .and_then(|p| p.remove("stream_options"));
+            retry_needed = true;
+        }
+        if lower_err.contains("reasoning_effort")
+            && cleaned_payload.get("reasoning_effort").is_some()
+        {
+            cleaned_payload
+                .as_object_mut()
+                .and_then(|p| p.remove("reasoning_effort"));
+            retry_needed = true;
+        }
+        if lower_err.contains("temperature") && cleaned_payload.get("temperature").is_some() {
+            cleaned_payload
+                .as_object_mut()
+                .and_then(|p| p.remove("temperature"));
+            retry_needed = true;
+        }
+
+        if retry_needed {
+            let mut retry_builder = client
+                .post(url.reqwest_url())
+                .header("Content-Type", "application/json");
+            for (k, v) in &headers {
+                retry_builder = retry_builder.header(*k, v);
+            }
+            let retry_resp = retry_builder
+                .json(&cleaned_payload)
+                .send()
+                .await
+                .map_err(reqwest_port_error)?;
+            let retry_status = retry_resp.status();
+            if !retry_status.is_success() {
+                let retry_headers = retry_resp.headers().clone();
+                let retry_text = retry_resp.text().await.map_err(reqwest_port_error)?;
+                return Err(http_status_port_error(
+                    retry_status,
+                    &retry_headers,
+                    retry_text,
+                ));
+            }
+            retry_resp
+        } else {
+            return Err(http_status_port_error(status, &headers_clone, text));
+        }
+    } else if !status.is_success() {
         let headers = response.headers().clone();
         let text = response.text().await.map_err(reqwest_port_error)?;
         return Err(http_status_port_error(status, &headers, text));
-    }
-
+    } else {
+        response
+    };
     let mut byte_stream = response.bytes_stream();
     let mut sse_buffer = SseEventBuffer::default();
     let mut demuxer = ThoughtStreamDemuxer::new();
@@ -273,7 +328,23 @@ where
             {
                 *total_usage = Some(usage);
             }
-            if let Some(delta) = json
+            let event_type = json.get("type").and_then(Value::as_str);
+            let is_reasoning_event = event_type == Some("response.reasoning.delta")
+                || event_type == Some("response.reasoning_text.delta")
+                || json.get("reasoning_delta").is_some()
+                || json.get("reasoning_content").is_some();
+
+            if is_reasoning_event {
+                let thought = json
+                    .get("delta")
+                    .or_else(|| json.get("reasoning_delta"))
+                    .or_else(|| json.get("reasoning_content"))
+                    .or_else(|| json.get("output_text_delta"))
+                    .and_then(Value::as_str);
+                if let Some(t) = thought {
+                    accumulator.push_thought(t)?;
+                }
+            } else if let Some(delta) = json
                 .get("delta")
                 .and_then(Value::as_str)
                 .or_else(|| json.get("output_text_delta").and_then(Value::as_str))

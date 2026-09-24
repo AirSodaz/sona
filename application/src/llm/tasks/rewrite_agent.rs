@@ -330,6 +330,7 @@ mod tests {
                         } else {
                             "valid".to_string()
                         },
+                        thought: None,
                         json: None,
                         usage: None,
                         execution: LlmExecutionMetadata {
@@ -408,6 +409,7 @@ mod tests {
                             } else {
                                 "valid".to_string()
                             },
+                            thought: None,
                             json: None,
                             usage: None,
                             execution: LlmExecutionMetadata {

@@ -23,6 +23,7 @@ pub fn build_gemini_payload_for_request(
         let is_budget_model = request.config.model.contains("gemini-2.5")
             || request.config.model.contains("thinking")
             || matches!(thinking, sona_core::llm::runtime::ThinkingLevel::Budget(_));
+        let is_gemini_2_0 = request.config.model.contains("gemini-2.0");
         generation_config["thinkingConfig"] = if is_budget_model {
             let raw_budget = thinking
                 .resolve_budget_tokens(1024, 2048, 4096)
@@ -32,10 +33,16 @@ pub fn build_gemini_payload_for_request(
                 .max_output_tokens
                 .map(|limit| raw_budget.min(limit.min(u64::from(u32::MAX)) as u32))
                 .unwrap_or(raw_budget);
-            json!({
-                "thinkingBudget": budget,
-                "includeThoughts": true,
-            })
+            if is_gemini_2_0 {
+                json!({
+                    "thinkingBudget": budget,
+                })
+            } else {
+                json!({
+                    "thinkingBudget": budget,
+                    "includeThoughts": true,
+                })
+            }
         } else {
             let label = match thinking {
                 sona_core::llm::runtime::ThinkingLevel::Minimal
@@ -47,7 +54,6 @@ pub fn build_gemini_payload_for_request(
             };
             json!({
                 "thinkingLevel": label,
-                "includeThoughts": true,
             })
         };
     }

@@ -298,6 +298,7 @@ pub(crate) async fn save_history_summary_v1(
         record: payload.record.map(|record| TranscriptSummaryRecordPayload {
             template_id: record.template_id,
             content: record.content,
+            thought: None,
             generated_at: record.generated_at,
             source_fingerprint: record.source_fingerprint,
         }),

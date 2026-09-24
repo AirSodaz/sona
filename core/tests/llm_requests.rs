@@ -318,6 +318,7 @@ fn history_summary_payload_omits_absent_record() {
         record: Some(TranscriptSummaryRecordPayload {
             template_id: "meeting".to_string(),
             content: "Final summary".to_string(),
+            thought: None,
             generated_at: "2026-07-08T00:00:00Z".to_string(),
             source_fingerprint: "fingerprint".to_string(),
         }),

@@ -2964,6 +2964,7 @@ export type TranscriptSnapshotRecord_Serialize = {
 export type TranscriptSummaryRecordPayload = {
 	templateId: string,
 	content: string,
+	thought?: string | null,
 	generatedAt: string,
 	sourceFingerprint: string,
 };
@@ -2971,6 +2972,7 @@ export type TranscriptSummaryRecordPayload = {
 export type TranscriptSummaryResult = {
 	templateId: string,
 	content: string,
+	thought?: string | null,
 };
 
 export type TranscriptTextReplacementRule = {

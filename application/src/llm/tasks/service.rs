@@ -411,6 +411,7 @@ where
             let result = sona_core::llm::tasks::TranscriptSummaryResult {
                 template_id: request.template.id.clone(),
                 content: response.text.trim().to_string(),
+                thought: response.thought,
             };
             emit(
                 observer,
@@ -494,6 +495,7 @@ where
         let result = sona_core::llm::tasks::TranscriptSummaryResult {
             template_id: request.template.id.clone(),
             content: response.text.trim().to_string(),
+            thought: response.thought,
         };
         emit(
             observer,

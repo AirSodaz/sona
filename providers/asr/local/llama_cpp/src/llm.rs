@@ -673,19 +673,48 @@ impl LlmStreamingPort for LlamaCppLlmEngine {
             tokio::spawn(
                 async move { engine.execute_completion_internal(request, Some(tx)).await },
             );
-        let mut accumulated = String::new();
-        // Forward tokens to the emit_delta callback as they arrive
+        let mut dual = sona_core::llm::streaming_protocol::DualStreamAccumulator::new(emit_delta);
+        let mut demuxer = sona_core::llm::demuxer::ThoughtStreamDemuxer::new();
+
         while let Some(delta) = rx.recv().await {
-            accumulated.push_str(&delta);
-            emit_delta(LlmStreamDelta::content(accumulated.clone(), delta))?;
+            for chunk in demuxer.process(&delta) {
+                match chunk.kind {
+                    sona_core::llm::runtime::LlmStreamDeltaKind::Thought => {
+                        dual.push_thought(&chunk.text)?;
+                    }
+                    sona_core::llm::runtime::LlmStreamDeltaKind::Content => {
+                        dual.push_content(&chunk.text)?;
+                    }
+                }
+            }
         }
 
-        completion_handle.await.map_err(|error| {
+        for chunk in demuxer.flush() {
+            match chunk.kind {
+                sona_core::llm::runtime::LlmStreamDeltaKind::Thought => {
+                    dual.push_thought(&chunk.text)?;
+                }
+                sona_core::llm::runtime::LlmStreamDeltaKind::Content => {
+                    dual.push_content(&chunk.text)?;
+                }
+            }
+        }
+
+        let mut response = completion_handle.await.map_err(|error| {
             LlmPortError::new(
                 LlmPortErrorKind::Unavailable,
                 format!("Streaming background task join error: {error}"),
             )
-        })?
+        })??;
+
+        if !dual.content_text().is_empty() {
+            response.text = dual.content_text().to_string();
+        }
+        if !dual.thought_text().is_empty() {
+            response.thought = Some(dual.thought_text().to_string());
+        }
+
+        Ok(response)
     }
 }
 

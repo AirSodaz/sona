@@ -414,6 +414,8 @@ pub struct TranscriptDiffResult {
 pub struct TranscriptSummaryRecordPayload {
     pub template_id: String,
     pub content: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought: Option<String>,
     pub generated_at: String,
     pub source_fingerprint: String,
 }

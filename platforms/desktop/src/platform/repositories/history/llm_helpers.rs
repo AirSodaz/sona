@@ -312,6 +312,7 @@ mod tests {
                 record: Some(TranscriptSummaryRecordPayload {
                     template_id: "meeting".to_string(),
                     content: "Summary".to_string(),
+                    thought: None,
                     generated_at: "2026-05-04T00:00:00.000Z".to_string(),
                     source_fingerprint: "fingerprint".to_string(),
                 }),
@@ -326,6 +327,7 @@ mod tests {
                 record: Some(TranscriptSummaryRecordPayload {
                     template_id: "meeting".to_string(),
                     content: "Summary".to_string(),
+                    thought: None,
                     generated_at: "2026-05-04T00:00:00.000Z".to_string(),
                     source_fingerprint: "fingerprint".to_string(),
                 }),

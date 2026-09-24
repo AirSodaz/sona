@@ -237,6 +237,7 @@ async fn run_summary_job(
         record: Some(TranscriptSummaryRecordPayload {
             template_id: result.template_id,
             content: result.content.trim().to_string(),
+            thought: result.thought,
             generated_at: crate::platform::time::utc_now_rfc3339_millis(),
             source_fingerprint: compute_summary_source_fingerprint(&request.segments),
         }),

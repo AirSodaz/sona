@@ -221,3 +221,54 @@ fn dual_stream_accumulator_separates_thought_and_content() {
     assert!(!events[3].is_thought());
     assert_eq!(events[3].delta, "Answer");
 }
+
+#[test]
+fn openai_chat_payload_omits_reasoning_effort_when_level_is_none() {
+    let payload = build_openai_chat_payload(
+        OpenAiChatPayloadConfig {
+            strategy: LlmProviderStrategy::OpenAi,
+            model: "o3-mini",
+            temperature: Some(0.5),
+            reasoning_enabled: true,
+            reasoning_level: Some("none"),
+        },
+        "hello",
+        true,
+    );
+    assert!(
+        payload.get("reasoning_effort").is_none(),
+        "reasoning_effort must not be set to 'none'"
+    );
+}
+
+#[test]
+fn stream_options_only_added_for_whitelisted_strategies() {
+    use sona_core::llm::streaming_protocol::strategy_supports_stream_options;
+
+    assert!(strategy_supports_stream_options(
+        LlmProviderStrategy::OpenAi
+    ));
+    assert!(strategy_supports_stream_options(
+        LlmProviderStrategy::DeepSeek
+    ));
+    assert!(strategy_supports_stream_options(LlmProviderStrategy::Groq));
+    assert!(strategy_supports_stream_options(
+        LlmProviderStrategy::OpenRouter
+    ));
+
+    assert!(!strategy_supports_stream_options(
+        LlmProviderStrategy::Ollama
+    ));
+    assert!(!strategy_supports_stream_options(
+        LlmProviderStrategy::Llamafile
+    ));
+    assert!(!strategy_supports_stream_options(
+        LlmProviderStrategy::Local
+    ));
+    assert!(!strategy_supports_stream_options(
+        LlmProviderStrategy::OpenAiCompatible
+    ));
+    assert!(!strategy_supports_stream_options(
+        LlmProviderStrategy::AzureOpenAi
+    ));
+}
