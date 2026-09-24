@@ -150,6 +150,11 @@ pub enum BuiltinLlmProvider {
     Venice,
     Hyperbolic,
     Llamafile,
+    Baidu,
+    Tencent,
+    Stepfun,
+    Lingyiwanwu,
+    Cerebras,
     #[serde(
         rename = "custom-openai-compatible",
         alias = "openai_compatible",
@@ -185,7 +190,7 @@ impl BuiltinLlmProvider {
             Self::XAi => "https://api.x.ai",
             Self::MistralAi => "https://api.mistral.ai",
             Self::Perplexity => "https://api.perplexity.ai",
-            Self::Volcengine => "https://ark.cn-beijing.volces.com",
+            Self::Volcengine => "https://ark.cn-beijing.volces.com/api/v3",
             Self::Chatglm => "https://open.bigmodel.cn/api/paas/v4/",
             Self::Copilot => "https://api.githubcopilot.com",
             Self::Cohere => "https://api.cohere.ai",
@@ -193,6 +198,11 @@ impl BuiltinLlmProvider {
             Self::Venice => "https://api.venice.ai/api/v1",
             Self::Hyperbolic => "https://api.hyperbolic.xyz",
             Self::Llamafile => "http://127.0.0.1:8080",
+            Self::Baidu => "https://qianfan.baidubce.com/v2",
+            Self::Tencent => "https://api.hunyuan.cloud.tencent.com/v1",
+            Self::Stepfun => "https://api.stepfun.com/v1",
+            Self::Lingyiwanwu => "https://api.lingyiwanwu.com/v1",
+            Self::Cerebras => "https://api.cerebras.ai/v1",
             Self::CustomOpenAiCompatible | Self::Local => "",
         }
     }

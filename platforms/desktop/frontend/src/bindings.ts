@@ -843,9 +843,9 @@ export type BatchSegmentationMode = "vad" | "whole";
 
 export type BuiltinLlmProvider = BuiltinLlmProvider_Serialize | BuiltinLlmProvider_Deserialize;
 
-export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "github_copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "custom-openai-compatible" | "openai_compatible" | "open_ai_compatible" | "local" | "llama_cpp" | "local_model";
+export type BuiltinLlmProvider_Deserialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "github_copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "custom-openai-compatible" | "openai_compatible" | "open_ai_compatible" | "local" | "llama_cpp" | "local_model";
 
-export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "custom-openai-compatible" | "local";
+export type BuiltinLlmProvider_Serialize = "google_translate" | "google_translate_free" | "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "openrouter" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "custom-openai-compatible" | "local";
 
 export type BuiltinPolishPresetId = "clean" | "verbatim" | "formal" | "general" | "customer_service" | "meeting" | "interview" | "lecture" | "podcast";
 
@@ -1223,12 +1223,12 @@ export type HistorySummaryPayload = HistorySummaryPayload_Serialize | HistorySum
 
 export type HistorySummaryPayload_Deserialize = {
 	activeTemplateId: string,
-	record: TranscriptSummaryRecordPayload | null,
+	record: TranscriptSummaryRecordPayload_Deserialize | null,
 };
 
 export type HistorySummaryPayload_Serialize = {
 	activeTemplateId: string,
-	record?: TranscriptSummaryRecordPayload | null,
+	record?: TranscriptSummaryRecordPayload_Serialize | null,
 };
 
 export type HistoryTrashItemsRequest = {
@@ -1409,6 +1409,7 @@ export type LlmCompletionResponse = LlmCompletionResponse_Serialize | LlmComplet
 
 export type LlmCompletionResponse_Deserialize = {
 	text: string,
+	thought?: string | null,
 	json: unknown | null,
 	usage: TokenUsage | null,
 	execution: LlmExecutionMetadata,
@@ -1416,6 +1417,7 @@ export type LlmCompletionResponse_Deserialize = {
 
 export type LlmCompletionResponse_Serialize = {
 	text: string,
+	thought?: string | null,
 	json?: unknown | null,
 	usage: TokenUsage | null,
 	execution: LlmExecutionMetadata,
@@ -1495,9 +1497,13 @@ export type LlmModelSummary = {
 	supportsMultimodal: boolean | null,
 	supportsTools: boolean | null,
 	supportsReasoning: boolean | null,
-	supportsStructuredOutput?: boolean | null,
+	supportsTemperature?: boolean | null,
+	supportsStructuredOutput: boolean | null,
 	supportsPromptCaching?: boolean | null,
 	metadataSources?: LlmModelMetadataSource[],
+	reasoningMode?: ReasoningMode | null,
+	tokenLimitKey?: string | null,
+	supportedThinkingLevels?: ThinkingLevel[],
 };
 
 export type LlmModelsRequest = LlmModelsRequest_Serialize | LlmModelsRequest_Deserialize;
@@ -1520,7 +1526,7 @@ export type LlmPromptCachePolicy = "disabled" | "automatic";
 
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
 
-export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local";
+export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local";
 
 export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
@@ -1535,9 +1541,20 @@ export type LlmSegmentInput = {
 	text: string,
 };
 
-export type LlmStreamDelta = {
+export type LlmStreamDelta = LlmStreamDelta_Serialize | LlmStreamDelta_Deserialize;
+
+export type LlmStreamDeltaKind = "thought" | "content";
+
+export type LlmStreamDelta_Deserialize = {
 	text: string,
 	delta: string,
+	kind?: LlmStreamDeltaKind | null,
+};
+
+export type LlmStreamDelta_Serialize = {
+	text: string,
+	delta: string,
+	kind?: LlmStreamDeltaKind | null,
 };
 
 export type LlmTaskChunkPayload<T> = {
@@ -1561,6 +1578,7 @@ export type LlmTaskTextPayload = {
 	text: string,
 	delta: string,
 	reset: boolean,
+	isThought?: boolean,
 };
 
 export type LlmTaskType = "polish" | "translate" | "summary";
@@ -2112,6 +2130,8 @@ export type ProjectUpdateInput = {
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";
+
+export type ReasoningMode = { type: "none" } | { type: "effort"; supported_levels: ThinkingLevel[] } | { type: "budget"; min_budget: number; max_budget: number; default_budget: number } | { type: "hybrid"; supported_levels: ThinkingLevel[]; default_budget: number };
 
 export type RecoveredQueueItem = RecoveredQueueItem_Serialize | RecoveredQueueItem_Deserialize;
 
@@ -2799,6 +2819,8 @@ export type TextReplacementSetRecord = {
 	rules: TextReplacementRuleRecord[],
 };
 
+export type ThinkingLevel = { mode: "none" } | { mode: "auto" } | { mode: "minimal" } | { mode: "low" } | { mode: "medium" } | { mode: "high" } | { mode: "xhigh" } | { mode: "max" } | { mode: "budget"; value: number };
+
 export type TimestampSupportHint = "token" | "segment" | "unknown";
 
 export type TokenUsage = {
@@ -2941,16 +2963,36 @@ export type TranscriptSnapshotRecord_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 };
 
-export type TranscriptSummaryRecordPayload = {
+export type TranscriptSummaryRecordPayload = TranscriptSummaryRecordPayload_Serialize | TranscriptSummaryRecordPayload_Deserialize;
+
+export type TranscriptSummaryRecordPayload_Deserialize = {
 	templateId: string,
 	content: string,
+	thought?: string | null,
 	generatedAt: string,
 	sourceFingerprint: string,
 };
 
-export type TranscriptSummaryResult = {
+export type TranscriptSummaryRecordPayload_Serialize = {
 	templateId: string,
 	content: string,
+	thought?: string | null,
+	generatedAt: string,
+	sourceFingerprint: string,
+};
+
+export type TranscriptSummaryResult = TranscriptSummaryResult_Serialize | TranscriptSummaryResult_Deserialize;
+
+export type TranscriptSummaryResult_Deserialize = {
+	templateId: string,
+	content: string,
+	thought?: string | null,
+};
+
+export type TranscriptSummaryResult_Serialize = {
+	templateId: string,
+	content: string,
+	thought?: string | null,
 };
 
 export type TranscriptTextReplacementRule = {

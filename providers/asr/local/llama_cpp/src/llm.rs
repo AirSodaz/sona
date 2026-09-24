@@ -148,27 +148,61 @@ impl LlamaCppLlmEngine {
         let mut models = Vec::new();
         let mut seen_names = std::collections::HashSet::new();
 
+        let api_host_clean = api_host
+            .map(str::trim)
+            .filter(|h| !h.is_empty() && !h.starts_with("http://") && !h.starts_with("https://"));
+
         // Helper to add a GGUF file
         let mut add_model_entry = |file_path: &Path| {
+            if let Some(file_name) = file_path.file_name().and_then(|s| s.to_str()) {
+                if sona_core::llm::local_models::is_non_llm_model_file(file_name) {
+                    return;
+                }
+                if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(file_name)
+                {
+                    if seen_names.insert(preset.model.clone()) {
+                        models.push(preset.to_model_summary());
+                    }
+                    return;
+                }
+            }
             if let Some(stem) = file_path.file_stem().and_then(|s| s.to_str()) {
+                if sona_core::llm::local_models::is_non_llm_model_file(stem) {
+                    return;
+                }
+                if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(stem) {
+                    if seen_names.insert(preset.model.clone()) {
+                        models.push(preset.to_model_summary());
+                    }
+                    return;
+                }
                 let name = stem.to_string();
                 if seen_names.insert(name.clone()) {
-                    models.push(LlmModelSummary {
-                        model: name,
+                    let mut summary = LlmModelSummary {
+                        model: name.clone(),
                         context_window: Some(262_144),
                         max_output_tokens: Some(4096),
                         input_modalities: vec![LlmModality::Text],
                         output_modalities: vec![LlmModality::Text],
                         ..Default::default()
-                    });
+                    };
+                    let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+                        sona_core::llm::tasks::LlmProviderStrategy::Local,
+                        &name,
+                        "",
+                        Some(&summary),
+                    );
+                    summary.supports_reasoning = Some(caps.reasoning);
+                    summary.reasoning_mode = Some(caps.reasoning_mode);
+                    summary.supported_thinking_levels = caps.supported_thinking_levels;
+                    summary.supports_temperature = Some(caps.supports_temperature);
+                    summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+                    models.push(summary);
                 }
             }
         };
 
         // 1. Scan api_host if directory
-        let api_host_clean = api_host
-            .map(str::trim)
-            .filter(|h| !h.is_empty() && !h.starts_with("http://") && !h.starts_with("https://"));
         if let Some(host) = api_host_clean {
             let host_path = Path::new(host);
             if host_path.is_file() && is_gguf_file(host_path) {
@@ -185,9 +219,35 @@ impl LlamaCppLlmEngine {
             scan_dir_for_gguf(dir, 3, &mut add_model_entry);
         }
 
-        // 3. Ensure all presets from sona_core::llm::local_models are present
+        // 3. For presets from sona_core::llm::local_models, only add if actually installed!
         for preset in sona_core::llm::local_models::local_llm_models() {
-            if seen_names.insert(preset.model.clone()) {
+            let is_installed = if let Some(dir) = &self.models_dir
+                && dir.is_dir()
+            {
+                preset.is_installed_in_dir(dir) || find_model_in_dir(dir, &preset.model).is_some()
+            } else {
+                false
+            } || if let Some(host) = api_host_clean {
+                let host_path = Path::new(host);
+                if host_path.is_file() {
+                    host_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|s| {
+                            s.eq_ignore_ascii_case(&preset.id)
+                                || s.eq_ignore_ascii_case(&preset.filename)
+                        })
+                } else if host_path.is_dir() {
+                    preset.is_installed_in_dir(host_path)
+                        || find_model_in_dir(host_path, &preset.model).is_some()
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if is_installed && seen_names.insert(preset.model.clone()) {
                 models.push(preset.to_model_summary());
             }
         }
@@ -381,19 +441,130 @@ fn load_cached_model(
     Ok(model)
 }
 
+pub(crate) fn prepare_chat_messages(
+    system_prompt: Option<&str>,
+    input: &str,
+    model_name: &str,
+    reasoning_enabled: bool,
+    thinking_level: &sona_core::llm::runtime::ThinkingLevel,
+) -> (Option<String>, String) {
+    use sona_core::llm::runtime::ThinkingLevel;
+
+    let lower_name = model_name.to_lowercase();
+    let is_qwen = lower_name.contains("qwen");
+
+    if !reasoning_enabled {
+        let no_think_instruction = "Answer directly and concisely. Do not output any thinking process, internal monologue, or <think> tags.";
+        let sys = match system_prompt {
+            Some(s) if !s.trim().is_empty() => {
+                format!("{s}\n\n[Instruction: {no_think_instruction}]")
+            }
+            _ => format!("[Instruction: {no_think_instruction}]"),
+        };
+        let user = if is_qwen {
+            format!("/no_think\n{input}")
+        } else {
+            input.to_string()
+        };
+        (Some(sys), user)
+    } else {
+        let dynamic_instruction = match thinking_level {
+            ThinkingLevel::Minimal => {
+                "Thinking effort: minimal. Keep your internal thought process extremely brief and concise before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Low => {
+                "Thinking effort: low. Keep your internal thought process concise and focus on key steps."
+                    .to_string()
+            }
+            ThinkingLevel::Medium | ThinkingLevel::Auto => {
+                "Thinking effort: medium. Think step by step before answering."
+                    .to_string()
+            }
+            ThinkingLevel::High => {
+                "Thinking effort: high. Think thoroughly, exploring key considerations and details carefully before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Xhigh | ThinkingLevel::Max => {
+                "Thinking effort: maximum. Think deeply, rigorously, and exhaustively, evaluating all possibilities and verifying reasoning before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Budget(budget) => {
+                format!("Thinking budget: approximately {budget} tokens. Plan and bound your internal thinking process within this token budget before answering.")
+            }
+            ThinkingLevel::None => String::new(),
+        };
+
+        let sys = if !dynamic_instruction.is_empty() {
+            match system_prompt {
+                Some(s) if !s.trim().is_empty() => {
+                    format!("{s}\n\n[Reasoning Guidance: {dynamic_instruction}]")
+                }
+                _ => format!("[Reasoning Guidance: {dynamic_instruction}]"),
+            }
+        } else {
+            system_prompt.unwrap_or_default().to_string()
+        };
+
+        let user = if is_qwen {
+            format!("/think\n{input}")
+        } else {
+            input.to_string()
+        };
+        (
+            if sys.trim().is_empty() {
+                None
+            } else {
+                Some(sys)
+            },
+            user,
+        )
+    }
+}
+
+pub(crate) fn format_chatml_prompt(system_prompt: Option<&str>, user_input: &str) -> String {
+    let mut prompt = String::new();
+    if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty()) {
+        prompt.push_str("<|im_start|>system\n");
+        prompt.push_str(sys);
+        if !sys.ends_with('\n') {
+            prompt.push('\n');
+        }
+        prompt.push_str("<|im_end|>\n");
+    }
+    prompt.push_str("<|im_start|>user\n");
+    prompt.push_str(user_input);
+    if !user_input.ends_with('\n') {
+        prompt.push('\n');
+    }
+    prompt.push_str("<|im_end|>\n<|im_start|>assistant\n");
+    prompt
+}
+
 fn format_prompt(
     model: &LlamaModel,
     system_prompt: Option<&str>,
     input: &str,
+    model_name: &str,
+    reasoning_enabled: bool,
+    thinking_level: &sona_core::llm::runtime::ThinkingLevel,
 ) -> Result<String, LlmPortError> {
+    let (effective_sys, effective_input) = prepare_chat_messages(
+        system_prompt,
+        input,
+        model_name,
+        reasoning_enabled,
+        thinking_level,
+    );
+
     if let Ok(template) = model.chat_template(None) {
         let mut chat_messages = Vec::new();
-        if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty())
+        if let Some(sys) = &effective_sys
             && let Ok(msg) = LlamaChatMessage::new("system".to_string(), sys.to_string())
         {
             chat_messages.push(msg);
         }
-        if let Ok(msg) = LlamaChatMessage::new("user".to_string(), input.to_string()) {
+        if let Ok(msg) = LlamaChatMessage::new("user".to_string(), effective_input.clone()) {
             chat_messages.push(msg);
         }
 
@@ -405,16 +576,10 @@ fn format_prompt(
     }
 
     // Fallback: ChatML format
-    let mut prompt = String::new();
-    if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty()) {
-        prompt.push_str("<|im_start|>system\n");
-        prompt.push_str(sys);
-        prompt.push_str("<|im_end|>\n");
-    }
-    prompt.push_str("<|im_start|>user\n");
-    prompt.push_str(input);
-    prompt.push_str("<|im_end|>\n<|im_start|>assistant\n");
-    Ok(prompt)
+    Ok(format_chatml_prompt(
+        effective_sys.as_deref(),
+        &effective_input,
+    ))
 }
 
 struct GenerationContext {
@@ -422,6 +587,7 @@ struct GenerationContext {
     prompt_tokens: Vec<llama_cpp_2::token::LlamaToken>,
     max_output_tokens: usize,
     temperature: f32,
+    reasoning_enabled: bool,
     delta_sender: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 }
 
@@ -553,12 +719,30 @@ fn run_llama_generation(
         current_pos += 1;
     }
 
+    let (text, thought) =
+        sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(&generated_text);
+
+    let reasoning_tokens = if let Some(th) = &thought {
+        model
+            .str_to_token(th, AddBos::Never)
+            .map(|t| t.len() as u64)
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
     Ok(StandardLlmResponse {
-        text: generated_text,
+        text,
+        thought: if gen_ctx.reasoning_enabled {
+            thought
+        } else {
+            None
+        },
         usage: Some(TokenUsage {
             prompt_tokens: prompt_tokens.len() as u64,
             completion_tokens: generated_tokens as u64,
             total_tokens: (prompt_tokens.len() + generated_tokens) as u64,
+            reasoning_tokens,
             ..Default::default()
         }),
     })
@@ -589,7 +773,16 @@ impl LlamaCppLlmEngine {
         };
 
         let model = load_cached_model(backend, &model_path, n_gpu_layers)?;
-        let prompt = format_prompt(&model, request.system_prompt.as_deref(), &request.input)?;
+        let reasoning_enabled = request.effective_reasoning_enabled();
+        let thinking_level = request.effective_thinking_level();
+        let prompt = format_prompt(
+            &model,
+            request.system_prompt.as_deref(),
+            &request.input,
+            &request.config.model,
+            reasoning_enabled,
+            &thinking_level,
+        )?;
 
         let prompt_tokens = model
             .str_to_token(&prompt, AddBos::Never)
@@ -623,7 +816,18 @@ impl LlamaCppLlmEngine {
             ));
         }
 
-        let max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
+        let mut max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
+        if reasoning_enabled {
+            use sona_core::llm::runtime::ThinkingLevel;
+            if let ThinkingLevel::Budget(budget) = thinking_level {
+                max_output_tokens = max_output_tokens.max(budget as usize + 2048);
+            } else if matches!(
+                thinking_level,
+                ThinkingLevel::High | ThinkingLevel::Xhigh | ThinkingLevel::Max
+            ) {
+                max_output_tokens = max_output_tokens.max(8192);
+            }
+        }
         let temperature = request.effective_temperature().unwrap_or(0.7);
 
         let gen_ctx = GenerationContext {
@@ -631,6 +835,7 @@ impl LlamaCppLlmEngine {
             prompt_tokens,
             max_output_tokens,
             temperature,
+            reasoning_enabled,
             delta_sender,
         };
 
@@ -669,22 +874,48 @@ impl LlmStreamingPort for LlamaCppLlmEngine {
             tokio::spawn(
                 async move { engine.execute_completion_internal(request, Some(tx)).await },
             );
-        let mut accumulated = String::new();
-        // Forward tokens to the emit_delta callback as they arrive
+        let mut dual = sona_core::llm::streaming_protocol::DualStreamAccumulator::new(emit_delta);
+        let mut demuxer = sona_core::llm::demuxer::ThoughtStreamDemuxer::new();
+
         while let Some(delta) = rx.recv().await {
-            accumulated.push_str(&delta);
-            emit_delta(LlmStreamDelta {
-                text: accumulated.clone(),
-                delta,
-            })?;
+            for chunk in demuxer.process(&delta) {
+                match chunk.kind {
+                    sona_core::llm::runtime::LlmStreamDeltaKind::Thought => {
+                        dual.push_thought(&chunk.text)?;
+                    }
+                    sona_core::llm::runtime::LlmStreamDeltaKind::Content => {
+                        dual.push_content(&chunk.text)?;
+                    }
+                }
+            }
         }
 
-        completion_handle.await.map_err(|error| {
+        for chunk in demuxer.flush() {
+            match chunk.kind {
+                sona_core::llm::runtime::LlmStreamDeltaKind::Thought => {
+                    dual.push_thought(&chunk.text)?;
+                }
+                sona_core::llm::runtime::LlmStreamDeltaKind::Content => {
+                    dual.push_content(&chunk.text)?;
+                }
+            }
+        }
+
+        let mut response = completion_handle.await.map_err(|error| {
             LlmPortError::new(
                 LlmPortErrorKind::Unavailable,
                 format!("Streaming background task join error: {error}"),
             )
-        })?
+        })??;
+
+        if !dual.content_text().is_empty() {
+            response.text = dual.content_text().to_string();
+        }
+        if !dual.thought_text().is_empty() {
+            response.thought = Some(dual.thought_text().to_string());
+        }
+
+        Ok(response)
     }
 }
 
@@ -700,21 +931,35 @@ impl LlmModelMetadataPort for LlamaCppLlmEngine {
         } else {
             model_name
         };
-        if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(target) {
-            return Ok(Some(preset.to_model_summary()));
-        }
+        let mut summary =
+            if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(target) {
+                preset.to_model_summary()
+            } else {
+                LlmModelSummary {
+                    model: target.to_string(),
+                    context_window: Some(131_072),
+                    max_output_tokens: Some(4096),
+                    input_modalities: vec![LlmModality::Text],
+                    output_modalities: vec![LlmModality::Text],
+                    ..Default::default()
+                }
+            };
 
-        Ok(Some(LlmModelSummary {
-            model: target.to_string(),
-            context_window: Some(131_072),
-            max_output_tokens: Some(4096),
-            input_modalities: vec![LlmModality::Text],
-            output_modalities: vec![LlmModality::Text],
-            ..Default::default()
-        }))
+        let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+            config.strategy,
+            &config.model,
+            &config.base_url,
+            Some(&summary),
+        );
+        summary.supports_reasoning = Some(caps.reasoning);
+        summary.reasoning_mode = Some(caps.reasoning_mode);
+        summary.supported_thinking_levels = caps.supported_thinking_levels;
+        summary.supports_temperature = Some(caps.supports_temperature);
+        summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+
+        Ok(Some(summary))
     }
 }
-
 #[async_trait]
 impl LlmModelDiscoveryPort for LlamaCppLlmEngine {
     async fn list_models(
@@ -745,13 +990,48 @@ mod tests {
     }
 
     #[test]
-    fn scans_local_models_includes_default_qwen() {
+    fn scans_local_models_empty_when_not_downloaded() {
         let engine = LlamaCppLlmEngine::new();
         let list = engine.scan_local_models(None);
-        assert!(list.iter().any(|m| m.model == DEFAULT_LOCAL_LLM_MODEL));
-        assert!(list.iter().any(|m| m.model == "google/gemma-4-e2b"));
+        assert!(
+            list.is_empty(),
+            "Un-downloaded models must not appear in scan_local_models"
+        );
     }
 
+    #[test]
+    fn scans_local_models_includes_installed_preset_and_excludes_asr() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("models_scan_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Installed LLM preset file
+        let qwen_file = temp_dir.join(DEFAULT_LOCAL_LLM_FILENAME);
+        std::fs::write(&qwen_file, b"dummy").unwrap();
+
+        // ASR GGUF file and mmproj file
+        let asr_file = temp_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf");
+        std::fs::write(&asr_file, b"dummy-asr").unwrap();
+        let mmproj_file = temp_dir.join("mmproj-Qwen3-ASR-0.6B-Q8_0.gguf");
+        std::fs::write(&mmproj_file, b"dummy-mmproj").unwrap();
+
+        let engine = LlamaCppLlmEngine::with_models_dir(Some(temp_dir.clone()));
+        let list = engine.scan_local_models(None);
+
+        // Should include installed Qwen LLM
+        assert!(list.iter().any(|m| m.model == DEFAULT_LOCAL_LLM_MODEL));
+        // Should NOT include uninstalled gemma
+        assert!(!list.iter().any(|m| m.model == "google/gemma-4-e2b"));
+        // Should NOT include ASR or mmproj models
+        assert!(
+            !list
+                .iter()
+                .any(|m| m.model.contains("ASR") || m.model.contains("asr"))
+        );
+        assert!(!list.iter().any(|m| m.model.contains("mmproj")));
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
     fn test_config(model: &str) -> LlmConfig {
         LlmConfig {
             provider: sona_core::domain::LlmProvider::Builtin(
@@ -779,6 +1059,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(qwen_summary.context_window, Some(262_144));
+        assert_eq!(qwen_summary.supports_reasoning, Some(true));
+        assert!(matches!(
+            qwen_summary.reasoning_mode,
+            Some(sona_core::llm::runtime::ReasoningMode::Effort { .. })
+        ));
+        assert_eq!(qwen_summary.supported_thinking_levels.len(), 6);
 
         let gemma_summary = engine
             .describe_model(&test_config("google/gemma-4-e2b"))
@@ -786,6 +1072,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(gemma_summary.context_window, Some(131_072));
+        assert_eq!(gemma_summary.supports_reasoning, Some(true));
     }
 
     #[test]
@@ -822,5 +1109,63 @@ mod tests {
             .unwrap();
         assert_eq!(resolved, temp_path);
         let _ = std::fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn prepares_chat_messages_for_qwen_with_reasoning_disabled() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, user) = prepare_chat_messages(
+            Some("You are a helpful assistant."),
+            "Explain quantum computing",
+            "Qwen/Qwen3.5-4B",
+            false,
+            &ThinkingLevel::None,
+        );
+        assert!(user.starts_with("/no_think\n"));
+        assert!(user.contains("Explain quantum computing"));
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("You are a helpful assistant."));
+        assert!(sys_str.contains("Answer directly and concisely"));
+    }
+
+    #[test]
+    fn prepares_chat_messages_for_qwen_with_reasoning_enabled_and_high_effort() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, user) = prepare_chat_messages(
+            None,
+            "Solve this math problem",
+            "Qwen/Qwen3.5-4B",
+            true,
+            &ThinkingLevel::High,
+        );
+        assert!(user.starts_with("/think\n"));
+        assert!(user.contains("Solve this math problem"));
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("Thinking effort: high"));
+    }
+
+    #[test]
+    fn prepares_chat_messages_with_budget() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, _user) = prepare_chat_messages(
+            None,
+            "Write an essay",
+            "google/gemma-4-e2b",
+            true,
+            &ThinkingLevel::Budget(2048),
+        );
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("2048 tokens"));
+    }
+
+    #[test]
+    fn format_chatml_prompt_constructs_valid_chatml() {
+        let prompt = format_chatml_prompt(Some("You are a helper."), "Hello world");
+        assert!(prompt.contains("<|im_start|>system\nYou are a helper.\n<|im_end|>"));
+        assert!(prompt.contains("<|im_start|>user\nHello world\n<|im_end|>"));
+        assert!(prompt.ends_with("<|im_start|>assistant\n"));
     }
 }

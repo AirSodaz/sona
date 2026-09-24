@@ -93,6 +93,11 @@ const FEATURE_REASONING_LEVEL_KEYS = {
   translation: 'translationReasoningLevel',
   summary: 'summaryReasoningLevel',
 } as const;
+const FEATURE_REASONING_BUDGET_KEYS = {
+  polish: 'polishReasoningBudget',
+  translation: 'translationReasoningBudget',
+  summary: 'summaryReasoningBudget',
+} as const;
 
 export function getFeatureLlmConfig(
   config: Pick<AppConfig, 'llmSettings' | 'llmRequestTimeoutSeconds'>,
@@ -110,13 +115,18 @@ export function getFeatureLlmConfig(
   const selections = config.llmSettings?.selections;
   const reasoningEnabled = selections?.[FEATURE_REASONING_ENABLED_KEYS[feature]] ?? false;
   const reasoningLevel = selections?.[FEATURE_REASONING_LEVEL_KEYS[feature]] ?? 'medium';
+  const reasoningBudget = selections?.[FEATURE_REASONING_BUDGET_KEYS[feature]];
+  const isBudgetMode = modelEntry.metadata?.reasoningMode?.type === 'budget';
+  const effectiveBudget = isBudgetMode ? reasoningBudget : undefined;
+  const effectiveReasoningLevel = effectiveBudget ? String(effectiveBudget) : reasoningLevel;
 
   return {
     ...buildLlmConfig(modelEntry.provider, setting, config.llmSettings?.customProviders),
     model: modelEntry.model,
     temperature: getFeatureTemperature(config, feature),
     reasoningEnabled,
-    reasoningLevel: reasoningEnabled ? reasoningLevel : undefined,
+    reasoningLevel: reasoningEnabled ? effectiveReasoningLevel : undefined,
+    reasoningBudget: effectiveBudget,
     timeoutSeconds: config.llmRequestTimeoutSeconds,
   };
 }

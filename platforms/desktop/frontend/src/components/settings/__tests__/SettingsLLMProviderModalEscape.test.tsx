@@ -35,6 +35,7 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
 
     await act(async () => {
       render(<Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />);
+      await Promise.resolve();
     });
 
     // Settings modal is open
@@ -73,6 +74,7 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
       ({ container } = render(
         <Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />
       ));
+      await Promise.resolve();
     });
     // Click "Add model provider" button
     const addBtn = await screen.findByRole('button', { name: 'settings.llm.add_custom_provider' });

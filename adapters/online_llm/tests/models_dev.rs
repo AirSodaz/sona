@@ -84,9 +84,9 @@ async fn models_dev_failure_leaves_discovered_models_unchanged() {
 }
 
 #[test]
-fn models_dev_skips_private_providers_and_loopback_endpoints() {
-    assert!(!should_enrich_model_metadata(
-        &LlmProvider::Custom("private".into()),
+fn models_dev_allows_online_gateways_and_skips_loopback_endpoints() {
+    assert!(should_enrich_model_metadata(
+        &LlmProvider::Custom("proxy".into()),
         "https://gateway.example.com"
     ));
     assert!(!should_enrich_model_metadata(

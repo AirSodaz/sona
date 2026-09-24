@@ -223,9 +223,9 @@ pub async fn post_json_request(
         .post(url.reqwest_url())
         .header("Content-Type", "application/json");
 
-    for (key, value) in headers {
+    for (key, value) in &headers {
         if !value.is_empty() {
-            request = request.header(key, value);
+            request = request.header(*key, value);
         }
     }
 
@@ -236,13 +236,69 @@ pub async fn post_json_request(
         .map_err(reqwest_port_error)?;
 
     let status = response.status();
-    let headers = response.headers().clone();
+    let resp_headers = response.headers().clone();
     let text = response.text().await.map_err(reqwest_port_error)?;
 
-    if !status.is_success() {
-        return Err(http_status_port_error(status, &headers, text));
+    if status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY {
+        let lower_err = text.to_ascii_lowercase();
+        let mut retry_needed = false;
+        let mut cleaned_body = body.clone();
+
+        if (lower_err.contains("reasoning_effort") || lower_err.contains("reasoningeffort"))
+            && cleaned_body.get("reasoning_effort").is_some()
+        {
+            cleaned_body
+                .as_object_mut()
+                .and_then(|p| p.remove("reasoning_effort"));
+            retry_needed = true;
+        }
+        if lower_err.contains("temperature") && cleaned_body.get("temperature").is_some() {
+            cleaned_body
+                .as_object_mut()
+                .and_then(|p| p.remove("temperature"));
+            retry_needed = true;
+        }
+        if (lower_err.contains("stream_options") || lower_err.contains("streamoptions"))
+            && cleaned_body.get("stream_options").is_some()
+        {
+            cleaned_body
+                .as_object_mut()
+                .and_then(|p| p.remove("stream_options"));
+            retry_needed = true;
+        }
+
+        if retry_needed {
+            let mut retry_req = client
+                .post(url.reqwest_url())
+                .header("Content-Type", "application/json");
+            for (key, value) in &headers {
+                if !value.is_empty() {
+                    retry_req = retry_req.header(*key, value);
+                }
+            }
+            let retry_resp = retry_req
+                .json(&cleaned_body)
+                .send()
+                .await
+                .map_err(reqwest_port_error)?;
+            let retry_status = retry_resp.status();
+            let retry_headers = retry_resp.headers().clone();
+            let retry_text = retry_resp.text().await.map_err(reqwest_port_error)?;
+            if !retry_status.is_success() {
+                return Err(http_status_port_error(
+                    retry_status,
+                    &retry_headers,
+                    retry_text,
+                ));
+            }
+            return serde_json::from_str(&retry_text)
+                .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()));
+        }
     }
 
+    if !status.is_success() {
+        return Err(http_status_port_error(status, &resp_headers, text));
+    }
     serde_json::from_str(&text)
         .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.to_string()))
 }

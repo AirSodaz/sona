@@ -82,7 +82,7 @@ impl<'a> AppConfigRepositoryService<'a> {
     }
 
     pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), ConfigError> {
-        let value_json = serde_json::to_string(value)?;
+        let value_json = sona_core::config::to_canonical_json_string(value)?;
         self.store.set_setting_json(key, value_json)
     }
 
@@ -375,7 +375,7 @@ fn unique_generated_id(
     index: usize,
     seen: &mut HashSet<String>,
 ) -> String {
-    let serialized = serde_json::to_string(value).unwrap_or_default();
+    let serialized = sona_core::config::to_canonical_json_string(value).unwrap_or_default();
     let base = format!(
         "{id_prefix}-{}",
         hash_string(&format!("{serialized}-{index}"))

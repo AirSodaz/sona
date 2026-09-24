@@ -204,10 +204,46 @@ export function LocalProviderAccordionItem({
 
   const handleApplyFeature = useCallback(
     (card: LocalLlmModelCardType, feature: 'polish' | 'translation' | 'summary' | 'all') => {
+      if (!card.isInstalled) {
+        return;
+      }
       const currentLlmState = getCurrentLlmState(config);
+      const isReasoning = card.capabilities?.includes('reasoning');
       let nextState = addLlmModel(currentLlmState.llmSettings, {
         provider: 'local',
         model: card.model,
+        metadata: isReasoning
+          ? {
+              displayName: card.name,
+              contextWindow: card.contextWindow,
+              maxOutputTokens: card.maxOutputTokens,
+              supportsReasoning: true,
+              reasoningMode: {
+                type: 'effort',
+                supported_levels: [
+                  { mode: 'minimal' },
+                  { mode: 'low' },
+                  { mode: 'medium' },
+                  { mode: 'high' },
+                  { mode: 'xhigh' },
+                  { mode: 'max' },
+                ],
+              },
+              supportedThinkingLevels: [
+                { mode: 'minimal' },
+                { mode: 'low' },
+                { mode: 'medium' },
+                { mode: 'high' },
+                { mode: 'xhigh' },
+                { mode: 'max' },
+              ],
+            }
+          : {
+              displayName: card.name,
+              contextWindow: card.contextWindow,
+              maxOutputTokens: card.maxOutputTokens,
+              supportsReasoning: false,
+            },
       });
       const entryId = nextState.modelOrder.find((id) => {
         const existing = nextState.models[id];

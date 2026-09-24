@@ -232,6 +232,66 @@ describe('summaryService', () => {
     ).toBeUndefined();
   });
 
+  it('separates thought reasoning stream from content stream', async () => {
+    useTranscriptStore.setState({
+      segments: [{ id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true }],
+      sourceHistoryId: null,
+    });
+
+    let invokeResolved = false;
+    mockListenToLlmTaskText.mockImplementation(async (_taskId, _taskType, onText) => {
+      await onText({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        text: 'Thinking deeply...',
+        delta: 'Thinking deeply...',
+        reset: false,
+        isThought: true,
+      });
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingThought).toBe(
+        'Thinking deeply...'
+      );
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe('');
+
+      await onText({
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        text: 'Actual content',
+        delta: 'Actual content',
+        reset: false,
+        isThought: false,
+      });
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingThought).toBe(
+        'Thinking deeply...'
+      );
+      expect(useTranscriptStore.getState().getSummaryState('current').streamingContent).toBe(
+        'Actual content'
+      );
+      return vi.fn();
+    });
+
+    vi.mocked(invoke).mockImplementation(async () => {
+      invokeResolved = true;
+      return {
+        taskId: 'summary-task-id',
+        taskType: 'summary',
+        jobHistoryId: null,
+        summary: {
+          activeTemplateId: 'general',
+          record: {
+            templateId: 'general',
+            content: 'Actual content',
+            generatedAt: '2026-03-30T00:00:00.000Z',
+            sourceFingerprint: 'fingerprint-1',
+          },
+        },
+      };
+    });
+
+    await summaryService.generateSummary('general');
+    expect(invokeResolved).toBe(true);
+  });
+
   it('keeps streamed summary text in memory when generation fails', async () => {
     useTranscriptStore.setState({
       segments: [{ id: '1', text: 'Live summary text', start: 0, end: 2, isFinal: true }],

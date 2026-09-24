@@ -10,12 +10,12 @@ import {
 import {
   addLlmModel,
   enrichLlmModelMetadata,
-  findLlmModelId,
   getFeatureModelEntry,
   getProviderLlmModels,
   isProviderModelDiscoveryExpired,
   modelSummaryToMetadata,
   setFeatureModelSelection,
+  setFeatureReasoningBudget,
   setFeatureReasoningEnabled,
   setFeatureReasoningLevel,
   setFeatureTemperature,
@@ -23,7 +23,12 @@ import {
 } from '../../../services/llm/state';
 import { describeLlmModel, listLlmModels } from '../../../services/tauri/llm';
 import type { LlmAssistantConfig } from '../../../types/config';
-import type { LlmFeature, LlmModelEntry, LlmProvider } from '../../../types/transcript';
+import type {
+  LlmFeature,
+  LlmModelEntry,
+  LlmProvider,
+  ReasoningEffortLevel,
+} from '../../../types/transcript';
 import { Dropdown } from '../../Dropdown';
 import {
   getCurrentLlmSettings,
@@ -110,7 +115,19 @@ export function FeatureCard({
     currentLlmState.providers,
     featureId,
   ]);
-  const selectedProvider = modelEntry?.provider || configuredProvider;
+  const selectedProvider = useMemo(() => {
+    const raw = modelEntry?.provider || configuredProvider;
+    if (
+      featureId !== 'translation' &&
+      (raw === 'google_translate' || raw === 'google_translate_free')
+    ) {
+      return configuredProvider === 'google_translate' ||
+        configuredProvider === 'google_translate_free'
+        ? 'open_ai'
+        : configuredProvider;
+    }
+    return raw;
+  }, [configuredProvider, featureId, modelEntry?.provider]);
   const selectedModel = modelEntry?.model || '';
   const temperature =
     featureId === 'polish'
@@ -133,19 +150,166 @@ export function FeatureCard({
         ? (currentLlmState.selections.translationReasoningLevel ?? 'medium')
         : (currentLlmState.selections.summaryReasoningLevel ?? 'medium');
 
+  const reasoningBudget =
+    featureId === 'polish'
+      ? currentLlmState.selections.polishReasoningBudget
+      : featureId === 'translation'
+        ? currentLlmState.selections.translationReasoningBudget
+        : currentLlmState.selections.summaryReasoningBudget;
+  const reasoningMode = modelEntry?.metadata?.reasoningMode;
+  const modelEntryId = modelEntry?.id;
+  const modelEntryHasReasoning = modelEntry?.metadata?.reasoningMode !== undefined;
+  const modelEntryHasTemp = modelEntry?.metadata?.supportsTemperature !== undefined;
+
+  useEffect(() => {
+    if (!modelEntryId || !selectedModel || !selectedProvider) return;
+    if (selectedProvider === 'google_translate' || selectedProvider === 'google_translate_free') {
+      return;
+    }
+    if (modelEntryHasReasoning && modelEntryHasTemp) {
+      return;
+    }
+
+    const providerSetting =
+      latestLlmStateRef.current.providers[selectedProvider] ??
+      (selectedProvider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
+    if (!providerSetting) return;
+
+    void describeLlmModel({
+      ...buildLlmConfig(
+        selectedProvider,
+        providerSetting,
+        latestLlmStateRef.current.customProviders
+      ),
+      model: selectedModel,
+    })
+      .then((summary) => {
+        if (!isMountedRef.current || !summary || summary.model !== selectedModel) {
+          return;
+        }
+        const metadata = modelSummaryToMetadata(summary);
+        if (Object.keys(metadata).length === 0) {
+          return;
+        }
+        const latestState = latestLlmStateRef.current;
+        const enrichedState = enrichLlmModelMetadata(latestState, modelEntryId, metadata);
+        if (enrichedState !== latestState) {
+          applyTrackedLlmSettings(enrichedState);
+        }
+      })
+      .catch(() => {});
+  }, [
+    applyTrackedLlmSettings,
+    modelEntryHasReasoning,
+    modelEntryHasTemp,
+    modelEntryId,
+    selectedModel,
+    selectedProvider,
+  ]);
+
   const supportsReasoning = useMemo(() => {
-    return !!(
-      modelEntry?.metadata?.supportsReasoning ||
-      (modelEntry?.model &&
-        (modelEntry.model.toLowerCase().includes('o1-') ||
-          modelEntry.model.toLowerCase() === 'o1' ||
-          modelEntry.model.toLowerCase().includes('o3-') ||
-          modelEntry.model.toLowerCase().includes('deepseek-reasoner') ||
-          modelEntry.model.toLowerCase().includes('deepseek-r1') ||
-          modelEntry.model.toLowerCase().includes('claude-3-7') ||
-          modelEntry.model.toLowerCase().includes('gemini-2.5')))
+    if (typeof modelEntry?.metadata?.supportsReasoning === 'boolean') {
+      return modelEntry.metadata.supportsReasoning;
+    }
+    const modelName = (modelEntry?.model || '').toLowerCase();
+    const core = (modelName.split('/').pop() || modelName).replace(/\./g, '-');
+    return (
+      core.startsWith('o1') ||
+      core.startsWith('o3') ||
+      core.startsWith('o4') ||
+      core.startsWith('gpt-5') ||
+      core.startsWith('gpt-6') ||
+      core.includes('deepseek-reasoner') ||
+      core.includes('deepseek-r1') ||
+      core.includes('claude-3-7') ||
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
+      core.includes('claude-sonnet-4') ||
+      core.includes('claude-opus-4') ||
+      core.includes('claude-4') ||
+      core.includes('gemini-2-5') ||
+      core.includes('gemini-3') ||
+      core.includes('gemma-4') ||
+      core.includes('qwq') ||
+      core.includes('qwen3') ||
+      core.includes('qwen-3') ||
+      core.includes('thinking') ||
+      core.includes('reasoner')
     );
   }, [modelEntry]);
+
+  const supportedLevels = useMemo((): ReasoningEffortLevel[] => {
+    const parseLevel = (item: unknown): ReasoningEffortLevel | null => {
+      let raw: unknown = item;
+      if (typeof item === 'object' && item !== null && 'mode' in item) {
+        raw = item.mode;
+      }
+      return raw === 'minimal' ||
+        raw === 'low' ||
+        raw === 'medium' ||
+        raw === 'high' ||
+        raw === 'xhigh' ||
+        raw === 'max'
+        ? raw
+        : null;
+    };
+
+    if (reasoningMode && 'type' in reasoningMode) {
+      if (
+        (reasoningMode.type === 'effort' || reasoningMode.type === 'hybrid') &&
+        Array.isArray(reasoningMode.supported_levels)
+      ) {
+        const levels = reasoningMode.supported_levels
+          .map(parseLevel)
+          .filter((lvl): lvl is ReasoningEffortLevel => lvl !== null);
+        if (levels.length > 0) {
+          return levels;
+        }
+      }
+    }
+
+    if (
+      Array.isArray(modelEntry?.metadata?.supportedThinkingLevels) &&
+      modelEntry.metadata.supportedThinkingLevels.length > 0
+    ) {
+      const levels = modelEntry.metadata.supportedThinkingLevels
+        .map(parseLevel)
+        .filter((lvl): lvl is ReasoningEffortLevel => lvl !== null);
+      if (levels.length > 0) {
+        return levels;
+      }
+    }
+
+    const modelName = (modelEntry?.model || '').toLowerCase();
+    const core = (modelName.split('/').pop() || modelName).replace(/\./g, '-');
+    if (
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
+      core.includes('claude-sonnet-4-6') ||
+      core.includes('claude-opus-4-6') ||
+      core.includes('qwen3') ||
+      core.includes('qwen-3')
+    ) {
+      return ['low', 'medium', 'high', 'xhigh', 'max'];
+    }
+    if (
+      core.includes('claude-3-7') ||
+      core.includes('claude-sonnet-4-5') ||
+      core.includes('claude-opus-4-5') ||
+      core.includes('gemini-2-5') ||
+      core.includes('gemini-3')
+    ) {
+      return ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+    }
+    if (core.startsWith('o1') || core.startsWith('o3') || core.startsWith('o4')) {
+      return ['low', 'medium', 'high'];
+    }
+    return ['low', 'medium', 'high', 'xhigh', 'max'];
+  }, [modelEntry, reasoningMode]);
 
   const supportsTemperatureForModel = (
     provider: LlmProvider,
@@ -160,14 +324,27 @@ export function FeatureCard({
       return false;
     }
     const normalizedModel = model.toLowerCase();
+    const core = (normalizedModel.split('/').pop() || normalizedModel).replace(/\./g, '-');
     return !(
-      /(^|[-:])o1(?:$|[-:])/.test(normalizedModel) ||
-      /(^|[-:])o3(?:$|[-:])/.test(normalizedModel) ||
-      normalizedModel.includes('deepseek-reasoner') ||
-      normalizedModel.includes('deepseek-r1')
+      core.startsWith('o1') ||
+      core.startsWith('o3') ||
+      core.startsWith('o4') ||
+      core.startsWith('gpt-5') ||
+      core.startsWith('gpt-6') ||
+      core.includes('deepseek-reasoner') ||
+      core.includes('deepseek-r1') ||
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
+      core.includes('claude-sonnet-4-6') ||
+      core.includes('claude-opus-4-6') ||
+      core.includes('claude-3-7') ||
+      core.includes('claude-4-5') ||
+      core.includes('qwq') ||
+      core.includes('reasoner')
     );
   };
-
   const handleReasoningEnabledChange = (enabled: boolean) => {
     applyTrackedLlmSettings(
       setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled)
@@ -176,11 +353,13 @@ export function FeatureCard({
 
   const handleReasoningLevelChange = (level: string) => {
     applyTrackedLlmSettings(
-      setFeatureReasoningLevel(
-        latestLlmStateRef.current,
-        featureId,
-        level as 'low' | 'medium' | 'high'
-      )
+      setFeatureReasoningLevel(latestLlmStateRef.current, featureId, level as ReasoningEffortLevel)
+    );
+  };
+
+  const handleReasoningBudgetChange = (budget: number | undefined) => {
+    applyTrackedLlmSettings(
+      setFeatureReasoningBudget(latestLlmStateRef.current, featureId, budget)
     );
   };
 
@@ -188,9 +367,11 @@ export function FeatureCard({
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
   const [modelCandidates, setModelCandidates] = useState<string[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+  const [hasLoadedCandidates, setHasLoadedCandidates] = useState(false);
   const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
   const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
+  const lastFetchedProviderRef = useRef<LlmProvider | null>(null);
   const localProviderDefinition = useMemo(
     () => getProviderDefinition(localProvider, currentLlmState.customProviders),
     [currentLlmState.customProviders, localProvider]
@@ -203,14 +384,15 @@ export function FeatureCard({
 
   const providerOptions = useMemo(() => {
     const filtered = listProviderDefinitions(currentLlmState.customProviders).filter((p) => {
-      if (p.id === selectedProvider) return true;
-
+      // Google Translate providers only support translation feature
       if (
         (p.id === 'google_translate' || p.id === 'google_translate_free') &&
         featureId !== 'translation'
       ) {
         return false;
       }
+
+      if (p.id === selectedProvider) return true;
 
       const setting = currentLlmState.providers[p.id as LlmProvider];
       return isProviderConfiguredForConfig(config, p.id as LlmProvider, setting);
@@ -249,18 +431,11 @@ export function FeatureCard({
       ) {
         setModelCandidates([]);
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
         return;
       }
 
       const latestLlmState = latestLlmStateRef.current;
-      const persistedModels = getProviderLlmModels(latestLlmState, provider);
-      const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
-      if (persistedModels.length > 0 && !isCacheExpired) {
-        setModelCandidates(persistedModels.map((entry) => entry.model));
-        setIsLoadingCandidates(false);
-        return;
-      }
-
       const setting =
         latestLlmState.providers[provider] ??
         (provider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
@@ -270,6 +445,7 @@ export function FeatureCard({
       ) {
         setModelCandidates([]);
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
         return;
       }
       setIsLoadingCandidates(true);
@@ -290,13 +466,18 @@ export function FeatureCard({
               )
           : [];
         setModelCandidates(models);
-        applyTrackedLlmSettings(
-          syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
-        );
+        if (provider !== 'local') {
+          applyTrackedLlmSettings(
+            syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
+          );
+        }
       } catch {
+        const latestLlmState = latestLlmStateRef.current;
+        const persistedModels = getProviderLlmModels(latestLlmState, provider);
         setModelCandidates(persistedModels.map((entry) => entry.model));
       } finally {
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
       }
     },
     [applyTrackedLlmSettings, featureId]
@@ -308,17 +489,71 @@ export function FeatureCard({
     }
 
     if (
+      localProvider !== 'local' &&
       persistedProviderModels.length > 0 &&
       !isProviderModelDiscoveryExpired(currentLlmState, localProvider)
     ) {
       setModelCandidates(persistedProviderModels.map((entry) => entry.model));
+      setIsLoadingCandidates(false);
+      setHasLoadedCandidates(true);
       return;
     }
 
-    queueMicrotask(() => {
-      void fetchModelCandidates(localProvider);
-    });
+    if (lastFetchedProviderRef.current === localProvider) {
+      return;
+    }
+    lastFetchedProviderRef.current = localProvider;
+
+    void fetchModelCandidates(localProvider);
   }, [currentLlmState, fetchModelCandidates, isActive, localProvider, persistedProviderModels]);
+
+  useEffect(() => {
+    if (
+      featureId !== 'translation' &&
+      (localProvider === 'google_translate' || localProvider === 'google_translate_free')
+    ) {
+      setLocalProvider(selectedProvider);
+    }
+  }, [featureId, localProvider, selectedProvider]);
+
+  useEffect(() => {
+    if (
+      featureId !== 'translation' &&
+      (modelEntry?.provider === 'google_translate' ||
+        modelEntry?.provider === 'google_translate_free')
+    ) {
+      applyTrackedLlmSettings(
+        setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
+      );
+    }
+  }, [applyTrackedLlmSettings, featureId, modelEntry?.provider]);
+
+  useEffect(() => {
+    if (localProvider === 'local' && hasLoadedCandidates && !isLoadingCandidates) {
+      if (
+        modelEntry?.provider === 'local' &&
+        modelEntry.model &&
+        !modelCandidates.includes(modelEntry.model)
+      ) {
+        applyTrackedLlmSettings(
+          setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
+        );
+      }
+      if (localModelName && !modelCandidates.includes(localModelName)) {
+        setLocalModelName('');
+      }
+    }
+  }, [
+    applyTrackedLlmSettings,
+    featureId,
+    hasLoadedCandidates,
+    isLoadingCandidates,
+    localModelName,
+    localProvider,
+    modelCandidates,
+    modelEntry?.model,
+    modelEntry?.provider,
+  ]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();
@@ -333,8 +568,10 @@ export function FeatureCard({
       return;
     }
 
+    if (providerToSave === 'local' && !modelCandidates.includes(trimmedModel)) {
+      return;
+    }
     const latestLlmState = latestLlmStateRef.current;
-    const isManualAddition = !findLlmModelId(latestLlmState, providerToSave, trimmedModel);
     let nextState = addLlmModel(latestLlmState, { provider: providerToSave, model: trimmedModel });
     const entryId = nextState.modelOrder.find((id) => {
       const existing = nextState.models[id];
@@ -351,7 +588,6 @@ export function FeatureCard({
       nextState.providers[providerToSave] ??
       (providerToSave === 'local' ? { apiHost: '', apiKey: '' } : undefined);
     if (
-      !isManualAddition ||
       !providerSetting ||
       providerToSave === 'google_translate' ||
       providerToSave === 'google_translate_free'
@@ -385,7 +621,15 @@ export function FeatureCard({
 
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
+    if (
+      featureId !== 'translation' &&
+      (p === 'google_translate' || p === 'google_translate_free')
+    ) {
+      return;
+    }
     setLocalProvider(p);
+    setHasLoadedCandidates(false);
+    lastFetchedProviderRef.current = null;
     if (
       featureId === 'translation' &&
       (p === 'google_translate' || p === 'google_translate_free')
@@ -406,6 +650,12 @@ export function FeatureCard({
   const handleInputBlur = (e: React.FocusEvent) => {
     if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
       setIsCandidateMenuOpen(false);
+      if (localProvider === 'local') {
+        if (!modelCandidates.includes(localModelName)) {
+          setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
+          return;
+        }
+      }
       if (localModelName !== selectedModel) {
         commitModelChange(localProvider, localModelName);
       }
@@ -449,10 +699,15 @@ export function FeatureCard({
         return;
       }
       setIsCandidateMenuOpen(false);
+      if (localProvider === 'local') {
+        if (!modelCandidates.includes(localModelName)) {
+          setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
+          return;
+        }
+      }
       commitModelChange(localProvider, localModelName);
     }
   };
-
   const handleTempChange = (val: number) => {
     applyTrackedLlmSettings(setFeatureTemperature(latestLlmStateRef.current, featureId, val));
   };
@@ -499,7 +754,20 @@ export function FeatureCard({
                   onFocus={() => setIsCandidateMenuOpen(true)}
                   onBlur={handleInputBlur}
                   onKeyDown={handleKeyDown}
-                  placeholder={getModelPlaceholder(localProvider)}
+                  placeholder={
+                    localProvider === 'local' &&
+                    modelCandidates.length === 0 &&
+                    !isLoadingCandidates
+                      ? t('settings.llm.no_local_models_available', {
+                          defaultValue: '未下载本地模型（请先在下方下载）',
+                        })
+                      : getModelPlaceholder(localProvider)
+                  }
+                  disabled={
+                    localProvider === 'local' &&
+                    modelCandidates.length === 0 &&
+                    !isLoadingCandidates
+                  }
                 />
                 {isLoadingCandidates && (
                   <div className="settings-hint feature-card-loading-indicator">
@@ -566,20 +834,70 @@ export function FeatureCard({
 
             {reasoningEnabled && (
               <div className="feature-field reasoning-level-wrapper">
-                <label className="settings-label" htmlFor={`feature-reasoning-level-${featureId}`}>
-                  {t('settings.llm.reasoning_level')}
-                </label>
-                <Dropdown
-                  id={`feature-reasoning-level-${featureId}`}
-                  value={reasoningLevel}
-                  onChange={(val) => handleReasoningLevelChange(val)}
-                  options={[
-                    { value: 'low', label: t('settings.llm.reasoning_level_low') },
-                    { value: 'medium', label: t('settings.llm.reasoning_level_medium') },
-                    { value: 'high', label: t('settings.llm.reasoning_level_high') },
-                  ]}
-                  style={{ width: '100%' }}
-                />
+                {reasoningMode?.type === 'none' ? (
+                  <div
+                    className="settings-hint"
+                    style={{
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary, #888)',
+                      paddingTop: '1.5rem',
+                    }}
+                  >
+                    {t('settings.llm.builtin_reasoning', {
+                      defaultValue: '内置深度思考（无需配置档位）',
+                    })}
+                  </div>
+                ) : reasoningMode?.type === 'budget' ? (
+                  <>
+                    <label
+                      className="settings-label"
+                      htmlFor={`feature-reasoning-budget-${featureId}`}
+                    >
+                      {t('settings.llm.reasoning_budget', {
+                        defaultValue: 'Thinking Token Budget',
+                      })}
+                    </label>
+                    <input
+                      id={`feature-reasoning-budget-${featureId}`}
+                      type="number"
+                      className="settings-input"
+                      min={reasoningMode.min_budget}
+                      max={reasoningMode.max_budget}
+                      step={1024}
+                      value={reasoningBudget ?? reasoningMode.default_budget}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(val) && val > 0) {
+                          handleReasoningBudgetChange(val);
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label
+                      className="settings-label"
+                      htmlFor={`feature-reasoning-level-${featureId}`}
+                    >
+                      {t('settings.llm.reasoning_level')}
+                    </label>
+                    <Dropdown
+                      id={`feature-reasoning-level-${featureId}`}
+                      value={
+                        supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                          ? reasoningLevel
+                          : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
+                      }
+                      onChange={(val) => handleReasoningLevelChange(val)}
+                      options={supportedLevels.map((lvl) => ({
+                        value: lvl,
+                        label: t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl }),
+                      }))}
+                      style={{ width: '100%' }}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>

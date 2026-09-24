@@ -196,6 +196,7 @@ mod tests {
             *self.completed_model.lock().unwrap() = Some(request.config.model);
             Ok(StandardLlmResponse {
                 text: r#"{"ok":true}"#.to_string(),
+                thought: None,
                 usage: Some(TokenUsage {
                     prompt_tokens: 10,
                     completion_tokens: 3,

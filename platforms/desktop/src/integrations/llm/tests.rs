@@ -119,6 +119,7 @@ impl LlmCompletionPort for FakeRuntimePort {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         Ok(StandardLlmResponse {
             text: r#"{"answer":42}"#.to_string(),
+            thought: None,
             usage: Some(TokenUsage {
                 prompt_tokens: 8,
                 completion_tokens: 2,
@@ -248,172 +249,8 @@ fn transcript_job_summary_fingerprint_matches_frontend_contract() {
 }
 
 #[test]
-fn openai_models_url_accepts_root_or_v1() {
-    assert_eq!(
-        format_openai_models_urls("https://api.openai.com", false),
-        vec![
-            "https://api.openai.com/v1/models".to_string(),
-            "https://api.openai.com/models".to_string()
-        ]
-    );
-    assert_eq!(
-        format_openai_models_urls("https://api.openai.com/v1", false),
-        vec!["https://api.openai.com/v1/models".to_string()]
-    );
-}
-
-#[test]
-fn gemini_base_url_is_cleaned() {
-    assert_eq!(
-        clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/models"),
-        "https://generativelanguage.googleapis.com"
-    );
-    assert_eq!(
-        clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/openai"),
-        "https://generativelanguage.googleapis.com"
-    );
-    assert_eq!(
-        clean_gemini_base_url("https://generativelanguage.googleapis.com/v1/openai/"),
-        "https://generativelanguage.googleapis.com"
-    );
-    assert_eq!(
-        clean_gemini_base_url("https://generativelanguage.googleapis.com"),
-        "https://generativelanguage.googleapis.com"
-    );
-}
-
-#[test]
-fn gemini_models_url_accepts_common_inputs() {
-    assert_eq!(
-        format_gemini_models_url("https://generativelanguage.googleapis.com/v1beta/openai"),
-        "https://generativelanguage.googleapis.com/v1beta/models"
-    );
-}
-
-#[test]
-fn gemini_generate_content_request_keeps_api_key_out_of_url() {
-    let request = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com/v1beta/openai",
-        "gemini-2.5-flash",
-        "secret-gemini-key",
-        false,
-    )
-    .expect("gemini request parts should build");
-
-    assert_eq!(
-        request.url.as_str(),
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    );
-    assert_eq!(
-        request.headers,
-        vec![("x-goog-api-key", "secret-gemini-key".to_string())]
-    );
-    assert!(!request.url.as_str().contains("secret-gemini-key"));
-    assert!(!request.url.as_str().contains("key="));
-}
-
-#[test]
-fn gemini_stream_generate_content_request_keeps_api_key_out_of_url() {
-    let request = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com/v1beta/models",
-        "gemini-2.5-pro",
-        "secret-stream-key",
-        true,
-    )
-    .expect("gemini stream request parts should build");
-
-    assert_eq!(
-        request.url.as_str(),
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse"
-    );
-    assert_eq!(
-        request.headers,
-        vec![("x-goog-api-key", "secret-stream-key".to_string())]
-    );
-    assert!(!request.url.as_str().contains("secret-stream-key"));
-    assert!(!request.url.as_str().contains("key="));
-}
-
-#[test]
-fn gemini_generate_content_request_errors_do_not_include_api_key() {
-    let error = build_gemini_generate_content_request_parts(
-        "http://generativelanguage.googleapis.com",
-        "gemini-2.5-flash",
-        "secret-gemini-key",
-        false,
-    )
-    .expect_err("remote http should be rejected before request dispatch");
-
-    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
-    assert_eq!(
-        error.message,
-        "LLM API host must use https:// unless it points to a local or LAN address."
-    );
-    assert!(!error.message.contains("secret-gemini-key"));
-}
-
-#[test]
-fn gemini_model_filter_keeps_generate_content_models() {
-    let text_model = GeminiModel {
-        name: "models/gemini-2.5-flash".to_string(),
-        supported_generation_methods: Some(vec!["generateContent".to_string()]),
-        input_token_limit: None,
-        output_token_limit: None,
-    };
-    let embedding_model = GeminiModel {
-        name: "models/text-embedding-004".to_string(),
-        supported_generation_methods: Some(vec!["embedContent".to_string()]),
-        input_token_limit: None,
-        output_token_limit: None,
-    };
-    let legacy_model = GeminiModel {
-        name: "models/gemini-pro".to_string(),
-        supported_generation_methods: None,
-        input_token_limit: None,
-        output_token_limit: None,
-    };
-
-    assert!(is_gemini_text_generation_model(&text_model));
-    assert!(!is_gemini_text_generation_model(&embedding_model));
-    assert!(is_gemini_text_generation_model(&legacy_model));
-}
-
-#[test]
-fn gemini_model_summary_preserves_supported_capabilities() {
-    let model = GeminiModel {
-        name: "models/gemini-2.5-pro".to_string(),
-        supported_generation_methods: Some(vec![
-            "generateContent".to_string(),
-            "countTokens".to_string(),
-        ]),
-        input_token_limit: Some(1_048_576),
-        output_token_limit: Some(65_536),
-    };
-
-    let summary = gemini_model_to_summary(model).expect("gemini text model should be converted");
-
-    assert_eq!(summary.model, "gemini-2.5-pro");
-    assert_eq!(summary.context_window, Some(1_048_576));
-    assert_eq!(summary.max_output_tokens, Some(65_536));
-    assert_eq!(summary.supports_tools, Some(true));
-    assert_eq!(summary.supports_multimodal, Some(true));
-}
-
-#[test]
-fn openai_model_summary_defaults_missing_metadata_to_none() {
-    let summary = openai_model_to_summary(OpenAiModel {
-        id: "gpt-4.1-mini".to_string(),
-    });
-
-    assert_eq!(summary.model, "gpt-4.1-mini");
-    assert_eq!(summary.context_window, None);
-    assert_eq!(summary.input_price, None);
-    assert_eq!(summary.supports_reasoning, None);
-}
-
-#[test]
-fn anthropic_listing_is_disabled() {
-    assert!(!strategy_supports_model_listing(
+fn strategy_model_listing_support() {
+    assert!(strategy_supports_model_listing(
         LlmProviderStrategy::Anthropic
     ));
     assert!(!strategy_supports_model_listing(
@@ -447,34 +284,6 @@ fn llm_config_accepts_custom_provider_with_strategy() {
 }
 
 #[test]
-fn openai_chat_payload_keeps_temperature_when_reasoning_is_enabled() {
-    let mut config = sample_llm_config("https://api.openai.com/v1");
-    config.temperature = Some(0.35);
-    config.reasoning_enabled = Some(true);
-    config.reasoning_level = Some("high".to_string());
-
-    let payload = build_openai_chat_payload(
-        OpenAiChatPayloadConfig {
-            strategy: config.strategy,
-            model: &config.model,
-            temperature: config.temperature,
-            reasoning_enabled: config.reasoning_enabled.unwrap_or(false),
-            reasoning_level: config.reasoning_level.as_deref(),
-        },
-        "hello",
-        true,
-    );
-
-    assert_eq!(payload["model"], "test-model");
-    assert_eq!(payload["stream"], true);
-    assert_eq!(payload["reasoning_effort"], "high");
-    let temperature = payload["temperature"]
-        .as_f64()
-        .expect("temperature should be numeric");
-    assert!((temperature - 0.35).abs() < 0.000_001);
-}
-
-#[test]
 fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
     let config: LlmConfig = serde_json::from_value(json!({
         "provider": "gemini",
@@ -503,45 +312,6 @@ fn join_url_trims_duplicate_slashes() {
             "api/v3/chat/completions"
         ),
         "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-    );
-}
-
-#[test]
-fn extract_text_from_chat_completions_response() {
-    let response = json!({
-        "choices": [
-            {
-                "message": {
-                    "content": "Hello from chat completions"
-                }
-            }
-        ]
-    });
-
-    assert_eq!(
-        extract_text_from_json_response(&response).unwrap(),
-        "Hello from chat completions"
-    );
-}
-
-#[test]
-fn extract_text_from_responses_api_payload() {
-    let response = json!({
-        "output": [
-            {
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": "Hello from responses"
-                    }
-                ]
-            }
-        ]
-    });
-
-    assert_eq!(
-        extract_text_from_json_response(&response).unwrap(),
-        "Hello from responses"
     );
 }
 
@@ -780,6 +550,7 @@ fn text_payload_serializes_with_camel_case() {
         text: "Hello world".to_string(),
         delta: "world".to_string(),
         reset: false,
+        is_thought: false,
     };
 
     let json = serde_json::to_value(payload).expect("payload should serialize");
@@ -789,6 +560,7 @@ fn text_payload_serializes_with_camel_case() {
     assert_eq!(json["text"], "Hello world");
     assert_eq!(json["delta"], "world");
     assert_eq!(json["reset"], false);
+    assert_eq!(json["isThought"], false);
 }
 
 #[test]
@@ -1052,7 +824,7 @@ fn llm_api_url_client_builds_for_https_and_local_or_lan_with_various_timeouts() 
 
 #[tokio::test]
 async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
-    let adapter = DesktopLlmAdapter::new(None);
+    let empty_adapter = DesktopLlmAdapter::new(None);
 
     let local_config = LlmConfig {
         provider: sona_core::domain::LlmProvider::Builtin(
@@ -1072,7 +844,33 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
 
     assert!(DesktopLlmAdapter::is_local_config(&local_config));
 
-    let models = adapter
+    // When no models are downloaded, local models list must be empty
+    let empty_models = empty_adapter
+        .list_models(LlmModelsRequest {
+            provider: sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::Local,
+            ),
+            strategy: Some(sona_core::llm::tasks::LlmProviderStrategy::Local),
+            base_url: "".to_string(),
+            api_key: "".to_string(),
+        })
+        .await
+        .expect("listing local models should succeed");
+
+    assert!(
+        empty_models.is_empty(),
+        "local models list should not include un-downloaded models"
+    );
+
+    // When a model is installed in models_dir, it should be listed, while ASR models must be excluded
+    let temp_dir =
+        std::env::temp_dir().join(format!("sona_desktop_llm_test_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::write(temp_dir.join("Qwen3.5-4B-Q4_K_M.gguf"), b"dummy-llm").unwrap();
+    std::fs::write(temp_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf"), b"dummy-asr").unwrap();
+
+    let installed_adapter = DesktopLlmAdapter::new(Some(temp_dir.clone()));
+    let models = installed_adapter
         .list_models(LlmModelsRequest {
             provider: sona_core::domain::LlmProvider::Builtin(
                 sona_core::domain::BuiltinLlmProvider::Local,
@@ -1086,8 +884,16 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
 
     assert!(
         models.iter().any(|m| m.model == "Qwen/Qwen3.5-4B"),
-        "local models list should include default Qwen/Qwen3.5-4B"
+        "local models list should include downloaded Qwen/Qwen3.5-4B"
     );
+    assert!(
+        !models
+            .iter()
+            .any(|m| m.model.contains("ASR") || m.model.contains("asr")),
+        "local models list must not include ASR models"
+    );
+
+    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[tokio::test]

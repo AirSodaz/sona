@@ -31,6 +31,7 @@ impl LlmTextGeneratorPort for EchoLlmAdapter {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         Ok(StandardLlmResponse {
             text: request.input,
+            thought: None,
             usage: None,
         })
     }

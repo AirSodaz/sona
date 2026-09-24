@@ -80,6 +80,7 @@ impl LlmCompletionPort for FakeCompletionPort {
         self.requests.lock().unwrap().push(request);
         Ok(StandardLlmResponse {
             text: self.response.clone(),
+            thought: None,
             usage: None,
         })
     }
@@ -103,12 +104,13 @@ impl LlmStreamingPort for FakeCompletionPort {
         emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
     ) -> Result<StandardLlmResponse, LlmPortError> {
         self.requests.lock().unwrap().push(request);
-        emit_delta(LlmStreamDelta {
-            text: self.response.clone(),
-            delta: self.response.clone(),
-        })?;
+        emit_delta(LlmStreamDelta::content(
+            self.response.clone(),
+            self.response.clone(),
+        ))?;
         Ok(StandardLlmResponse {
             text: self.response.clone(),
+            thought: None,
             usage: None,
         })
     }

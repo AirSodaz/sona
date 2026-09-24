@@ -106,6 +106,37 @@ impl LlmCompletionRequest {
             self.options.reasoning_level = self.config.reasoning_level.clone();
         }
     }
+
+    pub fn effective_thinking_level(&self) -> ThinkingLevel {
+        ThinkingLevel::from_legacy_options(
+            self.options
+                .reasoning_enabled
+                .or(self.config.reasoning_enabled),
+            self.options
+                .reasoning_level
+                .as_deref()
+                .or(self.config.reasoning_level.as_deref()),
+        )
+    }
+    pub fn capabilities(&self) -> crate::llm::capabilities::LlmModelCapabilities {
+        crate::llm::capabilities::LlmModelCapabilities::infer(
+            self.config.strategy,
+            &self.config.model,
+            &self.config.base_url,
+        )
+    }
+
+    pub fn resolve_capabilities(
+        &self,
+        summary: Option<&crate::llm::provider_protocol::LlmModelSummary>,
+    ) -> crate::llm::capabilities::LlmModelCapabilities {
+        crate::llm::capabilities::LlmModelCapabilities::resolve(
+            self.config.strategy,
+            &self.config.model,
+            &self.config.base_url,
+            summary,
+        )
+    }
 }
 
 impl From<LlmGenerateRequest> for LlmCompletionRequest {
@@ -159,6 +190,8 @@ pub struct LlmExecutionMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct LlmCompletionResponse {
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     #[cfg_attr(
         feature = "specta",
@@ -169,12 +202,198 @@ pub struct LlmCompletionResponse {
     pub execution: LlmExecutionMetadata,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum LlmStreamDeltaKind {
+    Thought,
+    Content,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct LlmStreamDelta {
     pub text: String,
     pub delta: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<LlmStreamDeltaKind>,
+}
+
+impl LlmStreamDelta {
+    pub fn content(text: impl Into<String>, delta: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            delta: delta.into(),
+            kind: Some(LlmStreamDeltaKind::Content),
+        }
+    }
+
+    pub fn thought(text: impl Into<String>, delta: impl Into<String>) -> Self {
+        Self {
+            text: text.into(),
+            delta: delta.into(),
+            kind: Some(LlmStreamDeltaKind::Thought),
+        }
+    }
+
+    pub fn is_thought(&self) -> bool {
+        matches!(self.kind, Some(LlmStreamDeltaKind::Thought))
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(tag = "mode", content = "value", rename_all = "snake_case")]
+pub enum ThinkingLevel {
+    None,
+    Auto,
+    Minimal,
+    Low,
+    Medium,
+    High,
+    Xhigh,
+    Max,
+    Budget(u32),
+}
+
+impl ThinkingLevel {
+    pub fn from_legacy_options(enabled: Option<bool>, level: Option<&str>) -> Self {
+        match enabled {
+            Some(false) => ThinkingLevel::None,
+            Some(true) => match level {
+                Some("none") => ThinkingLevel::None,
+                Some("auto") => ThinkingLevel::Auto,
+                Some("minimal") => ThinkingLevel::Minimal,
+                Some("low") => ThinkingLevel::Low,
+                Some("medium") => ThinkingLevel::Medium,
+                Some("high") => ThinkingLevel::High,
+                Some("xhigh") => ThinkingLevel::Xhigh,
+                Some("max") => ThinkingLevel::Max,
+                Some(s) => {
+                    if let Ok(b) = s.parse::<u32>() {
+                        ThinkingLevel::Budget(b)
+                    } else {
+                        ThinkingLevel::Medium
+                    }
+                }
+                None => ThinkingLevel::Auto,
+            },
+            None => match level {
+                Some("none") => ThinkingLevel::None,
+                Some("auto") => ThinkingLevel::Auto,
+                Some("minimal") => ThinkingLevel::Minimal,
+                Some("low") => ThinkingLevel::Low,
+                Some("medium") => ThinkingLevel::Medium,
+                Some("high") => ThinkingLevel::High,
+                Some("xhigh") => ThinkingLevel::Xhigh,
+                Some("max") => ThinkingLevel::Max,
+                Some(s) => {
+                    if let Ok(b) = s.parse::<u32>() {
+                        ThinkingLevel::Budget(b)
+                    } else {
+                        ThinkingLevel::Auto
+                    }
+                }
+                None => ThinkingLevel::Auto,
+            },
+        }
+    }
+
+    pub fn is_enabled(&self) -> bool {
+        !matches!(self, ThinkingLevel::None)
+    }
+
+    pub fn as_effort_str(&self) -> Option<&'static str> {
+        match self {
+            ThinkingLevel::None | ThinkingLevel::Auto => None,
+            ThinkingLevel::Minimal => Some("minimal"),
+            ThinkingLevel::Low => Some("low"),
+            ThinkingLevel::Medium => Some("medium"),
+            ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Xhigh => Some("xhigh"),
+            ThinkingLevel::Max => Some("max"),
+            ThinkingLevel::Budget(_) => None,
+        }
+    }
+
+    pub fn clamp_to_supported(&self, supported: &[ThinkingLevel]) -> Option<ThinkingLevel> {
+        if supported.is_empty() {
+            return None;
+        }
+        if supported.contains(self) {
+            return Some(*self);
+        }
+        if let ThinkingLevel::Budget(tokens) = self {
+            let qualitative = if *tokens <= 2048 {
+                ThinkingLevel::Low
+            } else if *tokens <= 8192 {
+                ThinkingLevel::Medium
+            } else {
+                ThinkingLevel::High
+            };
+            return qualitative.clamp_to_supported(supported);
+        }
+        const EXTENDED: [ThinkingLevel; 7] = [
+            ThinkingLevel::None,
+            ThinkingLevel::Minimal,
+            ThinkingLevel::Low,
+            ThinkingLevel::Medium,
+            ThinkingLevel::High,
+            ThinkingLevel::Xhigh,
+            ThinkingLevel::Max,
+        ];
+        let target = if *self == ThinkingLevel::Auto {
+            ThinkingLevel::Medium
+        } else {
+            *self
+        };
+        let idx = EXTENDED.iter().position(|l| *l == target).unwrap_or(3);
+        for cand in &EXTENDED[idx..] {
+            if supported.contains(cand) {
+                return Some(*cand);
+            }
+        }
+        for cand in EXTENDED[..idx].iter().rev() {
+            if supported.contains(cand) {
+                return Some(*cand);
+            }
+        }
+        supported.first().copied()
+    }
+
+    pub fn resolve_budget_tokens(&self, low: u32, medium: u32, high: u32) -> Option<u32> {
+        match self {
+            ThinkingLevel::None | ThinkingLevel::Auto => None,
+            ThinkingLevel::Minimal => Some(low.min(1024)),
+            ThinkingLevel::Low => Some(low),
+            ThinkingLevel::Medium => Some(medium),
+            ThinkingLevel::High => Some(high),
+            ThinkingLevel::Xhigh => Some(high.saturating_mul(2)),
+            ThinkingLevel::Max => Some(high.saturating_mul(4)),
+            ThinkingLevel::Budget(tokens) => Some(*tokens),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ReasoningMode {
+    #[default]
+    None,
+    Effort {
+        supported_levels: Vec<ThinkingLevel>,
+    },
+    Budget {
+        min_budget: u32,
+        max_budget: u32,
+        default_budget: u32,
+    },
+    Hybrid {
+        supported_levels: Vec<ThinkingLevel>,
+        default_budget: u32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
@@ -248,6 +467,7 @@ pub fn finish_response(
     let json = parse_output(&response.text, &validation_format)?;
     Ok(LlmCompletionResponse {
         text: response.text,
+        thought: response.thought,
         json,
         usage: response.usage,
         execution: LlmExecutionMetadata {

@@ -84,10 +84,13 @@ export type {
   LlmResponseFormatKind,
   LlmSettings,
   LlmTokenUsage,
+  ReasoningEffortLevel,
+  ReasoningMode,
   ResolvedSummaryTemplate,
   SummaryCustomTemplate,
   SummaryTemplate,
   SummaryTemplateId,
+  ThinkingLevel,
 } from './llm';
 export { DEFAULT_SUMMARY_TEMPLATE, DEFAULT_SUMMARY_TEMPLATE_ID } from './llm';
 
@@ -100,6 +103,8 @@ export interface TranscriptSummaryState {
   record?: TranscriptSummaryRecord;
   /** Temporary streamed summary content that is not persisted automatically. */
   streamingContent?: string;
+  /** Temporary streamed thought/reasoning content that is not persisted automatically. */
+  streamingThought?: string;
   /** Whether a summary is currently being generated. */
   isGenerating: boolean;
   /** Progress percentage for summary generation. */

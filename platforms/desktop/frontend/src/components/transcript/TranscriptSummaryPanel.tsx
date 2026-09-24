@@ -83,13 +83,12 @@ export function TranscriptSummaryPanel({
   );
   const record = summaryState?.record;
   const streamingContent = summaryState?.streamingContent || '';
+  const streamingThought = summaryState?.streamingThought || '';
   const isGenerating = summaryState?.isGenerating || false;
+  const activeThought = isGenerating ? streamingThought : record?.thought || '';
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
-  const displayContent = isGenerating
-    ? streamingContent || record?.content || ''
-    : record?.content || streamingContent;
-
+  const displayContent = isGenerating ? streamingContent : record?.content || streamingContent;
   const persistDraftIfNeeded = useCallback(async () => {
     if (saveInFlightRef.current) {
       return saveInFlightRef.current;
@@ -266,9 +265,11 @@ export function TranscriptSummaryPanel({
   };
 
   const statusLabel = isGenerating
-    ? generationProgress > 0
-      ? t('summary.generating_progress', { progress: generationProgress })
-      : t('summary.generating_short')
+    ? streamingThought && !streamingContent
+      ? t('settings.llm.reasoning_mode', { defaultValue: 'Thinking...' })
+      : generationProgress > 0
+        ? t('summary.generating_progress', { progress: generationProgress })
+        : t('summary.generating_short')
     : isSaving
       ? t('summary.saving')
       : record && isStale
@@ -481,6 +482,54 @@ export function TranscriptSummaryPanel({
               flexDirection: 'column',
             }}
           >
+            {activeThought && (
+              <details
+                className="transcript-summary-thought-details"
+                open={isGenerating && !streamingContent}
+                style={{
+                  marginBottom: 'var(--spacing-md)',
+                  padding: '8px 12px',
+                  borderRadius: 'var(--radius-sm)',
+                  background: 'var(--color-bg-secondary)',
+                  border: '1px solid var(--color-border)',
+                  fontSize: '0.8125rem',
+                  color: 'var(--color-text-secondary)',
+                }}
+              >
+                <summary
+                  style={{
+                    cursor: 'pointer',
+                    fontWeight: 600,
+                    userSelect: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}
+                >
+                  <span>
+                    {t('settings.llm.reasoning_mode', { defaultValue: 'Thinking Process' })}
+                  </span>
+                  {isGenerating && !streamingContent && (
+                    <span style={{ fontSize: '0.75rem', opacity: 0.8 }}>...</span>
+                  )}
+                </summary>
+                <div
+                  style={{
+                    marginTop: '8px',
+                    whiteSpace: 'pre-wrap',
+                    fontFamily: 'monospace',
+                    lineHeight: 1.5,
+                    maxHeight: '200px',
+                    overflowY: 'auto',
+                    padding: '6px 8px',
+                    borderRadius: 'var(--radius-xs)',
+                    background: 'var(--color-bg-tertiary, rgba(0, 0, 0, 0.03))',
+                  }}
+                >
+                  {activeThought}
+                </div>
+              </details>
+            )}
             <textarea
               ref={textareaRef}
               className="transcript-summary-content-text"

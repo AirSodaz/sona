@@ -1,8 +1,11 @@
+pub mod canonical_json;
 pub mod defaults;
 pub mod error;
 pub mod migration;
 pub mod repository;
 pub mod types;
+
+pub use canonical_json::*;
 
 pub use defaults::*;
 pub use error::ConfigError;

@@ -13,7 +13,7 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_text_from_json_response};
+use sona_core::llm::provider_protocol::StandardLlmResponse;
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
@@ -438,7 +438,11 @@ impl GoogleTranslateAdapter {
             )
             .await?;
 
-            return Ok(StandardLlmResponse { text, usage: None });
+            return Ok(StandardLlmResponse {
+                text,
+                thought: None,
+                usage: None,
+            });
         }
 
         let payload = GoogleTranslateRequest {
@@ -454,9 +458,24 @@ impl GoogleTranslateAdapter {
             config.timeout_seconds,
         )
         .await?;
-        let text = extract_text_from_json_response(&response)?;
-
-        Ok(StandardLlmResponse { text, usage: None })
+        let parsed: GoogleTranslateResponse = serde_json::from_value(response).map_err(|e| {
+            LlmPortError::new(
+                LlmPortErrorKind::Protocol,
+                format!("Google Translate response format error: {e}"),
+            )
+        })?;
+        let text = parsed
+            .data
+            .translations
+            .into_iter()
+            .next()
+            .map(|t| t.translated_text)
+            .unwrap_or_default();
+        Ok(StandardLlmResponse {
+            text,
+            thought: None,
+            usage: None,
+        })
     }
 }
 

@@ -411,6 +411,7 @@ where
             let result = sona_core::llm::tasks::TranscriptSummaryResult {
                 template_id: request.template.id.clone(),
                 content: response.text.trim().to_string(),
+                thought: response.thought,
             };
             emit(
                 observer,
@@ -494,6 +495,7 @@ where
         let result = sona_core::llm::tasks::TranscriptSummaryResult {
             template_id: request.template.id.clone(),
             content: response.text.trim().to_string(),
+            thought: response.thought,
         };
         emit(
             observer,
@@ -778,6 +780,7 @@ where
             let mut emitted_any = false;
             let mut emit_delta = |delta: LlmStreamDelta| {
                 emitted_any = true;
+                let is_thought = delta.is_thought();
                 observer
                     .on_event(LlmTaskEvent::Text(
                         sona_core::llm::tasks::LlmTaskTextPayload {
@@ -786,6 +789,7 @@ where
                             text: delta.text,
                             delta: delta.delta,
                             reset: false,
+                            is_thought,
                         },
                     ))
                     .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.reason))
@@ -812,6 +816,7 @@ where
                                     text: String::new(),
                                     delta: String::new(),
                                     reset: true,
+                                    is_thought: false,
                                 },
                             ))
                             .map_err(|error| {
@@ -926,16 +931,21 @@ fn structured_request(
     prompt_cache: LlmPromptCachePolicy,
     max_output_tokens: Option<u64>,
 ) -> LlmCompletionRequest {
+    let temperature = config.temperature;
+    let reasoning_enabled = config.reasoning_enabled;
+    let reasoning_level = config.reasoning_level.clone();
     LlmCompletionRequest {
         config,
         system_prompt: Some(system_prompt.to_string()),
         input,
         options: LlmCompletionOptions {
+            temperature,
             max_output_tokens,
+            reasoning_enabled,
+            reasoning_level,
             response_format,
             prompt_cache,
             capability_policy: LlmCapabilityPolicy::Compatible,
-            ..LlmCompletionOptions::default()
         },
         source: None,
     }

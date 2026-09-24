@@ -10,6 +10,7 @@ import type {
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
+  ReasoningEffortLevel,
 } from '../../types/transcript';
 import { createCustomProviderId, createProviderSetting, DEFAULT_LLM_PROVIDER } from './providers';
 
@@ -38,6 +39,11 @@ const FEATURE_REASONING_LEVEL_KEYS = {
   translation: 'translationReasoningLevel',
   summary: 'summaryReasoningLevel',
 } as const;
+const FEATURE_REASONING_BUDGET_KEYS = {
+  polish: 'polishReasoningBudget',
+  translation: 'translationReasoningBudget',
+  summary: 'summaryReasoningBudget',
+} as const;
 
 const MODEL_METADATA_KEYS = [
   'displayName',
@@ -58,6 +64,9 @@ const MODEL_METADATA_KEYS = [
   'supportsTemperature',
   'supportsStructuredOutput',
   'supportsPromptCaching',
+  'reasoningMode',
+  'tokenLimitKey',
+  'supportedThinkingLevels',
   'metadataSources',
 ] as const satisfies (keyof LlmModelMetadata)[];
 
@@ -517,7 +526,16 @@ export function setFeatureModelSelection(
     customProviders: current.customProviders ?? {},
     selections: {
       ...current.selections,
-      [key]: modelId && current.models[modelId] ? modelId : undefined,
+      [key]:
+        modelId &&
+        current.models[modelId] &&
+        !(
+          (feature === 'polish' || feature === 'summary') &&
+          (current.models[modelId].provider === 'google_translate' ||
+            current.models[modelId].provider === 'google_translate_free')
+        )
+          ? modelId
+          : undefined,
     },
   };
 }
@@ -559,17 +577,41 @@ export function setFeatureReasoningEnabled(
 export function setFeatureReasoningLevel(
   llmSettings: LlmSettings | undefined,
   feature: LlmFeature,
-  level: 'low' | 'medium' | 'high' | undefined
+  level: ReasoningEffortLevel | undefined
 ): LlmSettings {
   const current = llmSettings ?? createLlmSettings();
   const key = FEATURE_REASONING_LEVEL_KEYS[feature];
-  const isValidLevel = level === 'low' || level === 'medium' || level === 'high';
+  const isValidLevel =
+    level === 'minimal' ||
+    level === 'low' ||
+    level === 'medium' ||
+    level === 'high' ||
+    level === 'xhigh' ||
+    level === 'max';
   return {
     ...current,
     customProviders: current.customProviders ?? {},
     selections: {
       ...current.selections,
       [key]: isValidLevel ? level : undefined,
+    },
+  };
+}
+
+export function setFeatureReasoningBudget(
+  llmSettings: LlmSettings | undefined,
+  feature: LlmFeature,
+  budget: number | undefined
+): LlmSettings {
+  const current = llmSettings ?? createLlmSettings();
+  const key = FEATURE_REASONING_BUDGET_KEYS[feature];
+  const isValidBudget = typeof budget === 'number' && Number.isFinite(budget) && budget > 0;
+  return {
+    ...current,
+    customProviders: current.customProviders ?? {},
+    selections: {
+      ...current.selections,
+      [key]: isValidBudget ? budget : undefined,
     },
   };
 }

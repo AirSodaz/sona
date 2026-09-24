@@ -1,16 +1,7 @@
 mod commands;
 mod jobs;
 #[cfg(test)]
-pub(crate) use sona_core::llm::provider_protocol::{
-    GeminiModel, OpenAiModel, clean_gemini_base_url, extract_text_from_json_response,
-    format_gemini_models_url, format_openai_models_urls, gemini_model_to_summary,
-    is_gemini_text_generation_model, join_url, openai_model_to_summary,
-    strategy_supports_model_listing,
-};
-#[cfg(test)]
-pub(crate) use sona_core::llm::streaming_protocol::{
-    OpenAiChatPayloadConfig, build_openai_chat_payload,
-};
+pub(crate) use sona_core::llm::provider_protocol::{join_url, strategy_supports_model_listing};
 #[cfg(test)]
 pub(crate) use sona_core::llm::tasks::{
     build_summary_chunk_prompt, build_summary_finalize_prompt, clean_json_response,

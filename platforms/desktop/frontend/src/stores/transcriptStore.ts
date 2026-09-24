@@ -632,6 +632,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         activeTemplateId,
         record: payload.record ?? undefined,
         streamingContent: undefined,
+        streamingThought: undefined,
         isGenerating: false,
         generationProgress: 0,
       },
