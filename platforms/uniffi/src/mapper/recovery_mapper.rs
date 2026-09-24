@@ -634,8 +634,10 @@ fn parse_json_leaf(
 }
 
 fn serialize_json_leaf(field: &'static str, value: &Value) -> Result<String, RecoveryMapperError> {
-    serde_json::to_string(value).map_err(|error| RecoveryMapperError::InvalidJson {
-        field,
-        reason: error.to_string(),
+    sona_core::config::to_canonical_json_string(value).map_err(|error| {
+        RecoveryMapperError::InvalidJson {
+            field,
+            reason: error.to_string(),
+        }
     })
 }
