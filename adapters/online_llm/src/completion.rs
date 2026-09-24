@@ -1,60 +1,10 @@
-use serde_json::Value;
 use sona_core::llm::provider_protocol::{
     MessageRole, StandardLlmRequest, StandardLlmResponse, build_standard_input,
     normalize_token_usage,
 };
-use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
+use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
-
-pub(crate) fn completion_input(request: &LlmCompletionRequest) -> String {
-    if matches!(
-        &request.options.response_format,
-        LlmResponseFormat::JsonObject
-    ) {
-        format!(
-            "{}\n\nReturn only valid JSON with an object as the top-level value. Do not use Markdown fences.",
-            request.input
-        )
-    } else {
-        request.input.clone()
-    }
-}
-
-pub(crate) fn structured_schema(
-    request: &LlmCompletionRequest,
-) -> Result<Option<Value>, LlmPortError> {
-    let schema = match &request.options.response_format {
-        LlmResponseFormat::Text => return Ok(None),
-        LlmResponseFormat::JsonObject => return Ok(None),
-        LlmResponseFormat::JsonSchema { schema, .. } => schema.clone(),
-    };
-    if !schema.is_object() && !schema.is_boolean() {
-        return Err(LlmPortError::new(
-            LlmPortErrorKind::InvalidRequest,
-            "JSON Schema must be an object or boolean",
-        ));
-    }
-    Ok(Some(schema))
-}
-
-#[allow(dead_code)]
-pub(crate) fn reasoning_budget_tokens(reasoning_level: Option<&str>) -> u32 {
-    let thinking =
-        sona_core::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), reasoning_level);
-    thinking
-        .resolve_budget_tokens(1024, 2048, 4096)
-        .unwrap_or(2048)
-}
-
-#[allow(dead_code)]
-pub(crate) fn reasoning_level_label(reasoning_level: Option<&str>) -> &'static str {
-    match reasoning_level {
-        Some("minimal") | Some("low") => "LOW",
-        Some("high") | Some("xhigh") | Some("max") => "HIGH",
-        _ => "MEDIUM",
-    }
-}
+use sona_core::ports::llm::LlmPortError;
 
 #[derive(Clone, Debug, Default)]
 pub struct Usage {
@@ -81,7 +31,15 @@ pub fn token_usage_from_rig_usage(usage: Option<Usage>) -> Option<TokenUsage> {
 pub async fn complete_with_provider(
     request: LlmCompletionRequest,
 ) -> Result<StandardLlmResponse, LlmPortError> {
-    crate::native_completion::execute_native_completion(&request).await
+    if matches!(
+        request.config.strategy,
+        sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
+            | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
+    ) {
+        crate::native_completion::execute_native_completion(&request).await
+    } else {
+        crate::aimux_adapter::execute_aimux_completion(&request).await
+    }
 }
 
 pub fn build_standard_user_input(input: impl Into<String>, temperature: f32) -> String {
@@ -92,22 +50,4 @@ pub fn build_standard_user_input(input: impl Into<String>, temperature: f32) -> 
         }],
         temperature,
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn configure_reasoning_maps_thinking_budget_and_level_across_models() {
-        assert_eq!(reasoning_budget_tokens(Some("low")), 1024);
-        assert_eq!(reasoning_budget_tokens(Some("high")), 4096);
-        assert_eq!(reasoning_budget_tokens(Some("medium")), 2048);
-        assert_eq!(reasoning_budget_tokens(None), 2048);
-
-        assert_eq!(reasoning_level_label(Some("low")), "LOW");
-        assert_eq!(reasoning_level_label(Some("high")), "HIGH");
-        assert_eq!(reasoning_level_label(Some("medium")), "MEDIUM");
-        assert_eq!(reasoning_level_label(None), "MEDIUM");
-    }
 }

@@ -6,19 +6,11 @@ use serde_json::json;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
 use sona_core::llm::runtime::{
-    LlmCompletionOptions, LlmCompletionRequest, LlmPromptCachePolicy, LlmResponseFormat,
-    LlmStreamDelta,
+    LlmCompletionOptions, LlmCompletionRequest, LlmResponseFormat, LlmStreamDelta,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind, LlmStreamingPort};
-use sona_online_llm::Usage;
-use sona_online_llm::{
-    LlmApiUrl, OnlineLlmAdapter, build_anthropic_payload_for_request,
-    build_gemini_payload_for_request, build_openai_chat_payload_for_request,
-    build_openai_responses_payload, extract_anthropic_stream_usage, extract_gemini_usage,
-    extract_gemini_visible_text, extract_openai_responses_stream_usage, post_json_request,
-    token_usage_from_rig_usage,
-};
+use sona_online_llm::{LlmApiUrl, OnlineLlmAdapter, post_json_request};
 
 fn request() -> LlmCompletionRequest {
     LlmCompletionRequest {
@@ -51,193 +43,40 @@ fn request() -> LlmCompletionRequest {
 }
 
 #[test]
-fn openai_payload_applies_shared_completion_options() {
-    let mut request = request();
-    request.options.reasoning_enabled = Some(true);
-    request.options.reasoning_level = Some("high".into());
-    let payload = build_openai_chat_payload_for_request(&request, false, false).unwrap();
-
-    assert_eq!(
-        payload["messages"][0],
-        json!({
-            "role": "system",
-            "content": "Return a compact object."
-        })
-    );
-    assert_eq!(payload["max_tokens"], 256);
-    assert_eq!(payload["response_format"]["type"], "json_schema");
-    assert_eq!(payload["response_format"]["json_schema"]["name"], "answer");
-    assert_eq!(
-        build_openai_responses_payload(&request, false)["reasoning"]["effort"],
-        "high"
-    );
-}
-
-#[test]
-fn openai_responses_payload_suppresses_temperature_for_reasoning_models() {
-    let mut request = request();
-    request.config.model = "o3-mini".into();
-    request.options.temperature = Some(0.7);
-    request.options.reasoning_enabled = Some(true);
-    request.options.reasoning_level = Some("high".into());
-    let payload = build_openai_responses_payload(&request, false);
-
-    assert!(payload.get("temperature").is_none());
-    assert_eq!(payload["reasoning"]["effort"], "high");
-}
-
-#[test]
-fn anthropic_payload_uses_custom_budget_tokens() {
-    let mut request = request();
-    request.config.strategy = LlmProviderStrategy::Anthropic;
-    request.config.model = "claude-3-7-sonnet-20250219".into();
-    request.options.reasoning_enabled = Some(true);
-    request.options.reasoning_level = Some("12000".into());
-    request.options.max_output_tokens = Some(16384);
-    let payload = build_anthropic_payload_for_request(&request, false).unwrap();
-
-    assert_eq!(payload["thinking"]["budget_tokens"], 12000);
-    assert_eq!(payload["temperature"], 1.0);
-}
-
-#[test]
-fn rig_usage_preserves_cache_and_reasoning_breakdown() {
-    let usage = token_usage_from_rig_usage(Some(Usage {
-        input_tokens: 10,
-        output_tokens: 4,
-        total_tokens: 14,
-        cached_input_tokens: 6,
-        cache_creation_input_tokens: 2,
-        tool_use_prompt_tokens: 0,
-        reasoning_tokens: 3,
-    }))
-    .unwrap();
-
-    assert_eq!(
-        (
-            usage.cached_input_tokens,
-            usage.cache_creation_input_tokens,
-            usage.reasoning_tokens,
-        ),
-        (6, 2, 3)
-    );
-}
-
-#[test]
 fn online_adapter_implements_completion_port() {
     fn assert_port<T: LlmCompletionPort>() {}
     assert_port::<OnlineLlmAdapter>();
 }
 
 #[test]
-fn custom_reasoning_payloads_preserve_options_and_visible_output() {
-    let mut anthropic = request();
-    anthropic.config.strategy = LlmProviderStrategy::Anthropic;
-    anthropic.options.reasoning_enabled = Some(true);
-    anthropic.options.prompt_cache = LlmPromptCachePolicy::Automatic;
-    anthropic.options.max_output_tokens = Some(8192);
-    let anthropic_payload = build_anthropic_payload_for_request(&anthropic, true).unwrap();
-
-    assert_eq!(
-        anthropic_payload["system"][0]["cache_control"]["type"],
-        "ephemeral"
-    );
-    assert_eq!(
-        anthropic_payload["output_config"]["format"]["type"],
-        "json_schema"
-    );
-    assert!(
-        anthropic_payload["thinking"]["budget_tokens"]
-            .as_u64()
-            .unwrap()
-            < 8192
-    );
-
-    let mut gemini = request();
-    gemini.config.strategy = LlmProviderStrategy::Gemini;
-    gemini.config.model = "gemini-2.5-flash".into();
-    gemini.options.reasoning_enabled = Some(true);
-    let gemini_payload = build_gemini_payload_for_request(&gemini).unwrap();
-
-    assert_eq!(
-        gemini_payload["systemInstruction"]["parts"][0]["text"],
-        "Return a compact object."
-    );
-    assert_eq!(
-        gemini_payload["generationConfig"]["responseMimeType"],
-        "application/json"
-    );
-    assert_eq!(
-        gemini_payload["generationConfig"]["responseJsonSchema"]["type"],
-        "object"
-    );
-    assert_eq!(
-        gemini_payload["generationConfig"]["thinkingConfig"]["thinkingBudget"],
-        256
-    );
-
-    anthropic.options.max_output_tokens = Some(1024);
-    assert_eq!(
-        build_anthropic_payload_for_request(&anthropic, false)
-            .unwrap_err()
-            .kind,
-        LlmPortErrorKind::InvalidRequest
-    );
-    assert_eq!(
-        extract_gemini_visible_text(&json!({
-            "candidates": [{"content": {"parts": [
-                {"thought": true, "text": "analysis"}, {"text": "answer"}
-            ]}}]
-        })),
-        Some("answer".into())
-    );
-}
-
-#[test]
-fn payload_builders_preserve_invalid_schema_category() {
+fn aimux_call_options_maps_reasoning_and_formats() {
     let mut request = request();
-    request.options.response_format = LlmResponseFormat::JsonSchema {
-        name: "invalid".into(),
-        schema: json!(42),
-    };
+    request.options.reasoning_enabled = Some(true);
+    request.options.reasoning_level = Some("high".into());
 
-    for error in [
-        build_openai_chat_payload_for_request(&request, false, false).unwrap_err(),
-        build_anthropic_payload_for_request(&request, false).unwrap_err(),
-        build_gemini_payload_for_request(&request).unwrap_err(),
-    ] {
-        assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
-        assert!(error.message.contains("JSON Schema"));
-    }
+    let options = sona_online_llm::aimux_adapter::build_aimux_call_options(&request).unwrap();
+    assert_eq!(options.temperature, Some(f64::from(0.2f32)));
+    assert_eq!(options.max_output_tokens, Some(256));
+    assert_eq!(
+        options.reasoning,
+        Some(aimux_core::types::ReasoningEffort::High)
+    );
+    assert!(matches!(
+        options.response_format,
+        Some(aimux_core::options::ResponseFormat::Json { .. })
+    ));
 }
 
 #[test]
-fn json_object_mode_does_not_send_a_native_schema() {
+fn aimux_call_options_supports_json_object_mode() {
     let mut request = request();
     request.options.response_format = LlmResponseFormat::JsonObject;
-
-    let chat = build_openai_chat_payload_for_request(&request, false, false).unwrap();
-    let responses = build_openai_responses_payload(&request, false);
-    let anthropic = build_anthropic_payload_for_request(&request, false).unwrap();
-    let gemini = build_gemini_payload_for_request(&request).unwrap();
-    assert_eq!(
-        json!({
-            "chat": chat["response_format"],
-            "responses": responses["text"]["format"],
-            "anthropicSchema": anthropic["output_config"],
-            "geminiMime": gemini["generationConfig"]["responseMimeType"],
-            "geminiSchema": gemini["generationConfig"]["responseJsonSchema"],
-        }),
-        json!({
-            "chat": {"type": "json_object"},
-            "responses": {"type": "json_object"},
-            "anthropicSchema": null,
-            "geminiMime": "application/json",
-            "geminiSchema": null,
-        })
-    );
+    let options = sona_online_llm::aimux_adapter::build_aimux_call_options(&request).unwrap();
+    assert!(matches!(
+        options.response_format,
+        Some(aimux_core::options::ResponseFormat::Json { schema: None, .. })
+    ));
 }
-
 #[test]
 fn request_reasoning_option_overrides_legacy_config() {
     let mut disabled = request();
@@ -268,64 +107,6 @@ fn native_provider_from_request_supports_azure_openai() {
         "https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"
     );
     assert_eq!(headers, vec![("api-key", "azure-key".to_string())]);
-}
-
-#[test]
-fn gemini_usage_preserves_cache_and_reasoning_breakdown() {
-    let usage = extract_gemini_usage(&json!({
-        "promptTokenCount": 10,
-        "candidatesTokenCount": 4,
-        "totalTokenCount": 17,
-        "cachedContentTokenCount": 6,
-        "thoughtsTokenCount": 3
-    }))
-    .unwrap();
-
-    assert_eq!(
-        (
-            usage.total_tokens,
-            usage.cached_input_tokens,
-            usage.reasoning_tokens
-        ),
-        (17, 6, 3)
-    );
-}
-
-#[test]
-fn streamed_protocol_usage_keeps_provider_breakdowns() {
-    let anthropic = extract_anthropic_stream_usage(&[
-        json!({"message": {"usage": {
-            "input_tokens": 4,
-            "cache_read_input_tokens": 6,
-            "cache_creation_input_tokens": 2
-        }}}),
-        json!({"usage": {"output_tokens": 3}}),
-    ])
-    .unwrap();
-    assert_eq!(
-        (
-            anthropic.total_tokens,
-            anthropic.cached_input_tokens,
-            anthropic.cache_creation_input_tokens,
-        ),
-        (15, 6, 2)
-    );
-
-    let responses = extract_openai_responses_stream_usage(&json!({
-        "type": "response.completed",
-        "response": {"usage": {
-            "input_tokens": 10,
-            "output_tokens": 5,
-            "total_tokens": 15,
-            "input_tokens_details": {"cached_tokens": 4},
-            "output_tokens_details": {"reasoning_tokens": 2}
-        }}
-    }))
-    .unwrap();
-    assert_eq!(
-        (responses.cached_input_tokens, responses.reasoning_tokens),
-        (4, 2)
-    );
 }
 
 fn read_http_request(stream: &mut std::net::TcpStream) -> String {
@@ -476,37 +257,37 @@ async fn native_rig_providers_post_to_expected_endpoint_paths() {
         (
             LlmProviderStrategy::Cohere,
             "POST /v2/chat HTTP/1.1",
-            r#"{"id":"cohere-1","finish_reason":"COMPLETE","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]}}"#,
+            r#"{"id":"cohere-1","finish_reason":"COMPLETE","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]},"usage":{"billed_units":{"input_tokens":1,"output_tokens":1},"tokens":{"input_tokens":1,"output_tokens":1}}}"#,
         ),
         (
             LlmProviderStrategy::Together,
             "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"tgt-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"tgt-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::Hyperbolic,
             "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"hyp-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"hyp-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::Llamafile,
             "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"lf-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"lf-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::MistralAi,
             "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"mis-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"mis-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::Groq,
             "POST /chat/completions HTTP/1.1",
-            r#"{"id":"grq-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"grq-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::MoonshotAi,
             "POST /v1/chat/completions HTTP/1.1",
-            r#"{"id":"ms-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}"#,
+            r#"{"id":"ms-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
         (
             LlmProviderStrategy::DeepSeek,

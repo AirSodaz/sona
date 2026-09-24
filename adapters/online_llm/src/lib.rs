@@ -1,23 +1,19 @@
-mod anthropic;
+pub mod aimux_adapter;
 mod completion;
 pub mod demuxer;
 mod gemini;
 mod model_discovery;
 mod models_dev;
 pub mod native_completion;
-mod openai_compatible;
 mod providers;
-mod responses;
-pub mod stream;
-mod streaming;
 mod transport;
-pub use anthropic::build_anthropic_payload_for_request;
+
+use async_trait::async_trait;
 pub use completion::{
     Usage, build_standard_user_input, complete_with_provider, token_usage_from_rig_usage,
 };
 pub use gemini::{
     GeminiGenerateContentRequestParts, build_gemini_generate_content_request_parts_for_reqwest,
-    build_gemini_payload_for_request, extract_gemini_usage, extract_gemini_visible_text,
 };
 pub use model_discovery::{
     build_gemini_models_url, build_openai_models_urls, get_gemini_models, get_openai_models,
@@ -25,10 +21,6 @@ pub use model_discovery::{
 };
 pub use models_dev::{
     ModelsDevCatalog, models_dev_provider_id, parse_models_dev_models, should_enrich_model_metadata,
-};
-pub use openai_compatible::{
-    build_openai_chat_payload_for_request, generate_with_openai_chat_api,
-    generate_with_openai_custom_path,
 };
 pub use providers::{
     GOOGLE_TRANSLATE_USER_AGENT, GoogleTranslateAdapter, GoogleTranslateData,
@@ -38,16 +30,6 @@ pub use providers::{
     extract_google_translate_free_translation, fetch_google_translate_free_translation,
     parse_google_translate_free_retry_after, run_google_translate_free_requests_in_order,
 };
-pub use responses::{build_openai_responses_payload, generate_with_openai_responses_api};
-pub use streaming::{
-    extract_anthropic_stream_usage, extract_openai_responses_stream_usage,
-    try_stream_completion_with_provider, try_stream_text_with_provider,
-};
-pub use transport::{
-    LlmApiUrl, is_local_or_lan_host, parse_llm_api_host, post_json_request, validate_llm_api_host,
-};
-
-use async_trait::async_trait;
 use sona_core::llm::provider_protocol::{LlmModelSummary, StandardLlmResponse};
 use sona_core::llm::requests::{LlmConfig, LlmGenerateRequest, LlmModelsRequest};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmStreamDelta};
@@ -55,6 +37,9 @@ use sona_core::ports::llm::{
     LlmCompletionPort, LlmModelDiscoveryPort, LlmModelListerPort, LlmModelMetadataPort,
     LlmPortError, LlmStreamingPort, LlmTaskDelayPort, LlmTextGeneratorPort, LlmTranslationPort,
     LlmTranslationRequest,
+};
+pub use transport::{
+    LlmApiUrl, is_local_or_lan_host, parse_llm_api_host, post_json_request, validate_llm_api_host,
 };
 
 use crate::models_dev::default_models_dev_catalog;
@@ -90,7 +75,7 @@ impl LlmStreamingPort for OnlineLlmAdapter {
         emit_delta: &mut (dyn FnMut(LlmStreamDelta) -> Result<(), LlmPortError> + Send),
     ) -> Result<StandardLlmResponse, LlmPortError> {
         let mut dual = sona_core::llm::streaming_protocol::DualStreamAccumulator::new(emit_delta);
-        let stream_result = stream::execute_native_stream(&request, &mut dual).await;
+        let stream_result = crate::aimux_adapter::execute_aimux_stream(&request, &mut dual).await;
         let emitted_any = dual.emitted_any();
         drop(dual);
         match stream_result {

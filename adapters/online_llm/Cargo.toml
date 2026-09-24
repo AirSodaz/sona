@@ -10,6 +10,8 @@ license.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
+aimux-core = "0.3.0"
+aimux-providers = "0.3.0"
 async-trait = { workspace = true }
 futures-util = { workspace = true }
 log = { workspace = true }

@@ -1,16 +1,10 @@
-use sona_core::llm::provider_protocol::{
-    StandardLlmResponse, extract_text_from_json_response, extract_usage_from_json_response,
-};
+use sona_core::llm::provider_protocol::StandardLlmResponse;
 use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::LlmPortError;
 
-use crate::gemini::{
-    build_gemini_generate_content_request_parts_for_reqwest, extract_gemini_usage,
-    extract_gemini_visible_text,
-};
-use crate::transport::{LlmApiUrl, post_json_request};
-
+use crate::gemini::build_gemini_generate_content_request_parts_for_reqwest;
+use crate::transport::LlmApiUrl;
 pub type StrategyTarget = (LlmApiUrl, Vec<(&'static str, String)>);
 
 pub fn resolve_strategy_url_and_headers(
@@ -196,57 +190,6 @@ pub async fn execute_native_completion(
                 .generate(&client, request)
                 .await
         }
-        LlmProviderStrategy::Anthropic => {
-            let (url, headers) = resolve_strategy_url_and_headers(request, false)?;
-            let payload = crate::anthropic::build_anthropic_payload_for_request(request, false)?;
-            let response =
-                post_json_request(&url, headers, payload, request.config.timeout_seconds).await?;
-            let (text, thought, usage) =
-                sona_core::llm::provider_protocol::extract_anthropic_text_and_thought_response(
-                    &response,
-                )?;
-            Ok(StandardLlmResponse {
-                text,
-                thought,
-                usage,
-            })
-        }
-        LlmProviderStrategy::Gemini => {
-            let (url, headers) = resolve_strategy_url_and_headers(request, false)?;
-            let payload = crate::gemini::build_gemini_payload_for_request(request)?;
-            let response =
-                post_json_request(&url, headers, payload, request.config.timeout_seconds).await?;
-            let text = extract_gemini_visible_text(&response)
-                .or_else(|| extract_text_from_json_response(&response).ok())
-                .unwrap_or_default();
-            let thought = crate::gemini::extract_gemini_thought(&response);
-            let usage = response.get("usageMetadata").and_then(extract_gemini_usage);
-            Ok(StandardLlmResponse {
-                text,
-                thought,
-                usage,
-            })
-        }
-        LlmProviderStrategy::OpenAiResponses => {
-            crate::responses::generate_with_openai_responses_api(request).await
-        }
-        _ => {
-            let (url, headers) = resolve_strategy_url_and_headers(request, false)?;
-            let is_azure = request.config.strategy == LlmProviderStrategy::AzureOpenAi;
-            let payload = crate::openai_compatible::build_openai_chat_payload_for_request(
-                request, false, is_azure,
-            )?;
-            let response =
-                post_json_request(&url, headers, payload, request.config.timeout_seconds).await?;
-            let (text, thought) =
-                sona_core::llm::provider_protocol::extract_text_and_thought_from_json_response(
-                    &response,
-                )?;
-            Ok(StandardLlmResponse {
-                text,
-                thought,
-                usage: extract_usage_from_json_response(&response),
-            })
-        }
+        _ => crate::aimux_adapter::execute_aimux_completion(request).await,
     }
 }
