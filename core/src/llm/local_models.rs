@@ -46,6 +46,7 @@ pub struct LocalLlmPreset {
 
 impl LocalLlmPreset {
     pub fn to_model_summary(&self) -> LlmModelSummary {
+        let supports_reasoning = self.capabilities.iter().any(|c| c == "reasoning");
         LlmModelSummary {
             model: self.model.clone(),
             display_name: Some(self.name.clone()),
@@ -53,6 +54,34 @@ impl LocalLlmPreset {
             max_output_tokens: Some(self.max_output_tokens),
             input_modalities: vec![LlmModality::Text],
             output_modalities: vec![LlmModality::Text],
+            supports_reasoning: Some(supports_reasoning),
+            reasoning_mode: if supports_reasoning {
+                Some(crate::llm::runtime::ReasoningMode::Effort {
+                    supported_levels: vec![
+                        crate::llm::runtime::ThinkingLevel::Minimal,
+                        crate::llm::runtime::ThinkingLevel::Low,
+                        crate::llm::runtime::ThinkingLevel::Medium,
+                        crate::llm::runtime::ThinkingLevel::High,
+                        crate::llm::runtime::ThinkingLevel::Xhigh,
+                        crate::llm::runtime::ThinkingLevel::Max,
+                    ],
+                })
+            } else {
+                Some(crate::llm::runtime::ReasoningMode::None)
+            },
+            supported_thinking_levels: if supports_reasoning {
+                vec![
+                    crate::llm::runtime::ThinkingLevel::Minimal,
+                    crate::llm::runtime::ThinkingLevel::Low,
+                    crate::llm::runtime::ThinkingLevel::Medium,
+                    crate::llm::runtime::ThinkingLevel::High,
+                    crate::llm::runtime::ThinkingLevel::Xhigh,
+                    crate::llm::runtime::ThinkingLevel::Max,
+                ]
+            } else {
+                Vec::new()
+            },
+            supports_temperature: Some(true),
             ..Default::default()
         }
     }
@@ -362,5 +391,18 @@ mod tests {
         assert_eq!(qwen.find_installed_path(&temp_dir), Some(target_file));
 
         let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn converts_to_model_summary_with_reasoning() {
+        let qwen = find_local_llm_model("qwen3.5-4b").unwrap();
+        let summary = qwen.to_model_summary();
+        assert_eq!(summary.supports_reasoning, Some(true));
+        assert!(matches!(
+            summary.reasoning_mode,
+            Some(crate::llm::runtime::ReasoningMode::Effort { .. })
+        ));
+        assert_eq!(summary.supported_thinking_levels.len(), 6);
+        assert_eq!(summary.supports_temperature, Some(true));
     }
 }

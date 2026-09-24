@@ -931,16 +931,21 @@ fn structured_request(
     prompt_cache: LlmPromptCachePolicy,
     max_output_tokens: Option<u64>,
 ) -> LlmCompletionRequest {
+    let temperature = config.temperature;
+    let reasoning_enabled = config.reasoning_enabled;
+    let reasoning_level = config.reasoning_level.clone();
     LlmCompletionRequest {
         config,
         system_prompt: Some(system_prompt.to_string()),
         input,
         options: LlmCompletionOptions {
+            temperature,
             max_output_tokens,
+            reasoning_enabled,
+            reasoning_level,
             response_format,
             prompt_cache,
             capability_policy: LlmCapabilityPolicy::Compatible,
-            ..LlmCompletionOptions::default()
         },
         source: None,
     }

@@ -178,14 +178,26 @@ impl LlamaCppLlmEngine {
                 }
                 let name = stem.to_string();
                 if seen_names.insert(name.clone()) {
-                    models.push(LlmModelSummary {
-                        model: name,
+                    let mut summary = LlmModelSummary {
+                        model: name.clone(),
                         context_window: Some(262_144),
                         max_output_tokens: Some(4096),
                         input_modalities: vec![LlmModality::Text],
                         output_modalities: vec![LlmModality::Text],
                         ..Default::default()
-                    });
+                    };
+                    let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+                        sona_core::llm::tasks::LlmProviderStrategy::Local,
+                        &name,
+                        "",
+                        Some(&summary),
+                    );
+                    summary.supports_reasoning = Some(caps.reasoning);
+                    summary.reasoning_mode = Some(caps.reasoning_mode);
+                    summary.supported_thinking_levels = caps.supported_thinking_levels;
+                    summary.supports_temperature = Some(caps.supports_temperature);
+                    summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+                    models.push(summary);
                 }
             }
         };
@@ -429,19 +441,130 @@ fn load_cached_model(
     Ok(model)
 }
 
+pub(crate) fn prepare_chat_messages(
+    system_prompt: Option<&str>,
+    input: &str,
+    model_name: &str,
+    reasoning_enabled: bool,
+    thinking_level: &sona_core::llm::runtime::ThinkingLevel,
+) -> (Option<String>, String) {
+    use sona_core::llm::runtime::ThinkingLevel;
+
+    let lower_name = model_name.to_lowercase();
+    let is_qwen = lower_name.contains("qwen");
+
+    if !reasoning_enabled {
+        let no_think_instruction = "Answer directly and concisely. Do not output any thinking process, internal monologue, or <think> tags.";
+        let sys = match system_prompt {
+            Some(s) if !s.trim().is_empty() => {
+                format!("{s}\n\n[Instruction: {no_think_instruction}]")
+            }
+            _ => format!("[Instruction: {no_think_instruction}]"),
+        };
+        let user = if is_qwen {
+            format!("/no_think\n{input}")
+        } else {
+            input.to_string()
+        };
+        (Some(sys), user)
+    } else {
+        let dynamic_instruction = match thinking_level {
+            ThinkingLevel::Minimal => {
+                "Thinking effort: minimal. Keep your internal thought process extremely brief and concise before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Low => {
+                "Thinking effort: low. Keep your internal thought process concise and focus on key steps."
+                    .to_string()
+            }
+            ThinkingLevel::Medium | ThinkingLevel::Auto => {
+                "Thinking effort: medium. Think step by step before answering."
+                    .to_string()
+            }
+            ThinkingLevel::High => {
+                "Thinking effort: high. Think thoroughly, exploring key considerations and details carefully before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Xhigh | ThinkingLevel::Max => {
+                "Thinking effort: maximum. Think deeply, rigorously, and exhaustively, evaluating all possibilities and verifying reasoning before answering."
+                    .to_string()
+            }
+            ThinkingLevel::Budget(budget) => {
+                format!("Thinking budget: approximately {budget} tokens. Plan and bound your internal thinking process within this token budget before answering.")
+            }
+            ThinkingLevel::None => String::new(),
+        };
+
+        let sys = if !dynamic_instruction.is_empty() {
+            match system_prompt {
+                Some(s) if !s.trim().is_empty() => {
+                    format!("{s}\n\n[Reasoning Guidance: {dynamic_instruction}]")
+                }
+                _ => format!("[Reasoning Guidance: {dynamic_instruction}]"),
+            }
+        } else {
+            system_prompt.unwrap_or_default().to_string()
+        };
+
+        let user = if is_qwen {
+            format!("/think\n{input}")
+        } else {
+            input.to_string()
+        };
+        (
+            if sys.trim().is_empty() {
+                None
+            } else {
+                Some(sys)
+            },
+            user,
+        )
+    }
+}
+
+pub(crate) fn format_chatml_prompt(system_prompt: Option<&str>, user_input: &str) -> String {
+    let mut prompt = String::new();
+    if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty()) {
+        prompt.push_str("<|im_start|>system\n");
+        prompt.push_str(sys);
+        if !sys.ends_with('\n') {
+            prompt.push('\n');
+        }
+        prompt.push_str("<|im_end|>\n");
+    }
+    prompt.push_str("<|im_start|>user\n");
+    prompt.push_str(user_input);
+    if !user_input.ends_with('\n') {
+        prompt.push('\n');
+    }
+    prompt.push_str("<|im_end|>\n<|im_start|>assistant\n");
+    prompt
+}
+
 fn format_prompt(
     model: &LlamaModel,
     system_prompt: Option<&str>,
     input: &str,
+    model_name: &str,
+    reasoning_enabled: bool,
+    thinking_level: &sona_core::llm::runtime::ThinkingLevel,
 ) -> Result<String, LlmPortError> {
+    let (effective_sys, effective_input) = prepare_chat_messages(
+        system_prompt,
+        input,
+        model_name,
+        reasoning_enabled,
+        thinking_level,
+    );
+
     if let Ok(template) = model.chat_template(None) {
         let mut chat_messages = Vec::new();
-        if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty())
+        if let Some(sys) = &effective_sys
             && let Ok(msg) = LlamaChatMessage::new("system".to_string(), sys.to_string())
         {
             chat_messages.push(msg);
         }
-        if let Ok(msg) = LlamaChatMessage::new("user".to_string(), input.to_string()) {
+        if let Ok(msg) = LlamaChatMessage::new("user".to_string(), effective_input.clone()) {
             chat_messages.push(msg);
         }
 
@@ -453,16 +576,10 @@ fn format_prompt(
     }
 
     // Fallback: ChatML format
-    let mut prompt = String::new();
-    if let Some(sys) = system_prompt.filter(|s| !s.trim().is_empty()) {
-        prompt.push_str("<|im_start|>system\n");
-        prompt.push_str(sys);
-        prompt.push_str("<|im_end|>\n");
-    }
-    prompt.push_str("<|im_start|>user\n");
-    prompt.push_str(input);
-    prompt.push_str("<|im_end|>\n<|im_start|>assistant\n");
-    Ok(prompt)
+    Ok(format_chatml_prompt(
+        effective_sys.as_deref(),
+        &effective_input,
+    ))
 }
 
 struct GenerationContext {
@@ -470,6 +587,7 @@ struct GenerationContext {
     prompt_tokens: Vec<llama_cpp_2::token::LlamaToken>,
     max_output_tokens: usize,
     temperature: f32,
+    reasoning_enabled: bool,
     delta_sender: Option<tokio::sync::mpsc::UnboundedSender<String>>,
 }
 
@@ -604,13 +722,27 @@ fn run_llama_generation(
     let (text, thought) =
         sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(&generated_text);
 
+    let reasoning_tokens = if let Some(th) = &thought {
+        model
+            .str_to_token(th, AddBos::Never)
+            .map(|t| t.len() as u64)
+            .unwrap_or(0)
+    } else {
+        0
+    };
+
     Ok(StandardLlmResponse {
         text,
-        thought,
+        thought: if gen_ctx.reasoning_enabled {
+            thought
+        } else {
+            None
+        },
         usage: Some(TokenUsage {
             prompt_tokens: prompt_tokens.len() as u64,
             completion_tokens: generated_tokens as u64,
             total_tokens: (prompt_tokens.len() + generated_tokens) as u64,
+            reasoning_tokens,
             ..Default::default()
         }),
     })
@@ -641,7 +773,16 @@ impl LlamaCppLlmEngine {
         };
 
         let model = load_cached_model(backend, &model_path, n_gpu_layers)?;
-        let prompt = format_prompt(&model, request.system_prompt.as_deref(), &request.input)?;
+        let reasoning_enabled = request.effective_reasoning_enabled();
+        let thinking_level = request.effective_thinking_level();
+        let prompt = format_prompt(
+            &model,
+            request.system_prompt.as_deref(),
+            &request.input,
+            &request.config.model,
+            reasoning_enabled,
+            &thinking_level,
+        )?;
 
         let prompt_tokens = model
             .str_to_token(&prompt, AddBos::Never)
@@ -675,7 +816,18 @@ impl LlamaCppLlmEngine {
             ));
         }
 
-        let max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
+        let mut max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
+        if reasoning_enabled {
+            use sona_core::llm::runtime::ThinkingLevel;
+            if let ThinkingLevel::Budget(budget) = thinking_level {
+                max_output_tokens = max_output_tokens.max(budget as usize + 2048);
+            } else if matches!(
+                thinking_level,
+                ThinkingLevel::High | ThinkingLevel::Xhigh | ThinkingLevel::Max
+            ) {
+                max_output_tokens = max_output_tokens.max(8192);
+            }
+        }
         let temperature = request.effective_temperature().unwrap_or(0.7);
 
         let gen_ctx = GenerationContext {
@@ -683,6 +835,7 @@ impl LlamaCppLlmEngine {
             prompt_tokens,
             max_output_tokens,
             temperature,
+            reasoning_enabled,
             delta_sender,
         };
 
@@ -906,6 +1059,12 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(qwen_summary.context_window, Some(262_144));
+        assert_eq!(qwen_summary.supports_reasoning, Some(true));
+        assert!(matches!(
+            qwen_summary.reasoning_mode,
+            Some(sona_core::llm::runtime::ReasoningMode::Effort { .. })
+        ));
+        assert_eq!(qwen_summary.supported_thinking_levels.len(), 6);
 
         let gemma_summary = engine
             .describe_model(&test_config("google/gemma-4-e2b"))
@@ -913,6 +1072,7 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(gemma_summary.context_window, Some(131_072));
+        assert_eq!(gemma_summary.supports_reasoning, Some(true));
     }
 
     #[test]
@@ -949,5 +1109,63 @@ mod tests {
             .unwrap();
         assert_eq!(resolved, temp_path);
         let _ = std::fs::remove_file(temp_path);
+    }
+
+    #[test]
+    fn prepares_chat_messages_for_qwen_with_reasoning_disabled() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, user) = prepare_chat_messages(
+            Some("You are a helpful assistant."),
+            "Explain quantum computing",
+            "Qwen/Qwen3.5-4B",
+            false,
+            &ThinkingLevel::None,
+        );
+        assert!(user.starts_with("/no_think\n"));
+        assert!(user.contains("Explain quantum computing"));
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("You are a helpful assistant."));
+        assert!(sys_str.contains("Answer directly and concisely"));
+    }
+
+    #[test]
+    fn prepares_chat_messages_for_qwen_with_reasoning_enabled_and_high_effort() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, user) = prepare_chat_messages(
+            None,
+            "Solve this math problem",
+            "Qwen/Qwen3.5-4B",
+            true,
+            &ThinkingLevel::High,
+        );
+        assert!(user.starts_with("/think\n"));
+        assert!(user.contains("Solve this math problem"));
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("Thinking effort: high"));
+    }
+
+    #[test]
+    fn prepares_chat_messages_with_budget() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (sys, _user) = prepare_chat_messages(
+            None,
+            "Write an essay",
+            "google/gemma-4-e2b",
+            true,
+            &ThinkingLevel::Budget(2048),
+        );
+        let sys_str = sys.unwrap();
+        assert!(sys_str.contains("2048 tokens"));
+    }
+
+    #[test]
+    fn format_chatml_prompt_constructs_valid_chatml() {
+        let prompt = format_chatml_prompt(Some("You are a helper."), "Hello world");
+        assert!(prompt.contains("<|im_start|>system\nYou are a helper.\n<|im_end|>"));
+        assert!(prompt.contains("<|im_start|>user\nHello world\n<|im_end|>"));
+        assert!(prompt.ends_with("<|im_start|>assistant\n"));
     }
 }

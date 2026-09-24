@@ -233,6 +233,8 @@ export function FeatureCard({
       core.includes('gemini-3') ||
       core.includes('gemma-4') ||
       core.includes('qwq') ||
+      core.includes('qwen3') ||
+      core.includes('qwen-3') ||
       core.includes('thinking') ||
       core.includes('reasoner')
     );
@@ -288,7 +290,9 @@ export function FeatureCard({
       core.includes('claude-sonnet-5') ||
       core.includes('claude-fable-5') ||
       core.includes('claude-sonnet-4-6') ||
-      core.includes('claude-opus-4-6')
+      core.includes('claude-opus-4-6') ||
+      core.includes('qwen3') ||
+      core.includes('qwen-3')
     ) {
       return ['low', 'medium', 'high', 'xhigh', 'max'];
     }

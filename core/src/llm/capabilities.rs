@@ -372,6 +372,64 @@ impl LlmModelCapabilities {
             };
         }
 
+        if normalized.contains("qwen3")
+            || normalized.contains("qwen-3")
+            || normalized.contains("qwen3-5")
+        {
+            return Self {
+                reasoning: true,
+                reasoning_mode: ReasoningMode::Effort {
+                    supported_levels: vec![
+                        ThinkingLevel::Minimal,
+                        ThinkingLevel::Low,
+                        ThinkingLevel::Medium,
+                        ThinkingLevel::High,
+                        ThinkingLevel::Xhigh,
+                        ThinkingLevel::Max,
+                    ],
+                },
+                supported_thinking_levels: vec![
+                    ThinkingLevel::Minimal,
+                    ThinkingLevel::Low,
+                    ThinkingLevel::Medium,
+                    ThinkingLevel::High,
+                    ThinkingLevel::Xhigh,
+                    ThinkingLevel::Max,
+                ],
+                supports_temperature: true,
+                token_limit_key: TokenLimitKey::MaxTokens,
+            };
+        }
+
+        if strategy == LlmProviderStrategy::Local
+            && let Some(preset) = crate::llm::local_models::find_local_llm_model(model)
+            && preset.capabilities.iter().any(|c| c == "reasoning")
+        {
+            return Self {
+                reasoning: true,
+                reasoning_mode: ReasoningMode::Effort {
+                    supported_levels: vec![
+                        ThinkingLevel::Minimal,
+                        ThinkingLevel::Low,
+                        ThinkingLevel::Medium,
+                        ThinkingLevel::High,
+                        ThinkingLevel::Xhigh,
+                        ThinkingLevel::Max,
+                    ],
+                },
+                supported_thinking_levels: vec![
+                    ThinkingLevel::Minimal,
+                    ThinkingLevel::Low,
+                    ThinkingLevel::Medium,
+                    ThinkingLevel::High,
+                    ThinkingLevel::Xhigh,
+                    ThinkingLevel::Max,
+                ],
+                supports_temperature: true,
+                token_limit_key: TokenLimitKey::MaxTokens,
+            };
+        }
+
         // 7. GLM / Zhipu reasoning models
         if strategy == LlmProviderStrategy::Chatglm || normalized.contains("glm") {
             let is_reasoning = normalized.contains("glm-zero") || normalized.contains("r1");
@@ -565,5 +623,20 @@ mod tests {
         let v3 = LlmModelCapabilities::infer(LlmProviderStrategy::DeepSeek, "deepseek-chat", "");
         assert!(!v3.reasoning);
         assert!(v3.supports_temperature);
+    }
+
+    #[test]
+    fn infers_qwen3_5_and_local_reasoning_models() {
+        let qwen = LlmModelCapabilities::infer(LlmProviderStrategy::Local, "Qwen/Qwen3.5-4B", "");
+        assert!(qwen.reasoning);
+        assert!(matches!(qwen.reasoning_mode, ReasoningMode::Effort { .. }));
+        assert_eq!(qwen.supported_thinking_levels.len(), 6);
+        assert!(qwen.supports_temperature);
+
+        let gemma =
+            LlmModelCapabilities::infer(LlmProviderStrategy::Local, "google/gemma-4-e2b", "");
+        assert!(gemma.reasoning);
+        assert!(matches!(gemma.reasoning_mode, ReasoningMode::Effort { .. }));
+        assert!(gemma.supports_temperature);
     }
 }

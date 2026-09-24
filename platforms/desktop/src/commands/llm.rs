@@ -149,11 +149,24 @@ pub async fn list_local_llm_cards(
                     quantization: quant,
                     modalities: vec!["text".to_string()],
                     languages: vec!["auto".to_string()],
-                    capabilities: vec![
-                        "polish".to_string(),
-                        "summary".to_string(),
-                        "translate".to_string(),
-                    ],
+                    capabilities: {
+                        let mut caps = vec![
+                            "chat".to_string(),
+                            "polish".to_string(),
+                            "summary".to_string(),
+                            "translate".to_string(),
+                        ];
+                        if sona_core::llm::capabilities::LlmModelCapabilities::infer(
+                            sona_core::llm::tasks::LlmProviderStrategy::Local,
+                            stem,
+                            "",
+                        )
+                        .reasoning
+                        {
+                            caps.push("reasoning".to_string());
+                        }
+                        caps
+                    },
                     is_recommended: false,
                     is_installed: true,
                     installed_path: Some(path.to_string_lossy().into_owned()),
