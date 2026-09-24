@@ -246,7 +246,57 @@ async fn openai_adapter_posts_to_chat_completions_with_messages() {
     assert_eq!(response.text, "test answer");
 }
 #[tokio::test]
-async fn native_rig_providers_post_to_expected_endpoint_paths() {
+async fn azure_openai_adapter_posts_to_deployment_endpoint_with_api_key_header() {
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = listener.local_addr().unwrap();
+
+    let server = thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let request_str = read_http_request(&mut stream);
+        assert!(
+            request_str.starts_with(
+                "POST /openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21 HTTP/1.1"
+            ),
+            "expected Azure deployment path, got: '{}'",
+            request_str.lines().next().unwrap_or_default()
+        );
+        assert!(
+            request_str
+                .to_ascii_lowercase()
+                .contains("api-key: test-azure-key"),
+            "expected api-key header in Azure request, got:\n{}",
+            request_str
+        );
+        let mock_response = r#"{"id":"az-1","object":"chat.completion","created":123,"model":"gpt-4o","choices":[{"index":0,"message":{"role":"assistant","content":"azure ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+            mock_response.len(),
+            mock_response
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+
+    let mut req = request();
+    req.config.strategy = LlmProviderStrategy::AzureOpenAi;
+    req.config.base_url = format!("http://{address}/openai");
+    req.config.api_key = "test-azure-key".into();
+    req.config.model = "gpt-4o".into();
+    req.config.api_version = Some("2024-10-21".into());
+    req.options.reasoning_enabled = Some(false);
+    req.options.response_format = LlmResponseFormat::Text;
+
+    let res = OnlineLlmAdapter.complete(req).await;
+    server.join().unwrap();
+    assert!(
+        res.is_ok(),
+        "Azure OpenAI completion failed: {:?}",
+        res.err()
+    );
+    assert_eq!(res.unwrap().text, "azure ok");
+}
+
+#[tokio::test]
+async fn native_providers_post_to_expected_endpoint_paths() {
     let test_cases = [
         (
             LlmProviderStrategy::Cohere,
@@ -287,6 +337,16 @@ async fn native_rig_providers_post_to_expected_endpoint_paths() {
             LlmProviderStrategy::DeepSeek,
             "POST /chat/completions HTTP/1.1",
             r#"{"id":"ds-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2,"prompt_cache_hit_tokens":0,"prompt_cache_miss_tokens":1}}"#,
+        ),
+        (
+            LlmProviderStrategy::XAi,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"xai-1","object":"chat.completion","created":123,"model":"grok-2","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
+        ),
+        (
+            LlmProviderStrategy::OpenRouter,
+            "POST /v1/chat/completions HTTP/1.1",
+            r#"{"id":"or-1","object":"chat.completion","created":123,"model":"m","choices":[{"index":0,"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1,"completion_tokens":1,"total_tokens":2}}"#,
         ),
     ];
 

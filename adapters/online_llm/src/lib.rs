@@ -8,9 +8,7 @@ mod providers;
 mod transport;
 
 use async_trait::async_trait;
-pub use completion::{
-    Usage, build_standard_user_input, complete_with_provider, token_usage_from_rig_usage,
-};
+pub use completion::{build_standard_user_input, complete_with_provider};
 
 pub use model_discovery::list_models_with_provider;
 pub use models_dev::{

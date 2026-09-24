@@ -129,9 +129,41 @@ pub fn create_aimux_provider(
     base_url: &str,
     api_path: Option<&str>,
 ) -> Result<Box<dyn Provider>, LlmPortError> {
+    create_aimux_provider_with_version(strategy, api_key, base_url, api_path, None)
+}
+
+pub fn create_aimux_provider_with_version(
+    strategy: LlmProviderStrategy,
+    api_key: &str,
+    base_url: &str,
+    api_path: Option<&str>,
+    api_version: Option<&str>,
+) -> Result<Box<dyn Provider>, LlmPortError> {
     let base_url = base_url.trim();
 
     match strategy {
+        LlmProviderStrategy::AzureOpenAi => {
+            let mut azure_config = aimux_providers::AzureConfig::new();
+            if !api_key.is_empty() {
+                azure_config = azure_config.with_api_key(api_key);
+            }
+            if let Some(version) = api_version {
+                azure_config = azure_config.with_api_version(version);
+            }
+            if !base_url.is_empty() {
+                let trimmed = base_url.trim_end_matches('/');
+                let effective_base =
+                    if trimmed.contains(".openai.azure.com") && !trimmed.ends_with("/openai") {
+                        format!("{trimmed}/openai")
+                    } else {
+                        trimmed.to_string()
+                    };
+                azure_config = azure_config.with_base_url(effective_base);
+            }
+            let provider =
+                aimux_providers::AzureProvider::new(azure_config).map_err(map_aimux_error)?;
+            Ok(Box::new(provider))
+        }
         LlmProviderStrategy::Anthropic => {
             let mut anthropic_config = aimux_providers::anthropic::AnthropicConfig::new(api_key);
             if !base_url.is_empty() {
@@ -167,34 +199,127 @@ pub fn create_aimux_provider(
                 cohere_config,
             )))
         }
-        _ => {
-            let provider_name = match strategy {
-                LlmProviderStrategy::DeepSeek => "deepseek",
-                LlmProviderStrategy::Groq => "groq",
-                LlmProviderStrategy::MistralAi => "mistral",
-                LlmProviderStrategy::MoonshotAi | LlmProviderStrategy::MoonshotCn => "moonshot",
-                LlmProviderStrategy::SiliconFlow => "siliconflow",
-                LlmProviderStrategy::XAi => "xai",
-                LlmProviderStrategy::Together => "together",
-                LlmProviderStrategy::Perplexity => "perplexity",
-                _ => "openai",
-            };
-            let effective_base = if base_url.is_empty() {
-                match strategy {
-                    LlmProviderStrategy::DeepSeek => "https://api.deepseek.com".to_string(),
-                    LlmProviderStrategy::Groq => "https://api.groq.com/openai/v1".to_string(),
-                    _ => "https://api.openai.com/v1".to_string(),
-                }
-            } else {
-                normalize_openai_base_url(strategy, base_url, api_path)
-            };
-            let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key)
-                .with_provider(provider_name)
-                .with_base_url(&effective_base);
-            if strategy == LlmProviderStrategy::Groq {
-                openai_config = openai_config
-                    .with_profile(aimux_providers::openai::OpenAICompatProfile::groq());
+        LlmProviderStrategy::XAi => {
+            let mut xai_config = aimux_providers::XAIConfig::new(api_key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                xai_config = xai_config.with_base_url(effective_base);
             }
+            Ok(Box::new(aimux_providers::XAIProvider::new(xai_config)))
+        }
+        LlmProviderStrategy::MistralAi => {
+            let mut mistral_config = aimux_providers::MistralConfig::new(api_key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                mistral_config.base_url = effective_base;
+            }
+            Ok(Box::new(aimux_providers::MistralProvider::new(
+                mistral_config,
+            )))
+        }
+        LlmProviderStrategy::OpenRouter => {
+            let mut openrouter_config = aimux_providers::OpenRouterConfig::new(api_key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                openrouter_config = openrouter_config.with_base_url(effective_base);
+            }
+            Ok(Box::new(aimux_providers::OpenRouterProvider::new(
+                openrouter_config,
+            )))
+        }
+        LlmProviderStrategy::Ollama => {
+            let key = if api_key.is_empty() {
+                "ollama"
+            } else {
+                api_key
+            };
+            let mut ollama_config = aimux_providers::OllamaConfig::new(key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                ollama_config = ollama_config.with_base_url(effective_base);
+            }
+            Ok(Box::new(aimux_providers::OllamaProvider::new(
+                ollama_config,
+            )))
+        }
+        LlmProviderStrategy::LmStudio => {
+            let key = if api_key.is_empty() {
+                "lmstudio"
+            } else {
+                api_key
+            };
+            let mut lmstudio_config = aimux_providers::LmStudioConfig::new(key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                lmstudio_config = lmstudio_config.with_base_url(effective_base);
+            }
+            Ok(Box::new(aimux_providers::LmStudioProvider::new(
+                lmstudio_config,
+            )))
+        }
+        LlmProviderStrategy::Llamafile => {
+            let key = if api_key.is_empty() {
+                "llamafile"
+            } else {
+                api_key
+            };
+            let mut llamafile_config = aimux_providers::LlamafileConfig::new(key);
+            if !base_url.is_empty() {
+                let effective_base = normalize_openai_base_url(strategy, base_url, api_path);
+                llamafile_config = llamafile_config.with_base_url(effective_base);
+            }
+            Ok(Box::new(aimux_providers::LlamafileProvider::new(
+                llamafile_config,
+            )))
+        }
+        _ => {
+            let registry_name = match strategy {
+                LlmProviderStrategy::DeepSeek => Some("deepseek"),
+                LlmProviderStrategy::Groq => Some("groq"),
+                LlmProviderStrategy::MoonshotAi => Some("moonshotai"),
+                LlmProviderStrategy::MoonshotCn => Some("moonshotai"),
+                LlmProviderStrategy::Kimi => Some("kimi"),
+                LlmProviderStrategy::Xiaomi => Some("xiaomimimo"),
+                LlmProviderStrategy::SiliconFlow => Some("siliconflow"),
+                LlmProviderStrategy::Qwen | LlmProviderStrategy::QwenPortal => Some("alibaba"),
+                LlmProviderStrategy::MinimaxGlobal => Some("minimax"),
+                LlmProviderStrategy::MinimaxCn => Some("minimax_cn"),
+                LlmProviderStrategy::Together => Some("togetherai"),
+                LlmProviderStrategy::Venice => Some("venice"),
+                LlmProviderStrategy::Hyperbolic => Some("hyperbolic"),
+                LlmProviderStrategy::Perplexity => Some("perplexity"),
+                LlmProviderStrategy::Copilot => Some("copilot"),
+                LlmProviderStrategy::Chatglm => Some("bigmodel"),
+                LlmProviderStrategy::Volcengine => Some("volc_engine"),
+                _ => None,
+            };
+
+            let effective_base = if base_url.is_empty() {
+                None
+            } else {
+                Some(normalize_openai_base_url(strategy, base_url, api_path))
+            };
+
+            if let Some(name) = registry_name {
+                let options =
+                    effective_base
+                        .as_ref()
+                        .map(|base| aimux_providers::ProviderOptions {
+                            base_url: Some(base.clone()),
+                            ..Default::default()
+                        });
+                if let Ok(handle) =
+                    aimux_providers::provider_handle(name, Some(api_key.to_string()), options)
+                {
+                    return Ok(handle);
+                }
+            }
+
+            let fallback_base =
+                effective_base.unwrap_or_else(|| "https://api.openai.com/v1".to_string());
+            let openai_config = aimux_providers::openai::OpenAIConfig::new(api_key)
+                .with_provider("openai")
+                .with_base_url(&fallback_base);
             Ok(Box::new(aimux_providers::openai::OpenAIProvider::new(
                 openai_config,
             )))
@@ -216,11 +341,12 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
         return Ok(Arc::new(provider.responses_model(model)));
     }
 
-    let provider = create_aimux_provider(
+    let provider = create_aimux_provider_with_version(
         config.strategy,
         api_key,
         base_url,
         config.api_path.as_deref(),
+        config.api_version.as_deref(),
     )?;
     let model = provider.language_model(model).map_err(map_aimux_error)?;
     Ok(Arc::from(model))
