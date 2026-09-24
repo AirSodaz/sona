@@ -373,7 +373,11 @@ pub fn build_aimux_call_options(
 
     let mut options = CallOptions::new(prompt);
     options.max_retries = Some(0);
-    options.temperature = request.options.temperature.map(f64::from);
+    options.temperature = if request.capabilities().supports_temperature {
+        request.options.temperature.map(f64::from)
+    } else {
+        None
+    };
     options.max_output_tokens = request
         .options
         .max_output_tokens

@@ -778,21 +778,35 @@ impl LlmModelMetadataPort for LlamaCppLlmEngine {
         } else {
             model_name
         };
-        if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(target) {
-            return Ok(Some(preset.to_model_summary()));
-        }
+        let mut summary =
+            if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(target) {
+                preset.to_model_summary()
+            } else {
+                LlmModelSummary {
+                    model: target.to_string(),
+                    context_window: Some(131_072),
+                    max_output_tokens: Some(4096),
+                    input_modalities: vec![LlmModality::Text],
+                    output_modalities: vec![LlmModality::Text],
+                    ..Default::default()
+                }
+            };
 
-        Ok(Some(LlmModelSummary {
-            model: target.to_string(),
-            context_window: Some(131_072),
-            max_output_tokens: Some(4096),
-            input_modalities: vec![LlmModality::Text],
-            output_modalities: vec![LlmModality::Text],
-            ..Default::default()
-        }))
+        let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+            config.strategy,
+            &config.model,
+            &config.base_url,
+            Some(&summary),
+        );
+        summary.supports_reasoning = Some(caps.reasoning);
+        summary.reasoning_mode = Some(caps.reasoning_mode);
+        summary.supported_thinking_levels = caps.supported_thinking_levels;
+        summary.supports_temperature = Some(caps.supports_temperature);
+        summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+
+        Ok(Some(summary))
     }
 }
-
 #[async_trait]
 impl LlmModelDiscoveryPort for LlamaCppLlmEngine {
     async fn list_models(

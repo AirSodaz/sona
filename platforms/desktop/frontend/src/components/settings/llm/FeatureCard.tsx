@@ -10,7 +10,6 @@ import {
 import {
   addLlmModel,
   enrichLlmModelMetadata,
-  findLlmModelId,
   getFeatureModelEntry,
   getProviderLlmModels,
   isProviderModelDiscoveryExpired,
@@ -157,15 +156,63 @@ export function FeatureCard({
       : featureId === 'translation'
         ? currentLlmState.selections.translationReasoningBudget
         : currentLlmState.selections.summaryReasoningBudget;
-
   const reasoningMode = modelEntry?.metadata?.reasoningMode;
+  const modelEntryId = modelEntry?.id;
+  const modelEntryHasReasoning = modelEntry?.metadata?.reasoningMode !== undefined;
+  const modelEntryHasTemp = modelEntry?.metadata?.supportsTemperature !== undefined;
+
+  useEffect(() => {
+    if (!modelEntryId || !selectedModel || !selectedProvider) return;
+    if (selectedProvider === 'google_translate' || selectedProvider === 'google_translate_free') {
+      return;
+    }
+    if (modelEntryHasReasoning && modelEntryHasTemp) {
+      return;
+    }
+
+    const providerSetting =
+      latestLlmStateRef.current.providers[selectedProvider] ??
+      (selectedProvider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
+    if (!providerSetting) return;
+
+    void describeLlmModel({
+      ...buildLlmConfig(
+        selectedProvider,
+        providerSetting,
+        latestLlmStateRef.current.customProviders
+      ),
+      model: selectedModel,
+    })
+      .then((summary) => {
+        if (!isMountedRef.current || !summary || summary.model !== selectedModel) {
+          return;
+        }
+        const metadata = modelSummaryToMetadata(summary);
+        if (Object.keys(metadata).length === 0) {
+          return;
+        }
+        const latestState = latestLlmStateRef.current;
+        const enrichedState = enrichLlmModelMetadata(latestState, modelEntryId, metadata);
+        if (enrichedState !== latestState) {
+          applyTrackedLlmSettings(enrichedState);
+        }
+      })
+      .catch(() => {});
+  }, [
+    applyTrackedLlmSettings,
+    modelEntryHasReasoning,
+    modelEntryHasTemp,
+    modelEntryId,
+    selectedModel,
+    selectedProvider,
+  ]);
 
   const supportsReasoning = useMemo(() => {
     if (typeof modelEntry?.metadata?.supportsReasoning === 'boolean') {
       return modelEntry.metadata.supportsReasoning;
     }
     const modelName = (modelEntry?.model || '').toLowerCase();
-    const core = modelName.split('/').pop() || modelName;
+    const core = (modelName.split('/').pop() || modelName).replace(/\./g, '-');
     return (
       core.startsWith('o1') ||
       core.startsWith('o3') ||
@@ -177,40 +224,87 @@ export function FeatureCard({
       core.includes('claude-3-7') ||
       core.includes('claude-opus-5') ||
       core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
       core.includes('claude-sonnet-4') ||
+      core.includes('claude-opus-4') ||
       core.includes('claude-4') ||
-      core.includes('gemini-2.5') ||
+      core.includes('gemini-2-5') ||
       core.includes('gemini-3') ||
-      core.includes('qwq')
+      core.includes('gemma-4') ||
+      core.includes('qwq') ||
+      core.includes('thinking') ||
+      core.includes('reasoner')
     );
   }, [modelEntry]);
 
   const supportedLevels = useMemo((): ReasoningEffortLevel[] => {
+    const parseLevel = (item: unknown): ReasoningEffortLevel | null => {
+      let raw: unknown = item;
+      if (typeof item === 'object' && item !== null && 'mode' in item) {
+        raw = item.mode;
+      }
+      return raw === 'minimal' ||
+        raw === 'low' ||
+        raw === 'medium' ||
+        raw === 'high' ||
+        raw === 'xhigh' ||
+        raw === 'max'
+        ? raw
+        : null;
+    };
+
     if (reasoningMode && 'type' in reasoningMode) {
-      if (reasoningMode.type === 'effort' && Array.isArray(reasoningMode.supported_levels)) {
-        return reasoningMode.supported_levels.map((l) =>
-          typeof l === 'object' && l !== null && 'mode' in l
-            ? (l as { mode: ReasoningEffortLevel }).mode
-            : (l as unknown as ReasoningEffortLevel)
-        );
-      }
-      if (reasoningMode.type === 'hybrid' && Array.isArray(reasoningMode.supported_levels)) {
-        return reasoningMode.supported_levels.map((l) =>
-          typeof l === 'object' && l !== null && 'mode' in l
-            ? (l as { mode: ReasoningEffortLevel }).mode
-            : (l as unknown as ReasoningEffortLevel)
-        );
+      if (
+        (reasoningMode.type === 'effort' || reasoningMode.type === 'hybrid') &&
+        Array.isArray(reasoningMode.supported_levels)
+      ) {
+        const levels = reasoningMode.supported_levels
+          .map(parseLevel)
+          .filter((lvl): lvl is ReasoningEffortLevel => lvl !== null);
+        if (levels.length > 0) {
+          return levels;
+        }
       }
     }
+
+    if (
+      Array.isArray(modelEntry?.metadata?.supportedThinkingLevels) &&
+      modelEntry.metadata.supportedThinkingLevels.length > 0
+    ) {
+      const levels = modelEntry.metadata.supportedThinkingLevels
+        .map(parseLevel)
+        .filter((lvl): lvl is ReasoningEffortLevel => lvl !== null);
+      if (levels.length > 0) {
+        return levels;
+      }
+    }
+
     const modelName = (modelEntry?.model || '').toLowerCase();
-    const core = modelName.split('/').pop() || modelName;
-    if (core.startsWith('o1') || core.startsWith('o3')) {
-      return ['low', 'medium', 'high'];
+    const core = (modelName.split('/').pop() || modelName).replace(/\./g, '-');
+    if (
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
+      core.includes('claude-sonnet-4-6') ||
+      core.includes('claude-opus-4-6')
+    ) {
+      return ['low', 'medium', 'high', 'xhigh', 'max'];
     }
-    if (core.includes('claude-3-7') || core.includes('gemini-2.5')) {
+    if (
+      core.includes('claude-3-7') ||
+      core.includes('claude-sonnet-4-5') ||
+      core.includes('claude-opus-4-5') ||
+      core.includes('gemini-2-5') ||
+      core.includes('gemini-3')
+    ) {
       return ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
     }
-    return ['low', 'medium', 'high'];
+    if (core.startsWith('o1') || core.startsWith('o3') || core.startsWith('o4')) {
+      return ['low', 'medium', 'high'];
+    }
+    return ['low', 'medium', 'high', 'xhigh', 'max'];
   }, [modelEntry, reasoningMode]);
 
   const supportsTemperatureForModel = (
@@ -226,7 +320,7 @@ export function FeatureCard({
       return false;
     }
     const normalizedModel = model.toLowerCase();
-    const core = normalizedModel.split('/').pop() || normalizedModel;
+    const core = (normalizedModel.split('/').pop() || normalizedModel).replace(/\./g, '-');
     return !(
       core.startsWith('o1') ||
       core.startsWith('o3') ||
@@ -234,10 +328,19 @@ export function FeatureCard({
       core.startsWith('gpt-5') ||
       core.startsWith('gpt-6') ||
       core.includes('deepseek-reasoner') ||
-      core.includes('deepseek-r1')
+      core.includes('deepseek-r1') ||
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-5') ||
+      core.includes('claude-fable-5') ||
+      core.includes('claude-sonnet-4-6') ||
+      core.includes('claude-opus-4-6') ||
+      core.includes('claude-3-7') ||
+      core.includes('claude-4-5') ||
+      core.includes('qwq') ||
+      core.includes('reasoner')
     );
   };
-
   const handleReasoningEnabledChange = (enabled: boolean) => {
     applyTrackedLlmSettings(
       setFeatureReasoningEnabled(latestLlmStateRef.current, featureId, enabled)
@@ -465,7 +568,6 @@ export function FeatureCard({
       return;
     }
     const latestLlmState = latestLlmStateRef.current;
-    const isManualAddition = !findLlmModelId(latestLlmState, providerToSave, trimmedModel);
     let nextState = addLlmModel(latestLlmState, { provider: providerToSave, model: trimmedModel });
     const entryId = nextState.modelOrder.find((id) => {
       const existing = nextState.models[id];
@@ -482,7 +584,6 @@ export function FeatureCard({
       nextState.providers[providerToSave] ??
       (providerToSave === 'local' ? { apiHost: '', apiKey: '' } : undefined);
     if (
-      !isManualAddition ||
       !providerSetting ||
       providerToSave === 'google_translate' ||
       providerToSave === 'google_translate_free'

@@ -198,12 +198,36 @@ impl LlmModelMetadataPort for OnlineLlmAdapter {
         &self,
         config: &LlmConfig,
     ) -> Result<Option<LlmModelSummary>, LlmPortError> {
-        if !should_enrich_model_metadata(&config.provider, &config.base_url) {
+        if config.model.trim().is_empty() {
             return Ok(None);
         }
-        let provider_id = models_dev_provider_id(config.strategy).unwrap_or("");
-        Ok(default_models_dev_catalog()
-            .describe(provider_id, &config.model)
-            .await)
+        let catalog_summary = if should_enrich_model_metadata(&config.provider, &config.base_url) {
+            let provider_id = models_dev_provider_id(config.strategy).unwrap_or("");
+            default_models_dev_catalog()
+                .describe(provider_id, &config.model)
+                .await
+        } else {
+            None
+        };
+
+        let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+            config.strategy,
+            &config.model,
+            &config.base_url,
+            catalog_summary.as_ref(),
+        );
+
+        let mut summary = catalog_summary.unwrap_or_else(|| LlmModelSummary {
+            model: config.model.clone(),
+            ..Default::default()
+        });
+
+        summary.supports_reasoning = Some(caps.reasoning);
+        summary.reasoning_mode = Some(caps.reasoning_mode);
+        summary.supported_thinking_levels = caps.supported_thinking_levels;
+        summary.supports_temperature = Some(caps.supports_temperature);
+        summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+
+        Ok(Some(summary))
     }
 }

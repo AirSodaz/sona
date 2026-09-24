@@ -31,11 +31,32 @@ pub async fn list_models_with_provider(
             ..LlmModelSummary::default()
         })
         .collect::<Vec<_>>();
-    if !should_enrich_model_metadata(&request.provider, &request.base_url) {
-        return Ok(discovered);
-    }
-    let provider_id = models_dev_provider_id(strategy).unwrap_or("");
-    Ok(default_models_dev_catalog()
-        .enrich(provider_id, discovered)
-        .await)
+    let enriched = if !should_enrich_model_metadata(&request.provider, &request.base_url) {
+        discovered
+    } else {
+        let provider_id = models_dev_provider_id(strategy).unwrap_or("");
+        default_models_dev_catalog()
+            .enrich(provider_id, discovered)
+            .await
+    };
+
+    let results = enriched
+        .into_iter()
+        .map(|mut summary| {
+            let caps = sona_core::llm::capabilities::LlmModelCapabilities::resolve(
+                strategy,
+                &summary.model,
+                &request.base_url,
+                Some(&summary),
+            );
+            summary.supports_reasoning = Some(caps.reasoning);
+            summary.reasoning_mode = Some(caps.reasoning_mode);
+            summary.supported_thinking_levels = caps.supported_thinking_levels;
+            summary.supports_temperature = Some(caps.supports_temperature);
+            summary.token_limit_key = Some(caps.token_limit_key.as_str().to_string());
+            summary
+        })
+        .collect();
+
+    Ok(results)
 }
