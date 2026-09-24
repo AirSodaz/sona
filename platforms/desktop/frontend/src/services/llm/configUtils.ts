@@ -116,7 +116,9 @@ export function getFeatureLlmConfig(
   const reasoningEnabled = selections?.[FEATURE_REASONING_ENABLED_KEYS[feature]] ?? false;
   const reasoningLevel = selections?.[FEATURE_REASONING_LEVEL_KEYS[feature]] ?? 'medium';
   const reasoningBudget = selections?.[FEATURE_REASONING_BUDGET_KEYS[feature]];
-  const effectiveReasoningLevel = reasoningBudget ? String(reasoningBudget) : reasoningLevel;
+  const isBudgetMode = modelEntry.metadata?.reasoningMode?.type === 'budget';
+  const effectiveBudget = isBudgetMode ? reasoningBudget : undefined;
+  const effectiveReasoningLevel = effectiveBudget ? String(effectiveBudget) : reasoningLevel;
 
   return {
     ...buildLlmConfig(modelEntry.provider, setting, config.llmSettings?.customProviders),
@@ -124,7 +126,7 @@ export function getFeatureLlmConfig(
     temperature: getFeatureTemperature(config, feature),
     reasoningEnabled,
     reasoningLevel: reasoningEnabled ? effectiveReasoningLevel : undefined,
-    reasoningBudget,
+    reasoningBudget: effectiveBudget,
     timeoutSeconds: config.llmRequestTimeoutSeconds,
   };
 }

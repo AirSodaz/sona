@@ -74,6 +74,33 @@ fn openai_payload_applies_shared_completion_options() {
 }
 
 #[test]
+fn openai_responses_payload_suppresses_temperature_for_reasoning_models() {
+    let mut request = request();
+    request.config.model = "o3-mini".into();
+    request.options.temperature = Some(0.7);
+    request.options.reasoning_enabled = Some(true);
+    request.options.reasoning_level = Some("high".into());
+    let payload = build_openai_responses_payload(&request, false);
+
+    assert!(payload.get("temperature").is_none());
+    assert_eq!(payload["reasoning"]["effort"], "high");
+}
+
+#[test]
+fn anthropic_payload_uses_custom_budget_tokens() {
+    let mut request = request();
+    request.config.strategy = LlmProviderStrategy::Anthropic;
+    request.config.model = "claude-3-7-sonnet-20250219".into();
+    request.options.reasoning_enabled = Some(true);
+    request.options.reasoning_level = Some("12000".into());
+    request.options.max_output_tokens = Some(16384);
+    let payload = build_anthropic_payload_for_request(&request, false).unwrap();
+
+    assert_eq!(payload["thinking"]["budget_tokens"], 12000);
+    assert_eq!(payload["temperature"], 1.0);
+}
+
+#[test]
 fn rig_usage_preserves_cache_and_reasoning_breakdown() {
     let usage = token_usage_from_rig_usage(Some(Usage {
         input_tokens: 10,

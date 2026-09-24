@@ -7,9 +7,7 @@ use sona_core::llm::runtime::LlmCompletionRequest;
 use sona_core::llm::usage::TokenUsage;
 use sona_core::ports::llm::LlmPortError;
 
-use crate::completion::{
-    completion_input, reasoning_budget_tokens, reasoning_level_label, structured_schema,
-};
+use crate::completion::{completion_input, structured_schema};
 use crate::transport::LlmApiUrl;
 pub fn build_gemini_payload_for_request(
     request: &LlmCompletionRequest,
@@ -21,22 +19,34 @@ pub fn build_gemini_payload_for_request(
         generation_config["maxOutputTokens"] = json!(max_output_tokens);
     }
     if request.effective_reasoning_enabled() {
-        let level = request.effective_reasoning_level();
-        generation_config["thinkingConfig"] = if request.config.model.contains("gemini-2.5") {
+        let thinking = request.effective_thinking_level();
+        let is_budget_model = request.config.model.contains("gemini-2.5")
+            || request.config.model.contains("thinking")
+            || matches!(thinking, sona_core::llm::runtime::ThinkingLevel::Budget(_));
+        generation_config["thinkingConfig"] = if is_budget_model {
+            let raw_budget = thinking
+                .resolve_budget_tokens(1024, 2048, 4096)
+                .unwrap_or(2048);
             let budget = request
                 .options
                 .max_output_tokens
-                .map(|limit| {
-                    reasoning_budget_tokens(level).min(limit.min(u64::from(u32::MAX)) as u32)
-                })
-                .unwrap_or_else(|| reasoning_budget_tokens(level));
+                .map(|limit| raw_budget.min(limit.min(u64::from(u32::MAX)) as u32))
+                .unwrap_or(raw_budget);
             json!({
                 "thinkingBudget": budget,
                 "includeThoughts": true,
             })
         } else {
+            let label = match thinking {
+                sona_core::llm::runtime::ThinkingLevel::Minimal
+                | sona_core::llm::runtime::ThinkingLevel::Low => "LOW",
+                sona_core::llm::runtime::ThinkingLevel::High
+                | sona_core::llm::runtime::ThinkingLevel::Xhigh
+                | sona_core::llm::runtime::ThinkingLevel::Max => "HIGH",
+                _ => "MEDIUM",
+            };
             json!({
-                "thinkingLevel": reasoning_level_label(level),
+                "thinkingLevel": label,
                 "includeThoughts": true,
             })
         };

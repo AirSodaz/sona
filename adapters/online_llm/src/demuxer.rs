@@ -19,6 +19,35 @@ const TAG_PAIRS: &[(&str, &str)] = &[
     ("<thinking>", "</thinking>"),
     ("<reasoning>", "</reasoning>"),
 ];
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    let needle_bytes = needle.as_bytes();
+    let haystack_bytes = haystack.as_bytes();
+    let needle_len = needle_bytes.len();
+    if haystack_bytes.len() < needle_len {
+        return None;
+    }
+    for i in 0..=(haystack_bytes.len() - needle_len) {
+        if haystack.is_char_boundary(i)
+            && haystack_bytes[i..i + needle_len].eq_ignore_ascii_case(needle_bytes)
+        {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn ends_with_ascii_case_insensitive(haystack: &str, needle: &str) -> bool {
+    let needle_bytes = needle.as_bytes();
+    let haystack_bytes = haystack.as_bytes();
+    if haystack_bytes.len() < needle_bytes.len() {
+        return false;
+    }
+    let suffix = &haystack_bytes[haystack_bytes.len() - needle_bytes.len()..];
+    suffix.eq_ignore_ascii_case(needle_bytes)
+}
 
 impl ThoughtStreamDemuxer {
     pub fn new() -> Self {
@@ -42,12 +71,11 @@ impl ThoughtStreamDemuxer {
         let mut remaining = full_text.as_str();
 
         while !remaining.is_empty() {
-            let lower = remaining.to_lowercase();
             if !self.inside_think {
                 // Find earliest opening tag
                 let mut earliest: Option<(usize, &'static str, &'static str)> = None;
                 for (open_tag, close_tag) in TAG_PAIRS {
-                    if let Some(idx) = lower.find(open_tag) {
+                    if let Some(idx) = find_ascii_case_insensitive(remaining, open_tag) {
                         if let Some((best_idx, _, _)) = earliest {
                             if idx < best_idx {
                                 earliest = Some((idx, open_tag, close_tag));
@@ -73,7 +101,8 @@ impl ThoughtStreamDemuxer {
                     let mut matched_prefix_len = 0;
                     for (open_tag, _) in TAG_PAIRS {
                         for prefix_len in (1..open_tag.len()).rev() {
-                            if lower.ends_with(&open_tag[..prefix_len]) {
+                            if ends_with_ascii_case_insensitive(remaining, &open_tag[..prefix_len])
+                            {
                                 matched_prefix_len = matched_prefix_len.max(prefix_len);
                                 break;
                             }
@@ -101,13 +130,13 @@ impl ThoughtStreamDemuxer {
                 // Inside thought: look for closing tag
                 let mut earliest_close: Option<(usize, &'static str)> = None;
                 if let Some(expected_close) = self.active_close_tag
-                    && let Some(idx) = lower.find(expected_close)
+                    && let Some(idx) = find_ascii_case_insensitive(remaining, expected_close)
                 {
                     earliest_close = Some((idx, expected_close));
                 }
                 if earliest_close.is_none() {
                     for (_, close_tag) in TAG_PAIRS {
-                        if let Some(idx) = lower.find(close_tag) {
+                        if let Some(idx) = find_ascii_case_insensitive(remaining, close_tag) {
                             if let Some((best_idx, _)) = earliest_close {
                                 if idx < best_idx {
                                     earliest_close = Some((idx, close_tag));
@@ -146,7 +175,8 @@ impl ThoughtStreamDemuxer {
                             continue;
                         }
                         for prefix_len in (1..close_tag.len()).rev() {
-                            if lower.ends_with(&close_tag[..prefix_len]) {
+                            if ends_with_ascii_case_insensitive(remaining, &close_tag[..prefix_len])
+                            {
                                 matched_prefix_len = matched_prefix_len.max(prefix_len);
                                 break;
                             }
@@ -350,6 +380,31 @@ mod tests {
                 kind: LlmStreamDeltaKind::Content,
                 text: "<th".to_string(),
             }]
+        );
+    }
+
+    #[test]
+    fn handles_unicode_length_changing_chars_without_panic() {
+        let mut demuxer = ThoughtStreamDemuxer::new();
+        // '\u{212A}' is Kelvin sign (3 bytes in UTF-8, 1 byte when lowercased)
+        let text = "\u{212A}<think>reasoning step</think>final answer";
+        let chunks = demuxer.process(text);
+        assert_eq!(
+            chunks,
+            vec![
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Content,
+                    text: "\u{212A}".to_string(),
+                },
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Thought,
+                    text: "reasoning step".to_string(),
+                },
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Content,
+                    text: "final answer".to_string(),
+                },
+            ]
         );
     }
 }

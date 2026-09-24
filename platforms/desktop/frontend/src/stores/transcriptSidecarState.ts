@@ -48,6 +48,7 @@ export const DEFAULT_SUMMARY_STATE: TranscriptSummaryState = {
   activeTemplateId: DEFAULT_SUMMARY_TEMPLATE_ID as SummaryTemplateId,
   record: undefined,
   streamingContent: undefined,
+  streamingThought: undefined,
   isGenerating: false,
   generationProgress: 0,
 };

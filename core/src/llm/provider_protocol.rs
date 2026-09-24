@@ -448,6 +448,25 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
         _ => {}
     }
 }
+fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
+    if needle.is_empty() {
+        return Some(0);
+    }
+    let needle_bytes = needle.as_bytes();
+    let haystack_bytes = haystack.as_bytes();
+    let needle_len = needle_bytes.len();
+    if haystack_bytes.len() < needle_len {
+        return None;
+    }
+    for i in 0..=(haystack_bytes.len() - needle_len) {
+        if haystack.is_char_boundary(i)
+            && haystack_bytes[i..i + needle_len].eq_ignore_ascii_case(needle_bytes)
+        {
+            return Some(i);
+        }
+    }
+    None
+}
 
 pub fn strip_and_extract_inline_thoughts(input: &str) -> (String, Option<String>) {
     const TAGS: &[(&str, &str)] = &[
@@ -463,10 +482,9 @@ pub fn strip_and_extract_inline_thoughts(input: &str) -> (String, Option<String>
 
     while !remaining.is_empty() {
         let mut earliest_match: Option<(usize, usize, &'static str)> = None;
-        let lower = remaining.to_lowercase();
 
         for (open_tag, close_tag) in TAGS {
-            if let Some(idx) = lower.find(open_tag) {
+            if let Some(idx) = find_ascii_case_insensitive(remaining, open_tag) {
                 let end = idx + open_tag.len();
                 if let Some((best_idx, _, _)) = earliest_match {
                     if idx < best_idx {
@@ -483,8 +501,7 @@ pub fn strip_and_extract_inline_thoughts(input: &str) -> (String, Option<String>
                 clean_text.push_str(&remaining[..open_start]);
             }
             remaining = &remaining[open_end..];
-            let remaining_lower = remaining.to_lowercase();
-            if let Some(close_idx) = remaining_lower.find(close_tag) {
+            if let Some(close_idx) = find_ascii_case_insensitive(remaining, close_tag) {
                 let thought_content = &remaining[..close_idx];
                 if !thought_content.trim().is_empty() {
                     thoughts.push(thought_content.trim().to_string());
@@ -722,23 +739,30 @@ pub fn extract_anthropic_text_response(
 }
 
 pub fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
-    let usage = response.get("usage")?;
+    let usage = response
+        .get("usage")
+        .or_else(|| response.pointer("/delta/usage"))
+        .or_else(|| response.pointer("/response/usage"))?;
 
     let prompt_tokens = usage
         .get("prompt_tokens")
         .or_else(|| usage.get("input_tokens"))
+        .or_else(|| usage.pointer("/tokens/input_tokens"))
+        .or_else(|| usage.pointer("/billed_units/input_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let completion_tokens = usage
         .get("completion_tokens")
         .or_else(|| usage.get("output_tokens"))
+        .or_else(|| usage.pointer("/tokens/output_tokens"))
+        .or_else(|| usage.pointer("/billed_units/output_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
     let total_tokens = usage
         .get("total_tokens")
+        .or_else(|| usage.pointer("/tokens/total_tokens"))
         .and_then(Value::as_u64)
         .unwrap_or(0);
-
     let mut normalized = normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)?;
     normalized.cached_input_tokens = usage
         .pointer("/prompt_tokens_details/cached_tokens")

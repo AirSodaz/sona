@@ -286,3 +286,15 @@ fn extracts_inline_think_tags_and_explicit_reasoning() {
     assert_eq!(text, "Final output");
     assert_eq!(thought.as_deref(), Some("DeepSeek thought"));
 }
+
+#[test]
+fn strip_and_extract_inline_thoughts_handles_unicode_length_changing_chars() {
+    let input = "\u{212A} Kelvin <think>\nDeep thought about \u{0130}stanbul\n</think>\nResult";
+    let (text, thought) =
+        sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(input);
+    assert_eq!(text, "\u{212A} Kelvin Result");
+    assert_eq!(
+        thought.as_deref(),
+        Some("Deep thought about \u{0130}stanbul")
+    );
+}

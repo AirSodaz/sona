@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmPromptCachePolicy};
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
-use crate::completion::{completion_input, reasoning_budget_tokens, structured_schema};
+use crate::completion::{completion_input, structured_schema};
 pub fn build_anthropic_payload_for_request(
     request: &LlmCompletionRequest,
     stream: bool,
@@ -34,10 +34,14 @@ pub fn build_anthropic_payload_for_request(
                 "Anthropic reasoning requires max_output_tokens to be greater than 1024",
             ));
         }
+        let thinking = request.effective_thinking_level();
+        let raw_budget = thinking
+            .resolve_budget_tokens(1024, 2048, 4096)
+            .unwrap_or(2048);
+        let budget_tokens = raw_budget.clamp(1024, max_budget);
         payload["thinking"] = json!({
             "type": "enabled",
-            "budget_tokens": reasoning_budget_tokens(request.effective_reasoning_level())
-                .min(max_budget),
+            "budget_tokens": budget_tokens,
         });
         payload["temperature"] = json!(1.0);
     }

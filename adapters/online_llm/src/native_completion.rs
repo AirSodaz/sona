@@ -166,7 +166,6 @@ pub fn resolve_strategy_url_and_headers(
                 LlmProviderStrategy::MinimaxGlobal => "https://api.minimaxi.chat/v1",
                 LlmProviderStrategy::MinimaxCn => "https://api.minimax.chat/v1",
                 LlmProviderStrategy::Copilot => "https://api.githubcopilot.com",
-                LlmProviderStrategy::Cohere => "https://api.cohere.ai",
                 _ => "https://api.openai.com",
             };
             let host = if base_url.is_empty() {

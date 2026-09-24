@@ -17,6 +17,7 @@ function hasStoredSummaryState(summaryState: TranscriptSummaryState | undefined)
     summaryState.isGenerating ||
     summaryState.generationProgress > 0 ||
     !!summaryState.streamingContent ||
+    !!summaryState.streamingThought ||
     !!summaryState.record ||
     summaryState.activeTemplateId !== DEFAULT_SUMMARY_TEMPLATE_ID
   );

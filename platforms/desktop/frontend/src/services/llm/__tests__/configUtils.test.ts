@@ -223,4 +223,66 @@ describe('llm runtime', () => {
       })
     );
   });
+
+  it('applies reasoningBudget only when model metadata specifies budget mode', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = updateProviderSetting(llmSettings, 'anthropic', {
+      apiHost: 'https://api.anthropic.com',
+      apiKey: 'anthropic-key',
+    });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'anthropic',
+      model: 'claude-3-7-sonnet',
+      metadata: {
+        reasoningMode: {
+          type: 'budget',
+          min_budget: 1024,
+          max_budget: 64000,
+          default_budget: 4096,
+        },
+      },
+    });
+    llmSettings = addLlmModel(llmSettings, {
+      provider: 'anthropic',
+      model: 'o3-mini-proxy',
+      metadata: {
+        reasoningMode: {
+          type: 'effort',
+          supported_levels: [{ mode: 'low' }, { mode: 'medium' }, { mode: 'high' }],
+        },
+      },
+    });
+
+    // Set model to budget model with a budget
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[0]);
+    llmSettings = setFeatureReasoningEnabled(llmSettings, 'summary', true);
+    llmSettings = setFeatureReasoningLevel(llmSettings, 'summary', 'high');
+    llmSettings = {
+      ...llmSettings,
+      selections: {
+        ...llmSettings.selections,
+        summaryReasoningBudget: 8192,
+      },
+    };
+
+    let config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(
+      expect.objectContaining({
+        reasoningEnabled: true,
+        reasoningLevel: '8192',
+        reasoningBudget: 8192,
+      })
+    );
+
+    // Switch model to effort model, keeping old summaryReasoningBudget in selections
+    llmSettings = setFeatureModelSelection(llmSettings, 'summary', llmSettings.modelOrder[1]);
+    config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'summary')).toEqual(
+      expect.objectContaining({
+        reasoningEnabled: true,
+        reasoningLevel: 'high',
+        reasoningBudget: undefined,
+      })
+    );
+  });
 });

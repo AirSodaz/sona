@@ -38,18 +38,20 @@ pub(crate) fn structured_schema(
     Ok(Some(schema))
 }
 
+#[allow(dead_code)]
 pub(crate) fn reasoning_budget_tokens(reasoning_level: Option<&str>) -> u32 {
-    match reasoning_level {
-        Some("low") => 1024,
-        Some("high") => 4096,
-        _ => 2048,
-    }
+    let thinking =
+        sona_core::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), reasoning_level);
+    thinking
+        .resolve_budget_tokens(1024, 2048, 4096)
+        .unwrap_or(2048)
 }
 
+#[allow(dead_code)]
 pub(crate) fn reasoning_level_label(reasoning_level: Option<&str>) -> &'static str {
     match reasoning_level {
-        Some("low") => "LOW",
-        Some("high") => "HIGH",
+        Some("minimal") | Some("low") => "LOW",
+        Some("high") | Some("xhigh") | Some("max") => "HIGH",
         _ => "MEDIUM",
     }
 }

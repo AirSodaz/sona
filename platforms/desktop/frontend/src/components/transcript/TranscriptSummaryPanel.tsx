@@ -83,6 +83,7 @@ export function TranscriptSummaryPanel({
   );
   const record = summaryState?.record;
   const streamingContent = summaryState?.streamingContent || '';
+  const streamingThought = summaryState?.streamingThought || '';
   const isGenerating = summaryState?.isGenerating || false;
   const generationProgress = summaryState?.generationProgress || 0;
   const isStale = useMemo(() => isSummaryRecordStale(record, segments), [record, segments]);
@@ -266,9 +267,11 @@ export function TranscriptSummaryPanel({
   };
 
   const statusLabel = isGenerating
-    ? generationProgress > 0
-      ? t('summary.generating_progress', { progress: generationProgress })
-      : t('summary.generating_short')
+    ? streamingThought && !streamingContent
+      ? t('settings.llm.reasoning_mode', { defaultValue: 'Thinking...' })
+      : generationProgress > 0
+        ? t('summary.generating_progress', { progress: generationProgress })
+        : t('summary.generating_short')
     : isSaving
       ? t('summary.saving')
       : record && isStale

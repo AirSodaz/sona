@@ -140,6 +140,7 @@ export class SummaryService {
           sourceFingerprint,
         },
         streamingContent: undefined,
+        streamingThought: undefined,
       },
       targetHistoryId
     );
@@ -224,6 +225,7 @@ export class SummaryService {
             // Keep a dedicated transient buffer for streamed text so the final record can still
             // be written atomically once the backend returns the finished summary payload.
             streamingContent: '',
+            streamingThought: '',
           },
           startedHistoryId
         );
@@ -233,7 +235,13 @@ export class SummaryService {
           generationProgress,
         });
       },
-      onText: ({ text }, textHistoryId) => {
+      onText: ({ text, isThought }, textHistoryId) => {
+        if (isThought) {
+          this.updateJobSummaryState(textHistoryId, {
+            streamingThought: text,
+          });
+          return;
+        }
         this.updateJobSummaryState(textHistoryId, {
           streamingContent: text,
         });
@@ -272,6 +280,7 @@ export class SummaryService {
           activeTemplateId: resultTemplateId,
           record,
           streamingContent: undefined,
+          streamingThought: undefined,
         });
 
         if (runningHistoryId === 'current' && targetHistoryId !== 'current') {

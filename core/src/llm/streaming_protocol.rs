@@ -298,7 +298,9 @@ pub fn build_openai_chat_payload(
             crate::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), Some(level));
         let lower = config.model.to_lowercase();
         let core_model = lower.trim().rsplit('/').next().unwrap_or(&lower);
-        let is_openai_o_series = core_model.starts_with("o1") || core_model.starts_with("o3");
+        let is_openai_o_series = core_model.starts_with("o1")
+            || core_model.starts_with("o3")
+            || core_model.starts_with("o4");
         let clamped = if is_openai_o_series {
             match thinking {
                 crate::llm::runtime::ThinkingLevel::None

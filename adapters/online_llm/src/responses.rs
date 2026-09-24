@@ -37,9 +37,11 @@ pub fn build_openai_responses_payload(request: &LlmCompletionRequest, stream: bo
     let mut payload = json!({
         "model": config.model,
         "input": input,
-        "temperature": request.effective_temperature().unwrap_or(0.7),
         "stream": stream,
     });
+    if !sona_core::llm::streaming_protocol::is_temperature_prohibited_for_model(&config.model) {
+        payload["temperature"] = json!(request.effective_temperature().unwrap_or(0.7));
+    }
     if let Some(system_prompt) = request.system_prompt.as_deref() {
         payload["instructions"] = json!(system_prompt);
     }
@@ -47,8 +49,17 @@ pub fn build_openai_responses_payload(request: &LlmCompletionRequest, stream: bo
         payload["max_output_tokens"] = json!(max_output_tokens);
     }
     if request.effective_reasoning_enabled() {
+        let thinking = request.effective_thinking_level();
+        let effort = thinking
+            .clamp_to_supported(&[
+                sona_core::llm::runtime::ThinkingLevel::Low,
+                sona_core::llm::runtime::ThinkingLevel::Medium,
+                sona_core::llm::runtime::ThinkingLevel::High,
+            ])
+            .and_then(|t| t.as_effort_str())
+            .unwrap_or("medium");
         payload["reasoning"] = json!({
-            "effort": request.effective_reasoning_level().unwrap_or("medium")
+            "effort": effort
         });
     }
     let schema_format = match &request.options.response_format {
