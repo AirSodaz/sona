@@ -229,6 +229,8 @@ pub fn find_local_llm_model(id_or_name: &str) -> Option<&'static LocalLlmPreset>
             || m.model.eq_ignore_ascii_case(id_or_name)
             || m.name.eq_ignore_ascii_case(id_or_name)
             || m.filename.eq_ignore_ascii_case(id_or_name)
+            || (m.id.starts_with("qwen3-1.7b")
+                && id_or_name.to_ascii_lowercase().starts_with("qwen3-1.7b"))
     })
 }
 
@@ -336,6 +338,22 @@ mod tests {
         let found = find_local_llm_model("Qwen/Qwen3.5-4B");
         assert!(found.is_some());
         assert_eq!(found.unwrap().id, "qwen3.5-4b");
+    }
+
+    #[test]
+    fn finds_qwen3_1_7b_model() {
+        let qwen = find_local_llm_model("qwen3-1.7b");
+        assert!(qwen.is_some());
+        let qwen = qwen.unwrap();
+        assert_eq!(qwen.model, "Qwen/Qwen3-1.7B-Instruct");
+        assert_eq!(qwen.filename, "Qwen3-1.7B-Q4_K_M.gguf");
+        assert_eq!(qwen.backend, "llama.cpp");
+        assert_eq!(qwen.context_window, 32768);
+        assert!(qwen.download.is_some());
+
+        let qwen_instruct = find_local_llm_model("qwen3-1.7b-instruct");
+        assert!(qwen_instruct.is_some());
+        assert_eq!(qwen_instruct.unwrap().id, "qwen3-1.7b");
     }
 
     #[test]

@@ -1768,6 +1768,7 @@
       "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
       "mms_300m_fa": "Developed by Meta. MMS-300M multilingual CTC forced alignment model for token-level timestamps and speaker refinement.",
       "qwen3_5_4b": "Developed by Alibaba Qwen team. Next-gen 4B edge LLM featuring 262K context window and hybrid linear attention, excelling at polish, translation, summary, and dialogue.",
+      "qwen3_1_7b": "Developed by Alibaba Qwen team. Next-gen 1.7B ultra-lightweight edge LLM featuring native dual-mode thinking (Thinking / Non-thinking) and 32K context, delivering fast inference, polish, translation, and summary.",
       "gemma_4_e2b": "Developed by Google DeepMind. Next-gen edge-optimized lightweight multimodal model with 2B effective parameters, ultra-low memory footprint, 128K context, and strong on-device reasoning.",
       "custom_local_model": "Locally imported or scanned GGUF model file."
     },

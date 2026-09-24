@@ -185,6 +185,49 @@ describe('LocalModelCard', () => {
     expect(screen.queryByText('多语翻译')).toBeNull();
   });
 
+  it('renders Qwen3 1.7B model card with specs', () => {
+    const qwen3Card: LocalLlmModelCardType = {
+      id: 'qwen3-1.7b',
+      name: 'Qwen3 1.7B',
+      model: 'Qwen/Qwen3-1.7B-Instruct',
+      filename: 'Qwen3-1.7B-Q4_K_M.gguf',
+      description: 'settings.descriptions.qwen3_1_7b',
+      backend: 'llama.cpp',
+      contextWindow: 32768,
+      maxOutputTokens: 4096,
+      size: '~1.2 GB',
+      parameters: '1.7B',
+      quantization: 'Q4_K_M',
+      modalities: ['text'],
+      languages: ['zh', 'en', 'ja', 'ko'],
+      capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
+      isRecommended: false,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      downloadUrl: 'https://example.com/qwen3.gguf',
+      downloadSizeBytes: 1282439328,
+    };
+
+    render(
+      <LocalModelCard
+        card={qwen3Card}
+        activeFeatures={{ polish: false, translation: false, summary: false }}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onApplyFeature={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    expect(screen.getByText('Qwen3 1.7B')).toBeTruthy();
+    expect(screen.getByText('1.7B')).toBeTruthy();
+    expect(screen.getByText('32K (32,768 tokens)')).toBeTruthy();
+    expect(screen.getByText('~1.2 GB')).toBeTruthy();
+    expect(screen.getByText('文本')).toBeTruthy();
+  });
+
   it('renders custom model with dash fallback when quantization is unknown', () => {
     const customCard: LocalLlmModelCardType = {
       id: 'custom-my-model',

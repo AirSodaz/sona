@@ -85,6 +85,23 @@ fn resolves_local_llm_gemma4_e2b_download() {
 }
 
 #[test]
+fn resolves_local_llm_qwen3_1_7b_download() {
+    let models_dir = std::path::Path::new("C:/models");
+    let resolved = resolve_model_download("qwen3-1.7b", models_dir).unwrap();
+
+    assert_eq!(
+        resolved.install_path,
+        models_dir.join("Qwen3-1.7B-Q4_K_M.gguf")
+    );
+    assert_eq!(resolved.artifacts.len(), 1);
+    assert_eq!(
+        resolved.artifacts[0].install_path,
+        models_dir.join("Qwen3-1.7B-Q4_K_M.gguf")
+    );
+    assert_eq!(resolved.artifacts[0].filename, "Qwen3-1.7B-Q4_K_M.gguf");
+}
+
+#[test]
 fn unknown_model_download_preserves_model_id_validation_context() {
     let error =
         resolve_model_download("missing-model", std::path::Path::new("C:/models")).unwrap_err();

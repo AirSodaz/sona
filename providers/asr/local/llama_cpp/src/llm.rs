@@ -345,6 +345,37 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
         }
     }
 
+    let is_qwen3_1_7b = target.eq_ignore_ascii_case("Qwen/Qwen3-1.7B-Instruct")
+        || target.eq_ignore_ascii_case("Qwen/Qwen3-1.7B")
+        || target.eq_ignore_ascii_case("qwen3-1.7b-instruct")
+        || target.eq_ignore_ascii_case("qwen3-1.7b")
+        || target.eq_ignore_ascii_case("Qwen3-1.7B-Instruct")
+        || target.eq_ignore_ascii_case("Qwen3-1.7B")
+        || target.to_ascii_lowercase().contains("qwen3-1.7b");
+
+    if is_qwen3_1_7b {
+        let candidates = [
+            dir.join("Qwen3-1.7B-Q4_K_M.gguf"),
+            dir.join("Qwen3-1.7B-Instruct-Q4_K_M.gguf"),
+            dir.join("Qwen3-1.7B-Instruct.gguf"),
+            dir.join("Qwen3-1.7B.gguf"),
+            dir.join("qwen3-1.7b").join("Qwen3-1.7B-Q4_K_M.gguf"),
+            dir.join("qwen3-1.7b")
+                .join("Qwen3-1.7B-Instruct-Q4_K_M.gguf"),
+            dir.join("qwen3-1.7b").join("Qwen3-1.7B-Instruct.gguf"),
+            dir.join("qwen3-1.7b").join("Qwen3-1.7B.gguf"),
+            dir.join("qwen3-1.7b-gguf").join("Qwen3-1.7B-Q4_K_M.gguf"),
+            dir.join("qwen3-1.7b-gguf")
+                .join("Qwen3-1.7B-Instruct-Q4_K_M.gguf"),
+            dir.join("qwen3-1.7b-gguf").join("Qwen3-1.7B.gguf"),
+        ];
+        for c in candidates {
+            if c.is_file() {
+                return Some(c);
+            }
+        }
+    }
+
     // 4. Subdirectory matching bare name or preset id
     let mut subdirs = vec![dir.join(bare_name.to_lowercase())];
     if let Some(preset) = matched_preset {
@@ -383,6 +414,7 @@ fn find_model_in_dir(dir: &Path, target: &str) -> Option<PathBuf> {
                     }
                     if stem.eq_ignore_ascii_case(bare_name)
                         || (is_qwen3_5_4b && stem.to_ascii_lowercase().contains("qwen3.5-4b"))
+                        || (is_qwen3_1_7b && stem.to_ascii_lowercase().contains("qwen3-1.7b"))
                     {
                         return Some(p);
                     }
@@ -1073,8 +1105,15 @@ mod tests {
             .unwrap();
         assert_eq!(gemma_summary.context_window, Some(131_072));
         assert_eq!(gemma_summary.supports_reasoning, Some(true));
-    }
 
+        let qwen3_summary = engine
+            .describe_model(&test_config("Qwen/Qwen3-1.7B-Instruct"))
+            .await
+            .unwrap()
+            .unwrap();
+        assert_eq!(qwen3_summary.context_window, Some(32_768));
+        assert_eq!(qwen3_summary.supports_reasoning, Some(true));
+    }
     #[test]
     fn resolves_gemma_4_e2b_preset_in_models_dir() {
         let temp_dir = std::env::temp_dir().join(format!("models_test_{}", uuid::Uuid::new_v4()));
@@ -1095,6 +1134,30 @@ mod tests {
             .resolve_model_path("gemma-4-e2b", None)
             .expect("should resolve gemma by preset id");
         assert_eq!(resolved_by_id, gemma_file);
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
+
+    #[test]
+    fn resolves_qwen3_1_7b_preset_in_models_dir() {
+        let temp_dir = std::env::temp_dir().join(format!("models_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+        let qwen_file = temp_dir.join("Qwen3-1.7B-Q4_K_M.gguf");
+        std::fs::write(&qwen_file, b"dummy").unwrap();
+
+        let engine = LlamaCppLlmEngine::with_models_dir(Some(temp_dir.clone()));
+
+        // Resolving by canonical model ID
+        let resolved_by_model = engine
+            .resolve_model_path("Qwen/Qwen3-1.7B-Instruct", None)
+            .expect("should resolve qwen3-1.7b by model name");
+        assert_eq!(resolved_by_model, qwen_file);
+
+        // Resolving by preset id
+        let resolved_by_id = engine
+            .resolve_model_path("qwen3-1.7b", None)
+            .expect("should resolve qwen3-1.7b by preset id");
+        assert_eq!(resolved_by_id, qwen_file);
 
         let _ = std::fs::remove_dir_all(temp_dir);
     }

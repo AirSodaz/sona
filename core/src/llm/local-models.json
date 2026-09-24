@@ -46,6 +46,29 @@
         "sha256": "4b918b958c8942b0370d03b0c512cfc80b5e91d5eb856a5c102a3a14e9f7830f",
         "sizeBytes": 1932735283
       }
+    },
+    {
+      "id": "qwen3-1.7b",
+      "name": "Qwen3 1.7B",
+      "model": "Qwen/Qwen3-1.7B-Instruct",
+      "filename": "Qwen3-1.7B-Q4_K_M.gguf",
+      "description": "settings.descriptions.qwen3_1_7b",
+      "backend": "llama.cpp",
+      "contextWindow": 32768,
+      "maxOutputTokens": 4096,
+      "size": "~1.2 GB",
+      "parameters": "1.7B",
+      "quantization": "Q4_K_M",
+      "modalities": ["text"],
+      "languages": ["zh", "en", "ja", "ko", "es", "fr", "de", "ru"],
+      "capabilities": ["chat", "reasoning", "polish", "summary", "translate"],
+      "isRecommended": false,
+      "download": {
+        "url": "https://huggingface.co/lmstudio-community/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+        "mirrorUrl": "https://hf-mirror.com/lmstudio-community/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+        "sha256": "e0801cbda7e2f3fd00bea4d73b53b422b14b13aa130e778f6414b6b641920b7e",
+        "sizeBytes": 1282439328
+      }
     }
   ]
 }
