@@ -1,4 +1,4 @@
-import { Loader2 } from 'lucide-react';
+import { BrainCircuit, Loader2, RotateCcw, Sparkles } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -208,10 +208,13 @@ export function FeatureCard({
   ]);
 
   const supportsReasoning = useMemo(() => {
+    const modelName = (modelEntry?.model || '').toLowerCase();
+    if (!modelName?.trim()) {
+      return false;
+    }
     if (typeof modelEntry?.metadata?.supportsReasoning === 'boolean') {
       return modelEntry.metadata.supportsReasoning;
     }
-    const modelName = (modelEntry?.model || '').toLowerCase();
     const core = (modelName.split('/').pop() || modelName).replace(/\./g, '-');
     return (
       core.startsWith('o1') ||
@@ -316,6 +319,9 @@ export function FeatureCard({
     model: string,
     metadata?: LlmModelEntry['metadata']
   ) => {
+    if (!model?.trim()) {
+      return false;
+    }
     const explicit = metadata?.supportsTemperature;
     if (typeof explicit === 'boolean') {
       return explicit;
@@ -820,83 +826,143 @@ export function FeatureCard({
 
         {localProvider !== 'google_translate' && supportsReasoning && (
           <div className="feature-card-row feature-card-row-reasoning">
-            <div className="feature-field-toggle">
-              <label className="settings-toggle-label">
-                <input
-                  id={`feature-reasoning-toggle-${featureId}`}
-                  type="checkbox"
-                  checked={reasoningEnabled}
-                  onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
-                />
-                <span className="toggle-text">{t('settings.llm.reasoning_mode')}</span>
-              </label>
+            <div className="feature-reasoning-header">
+              <div className="feature-reasoning-label-group">
+                <div className="feature-reasoning-title-line">
+                  <BrainCircuit size={16} className="feature-reasoning-icon" />
+                  <span className="feature-reasoning-title">
+                    {t('settings.llm.reasoning_mode')}
+                  </span>
+                </div>
+                <span className="feature-reasoning-hint">
+                  {t('settings.llm.reasoning_mode_hint', {
+                    defaultValue: '针对复杂逻辑与多步推理任务开启思维链深度推导',
+                  })}
+                </span>
+              </div>
+              <div className="feature-field-toggle">
+                <label
+                  className="settings-toggle-label feature-switch-label"
+                  htmlFor={`feature-reasoning-toggle-${featureId}`}
+                >
+                  <input
+                    id={`feature-reasoning-toggle-${featureId}`}
+                    type="checkbox"
+                    checked={reasoningEnabled}
+                    onChange={(e) => handleReasoningEnabledChange(e.target.checked)}
+                  />
+                  <span className="feature-switch-track">
+                    <span className="feature-switch-thumb" />
+                  </span>
+                </label>
+              </div>
             </div>
 
             {reasoningEnabled && (
-              <div className="feature-field reasoning-level-wrapper">
+              <div className="feature-reasoning-panel">
                 {reasoningMode?.type === 'none' ? (
-                  <div
-                    className="settings-hint"
-                    style={{
-                      fontSize: '0.85rem',
-                      color: 'var(--text-secondary, #888)',
-                      paddingTop: '1.5rem',
-                    }}
-                  >
-                    {t('settings.llm.builtin_reasoning', {
-                      defaultValue: '内置深度思考（无需配置档位）',
-                    })}
+                  <div className="feature-builtin-reasoning-callout">
+                    <Sparkles size={14} className="feature-builtin-icon" />
+                    <span>
+                      {t('settings.llm.builtin_reasoning', {
+                        defaultValue: '内置深度思考（无需配置档位）',
+                      })}
+                    </span>
                   </div>
                 ) : reasoningMode?.type === 'budget' ? (
-                  <>
-                    <label
-                      className="settings-label"
-                      htmlFor={`feature-reasoning-budget-${featureId}`}
-                    >
-                      {t('settings.llm.reasoning_budget', {
-                        defaultValue: 'Thinking Token Budget',
-                      })}
-                    </label>
-                    <input
-                      id={`feature-reasoning-budget-${featureId}`}
-                      type="number"
-                      className="settings-input"
-                      min={reasoningMode.min_budget}
-                      max={reasoningMode.max_budget}
-                      step={1024}
-                      value={reasoningBudget ?? reasoningMode.default_budget}
-                      onChange={(e) => {
-                        const val = parseInt(e.target.value, 10);
-                        if (!Number.isNaN(val) && val > 0) {
-                          handleReasoningBudgetChange(val);
-                        }
-                      }}
-                      style={{ width: '100%' }}
-                    />
-                  </>
+                  <div className="feature-reasoning-budget-section">
+                    <div className="feature-reasoning-sublabel-group">
+                      <label
+                        className="settings-label"
+                        htmlFor={`feature-reasoning-budget-${featureId}`}
+                      >
+                        {t('settings.llm.reasoning_budget', {
+                          defaultValue: 'Thinking Token Budget',
+                        })}
+                      </label>
+                      <span className="feature-field-subhint">
+                        {t('settings.llm.reasoning_budget_hint', {
+                          defaultValue: '单次思考允许消耗的最大 Token 数量',
+                        })}
+                      </span>
+                    </div>
+                    <div className="feature-token-input-wrapper">
+                      <input
+                        id={`feature-reasoning-budget-${featureId}`}
+                        type="number"
+                        className="settings-input feature-token-input"
+                        min={reasoningMode.min_budget}
+                        max={reasoningMode.max_budget}
+                        step={1024}
+                        value={reasoningBudget ?? reasoningMode.default_budget}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value, 10);
+                          if (!Number.isNaN(val) && val > 0) {
+                            handleReasoningBudgetChange(val);
+                          }
+                        }}
+                      />
+                      <span className="feature-token-unit">Tokens</span>
+                    </div>
+                  </div>
                 ) : (
-                  <>
-                    <label
-                      className="settings-label"
-                      htmlFor={`feature-reasoning-level-${featureId}`}
-                    >
-                      {t('settings.llm.reasoning_level')}
-                    </label>
-                    <Dropdown
-                      id={`feature-reasoning-level-${featureId}`}
-                      value={
-                        supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
-                          ? reasoningLevel
-                          : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
-                      }
-                      onChange={(val) => handleReasoningLevelChange(val)}
-                      options={supportedLevels.map((lvl) => ({
-                        value: lvl,
-                        label: t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl }),
-                      }))}
-                      style={{ width: '100%' }}
-                    />
-                  </>
+                  <div className="feature-reasoning-level-section">
+                    <div className="feature-reasoning-sublabel-group">
+                      <label
+                        className="settings-label"
+                        htmlFor={`feature-reasoning-level-${featureId}`}
+                      >
+                        {t('settings.llm.reasoning_level')}
+                      </label>
+                      <span className="feature-field-subhint">
+                        {t('settings.llm.reasoning_level_hint', {
+                          defaultValue: '调节思维链思考过程的深度与详细度',
+                        })}
+                      </span>
+                    </div>
+                    <div className="feature-reasoning-level-controls">
+                      <div
+                        className="feature-segmented-pills"
+                        role="radiogroup"
+                        aria-label={t('settings.llm.reasoning_level')}
+                      >
+                        {supportedLevels.map((lvl) => {
+                          const isSelected =
+                            (supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                              ? reasoningLevel
+                              : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')) === lvl;
+                          return (
+                            <button
+                              key={lvl}
+                              type="button"
+                              role="radio"
+                              aria-checked={isSelected}
+                              className={`feature-segmented-pill${isSelected ? ' is-active' : ''}`}
+                              onClick={() => handleReasoningLevelChange(lvl)}
+                            >
+                              {t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl })}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      <div className="feature-field reasoning-level-wrapper visually-hidden">
+                        <Dropdown
+                          id={`feature-reasoning-level-${featureId}`}
+                          value={
+                            supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                              ? reasoningLevel
+                              : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
+                          }
+                          onChange={(val) => handleReasoningLevelChange(val)}
+                          options={supportedLevels.map((lvl) => ({
+                            value: lvl,
+                            label: t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl }),
+                          }))}
+                          style={{ width: '100%' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
                 )}
               </div>
             )}
@@ -905,43 +971,61 @@ export function FeatureCard({
 
         {supportsTemperature && (
           <div className="feature-card-row feature-card-row-secondary">
-            <div className="feature-field">
-              <div className="feature-temperature-row">
+            <div className="feature-temperature-row">
+              <div className="feature-temperature-label-col">
                 <span className="feature-temperature-label" id={temperatureLabelId}>
                   {t('settings.llm.temperature')}
                 </span>
-                <div className="feature-temperature-controls">
-                  <input
-                    id={`feature-temp-slider-${featureId}`}
-                    type="range"
-                    className="feature-temperature-slider"
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    value={temperature}
-                    onChange={(e) => handleTempChange(parseFloat(e.target.value))}
-                    aria-label={`${title} ${t('settings.llm.temperature')}`}
-                    style={
-                      {
-                        '--temperature-progress': `${(temperature / 2) * 100}%`,
-                      } as React.CSSProperties
-                    }
-                  />
-                  <input
-                    id={`feature-temp-${featureId}`}
-                    type="number"
-                    className="settings-input feature-temperature-number"
-                    min={0}
-                    max={2}
-                    step={0.05}
-                    value={temperature}
-                    onChange={(e) => {
-                      const val = parseFloat(e.target.value);
-                      if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
-                    }}
-                    aria-label={`${title} ${t('settings.llm.temperature')}`}
-                  />
-                </div>
+                <span className="feature-temperature-subhint">
+                  {t('settings.llm.temperature_hint', {
+                    defaultValue: '控制回复随机度：较低值严谨聚焦，较高值发散创新',
+                  })}
+                </span>
+              </div>
+              <div className="feature-temperature-controls">
+                {Math.abs(temperature - 1.0) > 0.001 && (
+                  <button
+                    type="button"
+                    className="feature-temperature-reset-btn"
+                    onClick={() => handleTempChange(1.0)}
+                    data-tooltip="重置为默认 1.0"
+                    data-tooltip-pos="top"
+                    aria-label="Reset temperature to 1.0"
+                  >
+                    <RotateCcw size={12} />
+                    <span>1.0</span>
+                  </button>
+                )}
+                <input
+                  id={`feature-temp-slider-${featureId}`}
+                  type="range"
+                  className="feature-temperature-slider"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={temperature}
+                  onChange={(e) => handleTempChange(parseFloat(e.target.value))}
+                  aria-label={`${title} ${t('settings.llm.temperature')}`}
+                  style={
+                    {
+                      '--temperature-progress': `${(temperature / 2) * 100}%`,
+                    } as React.CSSProperties
+                  }
+                />
+                <input
+                  id={`feature-temp-${featureId}`}
+                  type="number"
+                  className="settings-input feature-temperature-number"
+                  min={0}
+                  max={2}
+                  step={0.05}
+                  value={temperature}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value);
+                    if (!Number.isNaN(val) && val >= 0 && val <= 2) handleTempChange(val);
+                  }}
+                  aria-label={`${title} ${t('settings.llm.temperature')}`}
+                />
               </div>
             </div>
           </div>

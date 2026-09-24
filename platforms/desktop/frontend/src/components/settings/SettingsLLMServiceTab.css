@@ -687,21 +687,56 @@
   width: 100%;
 }
 
+.feature-temperature-label-col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
 .feature-temperature-label {
-  color: var(--color-text-muted);
-  font-size: 0.85rem;
-  font-weight: 500;
+  color: var(--color-text-primary);
+  font-size: 0.875rem;
+  font-weight: 600;
   white-space: nowrap;
 }
 
+.feature-temperature-subhint {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+  line-height: 1.35;
+}
+
 .feature-temperature-controls {
-  display: grid;
-  grid-template-columns: minmax(140px, 220px) 84px;
+  display: flex;
   align-items: center;
-  justify-content: end;
-  column-gap: 12px;
-  width: min(100%, 316px);
+  justify-content: flex-end;
+  gap: 10px;
   margin-left: auto;
+  flex-shrink: 0;
+}
+
+.feature-temperature-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-muted);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+  flex-shrink: 0;
+}
+
+.feature-temperature-reset-btn:hover {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+  border-color: var(--color-border-hover);
 }
 
 .feature-temperature-slider {
@@ -865,35 +900,216 @@
 
 /* Reasoning Mode styling */
 .feature-card-row-reasoning {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: center;
-  border-top: 1px dashed var(--color-border);
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--color-border);
   padding-top: 16px;
+  gap: 12px;
+}
+
+.feature-reasoning-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16px;
+  width: 100%;
+}
+
+.feature-reasoning-label-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.feature-reasoning-title-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.feature-reasoning-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.feature-reasoning-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.feature-reasoning-hint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  line-height: 1.35;
 }
 
 .feature-field-toggle {
   display: flex;
   align-items: center;
+  flex-shrink: 0;
 }
 
-.settings-toggle-label {
-  display: flex;
+.feature-switch-label {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-size: 0.9rem;
-  color: var(--color-text-secondary);
-  font-weight: 500;
   cursor: pointer;
   user-select: none;
 }
 
-.settings-toggle-label input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  cursor: pointer;
+.feature-switch-label input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
 
-.reasoning-level-wrapper {
-  max-width: 250px;
+.feature-switch-track {
+  width: 38px;
+  height: 22px;
+  background: var(--color-bg-tertiary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-full);
+  transition:
+    background var(--transition-fast, 0.15s),
+    border-color var(--transition-fast, 0.15s);
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.feature-switch-label:hover .feature-switch-track {
+  border-color: var(--color-border-hover);
+}
+
+.feature-switch-label input[type="checkbox"]:checked + .feature-switch-track {
+  background: var(--color-switch-checked, var(--color-primary));
+  border-color: var(--color-switch-checked, var(--color-primary));
+}
+
+.feature-switch-label input[type="checkbox"]:focus-visible + .feature-switch-track {
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.feature-switch-thumb {
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  transition: transform var(--transition-fast, 0.15s);
+}
+
+.feature-switch-label input[type="checkbox"]:checked + .feature-switch-track .feature-switch-thumb {
+  transform: translateX(16px);
+}
+
+.feature-reasoning-panel {
+  background: color-mix(in srgb, var(--color-bg-secondary) 70%, var(--color-bg-primary));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.feature-reasoning-level-section,
+.feature-reasoning-budget-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.feature-reasoning-sublabel-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feature-field-subhint {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.feature-segmented-pills {
+  display: inline-flex;
+  align-items: center;
+  background: var(--color-bg-tertiary);
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  gap: 2px;
+}
+
+.feature-segmented-pill {
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  padding: 4px 12px;
+  border-radius: calc(var(--radius-sm) - 2px);
+  cursor: pointer;
+  transition: all var(--transition-fast, 0.15s) ease;
+}
+
+.feature-segmented-pill:hover:not(.is-active) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+
+.feature-segmented-pill.is-active {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  font-weight: 600;
+}
+
+.feature-builtin-reasoning-callout {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  color: var(--color-text-secondary);
+}
+
+.feature-builtin-icon {
+  color: var(--color-primary);
+  flex-shrink: 0;
+}
+
+.feature-token-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.feature-token-input {
+  width: 120px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.feature-token-unit {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

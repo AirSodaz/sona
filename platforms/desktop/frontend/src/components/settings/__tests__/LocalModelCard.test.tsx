@@ -60,10 +60,11 @@ describe('LocalModelCard', () => {
     expect(screen.queryByText('长文总结')).toBeNull();
     expect(screen.queryByText('多语翻译')).toBeNull();
 
-    const downloadBtn = screen.getByRole('button', { name: /点击下载/i });
+    expect(screen.getByText('Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
+    const downloadBtn = screen.getByRole('button', { name: /下载/i });
     expect(downloadBtn).toBeTruthy();
-    expect(downloadBtn.textContent).not.toContain(mockCard.size);
-    expect(screen.queryByText('ZH')).toBeNull();
+    expect(downloadBtn.getAttribute('data-tooltip')).toBe('下载');
+    expect(downloadBtn.getAttribute('data-tooltip-pos')).toBe('top');
     fireEvent.click(downloadBtn);
     expect(onDownload).toHaveBeenCalledWith(mockCard);
   });
@@ -90,14 +91,16 @@ describe('LocalModelCard', () => {
     );
 
     expect(screen.getAllByText(/45%/).length).toBeGreaterThanOrEqual(1);
-    const cancelBtn = screen.getByRole('button', { name: /取消下载/i });
+    expect(screen.getByText('Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
+    const cancelBtn = screen.getByRole('button', { name: /取消/i });
     expect(cancelBtn).toBeTruthy();
+    expect(cancelBtn.getAttribute('data-tooltip')).toBe('取消');
+    expect(cancelBtn.getAttribute('data-tooltip-pos')).toBe('top');
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith('qwen3.5-4b');
   });
 
-  it('renders quick apply buttons and delete button when installed', () => {
-    const onApplyFeature = vi.fn();
+  it('renders filename and delete button when installed without path hint or apply buttons', () => {
     const onDelete = vi.fn();
     const installedCard: LocalLlmModelCardType = {
       ...mockCard,
@@ -109,33 +112,27 @@ describe('LocalModelCard', () => {
     render(
       <LocalModelCard
         card={installedCard}
-        activeFeatures={{ polish: true, translation: false, summary: false }}
         onDownload={vi.fn()}
         onCancelDownload={vi.fn()}
         onDelete={onDelete}
-        onApplyFeature={onApplyFeature}
         t={defaultT}
       />
     );
 
     expect(screen.getByText('已就绪')).toBeTruthy();
-    expect(screen.getByText('/models/Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
+    expect(screen.getByText('Qwen3.5-4B-Q4_K_M.gguf')).toBeTruthy();
+    expect(screen.queryByText('/models/Qwen3.5-4B-Q4_K_M.gguf')).toBeNull();
 
-    const applyAllBtn = screen.getByRole('button', { name: /设为全部功能模型/i });
-    expect(applyAllBtn).toBeTruthy();
-    fireEvent.click(applyAllBtn);
-    expect(onApplyFeature).toHaveBeenCalledWith(installedCard, 'all');
+    expect(screen.queryByRole('button', { name: /设为全部功能模型/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /润色/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /翻译/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /摘要/i })).toBeNull();
 
-    const polishBtn = screen.getByRole('button', { name: /润色/i });
-    expect(polishBtn).toBeTruthy();
-    fireEvent.click(polishBtn);
-    expect(onApplyFeature).toHaveBeenCalledWith(installedCard, 'polish');
-
-    const deleteBtn = screen.getByRole('button', { name: /删除模型/i });
+    const deleteBtn = screen.getByRole('button', { name: /删除/i });
     expect(deleteBtn).toBeTruthy();
-    expect(deleteBtn.getAttribute('data-tooltip')).toBe('删除模型');
+    expect(deleteBtn.getAttribute('data-tooltip')).toBe('删除');
     expect(deleteBtn.getAttribute('data-tooltip-pos')).toBe('top');
-    expect(deleteBtn.getAttribute('title')).toBeNull();
+    expect(deleteBtn.className).toContain('model-action-delete');
     fireEvent.click(deleteBtn);
     expect(onDelete).toHaveBeenCalledWith(installedCard);
   });

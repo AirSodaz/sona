@@ -5,11 +5,6 @@ import type {
   LocalLlmCardsResponse,
   LocalLlmModelCard as LocalLlmModelCardType,
 } from '../../../bindings';
-import {
-  addLlmModel,
-  getFeatureModelEntry,
-  setFeatureModelSelection,
-} from '../../../services/llm/state';
 import { parseDownloadProgressPayload } from '../../../services/modelDownloadService';
 import {
   cancelDownload,
@@ -30,7 +25,6 @@ import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import { normalizeError } from '../../../utils/errorUtils';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
-import { getCurrentLlmState } from './helpers';
 import { type LocalDownloadProgressState, LocalModelCard } from './LocalModelCard';
 import './LocalModelCard.css';
 
@@ -38,15 +32,15 @@ interface LocalProviderAccordionItemProps {
   config: LlmAssistantConfig;
   isOpen: boolean;
   onToggle: () => void;
-  applyLlmSettings: (nextSettings: LlmAssistantConfig['llmSettings']) => void;
+  applyLlmSettings?: (nextSettings: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
 
 export function LocalProviderAccordionItem({
-  config,
+  config: _config,
   isOpen,
   onToggle,
-  applyLlmSettings,
+  applyLlmSettings: _applyLlmSettings,
   t,
 }: LocalProviderAccordionItemProps): React.JSX.Element {
   const modelDownloadMirror = useConfigStore((state) => state.config.modelDownloadMirror);
@@ -198,78 +192,6 @@ export function LocalProviderAccordionItem({
     }
   }, [fetchCards]);
 
-  const currentPolish = getFeatureModelEntry(config, 'polish');
-  const currentTranslation = getFeatureModelEntry(config, 'translation');
-  const currentSummary = getFeatureModelEntry(config, 'summary');
-
-  const handleApplyFeature = useCallback(
-    (card: LocalLlmModelCardType, feature: 'polish' | 'translation' | 'summary' | 'all') => {
-      if (!card.isInstalled) {
-        return;
-      }
-      const currentLlmState = getCurrentLlmState(config);
-      const isReasoning = card.capabilities?.includes('reasoning');
-      let nextState = addLlmModel(currentLlmState.llmSettings, {
-        provider: 'local',
-        model: card.model,
-        metadata: isReasoning
-          ? {
-              displayName: card.name,
-              contextWindow: card.contextWindow,
-              maxOutputTokens: card.maxOutputTokens,
-              supportsReasoning: true,
-              reasoningMode: {
-                type: 'effort',
-                supported_levels: [
-                  { mode: 'minimal' },
-                  { mode: 'low' },
-                  { mode: 'medium' },
-                  { mode: 'high' },
-                  { mode: 'xhigh' },
-                  { mode: 'max' },
-                ],
-              },
-              supportedThinkingLevels: [
-                { mode: 'minimal' },
-                { mode: 'low' },
-                { mode: 'medium' },
-                { mode: 'high' },
-                { mode: 'xhigh' },
-                { mode: 'max' },
-              ],
-            }
-          : {
-              displayName: card.name,
-              contextWindow: card.contextWindow,
-              maxOutputTokens: card.maxOutputTokens,
-              supportsReasoning: false,
-            },
-      });
-      const entryId = nextState.modelOrder.find((id) => {
-        const existing = nextState.models[id];
-        return existing?.provider === 'local' && existing.model === card.model;
-      });
-
-      if (entryId) {
-        if (feature === 'polish' || feature === 'all') {
-          nextState = setFeatureModelSelection(nextState, 'polish', entryId);
-        }
-        if (feature === 'translation' || feature === 'all') {
-          nextState = setFeatureModelSelection(nextState, 'translation', entryId);
-        }
-        if (feature === 'summary' || feature === 'all') {
-          nextState = setFeatureModelSelection(nextState, 'summary', entryId);
-        }
-      }
-
-      applyLlmSettings({
-        ...nextState,
-        activeProvider: 'local',
-      });
-    },
-    [applyLlmSettings, config]
-  );
-
   const cards = useMemo(() => {
     if (data?.cards && data.cards.length > 0) {
       return data.cards;
@@ -413,32 +335,17 @@ export function LocalProviderAccordionItem({
         </div>
         {/* Model Cards List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {cards.map((card) => {
-            const isPolish =
-              currentPolish?.provider === 'local' && currentPolish.model === card.model;
-            const isTranslation =
-              currentTranslation?.provider === 'local' && currentTranslation.model === card.model;
-            const isSummary =
-              currentSummary?.provider === 'local' && currentSummary.model === card.model;
-
-            return (
-              <LocalModelCard
-                key={card.id}
-                card={card}
-                downloadState={downloads[card.id]}
-                activeFeatures={{
-                  polish: isPolish,
-                  translation: isTranslation,
-                  summary: isSummary,
-                }}
-                onDownload={handleDownload}
-                onCancelDownload={handleCancelDownload}
-                onDelete={handleDelete}
-                onApplyFeature={handleApplyFeature}
-                t={t}
-              />
-            );
-          })}
+          {cards.map((card) => (
+            <LocalModelCard
+              key={card.id}
+              card={card}
+              downloadState={downloads[card.id]}
+              onDownload={handleDownload}
+              onCancelDownload={handleCancelDownload}
+              onDelete={handleDelete}
+              t={t}
+            />
+          ))}
         </div>
 
         {/* Inference Connection Test */}

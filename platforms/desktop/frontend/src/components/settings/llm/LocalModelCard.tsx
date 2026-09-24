@@ -1,21 +1,7 @@
-import {
-  AlignLeft,
-  BrainCircuit,
-  Check,
-  Cpu,
-  Download,
-  FileText,
-  Globe,
-  Image,
-  Loader2,
-  Mic,
-  Sparkles,
-  Trash2,
-  Video,
-  X,
-} from 'lucide-react';
+import { BrainCircuit, Check, Cpu, FileText, Image, Loader2, Mic, Video } from 'lucide-react';
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
+import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import './LocalModelCard.css';
 
@@ -29,15 +15,15 @@ export interface LocalDownloadProgressState {
 interface LocalModelCardProps {
   card: LocalLlmModelCardType;
   downloadState?: LocalDownloadProgressState;
-  activeFeatures: {
-    polish: boolean;
-    translation: boolean;
-    summary: boolean;
+  activeFeatures?: {
+    polish?: boolean;
+    translation?: boolean;
+    summary?: boolean;
   };
   onDownload: (card: LocalLlmModelCardType) => void;
   onCancelDownload: (cardId: string) => void;
   onDelete: (card: LocalLlmModelCardType) => void;
-  onApplyFeature: (
+  onApplyFeature?: (
     card: LocalLlmModelCardType,
     feature: 'polish' | 'translation' | 'summary' | 'all'
   ) => void;
@@ -132,17 +118,13 @@ export function resolveModelModalities(card: LocalLlmModelCardType): SupportedMo
 export function LocalModelCard({
   card,
   downloadState,
-  activeFeatures,
   onDownload,
   onCancelDownload,
   onDelete,
-  onApplyFeature,
   t,
 }: LocalModelCardProps): React.JSX.Element {
   const isDownloading = Boolean(downloadState);
   const isInstalled = card.isInstalled;
-  const isAllApplied =
-    activeFeatures.polish && activeFeatures.translation && activeFeatures.summary;
   const modalities = resolveModelModalities(card);
 
   const isQwen = card.id.toLowerCase().includes('qwen') || card.name.toLowerCase().includes('qwen');
@@ -314,108 +296,43 @@ export function LocalModelCard({
       )}
 
       <div className="local-model-footer model-card-footer">
-        {isDownloading ? (
-          <>
-            <span className="model-size local-model-filename-hint">{card.filename}</span>
-            <div className="model-card-side">
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => onCancelDownload(card.id)}
-              >
-                <X size={14} />
-                <span>{t('settings.llm.cancel_download', { defaultValue: '取消下载' })}</span>
-              </button>
-            </div>
-          </>
-        ) : isInstalled ? (
-          <>
-            <div className="local-apply-buttons-group">
-              <button
-                type="button"
-                className={`btn btn-sm ${isAllApplied ? 'btn-success' : 'btn-primary'}`}
-                onClick={() => onApplyFeature(card, 'all')}
-                data-tooltip={t('settings.llm.apply_all_features')}
-                data-tooltip-pos="top"
-              >
-                {isAllApplied ? <Check size={14} /> : <Sparkles size={14} />}
-                <span>
-                  {isAllApplied
-                    ? t('settings.llm.applied_all', { defaultValue: '已用于全部功能' })
-                    : t('settings.llm.apply_all_features', { defaultValue: '设为全部功能模型' })}
-                </span>
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn-sm ${activeFeatures.polish ? 'btn-secondary-active' : 'btn-secondary'}`}
-                onClick={() => onApplyFeature(card, 'polish')}
-              >
-                <Sparkles size={12} />
-                <span>{t('settings.llm.polish_model', { defaultValue: '润色' })}</span>
-                {activeFeatures.polish && <Check size={12} />}
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn-sm ${activeFeatures.translation ? 'btn-secondary-active' : 'btn-secondary'}`}
-                onClick={() => onApplyFeature(card, 'translation')}
-              >
-                <Globe size={12} />
-                <span>{t('settings.llm.translation_model', { defaultValue: '翻译' })}</span>
-                {activeFeatures.translation && <Check size={12} />}
-              </button>
-
-              <button
-                type="button"
-                className={`btn btn-sm ${activeFeatures.summary ? 'btn-secondary-active' : 'btn-secondary'}`}
-                onClick={() => onApplyFeature(card, 'summary')}
-              >
-                <AlignLeft size={12} />
-                <span>{t('settings.llm.summary_model', { defaultValue: '摘要' })}</span>
-                {activeFeatures.summary && <Check size={12} />}
-              </button>
-            </div>
-
-            <div className="model-card-side">
-              {card.installedPath && (
-                <span className="local-model-path-hint" title={card.installedPath}>
-                  {card.installedPath}
-                </span>
-              )}
-              <button
-                type="button"
-                className="model-action-icon model-action-delete"
-                onClick={() => onDelete(card)}
-                aria-label={t('settings.llm.delete_model', { defaultValue: '删除模型' })}
-                data-tooltip={t('settings.llm.delete_model', { defaultValue: '删除模型' })}
-                data-tooltip-pos="top"
-              >
-                <Trash2 size={14} />
-              </button>
-            </div>
-          </>
-        ) : (
-          <>
-            <div className="local-model-footer-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                onClick={() => onDownload(card)}
-              >
-                <Download size={14} />
-                <span>
-                  {t('settings.llm.download_model', {
-                    defaultValue: '点击下载',
-                  })}
-                </span>
-              </button>
-            </div>
-            <div className="model-card-side">
-              <span className="model-size local-model-filename-hint">{card.filename}</span>
-            </div>
-          </>
-        )}
+        <span className="model-size local-model-filename-hint">{card.filename}</span>
+        <div className="model-card-side">
+          {isDownloading ? (
+            <button
+              type="button"
+              className="model-action-icon"
+              onClick={() => onCancelDownload(card.id)}
+              aria-label={t('common.cancel', { defaultValue: '取消' })}
+              data-tooltip={t('common.cancel', { defaultValue: '取消' })}
+              data-tooltip-pos="top"
+            >
+              <XIcon />
+            </button>
+          ) : isInstalled ? (
+            <button
+              type="button"
+              className="model-action-icon model-action-delete"
+              onClick={() => onDelete(card)}
+              aria-label={`${t('common.delete', { defaultValue: '删除' })} ${card.name}`}
+              data-tooltip={t('common.delete', { defaultValue: '删除' })}
+              data-tooltip-pos="top"
+            >
+              <TrashIcon />
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="model-action-icon"
+              onClick={() => onDownload(card)}
+              aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
+              data-tooltip={t('common.download', { defaultValue: '下载' })}
+              data-tooltip-pos="top"
+            >
+              <DownloadIcon />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
