@@ -2265,9 +2265,13 @@
       "status_off": "オフ",
       "reasoning_mode": "推理モード",
       "reasoning_level": "推理レベル",
+      "reasoning_level_minimal": "最小",
       "reasoning_level_low": "低い",
       "reasoning_level_medium": "中",
-      "reasoning_level_high": "高"
+      "reasoning_level_high": "高",
+      "reasoning_level_xhigh": "非常に高い",
+      "reasoning_level_max": "最大",
+      "reasoning_budget": "思考トークン予算"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

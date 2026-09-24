@@ -54,6 +54,13 @@ fn merge_summary(target: &mut LlmModelSummary, source: &LlmModelSummary) {
         &mut target.supports_prompt_caching,
         &source.supports_prompt_caching,
     );
+    fill(&mut target.reasoning_mode, &source.reasoning_mode);
+    fill(&mut target.token_limit_key, &source.token_limit_key);
+    if target.supported_thinking_levels.is_empty() {
+        target
+            .supported_thinking_levels
+            .clone_from(&source.supported_thinking_levels);
+    }
     if target.input_modalities.is_empty() {
         target.input_modalities.clone_from(&source.input_modalities);
     }

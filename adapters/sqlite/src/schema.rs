@@ -641,6 +641,14 @@ fn has_column(
     Ok(false)
 }
 
+fn has_table(tx: &rusqlite::Transaction, table: &str) -> Result<bool, rusqlite::Error> {
+    let count: i64 = tx.query_row(
+        "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?1",
+        [table],
+        |row| row.get(0),
+    )?;
+    Ok(count > 0)
+}
 fn migrate_v8(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS project_pipelines (
@@ -673,6 +681,9 @@ fn migrate_v8(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
 }
 
 fn migrate_v9(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    if !has_table(tx, "speaker_profiles")? {
+        return Ok(());
+    }
     if !has_column(tx, "speaker_profiles", "scope")? {
         tx.execute(
             "ALTER TABLE speaker_profiles ADD COLUMN scope TEXT NOT NULL DEFAULT 'global';",

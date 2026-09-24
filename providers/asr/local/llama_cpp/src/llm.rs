@@ -553,8 +553,12 @@ fn run_llama_generation(
         current_pos += 1;
     }
 
+    let (text, thought) =
+        sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(&generated_text);
+
     Ok(StandardLlmResponse {
-        text: generated_text,
+        text,
+        thought,
         usage: Some(TokenUsage {
             prompt_tokens: prompt_tokens.len() as u64,
             completion_tokens: generated_tokens as u64,

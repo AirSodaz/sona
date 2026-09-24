@@ -187,15 +187,52 @@ pub fn parse_models_dev_models(
                 format!("expected a valid models.dev catalog response: {error}"),
             )
         })?;
-    let Some(provider) = catalog.get(provider_id) else {
-        return Ok(Vec::new());
-    };
+    let provider = catalog.get(provider_id);
+    let mut results = Vec::new();
 
-    Ok(model_ids
-        .iter()
-        .filter_map(|model_id| provider.models.get(*model_id))
-        .map(model_summary)
-        .collect())
+    for model_id in model_ids {
+        // 1. Exact match in the requested provider
+        if let Some(m) = provider.and_then(|p| p.models.get(*model_id)) {
+            let mut summary = model_summary(m);
+            summary.model = (*model_id).to_string();
+            results.push(summary);
+            continue;
+        }
+
+        // 2. Cross-provider fallback (e.g. for custom/reverse-proxy gateways)
+        let core_id = model_id.split('/').next_back().unwrap_or(model_id);
+        let mut found = None;
+
+        for p in catalog.values() {
+            if let Some(m) = p.models.get(*model_id).or_else(|| p.models.get(core_id)) {
+                found = Some(m);
+                break;
+            }
+        }
+
+        if found.is_none() {
+            let lower_core = core_id.to_lowercase();
+            for p in catalog.values() {
+                for (id, m) in &p.models {
+                    if id.to_lowercase() == lower_core {
+                        found = Some(m);
+                        break;
+                    }
+                }
+                if found.is_some() {
+                    break;
+                }
+            }
+        }
+
+        if let Some(m) = found {
+            let mut summary = model_summary(m);
+            summary.model = (*model_id).to_string();
+            results.push(summary);
+        }
+    }
+
+    Ok(results)
 }
 
 fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
@@ -216,6 +253,87 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
     let cost = model.cost.as_ref();
     let cache_read_price = cost.and_then(|cost| cost.cache_read);
     let cache_write_price = cost.and_then(|cost| cost.cache_write);
+
+    let (reasoning_mode, supported_thinking_levels) = if model.reasoning == Some(true) {
+        let normalized = model.id.to_lowercase();
+        if normalized.contains("o1") || normalized.contains("o3") {
+            (
+                Some(sona_core::llm::runtime::ReasoningMode::Effort {
+                    supported_levels: vec![
+                        sona_core::llm::runtime::ThinkingLevel::Low,
+                        sona_core::llm::runtime::ThinkingLevel::Medium,
+                        sona_core::llm::runtime::ThinkingLevel::High,
+                    ],
+                }),
+                vec![
+                    sona_core::llm::runtime::ThinkingLevel::Low,
+                    sona_core::llm::runtime::ThinkingLevel::Medium,
+                    sona_core::llm::runtime::ThinkingLevel::High,
+                ],
+            )
+        } else if normalized.contains("claude-3-7") {
+            (
+                Some(sona_core::llm::runtime::ReasoningMode::Budget {
+                    min_budget: 1024,
+                    max_budget: model.limit.as_ref().and_then(|l| l.output).unwrap_or(64000) as u32,
+                    default_budget: 4096,
+                }),
+                vec![
+                    sona_core::llm::runtime::ThinkingLevel::Minimal,
+                    sona_core::llm::runtime::ThinkingLevel::Low,
+                    sona_core::llm::runtime::ThinkingLevel::Medium,
+                    sona_core::llm::runtime::ThinkingLevel::High,
+                    sona_core::llm::runtime::ThinkingLevel::Xhigh,
+                    sona_core::llm::runtime::ThinkingLevel::Max,
+                ],
+            )
+        } else if normalized.contains("gemini-2.5") {
+            (
+                Some(sona_core::llm::runtime::ReasoningMode::Hybrid {
+                    supported_levels: vec![
+                        sona_core::llm::runtime::ThinkingLevel::Minimal,
+                        sona_core::llm::runtime::ThinkingLevel::Low,
+                        sona_core::llm::runtime::ThinkingLevel::Medium,
+                        sona_core::llm::runtime::ThinkingLevel::High,
+                    ],
+                    default_budget: 2048,
+                }),
+                vec![
+                    sona_core::llm::runtime::ThinkingLevel::Minimal,
+                    sona_core::llm::runtime::ThinkingLevel::Low,
+                    sona_core::llm::runtime::ThinkingLevel::Medium,
+                    sona_core::llm::runtime::ThinkingLevel::High,
+                ],
+            )
+        } else {
+            (
+                Some(sona_core::llm::runtime::ReasoningMode::Effort {
+                    supported_levels: vec![
+                        sona_core::llm::runtime::ThinkingLevel::Low,
+                        sona_core::llm::runtime::ThinkingLevel::Medium,
+                        sona_core::llm::runtime::ThinkingLevel::High,
+                    ],
+                }),
+                vec![
+                    sona_core::llm::runtime::ThinkingLevel::Low,
+                    sona_core::llm::runtime::ThinkingLevel::Medium,
+                    sona_core::llm::runtime::ThinkingLevel::High,
+                ],
+            )
+        }
+    } else {
+        (
+            Some(sona_core::llm::runtime::ReasoningMode::None),
+            Vec::new(),
+        )
+    };
+
+    let token_limit_key =
+        if sona_core::llm::streaming_protocol::requires_max_completion_tokens(&model.id) {
+            Some("max_completion_tokens".to_string())
+        } else {
+            Some("max_tokens".to_string())
+        };
 
     LlmModelSummary {
         model: model.id.clone(),
@@ -241,6 +359,9 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
         supports_prompt_caching: (cache_read_price.is_some() || cache_write_price.is_some())
             .then_some(true),
         metadata_sources: vec![LlmModelMetadataSource::ModelsDev],
+        reasoning_mode,
+        token_limit_key,
+        supported_thinking_levels,
     }
 }
 
@@ -296,11 +417,7 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
     })
 }
 
-pub fn should_enrich_model_metadata(provider: &LlmProvider, base_url: &str) -> bool {
-    if matches!(provider, LlmProvider::Custom(_)) {
-        return false;
-    }
-
+pub fn should_enrich_model_metadata(_provider: &LlmProvider, base_url: &str) -> bool {
     let Ok(url) = reqwest::Url::parse(base_url) else {
         return false;
     };

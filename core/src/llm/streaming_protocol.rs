@@ -120,6 +120,15 @@ pub fn is_temperature_prohibited_for_model(model: &str) -> bool {
         || core_model.contains("deepseek-reasoner")
         || core_model.contains("deepseek-r1")
 }
+pub fn requires_max_completion_tokens(model: &str) -> bool {
+    let lower = model.to_lowercase();
+    let trimmed = lower.trim();
+    let core_model = trimmed.rsplit('/').next().unwrap_or(trimmed);
+    core_model.starts_with("o1")
+        || core_model.starts_with("o3")
+        || core_model.starts_with("o4")
+        || core_model.starts_with("gpt-5")
+}
 
 /// Reassembles transport chunks into complete lines before higher-level
 /// streaming parsers inspect them.
@@ -287,7 +296,26 @@ pub fn build_openai_chat_payload(
     {
         let thinking =
             crate::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), Some(level));
-        if let Some(effort) = thinking.as_effort_str() {
+        let lower = config.model.to_lowercase();
+        let core_model = lower.trim().rsplit('/').next().unwrap_or(&lower);
+        let is_openai_o_series = core_model.starts_with("o1") || core_model.starts_with("o3");
+        let clamped = if is_openai_o_series {
+            match thinking {
+                crate::llm::runtime::ThinkingLevel::None
+                | crate::llm::runtime::ThinkingLevel::Auto => thinking,
+                _ => thinking
+                    .clamp_to_supported(&[
+                        crate::llm::runtime::ThinkingLevel::Low,
+                        crate::llm::runtime::ThinkingLevel::Medium,
+                        crate::llm::runtime::ThinkingLevel::High,
+                    ])
+                    .unwrap_or(crate::llm::runtime::ThinkingLevel::Medium),
+            }
+        } else {
+            thinking
+        };
+
+        if let Some(effort) = clamped.as_effort_str() {
             payload["reasoning_effort"] = json!(effort);
         }
     }

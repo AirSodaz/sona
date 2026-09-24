@@ -75,7 +75,7 @@ pub use sona_core::llm::requests::{
 pub use sona_core::llm::runtime::{
     LlmCapabilityPolicy, LlmCompletionOptions, LlmCompletionRequest, LlmCompletionResponse,
     LlmExecutionMetadata, LlmPromptCachePolicy, LlmResponseFormat, LlmResponseFormatKind,
-    LlmStreamDelta,
+    LlmStreamDelta, ReasoningMode, ThinkingLevel,
 };
 pub use sona_core::llm::tasks::{
     LlmProviderStrategy, LlmSegmentInput, LlmTaskChunkPayload, LlmTaskProgressPayload,
@@ -563,6 +563,8 @@ pub fn desktop_types() -> specta::Types {
         .register::<LlmExecutionMetadata>()
         .register::<LlmCompletionResponse>()
         .register::<LlmStreamDelta>()
+        .register::<ThinkingLevel>()
+        .register::<ReasoningMode>()
         .register::<LlmModelSummary>()
         .register::<LlmModality>()
         .register::<LlmModelMetadataSource>()
@@ -801,6 +803,8 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "StandardLlmRequest",
     "StandardLlmResponse",
     "LlmModelSummary",
+    "ThinkingLevel",
+    "ReasoningMode",
     "LlmConfig",
     "LlmGenerateRequest",
     "LlmUsageEventPayload",
@@ -1093,6 +1097,8 @@ mod tests {
             "LlmExecutionMetadata",
             "LlmCompletionResponse",
             "LlmModelSummary",
+            "ThinkingLevel",
+            "ReasoningMode",
             "LlmModality",
             "LlmModelMetadataSource",
             "LlmGenerateSource",
@@ -1672,6 +1678,8 @@ mod tests {
         assert_specta_type::<StandardLlmRequest>();
         assert_specta_type::<StandardLlmResponse>();
         assert_specta_type::<LlmModelSummary>();
+        assert_specta_type::<ThinkingLevel>();
+        assert_specta_type::<ReasoningMode>();
         assert_specta_type::<LlmConfig>();
         assert_specta_type::<LlmGenerateRequest>();
         assert_specta_type::<LlmUsageEventPayload>();

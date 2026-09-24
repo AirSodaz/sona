@@ -285,6 +285,7 @@ mod tests {
             *self.request.lock().unwrap() = Some(request);
             Ok(StandardLlmResponse {
                 text: r#"{"items":[{"id":"segment-1","text":"clean"}]}"#.to_string(),
+                thought: None,
                 usage: None,
             })
         }

@@ -73,6 +73,18 @@ pub fn extract_gemini_visible_text(response: &Value) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+pub fn extract_gemini_thought(response: &Value) -> Option<String> {
+    let thought = response
+        .pointer("/candidates/0/content/parts")?
+        .as_array()?
+        .iter()
+        .filter(|part| part.get("thought").and_then(Value::as_bool) == Some(true))
+        .filter_map(|part| part.get("text").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("");
+    (!thought.is_empty()).then_some(thought)
+}
+
 #[derive(Clone, Debug)]
 pub struct GeminiGenerateContentRequestParts {
     pub url: LlmApiUrl,

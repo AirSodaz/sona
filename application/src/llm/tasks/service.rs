@@ -778,6 +778,7 @@ where
             let mut emitted_any = false;
             let mut emit_delta = |delta: LlmStreamDelta| {
                 emitted_any = true;
+                let is_thought = delta.is_thought();
                 observer
                     .on_event(LlmTaskEvent::Text(
                         sona_core::llm::tasks::LlmTaskTextPayload {
@@ -786,6 +787,7 @@ where
                             text: delta.text,
                             delta: delta.delta,
                             reset: false,
+                            is_thought,
                         },
                     ))
                     .map_err(|error| LlmPortError::new(LlmPortErrorKind::Protocol, error.reason))
@@ -812,6 +814,7 @@ where
                                     text: String::new(),
                                     delta: String::new(),
                                     reset: true,
+                                    is_thought: false,
                                 },
                             ))
                             .map_err(|error| {

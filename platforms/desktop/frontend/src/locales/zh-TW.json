@@ -2265,9 +2265,13 @@
       "status_off": "未開啟",
       "reasoning_mode": "深度思考模式",
       "reasoning_level": "思考程度",
+      "reasoning_level_minimal": "極簡",
       "reasoning_level_low": "低",
       "reasoning_level_medium": "中",
-      "reasoning_level_high": "高"
+      "reasoning_level_high": "高",
+      "reasoning_level_xhigh": "極高",
+      "reasoning_level_max": "最大",
+      "reasoning_budget": "思考 Token 預算"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

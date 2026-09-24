@@ -1,9 +1,9 @@
-use serde::{Deserialize, Serialize};
-use serde_json::Value;
-
+use crate::llm::runtime::{ReasoningMode, ThinkingLevel};
 use crate::llm::tasks::LlmProviderStrategy;
 use crate::llm::usage::TokenUsage;
 use crate::ports::llm::{LlmPortError, LlmPortErrorKind};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -56,7 +56,24 @@ pub struct StandardLlmRequest {
 #[cfg_attr(feature = "specta", derive(Type))]
 pub struct StandardLlmResponse {
     pub text: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thought: Option<String>,
     pub usage: Option<TokenUsage>,
+}
+
+impl StandardLlmResponse {
+    pub fn new(text: impl Into<String>, usage: Option<TokenUsage>) -> Self {
+        Self {
+            text: text.into(),
+            thought: None,
+            usage,
+        }
+    }
+
+    pub fn with_thought(mut self, thought: impl Into<String>) -> Self {
+        self.thought = Some(thought.into());
+        self
+    }
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]
@@ -118,6 +135,12 @@ pub struct LlmModelSummary {
     pub supports_prompt_caching: Option<bool>,
     #[serde(default)]
     pub metadata_sources: Vec<LlmModelMetadataSource>,
+    #[serde(default)]
+    pub reasoning_mode: Option<ReasoningMode>,
+    #[serde(default)]
+    pub token_limit_key: Option<String>,
+    #[serde(default)]
+    pub supported_thinking_levels: Vec<ThinkingLevel>,
 }
 
 #[derive(Deserialize)]
@@ -426,44 +449,185 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
     }
 }
 
-pub fn extract_text_from_json_response(response: &Value) -> Result<String, LlmPortError> {
-    let mut parts = Vec::new();
+pub fn strip_and_extract_inline_thoughts(input: &str) -> (String, Option<String>) {
+    const TAGS: &[(&str, &str)] = &[
+        ("<think>", "</think>"),
+        ("<thought>", "</thought>"),
+        ("<thinking>", "</thinking>"),
+        ("<reasoning>", "</reasoning>"),
+    ];
 
+    let mut remaining = input;
+    let mut clean_text = String::with_capacity(input.len());
+    let mut thoughts = Vec::new();
+
+    while !remaining.is_empty() {
+        let mut earliest_match: Option<(usize, usize, &'static str)> = None;
+        let lower = remaining.to_lowercase();
+
+        for (open_tag, close_tag) in TAGS {
+            if let Some(idx) = lower.find(open_tag) {
+                let end = idx + open_tag.len();
+                if let Some((best_idx, _, _)) = earliest_match {
+                    if idx < best_idx {
+                        earliest_match = Some((idx, end, close_tag));
+                    }
+                } else {
+                    earliest_match = Some((idx, end, close_tag));
+                }
+            }
+        }
+
+        if let Some((open_start, open_end, close_tag)) = earliest_match {
+            if open_start > 0 {
+                clean_text.push_str(&remaining[..open_start]);
+            }
+            remaining = &remaining[open_end..];
+            let remaining_lower = remaining.to_lowercase();
+            if let Some(close_idx) = remaining_lower.find(close_tag) {
+                let thought_content = &remaining[..close_idx];
+                if !thought_content.trim().is_empty() {
+                    thoughts.push(thought_content.trim().to_string());
+                }
+                let mut after_close = close_idx + close_tag.len();
+                if remaining[after_close..].starts_with("\r\n") {
+                    after_close += 2;
+                } else if remaining[after_close..].starts_with('\n') {
+                    after_close += 1;
+                }
+                remaining = &remaining[after_close..];
+            } else {
+                if !remaining.trim().is_empty() {
+                    thoughts.push(remaining.trim().to_string());
+                }
+                remaining = "";
+            }
+        } else {
+            clean_text.push_str(remaining);
+            break;
+        }
+    }
+
+    let thought_opt = if thoughts.is_empty() {
+        None
+    } else {
+        Some(thoughts.join("\n\n"))
+    };
+
+    (clean_text, thought_opt)
+}
+
+pub fn extract_text_and_thought_from_json_response(
+    response: &Value,
+) -> Result<(String, Option<String>), LlmPortError> {
+    let mut explicit_thoughts = Vec::new();
+
+    // Extract from choices[0].message (OpenAI compatible / DeepSeek)
+    if let Some(choice) = response.pointer("/choices/0") {
+        let msg = choice.get("message").or_else(|| choice.get("delta"));
+        if let Some(msg) = msg {
+            let thought_field = msg
+                .get("reasoning_content")
+                .or_else(|| msg.get("reasoning"))
+                .or_else(|| msg.get("thought"))
+                .or_else(|| msg.get("thinking"))
+                .or_else(|| msg.get("reasoning_text"))
+                .and_then(Value::as_str);
+            if let Some(t) = thought_field {
+                let trimmed = t.trim();
+                if !trimmed.is_empty() {
+                    explicit_thoughts.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    // Extract from Anthropic content blocks
+    if let Some(content_blocks) = response.get("content").and_then(Value::as_array) {
+        for block in content_blocks {
+            if block.get("type").and_then(Value::as_str) == Some("thinking")
+                && let Some(t) = block.get("thinking").and_then(Value::as_str)
+            {
+                let trimmed = t.trim();
+                if !trimmed.is_empty() {
+                    explicit_thoughts.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    // Extract from Gemini candidates[0].content.parts
+    if let Some(parts) = response
+        .pointer("/candidates/0/content/parts")
+        .and_then(Value::as_array)
+    {
+        for part in parts {
+            if part.get("thought").and_then(Value::as_bool) == Some(true)
+                && let Some(t) = part.get("text").and_then(Value::as_str)
+            {
+                let trimmed = t.trim();
+                if !trimmed.is_empty() {
+                    explicit_thoughts.push(trimmed.to_string());
+                }
+            }
+        }
+    }
+
+    let mut raw_parts = Vec::new();
     if let Some(output_text) = response.get("output_text").and_then(Value::as_str)
         && !output_text.is_empty()
     {
-        return Ok(output_text.to_string());
+        raw_parts.push(output_text.to_string());
     }
 
-    if let Some(choices) = response.get("choices") {
-        extract_text_parts(choices, &mut parts);
+    if raw_parts.is_empty()
+        && let Some(choices) = response.get("choices")
+    {
+        extract_text_parts(choices, &mut raw_parts);
     }
 
-    if parts.is_empty()
+    if raw_parts.is_empty()
         && let Some(output) = response.get("output")
     {
-        extract_text_parts(output, &mut parts);
+        extract_text_parts(output, &mut raw_parts);
     }
 
-    if parts.is_empty() {
-        extract_text_parts(response, &mut parts);
+    if raw_parts.is_empty() {
+        extract_text_parts(response, &mut raw_parts);
     }
 
-    let text = parts
+    let joined_raw = raw_parts
         .into_iter()
         .map(|part| part.trim().to_string())
         .filter(|part| !part.is_empty())
         .collect::<Vec<_>>()
         .join("\n");
 
-    if text.is_empty() {
+    let (cleaned_text, inline_thought) = strip_and_extract_inline_thoughts(&joined_raw);
+    let cleaned_text = cleaned_text.trim().to_string();
+
+    if let Some(it) = inline_thought {
+        explicit_thoughts.push(it);
+    }
+
+    let combined_thought = if explicit_thoughts.is_empty() {
+        None
+    } else {
+        Some(explicit_thoughts.join("\n\n"))
+    };
+
+    if cleaned_text.is_empty() {
         return Err(LlmPortError::new(
             LlmPortErrorKind::Protocol,
             "LLM response did not contain text output",
         ));
     }
 
-    Ok(text)
+    Ok((cleaned_text, combined_thought))
+}
+
+pub fn extract_text_from_json_response(response: &Value) -> Result<String, LlmPortError> {
+    extract_text_and_thought_from_json_response(response).map(|(text, _)| text)
 }
 
 pub fn normalize_token_usage(
@@ -489,9 +653,9 @@ pub fn normalize_token_usage(
     })
 }
 
-pub fn extract_anthropic_text_response(
+pub fn extract_anthropic_text_and_thought_response(
     response: &Value,
-) -> Result<(String, Option<TokenUsage>), LlmPortError> {
+) -> Result<(String, Option<String>, Option<TokenUsage>), LlmPortError> {
     let content = response
         .get("content")
         .and_then(Value::as_array)
@@ -508,12 +672,24 @@ pub fn extract_anthropic_text_response(
         .filter_map(|block| block.get("text").and_then(Value::as_str))
         .collect();
 
+    let thought_parts: Vec<&str> = content
+        .iter()
+        .filter(|block| block.get("type").and_then(Value::as_str) == Some("thinking"))
+        .filter_map(|block| block.get("thinking").and_then(Value::as_str))
+        .collect();
+
     if text_parts.is_empty() {
         return Err(LlmPortError::new(
             LlmPortErrorKind::Protocol,
             "Anthropic response did not contain text output",
         ));
     }
+
+    let thought = if thought_parts.is_empty() {
+        None
+    } else {
+        Some(thought_parts.join("\n\n"))
+    };
 
     let usage = response.get("usage").and_then(|u| {
         let input_tokens = u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
@@ -536,7 +712,13 @@ pub fn extract_anthropic_text_response(
         Some(usage)
     });
 
-    Ok((text_parts.join("\n"), usage))
+    Ok((text_parts.join("\n"), thought, usage))
+}
+
+pub fn extract_anthropic_text_response(
+    response: &Value,
+) -> Result<(String, Option<TokenUsage>), LlmPortError> {
+    extract_anthropic_text_and_thought_response(response).map(|(text, _, usage)| (text, usage))
 }
 
 pub fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {

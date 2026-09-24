@@ -119,6 +119,7 @@ impl LlmCompletionPort for FakeRuntimePort {
     ) -> Result<StandardLlmResponse, LlmPortError> {
         Ok(StandardLlmResponse {
             text: r#"{"answer":42}"#.to_string(),
+            thought: None,
             usage: Some(TokenUsage {
                 prompt_tokens: 8,
                 completion_tokens: 2,
@@ -780,6 +781,7 @@ fn text_payload_serializes_with_camel_case() {
         text: "Hello world".to_string(),
         delta: "world".to_string(),
         reset: false,
+        is_thought: false,
     };
 
     let json = serde_json::to_value(payload).expect("payload should serialize");
@@ -789,6 +791,7 @@ fn text_payload_serializes_with_camel_case() {
     assert_eq!(json["text"], "Hello world");
     assert_eq!(json["delta"], "world");
     assert_eq!(json["reset"], false);
+    assert_eq!(json["isThought"], false);
 }
 
 #[test]

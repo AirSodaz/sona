@@ -138,6 +138,7 @@ impl LlmStreamingPort for FakeRuntime {
         emit_delta(LlmStreamDelta::content("final summary", "final summary"))?;
         Ok(StandardLlmResponse {
             text: "final summary".to_string(),
+            thought: None,
             usage: None,
         })
     }
@@ -255,7 +256,11 @@ fn dynamic_response(request: &LlmCompletionRequest) -> StandardLlmResponse {
             }
         }
     };
-    StandardLlmResponse { text, usage: None }
+    StandardLlmResponse {
+        text,
+        thought: None,
+        usage: None,
+    }
 }
 
 #[test]
@@ -362,10 +367,12 @@ async fn polish_repairs_one_invalid_structured_response() {
         }),
         Ok(StandardLlmResponse {
             text: serde_json::json!({"items": [{"id": "wrong", "text": "fixed"}]}).to_string(),
+            thought: None,
             usage: None,
         }),
         Ok(StandardLlmResponse {
             text: serde_json::json!({"items": [{"id": "s1", "text": "fixed"}]}).to_string(),
+            thought: None,
             usage: None,
         }),
     ]);
@@ -479,6 +486,7 @@ async fn google_translate_free_uses_core_concurrency_per_segment() {
 async fn summary_maps_concurrently_then_streams_one_final_result() {
     let long_partial = StandardLlmResponse {
         text: "summary ".repeat(60),
+        thought: None,
         usage: None,
     };
     let fake = FakeRuntime::with_model(

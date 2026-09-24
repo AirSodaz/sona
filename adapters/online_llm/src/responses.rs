@@ -1,7 +1,5 @@
 use serde_json::{Value, json};
-use sona_core::llm::provider_protocol::{
-    StandardLlmResponse, extract_text_from_json_response, extract_usage_from_json_response,
-};
+use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_usage_from_json_response};
 use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
 use sona_core::ports::llm::LlmPortError;
 
@@ -24,8 +22,11 @@ pub async fn generate_with_openai_responses_api(
     )
     .await?;
 
+    let (text, thought) =
+        sona_core::llm::provider_protocol::extract_text_and_thought_from_json_response(&response)?;
     Ok(StandardLlmResponse {
-        text: extract_text_from_json_response(&response)?,
+        text,
+        thought,
         usage: extract_usage_from_json_response(&response),
     })
 }

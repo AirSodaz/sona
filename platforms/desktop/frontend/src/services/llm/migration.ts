@@ -10,6 +10,7 @@ import type {
   LlmProvider,
   LlmProviderSetting,
   LlmSettings,
+  ReasoningEffortLevel,
 } from '../../types/transcript';
 import { isCustomProviderId, normalizeProvider } from './providers';
 import {
@@ -252,21 +253,31 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
         ? selections.polishReasoningEnabled
         : undefined,
     polishReasoningLevel: normalizeReasoningLevel(selections.polishReasoningLevel),
+    polishReasoningBudget: sanitizeOptionalNumber(selections.polishReasoningBudget),
     translationReasoningEnabled:
       typeof selections.translationReasoningEnabled === 'boolean'
         ? selections.translationReasoningEnabled
         : undefined,
     translationReasoningLevel: normalizeReasoningLevel(selections.translationReasoningLevel),
+    translationReasoningBudget: sanitizeOptionalNumber(selections.translationReasoningBudget),
     summaryReasoningEnabled:
       typeof selections.summaryReasoningEnabled === 'boolean'
         ? selections.summaryReasoningEnabled
         : undefined,
     summaryReasoningLevel: normalizeReasoningLevel(selections.summaryReasoningLevel),
+    summaryReasoningBudget: sanitizeOptionalNumber(selections.summaryReasoningBudget),
   };
 }
 
-function normalizeReasoningLevel(value: unknown): 'low' | 'medium' | 'high' | undefined {
-  return value === 'low' || value === 'medium' || value === 'high' ? value : undefined;
+function normalizeReasoningLevel(value: unknown): ReasoningEffortLevel | undefined {
+  return value === 'minimal' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'xhigh' ||
+    value === 'max'
+    ? value
+    : undefined;
 }
 
 function applyLegacyTemperature(llmSettings: LlmSettings, legacyTemperature: unknown): LlmSettings {

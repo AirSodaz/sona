@@ -80,6 +80,7 @@ impl LlmCompletionPort for FakeCompletionPort {
         self.requests.lock().unwrap().push(request);
         Ok(StandardLlmResponse {
             text: self.response.clone(),
+            thought: None,
             usage: None,
         })
     }
@@ -109,6 +110,7 @@ impl LlmStreamingPort for FakeCompletionPort {
         ))?;
         Ok(StandardLlmResponse {
             text: self.response.clone(),
+            thought: None,
             usage: None,
         })
     }

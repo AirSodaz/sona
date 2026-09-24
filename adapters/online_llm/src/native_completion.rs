@@ -11,10 +11,12 @@ use crate::gemini::{
 };
 use crate::transport::{LlmApiUrl, post_json_request};
 
+pub type StrategyTarget = (LlmApiUrl, Vec<(&'static str, String)>);
+
 pub fn resolve_strategy_url_and_headers(
     request: &LlmCompletionRequest,
     stream: bool,
-) -> Result<(LlmApiUrl, Vec<(&'static str, String)>), LlmPortError> {
+) -> Result<StrategyTarget, LlmPortError> {
     let config = &request.config;
     let strategy = config.strategy;
     let base_url = config.base_url.trim();
@@ -199,9 +201,15 @@ pub async fn execute_native_completion(
             let payload = crate::anthropic::build_anthropic_payload_for_request(request, false)?;
             let response =
                 post_json_request(&url, headers, payload, request.config.timeout_seconds).await?;
-            let (text, usage) =
-                sona_core::llm::provider_protocol::extract_anthropic_text_response(&response)?;
-            Ok(StandardLlmResponse { text, usage })
+            let (text, thought, usage) =
+                sona_core::llm::provider_protocol::extract_anthropic_text_and_thought_response(
+                    &response,
+                )?;
+            Ok(StandardLlmResponse {
+                text,
+                thought,
+                usage,
+            })
         }
         LlmProviderStrategy::Gemini => {
             let (url, headers) = resolve_strategy_url_and_headers(request, false)?;
@@ -211,8 +219,13 @@ pub async fn execute_native_completion(
             let text = extract_gemini_visible_text(&response)
                 .or_else(|| extract_text_from_json_response(&response).ok())
                 .unwrap_or_default();
+            let thought = crate::gemini::extract_gemini_thought(&response);
             let usage = response.get("usageMetadata").and_then(extract_gemini_usage);
-            Ok(StandardLlmResponse { text, usage })
+            Ok(StandardLlmResponse {
+                text,
+                thought,
+                usage,
+            })
         }
         LlmProviderStrategy::OpenAiResponses => {
             crate::responses::generate_with_openai_responses_api(request).await
@@ -225,8 +238,13 @@ pub async fn execute_native_completion(
             )?;
             let response =
                 post_json_request(&url, headers, payload, request.config.timeout_seconds).await?;
+            let (text, thought) =
+                sona_core::llm::provider_protocol::extract_text_and_thought_from_json_response(
+                    &response,
+                )?;
             Ok(StandardLlmResponse {
-                text: extract_text_from_json_response(&response)?,
+                text,
+                thought,
                 usage: extract_usage_from_json_response(&response),
             })
         }

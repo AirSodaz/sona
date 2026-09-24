@@ -2236,9 +2236,13 @@
       "status_off": "Off",
       "reasoning_mode": "Reasoning Mode",
       "reasoning_level": "Reasoning Level",
+      "reasoning_level_minimal": "Minimal",
       "reasoning_level_low": "Low",
       "reasoning_level_medium": "Medium",
-      "reasoning_level_high": "High"
+      "reasoning_level_high": "High",
+      "reasoning_level_xhigh": "Extra High",
+      "reasoning_level_max": "Maximum",
+      "reasoning_budget": "Thinking Token Budget"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

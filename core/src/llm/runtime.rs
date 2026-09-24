@@ -221,15 +221,18 @@ impl LlmStreamDelta {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(tag = "mode", content = "value", rename_all = "snake_case")]
 pub enum ThinkingLevel {
     None,
     Auto,
+    Minimal,
     Low,
     Medium,
     High,
+    Xhigh,
+    Max,
     Budget(u32),
 }
 
@@ -240,9 +243,12 @@ impl ThinkingLevel {
             Some(true) => match level {
                 Some("none") => ThinkingLevel::None,
                 Some("auto") => ThinkingLevel::Auto,
+                Some("minimal") => ThinkingLevel::Minimal,
                 Some("low") => ThinkingLevel::Low,
                 Some("medium") => ThinkingLevel::Medium,
                 Some("high") => ThinkingLevel::High,
+                Some("xhigh") => ThinkingLevel::Xhigh,
+                Some("max") => ThinkingLevel::Max,
                 Some(s) => {
                     if let Ok(b) = s.parse::<u32>() {
                         ThinkingLevel::Budget(b)
@@ -255,9 +261,12 @@ impl ThinkingLevel {
             None => match level {
                 Some("none") => ThinkingLevel::None,
                 Some("auto") => ThinkingLevel::Auto,
+                Some("minimal") => ThinkingLevel::Minimal,
                 Some("low") => ThinkingLevel::Low,
                 Some("medium") => ThinkingLevel::Medium,
                 Some("high") => ThinkingLevel::High,
+                Some("xhigh") => ThinkingLevel::Xhigh,
+                Some("max") => ThinkingLevel::Max,
                 Some(s) => {
                     if let Ok(b) = s.parse::<u32>() {
                         ThinkingLevel::Budget(b)
@@ -278,23 +287,85 @@ impl ThinkingLevel {
         match self {
             ThinkingLevel::None => Some("none"),
             ThinkingLevel::Auto => None,
+            ThinkingLevel::Minimal => Some("minimal"),
             ThinkingLevel::Low => Some("low"),
             ThinkingLevel::Medium => Some("medium"),
             ThinkingLevel::High => Some("high"),
+            ThinkingLevel::Xhigh => Some("xhigh"),
+            ThinkingLevel::Max => Some("max"),
             ThinkingLevel::Budget(_) => None,
         }
     }
 
+    pub fn clamp_to_supported(&self, supported: &[ThinkingLevel]) -> Option<ThinkingLevel> {
+        if supported.is_empty() {
+            return None;
+        }
+        if supported.contains(self) {
+            return Some(*self);
+        }
+        let level_rank = |l: &ThinkingLevel| -> i32 {
+            match l {
+                ThinkingLevel::None => 0,
+                ThinkingLevel::Auto => 1,
+                ThinkingLevel::Minimal => 2,
+                ThinkingLevel::Low => 3,
+                ThinkingLevel::Medium => 4,
+                ThinkingLevel::High => 5,
+                ThinkingLevel::Xhigh => 6,
+                ThinkingLevel::Max => 7,
+                ThinkingLevel::Budget(_) => 4,
+            }
+        };
+        let target_rank = level_rank(self);
+        let mut best: Option<&ThinkingLevel> = None;
+        for cand in supported {
+            let cand_rank = level_rank(cand);
+            if cand_rank <= target_rank {
+                if let Some(current_best) = best {
+                    if cand_rank > level_rank(current_best) {
+                        best = Some(cand);
+                    }
+                } else {
+                    best = Some(cand);
+                }
+            }
+        }
+        best.copied().or_else(|| supported.first().copied())
+    }
+
     pub fn resolve_budget_tokens(&self, low: u32, medium: u32, high: u32) -> Option<u32> {
         match self {
-            ThinkingLevel::None => None,
-            ThinkingLevel::Auto => None,
+            ThinkingLevel::None | ThinkingLevel::Auto => None,
+            ThinkingLevel::Minimal => Some(low.min(1024)),
             ThinkingLevel::Low => Some(low),
             ThinkingLevel::Medium => Some(medium),
             ThinkingLevel::High => Some(high),
+            ThinkingLevel::Xhigh => Some(high.saturating_mul(2)),
+            ThinkingLevel::Max => Some(high.saturating_mul(4)),
             ThinkingLevel::Budget(tokens) => Some(*tokens),
         }
     }
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ReasoningMode {
+    #[default]
+    None,
+    Effort {
+        supported_levels: Vec<ThinkingLevel>,
+    },
+    Budget {
+        min_budget: u32,
+        max_budget: u32,
+        default_budget: u32,
+    },
+    Hybrid {
+        supported_levels: Vec<ThinkingLevel>,
+        default_budget: u32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]

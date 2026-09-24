@@ -2,10 +2,11 @@ use serde_json::json;
 use sona_core::llm::provider_protocol::{
     GeminiModel, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
     build_gemini_generate_content_request_parts, build_standard_input, clean_gemini_base_url,
-    extract_anthropic_text_response, extract_text_from_json_response,
-    extract_usage_from_json_response, format_gemini_models_url, format_openai_models_urls,
-    gemini_model_to_summary, join_url, openai_model_to_summary, strategy_supports_model_listing,
-    strategy_supports_structured_output, strategy_uses_openai_chat_payload,
+    extract_anthropic_text_response, extract_text_and_thought_from_json_response,
+    extract_text_from_json_response, extract_usage_from_json_response, format_gemini_models_url,
+    format_openai_models_urls, gemini_model_to_summary, join_url, openai_model_to_summary,
+    strategy_supports_model_listing, strategy_supports_structured_output,
+    strategy_uses_openai_chat_payload,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::llm::usage::TokenUsage;
@@ -248,4 +249,40 @@ fn anthropic_usage_preserves_prompt_cache_breakdown() {
         (usage.cached_input_tokens, usage.cache_creation_input_tokens),
         (6, 2)
     );
+}
+
+#[test]
+fn extracts_inline_think_tags_and_explicit_reasoning() {
+    let inline_response = json!({
+        "choices": [
+            {
+                "message": {
+                    "content": "<think>\nThinking about life...\n</think>\nThe answer is 42."
+                }
+            }
+        ]
+    });
+
+    let (text, thought) = extract_text_and_thought_from_json_response(&inline_response).unwrap();
+    assert_eq!(text, "The answer is 42.");
+    assert_eq!(thought.as_deref(), Some("Thinking about life..."));
+    assert_eq!(
+        extract_text_from_json_response(&inline_response).unwrap(),
+        "The answer is 42."
+    );
+
+    let explicit_response = json!({
+        "choices": [
+            {
+                "message": {
+                    "content": "Final output",
+                    "reasoning_content": "DeepSeek thought"
+                }
+            }
+        ]
+    });
+
+    let (text, thought) = extract_text_and_thought_from_json_response(&explicit_response).unwrap();
+    assert_eq!(text, "Final output");
+    assert_eq!(thought.as_deref(), Some("DeepSeek thought"));
 }

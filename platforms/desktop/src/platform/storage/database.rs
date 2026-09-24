@@ -182,7 +182,7 @@ mod tests {
                 .map_err(sona_sqlite::DatabaseError::QueryError)
             })
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
     }
 
     #[test]
@@ -252,7 +252,7 @@ mod tests {
                 .map_err(sona_sqlite::DatabaseError::QueryError)
             })
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         // The legacy table should not exist in the new database
         let table_exists: bool = db
@@ -354,7 +354,7 @@ mod tests {
                 .map_err(sona_sqlite::DatabaseError::QueryError)
             })
             .unwrap();
-        assert_eq!(version, 8);
+        assert_eq!(version, 9);
 
         // project_pipelines table should now exist
         let pipeline_exists: bool = db

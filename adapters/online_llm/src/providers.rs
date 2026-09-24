@@ -438,7 +438,11 @@ impl GoogleTranslateAdapter {
             )
             .await?;
 
-            return Ok(StandardLlmResponse { text, usage: None });
+            return Ok(StandardLlmResponse {
+                text,
+                thought: None,
+                usage: None,
+            });
         }
 
         let payload = GoogleTranslateRequest {
@@ -456,7 +460,11 @@ impl GoogleTranslateAdapter {
         .await?;
         let text = extract_text_from_json_response(&response)?;
 
-        Ok(StandardLlmResponse { text, usage: None })
+        Ok(StandardLlmResponse {
+            text,
+            thought: None,
+            usage: None,
+        })
     }
 }
 

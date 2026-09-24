@@ -80,9 +80,9 @@ where
         let chunk = chunk_res.map_err(reqwest_port_error)?;
         byte_buffer.extend_from_slice(&chunk);
 
-        let valid_up_to = match std::str::from_utf8(&byte_buffer) {
-            Ok(_) => byte_buffer.len(),
-            Err(e) => e.valid_up_to(),
+        let (valid_up_to, error_len) = match std::str::from_utf8(&byte_buffer) {
+            Ok(_) => (byte_buffer.len(), None),
+            Err(e) => (e.valid_up_to(), e.error_len()),
         };
 
         if valid_up_to > 0 {
@@ -100,6 +100,9 @@ where
                 }
             }
             byte_buffer.drain(..valid_up_to);
+        } else if let Some(bad_len) = error_len {
+            // Skip invalid non-UTF8 bytes to prevent buffer lockup
+            byte_buffer.drain(..bad_len);
         }
     }
 
@@ -137,14 +140,19 @@ where
         }
     }
 
-    if strategy == LlmProviderStrategy::Anthropic {
-        if let Some(usage) = finish_anthropic_stream_usage(anthropic_usage) {
-            total_usage = Some(usage);
-        }
+    if strategy == LlmProviderStrategy::Anthropic
+        && let Some(usage) = finish_anthropic_stream_usage(anthropic_usage)
+    {
+        total_usage = Some(usage);
     }
 
     Ok(StandardLlmResponse {
         text: accumulator.content_text().to_string(),
+        thought: if accumulator.thought_text().is_empty() {
+            None
+        } else {
+            Some(accumulator.thought_text().to_string())
+        },
         usage: total_usage,
     })
 }
@@ -197,25 +205,24 @@ where
     match strategy {
         LlmProviderStrategy::Anthropic => {
             update_anthropic_stream_usage(anthropic_usage, &json);
-            if let Some(event_type) = json.get("type").and_then(Value::as_str) {
-                if event_type == "content_block_delta" {
-                    if let Some(delta) = json.get("delta") {
-                        if delta.get("type").and_then(Value::as_str) == Some("thinking_delta") {
-                            if let Some(thinking) = delta.get("thinking").and_then(Value::as_str) {
-                                accumulator.push_thought(thinking)?;
+            if let Some(event_type) = json.get("type").and_then(Value::as_str)
+                && event_type == "content_block_delta"
+                && let Some(delta) = json.get("delta")
+            {
+                if delta.get("type").and_then(Value::as_str) == Some("thinking_delta")
+                    && let Some(thinking) = delta.get("thinking").and_then(Value::as_str)
+                {
+                    accumulator.push_thought(thinking)?;
+                } else if delta.get("type").and_then(Value::as_str) == Some("text_delta")
+                    && let Some(text) = delta.get("text").and_then(Value::as_str)
+                {
+                    for chunk in demuxer.process(text) {
+                        match chunk.kind {
+                            LlmStreamDeltaKind::Thought => {
+                                accumulator.push_thought(&chunk.text)?;
                             }
-                        } else if delta.get("type").and_then(Value::as_str) == Some("text_delta") {
-                            if let Some(text) = delta.get("text").and_then(Value::as_str) {
-                                for chunk in demuxer.process(text) {
-                                    match chunk.kind {
-                                        LlmStreamDeltaKind::Thought => {
-                                            accumulator.push_thought(&chunk.text)?;
-                                        }
-                                        LlmStreamDeltaKind::Content => {
-                                            accumulator.push_content(&chunk.text)?;
-                                        }
-                                    }
-                                }
+                            LlmStreamDeltaKind::Content => {
+                                accumulator.push_content(&chunk.text)?;
                             }
                         }
                     }
@@ -309,11 +316,14 @@ where
                 *total_usage = Some(usage);
             }
             if let Some(choice) = json.pointer("/choices/0") {
-                if let Some(delta) = choice.get("delta") {
+                let delta = choice.get("delta").or_else(|| choice.get("message"));
+                if let Some(delta) = delta {
                     let thought_field = delta
                         .get("reasoning_content")
                         .or_else(|| delta.get("reasoning"))
                         .or_else(|| delta.get("thought"))
+                        .or_else(|| delta.get("thinking"))
+                        .or_else(|| delta.get("reasoning_text"))
                         .and_then(Value::as_str);
 
                     if let Some(thought) = thought_field {

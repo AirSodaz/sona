@@ -2265,9 +2265,13 @@
       "status_off": "Off",
       "reasoning_mode": "Reasoning Mode",
       "reasoning_level": "Reasoning Level",
-      "reasoning_level_low": "Low",
-      "reasoning_level_medium": "Medium",
-      "reasoning_level_high": "High"
+      "reasoning_level_minimal": "최소",
+      "reasoning_level_low": "낮음",
+      "reasoning_level_medium": "보통",
+      "reasoning_level_high": "높음",
+      "reasoning_level_xhigh": "매우 높음",
+      "reasoning_level_max": "최대",
+      "reasoning_budget": "추론 토큰 예산"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

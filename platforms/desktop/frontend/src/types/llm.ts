@@ -2,7 +2,9 @@ import type {
   BuiltinLlmProvider as GeneratedBuiltinLlmProvider,
   LlmProvider as GeneratedLlmProvider,
   PolishPresetId as GeneratedPolishPresetId,
+  ReasoningMode as GeneratedReasoningMode,
   SummaryTemplateId as GeneratedSummaryTemplateId,
+  ThinkingLevel as GeneratedThinkingLevel,
 } from '../bindings';
 
 export type BuiltInLlmProvider = GeneratedBuiltinLlmProvider;
@@ -107,6 +109,10 @@ export interface CustomLlmProvider {
   createdAt: string;
 }
 
+export type ReasoningEffortLevel = 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export type ReasoningMode = GeneratedReasoningMode;
+export type ThinkingLevel = GeneratedThinkingLevel;
 export type LlmFeature = 'polish' | 'translation' | 'summary';
 
 export interface LlmProviderSetting {
@@ -165,6 +171,12 @@ export interface LlmModelMetadata {
   supportsPromptCaching?: boolean;
   /** Sources that contributed metadata; provider values take precedence. */
   metadataSources?: LlmModelMetadataSource[];
+  /** Reasoning control mode and limits. */
+  reasoningMode?: GeneratedReasoningMode | null;
+  /** Explicit token limit parameter key (e.g. max_completion_tokens). */
+  tokenLimitKey?: 'max_tokens' | 'max_completion_tokens' | string | null;
+  /** Supported thinking levels reported by the catalog or gateway. */
+  supportedThinkingLevels?: GeneratedThinkingLevel[] | null;
 }
 
 export type LlmDiscoveredModelSummary = {
@@ -203,13 +215,15 @@ export interface LlmFeatureSelections {
   /** Temperature override for summary. */
   summaryTemperature?: number;
   polishReasoningEnabled?: boolean;
-  polishReasoningLevel?: 'low' | 'medium' | 'high';
+  polishReasoningLevel?: ReasoningEffortLevel;
+  polishReasoningBudget?: number;
   translationReasoningEnabled?: boolean;
-  translationReasoningLevel?: 'low' | 'medium' | 'high';
+  translationReasoningLevel?: ReasoningEffortLevel;
+  translationReasoningBudget?: number;
   summaryReasoningEnabled?: boolean;
-  summaryReasoningLevel?: 'low' | 'medium' | 'high';
+  summaryReasoningLevel?: ReasoningEffortLevel;
+  summaryReasoningBudget?: number;
 }
-
 export interface LlmModelDiscoveryStatus {
   /** ISO timestamp when provider models were last fetched successfully. */
   fetchedAt: string;
@@ -252,7 +266,8 @@ export interface LlmConfig {
   /** LLM temperature (0.0 to 2.0). */
   temperature?: number;
   reasoningEnabled?: boolean;
-  reasoningLevel?: 'low' | 'medium' | 'high';
+  reasoningLevel?: ReasoningEffortLevel | string;
+  reasoningBudget?: number;
   /** Global LLM Request timeout in seconds. */
   timeoutSeconds?: number;
 }
@@ -281,6 +296,7 @@ export interface LlmCompletionOptions {
   maxOutputTokens?: number;
   reasoningEnabled?: boolean;
   reasoningLevel?: string;
+  reasoningBudget?: number;
   responseFormat?: LlmResponseFormat;
   promptCache?: LlmPromptCachePolicy;
   capabilityPolicy?: LlmCapabilityPolicy;

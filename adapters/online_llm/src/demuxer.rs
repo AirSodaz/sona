@@ -3,6 +3,7 @@ use sona_core::llm::runtime::LlmStreamDeltaKind;
 #[derive(Clone, Debug, Default)]
 pub struct ThoughtStreamDemuxer {
     inside_think: bool,
+    active_close_tag: Option<&'static str>,
     buffer: String,
 }
 
@@ -12,16 +13,22 @@ pub struct DemuxedChunk {
     pub text: String,
 }
 
-const THINK_OPEN: &str = "<think>";
-const THINK_CLOSE: &str = "</think>";
+const TAG_PAIRS: &[(&str, &str)] = &[
+    ("<think>", "</think>"),
+    ("<thought>", "</thought>"),
+    ("<thinking>", "</thinking>"),
+    ("<reasoning>", "</reasoning>"),
+];
 
 impl ThoughtStreamDemuxer {
     pub fn new() -> Self {
         Self {
             inside_think: false,
+            active_close_tag: None,
             buffer: String::new(),
         }
     }
+
     pub fn process(&mut self, text: &str) -> Vec<DemuxedChunk> {
         let mut chunks = Vec::new();
         let full_text = if self.buffer.is_empty() {
@@ -35,8 +42,23 @@ impl ThoughtStreamDemuxer {
         let mut remaining = full_text.as_str();
 
         while !remaining.is_empty() {
+            let lower = remaining.to_lowercase();
             if !self.inside_think {
-                if let Some(idx) = remaining.find(THINK_OPEN) {
+                // Find earliest opening tag
+                let mut earliest: Option<(usize, &'static str, &'static str)> = None;
+                for (open_tag, close_tag) in TAG_PAIRS {
+                    if let Some(idx) = lower.find(open_tag) {
+                        if let Some((best_idx, _, _)) = earliest {
+                            if idx < best_idx {
+                                earliest = Some((idx, open_tag, close_tag));
+                            }
+                        } else {
+                            earliest = Some((idx, open_tag, close_tag));
+                        }
+                    }
+                }
+
+                if let Some((idx, open_tag, close_tag)) = earliest {
                     if idx > 0 {
                         chunks.push(DemuxedChunk {
                             kind: LlmStreamDeltaKind::Content,
@@ -44,14 +66,17 @@ impl ThoughtStreamDemuxer {
                         });
                     }
                     self.inside_think = true;
-                    remaining = &remaining[idx + THINK_OPEN.len()..];
+                    self.active_close_tag = Some(close_tag);
+                    remaining = &remaining[idx + open_tag.len()..];
                 } else {
-                    // Check if remaining ends with a partial prefix of THINK_OPEN (<think>)
+                    // Check if remaining ends with a partial prefix of any open tag
                     let mut matched_prefix_len = 0;
-                    for prefix_len in (1..THINK_OPEN.len()).rev() {
-                        if remaining.ends_with(&THINK_OPEN[..prefix_len]) {
-                            matched_prefix_len = prefix_len;
-                            break;
+                    for (open_tag, _) in TAG_PAIRS {
+                        for prefix_len in (1..open_tag.len()).rev() {
+                            if lower.ends_with(&open_tag[..prefix_len]) {
+                                matched_prefix_len = matched_prefix_len.max(prefix_len);
+                                break;
+                            }
                         }
                     }
 
@@ -72,41 +97,78 @@ impl ThoughtStreamDemuxer {
                     }
                     break;
                 }
-            } else if let Some(idx) = remaining.find(THINK_CLOSE) {
-                if idx > 0 {
-                    chunks.push(DemuxedChunk {
-                        kind: LlmStreamDeltaKind::Thought,
-                        text: remaining[..idx].to_string(),
-                    });
-                }
-                self.inside_think = false;
-                remaining = &remaining[idx + THINK_CLOSE.len()..];
             } else {
-                // Check if remaining ends with a partial prefix of THINK_CLOSE (</think>)
-                let mut matched_prefix_len = 0;
-                for prefix_len in (1..THINK_CLOSE.len()).rev() {
-                    if remaining.ends_with(&THINK_CLOSE[..prefix_len]) {
-                        matched_prefix_len = prefix_len;
-                        break;
+                // Inside thought: look for closing tag
+                let mut earliest_close: Option<(usize, &'static str)> = None;
+                if let Some(expected_close) = self.active_close_tag
+                    && let Some(idx) = lower.find(expected_close)
+                {
+                    earliest_close = Some((idx, expected_close));
+                }
+                if earliest_close.is_none() {
+                    for (_, close_tag) in TAG_PAIRS {
+                        if let Some(idx) = lower.find(close_tag) {
+                            if let Some((best_idx, _)) = earliest_close {
+                                if idx < best_idx {
+                                    earliest_close = Some((idx, close_tag));
+                                }
+                            } else {
+                                earliest_close = Some((idx, close_tag));
+                            }
+                        }
                     }
                 }
 
-                if matched_prefix_len > 0 {
-                    let safe_thought_len = remaining.len() - matched_prefix_len;
-                    if safe_thought_len > 0 {
+                if let Some((idx, close_tag)) = earliest_close {
+                    if idx > 0 {
                         chunks.push(DemuxedChunk {
                             kind: LlmStreamDeltaKind::Thought,
-                            text: remaining[..safe_thought_len].to_string(),
+                            text: remaining[..idx].to_string(),
                         });
                     }
-                    self.buffer = remaining[safe_thought_len..].to_string();
+                    self.inside_think = false;
+                    self.active_close_tag = None;
+                    let mut after_close = idx + close_tag.len();
+                    // Strip optional immediate newline after close tag
+                    if remaining[after_close..].starts_with("\r\n") {
+                        after_close += 2;
+                    } else if remaining[after_close..].starts_with('\n') {
+                        after_close += 1;
+                    }
+                    remaining = &remaining[after_close..];
                 } else {
-                    chunks.push(DemuxedChunk {
-                        kind: LlmStreamDeltaKind::Thought,
-                        text: remaining.to_string(),
-                    });
+                    // Check if remaining ends with a partial prefix of closing tag
+                    let mut matched_prefix_len = 0;
+                    for (_, close_tag) in TAG_PAIRS {
+                        if let Some(expected) = self.active_close_tag
+                            && *close_tag != expected
+                        {
+                            continue;
+                        }
+                        for prefix_len in (1..close_tag.len()).rev() {
+                            if lower.ends_with(&close_tag[..prefix_len]) {
+                                matched_prefix_len = matched_prefix_len.max(prefix_len);
+                                break;
+                            }
+                        }
+                    }
+                    if matched_prefix_len > 0 {
+                        let safe_thought_len = remaining.len() - matched_prefix_len;
+                        if safe_thought_len > 0 {
+                            chunks.push(DemuxedChunk {
+                                kind: LlmStreamDeltaKind::Thought,
+                                text: remaining[..safe_thought_len].to_string(),
+                            });
+                        }
+                        self.buffer = remaining[safe_thought_len..].to_string();
+                    } else {
+                        chunks.push(DemuxedChunk {
+                            kind: LlmStreamDeltaKind::Thought,
+                            text: remaining.to_string(),
+                        });
+                    }
+                    break;
                 }
-                break;
             }
         }
 
@@ -160,6 +222,41 @@ mod tests {
                 DemuxedChunk {
                     kind: LlmStreamDeltaKind::Content,
                     text: "final answer".to_string(),
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn demuxes_case_insensitive_and_alternative_tags() {
+        let mut demuxer = ThoughtStreamDemuxer::new();
+        let chunks = demuxer.process("<Thought>deep reasoning</Thought>\nclean result");
+        assert_eq!(
+            chunks,
+            vec![
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Thought,
+                    text: "deep reasoning".to_string(),
+                },
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Content,
+                    text: "clean result".to_string(),
+                },
+            ]
+        );
+
+        let mut demuxer2 = ThoughtStreamDemuxer::new();
+        let chunks2 = demuxer2.process("<THINKING>step 1</THINKING>response");
+        assert_eq!(
+            chunks2,
+            vec![
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Thought,
+                    text: "step 1".to_string(),
+                },
+                DemuxedChunk {
+                    kind: LlmStreamDeltaKind::Content,
+                    text: "response".to_string(),
                 },
             ]
         );

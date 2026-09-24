@@ -1499,6 +1499,9 @@ export type LlmModelSummary = {
 	supportsStructuredOutput: boolean | null,
 	supportsPromptCaching?: boolean | null,
 	metadataSources?: LlmModelMetadataSource[],
+	reasoningMode?: ReasoningMode | null,
+	tokenLimitKey?: string | null,
+	supportedThinkingLevels?: ThinkingLevel[],
 };
 
 export type LlmModelsRequest = LlmModelsRequest_Serialize | LlmModelsRequest_Deserialize;
@@ -1573,6 +1576,7 @@ export type LlmTaskTextPayload = {
 	text: string,
 	delta: string,
 	reset: boolean,
+	isThought?: boolean,
 };
 
 export type LlmTaskType = "polish" | "translate" | "summary";
@@ -2124,6 +2128,8 @@ export type ProjectUpdateInput = {
 };
 
 export type ProjectsViewMode = "list" | "grid" | "table";
+
+export type ReasoningMode = { type: "none" } | { type: "effort"; supported_levels: ThinkingLevel[] } | { type: "budget"; min_budget: number; max_budget: number; default_budget: number } | { type: "hybrid"; supported_levels: ThinkingLevel[]; default_budget: number };
 
 export type RecoveredQueueItem = RecoveredQueueItem_Serialize | RecoveredQueueItem_Deserialize;
 
@@ -2810,6 +2816,8 @@ export type TextReplacementSetRecord = {
 	ignoreCase: boolean,
 	rules: TextReplacementRuleRecord[],
 };
+
+export type ThinkingLevel = { mode: "none" } | { mode: "auto" } | { mode: "minimal" } | { mode: "low" } | { mode: "medium" } | { mode: "high" } | { mode: "xhigh" } | { mode: "max" } | { mode: "budget"; value: number };
 
 export type TimestampSupportHint = "token" | "segment" | "unknown";
 

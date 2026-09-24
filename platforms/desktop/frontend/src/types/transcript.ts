@@ -84,10 +84,13 @@ export type {
   LlmResponseFormatKind,
   LlmSettings,
   LlmTokenUsage,
+  ReasoningEffortLevel,
+  ReasoningMode,
   ResolvedSummaryTemplate,
   SummaryCustomTemplate,
   SummaryTemplate,
   SummaryTemplateId,
+  ThinkingLevel,
 } from './llm';
 export { DEFAULT_SUMMARY_TEMPLATE, DEFAULT_SUMMARY_TEMPLATE_ID } from './llm';
 

@@ -280,6 +280,8 @@ pub struct LlmTaskTextPayload {
     pub text: String,
     pub delta: String,
     pub reset: bool,
+    #[serde(default)]
+    pub is_thought: bool,
 }
 
 fn task_label(task_type: LlmTaskType) -> &'static str {

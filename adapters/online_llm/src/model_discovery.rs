@@ -160,9 +160,7 @@ pub async fn list_models_with_provider(
     if !should_enrich_model_metadata(&request.provider, &request.base_url) {
         return Ok(discovered);
     }
-    let Some(provider_id) = models_dev_provider_id(strategy) else {
-        return Ok(discovered);
-    };
+    let provider_id = models_dev_provider_id(strategy).unwrap_or("");
     Ok(default_models_dev_catalog()
         .enrich(provider_id, discovered)
         .await)

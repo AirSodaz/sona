@@ -353,6 +353,7 @@ describe('SettingsLLMServiceTab', () => {
           }),
         })
       );
+      expect(mockUpdateConfig).toHaveBeenCalled();
     });
 
     const nextSettings =

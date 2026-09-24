@@ -16,6 +16,7 @@ import {
   isProviderModelDiscoveryExpired,
   modelSummaryToMetadata,
   setFeatureModelSelection,
+  setFeatureReasoningBudget,
   setFeatureReasoningEnabled,
   setFeatureReasoningLevel,
   setFeatureTemperature,
@@ -23,7 +24,12 @@ import {
 } from '../../../services/llm/state';
 import { describeLlmModel, listLlmModels } from '../../../services/tauri/llm';
 import type { LlmAssistantConfig } from '../../../types/config';
-import type { LlmFeature, LlmModelEntry, LlmProvider } from '../../../types/transcript';
+import type {
+  LlmFeature,
+  LlmModelEntry,
+  LlmProvider,
+  ReasoningEffortLevel,
+} from '../../../types/transcript';
 import { Dropdown } from '../../Dropdown';
 import {
   getCurrentLlmSettings,
@@ -133,19 +139,60 @@ export function FeatureCard({
         ? (currentLlmState.selections.translationReasoningLevel ?? 'medium')
         : (currentLlmState.selections.summaryReasoningLevel ?? 'medium');
 
+  const reasoningBudget =
+    featureId === 'polish'
+      ? currentLlmState.selections.polishReasoningBudget
+      : featureId === 'translation'
+        ? currentLlmState.selections.translationReasoningBudget
+        : currentLlmState.selections.summaryReasoningBudget;
+
+  const reasoningMode = modelEntry?.metadata?.reasoningMode;
+
   const supportsReasoning = useMemo(() => {
-    return !!(
-      modelEntry?.metadata?.supportsReasoning ||
-      (modelEntry?.model &&
-        (modelEntry.model.toLowerCase().includes('o1-') ||
-          modelEntry.model.toLowerCase() === 'o1' ||
-          modelEntry.model.toLowerCase().includes('o3-') ||
-          modelEntry.model.toLowerCase().includes('deepseek-reasoner') ||
-          modelEntry.model.toLowerCase().includes('deepseek-r1') ||
-          modelEntry.model.toLowerCase().includes('claude-3-7') ||
-          modelEntry.model.toLowerCase().includes('gemini-2.5')))
+    if (typeof modelEntry?.metadata?.supportsReasoning === 'boolean') {
+      return modelEntry.metadata.supportsReasoning;
+    }
+    const modelName = (modelEntry?.model || '').toLowerCase();
+    const core = modelName.split('/').pop() || modelName;
+    return (
+      core.startsWith('o1') ||
+      core.startsWith('o3') ||
+      core.startsWith('o4') ||
+      core.includes('deepseek-reasoner') ||
+      core.includes('deepseek-r1') ||
+      core.includes('claude-3-7') ||
+      core.includes('gemini-2.5') ||
+      core.includes('qwq')
     );
   }, [modelEntry]);
+
+  const supportedLevels = useMemo((): ReasoningEffortLevel[] => {
+    if (reasoningMode && 'type' in reasoningMode) {
+      if (reasoningMode.type === 'effort' && Array.isArray(reasoningMode.supported_levels)) {
+        return reasoningMode.supported_levels.map((l) =>
+          typeof l === 'object' && l !== null && 'mode' in l
+            ? (l as { mode: ReasoningEffortLevel }).mode
+            : (l as unknown as ReasoningEffortLevel)
+        );
+      }
+      if (reasoningMode.type === 'hybrid' && Array.isArray(reasoningMode.supported_levels)) {
+        return reasoningMode.supported_levels.map((l) =>
+          typeof l === 'object' && l !== null && 'mode' in l
+            ? (l as { mode: ReasoningEffortLevel }).mode
+            : (l as unknown as ReasoningEffortLevel)
+        );
+      }
+    }
+    const modelName = (modelEntry?.model || '').toLowerCase();
+    const core = modelName.split('/').pop() || modelName;
+    if (core.startsWith('o1') || core.startsWith('o3')) {
+      return ['low', 'medium', 'high'];
+    }
+    if (core.includes('claude-3-7') || core.includes('gemini-2.5')) {
+      return ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'];
+    }
+    return ['low', 'medium', 'high'];
+  }, [modelEntry, reasoningMode]);
 
   const supportsTemperatureForModel = (
     provider: LlmProvider,
@@ -160,11 +207,13 @@ export function FeatureCard({
       return false;
     }
     const normalizedModel = model.toLowerCase();
+    const core = normalizedModel.split('/').pop() || normalizedModel;
     return !(
-      /(^|[-:])o1(?:$|[-:])/.test(normalizedModel) ||
-      /(^|[-:])o3(?:$|[-:])/.test(normalizedModel) ||
-      normalizedModel.includes('deepseek-reasoner') ||
-      normalizedModel.includes('deepseek-r1')
+      core.startsWith('o1') ||
+      core.startsWith('o3') ||
+      core.startsWith('o4') ||
+      core.includes('deepseek-reasoner') ||
+      core.includes('deepseek-r1')
     );
   };
 
@@ -176,11 +225,13 @@ export function FeatureCard({
 
   const handleReasoningLevelChange = (level: string) => {
     applyTrackedLlmSettings(
-      setFeatureReasoningLevel(
-        latestLlmStateRef.current,
-        featureId,
-        level as 'low' | 'medium' | 'high'
-      )
+      setFeatureReasoningLevel(latestLlmStateRef.current, featureId, level as ReasoningEffortLevel)
+    );
+  };
+
+  const handleReasoningBudgetChange = (budget: number | undefined) => {
+    applyTrackedLlmSettings(
+      setFeatureReasoningBudget(latestLlmStateRef.current, featureId, budget)
     );
   };
 
@@ -566,20 +617,57 @@ export function FeatureCard({
 
             {reasoningEnabled && (
               <div className="feature-field reasoning-level-wrapper">
-                <label className="settings-label" htmlFor={`feature-reasoning-level-${featureId}`}>
-                  {t('settings.llm.reasoning_level')}
-                </label>
-                <Dropdown
-                  id={`feature-reasoning-level-${featureId}`}
-                  value={reasoningLevel}
-                  onChange={(val) => handleReasoningLevelChange(val)}
-                  options={[
-                    { value: 'low', label: t('settings.llm.reasoning_level_low') },
-                    { value: 'medium', label: t('settings.llm.reasoning_level_medium') },
-                    { value: 'high', label: t('settings.llm.reasoning_level_high') },
-                  ]}
-                  style={{ width: '100%' }}
-                />
+                {reasoningMode?.type === 'budget' ? (
+                  <>
+                    <label
+                      className="settings-label"
+                      htmlFor={`feature-reasoning-budget-${featureId}`}
+                    >
+                      {t('settings.llm.reasoning_budget', {
+                        defaultValue: 'Thinking Token Budget',
+                      })}
+                    </label>
+                    <input
+                      id={`feature-reasoning-budget-${featureId}`}
+                      type="number"
+                      className="settings-input"
+                      min={reasoningMode.min_budget}
+                      max={reasoningMode.max_budget}
+                      step={1024}
+                      value={reasoningBudget ?? reasoningMode.default_budget}
+                      onChange={(e) => {
+                        const val = parseInt(e.target.value, 10);
+                        if (!Number.isNaN(val) && val > 0) {
+                          handleReasoningBudgetChange(val);
+                        }
+                      }}
+                      style={{ width: '100%' }}
+                    />
+                  </>
+                ) : (
+                  <>
+                    <label
+                      className="settings-label"
+                      htmlFor={`feature-reasoning-level-${featureId}`}
+                    >
+                      {t('settings.llm.reasoning_level')}
+                    </label>
+                    <Dropdown
+                      id={`feature-reasoning-level-${featureId}`}
+                      value={
+                        supportedLevels.includes(reasoningLevel as ReasoningEffortLevel)
+                          ? reasoningLevel
+                          : (supportedLevels[1] ?? supportedLevels[0] ?? 'medium')
+                      }
+                      onChange={(val) => handleReasoningLevelChange(val)}
+                      options={supportedLevels.map((lvl) => ({
+                        value: lvl,
+                        label: t(`settings.llm.reasoning_level_${lvl}`, { defaultValue: lvl }),
+                      }))}
+                      style={{ width: '100%' }}
+                    />
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -224,9 +224,7 @@ impl LlmModelMetadataPort for OnlineLlmAdapter {
         if !should_enrich_model_metadata(&config.provider, &config.base_url) {
             return Ok(None);
         }
-        let Some(provider_id) = models_dev_provider_id(config.strategy) else {
-            return Ok(None);
-        };
+        let provider_id = models_dev_provider_id(config.strategy).unwrap_or("");
         Ok(default_models_dev_catalog()
             .describe(provider_id, &config.model)
             .await)
