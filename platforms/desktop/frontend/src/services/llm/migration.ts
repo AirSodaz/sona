@@ -234,7 +234,10 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
   const selections = rawSelections as Record<string, unknown>;
   return {
     polishModelId:
-      typeof selections.polishModelId === 'string' && models[selections.polishModelId]
+      typeof selections.polishModelId === 'string' &&
+      models[selections.polishModelId] &&
+      models[selections.polishModelId].provider !== 'google_translate' &&
+      models[selections.polishModelId].provider !== 'google_translate_free'
         ? selections.polishModelId
         : undefined,
     translationModelId:
@@ -242,7 +245,10 @@ function normalizeStoredSelections(rawSelections: unknown, models: Record<string
         ? selections.translationModelId
         : undefined,
     summaryModelId:
-      typeof selections.summaryModelId === 'string' && models[selections.summaryModelId]
+      typeof selections.summaryModelId === 'string' &&
+      models[selections.summaryModelId] &&
+      models[selections.summaryModelId].provider !== 'google_translate' &&
+      models[selections.summaryModelId].provider !== 'google_translate_free'
         ? selections.summaryModelId
         : undefined,
     polishTemperature: normalizeTemperature(selections.polishTemperature),
@@ -524,11 +530,17 @@ function bootstrapMissingModelSelections(
 
     // Legacy single-model setups powered both polish and translation. Summary is filled
     // separately below so translation-only providers do not accidentally unlock it.
-    return setFeatureModelSelection(
-      setFeatureModelSelection(nextSettings, 'polish', migratedModelId),
-      'translation',
-      migratedModelId
-    );
+    if (
+      legacyModel.provider !== 'google_translate' &&
+      legacyModel.provider !== 'google_translate_free'
+    ) {
+      return setFeatureModelSelection(
+        setFeatureModelSelection(nextSettings, 'polish', migratedModelId),
+        'translation',
+        migratedModelId
+      );
+    }
+    return setFeatureModelSelection(nextSettings, 'translation', migratedModelId);
   }
 
   // Fresh installs still need one usable translation path even before the user picks an

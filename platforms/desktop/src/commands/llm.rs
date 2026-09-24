@@ -103,24 +103,13 @@ pub async fn list_local_llm_cards(
     for preset in sona_core::llm::local_models::local_llm_models() {
         seen_filenames.insert(preset.filename.to_lowercase());
 
-        let candidate_paths = [
-            models_dir.join(&preset.filename),
-            models_dir.join(&preset.id).join(&preset.filename),
-        ];
-
-        let mut found_path = None;
-        let mut found_size = None;
-        for path in &candidate_paths {
-            if path.is_file()
-                && let Ok(meta) = std::fs::metadata(path)
-            {
-                found_path = Some(path.to_string_lossy().into_owned());
-                found_size = Some(meta.len());
-                break;
-            }
-        }
-
-        let is_installed = found_path.is_some();
+        let found_path_buf = preset.find_installed_path(&models_dir);
+        let found_size = found_path_buf
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map(|m| m.len());
+        let is_installed = found_path_buf.is_some();
+        let found_path = found_path_buf.map(|p| p.to_string_lossy().into_owned());
         cards.push(preset.to_model_card(is_installed, found_path, found_size));
     }
 
@@ -133,11 +122,15 @@ pub async fn list_local_llm_cards(
                 && ext.eq_ignore_ascii_case("gguf")
                 && let Some(file_name) = path.file_name().and_then(|f| f.to_str())
                 && !seen_filenames.contains(&file_name.to_lowercase())
+                && !sona_core::llm::local_models::is_non_llm_model_file(file_name)
             {
                 let stem = path
                     .file_stem()
                     .and_then(|s| s.to_str())
                     .unwrap_or(file_name);
+                if sona_core::llm::local_models::is_non_llm_model_file(stem) {
+                    continue;
+                }
                 let file_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
                 let formatted_size =
                     format!("{:.1} GB", file_size as f64 / (1024.0 * 1024.0 * 1024.0));

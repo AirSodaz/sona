@@ -116,7 +116,19 @@ export function FeatureCard({
     currentLlmState.providers,
     featureId,
   ]);
-  const selectedProvider = modelEntry?.provider || configuredProvider;
+  const selectedProvider = useMemo(() => {
+    const raw = modelEntry?.provider || configuredProvider;
+    if (
+      featureId !== 'translation' &&
+      (raw === 'google_translate' || raw === 'google_translate_free')
+    ) {
+      return configuredProvider === 'google_translate' ||
+        configuredProvider === 'google_translate_free'
+        ? 'open_ai'
+        : configuredProvider;
+    }
+    return raw;
+  }, [configuredProvider, featureId, modelEntry?.provider]);
   const selectedModel = modelEntry?.model || '';
   const temperature =
     featureId === 'polish'
@@ -248,9 +260,11 @@ export function FeatureCard({
   const [localModelName, setLocalModelName] = useState<string>(selectedModel);
   const [modelCandidates, setModelCandidates] = useState<string[]>([]);
   const [isLoadingCandidates, setIsLoadingCandidates] = useState(false);
+  const [hasLoadedCandidates, setHasLoadedCandidates] = useState(false);
   const [isCandidateMenuOpen, setIsCandidateMenuOpen] = useState(false);
   const [highlightedCandidateIndex, setHighlightedCandidateIndex] = useState(-1);
   const candidateContainerRef = useRef<HTMLDivElement>(null);
+  const lastFetchedProviderRef = useRef<LlmProvider | null>(null);
   const localProviderDefinition = useMemo(
     () => getProviderDefinition(localProvider, currentLlmState.customProviders),
     [currentLlmState.customProviders, localProvider]
@@ -263,14 +277,15 @@ export function FeatureCard({
 
   const providerOptions = useMemo(() => {
     const filtered = listProviderDefinitions(currentLlmState.customProviders).filter((p) => {
-      if (p.id === selectedProvider) return true;
-
+      // Google Translate providers only support translation feature
       if (
         (p.id === 'google_translate' || p.id === 'google_translate_free') &&
         featureId !== 'translation'
       ) {
         return false;
       }
+
+      if (p.id === selectedProvider) return true;
 
       const setting = currentLlmState.providers[p.id as LlmProvider];
       return isProviderConfiguredForConfig(config, p.id as LlmProvider, setting);
@@ -309,18 +324,11 @@ export function FeatureCard({
       ) {
         setModelCandidates([]);
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
         return;
       }
 
       const latestLlmState = latestLlmStateRef.current;
-      const persistedModels = getProviderLlmModels(latestLlmState, provider);
-      const isCacheExpired = isProviderModelDiscoveryExpired(latestLlmState, provider);
-      if (persistedModels.length > 0 && !isCacheExpired) {
-        setModelCandidates(persistedModels.map((entry) => entry.model));
-        setIsLoadingCandidates(false);
-        return;
-      }
-
       const setting =
         latestLlmState.providers[provider] ??
         (provider === 'local' ? { apiHost: '', apiKey: '' } : undefined);
@@ -330,6 +338,7 @@ export function FeatureCard({
       ) {
         setModelCandidates([]);
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
         return;
       }
       setIsLoadingCandidates(true);
@@ -350,13 +359,18 @@ export function FeatureCard({
               )
           : [];
         setModelCandidates(models);
-        applyTrackedLlmSettings(
-          syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
-        );
+        if (provider !== 'local') {
+          applyTrackedLlmSettings(
+            syncProviderDiscoveredModels(latestLlmStateRef.current, provider, result, fetchedAt)
+          );
+        }
       } catch {
+        const latestLlmState = latestLlmStateRef.current;
+        const persistedModels = getProviderLlmModels(latestLlmState, provider);
         setModelCandidates(persistedModels.map((entry) => entry.model));
       } finally {
         setIsLoadingCandidates(false);
+        setHasLoadedCandidates(true);
       }
     },
     [applyTrackedLlmSettings, featureId]
@@ -368,17 +382,71 @@ export function FeatureCard({
     }
 
     if (
+      localProvider !== 'local' &&
       persistedProviderModels.length > 0 &&
       !isProviderModelDiscoveryExpired(currentLlmState, localProvider)
     ) {
       setModelCandidates(persistedProviderModels.map((entry) => entry.model));
+      setIsLoadingCandidates(false);
+      setHasLoadedCandidates(true);
       return;
     }
 
-    queueMicrotask(() => {
-      void fetchModelCandidates(localProvider);
-    });
+    if (lastFetchedProviderRef.current === localProvider) {
+      return;
+    }
+    lastFetchedProviderRef.current = localProvider;
+
+    void fetchModelCandidates(localProvider);
   }, [currentLlmState, fetchModelCandidates, isActive, localProvider, persistedProviderModels]);
+
+  useEffect(() => {
+    if (
+      featureId !== 'translation' &&
+      (localProvider === 'google_translate' || localProvider === 'google_translate_free')
+    ) {
+      setLocalProvider(selectedProvider);
+    }
+  }, [featureId, localProvider, selectedProvider]);
+
+  useEffect(() => {
+    if (
+      featureId !== 'translation' &&
+      (modelEntry?.provider === 'google_translate' ||
+        modelEntry?.provider === 'google_translate_free')
+    ) {
+      applyTrackedLlmSettings(
+        setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
+      );
+    }
+  }, [applyTrackedLlmSettings, featureId, modelEntry?.provider]);
+
+  useEffect(() => {
+    if (localProvider === 'local' && hasLoadedCandidates && !isLoadingCandidates) {
+      if (
+        modelEntry?.provider === 'local' &&
+        modelEntry.model &&
+        !modelCandidates.includes(modelEntry.model)
+      ) {
+        applyTrackedLlmSettings(
+          setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
+        );
+      }
+      if (localModelName && !modelCandidates.includes(localModelName)) {
+        setLocalModelName('');
+      }
+    }
+  }, [
+    applyTrackedLlmSettings,
+    featureId,
+    hasLoadedCandidates,
+    isLoadingCandidates,
+    localModelName,
+    localProvider,
+    modelCandidates,
+    modelEntry?.model,
+    modelEntry?.provider,
+  ]);
 
   const commitModelChange = (providerToSave: LlmProvider, modelToSave: string) => {
     const trimmedModel = modelToSave.trim();
@@ -393,6 +461,9 @@ export function FeatureCard({
       return;
     }
 
+    if (providerToSave === 'local' && !modelCandidates.includes(trimmedModel)) {
+      return;
+    }
     const latestLlmState = latestLlmStateRef.current;
     const isManualAddition = !findLlmModelId(latestLlmState, providerToSave, trimmedModel);
     let nextState = addLlmModel(latestLlmState, { provider: providerToSave, model: trimmedModel });
@@ -445,7 +516,15 @@ export function FeatureCard({
 
   const handleProviderChange = (newProvider: string) => {
     const p = newProvider as LlmProvider;
+    if (
+      featureId !== 'translation' &&
+      (p === 'google_translate' || p === 'google_translate_free')
+    ) {
+      return;
+    }
     setLocalProvider(p);
+    setHasLoadedCandidates(false);
+    lastFetchedProviderRef.current = null;
     if (
       featureId === 'translation' &&
       (p === 'google_translate' || p === 'google_translate_free')
@@ -466,6 +545,12 @@ export function FeatureCard({
   const handleInputBlur = (e: React.FocusEvent) => {
     if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
       setIsCandidateMenuOpen(false);
+      if (localProvider === 'local') {
+        if (!modelCandidates.includes(localModelName)) {
+          setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
+          return;
+        }
+      }
       if (localModelName !== selectedModel) {
         commitModelChange(localProvider, localModelName);
       }
@@ -509,10 +594,15 @@ export function FeatureCard({
         return;
       }
       setIsCandidateMenuOpen(false);
+      if (localProvider === 'local') {
+        if (!modelCandidates.includes(localModelName)) {
+          setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
+          return;
+        }
+      }
       commitModelChange(localProvider, localModelName);
     }
   };
-
   const handleTempChange = (val: number) => {
     applyTrackedLlmSettings(setFeatureTemperature(latestLlmStateRef.current, featureId, val));
   };
@@ -559,7 +649,20 @@ export function FeatureCard({
                   onFocus={() => setIsCandidateMenuOpen(true)}
                   onBlur={handleInputBlur}
                   onKeyDown={handleKeyDown}
-                  placeholder={getModelPlaceholder(localProvider)}
+                  placeholder={
+                    localProvider === 'local' &&
+                    modelCandidates.length === 0 &&
+                    !isLoadingCandidates
+                      ? t('settings.llm.no_local_models_available', {
+                          defaultValue: '未下载本地模型（请先在下方下载）',
+                        })
+                      : getModelPlaceholder(localProvider)
+                  }
+                  disabled={
+                    localProvider === 'local' &&
+                    modelCandidates.length === 0 &&
+                    !isLoadingCandidates
+                  }
                 />
                 {isLoadingCandidates && (
                   <div className="settings-hint feature-card-loading-indicator">

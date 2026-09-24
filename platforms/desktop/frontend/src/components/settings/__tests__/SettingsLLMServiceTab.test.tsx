@@ -1412,4 +1412,172 @@ describe('SettingsLLMServiceTab', () => {
     });
     expect(screen.queryByRole('dialog', { name: 'settings.llm.edit_provider' })).toBeNull();
   });
+
+  it('disables model input and prevents selection when local models are not downloaded', async () => {
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command, args) => {
+      if (command === 'list_llm_models') {
+        const request =
+          args && typeof args === 'object' && 'request' in args ? args.request : undefined;
+        if (
+          request &&
+          typeof request === 'object' &&
+          'provider' in request &&
+          JSON.stringify(request.provider).toLowerCase().includes('local')
+        ) {
+          return [];
+        }
+        return [{ model: 'gpt-4o' }];
+      }
+      return 'OK';
+    });
+
+    currentConfig = buildConfig('local', false);
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    // Feature model input for polish
+    const modelInput = screen.getByLabelText('settings.llm.model_library') as HTMLInputElement;
+    expect(modelInput).toBeTruthy();
+    expect(modelInput.disabled).toBe(true);
+    expect(modelInput.placeholder).toBe('settings.llm.no_local_models_available');
+
+    // Committing un-downloaded model must not be called
+    mockUpdateConfig.mockClear();
+    fireEvent.blur(modelInput);
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
+  });
+
+  it('enables model selection when local models are downloaded and available', async () => {
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return [{ model: 'Qwen/Qwen3.5-4B' }];
+      }
+      return 'OK';
+    });
+
+    currentConfig = buildConfig('local', false);
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    const modelInput = screen.getByLabelText('settings.llm.model_library') as HTMLInputElement;
+    expect(modelInput).toBeTruthy();
+    expect(modelInput.disabled).toBe(false);
+
+    // Focus input to open candidate dropdown
+    await act(async () => {
+      fireEvent.focus(modelInput);
+    });
+
+    // Candidate menu should show the downloaded local model
+    const candidateBtn = screen.getByRole('button', { name: 'Qwen/Qwen3.5-4B' });
+    expect(candidateBtn).toBeTruthy();
+
+    // Selecting it commits model change
+    await act(async () => {
+      fireEvent.click(candidateBtn);
+    });
+
+    expect(mockUpdateConfig).toHaveBeenCalled();
+  });
+
+  it('clears feature model selection if assigned local model is not downloaded', async () => {
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        return [];
+      }
+      return 'OK';
+    });
+
+    // Config has an un-downloaded local model assigned to polish
+    currentConfig = buildConfig('local', false);
+    currentConfig.llmSettings = addLlmModel(currentConfig.llmSettings, {
+      provider: 'local',
+      model: 'Qwen/Qwen3.5-4B',
+    });
+    const modelId = currentConfig.llmSettings.modelOrder[0];
+    currentConfig.llmSettings = setFeatureModelSelection(
+      currentConfig.llmSettings,
+      'polish',
+      modelId
+    );
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    // Model should be cleared from selection because it's not downloaded
+    expect(mockUpdateConfig).toHaveBeenCalled();
+    const modelInput = screen.getByLabelText('settings.llm.model_library') as HTMLInputElement;
+    expect(modelInput.value).toBe('');
+  });
+
+  it('never displays Google Translate in Polish or Summary feature provider options', async () => {
+    // Start with google_translate_free as activeProvider
+    currentConfig = buildConfig('google_translate_free', false);
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    // On polish tab (default)
+    const polishProviderDropdown = document.querySelector(
+      '#provider-polish'
+    ) as HTMLSelectElement | null;
+    if (polishProviderDropdown) {
+      const options = Array.from(polishProviderDropdown.querySelectorAll('option')).map(
+        (o) => o.value
+      );
+      expect(options).not.toContain('google_translate');
+      expect(options).not.toContain('google_translate_free');
+    }
+
+    // Switch to summary tab
+    const summaryTab = screen.getByRole('tab', { name: 'settings.llm.summary_model' });
+    await act(async () => {
+      fireEvent.click(summaryTab);
+    });
+
+    const summaryProviderDropdown = document.querySelector(
+      '#provider-summary'
+    ) as HTMLSelectElement | null;
+    if (summaryProviderDropdown) {
+      const options = Array.from(summaryProviderDropdown.querySelectorAll('option')).map(
+        (o) => o.value
+      );
+      expect(options).not.toContain('google_translate');
+      expect(options).not.toContain('google_translate_free');
+    }
+  });
+
+  it('stops loading spinner when local model candidate fetch completes without infinite loop', async () => {
+    let fetchCount = 0;
+    vi.mocked(tauriApi.invoke).mockImplementation(async (command) => {
+      if (command === 'list_llm_models') {
+        fetchCount += 1;
+        return [{ model: 'Qwen/Qwen3.5-4B' }];
+      }
+      return 'OK';
+    });
+
+    currentConfig = buildConfig('local', false);
+
+    await act(async () => {
+      render(<SettingsLLMServiceTab />);
+    });
+
+    // Wait for microtask / async fetch
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    // Should NOT spin in an infinite loop: fetchCount should be exactly 1
+    expect(fetchCount).toBe(1);
+
+    // Spinner indicator must not be in DOM after loading finishes
+    expect(document.querySelector('.feature-card-loading-indicator')).toBeNull();
+  });
 });

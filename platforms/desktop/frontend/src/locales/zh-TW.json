@@ -2137,6 +2137,7 @@
       "model_library": "模型庫",
       "add_model": "新增模型",
       "no_models_added": "尚未添加模型。",
+      "no_local_models_available": "未下載本地模型（請先在下方下載）",
       "feature_models": "功能模型",
       "feature_models_hint": "在使用潤飾、翻譯和摘要功能前，請先指派對應的模型。",
       "feature_models_runtime_hint": "潤飾、翻譯和摘要將使用此處設定的模型和溫度執行。",

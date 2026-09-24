@@ -2137,6 +2137,7 @@
       "model_library": "モデルライブラリ",
       "add_model": "モデルの追加",
       "no_models_added": "まだモデルは追加されていません。",
+      "no_local_models_available": "ローカルモデルがダウンロードされていません（下部でダウンロードしてください）",
       "feature_models": "機能モデル",
       "feature_models_hint": "これらの機能を使う前に、Polish、翻訳、要約用のモデルを割り当てます。",
       "feature_models_runtime_hint": "ここで設定したモデルと温度を使って、Polish、翻訳、Summary を実行します。",

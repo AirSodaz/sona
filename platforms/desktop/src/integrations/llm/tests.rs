@@ -926,7 +926,7 @@ fn llm_api_url_client_builds_for_https_and_local_or_lan_with_various_timeouts() 
 
 #[tokio::test]
 async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
-    let adapter = DesktopLlmAdapter::new(None);
+    let empty_adapter = DesktopLlmAdapter::new(None);
 
     let local_config = LlmConfig {
         provider: sona_core::domain::LlmProvider::Builtin(
@@ -946,7 +946,33 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
 
     assert!(DesktopLlmAdapter::is_local_config(&local_config));
 
-    let models = adapter
+    // When no models are downloaded, local models list must be empty
+    let empty_models = empty_adapter
+        .list_models(LlmModelsRequest {
+            provider: sona_core::domain::LlmProvider::Builtin(
+                sona_core::domain::BuiltinLlmProvider::Local,
+            ),
+            strategy: Some(sona_core::llm::tasks::LlmProviderStrategy::Local),
+            base_url: "".to_string(),
+            api_key: "".to_string(),
+        })
+        .await
+        .expect("listing local models should succeed");
+
+    assert!(
+        empty_models.is_empty(),
+        "local models list should not include un-downloaded models"
+    );
+
+    // When a model is installed in models_dir, it should be listed, while ASR models must be excluded
+    let temp_dir =
+        std::env::temp_dir().join(format!("sona_desktop_llm_test_{}", uuid::Uuid::new_v4()));
+    std::fs::create_dir_all(&temp_dir).unwrap();
+    std::fs::write(temp_dir.join("Qwen3.5-4B-Q4_K_M.gguf"), b"dummy-llm").unwrap();
+    std::fs::write(temp_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf"), b"dummy-asr").unwrap();
+
+    let installed_adapter = DesktopLlmAdapter::new(Some(temp_dir.clone()));
+    let models = installed_adapter
         .list_models(LlmModelsRequest {
             provider: sona_core::domain::LlmProvider::Builtin(
                 sona_core::domain::BuiltinLlmProvider::Local,
@@ -960,8 +986,16 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
 
     assert!(
         models.iter().any(|m| m.model == "Qwen/Qwen3.5-4B"),
-        "local models list should include default Qwen/Qwen3.5-4B"
+        "local models list should include downloaded Qwen/Qwen3.5-4B"
     );
+    assert!(
+        !models
+            .iter()
+            .any(|m| m.model.contains("ASR") || m.model.contains("asr")),
+        "local models list must not include ASR models"
+    );
+
+    let _ = std::fs::remove_dir_all(temp_dir);
 }
 
 #[tokio::test]

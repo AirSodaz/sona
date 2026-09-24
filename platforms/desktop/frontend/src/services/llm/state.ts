@@ -526,7 +526,16 @@ export function setFeatureModelSelection(
     customProviders: current.customProviders ?? {},
     selections: {
       ...current.selections,
-      [key]: modelId && current.models[modelId] ? modelId : undefined,
+      [key]:
+        modelId &&
+        current.models[modelId] &&
+        !(
+          (feature === 'polish' || feature === 'summary') &&
+          (current.models[modelId].provider === 'google_translate' ||
+            current.models[modelId].provider === 'google_translate_free')
+        )
+          ? modelId
+          : undefined,
     },
   };
 }

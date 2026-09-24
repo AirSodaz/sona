@@ -204,6 +204,9 @@ export function LocalProviderAccordionItem({
 
   const handleApplyFeature = useCallback(
     (card: LocalLlmModelCardType, feature: 'polish' | 'translation' | 'summary' | 'all') => {
+      if (!card.isInstalled) {
+        return;
+      }
       const currentLlmState = getCurrentLlmState(config);
       let nextState = addLlmModel(currentLlmState.llmSettings, {
         provider: 'local',

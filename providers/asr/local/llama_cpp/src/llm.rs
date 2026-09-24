@@ -148,9 +148,34 @@ impl LlamaCppLlmEngine {
         let mut models = Vec::new();
         let mut seen_names = std::collections::HashSet::new();
 
+        let api_host_clean = api_host
+            .map(str::trim)
+            .filter(|h| !h.is_empty() && !h.starts_with("http://") && !h.starts_with("https://"));
+
         // Helper to add a GGUF file
         let mut add_model_entry = |file_path: &Path| {
+            if let Some(file_name) = file_path.file_name().and_then(|s| s.to_str()) {
+                if sona_core::llm::local_models::is_non_llm_model_file(file_name) {
+                    return;
+                }
+                if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(file_name)
+                {
+                    if seen_names.insert(preset.model.clone()) {
+                        models.push(preset.to_model_summary());
+                    }
+                    return;
+                }
+            }
             if let Some(stem) = file_path.file_stem().and_then(|s| s.to_str()) {
+                if sona_core::llm::local_models::is_non_llm_model_file(stem) {
+                    return;
+                }
+                if let Some(preset) = sona_core::llm::local_models::find_local_llm_model(stem) {
+                    if seen_names.insert(preset.model.clone()) {
+                        models.push(preset.to_model_summary());
+                    }
+                    return;
+                }
                 let name = stem.to_string();
                 if seen_names.insert(name.clone()) {
                     models.push(LlmModelSummary {
@@ -166,9 +191,6 @@ impl LlamaCppLlmEngine {
         };
 
         // 1. Scan api_host if directory
-        let api_host_clean = api_host
-            .map(str::trim)
-            .filter(|h| !h.is_empty() && !h.starts_with("http://") && !h.starts_with("https://"));
         if let Some(host) = api_host_clean {
             let host_path = Path::new(host);
             if host_path.is_file() && is_gguf_file(host_path) {
@@ -185,9 +207,35 @@ impl LlamaCppLlmEngine {
             scan_dir_for_gguf(dir, 3, &mut add_model_entry);
         }
 
-        // 3. Ensure all presets from sona_core::llm::local_models are present
+        // 3. For presets from sona_core::llm::local_models, only add if actually installed!
         for preset in sona_core::llm::local_models::local_llm_models() {
-            if seen_names.insert(preset.model.clone()) {
+            let is_installed = if let Some(dir) = &self.models_dir
+                && dir.is_dir()
+            {
+                preset.is_installed_in_dir(dir) || find_model_in_dir(dir, &preset.model).is_some()
+            } else {
+                false
+            } || if let Some(host) = api_host_clean {
+                let host_path = Path::new(host);
+                if host_path.is_file() {
+                    host_path
+                        .file_stem()
+                        .and_then(|s| s.to_str())
+                        .is_some_and(|s| {
+                            s.eq_ignore_ascii_case(&preset.id)
+                                || s.eq_ignore_ascii_case(&preset.filename)
+                        })
+                } else if host_path.is_dir() {
+                    preset.is_installed_in_dir(host_path)
+                        || find_model_in_dir(host_path, &preset.model).is_some()
+                } else {
+                    false
+                }
+            } else {
+                false
+            };
+
+            if is_installed && seen_names.insert(preset.model.clone()) {
                 models.push(preset.to_model_summary());
             }
         }
@@ -775,13 +823,48 @@ mod tests {
     }
 
     #[test]
-    fn scans_local_models_includes_default_qwen() {
+    fn scans_local_models_empty_when_not_downloaded() {
         let engine = LlamaCppLlmEngine::new();
         let list = engine.scan_local_models(None);
-        assert!(list.iter().any(|m| m.model == DEFAULT_LOCAL_LLM_MODEL));
-        assert!(list.iter().any(|m| m.model == "google/gemma-4-e2b"));
+        assert!(
+            list.is_empty(),
+            "Un-downloaded models must not appear in scan_local_models"
+        );
     }
 
+    #[test]
+    fn scans_local_models_includes_installed_preset_and_excludes_asr() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("models_scan_test_{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        // Installed LLM preset file
+        let qwen_file = temp_dir.join(DEFAULT_LOCAL_LLM_FILENAME);
+        std::fs::write(&qwen_file, b"dummy").unwrap();
+
+        // ASR GGUF file and mmproj file
+        let asr_file = temp_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf");
+        std::fs::write(&asr_file, b"dummy-asr").unwrap();
+        let mmproj_file = temp_dir.join("mmproj-Qwen3-ASR-0.6B-Q8_0.gguf");
+        std::fs::write(&mmproj_file, b"dummy-mmproj").unwrap();
+
+        let engine = LlamaCppLlmEngine::with_models_dir(Some(temp_dir.clone()));
+        let list = engine.scan_local_models(None);
+
+        // Should include installed Qwen LLM
+        assert!(list.iter().any(|m| m.model == DEFAULT_LOCAL_LLM_MODEL));
+        // Should NOT include uninstalled gemma
+        assert!(!list.iter().any(|m| m.model == "google/gemma-4-e2b"));
+        // Should NOT include ASR or mmproj models
+        assert!(
+            !list
+                .iter()
+                .any(|m| m.model.contains("ASR") || m.model.contains("asr"))
+        );
+        assert!(!list.iter().any(|m| m.model.contains("mmproj")));
+
+        let _ = std::fs::remove_dir_all(temp_dir);
+    }
     fn test_config(model: &str) -> LlmConfig {
         LlmConfig {
             provider: sona_core::domain::LlmProvider::Builtin(

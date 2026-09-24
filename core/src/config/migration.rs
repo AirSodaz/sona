@@ -1929,6 +1929,18 @@ fn normalize_stored_selections(
             .and_then(Value::as_str)
             .filter(|id| models.contains_key(*id))
         {
+            let model_provider = models
+                .get(id)
+                .and_then(|m| m.get("provider"))
+                .and_then(Value::as_str);
+            if matches!(key, "polishModelId" | "summaryModelId")
+                && matches!(
+                    model_provider,
+                    Some("google_translate" | "google_translate_free")
+                )
+            {
+                continue;
+            }
             selections.insert(key.to_string(), json!(id));
         }
     }
@@ -2004,7 +2016,6 @@ fn bootstrap_missing_model_selections(
     {
         return settings;
     }
-    let legacy_model_present = legacy_model.is_some();
     let (provider, model) =
         legacy_model.unwrap_or_else(|| (DEFAULT_LLM_PROVIDER.to_string(), "default".to_string()));
     let model_id = create_model_id(&provider, &model);
@@ -2020,9 +2031,7 @@ fn bootstrap_missing_model_selections(
         "/selections/translationModelId",
         json!(model_id.clone()),
     );
-    if (provider != "google_translate" && provider != "google_translate_free")
-        || legacy_model_present
-    {
+    if provider != "google_translate" && provider != "google_translate_free" {
         set_pointer(&mut settings, "/selections/polishModelId", json!(model_id));
     }
     settings

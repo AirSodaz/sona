@@ -279,6 +279,20 @@ describe('llm state', () => {
     ).toBe(true);
   });
 
+  it('rejects assigning Google Translate to polish or summary features', () => {
+    let settings = addLlmModel(createLlmSettings(), {
+      provider: 'google_translate_free',
+      model: 'default',
+    });
+    const modelId = settings.modelOrder[0];
+    settings = setFeatureModelSelection(settings, 'polish', modelId);
+    expect(settings.selections.polishModelId).toBeUndefined();
+    settings = setFeatureModelSelection(settings, 'summary', modelId);
+    expect(settings.selections.summaryModelId).toBeUndefined();
+    settings = setFeatureModelSelection(settings, 'translation', modelId);
+    expect(settings.selections.translationModelId).toBe(modelId);
+  });
+
   it('marks a provider model discovery cache expired when provider settings change', () => {
     const synced = syncProviderDiscoveredModels(
       createLlmSettings('open_ai'),

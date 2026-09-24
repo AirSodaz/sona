@@ -2137,6 +2137,7 @@
       "model_library": "모델 라이브러리",
       "add_model": "모델 추가",
       "no_models_added": "아직 추가한 모델이 없습니다.",
+      "no_local_models_available": "다운로드된 로컬 모델이 없습니다 (아래에서 먼저 다운로드하세요)",
       "feature_models": "기능별 모델",
       "feature_models_hint": "이 기능을 사용하기 전에 정리, 번역, 요약에 사용할 모델을 지정하세요.",
       "feature_models_runtime_hint": "정리, 번역, 요약은 여기에서 설정한 모델과 temperature로 실행됩니다.",

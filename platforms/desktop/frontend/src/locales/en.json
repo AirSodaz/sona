@@ -2108,6 +2108,7 @@
       "model_library": "Model Library",
       "add_model": "Add Model",
       "no_models_added": "No models added yet.",
+      "no_local_models_available": "No local models downloaded (please download below)",
       "feature_models": "Feature Models",
       "feature_models_hint": "Assign models for polish, translation, and summary before using those features.",
       "feature_models_runtime_hint": "Polish, translation, and summary run with the model and temperature configured here.",
