@@ -12,19 +12,29 @@ use crate::transport::LlmApiUrl;
 pub fn build_gemini_payload_for_request(
     request: &LlmCompletionRequest,
 ) -> Result<Value, LlmPortError> {
-    let mut generation_config = json!({
-        "temperature": request.effective_temperature().unwrap_or(0.7),
-    });
+    let capabilities = request.capabilities();
+    let mut generation_config = json!({});
+    if capabilities.supports_temperature {
+        generation_config["temperature"] = json!(request.effective_temperature().unwrap_or(0.7));
+    }
     if let Some(max_output_tokens) = request.options.max_output_tokens {
         generation_config["maxOutputTokens"] = json!(max_output_tokens);
     }
     if request.effective_reasoning_enabled() {
         let thinking = request.effective_thinking_level();
-        let is_budget_model = request.config.model.contains("gemini-2.5")
-            || request.config.model.contains("thinking")
-            || matches!(thinking, sona_core::llm::runtime::ThinkingLevel::Budget(_));
-        let is_gemini_2_0 = request.config.model.contains("gemini-2.0");
-        generation_config["thinkingConfig"] = if is_budget_model {
+        if capabilities.uses_google_thinking_level {
+            let label = match thinking {
+                sona_core::llm::runtime::ThinkingLevel::Minimal => "MINIMAL",
+                sona_core::llm::runtime::ThinkingLevel::Low => "LOW",
+                sona_core::llm::runtime::ThinkingLevel::High
+                | sona_core::llm::runtime::ThinkingLevel::Xhigh
+                | sona_core::llm::runtime::ThinkingLevel::Max => "HIGH",
+                _ => "MEDIUM",
+            };
+            generation_config["thinkingConfig"] = json!({
+                "thinkingLevel": label,
+            });
+        } else {
             let raw_budget = thinking
                 .resolve_budget_tokens(1024, 2048, 4096)
                 .unwrap_or(2048);
@@ -33,7 +43,8 @@ pub fn build_gemini_payload_for_request(
                 .max_output_tokens
                 .map(|limit| raw_budget.min(limit.min(u64::from(u32::MAX)) as u32))
                 .unwrap_or(raw_budget);
-            if is_gemini_2_0 {
+            let is_gemini_2_0 = request.config.model.contains("gemini-2.0");
+            generation_config["thinkingConfig"] = if is_gemini_2_0 {
                 json!({
                     "thinkingBudget": budget,
                 })
@@ -42,20 +53,8 @@ pub fn build_gemini_payload_for_request(
                     "thinkingBudget": budget,
                     "includeThoughts": true,
                 })
-            }
-        } else {
-            let label = match thinking {
-                sona_core::llm::runtime::ThinkingLevel::Minimal
-                | sona_core::llm::runtime::ThinkingLevel::Low => "LOW",
-                sona_core::llm::runtime::ThinkingLevel::High
-                | sona_core::llm::runtime::ThinkingLevel::Xhigh
-                | sona_core::llm::runtime::ThinkingLevel::Max => "HIGH",
-                _ => "MEDIUM",
             };
-            json!({
-                "thinkingLevel": label,
-            })
-        };
+        }
     }
     if matches!(
         &request.options.response_format,

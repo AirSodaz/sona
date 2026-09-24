@@ -63,20 +63,24 @@ where
         .map_err(reqwest_port_error)?;
 
     let status = response.status();
-    let response = if status == reqwest::StatusCode::BAD_REQUEST {
+    let response = if status == reqwest::StatusCode::BAD_REQUEST
+        || status == reqwest::StatusCode::UNPROCESSABLE_ENTITY
+    {
         let headers_clone = response.headers().clone();
         let text = response.text().await.map_err(reqwest_port_error)?;
         let lower_err = text.to_ascii_lowercase();
         let mut retry_needed = false;
         let mut cleaned_payload = payload.clone();
 
-        if lower_err.contains("stream_options") && cleaned_payload.get("stream_options").is_some() {
+        if (lower_err.contains("stream_options") || lower_err.contains("streamoptions"))
+            && cleaned_payload.get("stream_options").is_some()
+        {
             cleaned_payload
                 .as_object_mut()
                 .and_then(|p| p.remove("stream_options"));
             retry_needed = true;
         }
-        if lower_err.contains("reasoning_effort")
+        if (lower_err.contains("reasoning_effort") || lower_err.contains("reasoningeffort"))
             && cleaned_payload.get("reasoning_effort").is_some()
         {
             cleaned_payload

@@ -1223,12 +1223,12 @@ export type HistorySummaryPayload = HistorySummaryPayload_Serialize | HistorySum
 
 export type HistorySummaryPayload_Deserialize = {
 	activeTemplateId: string,
-	record: TranscriptSummaryRecordPayload | null,
+	record: TranscriptSummaryRecordPayload_Deserialize | null,
 };
 
 export type HistorySummaryPayload_Serialize = {
 	activeTemplateId: string,
-	record?: TranscriptSummaryRecordPayload | null,
+	record?: TranscriptSummaryRecordPayload_Serialize | null,
 };
 
 export type HistoryTrashItemsRequest = {
@@ -1409,6 +1409,7 @@ export type LlmCompletionResponse = LlmCompletionResponse_Serialize | LlmComplet
 
 export type LlmCompletionResponse_Deserialize = {
 	text: string,
+	thought?: string | null,
 	json: unknown | null,
 	usage: TokenUsage | null,
 	execution: LlmExecutionMetadata,
@@ -1416,6 +1417,7 @@ export type LlmCompletionResponse_Deserialize = {
 
 export type LlmCompletionResponse_Serialize = {
 	text: string,
+	thought?: string | null,
 	json?: unknown | null,
 	usage: TokenUsage | null,
 	execution: LlmExecutionMetadata,
@@ -2961,7 +2963,9 @@ export type TranscriptSnapshotRecord_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 };
 
-export type TranscriptSummaryRecordPayload = {
+export type TranscriptSummaryRecordPayload = TranscriptSummaryRecordPayload_Serialize | TranscriptSummaryRecordPayload_Deserialize;
+
+export type TranscriptSummaryRecordPayload_Deserialize = {
 	templateId: string,
 	content: string,
 	thought?: string | null,
@@ -2969,7 +2973,23 @@ export type TranscriptSummaryRecordPayload = {
 	sourceFingerprint: string,
 };
 
-export type TranscriptSummaryResult = {
+export type TranscriptSummaryRecordPayload_Serialize = {
+	templateId: string,
+	content: string,
+	thought?: string | null,
+	generatedAt: string,
+	sourceFingerprint: string,
+};
+
+export type TranscriptSummaryResult = TranscriptSummaryResult_Serialize | TranscriptSummaryResult_Deserialize;
+
+export type TranscriptSummaryResult_Deserialize = {
+	templateId: string,
+	content: string,
+	thought?: string | null,
+};
+
+export type TranscriptSummaryResult_Serialize = {
 	templateId: string,
 	content: string,
 	thought?: string | null,

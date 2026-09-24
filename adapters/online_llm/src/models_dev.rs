@@ -139,11 +139,22 @@ struct ModelsDevProvider {
 }
 
 #[derive(Deserialize)]
+struct ModelsDevReasoningOption {
+    #[serde(rename = "type")]
+    option_type: String,
+    min: Option<u64>,
+    max: Option<u64>,
+    default: Option<serde_json::Value>,
+    options: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
 struct ModelsDevModel {
     id: String,
     name: Option<String>,
     structured_output: Option<bool>,
     reasoning: Option<bool>,
+    reasoning_options: Option<Vec<ModelsDevReasoningOption>>,
     tool_call: Option<bool>,
     knowledge: Option<String>,
     release_date: Option<String>,
@@ -193,7 +204,7 @@ pub fn parse_models_dev_models(
     for model_id in model_ids {
         // 1. Exact match in the requested provider
         if let Some(m) = provider.and_then(|p| p.models.get(*model_id)) {
-            let mut summary = model_summary(m);
+            let mut summary = model_summary(m, provider_id);
             summary.model = (*model_id).to_string();
             results.push(summary);
             continue;
@@ -203,19 +214,19 @@ pub fn parse_models_dev_models(
         let core_id = model_id.split('/').next_back().unwrap_or(model_id);
         let mut found = None;
 
-        for p in catalog.values() {
+        for (p_id, p) in &catalog {
             if let Some(m) = p.models.get(*model_id).or_else(|| p.models.get(core_id)) {
-                found = Some(m);
+                found = Some((m, p_id.as_str()));
                 break;
             }
         }
 
         if found.is_none() {
             let lower_core = core_id.to_lowercase();
-            for p in catalog.values() {
+            for (p_id, p) in &catalog {
                 for (id, m) in &p.models {
                     if id.to_lowercase() == lower_core {
-                        found = Some(m);
+                        found = Some((m, p_id.as_str()));
                         break;
                     }
                 }
@@ -225,8 +236,8 @@ pub fn parse_models_dev_models(
             }
         }
 
-        if let Some(m) = found {
-            let mut summary = model_summary(m);
+        if let Some((m, found_p_id)) = found {
+            let mut summary = model_summary(m, found_p_id);
             summary.model = (*model_id).to_string();
             results.push(summary);
         }
@@ -235,7 +246,7 @@ pub fn parse_models_dev_models(
     Ok(results)
 }
 
-fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
+fn model_summary(model: &ModelsDevModel, provider_id: &str) -> LlmModelSummary {
     let modalities = model.modalities.as_ref();
     let input_modalities = modalities
         .map(|modalities| parse_modalities(&modalities.input))
@@ -254,79 +265,70 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
     let cache_read_price = cost.and_then(|cost| cost.cache_read);
     let cache_write_price = cost.and_then(|cost| cost.cache_write);
 
+    let strategy = strategy_from_models_dev_provider(provider_id);
+    let inferred =
+        sona_core::llm::capabilities::LlmModelCapabilities::infer(strategy, &model.id, "");
+
     let (reasoning_mode, supported_thinking_levels) = if model.reasoning == Some(true) {
-        let normalized = model.id.to_lowercase();
-        if normalized.contains("o1") || normalized.contains("o3") {
-            (
-                Some(sona_core::llm::runtime::ReasoningMode::Effort {
-                    supported_levels: vec![
-                        sona_core::llm::runtime::ThinkingLevel::Low,
-                        sona_core::llm::runtime::ThinkingLevel::Medium,
-                        sona_core::llm::runtime::ThinkingLevel::High,
-                    ],
-                }),
-                vec![
-                    sona_core::llm::runtime::ThinkingLevel::Low,
-                    sona_core::llm::runtime::ThinkingLevel::Medium,
-                    sona_core::llm::runtime::ThinkingLevel::High,
-                ],
-            )
-        } else if normalized.contains("claude-3-7") {
-            (
-                Some(sona_core::llm::runtime::ReasoningMode::Budget {
-                    min_budget: 1024,
-                    max_budget: model.limit.as_ref().and_then(|l| l.output).unwrap_or(64000) as u32,
-                    default_budget: 4096,
-                }),
-                vec![
-                    sona_core::llm::runtime::ThinkingLevel::Minimal,
-                    sona_core::llm::runtime::ThinkingLevel::Low,
-                    sona_core::llm::runtime::ThinkingLevel::Medium,
-                    sona_core::llm::runtime::ThinkingLevel::High,
-                    sona_core::llm::runtime::ThinkingLevel::Xhigh,
-                    sona_core::llm::runtime::ThinkingLevel::Max,
-                ],
-            )
-        } else if normalized.contains("gemini-2.5") {
-            (
-                Some(sona_core::llm::runtime::ReasoningMode::Hybrid {
-                    supported_levels: vec![
-                        sona_core::llm::runtime::ThinkingLevel::Minimal,
-                        sona_core::llm::runtime::ThinkingLevel::Low,
-                        sona_core::llm::runtime::ThinkingLevel::Medium,
-                        sona_core::llm::runtime::ThinkingLevel::High,
-                    ],
-                    default_budget: 2048,
-                }),
-                vec![
-                    sona_core::llm::runtime::ThinkingLevel::Minimal,
-                    sona_core::llm::runtime::ThinkingLevel::Low,
-                    sona_core::llm::runtime::ThinkingLevel::Medium,
-                    sona_core::llm::runtime::ThinkingLevel::High,
-                ],
-            )
-        } else if normalized.contains("deepseek-r1")
-            || normalized.contains("deepseek-reasoner")
-            || normalized.contains("qwq")
-        {
-            (
-                Some(sona_core::llm::runtime::ReasoningMode::None),
-                Vec::new(),
-            )
+        if let Some(options) = &model.reasoning_options {
+            if let Some(effort_opt) = options.iter().find(|o| o.option_type == "effort") {
+                let levels: Vec<sona_core::llm::runtime::ThinkingLevel> = effort_opt
+                    .options
+                    .as_ref()
+                    .map(|opts| {
+                        opts.iter()
+                            .filter_map(|s| match s.as_str() {
+                                "minimal" => Some(sona_core::llm::runtime::ThinkingLevel::Minimal),
+                                "low" => Some(sona_core::llm::runtime::ThinkingLevel::Low),
+                                "medium" => Some(sona_core::llm::runtime::ThinkingLevel::Medium),
+                                "high" => Some(sona_core::llm::runtime::ThinkingLevel::High),
+                                "xhigh" => Some(sona_core::llm::runtime::ThinkingLevel::Xhigh),
+                                "max" => Some(sona_core::llm::runtime::ThinkingLevel::Max),
+                                _ => None,
+                            })
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                let supported = if levels.is_empty() {
+                    inferred.supported_thinking_levels.clone()
+                } else {
+                    levels
+                };
+                (
+                    Some(sona_core::llm::runtime::ReasoningMode::Effort {
+                        supported_levels: supported.clone(),
+                    }),
+                    supported,
+                )
+            } else if let Some(budget_opt) = options.iter().find(|o| o.option_type == "budget") {
+                let min_budget = budget_opt.min.unwrap_or(1024) as u32;
+                let max_budget = budget_opt
+                    .max
+                    .unwrap_or_else(|| model.limit.as_ref().and_then(|l| l.output).unwrap_or(64000))
+                    as u32;
+                let default_budget = budget_opt
+                    .default
+                    .as_ref()
+                    .and_then(serde_json::Value::as_u64)
+                    .unwrap_or(4096) as u32;
+                (
+                    Some(sona_core::llm::runtime::ReasoningMode::Budget {
+                        min_budget,
+                        max_budget,
+                        default_budget,
+                    }),
+                    inferred.supported_thinking_levels.clone(),
+                )
+            } else {
+                (
+                    Some(inferred.reasoning_mode.clone()),
+                    inferred.supported_thinking_levels.clone(),
+                )
+            }
         } else {
             (
-                Some(sona_core::llm::runtime::ReasoningMode::Effort {
-                    supported_levels: vec![
-                        sona_core::llm::runtime::ThinkingLevel::Low,
-                        sona_core::llm::runtime::ThinkingLevel::Medium,
-                        sona_core::llm::runtime::ThinkingLevel::High,
-                    ],
-                }),
-                vec![
-                    sona_core::llm::runtime::ThinkingLevel::Low,
-                    sona_core::llm::runtime::ThinkingLevel::Medium,
-                    sona_core::llm::runtime::ThinkingLevel::High,
-                ],
+                Some(inferred.reasoning_mode.clone()),
+                inferred.supported_thinking_levels.clone(),
             )
         }
     } else {
@@ -336,12 +338,8 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
         )
     };
 
-    let token_limit_key =
-        if sona_core::llm::streaming_protocol::requires_max_completion_tokens(&model.id) {
-            Some("max_completion_tokens".to_string())
-        } else {
-            Some("max_tokens".to_string())
-        };
+    let token_limit_key = Some(inferred.token_limit_key.as_str().to_string());
+    let supports_temperature = Some(inferred.supports_temperature);
 
     LlmModelSummary {
         model: model.id.clone(),
@@ -360,9 +358,7 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
         supports_multimodal,
         supports_tools: model.tool_call,
         supports_reasoning: model.reasoning,
-        supports_temperature: Some(
-            !sona_core::llm::streaming_protocol::is_temperature_prohibited_for_model(&model.id),
-        ),
+        supports_temperature,
         supports_structured_output: model.structured_output,
         supports_prompt_caching: (cache_read_price.is_some() || cache_write_price.is_some())
             .then_some(true),
@@ -370,6 +366,33 @@ fn model_summary(model: &ModelsDevModel) -> LlmModelSummary {
         reasoning_mode,
         token_limit_key,
         supported_thinking_levels,
+    }
+}
+
+pub fn strategy_from_models_dev_provider(provider_id: &str) -> LlmProviderStrategy {
+    match provider_id {
+        "openai" => LlmProviderStrategy::OpenAi,
+        "azure" => LlmProviderStrategy::AzureOpenAi,
+        "anthropic" => LlmProviderStrategy::Anthropic,
+        "google" => LlmProviderStrategy::Gemini,
+        "deepseek" => LlmProviderStrategy::DeepSeek,
+        "moonshotai" | "moonshotai-cn" => LlmProviderStrategy::MoonshotAi,
+        "xiaomi" => LlmProviderStrategy::Xiaomi,
+        "siliconflow" => LlmProviderStrategy::SiliconFlow,
+        "alibaba" => LlmProviderStrategy::Qwen,
+        "minimax" | "minimax-cn" => LlmProviderStrategy::MinimaxGlobal,
+        "openrouter" => LlmProviderStrategy::OpenRouter,
+        "groq" => LlmProviderStrategy::Groq,
+        "xai" => LlmProviderStrategy::XAi,
+        "mistral" => LlmProviderStrategy::MistralAi,
+        "perplexity" => LlmProviderStrategy::Perplexity,
+        "zhipuai" => LlmProviderStrategy::Chatglm,
+        "github-copilot" => LlmProviderStrategy::Copilot,
+        "cohere" => LlmProviderStrategy::Cohere,
+        "together" => LlmProviderStrategy::Together,
+        "venice" => LlmProviderStrategy::Venice,
+        "hyperbolic" => LlmProviderStrategy::Hyperbolic,
+        _ => LlmProviderStrategy::OpenAiCompatible,
     }
 }
 

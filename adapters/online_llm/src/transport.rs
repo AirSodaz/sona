@@ -239,12 +239,13 @@ pub async fn post_json_request(
     let resp_headers = response.headers().clone();
     let text = response.text().await.map_err(reqwest_port_error)?;
 
-    if status == StatusCode::BAD_REQUEST {
+    if status == StatusCode::BAD_REQUEST || status == StatusCode::UNPROCESSABLE_ENTITY {
         let lower_err = text.to_ascii_lowercase();
         let mut retry_needed = false;
         let mut cleaned_body = body.clone();
 
-        if lower_err.contains("reasoning_effort") && cleaned_body.get("reasoning_effort").is_some()
+        if (lower_err.contains("reasoning_effort") || lower_err.contains("reasoningeffort"))
+            && cleaned_body.get("reasoning_effort").is_some()
         {
             cleaned_body
                 .as_object_mut()
@@ -257,7 +258,9 @@ pub async fn post_json_request(
                 .and_then(|p| p.remove("temperature"));
             retry_needed = true;
         }
-        if lower_err.contains("stream_options") && cleaned_body.get("stream_options").is_some() {
+        if (lower_err.contains("stream_options") || lower_err.contains("streamoptions"))
+            && cleaned_body.get("stream_options").is_some()
+        {
             cleaned_body
                 .as_object_mut()
                 .and_then(|p| p.remove("stream_options"));

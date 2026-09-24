@@ -1,12 +1,14 @@
-use serde_json::{Value, json};
-use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_usage_from_json_response};
-use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
-use sona_core::llm::streaming_protocol::{OpenAiChatPayloadConfig, build_openai_chat_payload};
-use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
-
 use crate::completion::completion_input;
 use crate::transport::{LlmApiUrl, post_json_request};
+use serde_json::{Value, json};
+use sona_core::llm::capabilities::TokenLimitKey;
+use sona_core::llm::provider_protocol::{StandardLlmResponse, extract_usage_from_json_response};
+use sona_core::llm::runtime::{LlmCompletionRequest, LlmResponseFormat};
+use sona_core::llm::streaming_protocol::{
+    OpenAiChatPayloadConfig, build_openai_chat_payload_with_capabilities,
+};
+use sona_core::llm::tasks::LlmProviderStrategy;
+use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
 
 pub async fn generate_with_openai_chat_api(
     url: &LlmApiUrl,
@@ -47,7 +49,8 @@ pub fn build_openai_chat_payload_for_request(
         request.config.strategy
     };
     let input = completion_input(request);
-    let mut payload = build_openai_chat_payload(
+    let capabilities = request.capabilities();
+    let mut payload = build_openai_chat_payload_with_capabilities(
         OpenAiChatPayloadConfig {
             strategy,
             model: &request.config.model,
@@ -55,6 +58,7 @@ pub fn build_openai_chat_payload_for_request(
             reasoning_enabled: request.effective_reasoning_enabled(),
             reasoning_level: request.effective_reasoning_level(),
         },
+        &capabilities,
         &input,
         stream,
     );
@@ -74,11 +78,13 @@ pub fn build_openai_chat_payload_for_request(
         );
     }
     if let Some(max_output_tokens) = request.options.max_output_tokens {
-        if sona_core::llm::streaming_protocol::requires_max_completion_tokens(&request.config.model)
-        {
-            payload["max_completion_tokens"] = json!(max_output_tokens);
-        } else {
-            payload["max_tokens"] = json!(max_output_tokens);
+        match capabilities.token_limit_key {
+            TokenLimitKey::MaxCompletionTokens => {
+                payload["max_completion_tokens"] = json!(max_output_tokens);
+            }
+            TokenLimitKey::MaxTokens => {
+                payload["max_tokens"] = json!(max_output_tokens);
+            }
         }
     }
     match &request.options.response_format {

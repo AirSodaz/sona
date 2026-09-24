@@ -419,6 +419,12 @@ fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
             }
         }
         Value::Object(map) => {
+            if map.get("thought").and_then(Value::as_bool) == Some(true)
+                || map.get("type").and_then(Value::as_str) == Some("thinking")
+            {
+                return;
+            }
+
             if let Some(text) = map
                 .get("output_text")
                 .and_then(Value::as_str)
@@ -573,30 +579,34 @@ pub fn extract_text_and_thought_from_json_response(
         }
     }
 
+    let mut raw_parts = Vec::new();
+
     // Extract from Gemini candidates[0].content.parts
     if let Some(parts) = response
         .pointer("/candidates/0/content/parts")
         .and_then(Value::as_array)
     {
         for part in parts {
-            if part.get("thought").and_then(Value::as_bool) == Some(true)
-                && let Some(t) = part.get("text").and_then(Value::as_str)
-            {
+            let is_thought = part.get("thought").and_then(Value::as_bool) == Some(true);
+            if let Some(t) = part.get("text").and_then(Value::as_str) {
                 let trimmed = t.trim();
-                if !trimmed.is_empty() {
-                    explicit_thoughts.push(trimmed.to_string());
+                if is_thought {
+                    if !trimmed.is_empty() {
+                        explicit_thoughts.push(trimmed.to_string());
+                    }
+                } else if !trimmed.is_empty() {
+                    raw_parts.push(trimmed.to_string());
                 }
             }
         }
     }
 
-    let mut raw_parts = Vec::new();
-    if let Some(output_text) = response.get("output_text").and_then(Value::as_str)
+    if raw_parts.is_empty()
+        && let Some(output_text) = response.get("output_text").and_then(Value::as_str)
         && !output_text.is_empty()
     {
         raw_parts.push(output_text.to_string());
     }
-
     if raw_parts.is_empty()
         && let Some(choices) = response.get("choices")
     {

@@ -158,10 +158,17 @@ export function FeatureCard({
       core.startsWith('o1') ||
       core.startsWith('o3') ||
       core.startsWith('o4') ||
+      core.startsWith('gpt-5') ||
+      core.startsWith('gpt-6') ||
       core.includes('deepseek-reasoner') ||
       core.includes('deepseek-r1') ||
       core.includes('claude-3-7') ||
+      core.includes('claude-opus-5') ||
+      core.includes('claude-5') ||
+      core.includes('claude-sonnet-4') ||
+      core.includes('claude-4') ||
       core.includes('gemini-2.5') ||
+      core.includes('gemini-3') ||
       core.includes('qwq')
     );
   }, [modelEntry]);
@@ -212,6 +219,8 @@ export function FeatureCard({
       core.startsWith('o1') ||
       core.startsWith('o3') ||
       core.startsWith('o4') ||
+      core.startsWith('gpt-5') ||
+      core.startsWith('gpt-6') ||
       core.includes('deepseek-reasoner') ||
       core.includes('deepseek-r1')
     );
@@ -617,7 +626,20 @@ export function FeatureCard({
 
             {reasoningEnabled && (
               <div className="feature-field reasoning-level-wrapper">
-                {reasoningMode?.type === 'budget' ? (
+                {reasoningMode?.type === 'none' ? (
+                  <div
+                    className="settings-hint"
+                    style={{
+                      fontSize: '0.85rem',
+                      color: 'var(--text-secondary, #888)',
+                      paddingTop: '1.5rem',
+                    }}
+                  >
+                    {t('settings.llm.builtin_reasoning', {
+                      defaultValue: '内置深度思考（无需配置档位）',
+                    })}
+                  </div>
+                ) : reasoningMode?.type === 'budget' ? (
                   <>
                     <label
                       className="settings-label"

@@ -118,6 +118,25 @@ impl LlmCompletionRequest {
                 .or(self.config.reasoning_level.as_deref()),
         )
     }
+    pub fn capabilities(&self) -> crate::llm::capabilities::LlmModelCapabilities {
+        crate::llm::capabilities::LlmModelCapabilities::infer(
+            self.config.strategy,
+            &self.config.model,
+            &self.config.base_url,
+        )
+    }
+
+    pub fn resolve_capabilities(
+        &self,
+        summary: Option<&crate::llm::provider_protocol::LlmModelSummary>,
+    ) -> crate::llm::capabilities::LlmModelCapabilities {
+        crate::llm::capabilities::LlmModelCapabilities::resolve(
+            self.config.strategy,
+            &self.config.model,
+            &self.config.base_url,
+            summary,
+        )
+    }
 }
 
 impl From<LlmGenerateRequest> for LlmCompletionRequest {
@@ -305,34 +324,42 @@ impl ThinkingLevel {
         if supported.contains(self) {
             return Some(*self);
         }
-        let level_rank = |l: &ThinkingLevel| -> i32 {
-            match l {
-                ThinkingLevel::None => 0,
-                ThinkingLevel::Auto => 1,
-                ThinkingLevel::Minimal => 2,
-                ThinkingLevel::Low => 3,
-                ThinkingLevel::Medium => 4,
-                ThinkingLevel::High => 5,
-                ThinkingLevel::Xhigh => 6,
-                ThinkingLevel::Max => 7,
-                ThinkingLevel::Budget(_) => 4,
-            }
+        if let ThinkingLevel::Budget(tokens) = self {
+            let qualitative = if *tokens <= 2048 {
+                ThinkingLevel::Low
+            } else if *tokens <= 8192 {
+                ThinkingLevel::Medium
+            } else {
+                ThinkingLevel::High
+            };
+            return qualitative.clamp_to_supported(supported);
+        }
+        const EXTENDED: [ThinkingLevel; 7] = [
+            ThinkingLevel::None,
+            ThinkingLevel::Minimal,
+            ThinkingLevel::Low,
+            ThinkingLevel::Medium,
+            ThinkingLevel::High,
+            ThinkingLevel::Xhigh,
+            ThinkingLevel::Max,
+        ];
+        let target = if *self == ThinkingLevel::Auto {
+            ThinkingLevel::Medium
+        } else {
+            *self
         };
-        let target_rank = level_rank(self);
-        let mut best: Option<&ThinkingLevel> = None;
-        for cand in supported {
-            let cand_rank = level_rank(cand);
-            if cand_rank <= target_rank {
-                if let Some(current_best) = best {
-                    if cand_rank > level_rank(current_best) {
-                        best = Some(cand);
-                    }
-                } else {
-                    best = Some(cand);
-                }
+        let idx = EXTENDED.iter().position(|l| *l == target).unwrap_or(3);
+        for cand in &EXTENDED[idx..] {
+            if supported.contains(cand) {
+                return Some(*cand);
             }
         }
-        best.copied().or_else(|| supported.first().copied())
+        for cand in EXTENDED[..idx].iter().rev() {
+            if supported.contains(cand) {
+                return Some(*cand);
+            }
+        }
+        supported.first().copied()
     }
 
     pub fn resolve_budget_tokens(&self, low: u32, medium: u32, high: u32) -> Option<u32> {

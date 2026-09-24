@@ -111,23 +111,21 @@ where
 }
 
 pub fn is_temperature_prohibited_for_model(model: &str) -> bool {
-    let lower = model.to_lowercase();
-    let trimmed = lower.trim();
-    let core_model = trimmed.rsplit('/').next().unwrap_or(trimmed);
-    core_model.starts_with("o1")
-        || core_model.starts_with("o3")
-        || core_model.starts_with("o4")
-        || core_model.contains("deepseek-reasoner")
-        || core_model.contains("deepseek-r1")
+    let caps = crate::llm::capabilities::LlmModelCapabilities::infer(
+        crate::llm::tasks::LlmProviderStrategy::OpenAi,
+        model,
+        "",
+    );
+    !caps.supports_temperature
 }
+
 pub fn requires_max_completion_tokens(model: &str) -> bool {
-    let lower = model.to_lowercase();
-    let trimmed = lower.trim();
-    let core_model = trimmed.rsplit('/').next().unwrap_or(trimmed);
-    core_model.starts_with("o1")
-        || core_model.starts_with("o3")
-        || core_model.starts_with("o4")
-        || core_model.starts_with("gpt-5")
+    let caps = crate::llm::capabilities::LlmModelCapabilities::infer(
+        crate::llm::tasks::LlmProviderStrategy::OpenAi,
+        model,
+        "",
+    );
+    caps.token_limit_key == crate::llm::capabilities::TokenLimitKey::MaxCompletionTokens
 }
 
 /// Reassembles transport chunks into complete lines before higher-level
@@ -275,6 +273,17 @@ pub fn build_openai_chat_payload(
     input: &str,
     stream: bool,
 ) -> Value {
+    let caps =
+        crate::llm::capabilities::LlmModelCapabilities::infer(config.strategy, config.model, "");
+    build_openai_chat_payload_with_capabilities(config, &caps, input, stream)
+}
+
+pub fn build_openai_chat_payload_with_capabilities(
+    config: OpenAiChatPayloadConfig<'_>,
+    capabilities: &crate::llm::capabilities::LlmModelCapabilities,
+    input: &str,
+    stream: bool,
+) -> Value {
     let mut payload = if config.strategy == LlmProviderStrategy::AzureOpenAi {
         json!({
             "messages": [
@@ -303,36 +312,26 @@ pub fn build_openai_chat_payload(
         }
     }
 
-    if !is_temperature_prohibited_for_model(config.model) {
+    if capabilities.supports_temperature {
         payload["temperature"] = json!(config.temperature.unwrap_or(0.7));
     }
 
     if config.reasoning_enabled
+        && capabilities.supports_reasoning_effort
         && let Some(level) = config.reasoning_level
     {
         let thinking =
             crate::llm::runtime::ThinkingLevel::from_legacy_options(Some(true), Some(level));
-        let lower = config.model.to_lowercase();
-        let core_model = lower.trim().rsplit('/').next().unwrap_or(&lower);
-        let is_openai_o_series = core_model.starts_with("o1")
-            || core_model.starts_with("o3")
-            || core_model.starts_with("o4");
-        let clamped = if is_openai_o_series {
-            match thinking {
-                crate::llm::runtime::ThinkingLevel::None
-                | crate::llm::runtime::ThinkingLevel::Auto => {
-                    crate::llm::runtime::ThinkingLevel::Auto
-                }
-                _ => thinking
-                    .clamp_to_supported(&[
-                        crate::llm::runtime::ThinkingLevel::Low,
-                        crate::llm::runtime::ThinkingLevel::Medium,
-                        crate::llm::runtime::ThinkingLevel::High,
-                    ])
-                    .unwrap_or(crate::llm::runtime::ThinkingLevel::Medium),
+        let clamped = match thinking {
+            crate::llm::runtime::ThinkingLevel::None | crate::llm::runtime::ThinkingLevel::Auto => {
+                crate::llm::runtime::ThinkingLevel::Auto
             }
-        } else {
-            thinking
+            _ => match &capabilities.reasoning_mode {
+                crate::llm::runtime::ReasoningMode::Effort { supported_levels } => thinking
+                    .clamp_to_supported(supported_levels)
+                    .unwrap_or(crate::llm::runtime::ThinkingLevel::Medium),
+                _ => thinking,
+            },
         };
 
         if let Some(effort) = clamped.as_effort_str() {

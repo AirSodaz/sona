@@ -1,3 +1,4 @@
+pub mod capabilities;
 pub mod demuxer;
 pub mod jobs;
 pub mod local_models;
@@ -9,4 +10,5 @@ pub mod runtime;
 pub mod streaming_protocol;
 pub mod tasks;
 pub mod usage;
+pub use capabilities::{LlmModelCapabilities, ThinkingFormat, TokenLimitKey};
 pub use local_models::{LocalLlmCardsResponse, LocalLlmModelCard, LocalLlmPreset};
