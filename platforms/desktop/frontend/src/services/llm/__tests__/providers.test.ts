@@ -47,8 +47,7 @@ describe('llm providers', () => {
     );
     expect(createProviderSetting('volcengine')).toEqual(
       expect.objectContaining({
-        apiHost: 'https://ark.cn-beijing.volces.com',
-        apiPath: '/api/v3/chat/completions',
+        apiHost: 'https://ark.cn-beijing.volces.com/api/v3',
       })
     );
   });

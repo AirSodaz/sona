@@ -392,6 +392,7 @@ pub fn strategy_from_models_dev_provider(provider_id: &str) -> LlmProviderStrate
         "together" => LlmProviderStrategy::Together,
         "venice" => LlmProviderStrategy::Venice,
         "hyperbolic" => LlmProviderStrategy::Hyperbolic,
+        "cerebras" => LlmProviderStrategy::Cerebras,
         _ => LlmProviderStrategy::OpenAiCompatible,
     }
 }
@@ -438,13 +439,18 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::Together => "together",
         LlmProviderStrategy::Venice => "venice",
         LlmProviderStrategy::Hyperbolic => "hyperbolic",
+        LlmProviderStrategy::Cerebras => "cerebras",
         LlmProviderStrategy::Llamafile
         | LlmProviderStrategy::Local
         | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::GoogleTranslate
         | LlmProviderStrategy::GoogleTranslateFree
         | LlmProviderStrategy::OpenAiCompatible
-        | LlmProviderStrategy::OpenAiCompatibleCustomPath => return None,
+        | LlmProviderStrategy::OpenAiCompatibleCustomPath
+        | LlmProviderStrategy::Baidu
+        | LlmProviderStrategy::Tencent
+        | LlmProviderStrategy::Stepfun
+        | LlmProviderStrategy::Lingyiwanwu => return None,
     })
 }
 

@@ -1,12 +1,14 @@
 use crate::domain::{BuiltinLlmProvider, LlmProvider};
 use serde::{Deserialize, Serialize};
 
+pub mod json_repair;
 mod planning;
 mod polish;
 mod structured;
 mod summary;
 mod translate;
 
+pub use json_repair::fix_json;
 pub use planning::*;
 pub use polish::*;
 pub use structured::*;
@@ -69,6 +71,11 @@ pub enum LlmProviderStrategy {
     Venice,
     Hyperbolic,
     Llamafile,
+    Baidu,
+    Tencent,
+    Stepfun,
+    Lingyiwanwu,
+    Cerebras,
     #[serde(rename = "google_translate")]
     GoogleTranslate,
     #[serde(rename = "google_translate_free")]
@@ -106,7 +113,7 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::XAi => Self::XAi,
                 BuiltinLlmProvider::MistralAi => Self::MistralAi,
                 BuiltinLlmProvider::Perplexity => Self::Perplexity,
-                BuiltinLlmProvider::Volcengine => Self::OpenAiCompatibleCustomPath,
+                BuiltinLlmProvider::Volcengine => Self::Volcengine,
                 BuiltinLlmProvider::Chatglm => Self::Chatglm,
                 BuiltinLlmProvider::Copilot => Self::Copilot,
                 BuiltinLlmProvider::Cohere => Self::Cohere,
@@ -114,6 +121,11 @@ impl LlmProviderStrategy {
                 BuiltinLlmProvider::Venice => Self::Venice,
                 BuiltinLlmProvider::Hyperbolic => Self::Hyperbolic,
                 BuiltinLlmProvider::Llamafile => Self::Llamafile,
+                BuiltinLlmProvider::Baidu => Self::Baidu,
+                BuiltinLlmProvider::Tencent => Self::Tencent,
+                BuiltinLlmProvider::Stepfun => Self::Stepfun,
+                BuiltinLlmProvider::Lingyiwanwu => Self::Lingyiwanwu,
+                BuiltinLlmProvider::Cerebras => Self::Cerebras,
                 BuiltinLlmProvider::GoogleTranslate => Self::GoogleTranslate,
                 BuiltinLlmProvider::GoogleTranslateFree => Self::GoogleTranslateFree,
                 BuiltinLlmProvider::CustomOpenAiCompatible => Self::OpenAiCompatible,
@@ -160,6 +172,11 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
             "venice" => Self::Venice,
             "hyperbolic" => Self::Hyperbolic,
             "llamafile" => Self::Llamafile,
+            "baidu" => Self::Baidu,
+            "tencent" => Self::Tencent,
+            "stepfun" => Self::Stepfun,
+            "lingyiwanwu" => Self::Lingyiwanwu,
+            "cerebras" => Self::Cerebras,
             "google_translate" => Self::GoogleTranslate,
             "google_translate_free" => Self::GoogleTranslateFree,
             "open_ai_compatible" | "openai_compatible" => Self::OpenAiCompatible,

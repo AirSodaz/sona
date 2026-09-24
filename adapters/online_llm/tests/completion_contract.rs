@@ -413,6 +413,12 @@ fn native_providers_build_successfully_from_default_configurations() {
         LlmProviderStrategy::Perplexity,
         LlmProviderStrategy::Together,
         LlmProviderStrategy::XAi,
+        LlmProviderStrategy::Volcengine,
+        LlmProviderStrategy::Baidu,
+        LlmProviderStrategy::Tencent,
+        LlmProviderStrategy::Stepfun,
+        LlmProviderStrategy::Lingyiwanwu,
+        LlmProviderStrategy::Cerebras,
     ];
 
     for strategy in strategies {

@@ -291,6 +291,11 @@ pub fn create_aimux_provider_with_version(
                 LlmProviderStrategy::Copilot => Some("copilot"),
                 LlmProviderStrategy::Chatglm => Some("bigmodel"),
                 LlmProviderStrategy::Volcengine => Some("volc_engine"),
+                LlmProviderStrategy::Baidu => Some("baidu"),
+                LlmProviderStrategy::Tencent => Some("tencent"),
+                LlmProviderStrategy::Stepfun => Some("stepfun"),
+                LlmProviderStrategy::Lingyiwanwu => Some("lingyiwanwu"),
+                LlmProviderStrategy::Cerebras => Some("cerebras"),
                 _ => None,
             };
 

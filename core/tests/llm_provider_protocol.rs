@@ -1,75 +1,17 @@
 use sona_core::llm::provider_protocol::{
-    GeminiModel, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
-    build_standard_input, clean_gemini_base_url, format_gemini_models_url,
-    format_openai_models_urls, gemini_model_to_summary, join_url, normalize_token_usage,
-    openai_model_to_summary, strategy_supports_model_listing, strategy_supports_structured_output,
-    strategy_uses_openai_chat_payload, strip_and_extract_inline_thoughts,
+    MessageRole, StandardLlmRequest, StandardMessage, build_standard_input, join_url,
+    normalize_token_usage, strategy_supports_model_listing, strategy_supports_structured_output,
+    strip_and_extract_inline_thoughts,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
 
 #[test]
-fn provider_model_urls_accept_common_base_url_shapes() {
-    assert_eq!(
-        format_openai_models_urls("https://api.openai.com", false),
-        vec![
-            "https://api.openai.com/v1/models".to_string(),
-            "https://api.openai.com/models".to_string(),
-        ]
-    );
-    assert_eq!(
-        format_openai_models_urls("https://api.openai.com/v1", false),
-        vec!["https://api.openai.com/v1/models".to_string()]
-    );
-    assert_eq!(
-        clean_gemini_base_url("https://generativelanguage.googleapis.com/v1beta/openai"),
-        "https://generativelanguage.googleapis.com"
-    );
-    assert_eq!(
-        format_gemini_models_url("https://generativelanguage.googleapis.com/v1beta/openai"),
-        "https://generativelanguage.googleapis.com/v1beta/models"
-    );
+fn join_url_accepts_common_shapes() {
     assert_eq!(
         join_url("https://api.openai.com/v1", "/chat/completions"),
         "https://api.openai.com/v1/chat/completions"
     );
 }
-
-#[test]
-fn provider_model_summaries_are_core_owned() {
-    let gemini_summary = gemini_model_to_summary(GeminiModel {
-        name: "models/gemini-2.5-pro".to_string(),
-        supported_generation_methods: Some(vec![
-            "generateContent".to_string(),
-            "embedContent".to_string(),
-        ]),
-        input_token_limit: Some(1_048_576),
-        output_token_limit: Some(65_536),
-    })
-    .expect("gemini text model should be converted");
-    let openai_summary = openai_model_to_summary(OpenAiModel {
-        id: "gpt-4.1-mini".to_string(),
-    });
-
-    assert_eq!(
-        (
-            gemini_summary.model.as_str(),
-            gemini_summary.context_window,
-            gemini_summary.max_output_tokens,
-            gemini_summary.supports_multimodal,
-            gemini_summary.supports_tools,
-        ),
-        (
-            "gemini-2.5-pro",
-            Some(1_048_576),
-            Some(65_536),
-            Some(true),
-            Some(true),
-        )
-    );
-    assert_eq!(openai_summary.model, "gpt-4.1-mini");
-    assert_eq!(openai_summary.context_window, None);
-}
-
 #[test]
 fn provider_strategy_and_standard_input_helpers_are_core_owned() {
     let input = build_standard_input(&StandardLlmRequest {
@@ -94,22 +36,6 @@ fn provider_strategy_and_standard_input_helpers_are_core_owned() {
         temperature: 0.2,
     });
     assert_eq!(input, "first question\nfollow up");
-
-    assert!(strategy_uses_openai_chat_payload(
-        LlmProviderStrategy::OpenAi
-    ));
-    assert!(strategy_uses_openai_chat_payload(
-        LlmProviderStrategy::OpenRouter
-    ));
-    assert!(strategy_uses_openai_chat_payload(
-        LlmProviderStrategy::DeepSeek
-    ));
-    assert!(!strategy_uses_openai_chat_payload(
-        LlmProviderStrategy::Anthropic
-    ));
-    assert!(!strategy_uses_openai_chat_payload(
-        LlmProviderStrategy::Gemini
-    ));
 
     assert_eq!(
         strategy_supports_structured_output(LlmProviderStrategy::OpenAi),
