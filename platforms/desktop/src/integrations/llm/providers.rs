@@ -135,9 +135,6 @@ impl LlmTranslationPort for DesktopLlmAdapter {
     }
 }
 
-#[cfg(test)]
-pub(crate) use sona_online_llm::build_gemini_generate_content_request_parts_for_reqwest as build_gemini_generate_content_request_parts;
-
 pub(crate) fn emit_llm_usage_event(
     app: &AppHandle,
     config: &LlmConfig,

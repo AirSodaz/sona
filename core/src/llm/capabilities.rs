@@ -9,18 +9,6 @@ use crate::llm::tasks::LlmProviderStrategy;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "snake_case")]
-pub enum ThinkingFormat {
-    OpenAi,
-    DeepSeek,
-    Zai,
-    Together,
-    OpenRouter,
-    None,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
-#[cfg_attr(feature = "specta", derive(Type))]
-#[serde(rename_all = "snake_case")]
 pub enum TokenLimitKey {
     MaxTokens,
     MaxCompletionTokens,
@@ -44,10 +32,6 @@ pub struct LlmModelCapabilities {
     pub supported_thinking_levels: Vec<ThinkingLevel>,
     pub supports_temperature: bool,
     pub token_limit_key: TokenLimitKey,
-    pub supports_reasoning_effort: bool,
-    pub thinking_format: ThinkingFormat,
-    pub force_adaptive_thinking: bool,
-    pub uses_google_thinking_level: bool,
 }
 
 impl Default for LlmModelCapabilities {
@@ -58,10 +42,6 @@ impl Default for LlmModelCapabilities {
             supported_thinking_levels: Vec::new(),
             supports_temperature: true,
             token_limit_key: TokenLimitKey::MaxTokens,
-            supports_reasoning_effort: false,
-            thinking_format: ThinkingFormat::None,
-            force_adaptive_thinking: false,
-            uses_google_thinking_level: false,
         }
     }
 }
@@ -89,10 +69,6 @@ impl LlmModelCapabilities {
                     Some("max_tokens") => TokenLimitKey::MaxTokens,
                     _ => base.token_limit_key,
                 },
-                supports_reasoning_effort: base.supports_reasoning_effort,
-                thinking_format: base.thinking_format,
-                force_adaptive_thinking: base.force_adaptive_thinking,
-                uses_google_thinking_level: base.uses_google_thinking_level,
             }
         } else {
             base
@@ -133,10 +109,6 @@ impl LlmModelCapabilities {
                         ],
                         supports_temperature: false,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: true,
-                        uses_google_thinking_level: false,
                     }
                 } else if is_budget {
                     Self {
@@ -156,10 +128,6 @@ impl LlmModelCapabilities {
                         ],
                         supports_temperature: false,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 } else {
                     Self {
@@ -168,10 +136,6 @@ impl LlmModelCapabilities {
                         supported_thinking_levels: Vec::new(),
                         supports_temperature: true,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 }
             }
@@ -202,10 +166,6 @@ impl LlmModelCapabilities {
                         ],
                         supports_temperature: true,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: true,
                     }
                 } else if is_budget {
                     Self {
@@ -227,10 +187,6 @@ impl LlmModelCapabilities {
                         ],
                         supports_temperature: true,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 } else {
                     Self {
@@ -239,10 +195,6 @@ impl LlmModelCapabilities {
                         supported_thinking_levels: Vec::new(),
                         supports_temperature: true,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 }
             }
@@ -288,10 +240,6 @@ impl LlmModelCapabilities {
                     } else {
                         TokenLimitKey::MaxTokens
                     },
-                    supports_reasoning_effort: true,
-                    thinking_format: ThinkingFormat::OpenAi,
-                    force_adaptive_thinking: false,
-                    uses_google_thinking_level: false,
                 }
             }
             LlmProviderStrategy::DeepSeek => {
@@ -302,10 +250,6 @@ impl LlmModelCapabilities {
                     supported_thinking_levels: Vec::new(),
                     supports_temperature: !is_r1,
                     token_limit_key: TokenLimitKey::MaxTokens,
-                    supports_reasoning_effort: false,
-                    thinking_format: ThinkingFormat::DeepSeek,
-                    force_adaptive_thinking: false,
-                    uses_google_thinking_level: false,
                 }
             }
             LlmProviderStrategy::Chatglm => {
@@ -316,10 +260,6 @@ impl LlmModelCapabilities {
                     supported_thinking_levels: Vec::new(),
                     supports_temperature: !is_reasoning,
                     token_limit_key: TokenLimitKey::MaxTokens,
-                    supports_reasoning_effort: false,
-                    thinking_format: ThinkingFormat::Zai,
-                    force_adaptive_thinking: false,
-                    uses_google_thinking_level: false,
                 }
             }
             LlmProviderStrategy::Together => {
@@ -330,10 +270,6 @@ impl LlmModelCapabilities {
                     supported_thinking_levels: Vec::new(),
                     supports_temperature: !is_reasoning,
                     token_limit_key: TokenLimitKey::MaxTokens,
-                    supports_reasoning_effort: false,
-                    thinking_format: ThinkingFormat::Together,
-                    force_adaptive_thinking: false,
-                    uses_google_thinking_level: false,
                 }
             }
             LlmProviderStrategy::OpenRouter => {
@@ -361,10 +297,6 @@ impl LlmModelCapabilities {
                         ],
                         supports_temperature: false,
                         token_limit_key: TokenLimitKey::MaxCompletionTokens,
-                        supports_reasoning_effort: true,
-                        thinking_format: ThinkingFormat::OpenRouter,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 } else if is_fixed_reasoning {
                     Self {
@@ -373,10 +305,6 @@ impl LlmModelCapabilities {
                         supported_thinking_levels: Vec::new(),
                         supports_temperature: false,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::OpenRouter,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 } else {
                     Self {
@@ -385,10 +313,6 @@ impl LlmModelCapabilities {
                         supported_thinking_levels: Vec::new(),
                         supports_temperature: true,
                         token_limit_key: TokenLimitKey::MaxTokens,
-                        supports_reasoning_effort: false,
-                        thinking_format: ThinkingFormat::None,
-                        force_adaptive_thinking: false,
-                        uses_google_thinking_level: false,
                     }
                 }
             }
@@ -451,14 +375,6 @@ impl LlmModelCapabilities {
                     } else {
                         TokenLimitKey::MaxTokens
                     },
-                    supports_reasoning_effort: !is_non_standard && !is_fixed_reasoning,
-                    thinking_format: if is_non_standard {
-                        ThinkingFormat::None
-                    } else {
-                        ThinkingFormat::OpenAi
-                    },
-                    force_adaptive_thinking: false,
-                    uses_google_thinking_level: false,
                 }
             }
         }

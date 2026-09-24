@@ -123,29 +123,32 @@ fn normalize_openai_base_url(
     }
 }
 
-pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, LlmPortError> {
-    let base_url = config.base_url.trim();
-    let api_key = &config.api_key;
-    let model = &config.model;
+pub fn create_aimux_provider(
+    strategy: LlmProviderStrategy,
+    api_key: &str,
+    base_url: &str,
+    api_path: Option<&str>,
+) -> Result<Box<dyn Provider>, LlmPortError> {
+    let base_url = base_url.trim();
 
-    match config.strategy {
+    match strategy {
         LlmProviderStrategy::Anthropic => {
             let mut anthropic_config = aimux_providers::anthropic::AnthropicConfig::new(api_key);
             if !base_url.is_empty() {
                 anthropic_config = anthropic_config.with_base_url(base_url);
             }
-            let provider = aimux_providers::anthropic::AnthropicProvider::new(anthropic_config);
-            let model = provider.language_model(model).map_err(map_aimux_error)?;
-            Ok(Arc::from(model))
+            Ok(Box::new(
+                aimux_providers::anthropic::AnthropicProvider::new(anthropic_config),
+            ))
         }
         LlmProviderStrategy::Gemini => {
             let mut google_config = aimux_providers::google::GoogleConfig::new(api_key);
             if !base_url.is_empty() {
                 google_config = google_config.with_base_url(base_url);
             }
-            let provider = aimux_providers::google::GoogleProvider::new(google_config);
-            let model = provider.language_model(model).map_err(map_aimux_error)?;
-            Ok(Arc::from(model))
+            Ok(Box::new(aimux_providers::google::GoogleProvider::new(
+                google_config,
+            )))
         }
         LlmProviderStrategy::Cohere => {
             let effective_base = if base_url.is_empty() {
@@ -160,20 +163,12 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
             };
             let cohere_config =
                 aimux_providers::cohere::CohereConfig::new(api_key).with_base_url(effective_base);
-            let provider = aimux_providers::cohere::CohereProvider::new(cohere_config);
-            let model = provider.language_model(model).map_err(map_aimux_error)?;
-            Ok(Arc::from(model))
-        }
-        LlmProviderStrategy::OpenAiResponses => {
-            let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key);
-            if !base_url.is_empty() {
-                openai_config = openai_config.with_base_url(base_url);
-            }
-            let provider = aimux_providers::openai::OpenAIProvider::new(openai_config);
-            Ok(Arc::new(provider.responses_model(model)))
+            Ok(Box::new(aimux_providers::cohere::CohereProvider::new(
+                cohere_config,
+            )))
         }
         _ => {
-            let provider_name = match config.strategy {
+            let provider_name = match strategy {
                 LlmProviderStrategy::DeepSeek => "deepseek",
                 LlmProviderStrategy::Groq => "groq",
                 LlmProviderStrategy::MistralAi => "mistral",
@@ -185,26 +180,50 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
                 _ => "openai",
             };
             let effective_base = if base_url.is_empty() {
-                match config.strategy {
+                match strategy {
                     LlmProviderStrategy::DeepSeek => "https://api.deepseek.com".to_string(),
                     LlmProviderStrategy::Groq => "https://api.groq.com/openai/v1".to_string(),
                     _ => "https://api.openai.com/v1".to_string(),
                 }
             } else {
-                normalize_openai_base_url(config.strategy, base_url, config.api_path.as_deref())
+                normalize_openai_base_url(strategy, base_url, api_path)
             };
             let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key)
                 .with_provider(provider_name)
                 .with_base_url(&effective_base);
-            if config.strategy == LlmProviderStrategy::Groq {
+            if strategy == LlmProviderStrategy::Groq {
                 openai_config = openai_config
                     .with_profile(aimux_providers::openai::OpenAICompatProfile::groq());
             }
-            let provider = aimux_providers::openai::OpenAIProvider::new(openai_config);
-            let model = provider.language_model(model).map_err(map_aimux_error)?;
-            Ok(Arc::from(model))
+            Ok(Box::new(aimux_providers::openai::OpenAIProvider::new(
+                openai_config,
+            )))
         }
     }
+}
+
+pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, LlmPortError> {
+    let base_url = config.base_url.trim();
+    let api_key = &config.api_key;
+    let model = &config.model;
+
+    if config.strategy == LlmProviderStrategy::OpenAiResponses {
+        let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key);
+        if !base_url.is_empty() {
+            openai_config = openai_config.with_base_url(base_url);
+        }
+        let provider = aimux_providers::openai::OpenAIProvider::new(openai_config);
+        return Ok(Arc::new(provider.responses_model(model)));
+    }
+
+    let provider = create_aimux_provider(
+        config.strategy,
+        api_key,
+        base_url,
+        config.api_path.as_deref(),
+    )?;
+    let model = provider.language_model(model).map_err(map_aimux_error)?;
+    Ok(Arc::from(model))
 }
 
 pub fn build_aimux_call_options(

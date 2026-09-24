@@ -1,16 +1,11 @@
-use serde_json::json;
 use sona_core::llm::provider_protocol::{
     GeminiModel, MessageRole, OpenAiModel, StandardLlmRequest, StandardMessage,
-    build_gemini_generate_content_request_parts, build_standard_input, clean_gemini_base_url,
-    extract_anthropic_text_response, extract_text_and_thought_from_json_response,
-    extract_text_from_json_response, extract_usage_from_json_response, format_gemini_models_url,
-    format_openai_models_urls, gemini_model_to_summary, join_url, openai_model_to_summary,
-    strategy_supports_model_listing, strategy_supports_structured_output,
-    strategy_uses_openai_chat_payload,
+    build_standard_input, clean_gemini_base_url, format_gemini_models_url,
+    format_openai_models_urls, gemini_model_to_summary, join_url, normalize_token_usage,
+    openai_model_to_summary, strategy_supports_model_listing, strategy_supports_structured_output,
+    strategy_uses_openai_chat_payload, strip_and_extract_inline_thoughts,
 };
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::llm::usage::TokenUsage;
-use sona_core::ports::llm::LlmPortErrorKind;
 
 #[test]
 fn provider_model_urls_accept_common_base_url_shapes() {
@@ -33,53 +28,9 @@ fn provider_model_urls_accept_common_base_url_shapes() {
         format_gemini_models_url("https://generativelanguage.googleapis.com/v1beta/openai"),
         "https://generativelanguage.googleapis.com/v1beta/models"
     );
-}
-
-#[test]
-fn gemini_generate_content_request_keeps_api_key_in_headers() {
-    let request = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com/v1beta/models",
-        "models/gemini-2.5-pro",
-        "secret-stream-key",
-        true,
-    )
-    .expect("request parts should be built");
-
     assert_eq!(
-        request.url,
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse"
-    );
-    assert!(!request.url.contains("secret-stream-key"));
-    assert_eq!(
-        request.headers,
-        vec![("x-goog-api-key", "secret-stream-key".to_string())]
-    );
-}
-
-#[test]
-fn provider_protocol_errors_preserve_invalid_request_and_protocol_kinds() {
-    let invalid_model = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com",
-        "models/  ",
-        "secret-key",
-        false,
-    )
-    .unwrap_err();
-    assert_eq!(invalid_model.kind, LlmPortErrorKind::InvalidRequest);
-    assert_eq!(invalid_model.message, "Gemini model cannot be empty");
-
-    let missing_text = extract_text_from_json_response(&json!({"choices": []})).unwrap_err();
-    assert_eq!(missing_text.kind, LlmPortErrorKind::Protocol);
-    assert_eq!(
-        missing_text.message,
-        "LLM response did not contain text output"
-    );
-
-    let malformed_anthropic = extract_anthropic_text_response(&json!({})).unwrap_err();
-    assert_eq!(malformed_anthropic.kind, LlmPortErrorKind::Protocol);
-    assert_eq!(
-        malformed_anthropic.message,
-        "Anthropic response missing content array"
+        join_url("https://api.openai.com/v1", "/chat/completions"),
+        "https://api.openai.com/v1/chat/completions"
     );
 }
 
@@ -121,177 +72,90 @@ fn provider_model_summaries_are_core_owned() {
 
 #[test]
 fn provider_strategy_and_standard_input_helpers_are_core_owned() {
-    assert!(!strategy_supports_model_listing(
-        LlmProviderStrategy::Anthropic
-    ));
-    assert!(strategy_supports_model_listing(
-        LlmProviderStrategy::OpenAiCompatible
+    let input = build_standard_input(&StandardLlmRequest {
+        messages: vec![
+            StandardMessage {
+                role: MessageRole::System,
+                content: "system instructions".to_string(),
+            },
+            StandardMessage {
+                role: MessageRole::User,
+                content: "first question".to_string(),
+            },
+            StandardMessage {
+                role: MessageRole::Assistant,
+                content: "first answer".to_string(),
+            },
+            StandardMessage {
+                role: MessageRole::User,
+                content: "follow up".to_string(),
+            },
+        ],
+        temperature: 0.2,
+    });
+    assert_eq!(input, "first question\nfollow up");
+
+    assert!(strategy_uses_openai_chat_payload(
+        LlmProviderStrategy::OpenAi
     ));
     assert!(strategy_uses_openai_chat_payload(
         LlmProviderStrategy::OpenRouter
     ));
+    assert!(strategy_uses_openai_chat_payload(
+        LlmProviderStrategy::DeepSeek
+    ));
+    assert!(!strategy_uses_openai_chat_payload(
+        LlmProviderStrategy::Anthropic
+    ));
     assert!(!strategy_uses_openai_chat_payload(
         LlmProviderStrategy::Gemini
     ));
-    assert_eq!(
-        strategy_supports_structured_output(LlmProviderStrategy::DeepSeek),
-        Some(false)
-    );
-    assert_eq!(
-        strategy_supports_structured_output(LlmProviderStrategy::Qwen),
-        Some(false)
-    );
+
     assert_eq!(
         strategy_supports_structured_output(LlmProviderStrategy::OpenAi),
         None
+    );
+    assert_eq!(
+        strategy_supports_structured_output(LlmProviderStrategy::DeepSeek),
+        Some(false)
     );
     assert_eq!(
         strategy_supports_structured_output(LlmProviderStrategy::MoonshotAi),
         Some(false)
     );
     assert_eq!(
-        strategy_supports_structured_output(LlmProviderStrategy::MoonshotCn),
-        Some(false)
-    );
-    assert_eq!(
-        strategy_supports_structured_output(LlmProviderStrategy::Xiaomi),
+        strategy_supports_structured_output(LlmProviderStrategy::SiliconFlow),
         Some(false)
     );
 
-    assert_eq!(
-        serde_json::from_str::<LlmProviderStrategy>(r#""moonshot_ai""#).unwrap(),
-        LlmProviderStrategy::MoonshotAi
-    );
-    assert_eq!(
-        serde_json::from_str::<LlmProviderStrategy>(r#""moonshot_cn""#).unwrap(),
-        LlmProviderStrategy::MoonshotCn
-    );
-    assert_eq!(
-        serde_json::from_str::<LlmProviderStrategy>(r#""xiaomi""#).unwrap(),
-        LlmProviderStrategy::Xiaomi
-    );
-
-    let request = StandardLlmRequest {
-        messages: vec![
-            StandardMessage {
-                role: MessageRole::System,
-                content: "system".to_string(),
-            },
-            StandardMessage {
-                role: MessageRole::User,
-                content: "hello".to_string(),
-            },
-            StandardMessage {
-                role: MessageRole::User,
-                content: "world".to_string(),
-            },
-        ],
-        temperature: 0.7,
-    };
-
-    assert_eq!(build_standard_input(&request), "hello\nworld");
+    assert!(strategy_supports_model_listing(LlmProviderStrategy::OpenAi));
+    assert!(strategy_supports_model_listing(
+        LlmProviderStrategy::Anthropic
+    ));
+    assert!(strategy_supports_model_listing(LlmProviderStrategy::Gemini));
+    assert!(strategy_supports_model_listing(LlmProviderStrategy::Cohere));
+    assert!(!strategy_supports_model_listing(
+        LlmProviderStrategy::GoogleTranslateFree
+    ));
 }
 
 #[test]
-fn response_text_and_usage_are_extracted_without_adapter_state() {
-    let response = json!({
-        "choices": [
-            {
-                "message": {
-                    "content": "Hello from chat completions"
-                }
-            }
-        ],
-        "usage": {
-            "input_tokens": 3,
-            "output_tokens": 5,
-            "prompt_tokens_details": {"cached_tokens": 2},
-            "completion_tokens_details": {"reasoning_tokens": 1}
-        }
-    });
+fn normalize_token_usage_works() {
+    let usage = normalize_token_usage(10, 20, 30).unwrap();
+    assert_eq!(usage.prompt_tokens, 10);
+    assert_eq!(usage.completion_tokens, 20);
+    assert_eq!(usage.total_tokens, 30);
 
-    assert_eq!(
-        extract_text_from_json_response(&response).unwrap(),
-        "Hello from chat completions"
-    );
-    assert_eq!(
-        extract_usage_from_json_response(&response),
-        Some(TokenUsage {
-            prompt_tokens: 3,
-            completion_tokens: 5,
-            total_tokens: 8,
-            cached_input_tokens: 2,
-            reasoning_tokens: 1,
-            ..TokenUsage::default()
-        })
-    );
-    assert_eq!(
-        join_url("https://api.openai.com/v1", "/v1/responses"),
-        "https://api.openai.com/v1/responses"
-    );
-}
+    let usage_inferred_total = normalize_token_usage(10, 20, 0).unwrap();
+    assert_eq!(usage_inferred_total.total_tokens, 30);
 
-#[test]
-fn anthropic_usage_preserves_prompt_cache_breakdown() {
-    let (_, usage) = extract_anthropic_text_response(&json!({
-        "content": [{"type": "text", "text": "ok"}],
-        "usage": {
-            "input_tokens": 10,
-            "output_tokens": 4,
-            "cache_read_input_tokens": 6,
-            "cache_creation_input_tokens": 2
-        }
-    }))
-    .unwrap();
-    let usage = usage.unwrap();
-
-    assert_eq!(
-        (usage.cached_input_tokens, usage.cache_creation_input_tokens),
-        (6, 2)
-    );
-}
-
-#[test]
-fn extracts_inline_think_tags_and_explicit_reasoning() {
-    let inline_response = json!({
-        "choices": [
-            {
-                "message": {
-                    "content": "<think>\nThinking about life...\n</think>\nThe answer is 42."
-                }
-            }
-        ]
-    });
-
-    let (text, thought) = extract_text_and_thought_from_json_response(&inline_response).unwrap();
-    assert_eq!(text, "The answer is 42.");
-    assert_eq!(thought.as_deref(), Some("Thinking about life..."));
-    assert_eq!(
-        extract_text_from_json_response(&inline_response).unwrap(),
-        "The answer is 42."
-    );
-
-    let explicit_response = json!({
-        "choices": [
-            {
-                "message": {
-                    "content": "Final output",
-                    "reasoning_content": "DeepSeek thought"
-                }
-            }
-        ]
-    });
-
-    let (text, thought) = extract_text_and_thought_from_json_response(&explicit_response).unwrap();
-    assert_eq!(text, "Final output");
-    assert_eq!(thought.as_deref(), Some("DeepSeek thought"));
+    assert!(normalize_token_usage(0, 0, 0).is_none());
 }
 
 #[test]
 fn strip_and_extract_inline_thoughts_handles_unicode_length_changing_chars() {
     let input = "\u{212A} Kelvin <think>\nDeep thought about \u{0130}stanbul\n</think>\nResult";
-    let (text, thought) =
-        sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(input);
+    let (text, thought) = strip_and_extract_inline_thoughts(input);
     assert_eq!(text, "\u{212A} Kelvin Result");
     assert_eq!(
         thought.as_deref(),

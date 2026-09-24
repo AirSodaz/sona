@@ -1,9 +1,7 @@
 use crate::llm::runtime::{ReasoningMode, ThinkingLevel};
 use crate::llm::tasks::LlmProviderStrategy;
 use crate::llm::usage::TokenUsage;
-use crate::ports::llm::{LlmPortError, LlmPortErrorKind};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[cfg(feature = "specta")]
 use specta::Type;
@@ -179,12 +177,6 @@ pub struct GeminiModelsResponse {
     pub models: Option<Vec<GeminiModel>>,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct GeminiGenerateContentRequestParts {
-    pub url: String,
-    pub headers: Vec<(&'static str, String)>,
-}
-
 pub fn strategy_uses_openai_chat_payload(strategy: LlmProviderStrategy) -> bool {
     matches!(
         strategy,
@@ -269,39 +261,6 @@ pub fn format_gemini_models_url(base_url: &str) -> String {
     format!("{}/v1beta/models", cleaned_base)
 }
 
-pub fn build_gemini_generate_content_request_parts(
-    base_url: &str,
-    model: &str,
-    api_key: &str,
-    stream: bool,
-) -> Result<GeminiGenerateContentRequestParts, LlmPortError> {
-    let cleaned_base = clean_gemini_base_url(base_url);
-    let model = model.trim().trim_start_matches("models/");
-    if model.is_empty() {
-        return Err(LlmPortError::new(
-            LlmPortErrorKind::InvalidRequest,
-            "Gemini model cannot be empty",
-        ));
-    }
-
-    let action = if stream {
-        "streamGenerateContent"
-    } else {
-        "generateContent"
-    };
-    let mut url = format!("{}/v1beta/models/{}:{}", cleaned_base, model, action);
-    if stream {
-        url.push_str("?alt=sse");
-    }
-
-    let mut headers = Vec::new();
-    if !api_key.is_empty() {
-        headers.push(("x-goog-api-key", api_key.to_string()));
-    }
-
-    Ok(GeminiGenerateContentRequestParts { url, headers })
-}
-
 pub fn is_gemini_text_generation_model(model: &GeminiModel) -> bool {
     model
         .supported_generation_methods
@@ -384,8 +343,7 @@ pub fn format_openai_models_urls(base_url: &str, is_ollama: bool) -> Vec<String>
 pub fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> bool {
     !matches!(
         strategy,
-        LlmProviderStrategy::Anthropic
-            | LlmProviderStrategy::AzureOpenAi
+        LlmProviderStrategy::AzureOpenAi
             | LlmProviderStrategy::Volcengine
             | LlmProviderStrategy::Perplexity
             | LlmProviderStrategy::Copilot
@@ -409,51 +367,6 @@ pub fn join_url(base_url: &str, path: &str) -> String {
     format!("{}/{}", base, path)
 }
 
-fn extract_text_parts(value: &Value, parts: &mut Vec<String>) {
-    match value {
-        Value::String(text) if !text.is_empty() => parts.push(text.clone()),
-        Value::String(_) => {}
-        Value::Array(items) => {
-            for item in items {
-                extract_text_parts(item, parts);
-            }
-        }
-        Value::Object(map) => {
-            if map.get("thought").and_then(Value::as_bool) == Some(true)
-                || map.get("type").and_then(Value::as_str) == Some("thinking")
-            {
-                return;
-            }
-
-            if let Some(text) = map
-                .get("output_text")
-                .and_then(Value::as_str)
-                .filter(|text| !text.is_empty())
-            {
-                parts.push(text.to_string());
-            }
-
-            if let Some(text) = map
-                .get("text")
-                .and_then(Value::as_str)
-                .filter(|text| !text.is_empty())
-            {
-                parts.push(text.to_string());
-                return;
-            }
-
-            if let Some(content) = map.get("content").or_else(|| map.get("message")) {
-                extract_text_parts(content, parts);
-                return;
-            }
-
-            if let Some(output) = map.get("output") {
-                extract_text_parts(output, parts);
-            }
-        }
-        _ => {}
-    }
-}
 fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
     if needle.is_empty() {
         return Some(0);
@@ -540,123 +453,6 @@ pub fn strip_and_extract_inline_thoughts(input: &str) -> (String, Option<String>
     (clean_text, thought_opt)
 }
 
-pub fn extract_text_and_thought_from_json_response(
-    response: &Value,
-) -> Result<(String, Option<String>), LlmPortError> {
-    let mut explicit_thoughts = Vec::new();
-
-    // Extract from choices[0].message (OpenAI compatible / DeepSeek)
-    if let Some(choice) = response.pointer("/choices/0") {
-        let msg = choice.get("message").or_else(|| choice.get("delta"));
-        if let Some(msg) = msg {
-            let thought_field = msg
-                .get("reasoning_content")
-                .or_else(|| msg.get("reasoning"))
-                .or_else(|| msg.get("thought"))
-                .or_else(|| msg.get("thinking"))
-                .or_else(|| msg.get("reasoning_text"))
-                .and_then(Value::as_str);
-            if let Some(t) = thought_field {
-                let trimmed = t.trim();
-                if !trimmed.is_empty() {
-                    explicit_thoughts.push(trimmed.to_string());
-                }
-            }
-        }
-    }
-
-    // Extract from Anthropic content blocks
-    if let Some(content_blocks) = response.get("content").and_then(Value::as_array) {
-        for block in content_blocks {
-            if block.get("type").and_then(Value::as_str) == Some("thinking")
-                && let Some(t) = block.get("thinking").and_then(Value::as_str)
-            {
-                let trimmed = t.trim();
-                if !trimmed.is_empty() {
-                    explicit_thoughts.push(trimmed.to_string());
-                }
-            }
-        }
-    }
-
-    let mut raw_parts = Vec::new();
-
-    // Extract from Gemini candidates[0].content.parts
-    if let Some(parts) = response
-        .pointer("/candidates/0/content/parts")
-        .and_then(Value::as_array)
-    {
-        for part in parts {
-            let is_thought = part.get("thought").and_then(Value::as_bool) == Some(true);
-            if let Some(t) = part.get("text").and_then(Value::as_str) {
-                let trimmed = t.trim();
-                if is_thought {
-                    if !trimmed.is_empty() {
-                        explicit_thoughts.push(trimmed.to_string());
-                    }
-                } else if !trimmed.is_empty() {
-                    raw_parts.push(trimmed.to_string());
-                }
-            }
-        }
-    }
-
-    if raw_parts.is_empty()
-        && let Some(output_text) = response.get("output_text").and_then(Value::as_str)
-        && !output_text.is_empty()
-    {
-        raw_parts.push(output_text.to_string());
-    }
-    if raw_parts.is_empty()
-        && let Some(choices) = response.get("choices")
-    {
-        extract_text_parts(choices, &mut raw_parts);
-    }
-
-    if raw_parts.is_empty()
-        && let Some(output) = response.get("output")
-    {
-        extract_text_parts(output, &mut raw_parts);
-    }
-
-    if raw_parts.is_empty() {
-        extract_text_parts(response, &mut raw_parts);
-    }
-
-    let joined_raw = raw_parts
-        .into_iter()
-        .map(|part| part.trim().to_string())
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-    let (cleaned_text, inline_thought) = strip_and_extract_inline_thoughts(&joined_raw);
-    let cleaned_text = cleaned_text.trim().to_string();
-
-    if let Some(it) = inline_thought {
-        explicit_thoughts.push(it);
-    }
-
-    let combined_thought = if explicit_thoughts.is_empty() {
-        None
-    } else {
-        Some(explicit_thoughts.join("\n\n"))
-    };
-
-    if cleaned_text.is_empty() {
-        return Err(LlmPortError::new(
-            LlmPortErrorKind::Protocol,
-            "LLM response did not contain text output",
-        ));
-    }
-
-    Ok((cleaned_text, combined_thought))
-}
-
-pub fn extract_text_from_json_response(response: &Value) -> Result<String, LlmPortError> {
-    extract_text_and_thought_from_json_response(response).map(|(text, _)| text)
-}
-
 pub fn normalize_token_usage(
     prompt_tokens: u64,
     completion_tokens: u64,
@@ -678,117 +474,6 @@ pub fn normalize_token_usage(
         total_tokens: normalized_total,
         ..TokenUsage::default()
     })
-}
-
-pub fn extract_anthropic_text_and_thought_response(
-    response: &Value,
-) -> Result<(String, Option<String>, Option<TokenUsage>), LlmPortError> {
-    let content = response
-        .get("content")
-        .and_then(Value::as_array)
-        .ok_or_else(|| {
-            LlmPortError::new(
-                LlmPortErrorKind::Protocol,
-                "Anthropic response missing content array",
-            )
-        })?;
-
-    let text_parts: Vec<&str> = content
-        .iter()
-        .filter(|block| block.get("type").and_then(Value::as_str) == Some("text"))
-        .filter_map(|block| block.get("text").and_then(Value::as_str))
-        .collect();
-
-    let thought_parts: Vec<&str> = content
-        .iter()
-        .filter(|block| block.get("type").and_then(Value::as_str) == Some("thinking"))
-        .filter_map(|block| block.get("thinking").and_then(Value::as_str))
-        .collect();
-
-    if text_parts.is_empty() {
-        return Err(LlmPortError::new(
-            LlmPortErrorKind::Protocol,
-            "Anthropic response did not contain text output",
-        ));
-    }
-
-    let thought = if thought_parts.is_empty() {
-        None
-    } else {
-        Some(thought_parts.join("\n\n"))
-    };
-
-    let usage = response.get("usage").and_then(|u| {
-        let input_tokens = u.get("input_tokens").and_then(Value::as_u64).unwrap_or(0);
-        let output_tokens = u.get("output_tokens").and_then(Value::as_u64).unwrap_or(0);
-        let cached_input_tokens = u
-            .get("cache_read_input_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
-        let cache_creation_input_tokens = u
-            .get("cache_creation_input_tokens")
-            .and_then(Value::as_u64)
-            .unwrap_or(0);
-        let total_tokens = input_tokens
-            .saturating_add(output_tokens)
-            .saturating_add(cached_input_tokens)
-            .saturating_add(cache_creation_input_tokens);
-        let mut usage = normalize_token_usage(input_tokens, output_tokens, total_tokens)?;
-        usage.cached_input_tokens = cached_input_tokens;
-        usage.cache_creation_input_tokens = cache_creation_input_tokens;
-        Some(usage)
-    });
-
-    Ok((text_parts.join("\n"), thought, usage))
-}
-
-pub fn extract_anthropic_text_response(
-    response: &Value,
-) -> Result<(String, Option<TokenUsage>), LlmPortError> {
-    extract_anthropic_text_and_thought_response(response).map(|(text, _, usage)| (text, usage))
-}
-
-pub fn extract_usage_from_json_response(response: &Value) -> Option<TokenUsage> {
-    let usage = response
-        .get("usage")
-        .or_else(|| response.pointer("/delta/usage"))
-        .or_else(|| response.pointer("/response/usage"))?;
-
-    let prompt_tokens = usage
-        .get("prompt_tokens")
-        .or_else(|| usage.get("input_tokens"))
-        .or_else(|| usage.pointer("/tokens/input_tokens"))
-        .or_else(|| usage.pointer("/billed_units/input_tokens"))
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let completion_tokens = usage
-        .get("completion_tokens")
-        .or_else(|| usage.get("output_tokens"))
-        .or_else(|| usage.pointer("/tokens/output_tokens"))
-        .or_else(|| usage.pointer("/billed_units/output_tokens"))
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let total_tokens = usage
-        .get("total_tokens")
-        .or_else(|| usage.pointer("/tokens/total_tokens"))
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    let mut normalized = normalize_token_usage(prompt_tokens, completion_tokens, total_tokens)?;
-    normalized.cached_input_tokens = usage
-        .pointer("/prompt_tokens_details/cached_tokens")
-        .or_else(|| usage.pointer("/input_tokens_details/cached_tokens"))
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    normalized.cache_creation_input_tokens = usage
-        .get("cache_creation_input_tokens")
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    normalized.reasoning_tokens = usage
-        .pointer("/completion_tokens_details/reasoning_tokens")
-        .or_else(|| usage.pointer("/output_tokens_details/reasoning_tokens"))
-        .and_then(Value::as_u64)
-        .unwrap_or(0);
-    Some(normalized)
 }
 
 pub fn build_standard_input(req: &StandardLlmRequest) -> String {

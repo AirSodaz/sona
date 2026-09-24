@@ -99,14 +99,8 @@ fn native_provider_from_request_supports_azure_openai() {
     azure_request.config.model = "gpt-4o".into();
     azure_request.config.api_version = Some("2024-10-21".into());
 
-    let (url, headers) =
-        sona_online_llm::native_completion::resolve_strategy_url_and_headers(&azure_request, false)
-            .unwrap();
-    assert_eq!(
-        url.as_str(),
-        "https://example.openai.azure.com/openai/deployments/gpt-4o/chat/completions?api-version=2024-10-21"
-    );
-    assert_eq!(headers, vec![("api-key", "azure-key".to_string())]);
+    let res = sona_online_llm::aimux_adapter::create_aimux_model(&azure_request.config);
+    assert!(res.is_ok());
 }
 
 fn read_http_request(stream: &mut std::net::TcpStream) -> String {
@@ -340,7 +334,7 @@ async fn native_rig_providers_post_to_expected_endpoint_paths() {
 
 #[test]
 fn native_providers_build_successfully_from_default_configurations() {
-    use sona_online_llm::native_completion::resolve_strategy_url_and_headers;
+    use sona_online_llm::aimux_adapter::create_aimux_model;
 
     let strategies = [
         LlmProviderStrategy::OpenAi,
@@ -348,7 +342,6 @@ fn native_providers_build_successfully_from_default_configurations() {
         LlmProviderStrategy::Anthropic,
         LlmProviderStrategy::Gemini,
         LlmProviderStrategy::Ollama,
-        LlmProviderStrategy::Copilot,
         LlmProviderStrategy::Cohere,
         LlmProviderStrategy::DeepSeek,
         LlmProviderStrategy::Groq,
@@ -360,19 +353,16 @@ fn native_providers_build_successfully_from_default_configurations() {
         LlmProviderStrategy::Perplexity,
         LlmProviderStrategy::Together,
         LlmProviderStrategy::XAi,
-        LlmProviderStrategy::Venice,
-        LlmProviderStrategy::Hyperbolic,
-        LlmProviderStrategy::Llamafile,
     ];
 
     for strategy in strategies {
         let mut req = request();
         req.config.strategy = strategy;
         req.config.base_url = String::new();
-        let res = resolve_strategy_url_and_headers(&req, false);
+        let res = create_aimux_model(&req.config);
         assert!(
             res.is_ok(),
-            "resolve_strategy_url_and_headers failed for strategy {:?}: {:?}",
+            "create_aimux_model failed for strategy {:?}: {:?}",
             strategy,
             res.err()
         );

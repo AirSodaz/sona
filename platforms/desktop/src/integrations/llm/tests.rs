@@ -292,68 +292,6 @@ fn gemini_models_url_accepts_common_inputs() {
 }
 
 #[test]
-fn gemini_generate_content_request_keeps_api_key_out_of_url() {
-    let request = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com/v1beta/openai",
-        "gemini-2.5-flash",
-        "secret-gemini-key",
-        false,
-    )
-    .expect("gemini request parts should build");
-
-    assert_eq!(
-        request.url.as_str(),
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
-    );
-    assert_eq!(
-        request.headers,
-        vec![("x-goog-api-key", "secret-gemini-key".to_string())]
-    );
-    assert!(!request.url.as_str().contains("secret-gemini-key"));
-    assert!(!request.url.as_str().contains("key="));
-}
-
-#[test]
-fn gemini_stream_generate_content_request_keeps_api_key_out_of_url() {
-    let request = build_gemini_generate_content_request_parts(
-        "https://generativelanguage.googleapis.com/v1beta/models",
-        "gemini-2.5-pro",
-        "secret-stream-key",
-        true,
-    )
-    .expect("gemini stream request parts should build");
-
-    assert_eq!(
-        request.url.as_str(),
-        "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:streamGenerateContent?alt=sse"
-    );
-    assert_eq!(
-        request.headers,
-        vec![("x-goog-api-key", "secret-stream-key".to_string())]
-    );
-    assert!(!request.url.as_str().contains("secret-stream-key"));
-    assert!(!request.url.as_str().contains("key="));
-}
-
-#[test]
-fn gemini_generate_content_request_errors_do_not_include_api_key() {
-    let error = build_gemini_generate_content_request_parts(
-        "http://generativelanguage.googleapis.com",
-        "gemini-2.5-flash",
-        "secret-gemini-key",
-        false,
-    )
-    .expect_err("remote http should be rejected before request dispatch");
-
-    assert_eq!(error.kind, LlmPortErrorKind::InvalidRequest);
-    assert_eq!(
-        error.message,
-        "LLM API host must use https:// unless it points to a local or LAN address."
-    );
-    assert!(!error.message.contains("secret-gemini-key"));
-}
-
-#[test]
 fn gemini_model_filter_keeps_generate_content_models() {
     let text_model = GeminiModel {
         name: "models/gemini-2.5-flash".to_string(),
@@ -413,8 +351,8 @@ fn openai_model_summary_defaults_missing_metadata_to_none() {
 }
 
 #[test]
-fn anthropic_listing_is_disabled() {
-    assert!(!strategy_supports_model_listing(
+fn strategy_model_listing_support() {
+    assert!(strategy_supports_model_listing(
         LlmProviderStrategy::Anthropic
     ));
     assert!(!strategy_supports_model_listing(
@@ -448,34 +386,6 @@ fn llm_config_accepts_custom_provider_with_strategy() {
 }
 
 #[test]
-fn openai_chat_payload_keeps_temperature_when_reasoning_is_enabled() {
-    let mut config = sample_llm_config("https://api.openai.com/v1");
-    config.temperature = Some(0.35);
-    config.reasoning_enabled = Some(true);
-    config.reasoning_level = Some("high".to_string());
-
-    let payload = build_openai_chat_payload(
-        OpenAiChatPayloadConfig {
-            strategy: config.strategy,
-            model: &config.model,
-            temperature: config.temperature,
-            reasoning_enabled: config.reasoning_enabled.unwrap_or(false),
-            reasoning_level: config.reasoning_level.as_deref(),
-        },
-        "hello",
-        true,
-    );
-
-    assert_eq!(payload["model"], "test-model");
-    assert_eq!(payload["stream"], true);
-    assert_eq!(payload["reasoning_effort"], "high");
-    let temperature = payload["temperature"]
-        .as_f64()
-        .expect("temperature should be numeric");
-    assert!((temperature - 0.35).abs() < 0.000_001);
-}
-
-#[test]
 fn provider_strategy_uses_legacy_provider_when_strategy_is_missing() {
     let config: LlmConfig = serde_json::from_value(json!({
         "provider": "gemini",
@@ -504,45 +414,6 @@ fn join_url_trims_duplicate_slashes() {
             "api/v3/chat/completions"
         ),
         "https://ark.cn-beijing.volces.com/api/v3/chat/completions"
-    );
-}
-
-#[test]
-fn extract_text_from_chat_completions_response() {
-    let response = json!({
-        "choices": [
-            {
-                "message": {
-                    "content": "Hello from chat completions"
-                }
-            }
-        ]
-    });
-
-    assert_eq!(
-        extract_text_from_json_response(&response).unwrap(),
-        "Hello from chat completions"
-    );
-}
-
-#[test]
-fn extract_text_from_responses_api_payload() {
-    let response = json!({
-        "output": [
-            {
-                "content": [
-                    {
-                        "type": "output_text",
-                        "text": "Hello from responses"
-                    }
-                ]
-            }
-        ]
-    });
-
-    assert_eq!(
-        extract_text_from_json_response(&response).unwrap(),
-        "Hello from responses"
     );
 }
 

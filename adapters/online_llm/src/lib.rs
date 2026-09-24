@@ -1,7 +1,6 @@
 pub mod aimux_adapter;
 mod completion;
 pub mod demuxer;
-mod gemini;
 mod model_discovery;
 mod models_dev;
 pub mod native_completion;
@@ -12,13 +11,8 @@ use async_trait::async_trait;
 pub use completion::{
     Usage, build_standard_user_input, complete_with_provider, token_usage_from_rig_usage,
 };
-pub use gemini::{
-    GeminiGenerateContentRequestParts, build_gemini_generate_content_request_parts_for_reqwest,
-};
-pub use model_discovery::{
-    build_gemini_models_url, build_openai_models_urls, get_gemini_models, get_openai_models,
-    list_models_with_provider,
-};
+
+pub use model_discovery::list_models_with_provider;
 pub use models_dev::{
     ModelsDevCatalog, models_dev_provider_id, parse_models_dev_models, should_enrich_model_metadata,
 };
