@@ -524,6 +524,8 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect(screen.queryByRole('button', { name: /Speaker Segmentation Models/ })).toBeNull();
     expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
 
+    // Expand the Volcengine cloud ASR provider card to reveal its config fields
+    fireEvent.click(screen.getByRole('button', { name: /豆包语音/ }));
     const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
     expect(apiKeyInput.disabled).toBe(false);
 
@@ -831,6 +833,9 @@ describe('SettingsModelsTab speaker model selections', () => {
     } as any);
 
     renderTab(new Set());
+
+    // Expand the Volcengine cloud ASR provider card to reveal batch mode dropdown
+    fireEvent.click(screen.getByRole('button', { name: /豆包语音/ }));
 
     fireEvent.click(screen.getByRole('button', { name: '急速 (同步直回)' }));
 

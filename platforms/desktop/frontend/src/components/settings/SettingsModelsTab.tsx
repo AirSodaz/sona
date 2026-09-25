@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import type { CudaAddonInspection } from '../../bindings';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import {
-  GROQ_WHISPER_PROVIDER_ID,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
   syncLegacyAsrSelectionFields,
   syncLiveAsrSelectionFields,
@@ -42,13 +41,8 @@ import { Dropdown, type DropdownOption } from '../Dropdown';
 import { ModelIcon, OnlineIcon, RestoreIcon } from '../Icons';
 import { ModelBrandLogo } from '../icons/ModelLogos';
 import { Switch } from '../Switch';
+import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
 import { ModelCard } from './ModelCard';
-import {
-  DynamicProviderSettings,
-  GroqWhisperSettingsCard,
-  type ProviderSettingsProps,
-  VolcengineSettingsCard,
-} from './OnlineAsrSettingsCards';
 import {
   SettingsAccordion,
   SettingsItem,
@@ -60,13 +54,7 @@ import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 
 type ModelScenario = 'live' | 'batch';
 
-const CUSTOM_PROVIDER_COMPONENTS: Record<string, React.ComponentType<ProviderSettingsProps>> = {
-  [VOLCENGINE_DOUBAO_PROVIDER_ID]: VolcengineSettingsCard,
-  [GROQ_WHISPER_PROVIDER_ID]: GroqWhisperSettingsCard,
-};
-
-const onlineAsrProvider = ONLINE_ASR_PROVIDER_DEFINITIONS[0];
-const VOLCENGINE_DOUBAO_OPTION_ID = onlineAsrProvider.id;
+const VOLCENGINE_DOUBAO_OPTION_ID = ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
 
 interface SettingsModelsTabProps {
   isActive?: boolean;
@@ -95,7 +83,12 @@ function toDropdownOptions(
       label: withIcon ? (
         <span className="model-dropdown-option">
           <span className="model-dropdown-option-icon">
-            <ModelBrandLogo model={{ id: option.id, name: option.label }} size={16} />
+            <ModelBrandLogo
+              model={{ id: option.id, name: option.label }}
+              size={16}
+              alt=""
+              aria-hidden="true"
+            />
           </span>
           <span>{option.label}</span>
         </span>
@@ -886,9 +879,17 @@ export function SettingsModelsTab({
             value: provider.id,
             ariaLabel: labelText,
             label: (
-              <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                {labelText}
-                <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
+              <span className="model-dropdown-option">
+                <span className="model-dropdown-option-icon">
+                  <ModelBrandLogo
+                    model={{ id: provider.id, name: labelText }}
+                    size={16}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>{labelText}</span>
+                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
               </span>
             ),
           };
@@ -914,9 +915,17 @@ export function SettingsModelsTab({
           value: provider.id,
           ariaLabel: labelText,
           label: (
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              {labelText}
-              <OnlineIcon style={{ color: 'var(--color-text-muted)' }} />
+            <span className="model-dropdown-option">
+              <span className="model-dropdown-option-icon">
+                <ModelBrandLogo
+                  model={{ id: provider.id, name: labelText }}
+                  size={16}
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+              <span>{labelText}</span>
+              <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
             </span>
           ),
         };
@@ -1512,8 +1521,8 @@ export function SettingsModelsTab({
 
         {isVolcengineSelected && (
           <div className="settings-hint">
-            {t(onlineAsrProvider.onlineUploadHintKey, {
-              defaultValue: onlineAsrProvider.onlineUploadHintDefault,
+            {t(ONLINE_ASR_PROVIDER_DEFINITIONS[0].onlineUploadHintKey, {
+              defaultValue: ONLINE_ASR_PROVIDER_DEFINITIONS[0].onlineUploadHintDefault,
             })}
           </div>
         )}
@@ -1555,10 +1564,7 @@ export function SettingsModelsTab({
         title={t('settings.online_model_management', { defaultValue: '在线模型管理' })}
         icon={<Settings2 size={20} />}
       >
-        {ONLINE_ASR_PROVIDER_DEFINITIONS.map((provider) => {
-          const Component = CUSTOM_PROVIDER_COMPONENTS[provider.id] || DynamicProviderSettings;
-          return <Component key={provider.id} provider={provider} />;
-        })}
+        <CloudAsrProviderGrid />
       </SettingsSection>
 
       <SettingsSection

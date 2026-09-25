@@ -1,18 +1,25 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import {
+  AssemblyAiLogo,
+  DeepgramLogo,
   DolphinLogo,
+  ElevenLabsLogo,
   FireRedLogo,
   FunAsrNanoLogo,
   GenericModelLogo,
+  GroqLogo,
   MetaLogo,
+  MistralLogo,
   ModelBrandLogo,
   MoonshineLogo,
   NvidiaLogo,
+  OpenAILogo,
   ParaformerLogo,
   QwenLogo,
   resolveModelBrand,
   SenseVoiceLogo,
+  VolcengineLogo,
   WhisperLogo,
   ZipformerLogo,
 } from '../ModelLogos';
@@ -109,6 +116,18 @@ describe('ModelLogos - resolveModelBrand', () => {
         groupId: 'moonshine-v2',
       })
     ).toBe('moonshine');
+  });
+
+  it('correctly resolves online cloud ASR provider models', () => {
+    expect(resolveModelBrand({ id: 'volcengine-doubao', name: '豆包语音 (火山)' })).toBe(
+      'volcengine'
+    );
+    expect(resolveModelBrand({ id: 'groq-whisper', name: 'Whisper (Groq)' })).toBe('groq');
+    expect(resolveModelBrand({ id: 'mistral-voxtral', name: 'Voxtral (Mistral)' })).toBe('mistral');
+    expect(resolveModelBrand({ id: 'openai-whisper', name: 'Whisper (OpenAI)' })).toBe('openai');
+    expect(resolveModelBrand({ id: 'deepgram', name: 'Deepgram' })).toBe('deepgram');
+    expect(resolveModelBrand({ id: 'assemblyai', name: 'AssemblyAI' })).toBe('assemblyai');
+    expect(resolveModelBrand({ id: 'elevenlabs', name: 'ElevenLabs' })).toBe('elevenlabs');
   });
 
   it('falls back to generic for unrecognized ASR models', () => {
@@ -237,5 +256,34 @@ describe('ModelLogos - Component Rendering', () => {
       <ModelBrandLogo model={{ id: 'silero-vad', type: 'vad', name: 'Silero VAD' }} />
     );
     expect(container.firstChild).toBeNull();
+  });
+
+  it('renders online ASR brand logos directly and via ModelBrandLogo', () => {
+    expect(render(<VolcengineLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<GroqLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<MistralLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<OpenAILogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<DeepgramLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<AssemblyAiLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<ElevenLabsLogo size={32} />).container.querySelector('img')).toBeTruthy();
+    expect(render(<SenseVoiceLogo size={32} />).container.querySelector('img')).toBeTruthy();
+
+    const brands = [
+      'volcengine',
+      'groq',
+      'mistral',
+      'openai',
+      'deepgram',
+      'assemblyai',
+      'elevenlabs',
+    ] as const;
+
+    for (const brand of brands) {
+      const { container } = render(<ModelBrandLogo brand={brand} size={28} />);
+      const img = container.querySelector('img');
+      expect(img).toBeTruthy();
+      expect(img?.getAttribute('width')).toBe('28');
+      expect(img?.getAttribute('class')).toContain('model-brand-logo');
+    }
   });
 });

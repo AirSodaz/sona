@@ -1,12 +1,19 @@
 import type React from 'react';
+import assemblyaiImg from '../../assets/models/assemblyai.png';
+import deepgramImg from '../../assets/models/deepgram.png';
 import dolphinImg from '../../assets/models/dolphin.png';
+import elevenlabsImg from '../../assets/models/elevenlabs.png';
 import fireredImg from '../../assets/models/firered.png';
 import funasrImg from '../../assets/models/funasr.png';
+import groqImg from '../../assets/models/groq.png';
 import metaImg from '../../assets/models/meta.png';
+import mistralImg from '../../assets/models/mistral.png';
 import moonshineImg from '../../assets/models/moonshine.png';
 import nvidiaImg from '../../assets/models/nvidia.png';
+import openaiImg from '../../assets/models/openai.png';
 import paraformerImg from '../../assets/models/paraformer.png';
 import sensevoiceImg from '../../assets/models/sensevoice.png';
+import volcengineImg from '../../assets/models/volcengine.png';
 import whisperImg from '../../assets/models/whisper.png';
 import zipformerImg from '../../assets/models/zipformer.png';
 
@@ -22,6 +29,13 @@ export type AsrBrand =
   | 'nvidia'
   | 'dolphin'
   | 'moonshine'
+  | 'volcengine'
+  | 'groq'
+  | 'mistral'
+  | 'openai'
+  | 'deepgram'
+  | 'assemblyai'
+  | 'elevenlabs'
   | 'generic';
 
 export interface ModelLogoProps extends React.ImgHTMLAttributes<HTMLImageElement> {
@@ -263,6 +277,153 @@ export function MoonshineLogo({
   );
 }
 
+/** 12. Volcengine / Doubao (火山引擎 / 豆包) Logo */
+export function VolcengineLogo({
+  size = 32,
+  className = '',
+  alt = 'Volcengine',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={volcengineImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 13. Groq Logo */
+export function GroqLogo({
+  size = 32,
+  className = '',
+  alt = 'Groq',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={groqImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 14. Mistral AI Logo */
+export function MistralLogo({
+  size = 32,
+  className = '',
+  alt = 'Mistral AI',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={mistralImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 15. OpenAI Logo */
+export function OpenAILogo({
+  size = 32,
+  className = '',
+  alt = 'OpenAI',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={openaiImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 16. Deepgram Logo */
+export function DeepgramLogo({
+  size = 32,
+  className = '',
+  alt = 'Deepgram',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={deepgramImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 17. AssemblyAI Logo */
+export function AssemblyAiLogo({
+  size = 32,
+  className = '',
+  alt = 'AssemblyAI',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={assemblyaiImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
+/** 18. ElevenLabs Logo */
+export function ElevenLabsLogo({
+  size = 32,
+  className = '',
+  alt = 'ElevenLabs',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={elevenlabsImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+
 /** Generic fallback model logo */
 export function GenericModelLogo({ size = 32, ...props }: GenericLogoProps): React.JSX.Element {
   return (
@@ -306,6 +467,15 @@ export const ASR_MODEL_TYPES = new Set([
   'parakeet-tdt',
   'moonshine',
   'omnilingual',
+  'volcengine',
+  'doubao',
+  'groq',
+  'mistral',
+  'voxtral',
+  'openai',
+  'deepgram',
+  'assemblyai',
+  'elevenlabs',
 ]);
 
 const NON_ASR_MODEL_TYPES = new Set([
@@ -364,7 +534,16 @@ export function isAsrModel(model: {
     token.includes('parakeet') ||
     token.includes('nemo') ||
     token.includes('dolphin') ||
-    token.includes('moonshine')
+    token.includes('moonshine') ||
+    token.includes('volcengine') ||
+    token.includes('doubao') ||
+    token.includes('groq') ||
+    token.includes('mistral') ||
+    token.includes('voxtral') ||
+    token.includes('deepgram') ||
+    token.includes('assemblyai') ||
+    token.includes('assembly') ||
+    token.includes('elevenlabs')
   ) {
     return true;
   }
@@ -388,6 +567,27 @@ export function resolveModelBrand(model: {
   const token =
     `${model.groupId ?? ''} ${model.id ?? ''} ${model.type ?? ''} ${model.name ?? ''}`.toLowerCase();
 
+  if (token.includes('volcengine') || token.includes('doubao')) {
+    return 'volcengine';
+  }
+  if (token.includes('groq')) {
+    return 'groq';
+  }
+  if (token.includes('mistral') || token.includes('voxtral')) {
+    return 'mistral';
+  }
+  if (token.includes('openai')) {
+    return 'openai';
+  }
+  if (token.includes('deepgram')) {
+    return 'deepgram';
+  }
+  if (token.includes('assemblyai') || token.includes('assembly')) {
+    return 'assemblyai';
+  }
+  if (token.includes('elevenlabs')) {
+    return 'elevenlabs';
+  }
   if (token.includes('qwen')) {
     return 'qwen';
   }
@@ -430,6 +630,7 @@ export interface ModelBrandLogoProps extends React.HTMLAttributes<HTMLElement> {
   model?: { id?: string; groupId?: string; name?: string; type?: string };
   size?: number;
   className?: string;
+  alt?: string;
 }
 
 /**
@@ -472,6 +673,20 @@ export function ModelBrandLogo({
       return <DolphinLogo size={size} className={className} {...props} />;
     case 'moonshine':
       return <MoonshineLogo size={size} className={className} {...props} />;
+    case 'volcengine':
+      return <VolcengineLogo size={size} className={className} {...props} />;
+    case 'groq':
+      return <GroqLogo size={size} className={className} {...props} />;
+    case 'mistral':
+      return <MistralLogo size={size} className={className} {...props} />;
+    case 'openai':
+      return <OpenAILogo size={size} className={className} {...props} />;
+    case 'deepgram':
+      return <DeepgramLogo size={size} className={className} {...props} />;
+    case 'assemblyai':
+      return <AssemblyAiLogo size={size} className={className} {...props} />;
+    case 'elevenlabs':
+      return <ElevenLabsLogo size={size} className={className} {...props} />;
     case 'generic':
       return <GenericModelLogo size={size} className={className} />;
     default:
