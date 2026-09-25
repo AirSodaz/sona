@@ -124,6 +124,165 @@
           "unsupportedMessage": ""
         }
       }
+    },
+    {
+      "id": "openai-whisper",
+      "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
+      "languageMode": "selectable",
+      "profileId": "openai-whisper-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.openai_whisper_option",
+        "optionDefaultLabel": "Whisper (OpenAI)",
+        "titleKey": "settings.asr.openai_title",
+        "titleDefault": "Whisper (OpenAI)",
+        "onlineUploadHintKey": "settings.asr.openai_online_upload_hint",
+        "onlineUploadHintDefault": "音频会发送到 OpenAI 进行识别。单文件最大 25MB。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" },
+          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint", "labelDefault": "Endpoint" }
+        ]
+      },
+      "defaults": {
+        "apiKey": "",
+        "batchEndpoint": "https://api.openai.com/v1/audio/transcriptions",
+        "model": "whisper-1"
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "batchEndpoint",
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.openai.com/v1/audio/transcriptions",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "deepgram",
+      "languages": ["ar", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "id", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sv", "ta", "th", "tr", "uk", "vi", "zh"],
+      "languageMode": "selectable",
+      "profileId": "deepgram-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.deepgram_option",
+        "optionDefaultLabel": "Deepgram",
+        "titleKey": "settings.asr.deepgram_title",
+        "titleDefault": "Deepgram",
+        "onlineUploadHintKey": "settings.asr.deepgram_online_upload_hint",
+        "onlineUploadHintDefault": "音频会发送到 Deepgram 进行识别。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+        ]
+      },
+      "defaults": {
+        "apiKey": "",
+        "model": "nova-2"
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.deepgram.com/v1/listen",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "assemblyai",
+      "languages": ["de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pl", "pt", "ru", "tr", "uk", "vi", "zh"],
+      "languageMode": "selectable",
+      "profileId": "assemblyai-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.assemblyai_option",
+        "optionDefaultLabel": "AssemblyAI",
+        "titleKey": "settings.asr.assemblyai_title",
+        "titleDefault": "AssemblyAI",
+        "onlineUploadHintKey": "settings.asr.assemblyai_online_upload_hint",
+        "onlineUploadHintDefault": "音频会发送到 AssemblyAI 进行识别。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+        ]
+      },
+      "defaults": {
+        "apiKey": "",
+        "model": "best"
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.assemblyai.com/v2/transcript",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
+    },
+    {
+      "id": "elevenlabs",
+      "languages": ["de", "en", "es", "fr", "hi", "id", "it", "ja", "ko", "ms", "nl", "pl", "pt", "ru", "sv", "tr", "vi", "zh"],
+      "languageMode": "selectable",
+      "profileId": "elevenlabs-default",
+      "ui": {
+        "optionLabelKey": "settings.asr.elevenlabs_option",
+        "optionDefaultLabel": "ElevenLabs",
+        "titleKey": "settings.asr.elevenlabs_title",
+        "titleDefault": "ElevenLabs",
+        "onlineUploadHintKey": "settings.asr.elevenlabs_online_upload_hint",
+        "onlineUploadHintDefault": "音频会发送到 ElevenLabs 进行识别。",
+        "fields": [
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+        ]
+      },
+      "defaults": {
+        "apiKey": "",
+        "model": "scribe_v1"
+      },
+      "streaming": {
+        "supported": false,
+        "requiresApiKey": false,
+        "requiredConfigFields": []
+      },
+      "batch": {
+        "requiresApiKey": true,
+        "requiredConfigFields": [
+          "model"
+        ],
+        "localFileMode": {
+          "supported": true,
+          "endpoint": "https://api.elevenlabs.io/v1/speech-to-text",
+          "resourceId": "",
+          "unsupportedMessage": ""
+        }
+      }
     }
   ]
 }

@@ -2,20 +2,93 @@ use std::path::Path;
 use std::sync::Arc;
 
 use aimux_core::transcription_model::{AudioInput, TranscriptionCallOptions, TranscriptionModel};
+use aimux_providers::assemblyai::{AssemblyAIConfig, AssemblyAITranscriptionModel};
+use aimux_providers::deepgram::{DeepgramConfig, DeepgramTranscriptionModel};
+use aimux_providers::elevenlabs::{ElevenLabsConfig, ElevenLabsTranscriptionModel};
 use aimux_providers::openai::{OpenAIConfig, OpenAITranscriptionModel};
 use sona_core::ports::asr::{
-    AsrMode, AsrPortError, AsrPortErrorKind, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest,
-    VOLCENGINE_DOUBAO_PROVIDER_ID,
+    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
+    AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID,
+    OnlineBatchTranscriptionOutput, OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    find_online_asr_provider,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
 
 use crate::error::map_aimux_asr_error;
 use crate::volcengine::VolcengineTranscriptionModel;
-use crate::{
-    VolcengineMode, WhisperCompatibleProvider, resolve_online_asr_provider_id,
-    resolve_volcengine_config, resolve_whisper_config, whisper_language_form_field,
-};
+use crate::{VolcengineMode, resolve_online_asr_provider_id, resolve_volcengine_config};
+
+/// Normalized fields resolved from an online ASR provider request and manifest.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OnlineProviderConfigFields {
+    pub api_key: String,
+    pub model: String,
+    pub batch_endpoint: Option<String>,
+}
+
+/// Helper to resolve standard online provider configuration (API key, model, endpoint).
+pub fn resolve_online_provider_config(
+    request: &AsrTranscriptionRequest,
+    provider_id: &str,
+) -> Result<OnlineProviderConfigFields, AsrPortError> {
+    let provider_request = match &request.engine_config {
+        AsrEngineConfig::Online { provider } => provider,
+        _ => {
+            return Err(AsrPortError::invalid_request(format!(
+                "Online ASR provider request is missing for {provider_id}."
+            )));
+        }
+    };
+
+    let manifest = find_online_asr_provider(provider_id).ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!("Provider {provider_id} not found in manifest"),
+        )
+    })?;
+
+    let defaults = manifest.defaults.as_object();
+
+    let get_string = |key: &str| -> String {
+        provider_request
+            .config
+            .get(key)
+            .and_then(serde_json::Value::as_str)
+            .map(str::trim)
+            .filter(|v| !v.is_empty())
+            .or_else(|| {
+                defaults
+                    .and_then(|d| d.get(key))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::trim)
+            })
+            .unwrap_or("")
+            .to_string()
+    };
+
+    let api_key = get_string("apiKey");
+    if api_key.is_empty() {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Authentication,
+            format!("{provider_id} API Key is not configured."),
+        ));
+    }
+
+    let model = get_string("model");
+    let batch_endpoint_str = get_string("batchEndpoint");
+    let batch_endpoint = if batch_endpoint_str.is_empty() {
+        None
+    } else {
+        Some(batch_endpoint_str)
+    };
+
+    Ok(OnlineProviderConfigFields {
+        api_key,
+        model,
+        batch_endpoint,
+    })
+}
 
 /// Detect MIME type based on audio file extension.
 pub fn detect_audio_mime_type(file_path: &Path) -> &'static str {
@@ -36,60 +109,146 @@ pub fn detect_audio_mime_type(file_path: &Path) -> &'static str {
     }
 }
 
+fn normalize_language_hint(language: &str) -> Option<String> {
+    let lang = language.trim();
+    if lang.is_empty() || lang.eq_ignore_ascii_case("auto") {
+        None
+    } else {
+        Some(lang.to_string())
+    }
+}
+
 /// Create an aimux [`TranscriptionModel`] from a Sona [`AsrTranscriptionRequest`].
 pub fn create_aimux_transcription_model(
     request: &AsrTranscriptionRequest,
 ) -> Result<Arc<dyn TranscriptionModel>, AsrPortError> {
+    if request.mode != AsrMode::Batch {
+        return Err(AsrPortError::invalid_request(format!(
+            "Online provider {} can only be used in batch mode.",
+            request.provider_id()
+        )));
+    }
+
     let provider_id = resolve_online_asr_provider_id(request)?;
 
     match provider_id {
-        GROQ_WHISPER_PROVIDER_ID => {
-            if request.mode != AsrMode::Batch {
-                return Err(AsrPortError::invalid_request(
-                    WhisperCompatibleProvider::GroqWhisper.batch_only_error(),
-                ));
+        VOLCENGINE_DOUBAO_PROVIDER_ID => {
+            let config = resolve_volcengine_config(request, VolcengineMode::Batch)
+                .map_err(AsrPortError::from)?;
+            Ok(Arc::new(VolcengineTranscriptionModel::new(config)))
+        }
+        OPENAI_WHISPER_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, OPENAI_WHISPER_PROVIDER_ID)?;
+            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/audio/transcriptions")
+                    .trim_end_matches('/');
+                openai_config = openai_config.with_base_url(base_url);
             }
-            let config = resolve_whisper_config(request, WhisperCompatibleProvider::GroqWhisper)
-                .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
-            let base_url = config
-                .batch_endpoint
-                .trim_end_matches("/audio/transcriptions")
-                .trim_end_matches('/');
-            let mut openai_config = OpenAIConfig::new(&config.api_key).with_base_url(base_url);
-            openai_config.provider = "groq".to_string();
+            let model_id = if config.model.is_empty() {
+                "whisper-1".to_string()
+            } else {
+                config.model
+            };
             Ok(Arc::new(OpenAITranscriptionModel::new(
-                config.model,
+                model_id,
+                openai_config,
+            )))
+        }
+        GROQ_WHISPER_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, GROQ_WHISPER_PROVIDER_ID)?;
+            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/audio/transcriptions")
+                    .trim_end_matches('/');
+                openai_config = openai_config.with_base_url(base_url);
+            }
+            openai_config.provider = "groq".to_string();
+            let model_id = if config.model.is_empty() {
+                "whisper-large-v3-turbo".to_string()
+            } else {
+                config.model
+            };
+            Ok(Arc::new(OpenAITranscriptionModel::new(
+                model_id,
                 openai_config,
             )))
         }
         MISTRAL_VOXTRAL_PROVIDER_ID => {
-            if request.mode != AsrMode::Batch {
-                return Err(AsrPortError::invalid_request(
-                    WhisperCompatibleProvider::MistralVoxtral.batch_only_error(),
-                ));
+            let config = resolve_online_provider_config(request, MISTRAL_VOXTRAL_PROVIDER_ID)?;
+            let mut openai_config = OpenAIConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/audio/transcriptions")
+                    .trim_end_matches('/');
+                openai_config = openai_config.with_base_url(base_url);
             }
-            let config = resolve_whisper_config(request, WhisperCompatibleProvider::MistralVoxtral)
-                .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
-            let base_url = config
-                .batch_endpoint
-                .trim_end_matches("/audio/transcriptions")
-                .trim_end_matches('/');
-            let mut openai_config = OpenAIConfig::new(&config.api_key).with_base_url(base_url);
             openai_config.provider = "mistral".to_string();
+            let model_id = if config.model.is_empty() {
+                "mistral-small-latest".to_string()
+            } else {
+                config.model
+            };
             Ok(Arc::new(OpenAITranscriptionModel::new(
-                config.model,
+                model_id,
                 openai_config,
             )))
         }
-        VOLCENGINE_DOUBAO_PROVIDER_ID => {
-            if request.mode != AsrMode::Batch {
-                return Err(AsrPortError::from(
-                    crate::SherpaError::VolcengineBatchModeMismatch,
-                ));
+        DEEPGRAM_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, DEEPGRAM_PROVIDER_ID)?;
+            let mut dg_config = DeepgramConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/v1/listen")
+                    .trim_end_matches('/');
+                dg_config = dg_config.with_base_url(base_url);
             }
-            let config = resolve_volcengine_config(request, VolcengineMode::Batch)
-                .map_err(AsrPortError::from)?;
-            Ok(Arc::new(VolcengineTranscriptionModel::new(config)))
+            let model_id = if config.model.is_empty() {
+                "nova-2".to_string()
+            } else {
+                config.model
+            };
+            Ok(Arc::new(DeepgramTranscriptionModel::new(
+                model_id, dg_config,
+            )))
+        }
+        ASSEMBLYAI_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, ASSEMBLYAI_PROVIDER_ID)?;
+            let mut aai_config = AssemblyAIConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/v2/transcript")
+                    .trim_end_matches('/');
+                aai_config = aai_config.with_base_url(base_url);
+            }
+            let model_id = if config.model.is_empty() {
+                "best".to_string()
+            } else {
+                config.model
+            };
+            Ok(Arc::new(AssemblyAITranscriptionModel::new(
+                model_id, aai_config,
+            )))
+        }
+        ELEVENLABS_PROVIDER_ID => {
+            let config = resolve_online_provider_config(request, ELEVENLABS_PROVIDER_ID)?;
+            let mut el_config = ElevenLabsConfig::new(&config.api_key);
+            if let Some(endpoint) = &config.batch_endpoint {
+                let base_url = endpoint
+                    .trim_end_matches("/v1/speech-to-text")
+                    .trim_end_matches('/');
+                el_config = el_config.with_base_url(base_url);
+            }
+            let model_id = if config.model.is_empty() {
+                "scribe_v1".to_string()
+            } else {
+                config.model
+            };
+            Ok(Arc::new(ElevenLabsTranscriptionModel::new(
+                model_id, el_config,
+            )))
         }
         _ => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
@@ -120,7 +279,7 @@ pub async fn execute_aimux_batch(
 
     // 1. OpenAI-compatible options
     let mut openai_options = serde_json::Map::new();
-    if let Some(language) = whisper_language_form_field(&input.request.language) {
+    if let Some(language) = normalize_language_hint(&input.request.language) {
         openai_options.insert("language".to_string(), serde_json::Value::String(language));
     }
     if let Some(hotwords) = input
@@ -147,11 +306,8 @@ pub async fn execute_aimux_batch(
         "enable_itn".to_string(),
         serde_json::Value::Bool(input.request.enable_itn),
     );
-    if !input.request.language.trim().is_empty() && input.request.language != "auto" {
-        volc_options.insert(
-            "language".to_string(),
-            serde_json::Value::String(input.request.language.clone()),
-        );
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        volc_options.insert("language".to_string(), serde_json::Value::String(language));
     }
     if let Some(hotwords) = input
         .request
@@ -168,6 +324,63 @@ pub async fn execute_aimux_batch(
         "volcengine".to_string(),
         serde_json::Value::Object(volc_options),
     );
+
+    // 3. Deepgram options
+    let mut deepgram_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        deepgram_options.insert("language".to_string(), serde_json::Value::String(language));
+    }
+    if !deepgram_options.is_empty() {
+        po.insert(
+            "deepgram".to_string(),
+            serde_json::Value::Object(deepgram_options),
+        );
+    }
+
+    // 4. AssemblyAI options
+    let mut assemblyai_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        assemblyai_options.insert(
+            "language_code".to_string(),
+            serde_json::Value::String(language),
+        );
+    }
+    if let Some(hotwords) = input
+        .request
+        .hotwords
+        .as_deref()
+        .filter(|value| !value.trim().is_empty())
+    {
+        let words = hotwords
+            .lines()
+            .map(str::trim)
+            .filter(|w| !w.is_empty())
+            .collect::<Vec<_>>();
+        if !words.is_empty() {
+            assemblyai_options.insert("word_boost".to_string(), serde_json::json!(words));
+        }
+    }
+    if !assemblyai_options.is_empty() {
+        po.insert(
+            "assemblyai".to_string(),
+            serde_json::Value::Object(assemblyai_options),
+        );
+    }
+
+    // 5. ElevenLabs options
+    let mut elevenlabs_options = serde_json::Map::new();
+    if let Some(language) = normalize_language_hint(&input.request.language) {
+        elevenlabs_options.insert(
+            "languageCode".to_string(),
+            serde_json::Value::String(language),
+        );
+    }
+    if !elevenlabs_options.is_empty() {
+        po.insert(
+            "elevenlabs".to_string(),
+            serde_json::Value::Object(elevenlabs_options),
+        );
+    }
 
     if !po.is_empty() {
         call_options.provider_options = Some(po);
@@ -234,8 +447,7 @@ mod tests {
     use serde_json::json;
     use sona_core::ports::asr::{
         AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
-        GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        OnlineAsrProviderRequest,
     };
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -274,6 +486,21 @@ mod tests {
     }
 
     #[test]
+    fn creates_aimux_model_for_openai_whisper() {
+        let request = online_request(
+            OPENAI_WHISPER_PROVIDER_ID,
+            json!({
+                "apiKey": "test-openai-key",
+                "model": "whisper-1"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "openai");
+        assert_eq!(model.model_id(), "whisper-1");
+    }
+
+    #[test]
     fn creates_aimux_model_for_groq_whisper() {
         let request = online_request(
             GROQ_WHISPER_PROVIDER_ID,
@@ -304,6 +531,51 @@ mod tests {
     }
 
     #[test]
+    fn creates_aimux_model_for_deepgram() {
+        let request = online_request(
+            DEEPGRAM_PROVIDER_ID,
+            json!({
+                "apiKey": "test-deepgram-key",
+                "model": "nova-2"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "deepgram");
+        assert_eq!(model.model_id(), "nova-2");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_assemblyai() {
+        let request = online_request(
+            ASSEMBLYAI_PROVIDER_ID,
+            json!({
+                "apiKey": "test-aai-key",
+                "model": "best"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "assemblyai");
+        assert_eq!(model.model_id(), "best");
+    }
+
+    #[test]
+    fn creates_aimux_model_for_elevenlabs() {
+        let request = online_request(
+            ELEVENLABS_PROVIDER_ID,
+            json!({
+                "apiKey": "test-el-key",
+                "model": "scribe_v1"
+            }),
+        );
+
+        let model = create_aimux_transcription_model(&request).unwrap();
+        assert_eq!(model.provider(), "elevenlabs");
+        assert_eq!(model.model_id(), "scribe_v1");
+    }
+
+    #[test]
     fn creates_aimux_model_for_volcengine_doubao() {
         let request = online_request(
             VOLCENGINE_DOUBAO_PROVIDER_ID,
@@ -317,6 +589,22 @@ mod tests {
         let model = create_aimux_transcription_model(&request).unwrap();
         assert_eq!(model.provider(), "volcengine");
         assert_eq!(model.model_id(), "volc.bigasr.auc_turbo");
+    }
+
+    #[test]
+    fn missing_api_key_fails_authentication() {
+        let request = online_request(
+            OPENAI_WHISPER_PROVIDER_ID,
+            json!({
+                "apiKey": "   "
+            }),
+        );
+
+        let err = match create_aimux_transcription_model(&request) {
+            Err(err) => err,
+            Ok(_) => panic!("expected missing API key error"),
+        };
+        assert_eq!(err.kind, AsrPortErrorKind::Authentication);
     }
 
     #[test]
@@ -419,6 +707,7 @@ mod tests {
             map_aimux_asr_error(no_provider_error).kind,
             AsrPortErrorKind::InvalidRequest
         );
+
         let unsupported_error =
             AiMuxError::UnsupportedFunctionality("streaming not supported".to_string());
         assert_eq!(

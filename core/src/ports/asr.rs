@@ -26,6 +26,10 @@ pub const VOLCENGINE_DOUBAO_PROVIDER_ID: &str = "volcengine-doubao";
 pub const VOLCENGINE_DOUBAO_LEGACY_PROVIDER_KEY: &str = "volcengineDoubao";
 pub const GROQ_WHISPER_PROVIDER_ID: &str = "groq-whisper";
 pub const MISTRAL_VOXTRAL_PROVIDER_ID: &str = "mistral-voxtral";
+pub const OPENAI_WHISPER_PROVIDER_ID: &str = "openai-whisper";
+pub const DEEPGRAM_PROVIDER_ID: &str = "deepgram";
+pub const ASSEMBLYAI_PROVIDER_ID: &str = "assemblyai";
+pub const ELEVENLABS_PROVIDER_ID: &str = "elevenlabs";
 
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[cfg_attr(feature = "specta", derive(Type))]

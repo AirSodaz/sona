@@ -1,9 +1,10 @@
 use clap::{Args, ValueEnum};
 use serde_json::{Map, Value};
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrTranscriptionRequest,
-    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OnlineAsrProviderRequest,
-    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
+    AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID,
+    OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -17,6 +18,10 @@ pub(crate) enum OnlineAsrProviderArg {
     VolcengineDoubao,
     GroqWhisper,
     MistralVoxtral,
+    OpenaiWhisper,
+    Deepgram,
+    Assemblyai,
+    Elevenlabs,
 }
 
 impl OnlineAsrProviderArg {
@@ -25,6 +30,10 @@ impl OnlineAsrProviderArg {
             Self::VolcengineDoubao => VOLCENGINE_DOUBAO_PROVIDER_ID,
             Self::GroqWhisper => GROQ_WHISPER_PROVIDER_ID,
             Self::MistralVoxtral => MISTRAL_VOXTRAL_PROVIDER_ID,
+            Self::OpenaiWhisper => OPENAI_WHISPER_PROVIDER_ID,
+            Self::Deepgram => DEEPGRAM_PROVIDER_ID,
+            Self::Assemblyai => ASSEMBLYAI_PROVIDER_ID,
+            Self::Elevenlabs => ELEVENLABS_PROVIDER_ID,
         }
     }
 
@@ -33,6 +42,10 @@ impl OnlineAsrProviderArg {
             Self::VolcengineDoubao => "SONA_VOLCENGINE_ASR_API_KEY",
             Self::GroqWhisper => "GROQ_API_KEY",
             Self::MistralVoxtral => "MISTRAL_API_KEY",
+            Self::OpenaiWhisper => "OPENAI_API_KEY",
+            Self::Deepgram => "DEEPGRAM_API_KEY",
+            Self::Assemblyai => "ASSEMBLYAI_API_KEY",
+            Self::Elevenlabs => "ELEVENLABS_API_KEY",
         }
     }
 }
@@ -269,5 +282,41 @@ mod tests {
             })
             .unwrap_err();
         assert!(error.to_string().contains("must not contain an API key"));
+    }
+
+    #[test]
+    fn online_provider_arg_maps_all_providers_to_correct_env_and_id() {
+        assert_eq!(
+            OnlineAsrProviderArg::OpenaiWhisper.provider_id(),
+            OPENAI_WHISPER_PROVIDER_ID
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::OpenaiWhisper.default_api_key_env(),
+            "OPENAI_API_KEY"
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Deepgram.provider_id(),
+            DEEPGRAM_PROVIDER_ID
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Deepgram.default_api_key_env(),
+            "DEEPGRAM_API_KEY"
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Assemblyai.provider_id(),
+            ASSEMBLYAI_PROVIDER_ID
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Assemblyai.default_api_key_env(),
+            "ASSEMBLYAI_API_KEY"
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Elevenlabs.provider_id(),
+            ELEVENLABS_PROVIDER_ID
+        );
+        assert_eq!(
+            OnlineAsrProviderArg::Elevenlabs.default_api_key_env(),
+            "ELEVENLABS_API_KEY"
+        );
     }
 }

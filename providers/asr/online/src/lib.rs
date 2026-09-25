@@ -1,9 +1,10 @@
 use async_trait::async_trait;
 use serde_json::Value;
 use sona_core::ports::asr::{
-    AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
-    AsrStreamingSession, AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID,
-    MISTRAL_VOXTRAL_PROVIDER_ID, OnlineBatchTranscriberPort, OnlineBatchTranscriptionOutput,
+    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
+    AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID,
+    ELEVENLABS_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
+    OPENAI_WHISPER_PROVIDER_ID, OnlineBatchTranscriberPort, OnlineBatchTranscriptionOutput,
     OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
@@ -21,16 +22,21 @@ pub mod error;
 pub mod volcengine;
 
 pub use aimux_adapter::{
-    create_aimux_transcription_model, detect_audio_mime_type, execute_aimux_batch,
+    OnlineProviderConfigFields, create_aimux_transcription_model, detect_audio_mime_type,
+    execute_aimux_batch, resolve_online_provider_config,
 };
 pub use error::{SherpaError, map_aimux_asr_error};
 pub use volcengine::VolcengineTranscriptionModel;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 
-pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 3] = [
+pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 7] = [
     AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+    AsrProviderCapability::new(OPENAI_WHISPER_PROVIDER_ID, false),
     AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
     AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
+    AsrProviderCapability::new(DEEPGRAM_PROVIDER_ID, false),
+    AsrProviderCapability::new(ASSEMBLYAI_PROVIDER_ID, false),
+    AsrProviderCapability::new(ELEVENLABS_PROVIDER_ID, false),
 ];
 
 pub fn resolve_online_asr_provider_id(
@@ -80,115 +86,6 @@ impl OnlineBatchTranscriberPort for OnlineAsrAdapter {
     ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         self.transcribe_batch(request).await
     }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum WhisperCompatibleProvider {
-    GroqWhisper,
-    MistralVoxtral,
-}
-
-impl WhisperCompatibleProvider {
-    pub fn provider_id(self) -> &'static str {
-        match self {
-            Self::GroqWhisper => GROQ_WHISPER_PROVIDER_ID,
-            Self::MistralVoxtral => MISTRAL_VOXTRAL_PROVIDER_ID,
-        }
-    }
-
-    fn provider_name(self) -> &'static str {
-        match self {
-            Self::GroqWhisper => "Groq Whisper",
-            Self::MistralVoxtral => "Mistral Voxtral",
-        }
-    }
-
-    fn api_key_error(self) -> &'static str {
-        match self {
-            Self::GroqWhisper => "Groq API Key is not configured.",
-            Self::MistralVoxtral => "Mistral API Key is not configured.",
-        }
-    }
-
-    fn endpoint_error(self) -> &'static str {
-        match self {
-            Self::GroqWhisper => "Groq batch endpoint or model is not configured.",
-            Self::MistralVoxtral => "Mistral batch endpoint or model is not configured.",
-        }
-    }
-
-    fn batch_only_error(self) -> String {
-        format!(
-            "{} API can only be used in batch mode.",
-            self.provider_name()
-        )
-    }
-
-    fn missing_request_error(self) -> String {
-        format!(
-            "Online ASR provider request is missing for {}.",
-            self.provider_name()
-        )
-    }
-
-    fn missing_manifest_error(self) -> String {
-        format!("{} provider not found in manifest", self.provider_name())
-    }
-
-    #[allow(dead_code)]
-    fn network_error(self, error: reqwest::Error) -> String {
-        format!("{} network request failed: {error}", self.provider_name())
-    }
-
-    #[allow(dead_code)]
-    fn status_error(self, status: reqwest::StatusCode, text: String) -> String {
-        format!(
-            "{} API returned error status {}: {}",
-            self.provider_name(),
-            status,
-            text
-        )
-    }
-
-    #[allow(dead_code)]
-    fn response_parse_error(self, error: reqwest::Error) -> String {
-        format!("{} response parsing failed: {error}", self.provider_name())
-    }
-
-    fn missing_segments_error(self) -> String {
-        format!(
-            "{} response is missing 'segments' array.",
-            self.provider_name()
-        )
-    }
-
-    #[allow(dead_code)]
-    fn stage(self) -> &'static str {
-        match self {
-            Self::GroqWhisper => "groq_batch_complete",
-            Self::MistralVoxtral => "mistral_batch_complete",
-        }
-    }
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-fn asr_http_status_error(status: reqwest::StatusCode, message: String) -> AsrPortError {
-    let kind = match status {
-        reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
-            AsrPortErrorKind::Authentication
-        }
-        reqwest::StatusCode::TOO_MANY_REQUESTS => AsrPortErrorKind::RateLimited,
-        _ if status.is_server_error() => AsrPortErrorKind::Unavailable,
-        _ => AsrPortErrorKind::Protocol,
-    };
-    AsrPortError::new(kind, message)
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WhisperCompatibleConfigFields {
-    pub api_key: String,
-    pub batch_endpoint: String,
-    pub model: String,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -286,215 +183,6 @@ impl OnlineBatchTranscriberPort for VolcengineDoubaoBatchTranscriber {
         let model = VolcengineTranscriptionModel::with_client(config, self.client.clone());
         execute_aimux_batch(&model, input).await
     }
-}
-
-#[derive(Clone)]
-pub struct WhisperCompatibleBatchTranscriber {
-    provider: WhisperCompatibleProvider,
-    #[allow(dead_code)]
-    client: reqwest::Client,
-}
-
-impl WhisperCompatibleBatchTranscriber {
-    pub fn new(provider: WhisperCompatibleProvider) -> Self {
-        Self {
-            provider,
-            client: reqwest::Client::new(),
-        }
-    }
-
-    pub fn with_client(provider: WhisperCompatibleProvider, client: reqwest::Client) -> Self {
-        Self { provider, client }
-    }
-}
-
-#[async_trait]
-impl OnlineBatchTranscriberPort for WhisperCompatibleBatchTranscriber {
-    async fn transcribe(
-        &self,
-        input: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        if input.request.mode != AsrMode::Batch {
-            return Err(AsrPortError::invalid_request(
-                self.provider.batch_only_error(),
-            ));
-        }
-
-        let config = resolve_whisper_config(&input.request, self.provider)
-            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
-
-        let base_url = config
-            .batch_endpoint
-            .trim_end_matches("/audio/transcriptions")
-            .trim_end_matches('/');
-        let mut openai_config =
-            aimux_providers::openai::OpenAIConfig::new(&config.api_key).with_base_url(base_url);
-        openai_config.provider = match self.provider {
-            WhisperCompatibleProvider::GroqWhisper => "groq".to_string(),
-            WhisperCompatibleProvider::MistralVoxtral => "mistral".to_string(),
-        };
-
-        let model =
-            aimux_providers::openai::OpenAITranscriptionModel::new(config.model, openai_config);
-
-        execute_aimux_batch(&model, input).await
-    }
-}
-
-#[derive(Clone)]
-pub struct GroqWhisperBatchTranscriber {
-    inner: WhisperCompatibleBatchTranscriber,
-}
-
-impl Default for GroqWhisperBatchTranscriber {
-    fn default() -> Self {
-        Self {
-            inner: WhisperCompatibleBatchTranscriber::new(WhisperCompatibleProvider::GroqWhisper),
-        }
-    }
-}
-
-#[async_trait]
-impl OnlineBatchTranscriberPort for GroqWhisperBatchTranscriber {
-    async fn transcribe(
-        &self,
-        request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        self.inner.transcribe(request).await
-    }
-}
-
-#[derive(Clone)]
-pub struct MistralVoxtralBatchTranscriber {
-    inner: WhisperCompatibleBatchTranscriber,
-}
-
-impl Default for MistralVoxtralBatchTranscriber {
-    fn default() -> Self {
-        Self {
-            inner: WhisperCompatibleBatchTranscriber::new(
-                WhisperCompatibleProvider::MistralVoxtral,
-            ),
-        }
-    }
-}
-
-#[async_trait]
-impl OnlineBatchTranscriberPort for MistralVoxtralBatchTranscriber {
-    async fn transcribe(
-        &self,
-        request: OnlineBatchTranscriptionRequest,
-    ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        self.inner.transcribe(request).await
-    }
-}
-
-/// Returns the normalized `language` multipart field for Whisper-compatible
-/// providers, or `None` when the request asks for automatic detection.
-fn whisper_language_form_field(language: &str) -> Option<String> {
-    let language = language.trim();
-    if language.is_empty() || language.eq_ignore_ascii_case("auto") {
-        None
-    } else {
-        Some(language.to_string())
-    }
-}
-
-pub fn resolve_whisper_config(
-    request: &sona_core::ports::asr::AsrTranscriptionRequest,
-    provider: WhisperCompatibleProvider,
-) -> Result<WhisperCompatibleConfigFields, SherpaError> {
-    let provider_request = if let AsrEngineConfig::Online { provider } = &request.engine_config {
-        provider
-    } else {
-        return Err(SherpaError::Generic(provider.missing_request_error()));
-    };
-
-    let get_string = |key: &str, default_val: &str| -> String {
-        provider_request
-            .config
-            .get(key)
-            .and_then(Value::as_str)
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .unwrap_or(default_val)
-            .to_string()
-    };
-
-    let manifest = find_online_asr_provider(provider.provider_id())
-        .ok_or_else(|| SherpaError::Generic(provider.missing_manifest_error()))?;
-    let defaults = manifest.defaults.as_object().ok_or_else(|| {
-        SherpaError::Generic(format!(
-            "{} provider defaults should be an object",
-            provider.provider_name()
-        ))
-    })?;
-
-    let fields = WhisperCompatibleConfigFields {
-        api_key: get_string(
-            "apiKey",
-            defaults.get("apiKey").and_then(Value::as_str).unwrap_or(""),
-        ),
-        batch_endpoint: get_string(
-            "batchEndpoint",
-            defaults
-                .get("batchEndpoint")
-                .and_then(Value::as_str)
-                .unwrap_or(""),
-        ),
-        model: get_string(
-            "model",
-            defaults.get("model").and_then(Value::as_str).unwrap_or(""),
-        ),
-    };
-
-    if fields.api_key.is_empty() {
-        return Err(SherpaError::Generic(provider.api_key_error().to_string()));
-    }
-    if fields.batch_endpoint.is_empty() || fields.model.is_empty() {
-        return Err(SherpaError::Generic(provider.endpoint_error().to_string()));
-    }
-
-    Ok(fields)
-}
-
-pub fn segments_from_whisper_response(
-    response: &Value,
-    provider: WhisperCompatibleProvider,
-) -> Result<Vec<TranscriptSegment>, SherpaError> {
-    let segments_array = response
-        .get("segments")
-        .and_then(Value::as_array)
-        .ok_or_else(|| SherpaError::Generic(provider.missing_segments_error()))?;
-
-    let mut segments = Vec::with_capacity(segments_array.len());
-    for segment in segments_array {
-        let text = segment
-            .get("text")
-            .and_then(Value::as_str)
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        let start = segment.get("start").and_then(Value::as_f64).unwrap_or(0.0);
-        let end = segment.get("end").and_then(Value::as_f64).unwrap_or(0.0);
-
-        segments.push(TranscriptSegment {
-            id: uuid::Uuid::new_v4().to_string(),
-            text,
-            start,
-            end,
-            is_final: true,
-            timing: None,
-            tokens: None,
-            timestamps: None,
-            durations: None,
-            translation: None,
-            speaker: None,
-            speaker_attribution: None,
-        });
-    }
-
-    Ok(segments)
 }
 
 pub fn resolve_volcengine_config(
@@ -1013,10 +701,11 @@ mod tests {
     use crate::SherpaError;
     use serde_json::json;
     use sona_core::ports::asr::{
-        AsrEngineConfig, AsrMode, AsrPortErrorKind, AsrTranscriptionRequest,
+        ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortErrorKind,
+        AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
         GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, NoopAsrRuntimeObserver,
-        OnlineAsrProviderRequest, OnlineBatchTranscriberPort, OnlineBatchTranscriptionRequest,
-        VOLCENGINE_DOUBAO_PROVIDER_ID,
+        OPENAI_WHISPER_PROVIDER_ID, OnlineAsrProviderRequest, OnlineBatchTranscriberPort,
+        OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::postprocess::{
         TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -1024,30 +713,13 @@ mod tests {
 
     use crate::{
         ONLINE_ASR_PROVIDER_CAPABILITIES, OnlineAsrAdapter, VolcengineConfigError, VolcengineMode,
-        WhisperCompatibleProvider, asr_http_status_error, build_volcengine_audio_frame,
-        build_volcengine_flash_batch_request_body, build_volcengine_full_client_request_frame,
-        detect_audio_format, f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
+        build_volcengine_audio_frame, build_volcengine_flash_batch_request_body,
+        build_volcengine_full_client_request_frame, detect_audio_format,
+        f32_samples_to_i16_pcm_bytes, parse_volcengine_server_response_frame,
         resolve_online_asr_provider_id, resolve_volcengine_config,
-        resolve_volcengine_config_checked, resolve_whisper_config,
-        segments_from_volcengine_response, segments_from_whisper_response,
-        volcengine_streaming_segments_from_response, whisper_language_form_field,
+        resolve_volcengine_config_checked, segments_from_volcengine_response,
+        volcengine_streaming_segments_from_response,
     };
-
-    #[test]
-    fn http_failures_preserve_authentication_rate_limit_and_availability_categories() {
-        assert_eq!(
-            asr_http_status_error(reqwest::StatusCode::UNAUTHORIZED, "unauthorized".into()).kind,
-            AsrPortErrorKind::Authentication
-        );
-        assert_eq!(
-            asr_http_status_error(reqwest::StatusCode::TOO_MANY_REQUESTS, "limited".into()).kind,
-            AsrPortErrorKind::RateLimited
-        );
-        assert_eq!(
-            asr_http_status_error(reqwest::StatusCode::BAD_GATEWAY, "unavailable".into()).kind,
-            AsrPortErrorKind::Unavailable
-        );
-    }
 
     fn online_request(provider_id: &str, config: serde_json::Value) -> AsrTranscriptionRequest {
         AsrTranscriptionRequest {
@@ -1079,8 +751,12 @@ mod tests {
             capabilities,
             vec![
                 (VOLCENGINE_DOUBAO_PROVIDER_ID, true),
+                (OPENAI_WHISPER_PROVIDER_ID, false),
                 (GROQ_WHISPER_PROVIDER_ID, false),
                 (MISTRAL_VOXTRAL_PROVIDER_ID, false),
+                (DEEPGRAM_PROVIDER_ID, false),
+                (ASSEMBLYAI_PROVIDER_ID, false),
+                (ELEVENLABS_PROVIDER_ID, false),
             ]
         );
     }
@@ -1194,115 +870,28 @@ mod tests {
     }
 
     #[test]
-    fn resolves_groq_config_from_request_with_manifest_defaults() {
-        let request = online_request(
-            GROQ_WHISPER_PROVIDER_ID,
-            json!({
-                "apiKey": " groq-key ",
-                "model": " custom-whisper "
-            }),
-        );
-
-        let config =
-            resolve_whisper_config(&request, WhisperCompatibleProvider::GroqWhisper).unwrap();
-
-        assert_eq!(config.api_key, "groq-key");
-        assert_eq!(config.model, "custom-whisper");
-        assert_eq!(
-            config.batch_endpoint,
-            "https://api.groq.com/openai/v1/audio/transcriptions"
-        );
-    }
-
-    #[test]
-    fn resolves_mistral_config_from_request_with_manifest_defaults() {
-        let request = online_request(
-            MISTRAL_VOXTRAL_PROVIDER_ID,
-            json!({
-                "apiKey": " mistral-key "
-            }),
-        );
-
-        let config =
-            resolve_whisper_config(&request, WhisperCompatibleProvider::MistralVoxtral).unwrap();
-
-        assert_eq!(config.api_key, "mistral-key");
-        assert_eq!(config.model, "mistral-small-latest");
-        assert_eq!(
-            config.batch_endpoint,
-            "https://api.mistral.ai/v1/audio/transcriptions"
-        );
-    }
-
-    #[test]
-    fn whisper_helpers_return_sherpa_errors() {
-        let request = online_request(
-            GROQ_WHISPER_PROVIDER_ID,
-            json!({
-                "apiKey": "  "
-            }),
-        );
-
-        let config_error =
-            resolve_whisper_config(&request, WhisperCompatibleProvider::GroqWhisper).unwrap_err();
-        assert!(matches!(config_error, SherpaError::Generic(_)));
-        assert!(config_error.to_string().contains("API Key"));
-
-        let response_error = segments_from_whisper_response(
-            &json!({"text": "missing verbose segments"}),
-            WhisperCompatibleProvider::GroqWhisper,
-        )
-        .unwrap_err();
-        assert!(matches!(response_error, SherpaError::Generic(_)));
-        assert!(response_error.to_string().contains("segments"));
-    }
-
-    #[test]
-    fn parses_whisper_compatible_verbose_json_segments() {
-        let response = json!({
-            "duration": 1.25,
-            "segments": [
-                { "text": " hello ", "start": 0.0, "end": 0.5 },
-                { "text": "world", "start": 0.5, "end": 1.25 }
-            ]
-        });
-
-        let segments =
-            segments_from_whisper_response(&response, WhisperCompatibleProvider::GroqWhisper)
-                .unwrap();
-
-        assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].text, "hello");
-        assert_eq!(segments[0].start, 0.0);
-        assert_eq!(segments[0].end, 0.5);
-        assert!(segments[0].is_final);
-        assert_eq!(segments[1].text, "world");
-    }
-
-    #[test]
-    fn whisper_compatible_language_field_follows_auto_detection_rules() {
+    fn online_asr_manifest_contains_expected_providers() {
         use sona_core::models::preset_models::LanguageMode;
         use sona_core::ports::asr::{find_online_asr_provider, online_asr_providers};
 
-        // Groq (Whisper) and Mistral (Voxtral) both accept an ISO 639-1 hint.
-        assert_eq!(whisper_language_form_field("ja"), Some("ja".to_string()));
-        assert_eq!(whisper_language_form_field(" JA "), Some("JA".to_string()));
-        assert_eq!(whisper_language_form_field("auto"), None);
-        assert_eq!(whisper_language_form_field(""), None);
-
-        // Both providers are advertised as language-selectable with explicit
-        // catalogs so clients only offer supported options.
-        for provider_id in [GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID] {
+        for provider_id in [
+            VOLCENGINE_DOUBAO_PROVIDER_ID,
+            OPENAI_WHISPER_PROVIDER_ID,
+            GROQ_WHISPER_PROVIDER_ID,
+            MISTRAL_VOXTRAL_PROVIDER_ID,
+            DEEPGRAM_PROVIDER_ID,
+            ASSEMBLYAI_PROVIDER_ID,
+            ELEVENLABS_PROVIDER_ID,
+        ] {
             let provider = find_online_asr_provider(provider_id)
                 .unwrap_or_else(|| panic!("{provider_id} should exist in the manifest"));
             assert_eq!(provider.language_mode, LanguageMode::Selectable);
             assert!(!provider.languages.is_empty());
         }
-        assert_eq!(online_asr_providers().len(), 3);
+        assert_eq!(online_asr_providers().len(), 7);
         let volcengine = find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID).unwrap();
         assert!(volcengine.languages.contains(&"zh".to_string()));
     }
-
     #[test]
     fn resolves_volcengine_batch_config_from_request_with_manifest_defaults() {
         let request = online_request(

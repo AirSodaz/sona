@@ -856,8 +856,9 @@ export function SettingsModelsTab({
     return [
       ...toDropdownOptions(selectionOptions.streaming, selectedLiveModelId, true),
       ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter(
-        (provider) => provider.id !== GROQ_WHISPER_PROVIDER_ID && provider.defaultConfig
-      ) // Groq doesn't support streaming. In future, we can check provider.streaming?.supported !== false. Wait! The definition might not have streaming field directly. Let's just filter groq-whisper directly here to be safe and clean since there's no full manifest typed.
+        (provider) =>
+          provider.manifestEntry.streaming?.supported !== false && provider.defaultConfig
+      )
         .filter((provider) => {
           if (provider.id === selectedLiveModelId) return true;
           const providerConfig =
