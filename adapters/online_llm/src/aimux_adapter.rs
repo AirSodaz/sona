@@ -88,17 +88,27 @@ pub fn map_aimux_error(error: AiMuxError) -> LlmPortError {
     port_error
 }
 
-fn normalize_openai_base_url(
+pub fn normalize_openai_base_url(
     strategy: LlmProviderStrategy,
     base_url: &str,
     api_path: Option<&str>,
 ) -> String {
-    let trimmed = base_url.trim_end_matches('/');
+    let mut trimmed = base_url.trim_end_matches('/');
+    if strategy == LlmProviderStrategy::OpenAiResponses && trimmed.ends_with("/responses") {
+        trimmed = trimmed.trim_end_matches("/responses").trim_end_matches('/');
+    }
     if let Some(path) = api_path {
         let p = path.trim_start_matches('/');
         if p.ends_with("chat/completions") {
             let base_part = p.trim_end_matches("chat/completions").trim_end_matches('/');
-            if base_part.is_empty() {
+            if base_part.is_empty() || trimmed.ends_with(base_part) {
+                trimmed.to_string()
+            } else {
+                format!("{trimmed}/{base_part}")
+            }
+        } else if strategy == LlmProviderStrategy::OpenAiResponses && p.ends_with("responses") {
+            let base_part = p.trim_end_matches("responses").trim_end_matches('/');
+            if base_part.is_empty() || trimmed.ends_with(base_part) {
                 trimmed.to_string()
             } else {
                 format!("{trimmed}/{base_part}")
@@ -340,7 +350,9 @@ pub fn create_aimux_model(config: &LlmConfig) -> Result<Arc<dyn LanguageModel>, 
     if config.strategy == LlmProviderStrategy::OpenAiResponses {
         let mut openai_config = aimux_providers::openai::OpenAIConfig::new(api_key);
         if !base_url.is_empty() {
-            openai_config = openai_config.with_base_url(base_url);
+            let effective_base =
+                normalize_openai_base_url(config.strategy, base_url, config.api_path.as_deref());
+            openai_config = openai_config.with_base_url(&effective_base);
         }
         let provider = aimux_providers::openai::OpenAIProvider::new(openai_config);
         return Ok(Arc::new(provider.responses_model(model)));

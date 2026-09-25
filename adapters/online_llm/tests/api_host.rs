@@ -76,3 +76,49 @@ fn llm_api_url_preserves_policy_after_join_and_query() {
         "LLM API host must use https:// unless it points to a local or LAN address."
     );
 }
+
+#[test]
+fn normalize_openai_base_url_responses_strategy_strips_redundant_responses_suffix() {
+    use sona_core::llm::tasks::LlmProviderStrategy;
+    use sona_online_llm::aimux_adapter::normalize_openai_base_url;
+
+    // Base url without /v1 and api_path with /v1/responses
+    assert_eq!(
+        normalize_openai_base_url(
+            LlmProviderStrategy::OpenAiResponses,
+            "https://newapi.example.com",
+            Some("/v1/responses")
+        ),
+        "https://newapi.example.com/v1"
+    );
+
+    // Base url with /v1 and api_path with /v1/responses
+    assert_eq!(
+        normalize_openai_base_url(
+            LlmProviderStrategy::OpenAiResponses,
+            "https://newapi.example.com/v1",
+            Some("/v1/responses")
+        ),
+        "https://newapi.example.com/v1"
+    );
+
+    // Base url with /responses suffix
+    assert_eq!(
+        normalize_openai_base_url(
+            LlmProviderStrategy::OpenAiResponses,
+            "https://newapi.example.com/v1/responses",
+            None
+        ),
+        "https://newapi.example.com/v1"
+    );
+
+    // Base url plain with /responses path
+    assert_eq!(
+        normalize_openai_base_url(
+            LlmProviderStrategy::OpenAiResponses,
+            "https://newapi.example.com/v1",
+            Some("/responses")
+        ),
+        "https://newapi.example.com/v1"
+    );
+}
