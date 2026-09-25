@@ -1,5 +1,8 @@
+pub(crate) mod model;
 pub(crate) mod streaming;
 mod transcript;
+
+pub use model::VolcengineTranscriptionModel;
 
 use crate::{SherpaError, VolcengineConfigError, VolcengineServerFrameError};
 

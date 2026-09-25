@@ -247,3 +247,68 @@ impl From<SherpaError> for AsrPortError {
         AsrPortError::new(kind, message).with_code(code)
     }
 }
+
+/// Map an [`aimux_core::error::AiMuxError`] to the Core [`AsrPortError`].
+pub fn map_aimux_asr_error(error: aimux_core::error::AiMuxError) -> AsrPortError {
+    let msg = error.to_string();
+    let lower = msg.to_ascii_lowercase();
+
+    let status_code = error.status_code().or_else(|| {
+        if let Some(idx) = msg.find("HTTP ") {
+            let rest = &msg[idx + 5..];
+            rest.split(|c: char| !c.is_ascii_digit())
+                .next()
+                .and_then(|code_str| code_str.parse::<u16>().ok())
+        } else {
+            None
+        }
+    });
+
+    let kind = match status_code {
+        Some(401 | 403) => AsrPortErrorKind::Authentication,
+        Some(429) => AsrPortErrorKind::RateLimited,
+        Some(408) => AsrPortErrorKind::Timeout,
+        Some(400 | 404 | 413 | 422) => AsrPortErrorKind::InvalidRequest,
+        Some(500..=599) => AsrPortErrorKind::Unavailable,
+        _ => match &error {
+            aimux_core::error::AiMuxError::InvalidArgument(_)
+            | aimux_core::error::AiMuxError::NoSuchModel { .. }
+            | aimux_core::error::AiMuxError::NoSuchProvider { .. } => {
+                AsrPortErrorKind::InvalidRequest
+            }
+            aimux_core::error::AiMuxError::UnsupportedFunctionality(_) => {
+                AsrPortErrorKind::Unsupported
+            }
+            aimux_core::error::AiMuxError::JsonParse(_)
+            | aimux_core::error::AiMuxError::InvalidResponseData(_) => AsrPortErrorKind::Protocol,
+            _ => {
+                if lower.contains("unauthorized")
+                    || lower.contains("api key")
+                    || lower.contains("forbidden")
+                {
+                    AsrPortErrorKind::Authentication
+                } else if lower.contains("rate limit")
+                    || lower.contains("429")
+                    || lower.contains("too many requests")
+                {
+                    AsrPortErrorKind::RateLimited
+                } else if lower.contains("timeout") || lower.contains("timed out") {
+                    AsrPortErrorKind::Timeout
+                } else if lower.contains("bad request") || lower.contains("invalid") {
+                    AsrPortErrorKind::InvalidRequest
+                } else if lower.contains("unavailable")
+                    || lower.contains("overloaded")
+                    || lower.contains("bad gateway")
+                {
+                    AsrPortErrorKind::Unavailable
+                } else if lower.contains("not supported") || lower.contains("unsupported") {
+                    AsrPortErrorKind::Unsupported
+                } else {
+                    AsrPortErrorKind::Network
+                }
+            }
+        },
+    };
+
+    AsrPortError::new(kind, msg)
+}

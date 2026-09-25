@@ -1,6 +1,4 @@
 use async_trait::async_trait;
-use base64::Engine;
-use reqwest::multipart;
 use serde_json::Value;
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver,
@@ -18,10 +16,15 @@ use sona_core::transcription::transcript::{
 use std::fmt;
 use std::sync::Arc;
 
-mod error;
-mod volcengine;
+pub mod aimux_adapter;
+pub mod error;
+pub mod volcengine;
 
-pub use error::SherpaError;
+pub use aimux_adapter::{
+    create_aimux_transcription_model, detect_audio_mime_type, execute_aimux_batch,
+};
+pub use error::{SherpaError, map_aimux_asr_error};
+pub use volcengine::VolcengineTranscriptionModel;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 
 pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 3] = [
@@ -44,34 +47,8 @@ impl OnlineAsrAdapter {
         &self,
         input: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        let provider_id = resolve_online_asr_provider_id(&input.request)?;
-        match provider_id {
-            VOLCENGINE_DOUBAO_PROVIDER_ID => {
-                if input.request.mode != AsrMode::Batch {
-                    return Err(AsrPortError::from(SherpaError::VolcengineBatchModeMismatch));
-                }
-                resolve_volcengine_config_checked(&input.request, VolcengineMode::Batch)
-                    .map_err(|e| AsrPortError::from(SherpaError::from(e)))?;
-                VolcengineDoubaoBatchTranscriber::default()
-                    .transcribe(input)
-                    .await
-            }
-            GROQ_WHISPER_PROVIDER_ID => {
-                GroqWhisperBatchTranscriber::default()
-                    .transcribe(input)
-                    .await
-            }
-            MISTRAL_VOXTRAL_PROVIDER_ID => {
-                MistralVoxtralBatchTranscriber::default()
-                    .transcribe(input)
-                    .await
-            }
-            _ => Err(AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!("不支持的在线 ASR provider：{provider_id}"),
-            )
-            .with_code("UNSUPPORTED_ONLINE_PROVIDER")),
-        }
+        let model = create_aimux_transcription_model(&input.request)?;
+        execute_aimux_batch(model.as_ref(), input).await
     }
 
     pub fn create_streaming_session(
@@ -101,34 +78,7 @@ impl OnlineBatchTranscriberPort for OnlineAsrAdapter {
         &self,
         request: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-        let provider_id = resolve_online_asr_provider_id(&request.request)?;
-
-        match provider_id {
-            VOLCENGINE_DOUBAO_PROVIDER_ID => {
-                if request.request.mode != AsrMode::Batch {
-                    return Err(AsrPortError::invalid_request(
-                        "Volcengine batch ASR can only be used in batch mode.",
-                    ));
-                }
-                VolcengineDoubaoBatchTranscriber::default()
-                    .transcribe(request)
-                    .await
-            }
-            GROQ_WHISPER_PROVIDER_ID => {
-                GroqWhisperBatchTranscriber::default()
-                    .transcribe(request)
-                    .await
-            }
-            MISTRAL_VOXTRAL_PROVIDER_ID => {
-                MistralVoxtralBatchTranscriber::default()
-                    .transcribe(request)
-                    .await
-            }
-            _ => Err(AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!("Unsupported online ASR provider: {provider_id}"),
-            )),
-        }
+        self.transcribe_batch(request).await
     }
 }
 
@@ -185,10 +135,12 @@ impl WhisperCompatibleProvider {
         format!("{} provider not found in manifest", self.provider_name())
     }
 
+    #[allow(dead_code)]
     fn network_error(self, error: reqwest::Error) -> String {
         format!("{} network request failed: {error}", self.provider_name())
     }
 
+    #[allow(dead_code)]
     fn status_error(self, status: reqwest::StatusCode, text: String) -> String {
         format!(
             "{} API returned error status {}: {}",
@@ -198,6 +150,7 @@ impl WhisperCompatibleProvider {
         )
     }
 
+    #[allow(dead_code)]
     fn response_parse_error(self, error: reqwest::Error) -> String {
         format!("{} response parsing failed: {error}", self.provider_name())
     }
@@ -209,6 +162,7 @@ impl WhisperCompatibleProvider {
         )
     }
 
+    #[allow(dead_code)]
     fn stage(self) -> &'static str {
         match self {
             Self::GroqWhisper => "groq_batch_complete",
@@ -217,6 +171,7 @@ impl WhisperCompatibleProvider {
     }
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 fn asr_http_status_error(status: reqwest::StatusCode, message: String) -> AsrPortError {
     let kind = match status {
         reqwest::StatusCode::UNAUTHORIZED | reqwest::StatusCode::FORBIDDEN => {
@@ -323,88 +278,20 @@ impl OnlineBatchTranscriberPort for VolcengineDoubaoBatchTranscriber {
         input: OnlineBatchTranscriptionRequest,
     ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
         if input.request.mode != AsrMode::Batch {
-            return Err(AsrPortError::invalid_request(
-                "Volcengine batch ASR can only be used in batch mode.",
-            ));
+            return Err(AsrPortError::from(SherpaError::VolcengineBatchModeMismatch));
         }
 
         let config = resolve_volcengine_config(&input.request, VolcengineMode::Batch)
-            .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
-        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::FileSystem,
-                format!("Failed to read audio file: {error}"),
-            )
-        })?;
-        let audio_data = base64::engine::general_purpose::STANDARD.encode(&bytes);
-        let request_id = uuid::Uuid::new_v4().to_string();
-        let body =
-            build_volcengine_flash_batch_request_body(&input.file_path, audio_data, &input.request);
-
-        let response = self
-            .client
-            .post(&config.batch_endpoint)
-            .header("X-Api-Key", &config.api_key)
-            .header("X-Api-Resource-Id", &config.batch_resource_id)
-            .header("X-Api-Request-Id", request_id)
-            .header("X-Api-Sequence", "-1")
-            .json(&body)
-            .send()
-            .await
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Network,
-                    format!("Volcengine batch network request failed: {error}"),
-                )
-            })?;
-
-        let status = response.status();
-        let headers = response.headers().clone();
-        let api_code = headers
-            .get("X-Api-Status-Code")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_string);
-        let api_message = headers
-            .get("X-Api-Message")
-            .and_then(|value| value.to_str().ok())
-            .map(str::to_string);
-        if !status.is_success() || api_code.as_deref().is_some_and(|code| code != "20000000") {
-            return Err(asr_http_status_error(
-                status,
-                map_volcengine_status_error(
-                    status.as_u16(),
-                    api_code.as_deref(),
-                    api_message.as_deref(),
-                ),
-            ));
-        }
-
-        let response_value = response.json::<Value>().await.map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::Protocol,
-                format!("Volcengine batch response parsing failed: {error}"),
-            )
-        })?;
-        let segments = segments_from_volcengine_response(&response_value, true, "volc-batch")
-            .map_err(|error| AsrPortError::new(AsrPortErrorKind::Protocol, error.to_string()))?;
-        let audio_duration_ms = response_value
-            .get("audio_info")
-            .and_then(|value| value.get("duration"))
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
-
-        Ok(OnlineBatchTranscriptionOutput {
-            segments,
-            audio_duration_ms,
-            buffered_samples: bytes.len() / 2,
-            stage: "volcengine_batch_complete".to_string(),
-        })
+            .map_err(AsrPortError::from)?;
+        let model = VolcengineTranscriptionModel::with_client(config, self.client.clone());
+        execute_aimux_batch(&model, input).await
     }
 }
 
 #[derive(Clone)]
 pub struct WhisperCompatibleBatchTranscriber {
     provider: WhisperCompatibleProvider,
+    #[allow(dead_code)]
     client: reqwest::Client,
 }
 
@@ -435,91 +322,22 @@ impl OnlineBatchTranscriberPort for WhisperCompatibleBatchTranscriber {
 
         let config = resolve_whisper_config(&input.request, self.provider)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
-        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::FileSystem,
-                format!("Failed to read audio file: {error}"),
-            )
-        })?;
 
-        let file_name = input
-            .file_path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .unwrap_or("audio.wav")
-            .to_string();
+        let base_url = config
+            .batch_endpoint
+            .trim_end_matches("/audio/transcriptions")
+            .trim_end_matches('/');
+        let mut openai_config =
+            aimux_providers::openai::OpenAIConfig::new(&config.api_key).with_base_url(base_url);
+        openai_config.provider = match self.provider {
+            WhisperCompatibleProvider::GroqWhisper => "groq".to_string(),
+            WhisperCompatibleProvider::MistralVoxtral => "mistral".to_string(),
+        };
 
-        let part = multipart::Part::bytes(bytes.clone())
-            .file_name(file_name)
-            .mime_str("audio/wav")
-            .map_err(|error| {
-                AsrPortError::invalid_request(format!("Failed to create multipart file: {error}"))
-            })?;
+        let model =
+            aimux_providers::openai::OpenAITranscriptionModel::new(config.model, openai_config);
 
-        let mut form = multipart::Form::new()
-            .part("file", part)
-            .text("model", config.model.clone())
-            .text("response_format", "verbose_json");
-
-        // Both Groq and Mistral accept an optional ISO 639-1 `language` hint
-        // that boosts accuracy; omit it for automatic language detection.
-        if let Some(language) = whisper_language_form_field(&input.request.language) {
-            form = form.text("language", language);
-        }
-
-        if let Some(hotwords) = input
-            .request
-            .hotwords
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        {
-            form = form.text("prompt", hotwords.replace('\n', ", "));
-        }
-
-        let response = self
-            .client
-            .post(&config.batch_endpoint)
-            .header("Authorization", format!("Bearer {}", config.api_key))
-            .multipart(form)
-            .send()
-            .await
-            .map_err(|error| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Network,
-                    self.provider.network_error(error),
-                )
-            })?;
-
-        let status = response.status();
-        if !status.is_success() {
-            let text = response.text().await.unwrap_or_default();
-            return Err(asr_http_status_error(
-                status,
-                self.provider.status_error(status, text),
-            ));
-        }
-
-        let response_value = response.json::<Value>().await.map_err(|error| {
-            AsrPortError::new(
-                AsrPortErrorKind::Protocol,
-                self.provider.response_parse_error(error),
-            )
-        })?;
-
-        let segments = segments_from_whisper_response(&response_value, self.provider)
-            .map_err(|error| AsrPortError::new(AsrPortErrorKind::Protocol, error.to_string()))?;
-        let audio_duration_ms = response_value
-            .get("duration")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0)
-            * 1000.0;
-
-        Ok(OnlineBatchTranscriptionOutput {
-            segments,
-            audio_duration_ms,
-            buffered_samples: bytes.len() / 2,
-            stage: self.provider.stage().to_string(),
-        })
+        execute_aimux_batch(&model, input).await
     }
 }
 

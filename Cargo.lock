@@ -6311,6 +6311,8 @@ dependencies = [
 name = "sona-online-asr"
 version = "0.9.2"
 dependencies = [
+ "aimux-core",
+ "aimux-providers",
  "async-trait",
  "base64 0.22.1",
  "futures-util",
