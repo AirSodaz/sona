@@ -288,21 +288,23 @@ export class AsrConfigService {
   syncOnlineAsrSelectionFields = (
     config: ModelConfig,
     slot: AsrSelectionSlot,
-    providerId: OnlineAsrProviderId
+    providerId: OnlineAsrProviderId,
+    modelId?: string | null
   ): Partial<AppConfig> => {
     const asr = this.normalizeAsrConfig(config);
-    asr.selections[slot] = createOnlineAsrSelection(providerId, SLOT_MODE[slot]);
+    asr.selections[slot] = createOnlineAsrSelection(providerId, SLOT_MODE[slot], modelId);
     return { asr };
   };
 
   syncStreamingOnlineAsrSelectionFields = (
     config: ModelConfig,
-    providerId: OnlineAsrProviderId
+    providerId: OnlineAsrProviderId,
+    modelId?: string | null
   ): Partial<AppConfig> => {
     const asr = this.normalizeAsrConfig(config);
-    asr.selections.live = createOnlineAsrSelection(providerId, 'streaming');
-    asr.selections.caption = createOnlineAsrSelection(providerId, 'streaming');
-    asr.selections.voiceTyping = createOnlineAsrSelection(providerId, 'streaming');
+    asr.selections.live = createOnlineAsrSelection(providerId, 'streaming', modelId);
+    asr.selections.caption = createOnlineAsrSelection(providerId, 'streaming', modelId);
+    asr.selections.voiceTyping = createOnlineAsrSelection(providerId, 'streaming', modelId);
     return { asr };
   };
 
@@ -586,10 +588,12 @@ export class AsrConfigService {
     if (!definition) {
       return undefined;
     }
+    const baseConfig = getOnlineProviderConfig(providers, selection.providerId);
+    const config = selection.modelId ? { ...baseConfig, model: selection.modelId } : baseConfig;
     return {
       providerId: selection.providerId,
       profileId: selection.profileId || definition.profileId,
-      config: getOnlineProviderConfig(providers, selection.providerId),
+      config,
     };
   };
 }

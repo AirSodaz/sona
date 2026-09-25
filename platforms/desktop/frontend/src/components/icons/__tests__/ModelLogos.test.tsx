@@ -119,11 +119,15 @@ describe('ModelLogos - resolveModelBrand', () => {
   });
 
   it('correctly resolves online cloud ASR provider models', () => {
+    expect(resolveModelBrand({ id: 'volcengine-doubao', name: '火山引擎' })).toBe('volcengine');
     expect(resolveModelBrand({ id: 'volcengine-doubao', name: '豆包语音 (火山)' })).toBe(
       'volcengine'
     );
+    expect(resolveModelBrand({ id: 'groq-whisper', name: 'Groq' })).toBe('groq');
     expect(resolveModelBrand({ id: 'groq-whisper', name: 'Whisper (Groq)' })).toBe('groq');
+    expect(resolveModelBrand({ id: 'mistral-voxtral', name: 'Mistral' })).toBe('mistral');
     expect(resolveModelBrand({ id: 'mistral-voxtral', name: 'Voxtral (Mistral)' })).toBe('mistral');
+    expect(resolveModelBrand({ id: 'openai-whisper', name: 'OpenAI' })).toBe('openai');
     expect(resolveModelBrand({ id: 'openai-whisper', name: 'Whisper (OpenAI)' })).toBe('openai');
     expect(resolveModelBrand({ id: 'deepgram', name: 'Deepgram' })).toBe('deepgram');
     expect(resolveModelBrand({ id: 'assemblyai', name: 'AssemblyAI' })).toBe('assemblyai');

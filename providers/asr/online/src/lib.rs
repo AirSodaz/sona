@@ -24,6 +24,7 @@ pub mod elevenlabs;
 pub mod error;
 pub mod mistral;
 pub mod streaming_common;
+pub mod test_connection;
 pub mod volcengine;
 
 pub use aimux_adapter::{
@@ -35,6 +36,7 @@ pub use deepgram::create_deepgram_streaming_session;
 pub use elevenlabs::create_elevenlabs_streaming_session;
 pub use error::{SherpaError, map_aimux_asr_error};
 pub use mistral::create_mistral_streaming_session;
+pub use test_connection::test_online_asr_provider;
 pub use volcengine::VolcengineTranscriptionModel;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 

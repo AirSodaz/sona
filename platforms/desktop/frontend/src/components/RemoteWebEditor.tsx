@@ -8,7 +8,10 @@ import {
   type ApiServerModelInfo,
   apiServerClient,
 } from '../services/apiServerClient';
-import { ONLINE_ASR_PROVIDER_DEFINITIONS } from '../services/onlineAsrProviders';
+import {
+  ONLINE_ASR_PROVIDER_DEFAULT_NAMES,
+  ONLINE_ASR_PROVIDER_DEFINITIONS,
+} from '../services/onlineAsrProviders';
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { PRESET_MODELS_MAP } from '../types/modelCatalog';
@@ -369,9 +372,11 @@ export function RemoteWebEditor(): React.JSX.Element {
         if (p.configured && p.supportsBatch) {
           const providerDef = ONLINE_ASR_PROVIDER_DEFINITIONS.find((def) => def.id === p.id);
           const providerName = providerDef
-            ? t(providerDef.optionLabelKey, { defaultValue: providerDef.optionDefaultLabel })
+            ? t(providerDef.optionLabelKey, {
+                defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[providerDef.id] ?? providerDef.id,
+              })
             : p.id;
-          const onlineBadge = t('web.online_badge', { defaultValue: '在线' });
+          const onlineBadge = t('web.online_badge', { defaultValue: 'Online' });
           const label = `${providerName} (${onlineBadge})`;
           options.push({
             value: p.id,

@@ -9,15 +9,29 @@ import type {
 
 export type { OnlineAsrProviderRequest } from '../types/asr';
 
+export interface OnlineAsrProviderSpec {
+  modelName: string;
+  descriptionKey: string;
+  strengthsKey: string;
+  bestForKey: string;
+  limitsKey: string;
+  consoleUrl: string;
+}
+export interface OnlineAsrSupportedModel {
+  id: string;
+  name: string;
+  modes: ('streaming' | 'batch')[];
+  description?: string;
+  tags?: string[];
+  isDefault?: boolean;
+}
+
 export type OnlineAsrProviderDefinition = {
   id: OnlineAsrProviderId;
   profileId: string;
   optionLabelKey: string;
-  optionDefaultLabel: string;
   titleKey: string;
-  titleDefault: string;
   onlineUploadHintKey: string;
-  onlineUploadHintDefault: string;
   defaultConfig: OnlineAsrProviderConfig;
   manifestEntry: (typeof onlineAsrProviderManifest.providers)[number];
   normalizeConfig: (
@@ -25,6 +39,8 @@ export type OnlineAsrProviderDefinition = {
   ) => OnlineAsrProviderConfig;
   isConfigured: (config: OnlineAsrProviderConfig, mode: AsrMode) => boolean;
   supportsSpeakerDiarization: boolean;
+  spec?: OnlineAsrProviderSpec;
+  models: OnlineAsrSupportedModel[];
 };
 
 export const VOLCENGINE_DOUBAO_PROVIDER_ID = 'volcengine-doubao';
@@ -34,6 +50,16 @@ export const VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT =
 export const VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID = 'volc.bigasr.auc_turbo';
 
 export const GROQ_WHISPER_PROVIDER_ID = 'groq-whisper';
+
+export const ONLINE_ASR_PROVIDER_DEFAULT_NAMES: Record<string, string> = {
+  'volcengine-doubao': 'Volcengine',
+  'groq-whisper': 'Groq',
+  'mistral-voxtral': 'Mistral',
+  'openai-whisper': 'OpenAI',
+  deepgram: 'Deepgram',
+  assemblyai: 'AssemblyAI',
+  elevenlabs: 'ElevenLabs',
+};
 
 export const DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG =
   (onlineAsrProviderManifest.providers.find((p) => p.id === VOLCENGINE_DOUBAO_PROVIDER_ID)
@@ -72,14 +98,19 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] =
       if (!config) return { ...defaults };
 
       const normalized: OnlineAsrProviderConfig = { ...defaults };
-      for (const key of Object.keys(defaults)) {
-        if (config[key] !== undefined) {
-          if (typeof config[key] === 'string') {
-            if ((config[key] as string).trim() !== '') {
-              normalized[key] = (config[key] as string).trim();
+      for (const [key, value] of Object.entries(config)) {
+        if (value !== undefined) {
+          if (typeof value === 'string') {
+            const trimmed = value.trim();
+            if (trimmed !== '') {
+              normalized[key] = trimmed;
+            } else if (key in defaults) {
+              normalized[key] = defaults[key];
+            } else {
+              normalized[key] = '';
             }
           } else {
-            normalized[key] = config[key]!;
+            normalized[key] = value;
           }
         }
       }
@@ -126,16 +157,15 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] =
       id: entry.id,
       profileId: entry.profileId,
       optionLabelKey: entry.ui.optionLabelKey,
-      optionDefaultLabel: entry.ui.optionDefaultLabel,
       titleKey: entry.ui.titleKey,
-      titleDefault: entry.ui.titleDefault,
       onlineUploadHintKey: entry.ui.onlineUploadHintKey,
-      onlineUploadHintDefault: entry.ui.onlineUploadHintDefault,
       defaultConfig: entry.defaults as OnlineAsrProviderConfig,
+      spec: entry.spec as OnlineAsrProviderSpec | undefined,
       manifestEntry: entry,
       normalizeConfig,
       isConfigured,
       supportsSpeakerDiarization: providerSupportsSpeakerDiarization(entry.id),
+      models: (entry.models as OnlineAsrSupportedModel[] | undefined) ?? [],
     };
   });
 
@@ -159,17 +189,33 @@ export function getOnlineAsrProviderDefinition(
 
 export function createOnlineAsrSelection(
   providerId: OnlineAsrProviderId,
-  mode: AsrMode
+  mode: AsrMode,
+  modelId?: string | null
 ): AsrModelSelection {
   const definition = getOnlineAsrProviderDefinition(providerId);
   return {
     engine: 'online',
     mode,
-    modelId: null,
+    modelId: modelId ?? null,
     modelPath: '',
     providerId,
     profileId: definition?.profileId ?? providerId,
   };
+}
+
+export function getProviderAddedModels(
+  config: OnlineAsrProviderConfig | undefined,
+  provider: OnlineAsrProviderDefinition
+): string[] {
+  if (Array.isArray(config?.addedModels)) {
+    return config.addedModels as string[];
+  }
+  const hasKey = typeof config?.apiKey === 'string' && config.apiKey.trim().length > 0;
+  if (hasKey) {
+    const defaults = provider.models.filter((m) => m.isDefault).map((m) => m.id);
+    return defaults.length > 0 ? defaults : provider.models.slice(0, 1).map((m) => m.id);
+  }
+  return [];
 }
 
 export function getOnlineProviderConfig(

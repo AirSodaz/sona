@@ -1245,6 +1245,34 @@
   color: var(--color-error);
 }
 
+.model-action-add:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
+  color: var(--color-accent-primary);
+}
+
+.model-action-test:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
+  color: var(--color-accent-primary);
+}
+
+.model-action-test.success {
+  color: var(--color-success, #4ea067);
+}
+
+.model-action-test.error {
+  color: var(--color-danger, #e05252);
+}
+
+.model-description-subtle {
+  font-size: 0.76rem;
+  color: var(--color-text-muted);
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 4px;
+}
+
 /* --- Premium Settings Items inside accordion panels --- */
 .settings-section-content .accordion-content-panel .settings-item-container {
   background: var(--color-bg-elevated);
@@ -1897,195 +1925,129 @@
 
 .cloud-provider-card {
   background: var(--color-bg-primary);
+  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
   transition:
     background-color var(--transition-fast, 0.15s) ease,
     box-shadow var(--transition-fast, 0.15s) ease;
 }
 
-.cloud-provider-card.active {
-  background: color-mix(in srgb, var(--color-accent-primary) 4%, var(--color-bg-primary));
-}
-
-/* --- Card header (clickable row) --- */
-
-.cloud-provider-card-header {
+.cloud-provider-card .cloud-provider-card-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--spacing-md, 16px);
   width: 100%;
-  padding: var(--spacing-md, 16px) var(--spacing-lg, 24px);
+  padding: 0;
   background: transparent;
   border: none;
   cursor: pointer;
   color: var(--color-text-primary);
   font-family: inherit;
   text-align: left;
-  transition: background var(--transition-fast, 0.15s) ease;
 }
 
-.cloud-provider-card-header:hover {
-  background: var(--color-bg-hover);
+.cloud-provider-card .cloud-provider-card-header:hover .model-name {
+  color: var(--color-accent-primary);
 }
 
-.cloud-provider-card-header:focus-visible {
+.cloud-provider-card .cloud-provider-card-header:focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-accent-primary) 48%, transparent);
-  outline-offset: -2px;
+  outline-offset: 4px;
   border-radius: var(--radius-sm, 4px);
-}
-
-/* --- Left: chevron + logo + info --- */
-
-.cloud-provider-card-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
 }
 
 .cloud-provider-chevron {
   color: var(--color-text-muted);
   flex-shrink: 0;
-  transition: transform 0.2s ease;
+  transition: transform var(--transition-fast, 0.15s) ease;
 }
 
 .cloud-provider-chevron.open {
   transform: rotate(90deg);
 }
 
-/* Provider brand logo */
-.cloud-provider-logo {
+.cloud-provider-card-summary {
+  margin-top: 10px;
+}
+
+.cloud-provider-card-summary .model-description {
+  margin-bottom: 10px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* --- API Key Group with Inline Test --- */
+
+.cloud-api-key-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: var(--spacing-md, 12px);
+}
+
+.cloud-api-key-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 480px;
+}
+
+.cloud-api-key-label {
+  font-size: 0.88rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+}
+
+.cloud-console-link {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+  font-size: 0.76rem;
+  color: var(--color-accent-primary);
+  text-decoration: none;
+  transition: opacity var(--transition-fast) ease;
+}
+
+.cloud-console-link:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+.cloud-api-key-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 480px;
+  width: 100%;
+}
+
+.cloud-api-key-input {
+  width: 100%;
+  padding-right: 36px;
+  box-sizing: border-box;
+}
+
+.cloud-api-key-eye-btn {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  padding: 4px;
+  display: flex;
+  align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex-shrink: 0;
-  border-radius: var(--radius-sm, 10px);
-  overflow: hidden;
-  background: color-mix(in srgb, var(--color-bg-secondary) 60%, var(--color-bg-primary));
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--color-border) 50%, transparent);
+  border-radius: var(--radius-sm, 4px);
   transition:
-    box-shadow var(--transition-fast) ease,
+    color var(--transition-fast) ease,
     background var(--transition-fast) ease;
 }
 
-.cloud-provider-logo .model-brand-logo {
-  width: 100%;
-  height: 100%;
-  display: block;
-}
-
-.cloud-provider-card.active .cloud-provider-logo {
-  box-shadow:
-    0 0 0 2px var(--color-accent-primary),
-    0 1px 3px rgba(0, 0, 0, 0.08);
-  background: var(--color-bg-elevated);
-}
-
-.cloud-provider-card-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  min-width: 0;
-}
-
-.cloud-provider-card-name {
-  font-size: 0.92rem;
-  font-weight: 500;
+.cloud-api-key-eye-btn:hover {
   color: var(--color-text-primary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.cloud-provider-card.unconfigured .cloud-provider-card-name {
-  color: var(--color-text-secondary);
-}
-
-/* --- Capability badges --- */
-
-.cloud-provider-badges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.cloud-provider-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 1px 6px;
-  border-radius: var(--radius-sm, 4px);
-  font-size: 0.7rem;
-  font-weight: 500;
-  line-height: 1.5;
-  white-space: nowrap;
-  color: var(--color-text-muted);
-  background: color-mix(in srgb, var(--color-bg-secondary) 80%, var(--color-bg-primary));
-  border: 1px solid color-mix(in srgb, var(--color-border) 60%, transparent);
-}
-
-.cloud-provider-badge.streaming {
-  color: color-mix(in srgb, var(--color-accent-primary) 80%, var(--color-text-secondary));
-  background: color-mix(in srgb, var(--color-accent-primary) 6%, var(--color-bg-secondary));
-  border-color: color-mix(in srgb, var(--color-accent-primary) 14%, var(--color-border));
-}
-
-/* --- Status area (right side) --- */
-
-.cloud-provider-card-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.cloud-provider-status-label {
-  font-size: 0.78rem;
-  font-weight: 500;
-  white-space: nowrap;
-  transition: color var(--transition-fast) ease;
-}
-
-.cloud-provider-status-label.active {
-  color: var(--color-success, #4ea067);
-}
-
-.cloud-provider-status-label.configured {
-  color: var(--color-text-secondary);
-}
-
-.cloud-provider-status-label.unconfigured {
-  color: var(--color-text-muted);
-}
-
-/* Status indicator — small inline dot */
-.cloud-provider-status-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  flex-shrink: 0;
-  transition:
-    background-color var(--transition-fast) ease,
-    box-shadow var(--transition-fast) ease;
-}
-
-.cloud-provider-status-indicator.active {
-  background-color: var(--color-success, #4ea067);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success, #4ea067) 20%, transparent);
-}
-
-.cloud-provider-status-indicator.configured {
-  background-color: var(--color-warning, #dfab01);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-warning, #dfab01) 20%, transparent);
-}
-
-.cloud-provider-status-indicator.unconfigured {
-  background-color: var(--color-text-muted);
-  opacity: 0.35;
+  background: var(--color-bg-hover);
 }
 
 /* --- Expanded config panel --- */
@@ -2093,7 +2055,9 @@
 .cloud-provider-config-panel {
   border-top: 1px solid var(--color-border);
   background: var(--color-bg-secondary);
-  padding: var(--spacing-sm, 8px) 0;
+  padding: var(--spacing-md, 16px);
+  margin: var(--spacing-md, 14px) calc(-1 * var(--spacing-lg, 24px))
+    calc(-1 * var(--spacing-md, 16px)) calc(-1 * var(--spacing-lg, 24px));
   animation: cloud-config-enter 0.18s ease-out;
 }
 
@@ -2116,13 +2080,8 @@
 
 .cloud-provider-config-panel .settings-item-container {
   background: transparent;
-  padding: 12px var(--spacing-lg, 24px) 12px calc(var(--spacing-lg, 24px) + 60px);
+  padding: 8px 0;
 }
-
-.cloud-provider-config-panel .settings-item-container:last-child {
-  padding-bottom: 16px;
-}
-
 /* --- Responsive --- */
 
 @media (max-width: 480px) {

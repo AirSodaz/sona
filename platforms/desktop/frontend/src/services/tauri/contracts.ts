@@ -485,6 +485,10 @@ type ManualTauriCommandContractMap = {
     args: { instanceId: string };
     result: undefined;
   };
+  [TauriCommand.recognizer.testOnlineAsrProvider]: {
+    args: { providerId: string; config: Record<string, unknown> };
+    result: number;
+  };
   [TauriCommand.backup.exportArchive]: {
     args: { request: ExportBackupArchiveRequest };
     result: BackupManifestV1;

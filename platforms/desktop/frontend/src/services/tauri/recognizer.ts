@@ -217,3 +217,14 @@ export async function processBatchFile(
 export async function cancelBatchTask(instanceId: string): Promise<void> {
   await invokeTauri(TauriCommand.recognizer.cancelBatchTask, { instanceId });
 }
+
+/** Tests the connectivity and authentication of an online ASR provider. */
+export async function testOnlineAsrProvider(
+  providerId: string,
+  config: Record<string, unknown>
+): Promise<number> {
+  return invokeTauri(TauriCommand.recognizer.testOnlineAsrProvider, {
+    providerId,
+    config,
+  });
+}

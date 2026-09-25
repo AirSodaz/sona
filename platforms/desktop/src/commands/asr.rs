@@ -398,3 +398,11 @@ pub async fn get_asr_runtime_metrics(
         .map_err(|error| error.to_string())?;
     Ok(metrics)
 }
+
+#[tauri::command]
+pub async fn test_online_asr_provider(
+    provider_id: String,
+    config: serde_json::Value,
+) -> Result<u64, AsrPortError> {
+    sona_online_asr::test_online_asr_provider(&provider_id, &config).await
+}

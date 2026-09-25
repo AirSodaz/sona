@@ -18,7 +18,9 @@ import { modelService } from '../../services/modelService';
 import {
   getOnlineAsrProviderDefinition,
   getOnlineProviderConfig,
+  getProviderAddedModels,
   isOnlineAsrProviderId,
+  ONLINE_ASR_PROVIDER_DEFAULT_NAMES,
   providerSupportsSpeakerDiarization,
 } from '../../services/onlineAsrProviders';
 import {
@@ -118,11 +120,11 @@ function MirrorDownloadPicker(): React.JSX.Element {
     () => [
       {
         value: 'auto',
-        label: t('settings.model_download_mirror_auto', { defaultValue: '自动' }),
+        label: t('settings.model_download_mirror_auto', { defaultValue: 'Auto' }),
       },
       {
         value: 'direct',
-        label: t('settings.model_download_mirror_direct', { defaultValue: '官方直连' }),
+        label: t('settings.model_download_mirror_direct', { defaultValue: 'Direct (Official)' }),
       },
       {
         value: 'ghproxy',
@@ -137,7 +139,7 @@ function MirrorDownloadPicker(): React.JSX.Element {
       {
         value: 'hf-mirror',
         label: t('settings.model_download_mirror_hfmirror', {
-          defaultValue: '镜像站 (hf-mirror.com)',
+          defaultValue: 'Mirror (hf-mirror.com)',
         }),
         group: t('settings.model_download_mirror_group_hf', { defaultValue: 'Hugging Face' }),
       },
@@ -192,30 +194,33 @@ function LocalModelManagementSection({
   const [searchQuery, setSearchQuery] = useState('');
 
   const engineFilterOptions = [
-    { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: '全部引擎' }) },
+    { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: 'All Engines' }) },
     { value: 'sherpa-onnx', label: 'ONNX' },
     { value: 'llama-cpp', label: 'GGUF' },
   ];
 
   const labelFilterOptions = [
-    { value: 'all', label: t('settings.model_filter_tag_all', { defaultValue: '全部标签' }) },
-    { value: 'accurate', label: t('settings.model_tag_accurate', { defaultValue: '准确' }) },
-    { value: 'lite', label: t('settings.model_tag_lite', { defaultValue: '轻量' }) },
+    { value: 'all', label: t('settings.model_filter_tag_all', { defaultValue: 'All Tags' }) },
+    { value: 'accurate', label: t('settings.model_tag_accurate', { defaultValue: 'Accurate' }) },
+    { value: 'lite', label: t('settings.model_tag_lite', { defaultValue: 'Lite' }) },
   ];
 
   const statusFilterOptions = [
-    { value: 'all', label: t('settings.model_filter_status_all', { defaultValue: '全部状态' }) },
+    {
+      value: 'all',
+      label: t('settings.model_filter_status_all', { defaultValue: 'All Statuses' }),
+    },
     {
       value: 'installed',
-      label: t('settings.model_filter_status_installed', { defaultValue: '已安装' }),
+      label: t('settings.model_filter_status_installed', { defaultValue: 'Installed' }),
     },
     {
       value: 'not-installed',
-      label: t('settings.model_filter_status_not_installed', { defaultValue: '未安装' }),
+      label: t('settings.model_filter_status_not_installed', { defaultValue: 'Not Installed' }),
     },
     {
       value: 'downloading',
-      label: t('settings.model_filter_status_downloading', { defaultValue: '下载中' }),
+      label: t('settings.model_filter_status_downloading', { defaultValue: 'Downloading' }),
     },
   ];
 
@@ -285,7 +290,7 @@ function LocalModelManagementSection({
 
   return (
     <SettingsSection
-      title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
+      title={t('settings.batch_model_management', { defaultValue: 'Local Model Management' })}
       icon={<RestoreIcon />}
       actions={<MirrorDownloadPicker />}
     >
@@ -293,7 +298,9 @@ function LocalModelManagementSection({
         <div className="settings-model-toolbar">
           <Dropdown
             id="settings-model-engine-filter"
-            aria-label={t('settings.model_filter_engine_label', { defaultValue: '按引擎筛选' })}
+            aria-label={t('settings.model_filter_engine_label', {
+              defaultValue: 'Filter by engine',
+            })}
             value={engineFilter}
             onChange={(value) => setEngineFilter(value as 'all' | LocalAsrEngine)}
             options={engineFilterOptions}
@@ -301,7 +308,9 @@ function LocalModelManagementSection({
           />
           <Dropdown
             id="settings-model-status-filter"
-            aria-label={t('settings.model_filter_status_label', { defaultValue: '按状态筛选' })}
+            aria-label={t('settings.model_filter_status_label', {
+              defaultValue: 'Filter by status',
+            })}
             value={statusFilter}
             onChange={(value) => setStatusFilter(value as typeof statusFilter)}
             options={statusFilterOptions}
@@ -309,7 +318,7 @@ function LocalModelManagementSection({
           />
           <Dropdown
             id="settings-model-label-filter"
-            aria-label={t('settings.model_filter_tag_label', { defaultValue: '按标签筛选' })}
+            aria-label={t('settings.model_filter_tag_label', { defaultValue: 'Filter by tag' })}
             value={labelFilter}
             onChange={(value) => setLabelFilter(value as 'all' | ModelLabel)}
             options={labelFilterOptions}
@@ -329,10 +338,10 @@ function LocalModelManagementSection({
                 }
               }}
               placeholder={t('settings.model_filter_search_placeholder', {
-                defaultValue: '搜索模型…',
+                defaultValue: 'Search models…',
               })}
               aria-label={t('settings.model_filter_search_placeholder', {
-                defaultValue: '搜索模型…',
+                defaultValue: 'Search models…',
               })}
             />
             {searchQuery && (
@@ -343,7 +352,7 @@ function LocalModelManagementSection({
                   setSearchQuery('');
                   document.getElementById('settings-model-search')?.focus();
                 }}
-                aria-label={t('settings.model_search_clear', { defaultValue: '清除搜索' })}
+                aria-label={t('settings.model_search_clear', { defaultValue: 'Clear search' })}
               >
                 <X size={12} strokeWidth={2.25} />
               </button>
@@ -390,7 +399,7 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('asr')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
@@ -418,7 +427,7 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('punctuation')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
@@ -446,7 +455,7 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('vad')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
@@ -476,7 +485,7 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('speaker-segmentation')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
@@ -506,14 +515,14 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('speaker-embedding')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
 
           <SettingsAccordion
             title={t('settings.alignment_models', {
-              defaultValue: 'CTC 对齐模型',
+              defaultValue: 'CTC Alignment Models',
             })}
             status={
               <span className={`status-badge ${getSectionStatus('alignment').type}`}>
@@ -536,7 +545,7 @@ function LocalModelManagementSection({
             ))}
             {(filteredGroupsByType.get('alignment')?.length ?? 0) === 0 && (
               <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: '没有匹配的模型' })}
+                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
           </SettingsAccordion>
@@ -719,20 +728,23 @@ export function SettingsModelsTab({
     [sectionGroupsByType]
   );
 
-  const selectedLiveModelId = useMemo(
-    () =>
-      modelConfig.asr?.selections.live.engine === 'online'
-        ? (modelConfig.asr.selections.live.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
-        : (selectedModelIds.streaming ?? ''),
-    [modelConfig.asr?.selections.live, selectedModelIds.streaming]
-  );
-  const selectedBatchModelId = useMemo(
-    () =>
-      modelConfig.asr?.selections.batch.engine === 'online'
-        ? (modelConfig.asr.selections.batch.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID)
-        : (selectedModelIds.batch ?? ''),
-    [modelConfig.asr?.selections.batch, selectedModelIds.batch]
-  );
+  const selectedLiveModelId = useMemo(() => {
+    const sel = modelConfig.asr?.selections.live;
+    if (sel?.engine === 'online') {
+      const pid = sel.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID;
+      return sel.modelId ? `${pid}::${sel.modelId}` : pid;
+    }
+    return selectedModelIds.streaming ?? '';
+  }, [modelConfig.asr?.selections.live, selectedModelIds.streaming]);
+
+  const selectedBatchModelId = useMemo(() => {
+    const sel = modelConfig.asr?.selections.batch;
+    if (sel?.engine === 'online') {
+      const pid = sel.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID;
+      return sel.modelId ? `${pid}::${sel.modelId}` : pid;
+    }
+    return selectedModelIds.batch ?? '';
+  }, [modelConfig.asr?.selections.batch, selectedModelIds.batch]);
   const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedLiveModelId;
   const activeOnlineSelection = useMemo(() => {
     const selection = isBatchScenario
@@ -821,6 +833,15 @@ export function SettingsModelsTab({
       );
       return;
     }
+    if (modelId.includes('::')) {
+      const [providerId, subModelId] = modelId.split('::');
+      if (isLive) {
+        updateConfig(syncLiveOnlineAsrSelectionFields(modelConfig, providerId, subModelId));
+      } else {
+        updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', providerId, subModelId));
+      }
+      return;
+    }
 
     if (isOnlineAsrProviderId(modelId)) {
       if (isLive) {
@@ -889,84 +910,177 @@ export function SettingsModelsTab({
   );
 
   const liveOptions = useMemo(() => {
-    return [
-      ...toDropdownOptions(selectionOptions.streaming, selectedLiveModelId, true),
-      ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter(
-        (provider) =>
-          provider.manifestEntry.streaming?.supported !== false && provider.defaultConfig
-      )
-        .filter((provider) => {
-          if (provider.id === selectedLiveModelId) return true;
-          const providerConfig =
-            modelConfig.asr?.providers?.online?.[provider.id] ??
-            (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
-              ? modelConfig.asr?.providers?.volcengineDoubao
-              : undefined) ??
-            provider.defaultConfig;
-          return provider.isConfigured(
-            providerConfig as typeof provider.defaultConfig,
-            'streaming'
-          );
-        })
-        .map((provider) => {
-          const labelText = t(provider.optionLabelKey, {
-            defaultValue: provider.optionDefaultLabel,
-          });
-          return {
+    const cloudOptions: Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> = [];
+
+    for (const provider of ONLINE_ASR_PROVIDER_DEFINITIONS) {
+      if (provider.manifestEntry.streaming?.supported === false) continue;
+      const providerConfig =
+        modelConfig.asr?.providers?.online?.[provider.id] ??
+        (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
+          ? modelConfig.asr?.providers?.volcengineDoubao
+          : undefined) ??
+        provider.defaultConfig;
+
+      const isConfigured = provider.isConfigured(
+        providerConfig as typeof provider.defaultConfig,
+        'streaming'
+      );
+      const isSelected =
+        selectedLiveModelId === provider.id || selectedLiveModelId?.startsWith(`${provider.id}::`);
+      if (!isConfigured && !isSelected) continue;
+
+      const addedModels = getProviderAddedModels(providerConfig, provider);
+      const streamingModels = provider.models.filter((m) => m.modes.includes('streaming'));
+      const activeModels = streamingModels.filter(
+        (m) =>
+          addedModels.includes(m.id) ||
+          selectedLiveModelId === `${provider.id}::${m.id}` ||
+          (selectedLiveModelId === provider.id && m.isDefault)
+      );
+
+      const providerLabel = t(provider.optionLabelKey, {
+        defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[provider.id] ?? provider.id,
+      });
+
+      if (activeModels.length === 0) {
+        if (isSelected) {
+          cloudOptions.push({
             value: provider.id,
-            ariaLabel: labelText,
+            ariaLabel: providerLabel,
             label: (
               <span className="model-dropdown-option">
                 <span className="model-dropdown-option-icon">
                   <ModelBrandLogo
-                    model={{ id: provider.id, name: labelText }}
+                    model={{ id: provider.id, name: providerLabel }}
                     size={16}
                     alt=""
                     aria-hidden="true"
                   />
                 </span>
-                <span>{labelText}</span>
+                <span>{providerLabel}</span>
                 <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
               </span>
             ),
-          };
-        }),
+          });
+        }
+      } else {
+        for (const model of activeModels) {
+          const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
+          const optionLabel =
+            activeModels.length > 1 ? `${providerLabel} · ${model.name}` : providerLabel;
+          cloudOptions.push({
+            value: optionValue,
+            ariaLabel: optionLabel,
+            label: (
+              <span className="model-dropdown-option">
+                <span className="model-dropdown-option-icon">
+                  <ModelBrandLogo
+                    model={{ id: provider.id, name: providerLabel }}
+                    size={16}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>{optionLabel}</span>
+                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+              </span>
+            ),
+          });
+        }
+      }
+    }
+
+    return [
+      ...toDropdownOptions(selectionOptions.streaming, selectedLiveModelId, true),
+      ...cloudOptions,
     ];
   }, [selectedLiveModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
 
   const batchOptions = useMemo(() => {
+    const cloudOptions: Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> = [];
+
+    for (const provider of ONLINE_ASR_PROVIDER_DEFINITIONS) {
+      if (provider.manifestEntry.batch?.localFileMode?.supported === false) continue;
+      const providerConfig =
+        modelConfig.asr?.providers?.online?.[provider.id] ??
+        (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
+          ? modelConfig.asr?.providers?.volcengineDoubao
+          : undefined) ??
+        provider.defaultConfig;
+
+      const isConfigured = provider.isConfigured(
+        providerConfig as typeof provider.defaultConfig,
+        'batch'
+      );
+      const isSelected =
+        selectedBatchModelId === provider.id ||
+        selectedBatchModelId?.startsWith(`${provider.id}::`);
+      if (!isConfigured && !isSelected) continue;
+
+      const addedModels = getProviderAddedModels(providerConfig, provider);
+      const batchModels = provider.models.filter((m) => m.modes.includes('batch'));
+      const activeModels = batchModels.filter(
+        (m) =>
+          addedModels.includes(m.id) ||
+          selectedBatchModelId === `${provider.id}::${m.id}` ||
+          (selectedBatchModelId === provider.id && m.isDefault)
+      );
+
+      const providerLabel = t(provider.optionLabelKey, {
+        defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[provider.id] ?? provider.id,
+      });
+
+      if (activeModels.length === 0) {
+        if (isSelected) {
+          cloudOptions.push({
+            value: provider.id,
+            ariaLabel: providerLabel,
+            label: (
+              <span className="model-dropdown-option">
+                <span className="model-dropdown-option-icon">
+                  <ModelBrandLogo
+                    model={{ id: provider.id, name: providerLabel }}
+                    size={16}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>{providerLabel}</span>
+                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+              </span>
+            ),
+          });
+        }
+      } else {
+        for (const model of activeModels) {
+          const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
+          const optionLabel =
+            activeModels.length > 1 ? `${providerLabel} · ${model.name}` : providerLabel;
+          cloudOptions.push({
+            value: optionValue,
+            ariaLabel: optionLabel,
+            label: (
+              <span className="model-dropdown-option">
+                <span className="model-dropdown-option-icon">
+                  <ModelBrandLogo
+                    model={{ id: provider.id, name: providerLabel }}
+                    size={16}
+                    alt=""
+                    aria-hidden="true"
+                  />
+                </span>
+                <span>{optionLabel}</span>
+                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+              </span>
+            ),
+          });
+        }
+      }
+    }
+
     return [
       ...toDropdownOptions(selectionOptions.batch, selectedBatchModelId, true),
-      ...ONLINE_ASR_PROVIDER_DEFINITIONS.filter((provider) => {
-        if (provider.id === selectedBatchModelId) return true;
-        const providerConfig =
-          modelConfig.asr?.providers?.online?.[provider.id] ??
-          (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
-            ? modelConfig.asr?.providers?.volcengineDoubao
-            : undefined) ??
-          provider.defaultConfig;
-        return provider.isConfigured(providerConfig as typeof provider.defaultConfig, 'batch');
-      }).map((provider) => {
-        const labelText = t(provider.optionLabelKey, { defaultValue: provider.optionDefaultLabel });
-        return {
-          value: provider.id,
-          ariaLabel: labelText,
-          label: (
-            <span className="model-dropdown-option">
-              <span className="model-dropdown-option-icon">
-                <ModelBrandLogo
-                  model={{ id: provider.id, name: labelText }}
-                  size={16}
-                  alt=""
-                  aria-hidden="true"
-                />
-              </span>
-              <span>{labelText}</span>
-              <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
-            </span>
-          ),
-        };
-      }),
+      ...cloudOptions,
     ];
   }, [selectedBatchModelId, selectionOptions.batch, t, modelConfig.asr?.providers]);
 
@@ -986,7 +1100,7 @@ export function SettingsModelsTab({
         type: 'pending',
         text: t('settings.downloading_progress', {
           progress: Math.round(progress),
-          defaultValue: `正在下载 (${Math.round(progress)}%)`,
+          defaultValue: `Downloading (${Math.round(progress)}%)`,
         }),
       };
     }
@@ -1006,7 +1120,7 @@ export function SettingsModelsTab({
 
     return {
       type: 'off',
-      text: t('settings.not_installed', { defaultValue: '未安装' }),
+      text: t('settings.not_installed', { defaultValue: 'Not installed' }),
     };
   };
 
@@ -1096,11 +1210,11 @@ export function SettingsModelsTab({
     const rules = modelService.getModelRules(modelId);
     const parts = [
       rules.requiresVad
-        ? t('settings.advanced_requires_vad', { defaultValue: '需要 VAD' })
-        : t('settings.advanced_no_vad', { defaultValue: '不需要 VAD' }),
+        ? t('settings.advanced_requires_vad', { defaultValue: 'Requires VAD' })
+        : t('settings.advanced_no_vad', { defaultValue: 'No VAD' }),
       rules.requiresPunctuation
-        ? t('settings.advanced_requires_punct', { defaultValue: '需要标点' })
-        : t('settings.advanced_no_punct', { defaultValue: '不需要标点' }),
+        ? t('settings.advanced_requires_punct', { defaultValue: 'Requires Punctuation' })
+        : t('settings.advanced_no_punct', { defaultValue: 'No Punctuation' }),
     ];
     return parts.join(' · ');
   }, [isBatchScenario, modelConfig.asr?.selections.batch, modelConfig.asr?.selections.live, t]);
@@ -1127,17 +1241,17 @@ export function SettingsModelsTab({
             {
               value: 'live' as ModelScenario,
               icon: <Mic size={18} />,
-              label: t('settings.scenario_live', { defaultValue: '实时录音' }),
+              label: t('settings.scenario_live', { defaultValue: 'Real-time Live' }),
               description: t('settings.scenario_live_desc', {
-                defaultValue: '麦克风说话，实时出字',
+                defaultValue: 'Microphone speech, real-time transcription',
               }),
             },
             {
               value: 'batch' as ModelScenario,
               icon: <PlaySquare size={18} />,
-              label: t('settings.scenario_batch', { defaultValue: '批量导入' }),
+              label: t('settings.scenario_batch', { defaultValue: 'Batch Import' }),
               description: t('settings.scenario_batch_desc', {
-                defaultValue: '导入音视频文件，离线批量转写',
+                defaultValue: 'Import audio/video files for offline batch transcription',
               }),
             },
           ].map((option) => (
@@ -1160,7 +1274,7 @@ export function SettingsModelsTab({
         </div>
 
         <SettingsItem
-          title={t('settings.asr_model_label', { defaultValue: '识别模型' })}
+          title={t('settings.asr_model_label', { defaultValue: 'Recognition Model' })}
           hint={
             isBatchScenario ? t('settings.batch_model_hint') : t('settings.streaming_model_hint')
           }
@@ -1427,7 +1541,7 @@ export function SettingsModelsTab({
                   />
                   <span className="settings-speaker-title">
                     {t('settings.speaker_diarization_title', {
-                      defaultValue: '说话人分离与识别',
+                      defaultValue: 'Speaker Diarization & Recognition',
                     })}
                   </span>
                   <span className={`status-badge ${isCloudSpeakerEnabled ? 'ready' : 'off'}`}>
@@ -1438,16 +1552,16 @@ export function SettingsModelsTab({
                             : selectedModelIds.liveSpeakerEmbedding
                         )
                         ? t('settings.cloud_speaker_status_with_local', {
-                            defaultValue: '已启用 (本地声纹匹配)',
+                            defaultValue: 'Enabled (Local Voiceprint Match)',
                           })
-                        : t('settings.speaker_status_enabled', { defaultValue: '已启用' })
-                      : t('settings.speaker_status_disabled', { defaultValue: '未启用' })}
+                        : t('settings.speaker_status_enabled', { defaultValue: 'Enabled' })
+                      : t('settings.speaker_status_disabled', { defaultValue: 'Disabled' })}
                   </span>
                 </div>
                 <p className="settings-speaker-desc">
                   {t('settings.cloud_speaker_diarization_desc', {
                     defaultValue:
-                      '由云端大模型服务自动区分不同说话人的发言片段，并在结果中标记 Speaker 标签。',
+                      'Cloud LLM service automatically separates speaker turns and applies speaker labels in the result.',
                   })}
                 </p>
               </div>
@@ -1477,12 +1591,12 @@ export function SettingsModelsTab({
             </div>
 
             <SettingsItem
-              title={t('settings.cloud_speaker_diarization_switch', {
-                defaultValue: '云端说话人分离',
+              title={t('settings.asr.speaker_diarization_label', {
+                defaultValue: 'Speaker Diarization',
               })}
               hint={t('settings.cloud_speaker_diarization_switch_hint', {
                 defaultValue:
-                  '开启后，云端接口将开启说话人聚类与分离，并在转录结果中输出说话人标签。',
+                  'When enabled, cloud ASR performs speaker diarization and returns speaker tags in transcript results.',
               })}
             >
               <Switch
@@ -1496,11 +1610,11 @@ export function SettingsModelsTab({
               <>
                 <SettingsItem
                   title={t('settings.local_speaker_embedding_model_label', {
-                    defaultValue: '本地说话人特征模型',
+                    defaultValue: 'Local Speaker Embedding Model',
                   })}
                   hint={t('settings.local_speaker_embedding_model_hint', {
                     defaultValue:
-                      '启用本地声纹特征模型后，将自动比对云端说话人片段与本地说话人档案，匹配已知说话人标签。',
+                      'When local speaker embedding model is enabled, cloud speaker turns are matched against local speaker profiles.',
                   })}
                 >
                   <div style={{ width: '220px' }}>
@@ -1520,7 +1634,7 @@ export function SettingsModelsTab({
                       options={speakerEmbeddingOptions}
                       style={{ flex: 1 }}
                       aria-label={t('settings.local_speaker_embedding_model_label', {
-                        defaultValue: '本地说话人特征模型',
+                        defaultValue: 'Local Speaker Embedding Model',
                       })}
                       disabled={localModelActionsDisabled}
                     />
@@ -1642,7 +1756,7 @@ export function SettingsModelsTab({
         )}
 
         <SettingsAccordion
-          title={t('settings.advanced_settings_title', { defaultValue: '高级设置' })}
+          title={t('settings.advanced_settings_title', { defaultValue: 'Advanced Settings' })}
           status={
             activeAsrRulesBadge ? (
               <span className="status-badge ready">{activeAsrRulesBadge}</span>
@@ -1659,9 +1773,9 @@ export function SettingsModelsTab({
           ) : (
             <>
               <SettingsItem
-                title={t('settings.punctuation_model_label', { defaultValue: '标点模型' })}
+                title={t('settings.punctuation_model_label', { defaultValue: 'Punctuation Model' })}
                 hint={t('settings.punctuation_rule_hint', {
-                  defaultValue: '仅当所选识别模型需要标点时才会启用。',
+                  defaultValue: 'Enabled only when the selected model requires punctuation.',
                 })}
               >
                 <div style={{ width: '220px' }}>
@@ -1678,16 +1792,18 @@ export function SettingsModelsTab({
                     })}
                     options={punctuationOptions}
                     style={{ flex: 1 }}
-                    aria-label={t('settings.punctuation_model_label', { defaultValue: '标点模型' })}
+                    aria-label={t('settings.punctuation_model_label', {
+                      defaultValue: 'Punctuation Model',
+                    })}
                     disabled={localModelActionsDisabled}
                   />
                 </div>
               </SettingsItem>
 
               <SettingsItem
-                title={t('settings.vad_model_label', { defaultValue: 'VAD 模型' })}
+                title={t('settings.vad_model_label', { defaultValue: 'VAD Model' })}
                 hint={t('settings.vad_rule_hint', {
-                  defaultValue: '仅当所选识别模型需要 VAD 时才会启用。',
+                  defaultValue: 'Enabled only when the selected model requires VAD.',
                 })}
               >
                 <div style={{ width: '220px' }}>
@@ -1702,7 +1818,7 @@ export function SettingsModelsTab({
                     })}
                     options={vadOptions}
                     style={{ flex: 1 }}
-                    aria-label={t('settings.vad_model_label', { defaultValue: 'VAD 模型' })}
+                    aria-label={t('settings.vad_model_label', { defaultValue: 'VAD Model' })}
                     disabled={localModelActionsDisabled}
                   />
                 </div>
@@ -1756,7 +1872,7 @@ export function SettingsModelsTab({
         {isVolcengineSelected && (
           <div className="settings-hint">
             {t(ONLINE_ASR_PROVIDER_DEFINITIONS[0].onlineUploadHintKey, {
-              defaultValue: ONLINE_ASR_PROVIDER_DEFINITIONS[0].onlineUploadHintDefault,
+              defaultValue: 'Audio will be sent to the cloud for recognition.',
             })}
           </div>
         )}
@@ -1774,7 +1890,7 @@ export function SettingsModelsTab({
         />
       ) : (
         <SettingsSection
-          title={t('settings.batch_model_management', { defaultValue: '离线模型管理' })}
+          title={t('settings.batch_model_management', { defaultValue: 'Local Model Management' })}
           icon={<RestoreIcon />}
         >
           {catalogLoadState === 'loading' && (
@@ -1793,9 +1909,8 @@ export function SettingsModelsTab({
           )}
         </SettingsSection>
       )}
-
       <SettingsSection
-        title={t('settings.online_model_management', { defaultValue: '在线模型管理' })}
+        title={t('settings.online_model_management', { defaultValue: 'Online Model Management' })}
         icon={<Settings2 size={20} />}
       >
         <CloudAsrProviderGrid />

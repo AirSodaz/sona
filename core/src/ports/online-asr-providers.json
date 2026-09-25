@@ -8,13 +8,36 @@
       "profileId": "volcengine-doubao-default",
       "ui": {
         "optionLabelKey": "settings.asr.volcengine_doubao_option",
-        "optionDefaultLabel": "豆包语音 (火山)",
         "titleKey": "settings.asr.volcengine_title",
-        "titleDefault": "豆包语音 (火山)",
         "onlineUploadHintKey": "settings.asr.online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到火山引擎进行识别。",
         "fields": []
       },
+      "spec": {
+        "modelName": "Seed-ASR / BigModel 2.0",
+        "descriptionKey": "settings.asr.volcengine_spec_desc",
+        "strengthsKey": "settings.asr.volcengine_spec_strengths",
+        "bestForKey": "settings.asr.volcengine_spec_best_for",
+        "limitsKey": "settings.asr.volcengine_spec_limits",
+        "consoleUrl": "https://console.volcengine.com/speech/service/8"
+      },
+      "models": [
+        {
+          "id": "volc.bigasr.auc_turbo",
+          "name": "Seed-ASR 极速版 (Flash)",
+          "modes": ["batch"],
+          "description": "极速同步直回，秒级出字，适合批量音频文件导入",
+          "tags": ["Flash", "Turbo", "2.0"],
+          "isDefault": true
+        },
+        {
+          "id": "volc.seedasr.sauc.duration",
+          "name": "Seed-ASR 流式版 (Streaming)",
+          "modes": ["streaming"],
+          "description": "双向流式实时出字，高抗噪，适合麦克风实时转写",
+          "tags": ["Streaming", "2.0"],
+          "isDefault": true
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
@@ -51,17 +74,48 @@
       "profileId": "groq-whisper-default",
       "ui": {
         "optionLabelKey": "settings.asr.groq_whisper_option",
-        "optionDefaultLabel": "Whisper (Groq)",
         "titleKey": "settings.asr.groq_title",
-        "titleDefault": "Whisper (Groq)",
         "onlineUploadHintKey": "settings.asr.groq_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 Groq 进行识别。请注意 Groq 存在单文件最大 25MB 的限制。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" },
-          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint", "labelDefault": "Endpoint" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model" },
+          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint" }
         ]
       },
+      "spec": {
+        "modelName": "Whisper Large v3 / Turbo",
+        "descriptionKey": "settings.asr.groq_spec_desc",
+        "strengthsKey": "settings.asr.groq_spec_strengths",
+        "bestForKey": "settings.asr.groq_spec_best_for",
+        "limitsKey": "settings.asr.groq_spec_limits",
+        "consoleUrl": "https://console.groq.com/keys"
+      },
+      "models": [
+        {
+          "id": "whisper-large-v3-turbo",
+          "name": "Whisper Large v3 Turbo",
+          "modes": ["batch"],
+          "description": "基于 Groq LPU 极速硬件推理，数百倍实时转写速度",
+          "tags": ["Turbo", "25MB max"],
+          "isDefault": true
+        },
+        {
+          "id": "whisper-large-v3",
+          "name": "Whisper Large v3",
+          "modes": ["batch"],
+          "description": "全精度 Whisper v3 模型，最高识别精度与多语种表现",
+          "tags": ["High-Acc", "25MB max"],
+          "isDefault": false
+        },
+        {
+          "id": "distil-whisper-large-v3-en",
+          "name": "Distil-Whisper Large v3 (EN)",
+          "modes": ["batch"],
+          "description": "蒸馏轻量化英文 Whisper 模型，极致低延迟与吞吐",
+          "tags": ["English", "25MB max"],
+          "isDefault": false
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "batchEndpoint": "https://api.groq.com/openai/v1/audio/transcriptions",
@@ -94,15 +148,30 @@
       "profileId": "mistral-voxtral-default",
       "ui": {
         "optionLabelKey": "settings.asr.mistral_voxtral_option",
-        "optionDefaultLabel": "Voxtral (Mistral)",
         "titleKey": "settings.asr.mistral_title",
-        "titleDefault": "Voxtral (Mistral)",
         "onlineUploadHintKey": "settings.asr.mistral_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 Mistral 进行识别。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" }
         ]
       },
+      "spec": {
+        "modelName": "Voxtral (mistral-small)",
+        "descriptionKey": "settings.asr.mistral_spec_desc",
+        "strengthsKey": "settings.asr.mistral_spec_strengths",
+        "bestForKey": "settings.asr.mistral_spec_best_for",
+        "limitsKey": "settings.asr.mistral_spec_limits",
+        "consoleUrl": "https://console.mistral.ai/api-keys/"
+      },
+      "models": [
+        {
+          "id": "mistral-small-latest",
+          "name": "Voxtral Small",
+          "modes": ["streaming", "batch"],
+          "description": "Mistral 全语种多模态语音识别，实时流式与批量导入两用",
+          "tags": ["Multilingual", "Smart-Punct"],
+          "isDefault": true
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "streamingEndpoint": "wss://api.mistral.ai/v1/audio/transcriptions/realtime",
@@ -136,17 +205,32 @@
       "profileId": "openai-whisper-default",
       "ui": {
         "optionLabelKey": "settings.asr.openai_whisper_option",
-        "optionDefaultLabel": "Whisper (OpenAI)",
         "titleKey": "settings.asr.openai_title",
-        "titleDefault": "Whisper (OpenAI)",
         "onlineUploadHintKey": "settings.asr.openai_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 OpenAI 进行识别。单文件最大 25MB。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" },
-          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint", "labelDefault": "Endpoint" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model" },
+          { "name": "batchEndpoint", "type": "text", "labelKey": "settings.asr.endpoint" }
         ]
       },
+      "spec": {
+        "modelName": "Whisper-1",
+        "descriptionKey": "settings.asr.openai_spec_desc",
+        "strengthsKey": "settings.asr.openai_spec_strengths",
+        "bestForKey": "settings.asr.openai_spec_best_for",
+        "limitsKey": "settings.asr.openai_spec_limits",
+        "consoleUrl": "https://platform.openai.com/api-keys"
+      },
+      "models": [
+        {
+          "id": "whisper-1",
+          "name": "Whisper 1",
+          "modes": ["batch"],
+          "description": "OpenAI 官方通用语音识别大模型，多语种强健性标杆",
+          "tags": ["25MB max"],
+          "isDefault": true
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "batchEndpoint": "https://api.openai.com/v1/audio/transcriptions",
@@ -179,16 +263,47 @@
       "profileId": "deepgram-default",
       "ui": {
         "optionLabelKey": "settings.asr.deepgram_option",
-        "optionDefaultLabel": "Deepgram",
         "titleKey": "settings.asr.deepgram_title",
-        "titleDefault": "Deepgram",
         "onlineUploadHintKey": "settings.asr.deepgram_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 Deepgram 进行识别。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
         ]
       },
+      "spec": {
+        "modelName": "Nova-2 / Nova-3",
+        "descriptionKey": "settings.asr.deepgram_spec_desc",
+        "strengthsKey": "settings.asr.deepgram_spec_strengths",
+        "bestForKey": "settings.asr.deepgram_spec_best_for",
+        "limitsKey": "settings.asr.deepgram_spec_limits",
+        "consoleUrl": "https://console.deepgram.com/"
+      },
+      "models": [
+        {
+          "id": "nova-3",
+          "name": "Nova-3",
+          "modes": ["streaming", "batch"],
+          "description": "Deepgram 最新旗舰语音大模型，极低时延与最高准确率",
+          "tags": ["Fastest"],
+          "isDefault": true
+        },
+        {
+          "id": "nova-2",
+          "name": "Nova-2",
+          "modes": ["streaming", "batch"],
+          "description": "工业级通用语音模型，兼具高稳定性与说话人分离",
+          "tags": ["General"],
+          "isDefault": false
+        },
+        {
+          "id": "enhanced",
+          "name": "Enhanced",
+          "modes": ["streaming", "batch"],
+          "description": "增强型音频识别引擎，适合复杂背景噪声场景",
+          "tags": ["Noise-Robust"],
+          "isDefault": false
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "streamingEndpoint": "wss://api.deepgram.com/v1/listen",
@@ -220,16 +335,39 @@
       "profileId": "assemblyai-default",
       "ui": {
         "optionLabelKey": "settings.asr.assemblyai_option",
-        "optionDefaultLabel": "AssemblyAI",
         "titleKey": "settings.asr.assemblyai_title",
-        "titleDefault": "AssemblyAI",
         "onlineUploadHintKey": "settings.asr.assemblyai_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 AssemblyAI 进行识别。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
         ]
       },
+      "spec": {
+        "modelName": "Universal-1 / Best",
+        "descriptionKey": "settings.asr.assemblyai_spec_desc",
+        "strengthsKey": "settings.asr.assemblyai_spec_strengths",
+        "bestForKey": "settings.asr.assemblyai_spec_best_for",
+        "limitsKey": "settings.asr.assemblyai_spec_limits",
+        "consoleUrl": "https://www.assemblyai.com/app/account"
+      },
+      "models": [
+        {
+          "id": "best",
+          "name": "Speech-to-Text Best",
+          "modes": ["streaming", "batch"],
+          "description": "AssemblyAI 旗舰高准确率模型，长语音与多说话人聚类",
+          "tags": ["High-Acc"],
+          "isDefault": true
+        },
+        {
+          "id": "nano",
+          "name": "Speech-to-Text Nano",
+          "modes": ["streaming", "batch"],
+          "description": "轻量经济模型，低时延快速出稿",
+          "tags": ["Fast"],
+          "isDefault": false
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "streamingEndpoint": "wss://streaming.assemblyai.com/v3/ws",
@@ -261,16 +399,31 @@
       "profileId": "elevenlabs-default",
       "ui": {
         "optionLabelKey": "settings.asr.elevenlabs_option",
-        "optionDefaultLabel": "ElevenLabs",
         "titleKey": "settings.asr.elevenlabs_title",
-        "titleDefault": "ElevenLabs",
         "onlineUploadHintKey": "settings.asr.elevenlabs_online_upload_hint",
-        "onlineUploadHintDefault": "音频会发送到 ElevenLabs 进行识别。",
         "fields": [
-          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key", "labelDefault": "API Key" },
-          { "name": "model", "type": "text", "labelKey": "settings.asr.model", "labelDefault": "Model ID" }
+          { "name": "apiKey", "type": "password", "labelKey": "settings.asr.api_key" },
+          { "name": "model", "type": "text", "labelKey": "settings.asr.model" }
         ]
       },
+      "spec": {
+        "modelName": "Scribe v1",
+        "descriptionKey": "settings.asr.elevenlabs_spec_desc",
+        "strengthsKey": "settings.asr.elevenlabs_spec_strengths",
+        "bestForKey": "settings.asr.elevenlabs_spec_best_for",
+        "limitsKey": "settings.asr.elevenlabs_spec_limits",
+        "consoleUrl": "https://elevenlabs.io/app/speech-to-text"
+      },
+      "models": [
+        {
+          "id": "scribe_v1",
+          "name": "Scribe v1",
+          "modes": ["streaming", "batch"],
+          "description": "ElevenLabs 语音大模型，99+ 语言精细音素级对齐",
+          "tags": ["Accents", "Word Timestamps"],
+          "isDefault": true
+        }
+      ],
       "defaults": {
         "apiKey": "",
         "streamingEndpoint": "wss://api.elevenlabs.io/v1/speech-to-text/realtime",

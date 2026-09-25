@@ -443,7 +443,7 @@ fn is_batch_asr_configured(
 
         if let Some(defaults) = provider_def.defaults.as_object() {
             for (key, default_val) in defaults {
-                if key == "apiKey" || key == "unknownKey" {
+                if key == "apiKey" || key == "unknownKey" || default_val.is_boolean() {
                     continue;
                 }
                 let val = string_field(settings, key)

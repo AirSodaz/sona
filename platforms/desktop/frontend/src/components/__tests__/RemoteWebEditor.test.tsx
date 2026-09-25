@@ -319,20 +319,20 @@ describe('RemoteWebEditor ASR Model Selection', () => {
       expect(apiServerClient.getInfo).toHaveBeenCalled();
     });
 
-    const dropdownTrigger = await screen.findByRole('button', { name: /豆包语音 \(火山\)/i });
+    const dropdownTrigger = await screen.findByRole('button', { name: /Volcengine/i });
     // Default fallback to first configured batch online provider with friendly name
-    expect(dropdownTrigger.textContent).toContain('豆包语音 (火山)');
-    expect(dropdownTrigger.textContent).not.toContain('在线: volcengine-doubao');
+    expect(dropdownTrigger.textContent).toContain('Volcengine');
+    expect(dropdownTrigger.textContent).not.toContain('online: volcengine-doubao');
 
     fireEvent.click(dropdownTrigger);
 
     await waitFor(() => {
       const options = screen.getAllByRole('option');
       const optionTexts = options.map((opt) => opt.textContent);
-      expect(optionTexts.some((txt) => txt?.includes('豆包语音 (火山)'))).toBe(true);
-      expect(optionTexts.some((txt) => txt?.includes('Whisper (Groq)'))).toBe(true);
-      expect(optionTexts.some((txt) => txt === '在线: volcengine-doubao')).toBe(false);
-      expect(optionTexts.some((txt) => txt === '在线: groq-whisper')).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('Volcengine'))).toBe(true);
+      expect(optionTexts.some((txt) => txt?.includes('Groq'))).toBe(true);
+      expect(optionTexts.some((txt) => txt?.includes('volcengine-doubao'))).toBe(false);
+      expect(optionTexts.some((txt) => txt?.includes('groq-whisper'))).toBe(false);
     });
   });
 

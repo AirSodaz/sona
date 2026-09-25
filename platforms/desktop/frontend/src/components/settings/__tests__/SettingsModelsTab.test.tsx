@@ -291,9 +291,9 @@ function renderTab(installedModels: Set<string>, managerOverrides: Record<string
 }
 
 async function activateBatchScenarioAndExpandAdvanced() {
-  fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+  fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
-  const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
+  const advancedHeader = await screen.findByRole('button', { name: /Advanced Settings/i });
   const expanded = advancedHeader.getAttribute('aria-expanded') === 'true';
   if (!expanded) {
     fireEvent.click(advancedHeader);
@@ -335,9 +335,8 @@ describe('SettingsModelsTab speaker model selections', () => {
 
   it('hides the batch VAD toggle on the live scenario', async () => {
     renderTab(new Set());
-
-    await screen.findByRole('button', { name: /高级设置/ });
-    const advancedHeader = screen.getByRole('button', { name: /高级设置/ });
+    await screen.findByRole('button', { name: /Advanced Settings/i });
+    const advancedHeader = screen.getByRole('button', { name: /Advanced Settings/i });
     if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
       fireEvent.click(advancedHeader);
     }
@@ -525,7 +524,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect(screen.queryByTestId('model-card-sherpa-onnx-pyannote-segmentation-3-0')).toBeNull();
 
     // Expand the Volcengine cloud ASR provider card to reveal its config fields
-    fireEvent.click(screen.getByRole('button', { name: /豆包语音/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Volcengine/i }));
     const apiKeyInput = screen.getByPlaceholderText('X-Api-Key') as HTMLInputElement;
     expect(apiKeyInput.disabled).toBe(false);
 
@@ -742,7 +741,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     renderTab(new Set());
 
     fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
-    fireEvent.click(screen.getByRole('option', { name: '豆包语音 (火山)' }));
+    fireEvent.click(screen.getByRole('option', { name: /Volcengine/i }));
 
     await waitFor(() => {
       const config = useConfigStore.getState().config;
@@ -757,8 +756,7 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(config.asr?.selections.caption.engine).toBe('online');
       expect(config.asr?.selections.voiceTyping.engine).toBe('online');
     });
-
-    screen.getByText('音频会发送到火山引擎进行识别。');
+    screen.getByText('Audio will be sent to the cloud for recognition.');
   });
 
   it('keeps a selected Volcengine batch slot when local ASR models are not installed', async () => {
@@ -794,10 +792,10 @@ describe('SettingsModelsTab speaker model selections', () => {
 
     renderTab(new Set());
 
-    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
     await waitFor(() => {
-      screen.getByRole('button', { name: '豆包语音 (火山)' });
+      screen.getByRole('button', { name: 'Volcengine' });
       expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
     });
   });
@@ -835,17 +833,19 @@ describe('SettingsModelsTab speaker model selections', () => {
     renderTab(new Set());
 
     // Expand the Volcengine cloud ASR provider card to reveal batch mode dropdown
-    fireEvent.click(screen.getByRole('button', { name: /豆包语音/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Volcengine/i }));
 
-    fireEvent.click(screen.getByRole('button', { name: '急速 (同步直回)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Flash (Sync Direct)' }));
 
-    const standardOption = screen.getByRole('option', { name: /普通 \(异步轮询\)/ });
-    const offpeakOption = screen.getByRole('option', { name: /闲时 \(特惠异步\)/ });
+    const standardOption = screen.getByRole('option', { name: /Standard \(Async Polling\)/i });
+    const offpeakOption = screen.getByRole('option', { name: /Off-peak \(Discount Async\)/i });
 
     expect((standardOption as HTMLButtonElement).disabled).toBe(true);
     expect((offpeakOption as HTMLButtonElement).disabled).toBe(true);
     expect(
-      screen.getAllByText('需要公网音频 URL，当前本地批量导入暂不支持。').length
+      screen.getAllByText(
+        'Requires a public audio URL; local batch import does not support it yet.'
+      ).length
     ).toBeGreaterThan(0);
 
     fireEvent.click(standardOption);
@@ -925,20 +925,20 @@ describe('SettingsModelsTab speaker model selections', () => {
     const mirrorDropdownTrigger = await screen.findByRole('button', {
       name: 'settings.model_download_mirror',
     });
-    expect(mirrorDropdownTrigger.textContent).toContain('自动');
+    expect(mirrorDropdownTrigger.textContent).toContain('Auto');
 
     fireEvent.click(mirrorDropdownTrigger);
 
     expect(screen.getByText('GitHub').classList.contains('dropdown-group-header')).toBe(true);
     expect(screen.getByText('Hugging Face').classList.contains('dropdown-group-header')).toBe(true);
-    const directOption = screen.getByRole('option', { name: '官方直连' });
+    const directOption = screen.getByRole('option', { name: 'Direct (Official)' });
     expect(directOption).not.toBeNull();
-    const hfOption = screen.getByRole('option', { name: '镜像站 (hf-mirror.com)' });
+    const hfOption = screen.getByRole('option', { name: 'Mirror (hf-mirror.com)' });
     fireEvent.click(hfOption);
 
     await waitFor(() => {
       expect(useConfigStore.getState().config.modelDownloadMirror).toBe('hf-mirror');
-      expect(mirrorDropdownTrigger.textContent).toContain('镜像站 (hf-mirror.com)');
+      expect(mirrorDropdownTrigger.textContent).toContain('Mirror (hf-mirror.com)');
     });
   });
 
@@ -973,7 +973,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     renderTab(new Set());
 
     // Switch to batch scenario
-    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
     // 1. Batch VAD toggle should NOT be visible
     expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
@@ -999,7 +999,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect(screen.queryByRole('button', { name: 'CTC Alignment Model' })).toBeNull();
 
     // 4. Expand advanced settings accordion
-    const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
+    const advancedHeader = await screen.findByRole('button', { name: /Advanced Settings/i });
     if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
       fireEvent.click(advancedHeader);
     }
@@ -1010,8 +1010,8 @@ describe('SettingsModelsTab speaker model selections', () => {
     ).toBeDefined();
 
     // 6. Local VAD / punctuation dropdowns should NOT be displayed
-    expect(screen.queryByRole('button', { name: /VAD Model|VAD 模型/ })).toBeNull();
-    expect(screen.queryByRole('button', { name: /Punctuation Model|标点模型/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'VAD Model' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Punctuation Model' })).toBeNull();
   });
 
   it('does not display cloud speaker panel when an unsupported online provider is selected', async () => {
@@ -1040,7 +1040,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
 
     renderTab(new Set());
-    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
     // Neither local nor cloud speaker panel should be shown
     expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
@@ -1074,14 +1074,14 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
 
     renderTab(new Set(['3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx']));
-    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
     const cloudSpeakerPanel = screen.getByTestId('cloud-speaker-panel');
     expect(cloudSpeakerPanel).toBeDefined();
 
     // Local speaker embedding model dropdown should be present in cloud speaker panel
     const localEmbeddingDropdown = within(cloudSpeakerPanel).getByRole('button', {
-      name: /本地说话人特征模型|Local Speaker Embedding Model/,
+      name: /Local Speaker Embedding Model/i,
     });
     expect(localEmbeddingDropdown).toBeDefined();
 
