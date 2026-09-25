@@ -145,11 +145,14 @@ async fn start_streaming_recognizer_impl(
     }
 
     let (mut writer, mut reader) = ws.split();
+    let speaker_diarization_enabled =
+        crate::aimux_adapter::is_cloud_speaker_diarization_enabled(&session.request);
     let init_frame = crate::build_volcengine_full_client_request_frame(
         session.request.enable_itn,
         true,
         &session.request.language,
         session.request.hotwords.as_deref(),
+        speaker_diarization_enabled,
     )?;
     writer
         .send(Message::Binary(init_frame.into()))

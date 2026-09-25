@@ -188,6 +188,14 @@ pub async fn match_cloud_speaker_segments_from_file(
     if !segments.iter().any(|s| s.speaker.is_some()) {
         return Ok(segments);
     }
+    let has_enabled_profiles = config
+        .speaker_profiles
+        .as_ref()
+        .map(|profiles| profiles.iter().any(|p| p.enabled))
+        .unwrap_or(false);
+    if !has_enabled_profiles {
+        return Ok(segments);
+    }
 
     let samples = crate::audio::extract_and_resample_audio(file_path, SAMPLE_RATE as u32).await?;
 
@@ -3257,6 +3265,28 @@ mod tests {
             segments.clone(),
             &config_with_embed_no_profiles,
         )
+        .unwrap();
+        assert_eq!(res, segments);
+    }
+
+    #[tokio::test]
+    async fn test_match_cloud_speaker_segments_from_file_short_circuits_without_profiles() {
+        let seg = sample_segment(0.0, 1.0, "Hello");
+        let segments = vec![seg];
+        let config_no_profiles = SpeakerProcessingConfig {
+            speaker_segmentation_model_path: None,
+            speaker_embedding_model_path: Some("/dummy/path".to_string()),
+            speaker_profiles: None,
+            sensitivity: None,
+        };
+        // Even with a nonexistent file path, it should return Ok(segments) without attempting audio extraction
+        let non_existent_path = Path::new("non_existent_audio_file_12345.wav");
+        let res = match_cloud_speaker_segments_from_file(
+            non_existent_path,
+            segments.clone(),
+            Some(&config_no_profiles),
+        )
+        .await
         .unwrap();
         assert_eq!(res, segments);
     }

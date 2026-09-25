@@ -314,7 +314,7 @@ pub fn build_volcengine_flash_batch_request_body(
     request: &sona_core::ports::asr::AsrTranscriptionRequest,
 ) -> Value {
     let audio_format = detect_audio_format(file_path);
-    serde_json::json!({
+    let mut body = serde_json::json!({
         "user": { "uid": "sona" },
         "audio": { "format": audio_format, "data": audio_data },
         "request": {
@@ -323,7 +323,11 @@ pub fn build_volcengine_flash_batch_request_body(
             "enable_punc": true,
             "show_utterances": true
         }
-    })
+    });
+    if aimux_adapter::is_cloud_speaker_diarization_enabled(request) {
+        body["request"]["enable_speaker_info"] = serde_json::json!(true);
+    }
+    body
 }
 
 pub fn detect_audio_format(file_path: &std::path::Path) -> &'static str {
@@ -394,6 +398,7 @@ pub fn build_volcengine_full_client_request_frame(
     enable_punc: bool,
     language: &str,
     hotwords: Option<&str>,
+    enable_speaker_info: bool,
 ) -> Result<Vec<u8>, SherpaError> {
     let mut request = serde_json::json!({
         "user": {
@@ -414,6 +419,9 @@ pub fn build_volcengine_full_client_request_frame(
             "result_type": "full"
         }
     });
+    if enable_speaker_info {
+        request["request"]["enable_speaker_info"] = serde_json::json!(true);
+    }
 
     if language != "auto" {
         request["audio"]["language"] = serde_json::json!(language);
@@ -1037,6 +1045,27 @@ mod tests {
         assert_eq!(body["request"]["enable_itn"], false);
         assert_eq!(body["request"]["enable_punc"], true);
         assert_eq!(body["request"]["show_utterances"], true);
+        assert_eq!(body["request"]["enable_speaker_info"], true);
+
+        let mut request_disabled = request.clone();
+        if let sona_core::ports::asr::AsrEngineConfig::Online { provider } =
+            &mut request_disabled.engine_config
+        {
+            provider.config = json!({
+                "apiKey": "volc-key",
+                "speakerDiarization": false
+            });
+        }
+        let body_disabled = build_volcengine_flash_batch_request_body(
+            std::path::Path::new("C:/recordings/meeting.mp3"),
+            "bG9jYWwtYXVkaW8=".to_string(),
+            &request_disabled,
+        );
+        assert!(
+            body_disabled["request"]
+                .get("enable_speaker_info")
+                .is_none()
+        );
     }
 
     #[test]
@@ -1186,8 +1215,9 @@ mod tests {
 
     #[test]
     fn builds_volcengine_streaming_frames_with_expected_headers() {
-        let request_frame = build_volcengine_full_client_request_frame(true, true, "auto", None)
-            .expect("request frame");
+        let request_frame =
+            build_volcengine_full_client_request_frame(true, true, "auto", None, true)
+                .expect("request frame");
         let audio_frame = build_volcengine_audio_frame(&[1, 2, 3, 4], false);
         let final_audio_frame = build_volcengine_audio_frame(&[], true);
 
@@ -1196,9 +1226,16 @@ mod tests {
             u32::from_be_bytes(request_frame[4..8].try_into().unwrap()) as usize,
             request_frame.len() - 8
         );
-        assert!(
-            String::from_utf8_lossy(&request_frame[8..]).contains("\"model_name\":\"bigmodel\"")
-        );
+        let payload_str = String::from_utf8_lossy(&request_frame[8..]);
+        assert!(payload_str.contains("\"model_name\":\"bigmodel\""));
+        assert!(payload_str.contains("\"enable_speaker_info\":true"));
+
+        let frame_no_speaker =
+            build_volcengine_full_client_request_frame(true, true, "auto", None, false)
+                .expect("frame without speaker");
+        let payload_no_spk = String::from_utf8_lossy(&frame_no_speaker[8..]);
+        assert!(!payload_no_spk.contains("enable_speaker_info"));
+
         assert_eq!(&audio_frame[0..4], &[0x11, 0x20, 0x00, 0x00]);
         assert_eq!(u32::from_be_bytes(audio_frame[4..8].try_into().unwrap()), 4);
         assert_eq!(&audio_frame[8..], &[1, 2, 3, 4]);

@@ -283,6 +283,15 @@ pub fn is_cloud_speaker_diarization_enabled(request: &AsrTranscriptionRequest) -
         {
             return b;
         }
+        if let Some(provider_def) =
+            sona_core::ports::asr::find_online_asr_provider(&provider.provider_id)
+            && let Some(b) = provider_def
+                .defaults
+                .get("speakerDiarization")
+                .and_then(Value::as_bool)
+        {
+            return b;
+        }
     }
     true
 }
