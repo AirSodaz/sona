@@ -168,6 +168,321 @@ pub async fn annotate_speaker_segments_from_file(
     annotate_segments_with_speakers(&samples, &segments, speaker_processing.as_ref())
 }
 
+pub async fn match_cloud_speaker_segments_from_file(
+    file_path: &Path,
+    segments: Vec<TranscriptSegment>,
+    speaker_processing: Option<&SpeakerProcessingConfig>,
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    if segments.is_empty() {
+        return Ok(segments);
+    }
+    let Some(config) = speaker_processing else {
+        return Ok(segments);
+    };
+    let Some(embedding_path) = config.speaker_embedding_model_path.as_deref() else {
+        return Ok(segments);
+    };
+    if embedding_path.trim().is_empty() {
+        return Ok(segments);
+    }
+    if !segments.iter().any(|s| s.speaker.is_some()) {
+        return Ok(segments);
+    }
+
+    let samples = crate::audio::extract_and_resample_audio(file_path, SAMPLE_RATE as u32).await?;
+
+    match_cloud_speakers_with_profiles(&samples, segments, config)
+}
+
+#[derive(Debug, Clone)]
+pub struct CloudSpeakerGroup {
+    pub group_key: String,
+    pub initial_tag: SpeakerTag,
+    pub initial_attribution: Option<SpeakerAttribution>,
+    pub segment_indices: Vec<usize>,
+    pub raw_spans: Vec<(f32, f32)>,
+}
+
+pub fn cloud_speaker_key(segment: &TranscriptSegment) -> Option<String> {
+    let speaker = segment.speaker.as_ref()?;
+    if let Some(attr) = segment.speaker_attribution.as_ref()
+        && !attr.group_id.trim().is_empty()
+    {
+        return Some(attr.group_id.trim().to_string());
+    }
+    if !speaker.id.trim().is_empty() {
+        return Some(speaker.id.trim().to_string());
+    }
+    if !speaker.label.trim().is_empty() {
+        return Some(speaker.label.trim().to_string());
+    }
+    None
+}
+
+fn merge_speaker_spans(mut raw_spans: Vec<(f32, f32)>, raw_speaker: i32) -> Vec<SpeakerSpan> {
+    if raw_spans.is_empty() {
+        return Vec::new();
+    }
+    raw_spans.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(Ordering::Equal));
+    let mut merged: Vec<SpeakerSpan> = Vec::new();
+    for (start, end) in raw_spans {
+        if end <= start {
+            continue;
+        }
+        if let Some(last) = merged.last_mut()
+            && start <= last.end + 0.5
+        {
+            last.end = last.end.max(end);
+            continue;
+        }
+        merged.push(SpeakerSpan {
+            start,
+            end,
+            raw_speaker,
+        });
+    }
+    merged
+}
+
+fn apply_cloud_speaker_assignments_to_segments(
+    segments: &mut [TranscriptSegment],
+    cloud_groups: &[CloudSpeakerGroup],
+    assignments: &HashMap<i32, ResolvedSpeakerAssignment>,
+) {
+    for (group_idx, group) in cloud_groups.iter().enumerate() {
+        let raw_speaker = group_idx as i32;
+        let Some(assignment) = assignments.get(&raw_speaker) else {
+            continue;
+        };
+
+        for &seg_idx in &group.segment_indices {
+            let seg = &mut segments[seg_idx];
+            if assignment.attribution.state == "identified" {
+                if let Some(identified_speaker) = &assignment.speaker {
+                    seg.speaker = Some(SpeakerTag {
+                        id: identified_speaker.id.clone(),
+                        label: identified_speaker.label.clone(),
+                        kind: "identified".to_string(),
+                        score: assignment.average_score,
+                    });
+                }
+                if let Some(attr) = &mut seg.speaker_attribution {
+                    attr.state = "identified".to_string();
+                    attr.source = "cloud+local_embedding".to_string();
+                    attr.confidence = assignment.attribution.confidence.clone();
+                    attr.candidates = assignment.attribution.candidates.clone();
+                } else {
+                    seg.speaker_attribution = Some(SpeakerAttribution {
+                        group_id: group.group_key.clone(),
+                        anonymous_label: group.initial_tag.label.clone(),
+                        state: "identified".to_string(),
+                        source: "cloud+local_embedding".to_string(),
+                        confidence: assignment.attribution.confidence.clone(),
+                        candidates: assignment.attribution.candidates.clone(),
+                    });
+                }
+            } else if assignment.attribution.state == "suggested" {
+                if let Some(spk) = &mut seg.speaker {
+                    spk.kind = "suggested".to_string();
+                }
+                if let Some(attr) = &mut seg.speaker_attribution {
+                    attr.state = "suggested".to_string();
+                    attr.candidates = assignment.attribution.candidates.clone();
+                } else {
+                    seg.speaker_attribution = Some(SpeakerAttribution {
+                        group_id: group.group_key.clone(),
+                        anonymous_label: group.initial_tag.label.clone(),
+                        state: "suggested".to_string(),
+                        source: "cloud+local_embedding".to_string(),
+                        confidence: assignment.attribution.confidence.clone(),
+                        candidates: assignment.attribution.candidates.clone(),
+                    });
+                }
+            } else if !assignment.attribution.candidates.is_empty()
+                && let Some(attr) = &mut seg.speaker_attribution
+            {
+                attr.candidates = assignment.attribution.candidates.clone();
+            }
+        }
+    }
+}
+
+pub fn match_cloud_speakers_with_profiles(
+    samples: &[f32],
+    mut segments: Vec<TranscriptSegment>,
+    config: &SpeakerProcessingConfig,
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    let total_started = Instant::now();
+    let input_segment_count = segments.len();
+
+    if segments.is_empty() {
+        return Ok(segments);
+    }
+
+    let Some(embedding_model_str) = config.speaker_embedding_model_path.as_deref() else {
+        return Ok(segments);
+    };
+    if embedding_model_str.trim().is_empty() {
+        return Ok(segments);
+    }
+
+    let enabled_profiles = config
+        .speaker_profiles
+        .clone()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|profile| profile.enabled)
+        .collect::<Vec<_>>();
+
+    if enabled_profiles.is_empty() {
+        return Ok(segments);
+    }
+
+    // 1. Group segments by cloud speaker
+    let mut cloud_groups: Vec<CloudSpeakerGroup> = Vec::new();
+    let mut key_to_group_index: HashMap<String, usize> = HashMap::new();
+
+    for (seg_idx, seg) in segments.iter().enumerate() {
+        let Some(key) = cloud_speaker_key(seg) else {
+            continue;
+        };
+
+        let start = seg.start as f32;
+        let end = seg.end as f32;
+        if end <= start {
+            continue;
+        }
+
+        let group_idx = match key_to_group_index.get(&key) {
+            Some(&idx) => idx,
+            None => {
+                let idx = cloud_groups.len();
+                key_to_group_index.insert(key.clone(), idx);
+                cloud_groups.push(CloudSpeakerGroup {
+                    group_key: key,
+                    initial_tag: seg.speaker.clone().unwrap(),
+                    initial_attribution: seg.speaker_attribution.clone(),
+                    segment_indices: Vec::new(),
+                    raw_spans: Vec::new(),
+                });
+                idx
+            }
+        };
+
+        cloud_groups[group_idx].segment_indices.push(seg_idx);
+        cloud_groups[group_idx].raw_spans.push((start, end));
+    }
+
+    if cloud_groups.is_empty() {
+        return Ok(segments);
+    }
+
+    // 2. Load speaker embedding model and index speaker profiles
+    let embedding_model = resolve_model_path(Some(embedding_model_str))?;
+    let embedding_index = crate::speaker::SpeakerEmbeddingIndex::new(&embedding_model)?;
+    let thresholds = SpeakerModelThresholds::for_batch_diarization(
+        &embedding_model,
+        config.sensitivity.as_deref(),
+    );
+
+    let mut loaded_profile_names = HashMap::new();
+    let mut profile_readiness = HashMap::new();
+    let mut profile_sample_embeddings: HashMap<String, Vec<ProfileSampleEmbedding>> =
+        HashMap::new();
+
+    for profile in enabled_profiles {
+        let readiness = derive_profile_readiness(&profile);
+        if readiness == SpeakerProfileReadinessState::NotReady {
+            continue;
+        }
+
+        let mut samples_list = Vec::new();
+        let mut raw_embeddings = Vec::new();
+        for sample in &profile.samples {
+            if sample.duration_seconds < PROFILE_SAMPLE_MIN_DURATION_SECONDS {
+                continue;
+            }
+            if let Some(embedding) =
+                embedding_index.compute_embedding_for_wav_file(&sample.file_path)?
+            {
+                samples_list.push(ProfileSampleEmbedding {
+                    embedding: embedding.clone(),
+                    duration_seconds: sample.duration_seconds,
+                });
+                raw_embeddings.push(embedding);
+            }
+        }
+
+        if samples_list.is_empty() {
+            continue;
+        }
+
+        embedding_index.add_profile_embeddings(&profile.id, &profile.name, &raw_embeddings)?;
+        loaded_profile_names.insert(profile.id.clone(), profile.name.clone());
+        profile_readiness.insert(profile.id.clone(), readiness);
+        profile_sample_embeddings.insert(profile.id.clone(), samples_list);
+    }
+
+    if loaded_profile_names.is_empty() {
+        return Ok(segments);
+    }
+
+    // 3. For each cloud speaker group, build ClusterInfo, compute centroid and identify candidates
+    let mut clusters = Vec::new();
+    let mut candidates = HashMap::new();
+
+    for (group_idx, group) in cloud_groups.iter().enumerate() {
+        let raw_speaker = group_idx as i32;
+        let spans = merge_speaker_spans(group.raw_spans.clone(), raw_speaker);
+        let cluster = ClusterInfo {
+            raw_speaker,
+            spans: spans.clone(),
+            anonymous_tag: group.initial_tag.clone(),
+        };
+
+        let centroid = compute_cluster_centroid_embedding(samples, &spans, &embedding_index)?;
+        let cluster_candidates = identify_cluster_candidates(
+            samples,
+            &cluster,
+            centroid.as_deref(),
+            &spans,
+            &embedding_index,
+            &loaded_profile_names,
+            &profile_sample_embeddings,
+            thresholds.candidate_display_threshold,
+        )?;
+
+        if !cluster_candidates.is_empty() {
+            candidates.insert(raw_speaker, cluster_candidates);
+        }
+        clusters.push(cluster);
+    }
+
+    // 4. Resolve assignments with thresholds
+    let assignments = resolve_cluster_assignments_with_thresholds(
+        &clusters,
+        &candidates,
+        &profile_readiness,
+        &thresholds,
+    );
+
+    // 5. Update segments with matched speaker labels
+    apply_cloud_speaker_assignments_to_segments(&mut segments, &cloud_groups, &assignments);
+
+    let assignment_summary = summarize_speaker_assignments(&assignments);
+    info!(
+        target: SPEAKER_PROCESSING_LOG_TARGET,
+        "event=cloud_speaker_matching_complete total_ms={:.1} input_segment_count={} cloud_speaker_count={} identified_count={} suggested_count={}",
+        elapsed_ms(total_started),
+        input_segment_count,
+        cloud_groups.len(),
+        assignment_summary.identified,
+        assignment_summary.suggested,
+    );
+
+    Ok(segments)
+}
+
 pub async fn import_speaker_profile_sample(
     app_data_dir: &Path,
     profile_id: String,
@@ -1029,6 +1344,23 @@ fn identify_cluster_candidates(
             .spans
             .iter()
             .filter(|span| (span.end - span.start) >= IDENTIFICATION_MIN_DURATION_SECONDS)
+            .cloned()
+            .collect::<Vec<_>>();
+    }
+
+    if candidate_spans.is_empty() {
+        candidate_spans = purified_spans
+            .iter()
+            .filter(|span| (span.end - span.start) >= 0.5)
+            .cloned()
+            .collect::<Vec<_>>();
+    }
+
+    if candidate_spans.is_empty() {
+        candidate_spans = cluster
+            .spans
+            .iter()
+            .filter(|span| (span.end - span.start) >= 0.5)
             .cloned()
             .collect::<Vec<_>>();
     }
@@ -2682,5 +3014,250 @@ mod tests {
         assert_eq!(assignment.attribution.candidates.len(), 2);
         assert_eq!(assignment.attribution.candidates[0].profile_name, "Alice");
         assert_eq!(assignment.attribution.candidates[1].profile_name, "Bob");
+    }
+
+    #[test]
+    fn test_cloud_speaker_key_resolution() {
+        let mut seg = sample_segment(0.0, 1.0, "Hello");
+        assert!(cloud_speaker_key(&seg).is_none());
+
+        seg.speaker = Some(SpeakerTag {
+            id: "speaker-1".to_string(),
+            label: "Speaker 1".to_string(),
+            kind: "anonymous".to_string(),
+            score: None,
+        });
+        assert_eq!(cloud_speaker_key(&seg).unwrap(), "speaker-1");
+
+        seg.speaker_attribution = Some(SpeakerAttribution {
+            group_id: "cloud-speaker-0".to_string(),
+            anonymous_label: "Speaker 1".to_string(),
+            state: "anonymous".to_string(),
+            source: "cloud".to_string(),
+            confidence: "high".to_string(),
+            candidates: Vec::new(),
+        });
+        assert_eq!(cloud_speaker_key(&seg).unwrap(), "cloud-speaker-0");
+    }
+
+    #[test]
+    fn test_merge_speaker_spans_merges_contiguous_and_overlapping() {
+        let raw = vec![(0.0, 1.0), (1.2, 2.0), (3.0, 4.0), (0.5, 1.1)];
+        let merged = merge_speaker_spans(raw, 0);
+        // (0.0, 1.0) and (0.5, 1.1) overlap -> 0.0..1.1
+        // (1.2, 2.0) has gap 0.1 <= 0.5 -> merges into 0.0..2.0
+        // (3.0, 4.0) gap is 1.0 > 0.5 -> separate
+        assert_eq!(merged.len(), 2);
+        assert_eq!(merged[0].start, 0.0);
+        assert_eq!(merged[0].end, 2.0);
+        assert_eq!(merged[1].start, 3.0);
+        assert_eq!(merged[1].end, 4.0);
+    }
+
+    #[test]
+    fn test_apply_cloud_speaker_assignments_updates_identified_and_suggested() {
+        let mut segments = vec![
+            sample_segment(0.0, 2.0, "Hello Alice here"),
+            sample_segment(2.5, 4.5, "Hi this is Bob"),
+            sample_segment(5.0, 7.0, "And Alice speaking again"),
+            sample_segment(7.5, 9.0, "Unknown voice"),
+        ];
+        segments[0].speaker = Some(SpeakerTag {
+            id: "cloud-speaker-0".to_string(),
+            label: "Speaker 1".to_string(),
+            kind: "anonymous".to_string(),
+            score: None,
+        });
+        segments[1].speaker = Some(SpeakerTag {
+            id: "cloud-speaker-1".to_string(),
+            label: "Speaker 2".to_string(),
+            kind: "anonymous".to_string(),
+            score: None,
+        });
+        segments[2].speaker = Some(SpeakerTag {
+            id: "cloud-speaker-0".to_string(),
+            label: "Speaker 1".to_string(),
+            kind: "anonymous".to_string(),
+            score: None,
+        });
+        segments[3].speaker = Some(SpeakerTag {
+            id: "cloud-speaker-2".to_string(),
+            label: "Speaker 3".to_string(),
+            kind: "anonymous".to_string(),
+            score: None,
+        });
+
+        let cloud_groups = vec![
+            CloudSpeakerGroup {
+                group_key: "cloud-speaker-0".to_string(),
+                initial_tag: segments[0].speaker.clone().unwrap(),
+                initial_attribution: None,
+                segment_indices: vec![0, 2],
+                raw_spans: vec![(0.0, 2.0), (5.0, 7.0)],
+            },
+            CloudSpeakerGroup {
+                group_key: "cloud-speaker-1".to_string(),
+                initial_tag: segments[1].speaker.clone().unwrap(),
+                initial_attribution: None,
+                segment_indices: vec![1],
+                raw_spans: vec![(2.5, 4.5)],
+            },
+            CloudSpeakerGroup {
+                group_key: "cloud-speaker-2".to_string(),
+                initial_tag: segments[3].speaker.clone().unwrap(),
+                initial_attribution: None,
+                segment_indices: vec![3],
+                raw_spans: vec![(7.5, 9.0)],
+            },
+        ];
+
+        let assignments = HashMap::from([
+            (
+                0,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 0,
+                    speaker: Some(SpeakerTag {
+                        id: "profile-alice".to_string(),
+                        label: "Alice".to_string(),
+                        kind: "identified".to_string(),
+                        score: Some(0.88),
+                    }),
+                    attribution: SpeakerAttribution {
+                        group_id: "cloud-speaker-0".to_string(),
+                        anonymous_label: "Speaker 1".to_string(),
+                        state: "identified".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "high".to_string(),
+                        candidates: vec![SpeakerCandidate {
+                            profile_id: "profile-alice".to_string(),
+                            profile_name: "Alice".to_string(),
+                            score: 0.88,
+                            rank: 1,
+                        }],
+                    },
+                    average_score: Some(0.88),
+                    votes: 2,
+                },
+            ),
+            (
+                1,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 1,
+                    speaker: Some(SpeakerTag {
+                        id: "cloud-speaker-1".to_string(),
+                        label: "Speaker 2".to_string(),
+                        kind: "suggested".to_string(),
+                        score: Some(0.68),
+                    }),
+                    attribution: SpeakerAttribution {
+                        group_id: "cloud-speaker-1".to_string(),
+                        anonymous_label: "Speaker 2".to_string(),
+                        state: "suggested".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "medium".to_string(),
+                        candidates: vec![SpeakerCandidate {
+                            profile_id: "profile-bob".to_string(),
+                            profile_name: "Bob".to_string(),
+                            score: 0.68,
+                            rank: 1,
+                        }],
+                    },
+                    average_score: Some(0.68),
+                    votes: 1,
+                },
+            ),
+            (
+                2,
+                ResolvedSpeakerAssignment {
+                    raw_speaker: 2,
+                    speaker: Some(SpeakerTag {
+                        id: "cloud-speaker-2".to_string(),
+                        label: "Speaker 3".to_string(),
+                        kind: "anonymous".to_string(),
+                        score: None,
+                    }),
+                    attribution: SpeakerAttribution {
+                        group_id: "cloud-speaker-2".to_string(),
+                        anonymous_label: "Speaker 3".to_string(),
+                        state: "anonymous".to_string(),
+                        source: "auto".to_string(),
+                        confidence: "low".to_string(),
+                        candidates: Vec::new(),
+                    },
+                    average_score: None,
+                    votes: 0,
+                },
+            ),
+        ]);
+
+        apply_cloud_speaker_assignments_to_segments(&mut segments, &cloud_groups, &assignments);
+
+        // Segments 0 and 2 should be identified as Alice
+        assert_eq!(segments[0].speaker.as_ref().unwrap().label, "Alice");
+        assert_eq!(segments[0].speaker.as_ref().unwrap().id, "profile-alice");
+        assert_eq!(segments[0].speaker.as_ref().unwrap().kind, "identified");
+        assert_eq!(segments[0].speaker.as_ref().unwrap().score, Some(0.88));
+        assert_eq!(
+            segments[0].speaker_attribution.as_ref().unwrap().state,
+            "identified"
+        );
+
+        assert_eq!(segments[2].speaker.as_ref().unwrap().label, "Alice");
+        assert_eq!(segments[2].speaker.as_ref().unwrap().id, "profile-alice");
+        assert_eq!(segments[2].speaker.as_ref().unwrap().kind, "identified");
+
+        // Segment 1 should be suggested Bob
+        assert_eq!(segments[1].speaker.as_ref().unwrap().label, "Speaker 2");
+        assert_eq!(segments[1].speaker.as_ref().unwrap().kind, "suggested");
+        assert_eq!(
+            segments[1].speaker_attribution.as_ref().unwrap().state,
+            "suggested"
+        );
+        assert_eq!(
+            segments[1]
+                .speaker_attribution
+                .as_ref()
+                .unwrap()
+                .candidates
+                .len(),
+            1
+        );
+        assert_eq!(
+            segments[1].speaker_attribution.as_ref().unwrap().candidates[0].profile_name,
+            "Bob"
+        );
+
+        // Segment 3 should remain anonymous Speaker 3
+        assert_eq!(segments[3].speaker.as_ref().unwrap().label, "Speaker 3");
+        assert_eq!(segments[3].speaker.as_ref().unwrap().kind, "anonymous");
+    }
+
+    #[test]
+    fn test_match_cloud_speakers_with_profiles_noop_cases() {
+        let seg = sample_segment(0.0, 1.0, "Hello");
+        let segments = vec![seg];
+        let config_no_embed = SpeakerProcessingConfig {
+            speaker_segmentation_model_path: None,
+            speaker_embedding_model_path: None,
+            speaker_profiles: None,
+            sensitivity: None,
+        };
+        let res =
+            match_cloud_speakers_with_profiles(&[], segments.clone(), &config_no_embed).unwrap();
+        assert_eq!(res, segments);
+
+        let config_with_embed_no_profiles = SpeakerProcessingConfig {
+            speaker_segmentation_model_path: None,
+            speaker_embedding_model_path: Some("/dummy/path".to_string()),
+            speaker_profiles: Some(vec![]),
+            sensitivity: None,
+        };
+        let res = match_cloud_speakers_with_profiles(
+            &[],
+            segments.clone(),
+            &config_with_embed_no_profiles,
+        )
+        .unwrap();
+        assert_eq!(res, segments);
     }
 }

@@ -23,7 +23,7 @@ pub mod volcengine;
 
 pub use aimux_adapter::{
     OnlineProviderConfigFields, create_aimux_transcription_model, detect_audio_mime_type,
-    execute_aimux_batch, resolve_online_provider_config,
+    execute_aimux_batch, is_cloud_speaker_diarization_enabled, resolve_online_provider_config,
 };
 pub use error::{SherpaError, map_aimux_asr_error};
 pub use volcengine::VolcengineTranscriptionModel;

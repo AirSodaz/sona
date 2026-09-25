@@ -45,12 +45,16 @@ export class SpeakerService {
     });
   }
 
-  isConfigured(config: SpeakerConfigInput, scenario: AsrScenario): boolean {
+  isConfigured(
+    config: SpeakerConfigInput,
+    scenario: AsrScenario,
+    options?: { requireSegmentation?: boolean }
+  ): boolean {
     const embeddingPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!embeddingPath) {
       return false;
     }
-    if (scenario === 'batch') {
+    if (options?.requireSegmentation !== false && scenario === 'batch') {
       return Boolean(getScenarioSpeakerSegmentationModelPath(config, scenario));
     }
     return true;
@@ -59,14 +63,15 @@ export class SpeakerService {
   buildProcessingConfig(
     config: SpeakerConfigInput,
     scenario: AsrScenario,
-    projectId?: string | null
+    projectId?: string | null,
+    options?: { requireSegmentation?: boolean }
   ): SpeakerProcessingConfig | null {
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!embeddingModelPath) {
       return null;
     }
     const segmentationModelPath = getScenarioSpeakerSegmentationModelPath(config, scenario);
-    if (scenario === 'batch' && !segmentationModelPath) {
+    if (options?.requireSegmentation !== false && scenario === 'batch' && !segmentationModelPath) {
       return null;
     }
 

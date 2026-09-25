@@ -111,17 +111,31 @@ export function buildBatchTranscriptionRequest({
     : runtimeRequest;
   const isOnline = asrRequest.engine === 'online';
   const isLlamaCpp = isLlamaCppBatchRequest(asrRequest);
+  const isCloudSpeakerEnabled =
+    isOnline && asrRequest.onlineProvider.config?.speakerDiarization !== false;
+
+  const speakerProcessing = isLlamaCpp
+    ? null
+    : isOnline
+      ? isCloudSpeakerEnabled
+        ? speakerService.buildProcessingConfig(appConfig, 'batch', projectId, {
+            requireSegmentation: false,
+          })
+        : null
+      : speakerService.buildProcessingConfig(appConfig, 'batch', projectId);
+
+  const resolvedAsrRequest: AsrTranscriptionRequest = {
+    ...asrRequest,
+    speakerProcessing,
+  };
 
   return {
-    asrRequest,
+    asrRequest: resolvedAsrRequest,
     request: {
       filePath,
       saveToPath: isLlamaCpp || isOnline ? null : saveToPath || null,
-      speakerProcessing:
-        isLlamaCpp || isOnline
-          ? null
-          : speakerService.buildProcessingConfig(appConfig, 'batch', projectId),
-      asrRequest,
+      speakerProcessing,
+      asrRequest: resolvedAsrRequest,
       ...(instanceId ? { instanceId } : {}),
     },
   };

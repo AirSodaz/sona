@@ -1432,7 +1432,15 @@ export function SettingsModelsTab({
                   </span>
                   <span className={`status-badge ${isCloudSpeakerEnabled ? 'ready' : 'off'}`}>
                     {isCloudSpeakerEnabled
-                      ? t('settings.speaker_status_enabled', { defaultValue: '已启用' })
+                      ? (
+                          isBatchScenario
+                            ? selectedModelIds.batchSpeakerEmbedding
+                            : selectedModelIds.liveSpeakerEmbedding
+                        )
+                        ? t('settings.cloud_speaker_status_with_local', {
+                            defaultValue: '已启用 (本地声纹匹配)',
+                          })
+                        : t('settings.speaker_status_enabled', { defaultValue: '已启用' })
                       : t('settings.speaker_status_disabled', { defaultValue: '未启用' })}
                   </span>
                 </div>
@@ -1443,6 +1451,29 @@ export function SettingsModelsTab({
                   })}
                 </p>
               </div>
+              {Boolean(navContext) && isCloudSpeakerEnabled && (
+                <button
+                  type="button"
+                  className="settings-speaker-profiles-btn"
+                  onClick={() => navContext?.navigateToTab('vocabulary')}
+                  data-tooltip={t('settings.speaker_manage_profiles', {
+                    defaultValue: 'Manage Voiceprints',
+                  })}
+                  data-tooltip-pos="top"
+                  aria-label={t('settings.speaker_manage_profiles', {
+                    defaultValue: 'Manage Voiceprints',
+                  })}
+                >
+                  <UserCheck size={14} />
+                  <span>
+                    {t('settings.speaker_profiles_count_pill', {
+                      count: speakerProfiles?.length ?? 0,
+                      defaultValue: `${speakerProfiles?.length ?? 0} enrolled speakers`,
+                    })}
+                  </span>
+                  <ArrowRight size={13} />
+                </button>
+              )}
             </div>
 
             <SettingsItem
@@ -1460,6 +1491,121 @@ export function SettingsModelsTab({
                 onChange={handleCloudSpeakerToggle}
               />
             </SettingsItem>
+
+            {isCloudSpeakerEnabled && (
+              <>
+                <SettingsItem
+                  title={t('settings.local_speaker_embedding_model_label', {
+                    defaultValue: '本地说话人特征模型',
+                  })}
+                  hint={t('settings.local_speaker_embedding_model_hint', {
+                    defaultValue:
+                      '启用本地声纹特征模型后，将自动比对云端说话人片段与本地说话人档案，匹配已知说话人标签。',
+                  })}
+                >
+                  <div style={{ width: '220px' }}>
+                    <Dropdown
+                      id="settings-cloud-local-speaker-embedding-path"
+                      value={
+                        (isBatchScenario
+                          ? selectedModelIds.batchSpeakerEmbedding
+                          : selectedModelIds.liveSpeakerEmbedding) ?? ''
+                      }
+                      onChange={(value) =>
+                        handleCompanionModelChange('speakerEmbeddingModelPath', value)
+                      }
+                      placeholder={t('settings.select_speaker_embedding_model', {
+                        defaultValue: 'Select speaker embedding model',
+                      })}
+                      options={speakerEmbeddingOptions}
+                      style={{ flex: 1 }}
+                      aria-label={t('settings.local_speaker_embedding_model_label', {
+                        defaultValue: '本地说话人特征模型',
+                      })}
+                      disabled={localModelActionsDisabled}
+                    />
+                  </div>
+                </SettingsItem>
+
+                {Boolean(
+                  isBatchScenario
+                    ? selectedModelIds.batchSpeakerEmbedding
+                    : selectedModelIds.liveSpeakerEmbedding
+                ) && (
+                  <SettingsItem
+                    title={t('settings.speaker_sensitivity_label', {
+                      defaultValue: 'Separation Sensitivity',
+                    })}
+                    hint={t('settings.speaker_sensitivity_hint', {
+                      defaultValue:
+                        'Adjust strictness of speaker clustering. Permissive tolerates pitch variations; strict clearly differentiates close voices.',
+                    })}
+                  >
+                    {(() => {
+                      const currentSensitivity =
+                        modelConfig.speakerDiarizationSensitivity ?? 'balanced';
+                      return (
+                        <div
+                          className="settings-radio-pill-group"
+                          role="radiogroup"
+                          aria-label={t('settings.speaker_sensitivity_label', {
+                            defaultValue: 'Separation Sensitivity',
+                          })}
+                        >
+                          {[
+                            {
+                              value: 'permissive' as const,
+                              label: t('settings.speaker_sensitivity_permissive', {
+                                defaultValue: 'Permissive',
+                              }),
+                              desc: t('settings.speaker_sensitivity_permissive_desc', {
+                                defaultValue: 'Tends to merge similar voices',
+                              }),
+                            },
+                            {
+                              value: 'balanced' as const,
+                              label: t('settings.speaker_sensitivity_balanced', {
+                                defaultValue: 'Balanced',
+                              }),
+                              desc: t('settings.speaker_sensitivity_balanced_desc', {
+                                defaultValue: 'Recommended model baseline',
+                              }),
+                            },
+                            {
+                              value: 'strict' as const,
+                              label: t('settings.speaker_sensitivity_strict', {
+                                defaultValue: 'Strict',
+                              }),
+                              desc: t('settings.speaker_sensitivity_strict_desc', {
+                                defaultValue: 'Differentiates close speakers',
+                              }),
+                            },
+                          ].map((item) => (
+                            <button
+                              key={item.value}
+                              type="button"
+                              role="radio"
+                              aria-checked={currentSensitivity === item.value}
+                              className={`settings-radio-pill ${
+                                currentSensitivity === item.value ? 'active' : ''
+                              }`}
+                              onClick={() =>
+                                updateConfig({ speakerDiarizationSensitivity: item.value })
+                              }
+                              disabled={localModelActionsDisabled}
+                              data-tooltip={item.desc}
+                              data-tooltip-pos="top"
+                            >
+                              {item.label}
+                            </button>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </SettingsItem>
+                )}
+              </>
+            )}
           </div>
         )}
 

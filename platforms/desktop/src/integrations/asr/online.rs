@@ -54,7 +54,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         file_path: std::path::PathBuf,
         _save_to_path: Option<std::path::PathBuf>,
         request: AsrTranscriptionRequest,
-        _speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
+        speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let cancel_rx = if let Some(id) = &instance_id {
@@ -93,9 +93,27 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         };
         let mut segments =
             apply_timeline_normalization(output.segments, request.normalization_options);
-        segments = TranscriptPostprocessor::compile(request.postprocess_options)
+        segments = TranscriptPostprocessor::compile(request.postprocess_options.clone())
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?
             .process_segments(segments);
+
+        let effective_speaker_processing =
+            speaker_processing.or(request.speaker_processing.clone());
+        if let Some(sp_config) = effective_speaker_processing.as_ref()
+            && sp_config
+                .speaker_embedding_model_path
+                .as_deref()
+                .is_some_and(|p| !p.trim().is_empty())
+            && sona_online_asr::is_cloud_speaker_diarization_enabled(&request)
+        {
+            segments =
+                sona_sherpa_onnx::speaker_processing::match_cloud_speaker_segments_from_file(
+                    &file_path,
+                    segments,
+                    Some(sp_config),
+                )
+                .await?;
+        }
 
         let elapsed_ms = duration_to_ms(started.elapsed());
         let metric = AsrInferenceMetric {
@@ -123,5 +141,59 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         );
 
         Ok(segments)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+    use sona_core::ports::asr::{
+        AsrEngineConfig, AsrMode, OnlineAsrProviderRequest, TranscriptNormalizationOptions,
+        TranscriptPostprocessOptions, VOLCENGINE_DOUBAO_PROVIDER_ID,
+    };
+
+    fn make_online_request(provider_id: &str, diarization: bool) -> AsrTranscriptionRequest {
+        AsrTranscriptionRequest {
+            mode: AsrMode::Batch,
+            language: "zh".into(),
+            enable_itn: true,
+            normalization_options: TranscriptNormalizationOptions::default(),
+            postprocess_options: TranscriptPostprocessOptions::default(),
+            hotwords: None,
+            speaker_processing: None,
+            engine_config: AsrEngineConfig::Online {
+                provider: OnlineAsrProviderRequest {
+                    provider_id: provider_id.into(),
+                    profile_id: "test".into(),
+                    config: json!({
+                        "speakerDiarization": diarization,
+                    }),
+                },
+            },
+        }
+    }
+
+    #[test]
+    fn creates_batch_processor_for_matching_provider() {
+        let adapter = DesktopOnlineAsrAdapter::new(VOLCENGINE_DOUBAO_PROVIDER_ID);
+        let request = make_online_request(VOLCENGINE_DOUBAO_PROVIDER_ID, true);
+        assert!(adapter.create_batch_processor(&request).is_ok());
+
+        let wrong_request = make_online_request("deepgram", true);
+        assert!(adapter.create_batch_processor(&wrong_request).is_err());
+    }
+
+    #[test]
+    fn cloud_speaker_diarization_flag_is_respected() {
+        let req_enabled = make_online_request(VOLCENGINE_DOUBAO_PROVIDER_ID, true);
+        assert!(sona_online_asr::is_cloud_speaker_diarization_enabled(
+            &req_enabled
+        ));
+
+        let req_disabled = make_online_request(VOLCENGINE_DOUBAO_PROVIDER_ID, false);
+        assert!(!sona_online_asr::is_cloud_speaker_diarization_enabled(
+            &req_disabled
+        ));
     }
 }

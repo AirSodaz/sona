@@ -268,7 +268,7 @@ describe('transcriptionRequest helpers', () => {
     expect(request.speakerProcessing).toBeNull();
   });
 
-  it('builds online batch requests with null saveToPath, null speakerProcessing, and no batchSegmentationMode', () => {
+  it('builds online batch requests with null speakerProcessing when speaker diarization is disabled', () => {
     const config = buildTestConfig({
       batchVadEnabled: true,
       batchVadModelPath: '/models/vad.onnx',
@@ -289,6 +289,7 @@ describe('transcriptionRequest helpers', () => {
               apiKey: 'test-key',
               batchEndpoint: 'https://example.com/flash',
               batchResourceId: 'res-1',
+              speakerDiarization: false,
             },
           },
         },
@@ -309,6 +310,74 @@ describe('transcriptionRequest helpers', () => {
     expect(untyped.vadModel).toBeUndefined();
     expect(request.saveToPath).toBeNull();
     expect(request.speakerProcessing).toBeNull();
+  });
+
+  it('builds online batch requests with speakerProcessing when speaker diarization is enabled and local embedding is configured', () => {
+    const config = buildTestConfig({
+      batchVadEnabled: true,
+      batchVadModelPath: '/models/vad.onnx',
+      batchSpeakerSegmentationModelPath: '/models/speaker-seg',
+      batchSpeakerEmbeddingModelPath: '/models/speaker-embed',
+      speakerProfiles: [
+        {
+          id: 'spk-1',
+          name: 'Alice',
+          enabled: true,
+          scope: 'global',
+          samples: [
+            {
+              id: 'sample-1',
+              filePath: '/samples/alice.wav',
+              sourceName: 'Sample 1',
+              durationSeconds: 5,
+            },
+          ],
+        },
+      ],
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              batchEndpoint: 'https://example.com/flash',
+              batchResourceId: 'res-1',
+              speakerDiarization: true,
+            },
+          },
+        },
+      },
+    });
+
+    const { request, asrRequest } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      saveToPath: 'C:/audio/copy.wav',
+      language: 'zh',
+      enableItn: true,
+    });
+
+    expect(asrRequest.engine).toBe('online');
+    expect(request.saveToPath).toBeNull();
+    expect(request.speakerProcessing).toEqual({
+      speakerSegmentationModelPath: '/models/speaker-seg',
+      speakerEmbeddingModelPath: '/models/speaker-embed',
+      speakerProfiles: [
+        expect.objectContaining({
+          id: 'spk-1',
+          name: 'Alice',
+        }),
+      ],
+      sensitivity: 'balanced',
+    });
+    expect(asrRequest.speakerProcessing).toEqual(request.speakerProcessing);
   });
 
   it('builds online streaming requests without speakerProcessing', () => {

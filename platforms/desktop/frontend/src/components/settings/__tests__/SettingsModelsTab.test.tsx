@@ -1046,4 +1046,56 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
     expect(screen.queryByTestId('cloud-speaker-panel')).toBeNull();
   });
+
+  it('allows configuring local speaker embedding model when cloud speaker diarization is enabled', async () => {
+    setTestConfig({
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            modelId: null,
+            modelPath: '',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              batchEndpoint: 'https://example.com/flash',
+              batchResourceId: 'res-1',
+              speakerDiarization: true,
+            },
+          },
+        },
+      },
+    });
+
+    renderTab(new Set(['3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx']));
+    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+
+    const cloudSpeakerPanel = screen.getByTestId('cloud-speaker-panel');
+    expect(cloudSpeakerPanel).toBeDefined();
+
+    // Local speaker embedding model dropdown should be present in cloud speaker panel
+    const localEmbeddingDropdown = within(cloudSpeakerPanel).getByRole('button', {
+      name: /本地说话人特征模型|Local Speaker Embedding Model/,
+    });
+    expect(localEmbeddingDropdown).toBeDefined();
+
+    // Select a speaker embedding model
+    fireEvent.click(localEmbeddingDropdown);
+    const option = await screen.findByRole('option', { name: /3DSpeaker|CAMPPlus/ });
+    fireEvent.click(option);
+
+    await waitFor(() => {
+      const config = useConfigStore.getState().config;
+      expect(config.batchSpeakerEmbeddingModelPath).toBeTruthy();
+    });
+
+    // Separation sensitivity should now be visible
+    expect(within(cloudSpeakerPanel).getByRole('radiogroup')).toBeDefined();
+  });
 });
