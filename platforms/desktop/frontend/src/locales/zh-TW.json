@@ -1680,6 +1680,8 @@
     "advanced_no_vad": "不需要 VAD",
     "advanced_requires_punct": "需要標點",
     "advanced_no_punct": "不需要標點",
+    "cloud_managed": "雲端自動處理",
+    "online_automated_processing_hint": "雲端 ASR 服務會自動處理端點檢測 (VAD)、分句與標點，無需配置本地伴生模型與本地 VAD 分割。",
     "general": "常規",
     "general_title": "常規偏好",
     "general_description": "管理基本應用行為和外觀。",

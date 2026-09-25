@@ -1680,6 +1680,8 @@
     "advanced_no_vad": "VAD 不要",
     "advanced_requires_punct": "句読点必須",
     "advanced_no_punct": "句読点不要",
+    "cloud_managed": "クラウド自動処理",
+    "online_automated_processing_hint": "クラウド ASR サービスは音声区間検出 (VAD)、文の分割、句読点を自動的に処理するため、ローカルのコンパニオンモデルやバッチ VAD 分割の設定は不要です。",
     "general": "一般",
     "general_title": "一般的な設定",
     "general_description": "アプリケーションの基本的な動作と外観を管理します。",

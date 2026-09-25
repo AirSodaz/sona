@@ -1680,6 +1680,8 @@
     "advanced_no_vad": "VAD 불필요",
     "advanced_requires_punct": "문장부호 필요",
     "advanced_no_punct": "문장부호 불필요",
+    "cloud_managed": "클라우드 자동 처리",
+    "online_automated_processing_hint": "클라우드 ASR 서비스는 음성 활동 감지(VAD), 문장 분할 및 문장 부호를 자동으로 처리하므로 로컬 동반 모델이나 로컬 배치 VAD 분할을 구성할 필요가 없습니다.",
     "general": "일반",
     "general_title": "기본 설정",
     "general_description": "언어, 테마, 로그, 백업 같은 기본 동작을 설정합니다.",

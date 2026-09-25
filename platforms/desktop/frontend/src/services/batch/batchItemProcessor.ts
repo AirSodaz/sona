@@ -169,7 +169,10 @@ export class BatchItemProcessor {
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
       const tempDirectory = await tempDir();
-      tempWavPath = isLlamaCpp ? undefined : await join(tempDirectory, `${uuidv4()}.wav`);
+      tempWavPath =
+        isLlamaCpp || batchAsr.engine === 'online'
+          ? undefined
+          : await join(tempDirectory, `${uuidv4()}.wav`);
 
       this.throwIfCancelRequested(callbacks);
 

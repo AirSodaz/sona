@@ -936,4 +936,62 @@ describe('SettingsModelsTab speaker model selections', () => {
       expect(mirrorDropdownTrigger.textContent).toContain('镜像站 (hf-mirror.com)');
     });
   });
+
+  it('hides batch VAD toggle, companion models, and speaker panel when online ASR is selected for batch scenario', async () => {
+    setTestConfig({
+      batchVadEnabled: true,
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            modelId: null,
+            modelPath: '',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              streamingEndpoint: 'wss://test.example.com',
+              streamingResourceId: 'res-live',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
+            },
+          },
+        },
+      },
+    });
+
+    renderTab(new Set());
+
+    // Switch to batch scenario
+    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+
+    // 1. Batch VAD toggle should NOT be visible
+    expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
+
+    // 2. Speaker Diarization panel should NOT be visible
+    expect(screen.queryByText('Speaker Diarization & Recognition')).toBeNull();
+
+    // 3. CTC Alignment Model should NOT be visible
+    expect(screen.queryByRole('button', { name: 'CTC Alignment Model' })).toBeNull();
+
+    // 4. Expand advanced settings accordion
+    const advancedHeader = await screen.findByRole('button', { name: /高级设置/ });
+    if (advancedHeader.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(advancedHeader);
+    }
+
+    // 5. Cloud automated processing hint should be displayed
+    expect(
+      screen.getByText(/Cloud ASR automatically handles voice activity detection/)
+    ).toBeDefined();
+
+    // 6. Local VAD / punctuation dropdowns should NOT be displayed
+    expect(screen.queryByRole('button', { name: /VAD Model|VAD 模型/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Punctuation Model|标点模型/ })).toBeNull();
+  });
 });

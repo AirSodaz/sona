@@ -545,4 +545,36 @@ projects:
       expect.objectContaining({ from: 'GlobalMistake', to: 'GlobalFix' }),
     ]);
   });
+
+  it('resolves online batch request without batchSegmentationMode, vadModel, or punctuationModel even if batch VAD is enabled in config', () => {
+    const config = buildAsrConfig({
+      batchVadEnabled: true,
+      batchVadModelPath: 'C:/models/silero_vad.onnx',
+      batchPunctuationModelPath: 'C:/models/punct',
+      asr: {
+        selections: {
+          live: createVolcengineDoubaoSelection('streaming'),
+          caption: createVolcengineDoubaoSelection('streaming'),
+          voiceTyping: createVolcengineDoubaoSelection('streaming'),
+          batch: createVolcengineDoubaoSelection('batch'),
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
+            },
+          },
+        },
+      },
+    });
+
+    const request = resolveAsrTranscriptionRequest(config, 'batch');
+    expect(request.engine).toBe('online');
+    const untyped = request as Record<string, unknown>;
+    expect(untyped.batchSegmentationMode).toBeUndefined();
+    expect(untyped.vadModel).toBeUndefined();
+    expect(untyped.punctuationModel).toBeUndefined();
+  });
 });

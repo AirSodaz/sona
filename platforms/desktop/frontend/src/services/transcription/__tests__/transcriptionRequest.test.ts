@@ -267,4 +267,83 @@ describe('transcriptionRequest helpers', () => {
     expect(request.saveToPath).toBeNull();
     expect(request.speakerProcessing).toBeNull();
   });
+
+  it('builds online batch requests with null saveToPath, null speakerProcessing, and no batchSegmentationMode', () => {
+    const config = buildTestConfig({
+      batchVadEnabled: true,
+      batchVadModelPath: '/models/vad.onnx',
+      batchSpeakerSegmentationModelPath: '/models/speaker-seg',
+      batchSpeakerEmbeddingModelPath: '/models/speaker-embed',
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              batchEndpoint: 'https://example.com/flash',
+              batchResourceId: 'res-1',
+            },
+          },
+        },
+      },
+    });
+
+    const { request, asrRequest } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      saveToPath: 'C:/audio/copy.wav',
+      language: 'zh',
+      enableItn: true,
+    });
+
+    expect(asrRequest.engine).toBe('online');
+    const untyped = asrRequest as Record<string, unknown>;
+    expect(untyped.batchSegmentationMode).toBeUndefined();
+    expect(untyped.vadModel).toBeUndefined();
+    expect(request.saveToPath).toBeNull();
+    expect(request.speakerProcessing).toBeNull();
+  });
+
+  it('builds online streaming requests without speakerProcessing', () => {
+    const config = buildTestConfig({
+      liveSpeakerSegmentationModelPath: '/models/speaker-seg',
+      liveSpeakerEmbeddingModelPath: '/models/speaker-embed',
+      asr: {
+        selections: {
+          live: {
+            engine: 'online',
+            mode: 'streaming',
+            providerId: 'volcengine-doubao',
+            profileId: 'volcengine-doubao-default',
+          },
+        },
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              streamingEndpoint: 'wss://example.com/stream',
+              streamingResourceId: 'res-stream',
+            },
+          },
+        },
+      },
+    });
+
+    const request = buildStreamingAsrRequest({
+      appConfig: config,
+      instanceId: 'record',
+      language: 'zh',
+      enableItn: true,
+    });
+
+    expect(request.engine).toBe('online');
+    expect(request.speakerProcessing).toBeNull();
+  });
 });

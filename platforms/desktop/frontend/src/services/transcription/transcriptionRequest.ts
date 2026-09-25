@@ -81,7 +81,10 @@ export function buildStreamingAsrRequest({
     normalizationOptions: {
       enableTimeline: instanceId === 'record' ? (appConfig.enableTimeline ?? false) : false,
     },
-    speakerProcessing: speakerService.buildProcessingConfig(appConfig, 'live', projectId),
+    speakerProcessing:
+      request.engine === 'online'
+        ? null
+        : speakerService.buildProcessingConfig(appConfig, 'live', projectId),
   };
 }
 
@@ -106,16 +109,18 @@ export function buildBatchTranscriptionRequest({
         punctuationModel: null,
       }
     : runtimeRequest;
+  const isOnline = asrRequest.engine === 'online';
   const isLlamaCpp = isLlamaCppBatchRequest(asrRequest);
 
   return {
     asrRequest,
     request: {
       filePath,
-      saveToPath: isLlamaCpp ? null : saveToPath || null,
-      speakerProcessing: isLlamaCpp
-        ? null
-        : speakerService.buildProcessingConfig(appConfig, 'batch', projectId),
+      saveToPath: isLlamaCpp || isOnline ? null : saveToPath || null,
+      speakerProcessing:
+        isLlamaCpp || isOnline
+          ? null
+          : speakerService.buildProcessingConfig(appConfig, 'batch', projectId),
       asrRequest,
       ...(instanceId ? { instanceId } : {}),
     },

@@ -189,6 +189,30 @@ export class AsrConfigService {
   ): AsrTranscriptionRequest => {
     const normalizedAsr = this.normalizeAsrConfig(config);
     const selection = this.getSelection({ ...config, asr: normalizedAsr }, slot);
+    const baseRequest: AsrTranscriptionRequestBase = {
+      mode: selection.mode,
+      language: overrides.language || this.coerceConfiguredLanguage(config, slot, config.language),
+      enableItn: config.enableITN ?? false,
+      normalizationOptions: {
+        enableTimeline: config.enableTimeline ?? false,
+      },
+      postprocessOptions:
+        overrides.postprocessOptions || this.buildPostprocessOptions(config, slot),
+      hotwords:
+        overrides.hotwords !== undefined ? overrides.hotwords : this.buildHotwords(config, slot),
+    };
+
+    if (selection.engine === 'online') {
+      return {
+        ...baseRequest,
+        engine: 'online',
+        onlineProvider: this.buildOnlineProviderRequest(
+          normalizedAsr.providers!,
+          selection
+        ) as OnlineAsrProviderRequest,
+      };
+    }
+
     const modelInfo = this.resolveModelInfo(selection);
     const rules = modelInfo
       ? this.ports.modelService.getModelRules(modelInfo.id)
@@ -224,30 +248,6 @@ export class AsrConfigService {
       rules.requiresPunctuation && punctuationModelPath ? punctuationModelPath : null;
     const alignmentModelPath = getScenarioAlignmentModelPath(config, scenario);
     const alignmentModel = alignmentModelPath ? alignmentModelPath : null;
-    const baseRequest: AsrTranscriptionRequestBase = {
-      mode: selection.mode,
-      language: overrides.language || this.coerceConfiguredLanguage(config, slot, config.language),
-      enableItn: config.enableITN ?? false,
-      normalizationOptions: {
-        enableTimeline: config.enableTimeline ?? false,
-      },
-      postprocessOptions:
-        overrides.postprocessOptions || this.buildPostprocessOptions(config, slot),
-      hotwords:
-        overrides.hotwords !== undefined ? overrides.hotwords : this.buildHotwords(config, slot),
-    };
-
-    if (selection.engine === 'online') {
-      return {
-        ...baseRequest,
-        engine: 'online',
-        onlineProvider: this.buildOnlineProviderRequest(
-          normalizedAsr.providers!,
-          selection
-        ) as OnlineAsrProviderRequest,
-      };
-    }
-
     return {
       ...baseRequest,
       engine: 'local',
