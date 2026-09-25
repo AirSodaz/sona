@@ -1658,6 +1658,9 @@
     "speaker_disabled_hint": "음성 특징 모델을 선택하면 실시간 화자 추적 및 식별이 활성화됩니다.",
     "speaker_status_enabled": "활성화됨",
     "speaker_status_disabled": "비활성화됨",
+    "cloud_speaker_diarization_desc": "클라우드 LLM 서비스를 통해 화자를 자동으로 분리하고 Speaker 라벨을 적용합니다.",
+    "cloud_speaker_diarization_switch": "클라우드 화자 분리",
+    "cloud_speaker_diarization_switch_hint": "활성화하면 클라우드 인터페이스에서 화자 분리를 수행하고 전사 결과에 화자 라벨을 출력합니다.",
     "alignment_model_label": "CTC 정렬 모델",
     "alignment_model_hint": "토큰 수준 타임스탬프를 생성하고 화자 분할 경계를 최적화합니다.",
     "select_alignment_model": "정렬 모델 선택...",
@@ -1736,7 +1739,10 @@
       "assemblyai_online_upload_hint": "오디오는 인식을 위해 AssemblyAI로 전송됩니다.",
       "elevenlabs_option": "ElevenLabs",
       "elevenlabs_title": "ElevenLabs",
-      "elevenlabs_online_upload_hint": "오디오는 인식을 위해 ElevenLabs로 전송됩니다."
+      "elevenlabs_online_upload_hint": "오디오는 인식을 위해 ElevenLabs로 전송됩니다.",
+      "speaker_diarization_label": "화자 분리 (Diarization)",
+      "volcengine_speaker_diarization_hint": "활성화하면 화산엔진 거대 모델을 통해 화자가 자동으로 분리되고 Speaker 라벨이 적용됩니다.",
+      "cloud_speaker_diarization_hint": "활성화하면 클라우드 서비스를 통해 화자가 자동으로 분리되고 Speaker 라벨이 적용됩니다."
     },
     "model_settings_description": "Manage 로컬 전사 모델 and processing behavior.",
     "local_path": "로컬 Setup",

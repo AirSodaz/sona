@@ -13,6 +13,7 @@ import {
 import { useModelConfig, useSetConfig } from '../../stores/configStore';
 import { Dropdown } from '../Dropdown';
 import { ModelBrandLogo } from '../icons/ModelLogos';
+import { Switch } from '../Switch';
 import { SettingsItem } from './SettingsLayout';
 
 type ProviderStatus = 'active' | 'configured' | 'unconfigured';
@@ -171,6 +172,20 @@ function VolcengineConfigPanel({ provider }: ProviderConfigPanelProps) {
           />
         </div>
       </SettingsItem>
+      <SettingsItem
+        title={t('settings.asr.speaker_diarization_label', {
+          defaultValue: '区分说话人 (Diarization)',
+        })}
+        hint={t('settings.asr.volcengine_speaker_diarization_hint', {
+          defaultValue: '开启后由火山大模型自动分离不同说话人并标记 Speaker 标签。',
+        })}
+      >
+        <Switch
+          id="settings-volcengine-speaker-diarization"
+          checked={(config.speakerDiarization as boolean | undefined) ?? true}
+          onChange={(checked) => update({ speakerDiarization: checked })}
+        />
+      </SettingsItem>
     </>
   );
 }
@@ -225,7 +240,7 @@ function GenericConfigPanel({ provider }: ProviderConfigPanelProps) {
   const updateConfig = useSetConfig();
   const config = getOnlineProviderConfig(modelConfig.asr?.providers, provider.id);
 
-  const update = (key: string, value: string) => {
+  const update = (key: string, value: string | boolean) => {
     updateConfig(syncOnlineAsrProviderConfig(modelConfig, provider.id, { [key]: value }));
   };
 
@@ -248,6 +263,25 @@ function GenericConfigPanel({ provider }: ProviderConfigPanelProps) {
             </div>
           </SettingsItem>
         )
+      )}
+      {provider.supportsSpeakerDiarization && (
+        <SettingsItem
+          title={t('settings.asr.speaker_diarization_label', {
+            defaultValue: '区分说话人 (Diarization)',
+          })}
+          hint={t('settings.asr.cloud_speaker_diarization_hint', {
+            defaultValue: '开启后由云端服务自动分离不同说话人并标记 Speaker 标签。',
+          })}
+        >
+          <Switch
+            id={`settings-${provider.id}-speaker-diarization`}
+            checked={
+              (config.speakerDiarization as boolean | undefined) ??
+              provider.defaultConfig?.speakerDiarization !== false
+            }
+            onChange={(checked) => update('speakerDiarization', checked)}
+          />
+        </SettingsItem>
       )}
     </>
   );

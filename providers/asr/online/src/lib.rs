@@ -11,8 +11,8 @@ use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
 };
 use sona_core::transcription::transcript::{
-    TranscriptSegment, TranscriptTiming, TranscriptTimingLevel, TranscriptTimingSource,
-    TranscriptTimingUnit,
+    SpeakerAttribution, SpeakerTag, TranscriptSegment, TranscriptTiming, TranscriptTimingLevel,
+    TranscriptTimingSource, TranscriptTimingUnit,
 };
 use std::fmt;
 use std::sync::Arc;
@@ -623,6 +623,26 @@ fn volcengine_segment_from_utterance(
         .and_then(Value::as_bool)
         .unwrap_or(default_final);
 
+    let speaker_info = utterance
+        .get("additions")
+        .and_then(|a| a.get("speaker_id"))
+        .or_else(|| utterance.get("speaker_id"))
+        .or_else(|| utterance.get("speaker"))
+        .and_then(|v| {
+            v.as_str()
+                .map(|s| s.trim().to_string())
+                .or_else(|| v.as_i64().map(|n| n.to_string()))
+        })
+        .filter(|s| !s.is_empty());
+
+    let (speaker, speaker_attribution) = match &speaker_info {
+        Some(id) => {
+            let (tag, attr) = create_cloud_speaker(id);
+            (Some(tag), Some(attr))
+        }
+        None => (None, None),
+    };
+
     let words = utterance.get("words").and_then(Value::as_array);
     let mut tokens = Vec::new();
     let mut timestamps = Vec::new();
@@ -664,9 +684,47 @@ fn volcengine_segment_from_utterance(
         timestamps: (!timestamps.is_empty()).then_some(timestamps),
         durations: (!durations.is_empty()).then_some(durations),
         translation: None,
-        speaker: None,
-        speaker_attribution: None,
+        speaker,
+        speaker_attribution,
     })
+}
+
+pub fn create_cloud_speaker(raw_id: &str) -> (SpeakerTag, SpeakerAttribution) {
+    let raw_trimmed = raw_id.trim();
+    let numeric = if let Ok(n) = raw_trimmed.parse::<usize>() {
+        Some(n + 1)
+    } else if let Some(stripped) = raw_trimmed
+        .strip_prefix("speaker_")
+        .or_else(|| raw_trimmed.strip_prefix("speaker-"))
+    {
+        stripped.parse::<usize>().ok().map(|n| n + 1)
+    } else {
+        None
+    };
+
+    let label = if let Some(n) = numeric {
+        format!("Speaker {n}")
+    } else {
+        format!("Speaker {raw_trimmed}")
+    };
+    let group_id = format!("cloud-speaker-{raw_trimmed}");
+
+    (
+        SpeakerTag {
+            id: group_id.clone(),
+            label: label.clone(),
+            kind: "anonymous".to_string(),
+            score: None,
+        },
+        SpeakerAttribution {
+            group_id,
+            anonymous_label: label,
+            state: "anonymous".to_string(),
+            source: "cloud".to_string(),
+            confidence: "high".to_string(),
+            candidates: Vec::new(),
+        },
+    )
 }
 
 fn ms_value(value: Option<&Value>) -> Option<f64> {
@@ -1078,6 +1136,52 @@ mod tests {
         assert_eq!(segments[0].tokens.as_ref().unwrap(), &vec!["hel", "lo"]);
         assert_eq!(segments[0].timestamps.as_ref().unwrap(), &vec![0.45, 0.77]);
         assert_eq!(segments[0].durations.as_ref().unwrap(), &vec![0.32, 0.76]);
+    }
+
+    #[test]
+    fn parses_volcengine_utterances_with_speaker_id() {
+        let response = json!({
+            "result": {
+                "utterances": [
+                    {
+                        "start_time": 0,
+                        "end_time": 1500,
+                        "text": "first speaker",
+                        "definite": true,
+                        "additions": {
+                            "speaker_id": "0"
+                        }
+                    },
+                    {
+                        "start_time": 1600,
+                        "end_time": 3000,
+                        "text": "second speaker",
+                        "definite": true,
+                        "speaker_id": 1
+                    }
+                ]
+            }
+        });
+
+        let segments = segments_from_volcengine_response(&response, true, "volc").unwrap();
+        assert_eq!(segments.len(), 2);
+
+        let spk0 = segments[0].speaker.as_ref().unwrap();
+        assert_eq!(spk0.id, "cloud-speaker-0");
+        assert_eq!(spk0.label, "Speaker 1");
+        assert_eq!(spk0.kind, "anonymous");
+        assert_eq!(
+            segments[0].speaker_attribution.as_ref().unwrap().group_id,
+            "cloud-speaker-0"
+        );
+        assert_eq!(
+            segments[0].speaker_attribution.as_ref().unwrap().source,
+            "cloud"
+        );
+
+        let spk1 = segments[1].speaker.as_ref().unwrap();
+        assert_eq!(spk1.id, "cloud-speaker-1");
+        assert_eq!(spk1.label, "Speaker 2");
     }
 
     #[test]

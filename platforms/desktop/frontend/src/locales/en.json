@@ -1658,6 +1658,9 @@
     "speaker_disabled_hint": "Select a speaker embedding model to enable real-time speaker tracking and voiceprint matching.",
     "speaker_status_enabled": "Enabled",
     "speaker_status_disabled": "Disabled",
+    "cloud_speaker_diarization_desc": "Automatically separates speaker turns and labels them using cloud LLM diarization.",
+    "cloud_speaker_diarization_switch": "Cloud Speaker Diarization",
+    "cloud_speaker_diarization_switch_hint": "When enabled, cloud ASR requests will include speaker clustering and return speaker tags.",
     "alignment_model_label": "CTC Alignment Model",
     "alignment_model_hint": "Used to generate token-level timestamps and refine speaker turn boundaries.",
     "select_alignment_model": "Select alignment model...",
@@ -1736,7 +1739,10 @@
       "assemblyai_online_upload_hint": "Audio will be sent to AssemblyAI for transcription.",
       "elevenlabs_option": "ElevenLabs",
       "elevenlabs_title": "ElevenLabs",
-      "elevenlabs_online_upload_hint": "Audio will be sent to ElevenLabs for transcription."
+      "elevenlabs_online_upload_hint": "Audio will be sent to ElevenLabs for transcription.",
+      "speaker_diarization_label": "Speaker Diarization",
+      "volcengine_speaker_diarization_hint": "Automatically separate speaker turns and apply speaker labels using Volcengine Doubao LLM.",
+      "cloud_speaker_diarization_hint": "Automatically separate speaker turns and apply speaker labels using cloud provider diarization."
     },
     "model_settings_description": "Manage local transcription models and processing behavior.",
     "local_path": "Local Setup",

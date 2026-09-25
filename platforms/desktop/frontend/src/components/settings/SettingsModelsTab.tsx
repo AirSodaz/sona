@@ -9,12 +9,18 @@ import {
   syncLegacyAsrSelectionFields,
   syncLiveAsrSelectionFields,
   syncLiveOnlineAsrSelectionFields,
+  syncOnlineAsrProviderConfig,
   syncOnlineAsrSelectionFields,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
 } from '../../services/asrConfigService';
 import { cudaAddonService } from '../../services/cudaAddonService';
 import { modelService } from '../../services/modelService';
-import { isOnlineAsrProviderId } from '../../services/onlineAsrProviders';
+import {
+  getOnlineAsrProviderDefinition,
+  getOnlineProviderConfig,
+  isOnlineAsrProviderId,
+  providerSupportsSpeakerDiarization,
+} from '../../services/onlineAsrProviders';
 import {
   useConfigStore,
   useModelConfig,
@@ -728,12 +734,43 @@ export function SettingsModelsTab({
     [modelConfig.asr?.selections.batch, selectedModelIds.batch]
   );
   const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedLiveModelId;
-  const isOnlineSelected = useMemo(() => {
+  const activeOnlineSelection = useMemo(() => {
     const selection = isBatchScenario
       ? modelConfig.asr?.selections.batch
       : modelConfig.asr?.selections.live;
-    return selection?.engine === 'online';
+    return selection?.engine === 'online' ? selection : null;
   }, [isBatchScenario, modelConfig.asr?.selections.batch, modelConfig.asr?.selections.live]);
+  const isOnlineSelected = Boolean(activeOnlineSelection);
+
+  const activeOnlineProviderId = activeOnlineSelection?.providerId;
+  const isCloudSpeakerSupported = useMemo(() => {
+    return providerSupportsSpeakerDiarization(activeOnlineProviderId);
+  }, [activeOnlineProviderId]);
+
+  const isCloudSpeakerEnabled = useMemo(() => {
+    if (!activeOnlineProviderId) return false;
+    const providerConfig = getOnlineProviderConfig(
+      modelConfig.asr?.providers,
+      activeOnlineProviderId
+    );
+    const def = getOnlineAsrProviderDefinition(activeOnlineProviderId);
+    return (
+      (providerConfig?.speakerDiarization as boolean | undefined) ??
+      def?.defaultConfig?.speakerDiarization !== false
+    );
+  }, [activeOnlineProviderId, modelConfig.asr?.providers]);
+
+  const handleCloudSpeakerToggle = useCallback(
+    (enabled: boolean) => {
+      if (!activeOnlineProviderId) return;
+      updateConfig(
+        syncOnlineAsrProviderConfig(modelConfig, activeOnlineProviderId, {
+          speakerDiarization: enabled,
+        })
+      );
+    },
+    [activeOnlineProviderId, modelConfig, updateConfig]
+  );
   const applyDependencyRequests = (modelId: string) => {
     const dependencyUpdates: Partial<typeof modelConfig> = {};
     const dependencies = modelCatalog.dependencyRequestsByModelId[modelId] ?? [];
@@ -1371,6 +1408,57 @@ export function SettingsModelsTab({
                   </div>
                 );
               })()}
+            </SettingsItem>
+          </div>
+        )}
+
+        {isOnlineSelected && isCloudSpeakerSupported && (
+          <div className="settings-speaker-panel" data-testid="cloud-speaker-panel">
+            <div className="settings-speaker-header">
+              <div className="settings-speaker-header-main">
+                <div className="settings-speaker-title-row">
+                  <Users
+                    size={17}
+                    style={{
+                      color: isCloudSpeakerEnabled
+                        ? 'var(--color-accent-primary)'
+                        : 'var(--color-text-muted)',
+                    }}
+                  />
+                  <span className="settings-speaker-title">
+                    {t('settings.speaker_diarization_title', {
+                      defaultValue: '说话人分离与识别',
+                    })}
+                  </span>
+                  <span className={`status-badge ${isCloudSpeakerEnabled ? 'ready' : 'off'}`}>
+                    {isCloudSpeakerEnabled
+                      ? t('settings.speaker_status_enabled', { defaultValue: '已启用' })
+                      : t('settings.speaker_status_disabled', { defaultValue: '未启用' })}
+                  </span>
+                </div>
+                <p className="settings-speaker-desc">
+                  {t('settings.cloud_speaker_diarization_desc', {
+                    defaultValue:
+                      '由云端大模型服务自动区分不同说话人的发言片段，并在结果中标记 Speaker 标签。',
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <SettingsItem
+              title={t('settings.cloud_speaker_diarization_switch', {
+                defaultValue: '云端说话人分离',
+              })}
+              hint={t('settings.cloud_speaker_diarization_switch_hint', {
+                defaultValue:
+                  '开启后，云端接口将开启说话人聚类与分离，并在转录结果中输出说话人标签。',
+              })}
+            >
+              <Switch
+                id="settings-cloud-speaker-diarization-switch"
+                checked={isCloudSpeakerEnabled}
+                onChange={handleCloudSpeakerToggle}
+              />
             </SettingsItem>
           </div>
         )}

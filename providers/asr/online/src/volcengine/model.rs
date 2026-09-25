@@ -75,6 +75,7 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
                 "enable_itn": true,
                 "enable_punc": true,
                 "show_utterances": true,
+                "enable_speaker_info": true,
                 "result_type": "full"
             }
         });
@@ -88,6 +89,12 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
         {
             if let Some(itn) = volc.get("enable_itn").and_then(Value::as_bool) {
                 req_obj.insert("enable_itn".to_string(), serde_json::Value::Bool(itn));
+            }
+            if let Some(speaker_info) = volc.get("enable_speaker_info").and_then(Value::as_bool) {
+                req_obj.insert(
+                    "enable_speaker_info".to_string(),
+                    serde_json::Value::Bool(speaker_info),
+                );
             }
             if let Some(lang) = volc.get("language").and_then(Value::as_str) {
                 req_obj.insert(
@@ -203,7 +210,12 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
             duration_in_seconds,
             warnings: Vec::new(),
             request: None,
-            response: Default::default(),
+            response: aimux_core::transcription_model::TranscriptionResponse {
+                timestamp: None,
+                model_id: Some(self.config.batch_resource_id.clone()),
+                headers: None,
+                body: Some(response_value),
+            },
             provider_metadata: None,
         })
     }

@@ -20,7 +20,8 @@
         "streamingEndpoint": "wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async",
         "streamingResourceId": "volc.seedasr.sauc.duration",
         "batchEndpoint": "https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash",
-        "batchResourceId": "volc.bigasr.auc_turbo"
+        "batchResourceId": "volc.bigasr.auc_turbo",
+        "speakerDiarization": true
       },
       "streaming": {
         "requiresApiKey": true,
@@ -64,7 +65,8 @@
       "defaults": {
         "apiKey": "",
         "batchEndpoint": "https://api.groq.com/openai/v1/audio/transcriptions",
-        "model": "whisper-large-v3-turbo"
+        "model": "whisper-large-v3-turbo",
+        "speakerDiarization": false
       },
       "streaming": {
         "supported": false,
@@ -104,7 +106,8 @@
       "defaults": {
         "apiKey": "",
         "batchEndpoint": "https://api.mistral.ai/v1/audio/transcriptions",
-        "model": "mistral-small-latest"
+        "model": "mistral-small-latest",
+        "speakerDiarization": false
       },
       "streaming": {
         "supported": false,
@@ -146,7 +149,8 @@
       "defaults": {
         "apiKey": "",
         "batchEndpoint": "https://api.openai.com/v1/audio/transcriptions",
-        "model": "whisper-1"
+        "model": "whisper-1",
+        "speakerDiarization": false
       },
       "streaming": {
         "supported": false,
@@ -186,7 +190,8 @@
       },
       "defaults": {
         "apiKey": "",
-        "model": "nova-2"
+        "model": "nova-2",
+        "speakerDiarization": true
       },
       "streaming": {
         "supported": false,
@@ -225,7 +230,8 @@
       },
       "defaults": {
         "apiKey": "",
-        "model": "best"
+        "model": "best",
+        "speakerDiarization": true
       },
       "streaming": {
         "supported": false,
@@ -264,7 +270,8 @@
       },
       "defaults": {
         "apiKey": "",
-        "model": "scribe_v1"
+        "model": "scribe_v1",
+        "speakerDiarization": true
       },
       "streaming": {
         "supported": false,

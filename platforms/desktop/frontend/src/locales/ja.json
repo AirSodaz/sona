@@ -1658,6 +1658,9 @@
     "speaker_disabled_hint": "声紋特徴モデルを選択すると、リアルタイム話者追跡と声紋照合が有効になります。",
     "speaker_status_enabled": "有効",
     "speaker_status_disabled": "無効",
+    "cloud_speaker_diarization_desc": "クラウドLLMサービスにより自動的に話者を識別・分離し、Speakerラベルを付与します。",
+    "cloud_speaker_diarization_switch": "クラウド話者分離",
+    "cloud_speaker_diarization_switch_hint": "有効にすると、クラウドAPIで話者クラスタリングと分離が行われ、認識結果に話者ラベルが出力されます。",
     "alignment_model_label": "CTC アライメントモデル",
     "alignment_model_hint": "トークン単位のタイムスタンプを生成し、話者区切り境界を最適化します。",
     "select_alignment_model": "アライメントモデルを選択...",
@@ -1736,7 +1739,10 @@
       "assemblyai_online_upload_hint": "音声は AssemblyAI に送信されて認識されます。",
       "elevenlabs_option": "ElevenLabs",
       "elevenlabs_title": "ElevenLabs",
-      "elevenlabs_online_upload_hint": "音声は ElevenLabs に送信されて認識されます。"
+      "elevenlabs_online_upload_hint": "音声は ElevenLabs に送信されて認識されます。",
+      "speaker_diarization_label": "話者分離 (Diarization)",
+      "volcengine_speaker_diarization_hint": "有効にすると、火山エンジンの大モデルによって話者が自動分離され、Speakerラベルが付与されます。",
+      "cloud_speaker_diarization_hint": "有効にすると、クラウドサービスによって話者が自動分離され、Speakerラベルが付与されます。"
     },
     "model_settings_description": "ローカルの転写モデルと処理動作を管理します。",
     "local_path": "ローカルセットアップ",

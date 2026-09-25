@@ -978,9 +978,23 @@ describe('SettingsModelsTab speaker model selections', () => {
     // 1. Batch VAD toggle should NOT be visible
     expect(screen.queryByText('settings.batch_vad_enabled')).toBeNull();
 
-    // 2. Speaker Diarization panel should NOT be visible
-    expect(screen.queryByText('Speaker Diarization & Recognition')).toBeNull();
+    // 2. Local speaker dropdowns should NOT be visible
+    expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Speaker Embedding Model' })).toBeNull();
 
+    // 2b. Cloud speaker panel SHOULD be visible for Volcengine
+    const cloudSpeakerPanel = screen.getByTestId('cloud-speaker-panel');
+    expect(cloudSpeakerPanel).toBeDefined();
+
+    // 2c. Toggle the cloud speaker switch
+    const cloudSwitch = within(cloudSpeakerPanel).getByRole('switch');
+    expect(cloudSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(cloudSwitch);
+
+    await waitFor(() => {
+      const config = useConfigStore.getState().config;
+      expect(config.asr?.providers?.online?.['volcengine-doubao']?.speakerDiarization).toBe(false);
+    });
     // 3. CTC Alignment Model should NOT be visible
     expect(screen.queryByRole('button', { name: 'CTC Alignment Model' })).toBeNull();
 
@@ -998,5 +1012,38 @@ describe('SettingsModelsTab speaker model selections', () => {
     // 6. Local VAD / punctuation dropdowns should NOT be displayed
     expect(screen.queryByRole('button', { name: /VAD Model|VAD 模型/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Punctuation Model|标点模型/ })).toBeNull();
+  });
+
+  it('does not display cloud speaker panel when an unsupported online provider is selected', async () => {
+    setTestConfig({
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            modelId: null,
+            modelPath: '',
+            providerId: 'groq-whisper',
+            profileId: 'groq-whisper-default',
+          },
+        },
+        providers: {
+          online: {
+            'groq-whisper': {
+              apiKey: 'test-groq-key',
+              batchEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
+              model: 'whisper-large-v3-turbo',
+            },
+          },
+        },
+      },
+    });
+
+    renderTab(new Set());
+    fireEvent.click(screen.getByRole('tab', { name: '批量导入' }));
+
+    // Neither local nor cloud speaker panel should be shown
+    expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+    expect(screen.queryByTestId('cloud-speaker-panel')).toBeNull();
   });
 });

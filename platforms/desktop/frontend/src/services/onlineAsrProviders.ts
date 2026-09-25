@@ -24,6 +24,7 @@ export type OnlineAsrProviderDefinition = {
     config: Partial<OnlineAsrProviderConfig> | undefined
   ) => OnlineAsrProviderConfig;
   isConfigured: (config: OnlineAsrProviderConfig, mode: AsrMode) => boolean;
+  supportsSpeakerDiarization: boolean;
 };
 
 export const VOLCENGINE_DOUBAO_PROVIDER_ID = 'volcengine-doubao';
@@ -48,6 +49,18 @@ export function isVolcengineFlashBatchMode(
   const expectedEndpoint = VOLCENGINE_DOUBAO_FLASH_BATCH_ENDPOINT.replace(/\/+$/, '');
   const resourceId = (provider?.batchResourceId as string)?.trim() ?? '';
   return endpoint === expectedEndpoint && resourceId === VOLCENGINE_DOUBAO_FLASH_BATCH_RESOURCE_ID;
+}
+
+export const DIARIZATION_SUPPORTED_PROVIDER_IDS: Record<string, true> = {
+  'volcengine-doubao': true,
+  deepgram: true,
+  assemblyai: true,
+  elevenlabs: true,
+  'openai-whisper': true,
+};
+
+export function providerSupportsSpeakerDiarization(providerId: string | null | undefined): boolean {
+  return Boolean(providerId && DIARIZATION_SUPPORTED_PROVIDER_IDS[providerId]);
 }
 
 export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] =
@@ -122,6 +135,7 @@ export const ONLINE_ASR_PROVIDER_DEFINITIONS: OnlineAsrProviderDefinition[] =
       manifestEntry: entry,
       normalizeConfig,
       isConfigured,
+      supportsSpeakerDiarization: providerSupportsSpeakerDiarization(entry.id),
     };
   });
 

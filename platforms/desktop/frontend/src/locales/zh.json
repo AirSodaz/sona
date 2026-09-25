@@ -1658,6 +1658,9 @@
     "speaker_disabled_hint": "选择声纹特征模型后，即可启用实时说话人跟踪与声纹识别。",
     "speaker_status_enabled": "已启用",
     "speaker_status_disabled": "未启用",
+    "cloud_speaker_diarization_desc": "由云端大模型服务自动区分不同说话人的发言片段，并在结果中标记 Speaker 标签。",
+    "cloud_speaker_diarization_switch": "云端说话人分离",
+    "cloud_speaker_diarization_switch_hint": "开启后，云端接口将开启说话人聚类与分离，并在转录结果中输出说话人标签。",
     "alignment_model_label": "CTC 对齐模型",
     "alignment_model_hint": "用于生成字/词级时间戳并优化说话人切分边界。",
     "select_alignment_model": "选择对齐模型...",
@@ -1736,7 +1739,10 @@
       "assemblyai_online_upload_hint": "音频会发送到 AssemblyAI 进行识别。",
       "elevenlabs_option": "ElevenLabs",
       "elevenlabs_title": "ElevenLabs",
-      "elevenlabs_online_upload_hint": "音频会发送到 ElevenLabs 进行识别。"
+      "elevenlabs_online_upload_hint": "音频会发送到 ElevenLabs 进行识别。",
+      "speaker_diarization_label": "区分说话人 (Diarization)",
+      "volcengine_speaker_diarization_hint": "开启后由火山大模型自动分离不同说话人并标记 Speaker 标签。",
+      "cloud_speaker_diarization_hint": "开启后由云端服务自动分离不同说话人并标记 Speaker 标签。"
     },
     "model_settings_description": "管理本地转录模型与处理参数。",
     "local_path": "本地设置",

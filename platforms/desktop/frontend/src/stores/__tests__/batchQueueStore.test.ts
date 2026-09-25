@@ -356,7 +356,7 @@ describe('batchQueueStore', () => {
       expect.any(Function),
       expect.any(Function),
       undefined,
-      expect.any(String),
+      undefined,
       config,
       expect.any(Function),
       null
