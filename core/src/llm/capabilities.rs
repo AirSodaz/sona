@@ -633,8 +633,7 @@ mod tests {
         assert_eq!(qwen.supported_thinking_levels.len(), 6);
         assert!(qwen.supports_temperature);
 
-        let qwen3 =
-            LlmModelCapabilities::infer(LlmProviderStrategy::Local, "Qwen/Qwen3-1.7B-Instruct", "");
+        let qwen3 = LlmModelCapabilities::infer(LlmProviderStrategy::Local, "Qwen/Qwen3-1.7B", "");
         assert!(qwen3.reasoning);
         assert!(matches!(qwen3.reasoning_mode, ReasoningMode::Effort { .. }));
         assert_eq!(qwen3.supported_thinking_levels.len(), 6);

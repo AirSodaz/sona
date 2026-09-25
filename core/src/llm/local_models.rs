@@ -345,7 +345,7 @@ mod tests {
         let qwen = find_local_llm_model("qwen3-1.7b");
         assert!(qwen.is_some());
         let qwen = qwen.unwrap();
-        assert_eq!(qwen.model, "Qwen/Qwen3-1.7B-Instruct");
+        assert_eq!(qwen.model, "Qwen/Qwen3-1.7B");
         assert_eq!(qwen.filename, "Qwen3-1.7B-Q4_K_M.gguf");
         assert_eq!(qwen.backend, "llama.cpp");
         assert_eq!(qwen.context_window, 32768);
@@ -354,6 +354,10 @@ mod tests {
         let qwen_instruct = find_local_llm_model("qwen3-1.7b-instruct");
         assert!(qwen_instruct.is_some());
         assert_eq!(qwen_instruct.unwrap().id, "qwen3-1.7b");
+
+        let qwen_by_model = find_local_llm_model("Qwen/Qwen3-1.7B");
+        assert!(qwen_by_model.is_some());
+        assert_eq!(qwen_by_model.unwrap().id, "qwen3-1.7b");
     }
 
     #[test]

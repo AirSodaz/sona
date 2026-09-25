@@ -50,7 +50,7 @@
     {
       "id": "qwen3-1.7b",
       "name": "Qwen3 1.7B",
-      "model": "Qwen/Qwen3-1.7B-Instruct",
+      "model": "Qwen/Qwen3-1.7B",
       "filename": "Qwen3-1.7B-Q4_K_M.gguf",
       "description": "settings.descriptions.qwen3_1_7b",
       "backend": "llama.cpp",

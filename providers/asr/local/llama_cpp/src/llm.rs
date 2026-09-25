@@ -23,9 +23,10 @@ use crate::batch::{get_llama_backend, gpu_backend_available};
 
 pub const DEFAULT_LOCAL_LLM_MODEL: &str = "Qwen/Qwen3.5-4B";
 pub const DEFAULT_LOCAL_LLM_FILENAME: &str = "Qwen3.5-4B-Q4_K_M.gguf";
+pub const DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW: u32 = 262_144;
+pub const DEFAULT_LOCAL_LLM_MAX_OUTPUT_TOKENS: usize = 4096;
 const N_BATCH: usize = 512;
 const GPU_OFFLOAD_ALL_LAYERS: u32 = u32::MAX;
-
 type ModelCacheKey = (PathBuf, u32);
 static LLM_MODEL_CACHE: LazyLock<Mutex<HashMap<ModelCacheKey, Arc<LlamaModel>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
@@ -483,8 +484,8 @@ pub(crate) fn prepare_chat_messages(
     use sona_core::llm::runtime::ThinkingLevel;
 
     let lower_name = model_name.to_lowercase();
-    let is_qwen = lower_name.contains("qwen");
-
+    let is_qwen = lower_name.contains("qwen")
+        && !sona_core::llm::local_models::is_non_llm_model_file(model_name);
     if !reasoning_enabled {
         let no_think_instruction = "Answer directly and concisely. Do not output any thinking process, internal monologue, or <think> tags.";
         let sys = match system_prompt {
@@ -551,6 +552,32 @@ pub(crate) fn prepare_chat_messages(
             },
             user,
         )
+    }
+}
+
+pub(crate) fn resolve_generation_token_limit(
+    requested_tokens: Option<u64>,
+    reasoning_enabled: bool,
+    thinking_level: &sona_core::llm::runtime::ThinkingLevel,
+) -> usize {
+    use sona_core::llm::runtime::ThinkingLevel;
+
+    let content_tokens =
+        requested_tokens.unwrap_or(DEFAULT_LOCAL_LLM_MAX_OUTPUT_TOKENS as u64) as usize;
+
+    if reasoning_enabled {
+        let thinking_budget = match thinking_level {
+            ThinkingLevel::Minimal => 1024,
+            ThinkingLevel::Low => 2048,
+            ThinkingLevel::Medium | ThinkingLevel::Auto => 4096,
+            ThinkingLevel::High => 8192,
+            ThinkingLevel::Xhigh | ThinkingLevel::Max => 16384,
+            ThinkingLevel::Budget(budget) => *budget as usize,
+            ThinkingLevel::None => 0,
+        };
+        content_tokens.saturating_add(thinking_budget)
+    } else {
+        content_tokens
     }
 }
 
@@ -635,9 +662,9 @@ fn run_llama_generation(
 
     let n_ctx_train = model.n_ctx_train();
     let max_ctx = if n_ctx_train > 0 {
-        n_ctx_train.clamp(2048, 32_768)
+        n_ctx_train.clamp(2048, DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW)
     } else {
-        32_768
+        DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW
     };
     let prompt_len = prompt_tokens.len() as u32;
     let needed = prompt_len.saturating_add(max_output_tokens as u32);
@@ -707,14 +734,14 @@ fn run_llama_generation(
 
     let available = context.n_ctx().saturating_sub(current_pos as u32) as usize;
     let generation_limit = max_output_tokens.min(available);
-
+    let mut stopped_by_eog = false;
     for _ in 0..generation_limit {
         let token = sampler.sample(&context, -1);
         if model.is_eog_token(token) {
+            stopped_by_eog = true;
             break;
         }
         sampler.accept(token);
-
         let piece = model
             .token_to_piece(token, &mut decoder, false, None)
             .map_err(|error| {
@@ -729,6 +756,7 @@ fn run_llama_generation(
             && tx.send(piece).is_err()
         {
             // Stream receiver has disconnected or cancelled
+            stopped_by_eog = true;
             break;
         }
         generated_tokens += 1;
@@ -751,9 +779,26 @@ fn run_llama_generation(
         current_pos += 1;
     }
 
-    let (text, thought) =
+    if !stopped_by_eog {
+        log::warn!(
+            "[llama.cpp LLM] generation truncated: reached limit of {generation_limit} tokens (available context remaining: {available}), prompt tokens: {}",
+            prompt_tokens.len()
+        );
+    }
+
+    let (mut text, thought) =
         sona_core::llm::provider_protocol::strip_and_extract_inline_thoughts(&generated_text);
 
+    if text.trim().is_empty() && !generated_text.trim().is_empty() {
+        if !stopped_by_eog {
+            log::warn!(
+                "[llama.cpp LLM] generation stopped while inside unclosed thought block; recovering partial output"
+            );
+        }
+        if !gen_ctx.reasoning_enabled {
+            text = generated_text.trim().to_string();
+        }
+    }
     let reasoning_tokens = if let Some(th) = &thought {
         model
             .str_to_token(th, AddBos::Never)
@@ -833,9 +878,9 @@ impl LlamaCppLlmEngine {
         }
         let n_ctx_train = model.n_ctx_train() as usize;
         let max_supported_tokens = if n_ctx_train > 0 {
-            n_ctx_train.min(32_768)
+            n_ctx_train.min(DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW as usize)
         } else {
-            32_768
+            DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW as usize
         };
         if prompt_tokens.len() >= max_supported_tokens {
             return Err(LlmPortError::new(
@@ -848,18 +893,11 @@ impl LlamaCppLlmEngine {
             ));
         }
 
-        let mut max_output_tokens = request.options.max_output_tokens.unwrap_or(4096) as usize;
-        if reasoning_enabled {
-            use sona_core::llm::runtime::ThinkingLevel;
-            if let ThinkingLevel::Budget(budget) = thinking_level {
-                max_output_tokens = max_output_tokens.max(budget as usize + 2048);
-            } else if matches!(
-                thinking_level,
-                ThinkingLevel::High | ThinkingLevel::Xhigh | ThinkingLevel::Max
-            ) {
-                max_output_tokens = max_output_tokens.max(8192);
-            }
-        }
+        let max_output_tokens = resolve_generation_token_limit(
+            request.options.max_output_tokens,
+            reasoning_enabled,
+            &thinking_level,
+        );
         let temperature = request.effective_temperature().unwrap_or(0.7);
 
         let gen_ctx = GenerationContext {
@@ -1107,7 +1145,7 @@ mod tests {
         assert_eq!(gemma_summary.supports_reasoning, Some(true));
 
         let qwen3_summary = engine
-            .describe_model(&test_config("Qwen/Qwen3-1.7B-Instruct"))
+            .describe_model(&test_config("Qwen/Qwen3-1.7B"))
             .await
             .unwrap()
             .unwrap();
@@ -1149,9 +1187,14 @@ mod tests {
 
         // Resolving by canonical model ID
         let resolved_by_model = engine
-            .resolve_model_path("Qwen/Qwen3-1.7B-Instruct", None)
+            .resolve_model_path("Qwen/Qwen3-1.7B", None)
             .expect("should resolve qwen3-1.7b by model name");
         assert_eq!(resolved_by_model, qwen_file);
+
+        let resolved_by_instruct = engine
+            .resolve_model_path("Qwen/Qwen3-1.7B-Instruct", None)
+            .expect("should resolve qwen3-1.7b by instruct alias");
+        assert_eq!(resolved_by_instruct, qwen_file);
 
         // Resolving by preset id
         let resolved_by_id = engine
@@ -1230,5 +1273,93 @@ mod tests {
         assert!(prompt.contains("<|im_start|>system\nYou are a helper.\n<|im_end|>"));
         assert!(prompt.contains("<|im_start|>user\nHello world\n<|im_end|>"));
         assert!(prompt.ends_with("<|im_start|>assistant\n"));
+    }
+
+    #[test]
+    fn resolves_generation_token_limit_without_reasoning() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        // Default content tokens when None is provided
+        assert_eq!(
+            resolve_generation_token_limit(None, false, &ThinkingLevel::None),
+            DEFAULT_LOCAL_LLM_MAX_OUTPUT_TOKENS
+        );
+
+        // Explicit custom content tokens
+        assert_eq!(
+            resolve_generation_token_limit(Some(1024), false, &ThinkingLevel::None),
+            1024
+        );
+    }
+
+    #[test]
+    fn resolves_generation_token_limit_with_reasoning_levels() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        // Medium (default): 4096 content + 4096 thinking = 8192
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Medium),
+            8192
+        );
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Auto),
+            8192
+        );
+
+        // Minimal: 4096 + 1024 = 5120
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Minimal),
+            5120
+        );
+
+        // Low: 4096 + 2048 = 6144
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Low),
+            6144
+        );
+
+        // High: 4096 + 8192 = 12288
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::High),
+            12288
+        );
+
+        // Xhigh / Max: 4096 + 16384 = 20480
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Xhigh),
+            20480
+        );
+        assert_eq!(
+            resolve_generation_token_limit(None, true, &ThinkingLevel::Max),
+            20480
+        );
+
+        // Custom budget: 2000 content + 3000 thinking = 5000
+        assert_eq!(
+            resolve_generation_token_limit(Some(2000), true, &ThinkingLevel::Budget(3000)),
+            5000
+        );
+    }
+
+    #[test]
+    fn prepares_chat_messages_excludes_asr_model_from_qwen_think_injection() {
+        use sona_core::llm::runtime::ThinkingLevel;
+
+        let (_, user) = prepare_chat_messages(
+            None,
+            "audio transcription text",
+            "Qwen3-ASR-0.6B-Q8_0.gguf",
+            true,
+            &ThinkingLevel::High,
+        );
+        // Must NOT prepend /think for ASR model
+        assert_eq!(user, "audio transcription text");
+        assert!(!user.starts_with("/think"));
+    }
+
+    #[test]
+    fn local_llm_constants_have_expected_bounds() {
+        assert_eq!(DEFAULT_LOCAL_LLM_MAX_CONTEXT_WINDOW, 262_144);
+        assert_eq!(DEFAULT_LOCAL_LLM_MAX_OUTPUT_TOKENS, 4096);
     }
 }
