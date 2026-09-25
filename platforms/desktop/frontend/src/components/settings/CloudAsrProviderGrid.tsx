@@ -534,104 +534,130 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
               <div className="cloud-provider-config-panel">
                 <ConfigPanel provider={provider} />
 
-                {/* Supported Models List */}
-                <div className="model-versions" style={{ marginTop: 12 }}>
-                  {provider.models.map((model) => {
-                    const isAdded = addedModelIds.has(model.id);
-                    const testKey = `${provider.id}::${model.id}`;
-                    const testState = modelTestStates[testKey];
-                    const isTesting = testState?.status === 'loading';
+                {/* Supported Models Section with Elevated White Card */}
+                <div className="cloud-models-section">
+                  <div className="cloud-models-header">
+                    <span className="cloud-models-title">
+                      {t('settings.asr.supported_models', { defaultValue: 'Supported Models' })}
+                    </span>
+                    <span className="cloud-models-counter">
+                      {t('settings.asr.partial_added', {
+                        added: addedCount,
+                        total: totalModels,
+                        defaultValue: `${addedCount}/${totalModels} added`,
+                      })}
+                    </span>
+                  </div>
 
-                    let testTooltip = t('settings.asr.test_model', {
-                      defaultValue: 'Test Connection',
-                    });
-                    if (testState?.status === 'loading') {
-                      testTooltip = t('settings.asr.verifying', { defaultValue: 'Verifying...' });
-                    } else if (testState?.status === 'success') {
-                      testTooltip = `✓ ${t('settings.asr.verify_success', { defaultValue: 'Connection verified' })} (${testState.latency}ms)`;
-                    } else if (testState?.status === 'error') {
-                      testTooltip = `✕ ${testState.message}`;
-                    }
+                  <div className="cloud-provider-models-card">
+                    <div className="model-versions">
+                      {provider.models.map((model) => {
+                        const isAdded = addedModelIds.has(model.id);
+                        const testKey = `${provider.id}::${model.id}`;
+                        const testState = modelTestStates[testKey];
+                        const isTesting = testState?.status === 'loading';
 
-                    const displayTags = (model.tags ?? []).filter(
-                      (tag) => !commonTagTokens.has(tag.toLowerCase())
-                    );
+                        let testTooltip = t('settings.asr.test_model', {
+                          defaultValue: 'Test Connection',
+                        });
+                        if (testState?.status === 'loading') {
+                          testTooltip = t('settings.asr.verifying', {
+                            defaultValue: 'Verifying...',
+                          });
+                        } else if (testState?.status === 'success') {
+                          testTooltip = `✓ ${t('settings.asr.verify_success', { defaultValue: 'Connection verified' })} (${testState.latency}ms)`;
+                        } else if (testState?.status === 'error') {
+                          testTooltip = `✕ ${testState.message}`;
+                        }
 
-                    return (
-                      <div key={model.id} className="model-version-row">
-                        <div className="model-version-main">
-                          <div className="model-version-info">
-                            <span className="model-version-label">{model.name}</span>
-                            {displayTags.map((tag) => (
-                              <span key={tag} className="model-tag">
-                                {tag}
-                              </span>
-                            ))}
-                            {isAdded && <CheckIcon className="model-version-check" />}
+                        const displayTags = (model.tags ?? []).filter(
+                          (tag) => !commonTagTokens.has(tag.toLowerCase())
+                        );
+
+                        return (
+                          <div key={model.id} className="model-version-row">
+                            <div className="model-version-main">
+                              <div className="model-version-info">
+                                <span className="model-version-label">{model.name}</span>
+                                {displayTags.map((tag) => (
+                                  <span key={tag} className="model-tag">
+                                    {tag}
+                                  </span>
+                                ))}
+                                {isAdded && (
+                                  <span className="cloud-model-added-badge">
+                                    <CheckIcon className="model-version-check" />
+                                    <span>
+                                      {t('settings.asr.added', { defaultValue: 'Added' })}
+                                    </span>
+                                  </span>
+                                )}
+                              </div>
+
+                              <div className="model-card-side">
+                                {/* Test button: icon-only placed to the left of Add/Delete button */}
+                                <button
+                                  type="button"
+                                  className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
+                                  onClick={() => handleTestModel(provider, model.id)}
+                                  disabled={isTesting || !hasApiKey}
+                                  aria-label={`${t('settings.asr.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
+                                  data-tooltip={testTooltip}
+                                  data-tooltip-pos="top"
+                                >
+                                  {isTesting ? (
+                                    <Loader2 size={15} className="spin" />
+                                  ) : testState?.status === 'success' ? (
+                                    <Check size={15} />
+                                  ) : testState?.status === 'error' ? (
+                                    <AlertCircle size={15} />
+                                  ) : (
+                                    <Zap size={15} />
+                                  )}
+                                </button>
+
+                                {/* Add / Delete button */}
+                                {isAdded ? (
+                                  <button
+                                    type="button"
+                                    className="model-action-icon model-action-delete"
+                                    onClick={() => handleRemoveModel(provider, model.id)}
+                                    aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
+                                    data-tooltip={t('settings.asr.delete_model', {
+                                      defaultValue: 'Delete Model',
+                                    })}
+                                    data-tooltip-pos="top"
+                                  >
+                                    <TrashIcon />
+                                  </button>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="model-action-icon model-action-add"
+                                    onClick={() => handleAddModel(provider, model.id)}
+                                    disabled={!hasApiKey}
+                                    aria-label={`${t('common.add', { defaultValue: 'Add' })} ${model.name}`}
+                                    data-tooltip={
+                                      !hasApiKey
+                                        ? t('settings.asr.api_key_required_to_add', {
+                                            defaultValue: 'Configure API Key first',
+                                          })
+                                        : t('settings.asr.add_model', {
+                                            defaultValue: 'Add Model',
+                                          })
+                                    }
+                                    data-tooltip-pos="top"
+                                  >
+                                    <Plus size={16} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
                           </div>
-
-                          <div className="model-card-side">
-                            {/* Test button: icon-only placed to the left of Add/Delete button */}
-                            <button
-                              type="button"
-                              className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
-                              onClick={() => handleTestModel(provider, model.id)}
-                              disabled={isTesting || !hasApiKey}
-                              aria-label={`${t('settings.asr.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
-                              data-tooltip={testTooltip}
-                              data-tooltip-pos="top"
-                            >
-                              {isTesting ? (
-                                <Loader2 size={15} className="spin" />
-                              ) : testState?.status === 'success' ? (
-                                <Check size={15} />
-                              ) : testState?.status === 'error' ? (
-                                <AlertCircle size={15} />
-                              ) : (
-                                <Zap size={15} />
-                              )}
-                            </button>
-
-                            {/* Add / Delete button */}
-                            {isAdded ? (
-                              <button
-                                type="button"
-                                className="model-action-icon model-action-delete"
-                                onClick={() => handleRemoveModel(provider, model.id)}
-                                aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
-                                data-tooltip={t('settings.asr.delete_model', {
-                                  defaultValue: 'Delete Model',
-                                })}
-                                data-tooltip-pos="top"
-                              >
-                                <TrashIcon />
-                              </button>
-                            ) : (
-                              <button
-                                type="button"
-                                className="model-action-icon model-action-add"
-                                onClick={() => handleAddModel(provider, model.id)}
-                                disabled={!hasApiKey}
-                                aria-label={`${t('common.add', { defaultValue: 'Add' })} ${model.name}`}
-                                data-tooltip={
-                                  !hasApiKey
-                                    ? t('settings.asr.api_key_required_to_add', {
-                                        defaultValue: 'Configure API Key first',
-                                      })
-                                    : t('settings.asr.add_model', {
-                                        defaultValue: 'Add Model',
-                                      })
-                                }
-                                data-tooltip-pos="top"
-                              >
-                                <Plus size={16} />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             )}

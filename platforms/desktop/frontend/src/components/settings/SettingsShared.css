@@ -2082,6 +2082,128 @@
   background: transparent;
   padding: 8px 0;
 }
+
+/* --- Cloud Provider Models Section & Elevated White Card --- */
+
+.cloud-models-section {
+  margin-top: var(--spacing-md, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.cloud-models-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 2px;
+}
+
+.cloud-models-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--color-text-secondary);
+  text-transform: uppercase;
+}
+
+.cloud-models-counter {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  font-weight: 500;
+}
+
+.cloud-provider-models-card {
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 12px);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.04));
+  overflow: visible;
+  transition:
+    border-color var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-provider-models-card:hover {
+  border-color: var(--color-border-hover);
+}
+
+.cloud-provider-models-card .model-versions {
+  display: flex;
+  flex-direction: column;
+}
+
+.cloud-provider-models-card .model-version-row {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: 0;
+  background: transparent;
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+.cloud-provider-models-card .model-version-row:first-child {
+  border-top-left-radius: calc(var(--radius-md, 12px) - 1px);
+  border-top-right-radius: calc(var(--radius-md, 12px) - 1px);
+}
+
+.cloud-provider-models-card .model-version-row:last-child {
+  border-bottom-left-radius: calc(var(--radius-md, 12px) - 1px);
+  border-bottom-right-radius: calc(var(--radius-md, 12px) - 1px);
+}
+
+.cloud-provider-models-card .model-version-row + .model-version-row {
+  border-top: 1px solid var(--color-border);
+}
+
+.cloud-provider-models-card .model-version-row:hover {
+  background: var(--color-bg-hover);
+}
+
+.cloud-provider-models-card .model-version-row:hover,
+.cloud-provider-models-card .model-version-row:focus-within {
+  position: relative;
+  z-index: 2;
+}
+
+.cloud-provider-models-card .model-action-icon[data-tooltip]:hover,
+.cloud-provider-models-card .model-action-icon[data-tooltip]:focus-visible {
+  position: relative;
+  z-index: 10;
+}
+
+/* Tooltip positioning for model action buttons: centered over button */
+.cloud-provider-models-card .model-action-icon[data-tooltip]::after {
+  left: 50%;
+  right: auto;
+  transform: translateX(-50%);
+  max-width: min(320px, 80vw);
+  white-space: normal;
+  width: max-content;
+  text-align: center;
+}
+
+.cloud-provider-models-card .model-action-icon[data-tooltip]:hover::after,
+.cloud-provider-models-card .model-action-icon[data-tooltip]:focus-visible::after {
+  transform: translateX(-50%) translateY(-4px);
+}
+
+.cloud-model-added-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: var(--color-success, #4ea067);
+  background: color-mix(in srgb, var(--color-success, #4ea067) 12%, transparent);
+  padding: 1px 7px;
+  border-radius: var(--radius-full, 9999px);
+  line-height: 1.5;
+}
+
+.cloud-model-added-badge .model-version-check {
+  width: 12px;
+  height: 12px;
+}
 /* --- Responsive --- */
 
 @media (max-width: 480px) {
