@@ -18,14 +18,23 @@ use std::fmt;
 use std::sync::Arc;
 
 pub mod aimux_adapter;
+pub mod assemblyai;
+pub mod deepgram;
+pub mod elevenlabs;
 pub mod error;
+pub mod mistral;
+pub mod streaming_common;
 pub mod volcengine;
 
 pub use aimux_adapter::{
     OnlineProviderConfigFields, create_aimux_transcription_model, detect_audio_mime_type,
     execute_aimux_batch, is_cloud_speaker_diarization_enabled, resolve_online_provider_config,
 };
+pub use assemblyai::create_assemblyai_streaming_session;
+pub use deepgram::create_deepgram_streaming_session;
+pub use elevenlabs::create_elevenlabs_streaming_session;
 pub use error::{SherpaError, map_aimux_asr_error};
+pub use mistral::create_mistral_streaming_session;
 pub use volcengine::VolcengineTranscriptionModel;
 pub use volcengine::streaming::create_volcengine_streaming_session;
 
@@ -33,10 +42,10 @@ pub const ONLINE_ASR_PROVIDER_CAPABILITIES: [AsrProviderCapability<'static>; 7] 
     AsrProviderCapability::new(VOLCENGINE_DOUBAO_PROVIDER_ID, true),
     AsrProviderCapability::new(OPENAI_WHISPER_PROVIDER_ID, false),
     AsrProviderCapability::new(GROQ_WHISPER_PROVIDER_ID, false),
-    AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, false),
-    AsrProviderCapability::new(DEEPGRAM_PROVIDER_ID, false),
-    AsrProviderCapability::new(ASSEMBLYAI_PROVIDER_ID, false),
-    AsrProviderCapability::new(ELEVENLABS_PROVIDER_ID, false),
+    AsrProviderCapability::new(MISTRAL_VOXTRAL_PROVIDER_ID, true),
+    AsrProviderCapability::new(DEEPGRAM_PROVIDER_ID, true),
+    AsrProviderCapability::new(ASSEMBLYAI_PROVIDER_ID, true),
+    AsrProviderCapability::new(ELEVENLABS_PROVIDER_ID, true),
 ];
 
 pub fn resolve_online_asr_provider_id(
@@ -68,6 +77,18 @@ impl OnlineAsrAdapter {
         match provider_id {
             VOLCENGINE_DOUBAO_PROVIDER_ID => {
                 create_volcengine_streaming_session(instance_id, request, observer)
+            }
+            DEEPGRAM_PROVIDER_ID => {
+                create_deepgram_streaming_session(instance_id, request, observer)
+            }
+            ASSEMBLYAI_PROVIDER_ID => {
+                create_assemblyai_streaming_session(instance_id, request, observer)
+            }
+            ELEVENLABS_PROVIDER_ID => {
+                create_elevenlabs_streaming_session(instance_id, request, observer)
+            }
+            MISTRAL_VOXTRAL_PROVIDER_ID => {
+                create_mistral_streaming_session(instance_id, request, observer)
             }
             _ => Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
@@ -819,10 +840,10 @@ mod tests {
                 (VOLCENGINE_DOUBAO_PROVIDER_ID, true),
                 (OPENAI_WHISPER_PROVIDER_ID, false),
                 (GROQ_WHISPER_PROVIDER_ID, false),
-                (MISTRAL_VOXTRAL_PROVIDER_ID, false),
-                (DEEPGRAM_PROVIDER_ID, false),
-                (ASSEMBLYAI_PROVIDER_ID, false),
-                (ELEVENLABS_PROVIDER_ID, false),
+                (MISTRAL_VOXTRAL_PROVIDER_ID, true),
+                (DEEPGRAM_PROVIDER_ID, true),
+                (ASSEMBLYAI_PROVIDER_ID, true),
+                (ELEVENLABS_PROVIDER_ID, true),
             ]
         );
     }

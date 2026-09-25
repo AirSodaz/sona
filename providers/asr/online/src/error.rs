@@ -112,6 +112,50 @@ pub enum SherpaError {
     #[error("火山批量 ASR 只能用于 batch 槽位。")]
     VolcengineBatchModeMismatch,
 
+    #[error("{provider} WebSocket 尚未连接。")]
+    StreamingWebSocketNotConnected { provider: &'static str },
+
+    #[error("{provider} WebSocket 读取失败：{error}")]
+    StreamingWebSocketReadFailed {
+        provider: &'static str,
+        error: String,
+    },
+
+    #[error("{provider} WebSocket 连接意外关闭。")]
+    StreamingWebSocketClosed { provider: &'static str },
+
+    #[error("等待 {provider} 最终响应超时。")]
+    StreamingFinalResponseTimeout { provider: &'static str },
+
+    #[error("{provider} 音频发送失败：{error}")]
+    StreamingAudioSendFailed {
+        provider: &'static str,
+        error: String,
+    },
+
+    #[error("{provider} 结束帧发送失败：{error}")]
+    StreamingEndFrameSendFailed {
+        provider: &'static str,
+        error: String,
+    },
+
+    #[error("{provider} WebSocket 连接失败：{error}")]
+    StreamingConnectionFailed {
+        provider: &'static str,
+        error: String,
+    },
+
+    #[error("{provider} WebSocket endpoint 无效：{error}")]
+    StreamingEndpointInvalid {
+        provider: &'static str,
+        error: String,
+    },
+
+    #[error("{provider} 响应解析失败：{error}")]
+    StreamingResponseParseFailed {
+        provider: &'static str,
+        error: String,
+    },
     #[error("{0}")]
     Generic(String),
 }
@@ -158,6 +202,15 @@ impl SherpaError {
             }
             Self::VolcengineRealtimeOnlyForStreaming => "VOLCENGINE_REALTIME_ONLY_FOR_STREAMING",
             Self::VolcengineBatchModeMismatch => "VOLCENGINE_BATCH_MODE_MISMATCH",
+            Self::StreamingWebSocketNotConnected { .. } => "STREAMING_WEB_SOCKET_NOT_CONNECTED",
+            Self::StreamingWebSocketReadFailed { .. } => "STREAMING_WEB_SOCKET_READ_FAILED",
+            Self::StreamingWebSocketClosed { .. } => "STREAMING_WEB_SOCKET_CLOSED",
+            Self::StreamingFinalResponseTimeout { .. } => "STREAMING_FINAL_RESPONSE_TIMEOUT",
+            Self::StreamingAudioSendFailed { .. } => "STREAMING_AUDIO_SEND_FAILED",
+            Self::StreamingEndFrameSendFailed { .. } => "STREAMING_END_FRAME_SEND_FAILED",
+            Self::StreamingConnectionFailed { .. } => "STREAMING_CONNECTION_FAILED",
+            Self::StreamingEndpointInvalid { .. } => "STREAMING_ENDPOINT_INVALID",
+            Self::StreamingResponseParseFailed { .. } => "STREAMING_RESPONSE_PARSE_FAILED",
             Self::Generic(_) => "GENERIC_ERROR",
         }
     }
@@ -190,6 +243,17 @@ impl SherpaError {
             | Self::VolcengineAudioSendFailed { .. }
             | Self::VolcengineEndFrameSendFailed { .. }
             | Self::VolcengineInitFrameSendFailed { .. } => AsrPortErrorKind::Network,
+            Self::StreamingConnectionFailed { .. }
+            | Self::StreamingWebSocketNotConnected { .. }
+            | Self::StreamingWebSocketReadFailed { .. }
+            | Self::StreamingWebSocketClosed { .. }
+            | Self::StreamingFinalResponseTimeout { .. }
+            | Self::StreamingAudioSendFailed { .. }
+            | Self::StreamingEndFrameSendFailed { .. } => AsrPortErrorKind::Network,
+
+            Self::StreamingEndpointInvalid { .. } | Self::StreamingResponseParseFailed { .. } => {
+                AsrPortErrorKind::Protocol
+            }
 
             Self::VolcengineFrameTooShort
             | Self::VolcengineErrorFrame

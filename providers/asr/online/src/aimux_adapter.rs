@@ -32,6 +32,7 @@ pub struct OnlineProviderConfigFields {
     pub api_key: String,
     pub model: String,
     pub batch_endpoint: Option<String>,
+    pub streaming_endpoint: Option<String>,
 }
 
 /// Helper to resolve standard online provider configuration (API key, model, endpoint).
@@ -89,11 +90,18 @@ pub fn resolve_online_provider_config(
     } else {
         Some(batch_endpoint_str)
     };
+    let streaming_endpoint_str = get_string("streamingEndpoint");
+    let streaming_endpoint = if streaming_endpoint_str.is_empty() {
+        None
+    } else {
+        Some(streaming_endpoint_str)
+    };
 
     Ok(OnlineProviderConfigFields {
         api_key,
         model,
         batch_endpoint,
+        streaming_endpoint,
     })
 }
 

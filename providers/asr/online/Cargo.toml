@@ -15,6 +15,7 @@ aimux-providers = "0.3.0"
 async-trait = { workspace = true }
 base64 = { workspace = true }
 futures-util = { workspace = true }
+parking_lot = "0.12"
 log = { workspace = true }
 reqwest = { workspace = true, features = ["rustls", "json", "multipart"] }
 serde = { workspace = true }

@@ -105,13 +105,14 @@
       },
       "defaults": {
         "apiKey": "",
+        "streamingEndpoint": "wss://api.mistral.ai/v1/audio/transcriptions/realtime",
         "batchEndpoint": "https://api.mistral.ai/v1/audio/transcriptions",
         "model": "mistral-small-latest",
         "speakerDiarization": false
       },
       "streaming": {
-        "supported": false,
-        "requiresApiKey": false,
+        "supported": true,
+        "requiresApiKey": true,
         "requiredConfigFields": []
       },
       "batch": {
@@ -190,12 +191,13 @@
       },
       "defaults": {
         "apiKey": "",
+        "streamingEndpoint": "wss://api.deepgram.com/v1/listen",
         "model": "nova-2",
         "speakerDiarization": true
       },
       "streaming": {
-        "supported": false,
-        "requiresApiKey": false,
+        "supported": true,
+        "requiresApiKey": true,
         "requiredConfigFields": []
       },
       "batch": {
@@ -230,12 +232,13 @@
       },
       "defaults": {
         "apiKey": "",
+        "streamingEndpoint": "wss://streaming.assemblyai.com/v3/ws",
         "model": "best",
         "speakerDiarization": true
       },
       "streaming": {
-        "supported": false,
-        "requiresApiKey": false,
+        "supported": true,
+        "requiresApiKey": true,
         "requiredConfigFields": []
       },
       "batch": {
@@ -270,12 +273,13 @@
       },
       "defaults": {
         "apiKey": "",
+        "streamingEndpoint": "wss://api.elevenlabs.io/v1/speech-to-text/realtime",
         "model": "scribe_v1",
         "speakerDiarization": true
       },
       "streaming": {
-        "supported": false,
-        "requiresApiKey": false,
+        "supported": true,
+        "requiresApiKey": true,
         "requiredConfigFields": []
       },
       "batch": {
