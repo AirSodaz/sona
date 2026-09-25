@@ -72,13 +72,13 @@ describe('CloudAsrProviderGrid', () => {
 
     // 4. Verifies no noisy "Active" indicators are rendered
     expect(screen.queryByText(/Active/i)).toBeNull();
-    // 5. Verifies model tags exist (Live, Batch, Cloud)
+    // 5. Verifies model tags exist (Live, Batch) and Cloud tag is not shown
     const liveTags = screen.getAllByText('Live');
     expect(liveTags.length).toBeGreaterThanOrEqual(1);
     const batchTags = screen.getAllByText('Batch');
     expect(batchTags.length).toBeGreaterThanOrEqual(1);
-    const cloudTags = screen.getAllByText('Cloud');
-    expect(cloudTags.length).toBeGreaterThanOrEqual(1);
+    const cloudTags = screen.queryAllByText('Cloud');
+    expect(cloudTags.length).toBe(0);
     // 6. Verifies models are folded by default (not visible in DOM)
     expect(screen.queryByText('Seed-ASR 极速版 (Flash)')).toBeNull();
     expect(screen.queryByText('Whisper Large v3 Turbo')).toBeNull();
@@ -209,5 +209,30 @@ describe('CloudAsrProviderGrid', () => {
     await waitFor(() => {
       expect(testModelBtn.getAttribute('data-tooltip')).toContain('Invalid API Key (HTTP 401)');
     });
+  });
+
+  it('renders installed style capsule with checkmark when models are partially added', () => {
+    // Configure Volcengine with only 1 model added out of 2
+    setTestConfig({
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'volc-test-key',
+              addedModels: ['volc.bigasr.auc_turbo'],
+            },
+          },
+        },
+      },
+    });
+
+    render(<CloudAsrProviderGrid />);
+
+    const partialChip = screen.getByText('1/2 added');
+    expect(partialChip).toBeDefined();
+    const chipContainer = partialChip.closest('.model-status-chip');
+    expect(chipContainer).not.toBeNull();
+    expect(chipContainer?.classList.contains('model-status-installed')).toBe(true);
+    expect(chipContainer?.querySelector('svg')).not.toBeNull();
   });
 });

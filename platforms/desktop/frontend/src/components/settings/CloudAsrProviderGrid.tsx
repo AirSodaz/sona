@@ -469,7 +469,8 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
             );
           }
           return (
-            <span className="model-status-chip model-status-partial">
+            <span className="model-status-chip model-status-installed">
+              <CheckIcon />
               {t('settings.asr.partial_added', {
                 added: addedCount,
                 total: totalModels,
@@ -524,7 +525,6 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                         })}
                       </span>
                     )}
-                    <span className="model-tag model-tag-engine">Cloud</span>
                   </div>
                 </div>
               </div>

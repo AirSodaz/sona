@@ -1089,6 +1089,14 @@
   font-weight: 500;
   letter-spacing: 0.02em;
 }
+.model-tag-diarization {
+  background: color-mix(in srgb, var(--color-accent-primary, #6366f1) 8%, transparent);
+  color: color-mix(
+    in srgb,
+    var(--color-accent-primary, #6366f1) 80%,
+    var(--color-text-primary) 20%
+  );
+}
 
 .model-tag-recommended {
   background: color-mix(in srgb, var(--color-warning) 18%, transparent);

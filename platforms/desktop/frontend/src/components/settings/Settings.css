@@ -313,12 +313,19 @@
 /* Borderless pill base; semantic tint variants live in SettingsShared.css.
    The transparent border keeps every tag the same height as bordered ones. */
 .model-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  height: 20px;
+  line-height: 1;
   background: var(--color-bg-secondary);
-  padding: 2px 8px;
+  padding: 0 8px;
   border-radius: var(--radius-full);
   border: 1px solid transparent;
   font-size: 0.72rem;
   color: var(--color-text-secondary);
+  white-space: nowrap;
 }
 
 .model-tag-overflow {
