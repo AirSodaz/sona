@@ -192,7 +192,7 @@ pub fn seal_json<T: Serialize>(
         .map_err(|_| crypto_error("Vault key has an invalid size."))?;
     let ciphertext = cipher
         .encrypt(
-            XNonce::from_slice(&nonce),
+            &XNonce::from(nonce),
             Payload {
                 msg: &compressed,
                 aad,
@@ -222,7 +222,8 @@ pub fn open_json<T: DeserializeOwned>(
         .map_err(|_| crypto_error("Vault key has an invalid size."))?;
     let compressed = cipher
         .decrypt(
-            XNonce::from_slice(nonce),
+            <&XNonce>::try_from(nonce)
+                .map_err(|_| crypto_error("Sync envelope has an invalid nonce length."))?,
             Payload {
                 msg: ciphertext,
                 aad,
@@ -325,7 +326,8 @@ fn encrypt_key(
         .map_err(|_| crypto_error("Wrapping key has an invalid size."))?;
     cipher
         .encrypt(
-            XNonce::from_slice(nonce),
+            <&XNonce>::try_from(nonce)
+                .map_err(|_| crypto_error("Wrapping key nonce has an invalid size."))?,
             Payload {
                 msg: plaintext,
                 aad: &aad,
@@ -344,7 +346,8 @@ fn decrypt_key(
         .map_err(|_| crypto_error("Wrapping key has an invalid size."))?;
     cipher
         .decrypt(
-            XNonce::from_slice(nonce),
+            <&XNonce>::try_from(nonce)
+                .map_err(|_| crypto_error("Wrapping key nonce has an invalid size."))?,
             Payload {
                 msg: ciphertext,
                 aad: &aad,

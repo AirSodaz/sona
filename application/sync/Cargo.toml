@@ -11,9 +11,9 @@ role = "application"
 
 [dependencies]
 async-trait = { workspace = true }
-argon2 = "0.5"
+argon2 = "0.6"
 base64 = { workspace = true }
-chacha20poly1305 = { version = "0.10", features = ["std"] }
+chacha20poly1305 = "0.11"
 flate2 = { workspace = true, features = ["rust_backend"] }
 hex = { workspace = true }
 hkdf = { workspace = true }

@@ -106,7 +106,7 @@ strum = { version = "0.28", features = ["derive"] }
 sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 tar = "0.4"
 tempfile = "3"
-thiserror = "2.0.18"
+thiserror = "2.0.21"
 tokio = { version = "1", features = ["sync"] }
 toml = "1.1"
 tower = { version = "0.5", features = ["util"] }
