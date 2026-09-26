@@ -1819,6 +1819,7 @@
       "whisper_large": "由 OpenAI 开发。Whisper 最准确的版本，非常适合跨多种语言的复杂本地转录任务。",
       "whisper_medium_aishell": "基于 OpenAI 的 Whisper medium，专门在 AISHELL 数据集上进行了微调，以提高中文识别率。",
       "zipformer_xlarge": "由 K2-FSA 开发。针对中文识别进行优化的高度准确且高效的流式模型。",
+      "x_asr": "由上海交通大学等联合开发。基于 Zipformer-Transducer 架构的中英双语流式语音识别模型，内置标点预测，支持多种延迟块大小。",
       "funasr_nano": "由阿里巴巴 FunASR 开发。大型且高度准确的本地模型，支持多种方言和复杂的转录任务。",
       "qwen3_asr": "由阿里巴巴 Qwen 团队开发。基于 Qwen3 的本地 ASR 模型，用于高质量的批量转录。",
       "firered_asr": "由小红书（FireRed 团队）开发。先进的本地模型，在中英混认任务中表现出色。",

@@ -610,3 +610,79 @@ async fn test_funasr_nano_durations() {
         );
     }
 }
+
+#[tokio::test]
+async fn test_x_asr_streaming_segment_isolation_no_duplication() {
+    let model_dir = Path::new(
+        r"D:\projects\models\sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
+    );
+    let wav_path = Path::new(
+        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\a3fa6f44-66cb-4a6d-a05b-8c7b53e99aa9.wav",
+    );
+    if !model_dir.exists() || !wav_path.exists() {
+        return;
+    }
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        decoder: Some("decoder.onnx".to_string()),
+        joiner: Some("joiner.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let config_type = sona_sherpa_onnx::recognizer::build_model_config(
+        model_dir,
+        "x-asr",
+        &file_config,
+        false,
+        "auto",
+        None,
+    )
+    .unwrap();
+    let recognizer = sona_sherpa_onnx::recognizer::Recognizer::new(config_type, 4, None).unwrap();
+    let r = recognizer.online().expect("must be online");
+
+    let mut reader = hound::WavReader::open(wav_path).unwrap();
+    let all_samples: Vec<f32> = reader
+        .samples::<i16>()
+        .map(|s| s.unwrap() as f32 / 32768.0)
+        .collect();
+
+    let mut stream = sona_sherpa_onnx::recognizer::create_online_stream(r);
+    let chunk_size = 1024;
+    let mut segments = Vec::new();
+    for chunk in all_samples.chunks(chunk_size) {
+        sona_sherpa_onnx::recognizer::accept_online_samples(&stream, chunk);
+        sona_sherpa_onnx::recognizer::decode_online_ready(r, &stream);
+        let ep = sona_sherpa_onnx::recognizer::is_online_endpoint(r, &stream);
+        if ep {
+            let tail = vec![0.0f32; (16000.0 * 0.8) as usize];
+            sona_sherpa_onnx::recognizer::accept_online_samples(&stream, &tail);
+            sona_sherpa_onnx::recognizer::decode_online_ready(r, &stream);
+            if let Some(res) = sona_sherpa_onnx::recognizer::online_stream_result(r, &stream) {
+                let trimmed = res.text.trim().to_string();
+                if !trimmed.is_empty() {
+                    segments.push(trimmed);
+                }
+            }
+            stream = sona_sherpa_onnx::recognizer::create_online_stream(r);
+        }
+    }
+
+    assert!(
+        segments.len() >= 3,
+        "Expected at least 3 segments, got {}",
+        segments.len()
+    );
+    // Ensure no segment starts with the exact text of the previous segment (no duplicate accumulation)
+    for i in 1..segments.len() {
+        assert!(
+            !segments[i].starts_with(&segments[i - 1]),
+            "Segment {} ('{}') should not duplicate prefix of segment {} ('{}')",
+            i,
+            segments[i],
+            i - 1,
+            segments[i - 1]
+        );
+    }
+}

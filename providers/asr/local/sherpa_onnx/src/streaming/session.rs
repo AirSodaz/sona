@@ -12,7 +12,6 @@ use crate::punctuation::{Punctuation, load_punctuation};
 use crate::recognizer::{
     Recognizer, accept_online_samples, build_model_config, create_online_stream,
     create_recognizer_with_gpu_plan, decode_online_ready, is_online_endpoint, online_stream_result,
-    reset_online_stream,
 };
 use crate::runtime::{
     ModelConfigKey, OfflineState, RecognizerPool, SherpaInstance, buffered_sample_count,
@@ -576,8 +575,8 @@ async fn flush_session_impl_inner(
         );
 
         instance.current_segment_id = None;
-        reset_online_stream(r, st);
-        instance.restore_stream(stream);
+        drop(stream);
+        instance.restore_stream(create_online_stream(r));
         instance.segment_start_time = current_time;
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] flush_session({label}) complete. mode=online");
@@ -1056,15 +1055,16 @@ async fn feed_audio_samples_inner(
             );
 
             instance.current_segment_id = None;
-            reset_online_stream(r, st);
             instance.clear_partial_metric_sample();
             instance.segment_start_time = current_time;
             instance.current_turn_samples.clear();
+            drop(stream);
+            instance.restore_stream(create_online_stream(r));
             if let Some(boundary) = boundary.as_ref() {
                 observer.on_stream_boundary(boundary);
             }
+            return Ok(());
         }
-
         if did_record_partial_metric {
             instance.mark_partial_metric_sample();
         }

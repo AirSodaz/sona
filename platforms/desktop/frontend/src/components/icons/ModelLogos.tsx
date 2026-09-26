@@ -504,7 +504,7 @@ export function isAsrModel(model: {
   const token =
     `${model.groupId ?? ''} ${model.id ?? ''} ${model.type ?? ''} ${model.name ?? ''}`.toLowerCase();
   if (
-    token.includes('punct') ||
+    (token.includes('punct') && !token.includes('asr') && !token.includes('zipformer')) ||
     token.includes('ct-transformer') ||
     token.includes('vad') ||
     token.includes('silero') ||
@@ -609,7 +609,12 @@ export function resolveModelBrand(model: {
   if (token.includes('funasr-nano') || token.includes('funasr_nano') || token.includes('funasr')) {
     return 'funasr-nano';
   }
-  if (token.includes('zipformer') || token.includes('icefall') || token.includes('k2')) {
+  if (
+    token.includes('zipformer') ||
+    token.includes('icefall') ||
+    token.includes('k2') ||
+    token.includes('x-asr')
+  ) {
     return 'zipformer';
   }
   if (token.includes('parakeet') || token.includes('nemo')) {

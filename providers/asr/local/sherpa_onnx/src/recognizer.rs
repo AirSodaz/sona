@@ -153,7 +153,7 @@ pub fn build_model_config(
     };
 
     match model_type {
-        "zipformer" => {
+        "zipformer" | "x-asr" => {
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let joiner = get_path(&fc.joiner)?;
@@ -491,7 +491,7 @@ impl Recognizer {
             } => {
                 info!("[Recognizer::new] branch=OnlineTransducer");
                 let mut config = get_base_online_config(num_threads, &tokens, provider.clone());
-                config.model_config.model_type = Some("transducer".to_string());
+                config.model_config.model_type = None;
                 config.model_config.transducer.encoder =
                     Some(encoder.to_string_lossy().to_string());
                 config.model_config.transducer.decoder =

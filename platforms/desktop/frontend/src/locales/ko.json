@@ -1819,6 +1819,7 @@
       "whisper_large": "OpenAI가 개발했습니다. 복잡한 로컬 전사 작업과 다양한 언어에 적합한 가장 정확한 Whisper 버전입니다.",
       "whisper_medium_aishell": "OpenAI Whisper medium 기반이며, 중국어 인식 향상을 위해 AISHELL 데이터셋으로 미세 조정되었습니다.",
       "zipformer_xlarge": "Developed by K2-FSA. A highly accurate and efficient streaming 모델 specialized for Chinese recognition.",
+      "x_asr": "SJTU 등에서 공동 개발. Zipformer-Transducer 아키텍처 기반의 중·영 이중 언어 스트리밍 음성 인식 모델로, 구두점 예측이 내장되어 있으며 다양한 지연 청크 크기를 지원합니다.",
       "funasr_nano": "Developed by Alibaba FunASR. A large and highly accurate 로컬 모델, supporting multiple dialects and complex 전사 tasks.",
       "qwen3_asr": "Developed by Alibaba Qwen. A 로컬 Qwen3-based ASR 모델 for high-quality batch 전사.",
       "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced 로컬 모델 delivering strong performance for Chinese and 영어 mixed-language tasks.",

@@ -1693,6 +1693,186 @@
     }
   },
   {
+    "id": "sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
+    "name": "X-ASR",
+    "description": "settings.descriptions.x_asr",
+    "type": "zipformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~134 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
+    },
+    "isArchive": true,
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+        "filename": "sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+        "sha256": "8a6fca056e1a342546edd78be4d50274e2c01898e7b8ae8fc336f6410319c399",
+        "sizeBytes": 133898007
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "x-asr",
+    "versionLabel": "160ms Int8",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
+    "id": "sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05",
+    "name": "X-ASR",
+    "description": "settings.descriptions.x_asr",
+    "type": "zipformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~584 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
+    },
+    "isArchive": true,
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05.tar.bz2",
+        "filename": "sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05.tar.bz2",
+        "sha256": "342764b59446de0a52cbc51c5b135d767b62f552bc0f26fc5b21ddd80027d16a",
+        "sizeBytes": 584120261
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "x-asr",
+    "versionLabel": "160ms Fp32",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
+    "id": "sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
+    "name": "X-ASR",
+    "description": "settings.descriptions.x_asr",
+    "type": "zipformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~134 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
+    },
+    "isArchive": true,
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+        "filename": "sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05.tar.bz2",
+        "sha256": "fdae310438a22e4acba3ae8280320d25365e66da269fcac2a906c98c51e705e4",
+        "sizeBytes": 133894723
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "x-asr",
+    "versionLabel": "1920ms Int8",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
+    "id": "sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05",
+    "name": "X-ASR",
+    "description": "settings.descriptions.x_asr",
+    "type": "zipformer",
+    "modes": [
+      "streaming"
+    ],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~584 MB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "token"
+    },
+    "isArchive": true,
+    "artifacts": [
+      {
+        "url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05.tar.bz2",
+        "filename": "sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05.tar.bz2",
+        "sha256": "0aaf966d32e047561678719ce8d4b3582cc208294e4eef222dc641999ee45540",
+        "sizeBytes": 584116380
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "joiner": "joiner.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "x-asr",
+    "versionLabel": "1920ms Fp32",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
     "id": "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
     "name": "Parakeet TDT",
     "description": "settings.descriptions.parakeet_tdt",

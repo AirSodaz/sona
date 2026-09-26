@@ -1819,6 +1819,7 @@
       "whisper_large": "Developed by OpenAI. The most accurate version of Whisper, ideal for complex local transcription tasks across many languages.",
       "whisper_medium_aishell": "Based on OpenAI's Whisper medium, specifically fine-tuned on the AISHELL dataset for improved Chinese recognition.",
       "zipformer_xlarge": "Developed by K2-FSA. A highly accurate and efficient streaming model specialized for Chinese recognition.",
+      "x_asr": "Developed by SJTU and partners. A bilingual Chinese-English streaming ASR model based on the Zipformer-Transducer architecture with built-in punctuation and multiple latency chunk options.",
       "funasr_nano": "Developed by Alibaba FunASR. A large and highly accurate local model, supporting multiple dialects and complex transcription tasks.",
       "qwen3_asr": "Developed by Alibaba Qwen. A local Qwen3-based ASR model for high-quality batch transcription.",
       "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced local model delivering strong performance for Chinese and English mixed-language tasks.",

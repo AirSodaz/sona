@@ -91,6 +91,22 @@ describe('ModelLogos - resolveModelBrand', () => {
     ).toBe('zipformer');
   });
 
+  it('correctly resolves X-ASR models', () => {
+    expect(
+      resolveModelBrand({
+        id: 'sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05',
+        groupId: 'x-asr',
+        type: 'zipformer',
+      })
+    ).toBe('zipformer');
+    expect(
+      resolveModelBrand({
+        id: 'sherpa-onnx-x-asr-1920ms-streaming-zipformer-transducer-zh-en-punct-2026-06-05',
+        groupId: 'x-asr',
+      })
+    ).toBe('zipformer');
+  });
+
   it('correctly resolves Parakeet TDT (NVIDIA) models', () => {
     expect(
       resolveModelBrand({
