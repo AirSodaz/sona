@@ -911,6 +911,17 @@ pub fn online_stream_result(
 pub fn reset_online_stream(recognizer: &SafeOnlineRecognizer, stream: &SafeStream) {
     recognizer.0.reset(&stream.0);
 }
+pub fn warmup_recognizer_dry_run(recognizer: &Recognizer) {
+    if let Some(r) = recognizer.online() {
+        let stream = create_online_stream(r);
+        let dummy = vec![0.0f32; 1600];
+        accept_online_samples(&stream, &dummy);
+        decode_online_ready(r, &stream);
+    } else if let Some(r) = recognizer.offline() {
+        let dummy = vec![0.0f32; 3200];
+        let _ = decode_offline_samples(r, &dummy);
+    }
+}
 
 fn create_value_with_gpu_plan<T, F, E>(
     plan: GpuAccelerationPlan,

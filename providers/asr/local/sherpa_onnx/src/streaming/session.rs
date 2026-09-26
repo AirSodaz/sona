@@ -39,6 +39,7 @@ type PendingInferenceTask = tokio::task::JoinHandle<Result<(), String>>;
 pub struct LocalSherpaSession {
     instance_id: String,
     observer: Arc<dyn AsrRuntimeObserver>,
+    pub(crate) recognizer_pool: RecognizerPool,
     instance: tokio::sync::Mutex<SherpaInstance>,
     pending_inference: tokio::sync::Mutex<Option<PendingInferenceTask>>,
     last_frame_sequence: AtomicU64,
@@ -93,9 +94,16 @@ impl AsrStreamingSession for LocalSherpaSession {
         wait_for_inference_task(&mut pending)
             .await
             .map_err(AsrPortError::runtime)?;
-        stop_session_impl_inner(&self.instance_id, &mut instance)
+        let result = stop_session_impl_inner(&self.instance_id, &mut instance)
             .await
-            .map_err(AsrPortError::runtime)
+            .map_err(AsrPortError::runtime);
+        if let (Some(vad), Some(model_path)) = (
+            instance.take_vad(),
+            instance.vad_model().map(|s| s.to_string()),
+        ) {
+            self.recognizer_pool.recycle_vad(&model_path, vad).await;
+        }
+        result
     }
 
     async fn flush(&self) -> Result<(), AsrPortError> {
@@ -271,9 +279,29 @@ pub async fn prepare_streaming_resources(
     recognizer_pool: RecognizerPool,
     request: &LocalSherpaStreamingRequest,
 ) -> Result<(), AsrPortError> {
-    load_streaming_resources(&recognizer_pool, request, None)
-        .await
-        .map(drop)
+    let resources = load_streaming_resources(&recognizer_pool, request, None).await?;
+
+    if let Some(vad_path) = request
+        .vad_model
+        .as_deref()
+        .filter(|p| !p.trim().is_empty())
+    {
+        recognizer_pool.prepare_vad(vad_path).await;
+    }
+
+    if let Some(model_path) = request
+        .speaker_processing
+        .as_ref()
+        .and_then(|sp| sp.speaker_embedding_model_path.as_deref())
+        .filter(|p| !p.trim().is_empty())
+        .and_then(|spk_path| crate::speaker_processing::resolve_model_path(Some(spk_path)).ok())
+    {
+        let _ = crate::speaker::preload_speaker_embedding_extractor(&model_path);
+    }
+
+    crate::recognizer::warmup_recognizer_dry_run(&resources.recognizer);
+
+    Ok(())
 }
 
 pub async fn create_streaming_session(
@@ -296,7 +324,12 @@ pub async fn create_streaming_session(
     let mut session_instance = SherpaInstance::default();
     session_instance.set_recognizer(resources.recognizer);
     session_instance.set_punctuation(resources.punctuation);
-    session_instance.configure_vad(vad_model.clone(), vad_buffer);
+    let vad = if let Some(vad_path) = vad_model.as_deref().filter(|p| !p.trim().is_empty()) {
+        recognizer_pool.get_or_create_vad(vad_path).await
+    } else {
+        None
+    };
+    session_instance.configure_vad_instance(vad, vad_model.clone(), vad_buffer);
     session_instance.normalization_options = normalization_options;
     let initial_refresh = initial_refresh_rate_ms.unwrap_or(200) as u64;
     session_instance
@@ -318,6 +351,7 @@ pub async fn create_streaming_session(
     let session = std::sync::Arc::new(LocalSherpaSession {
         instance_id,
         observer,
+        recognizer_pool,
         instance: tokio::sync::Mutex::new(session_instance),
         pending_inference: tokio::sync::Mutex::new(None),
         last_frame_sequence: AtomicU64::new(0),

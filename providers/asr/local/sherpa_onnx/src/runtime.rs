@@ -16,6 +16,7 @@ pub type PunctuationCell = Arc<OnceCell<Arc<Punctuation>>>;
 pub struct RecognizerPool {
     recognizers: Arc<Mutex<HashMap<ModelConfigKey, RecognizerCell>>>,
     punctuations: Arc<Mutex<HashMap<String, PunctuationCell>>>,
+    vads: Arc<Mutex<HashMap<String, Vec<SafeVad>>>>,
 }
 
 impl Default for RecognizerPool {
@@ -29,6 +30,7 @@ impl RecognizerPool {
         Self {
             recognizers: Arc::new(Mutex::new(HashMap::new())),
             punctuations: Arc::new(Mutex::new(HashMap::new())),
+            vads: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
@@ -82,6 +84,65 @@ impl RecognizerPool {
 
         let mut punctuations = self.punctuations.lock().await;
         Self::prune_idle_punctuations_locked(&mut punctuations, None);
+        drop(punctuations);
+
+        let mut vads = self.vads.lock().await;
+        vads.clear();
+        drop(vads);
+
+        crate::speaker::clear_speaker_caches();
+        crate::batch::prune_offline_batch_caches();
+    }
+    pub async fn prepare_vad(&self, vad_model_path: &str) -> bool {
+        if vad_model_path.trim().is_empty() {
+            return false;
+        }
+        {
+            let mut vads = self.vads.lock().await;
+            let pool = vads.entry(vad_model_path.to_string()).or_default();
+            if !pool.is_empty() {
+                return true;
+            }
+        }
+
+        if let Some(mut vad) = load_vad(Some(vad_model_path.to_string())) {
+            reset_vad(&mut vad);
+            let mut vads = self.vads.lock().await;
+            let pool = vads.entry(vad_model_path.to_string()).or_default();
+            if pool.is_empty() {
+                pool.push(vad);
+            }
+            true
+        } else {
+            false
+        }
+    }
+
+    pub async fn get_or_create_vad(&self, vad_model_path: &str) -> Option<SafeVad> {
+        if vad_model_path.trim().is_empty() {
+            return None;
+        }
+        {
+            let mut vads = self.vads.lock().await;
+            if let Some(mut vad) = vads.get_mut(vad_model_path).and_then(|pool| pool.pop()) {
+                reset_vad(&mut vad);
+                return Some(vad);
+            }
+        }
+
+        load_vad(Some(vad_model_path.to_string()))
+    }
+
+    pub async fn recycle_vad(&self, vad_model_path: &str, mut vad: SafeVad) {
+        if vad_model_path.trim().is_empty() {
+            return;
+        }
+        reset_vad(&mut vad);
+        let mut vads = self.vads.lock().await;
+        let pool = vads.entry(vad_model_path.to_string()).or_default();
+        if pool.len() < 2 {
+            pool.push(vad);
+        }
     }
 
     pub async fn prune_idle_punctuations(&self, active_path: Option<&str>) {
@@ -140,6 +201,10 @@ impl RecognizerPool {
     #[cfg(test)]
     pub async fn cached_punctuation_count(&self) -> usize {
         self.punctuations.lock().await.len()
+    }
+    #[cfg(test)]
+    pub async fn cached_vad_count(&self) -> usize {
+        self.vads.lock().await.values().map(|v| v.len()).sum()
     }
 }
 
@@ -285,6 +350,25 @@ impl SherpaInstance {
         self.vad = load_vad(vad_model.clone());
         self.vad_model = vad_model;
         self.vad_buffer = vad_buffer;
+    }
+
+    pub fn configure_vad_instance(
+        &mut self,
+        vad: Option<SafeVad>,
+        vad_model: Option<String>,
+        vad_buffer: f32,
+    ) {
+        self.vad = vad;
+        self.vad_model = vad_model;
+        self.vad_buffer = vad_buffer;
+    }
+
+    pub fn take_vad(&mut self) -> Option<SafeVad> {
+        self.vad.take()
+    }
+
+    pub fn vad_model(&self) -> Option<&str> {
+        self.vad_model.as_deref()
     }
 
     pub fn reset_or_reload_vad(&mut self) {
@@ -861,6 +945,20 @@ mod tests {
 
         pool.prune_all_idle().await;
         assert_eq!(pool.cached_punctuation_count().await, 0);
+    }
+    #[tokio::test]
+    async fn vad_pool_caches_recycles_and_prunes_vad() {
+        let pool = RecognizerPool::new();
+        assert_eq!(pool.cached_vad_count().await, 0);
+
+        // Empty path returns false / None
+        assert!(!pool.prepare_vad("").await);
+        assert!(pool.get_or_create_vad("").await.is_none());
+        assert_eq!(pool.cached_vad_count().await, 0);
+
+        // Prune all clears any idle vads
+        pool.prune_all_idle().await;
+        assert_eq!(pool.cached_vad_count().await, 0);
     }
 
     #[test]

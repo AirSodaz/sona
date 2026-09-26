@@ -93,18 +93,65 @@ export function createRecordingPersistence({
     await persistSummary(newItem.id);
   }
 
-  async function annotateRecordedSegments(
-    filePath: string,
-    segments: TranscriptSegment[]
-  ): Promise<TranscriptSegment[]> {
-    const transcriptState = getTranscriptState();
-    const annotatedSegments = await annotateSegmentsForFile(
-      filePath,
-      segments,
-      transcriptState.config
+  function mergeSpeakerAnnotations(
+    targetSegments: TranscriptSegment[],
+    annotated: TranscriptSegment[]
+  ): TranscriptSegment[] {
+    const speakerMap = new Map(
+      annotated.map((seg) => [
+        seg.id,
+        { speaker: seg.speaker, speakerAttribution: seg.speakerAttribution },
+      ])
     );
-    transcriptState.setSegments(annotatedSegments);
-    return annotatedSegments;
+    return targetSegments.map((seg) => {
+      const spk = speakerMap.get(seg.id);
+      if (!spk) {
+        return seg;
+      }
+      return {
+        ...seg,
+        speaker: spk.speaker,
+        speakerAttribution: spk.speakerAttribution,
+      };
+    });
+  }
+
+  async function applyBackgroundSpeakerAnnotation(
+    sessionId: string,
+    filePath: string,
+    initialSegments: TranscriptSegment[]
+  ): Promise<void> {
+    try {
+      const transcriptState = getTranscriptState();
+      const annotated = await annotateSegmentsForFile(
+        filePath,
+        initialSegments,
+        transcriptState.config
+      );
+      if (!annotated || annotated === initialSegments) {
+        return;
+      }
+
+      const currentTranscriptState = getTranscriptState();
+      if (currentTranscriptState.setSegmentsForSession) {
+        currentTranscriptState.setSegmentsForSession(
+          sessionId,
+          mergeSpeakerAnnotations(initialSegments, annotated)
+        );
+      } else if (currentTranscriptState.activeSessionId === sessionId) {
+        currentTranscriptState.setSegments(
+          mergeSpeakerAnnotations(currentTranscriptState.segments, annotated)
+        );
+      }
+
+      if (history.updateTranscript) {
+        const mergedForHistory = mergeSpeakerAnnotations(initialSegments, annotated);
+        const updatedItem = await history.updateTranscript(sessionId, mergedForHistory);
+        upsertHistoryItem(updatedItem);
+      }
+    } catch (error) {
+      logger.warn('[useAudioRecorder] Failed to annotate speaker labels in background:', error);
+    }
   }
 
   async function writeRecordedBlobToPath(blob: Blob, filePath: string): Promise<void> {
@@ -137,7 +184,7 @@ export function createRecordingPersistence({
     duration: number
   ): Promise<void> {
     const transcriptState = getTranscriptState();
-    let segments = transcriptState.segments;
+    const segments = transcriptState.segments;
 
     if (segments.length === 0) {
       await discardLiveRecordingDraft(draft);
@@ -146,20 +193,12 @@ export function createRecordingPersistence({
 
     try {
       await writeRecordedBlobToPath(blob, draft.audioAbsolutePath);
-
-      try {
-        segments = await annotateRecordedSegments(draft.audioAbsolutePath, segments);
-      } catch (error) {
-        logger.warn(
-          '[useAudioRecorder] Failed to annotate speaker labels for MediaRecorder fallback audio:',
-          error
-        );
-      }
-
       transcriptState.setAudioUrl(fileSrcFromPath(draft.audioAbsolutePath));
 
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
       await persistSavedItem(newItem, 'upsert', segments);
+
+      void applyBackgroundSpeakerAnnotation(draft.item.id, draft.audioAbsolutePath, segments);
     } catch (error) {
       logger.error('[useAudioRecorder] Failed to persist browser recording draft:', error);
       throw error;
@@ -172,22 +211,15 @@ export function createRecordingPersistence({
     duration: number
   ): Promise<void> {
     const transcriptState = getTranscriptState();
-    let segments = transcriptState.segments;
+    const segments = transcriptState.segments;
 
     if (segments.length > 0) {
-      try {
-        segments = await annotateRecordedSegments(savedWavPath, segments);
-      } catch (error) {
-        logger.warn(
-          '[useAudioRecorder] Failed to annotate speaker labels for native recording:',
-          error
-        );
-      }
-
       transcriptState.setAudioUrl(fileSrcFromPath(savedWavPath));
 
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
       await persistSavedItem(newItem, 'upsert', segments);
+
+      void applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments);
       return;
     }
 

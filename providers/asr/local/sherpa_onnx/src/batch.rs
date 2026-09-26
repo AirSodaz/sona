@@ -6,7 +6,7 @@ use crate::recognizer::{
 };
 use async_trait::async_trait;
 use sona_core::models::config::ModelFileConfig;
-use sona_core::ports::aligner::{AlignerEngineSet, load_configured_aligner};
+use sona_core::ports::aligner::{AlignerEngineSet, SegmentAlignerPort, load_configured_aligner};
 use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriberPort,
     BatchTranscriptionObserver, LocalAsrEngine, NoopBatchTranscriptionObserver,
@@ -23,8 +23,124 @@ use sona_core::transcription::transcript::{
     normalize_recognizer_text, synthesize_durations,
 };
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, LazyLock, Mutex};
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OfflineRecognizerCacheKey {
+    pub model_path: PathBuf,
+    pub model_type: String,
+    pub file_config: Option<ModelFileConfig>,
+    pub enable_itn: bool,
+    pub language: String,
+    pub hotwords: Option<String>,
+    pub num_threads: i32,
+    pub provider: Option<String>,
+}
+
+type CachedOfflineRecognizer = Option<(OfflineRecognizerCacheKey, Arc<SafeOfflineRecognizer>)>;
+type CachedPunctuation = Option<(PathBuf, Arc<dyn PunctuationModel>)>;
+type CachedAligner = Option<(PathBuf, Arc<dyn SegmentAlignerPort>)>;
+
+static OFFLINE_RECOGNIZER_CACHE: LazyLock<Mutex<CachedOfflineRecognizer>> =
+    LazyLock::new(|| Mutex::new(None));
+
+static PUNCTUATION_CACHE: LazyLock<Mutex<CachedPunctuation>> = LazyLock::new(|| Mutex::new(None));
+
+static ALIGNER_CACHE: LazyLock<Mutex<CachedAligner>> = LazyLock::new(|| Mutex::new(None));
+
+pub(crate) fn get_or_create_offline_recognizer(
+    key: OfflineRecognizerCacheKey,
+) -> Result<Arc<SafeOfflineRecognizer>, AsrPortError> {
+    let mut cache = OFFLINE_RECOGNIZER_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some((_, recognizer)) = cache.as_ref().filter(|(cached_key, _)| cached_key == &key) {
+        return Ok(Arc::clone(recognizer));
+    }
+
+    let model_type = build_offline_model_config(
+        &key.model_path,
+        &key.model_type,
+        &key.file_config,
+        key.enable_itn,
+        &key.language,
+        key.hotwords.clone(),
+    )?;
+
+    let recognizer = Arc::new(create_offline_recognizer(
+        model_type,
+        key.num_threads,
+        key.provider.as_deref(),
+    )?);
+
+    *cache = Some((key, Arc::clone(&recognizer)));
+    Ok(recognizer)
+}
+
+pub(crate) fn get_or_create_punctuation(
+    engines: &PunctuationEngineSet,
+    path: Option<&Path>,
+) -> Result<Option<Arc<dyn PunctuationModel>>, AsrPortError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    if path.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    let mut cache = PUNCTUATION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, model)) = cache
+        .as_ref()
+        .filter(|(cached_path, _)| cached_path == path)
+    {
+        return Ok(Some(Arc::clone(model)));
+    }
+    if let Some(loaded) = load_configured_punctuation(engines, Some(path))? {
+        *cache = Some((path.to_path_buf(), Arc::clone(&loaded)));
+        Ok(Some(loaded))
+    } else {
+        *cache = None;
+        Ok(None)
+    }
+}
+
+pub(crate) fn get_or_create_aligner(
+    engines: &AlignerEngineSet,
+    path: Option<&Path>,
+) -> Result<Option<Arc<dyn SegmentAlignerPort>>, AsrPortError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    if path.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    let mut cache = ALIGNER_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((_, model)) = cache
+        .as_ref()
+        .filter(|(cached_path, _)| cached_path == path)
+    {
+        return Ok(Some(Arc::clone(model)));
+    }
+    if let Some(loaded) = load_configured_aligner(engines, Some(path))
+        .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?
+    {
+        *cache = Some((path.to_path_buf(), Arc::clone(&loaded)));
+        Ok(Some(loaded))
+    } else {
+        *cache = None;
+        Ok(None)
+    }
+}
+
+pub fn prune_offline_batch_caches() {
+    let mut cache = OFFLINE_RECOGNIZER_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    *cache = None;
+    let mut punct = PUNCTUATION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    *punct = None;
+    let mut aligner = ALIGNER_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    *aligner = None;
+}
 #[derive(Clone)]
 pub struct LocalBatchAsrAdapter {
     vad_engines: VadEngineSet,
@@ -226,22 +342,23 @@ impl BatchTranscriptionJob {
             );
             None
         } else {
-            load_configured_aligner(&self.aligner_engines, self.alignment_model.as_deref())
-                .map_err(|err| AsrPortError::new(AsrPortErrorKind::Model, err.to_string()))?
+            get_or_create_aligner(&self.aligner_engines, self.alignment_model.as_deref())?
         };
         let punctuation =
-            load_configured_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
+            get_or_create_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
 
-        let model_type = build_offline_model_config(
-            &self.model_path,
-            &self.model_type,
-            &self.file_config,
-            self.enable_itn,
-            &self.language,
-            self.hotwords.clone(),
-        )?;
+        let cache_key = OfflineRecognizerCacheKey {
+            model_path: self.model_path.clone(),
+            model_type: self.model_type.clone(),
+            file_config: self.file_config.clone(),
+            enable_itn: self.enable_itn,
+            language: self.language.clone(),
+            hotwords: self.hotwords.clone(),
+            num_threads: self.num_threads,
+            provider: provider.map(str::to_string),
+        };
 
-        let recognizer = create_offline_recognizer(model_type, self.num_threads, provider)?;
+        let recognizer = get_or_create_offline_recognizer(cache_key)?;
         let samples = extract_and_resample_audio_with_ffmpeg(
             &self.input_path,
             16000,
@@ -574,5 +691,12 @@ mod tests {
         assert!(!is_same_model_target(&temp_dir, &other_dir));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+    #[test]
+    fn test_offline_batch_caches_prune_and_clean() {
+        prune_offline_batch_caches();
+        assert!(OFFLINE_RECOGNIZER_CACHE.lock().unwrap().is_none());
+        assert!(PUNCTUATION_CACHE.lock().unwrap().is_none());
+        assert!(ALIGNER_CACHE.lock().unwrap().is_none());
     }
 }

@@ -63,12 +63,13 @@ export interface RecordingMetaState {
   setTitle: (title: string | null) => void;
   setIcon: (icon: string | null) => void;
 }
-
 export interface RecordingPersistenceTranscriptState {
   config: AppConfig;
   segments: TranscriptSegment[];
   setAudioUrl: (url: string | null) => void;
   setSegments: (segments: TranscriptSegment[]) => void;
+  activeSessionId?: string;
+  setSegmentsForSession?: (sessionId: string, segments: TranscriptSegment[]) => void;
 }
 
 export interface RecordingHistorySaver {
@@ -96,4 +97,5 @@ export interface RecordingHistorySaver {
     duration: number,
     projectId?: string | null
   ) => Promise<HistoryItem | null>;
+  updateTranscript?: (historyId: string, segments: TranscriptSegment[]) => Promise<HistoryItem>;
 }

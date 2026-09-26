@@ -130,9 +130,8 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             quiet: true,
             ffmpeg_path: request.ffmpeg_path,
         };
-        let transcriber = sona_application::local_asr::LocalBatchTranscriberRouter::new(
-            super::local_asr_registry_default(),
-        );
+        let transcriber =
+            sona_application::local_asr::LocalBatchTranscriberRouter::new(state.registry.clone());
 
         let transcribe_fut = transcriber.transcribe_with_observer(plan, observer.clone());
 

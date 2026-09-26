@@ -5,8 +5,64 @@ use sherpa_onnx::{
     SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, SpeakerEmbeddingManager,
 };
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, LazyLock, Mutex};
+use std::time::SystemTime;
 
+pub struct SafeSpeakerEmbeddingExtractor(pub(crate) SpeakerEmbeddingExtractor);
+unsafe impl Send for SafeSpeakerEmbeddingExtractor {}
+unsafe impl Sync for SafeSpeakerEmbeddingExtractor {}
+
+static EXTRACTOR_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<SafeSpeakerEmbeddingExtractor>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct SampleCacheKey {
+    model_path: PathBuf,
+    file_path: PathBuf,
+    file_size: u64,
+    modified: SystemTime,
+}
+
+static SAMPLE_EMBEDDING_CACHE: LazyLock<Mutex<HashMap<SampleCacheKey, Vec<f32>>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+pub fn preload_speaker_embedding_extractor(
+    embedding_model: &Path,
+) -> Result<Arc<SafeSpeakerEmbeddingExtractor>, AsrPortError> {
+    let key = embedding_model.to_path_buf();
+    let mut cache = EXTRACTOR_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(extractor) = cache.get(&key) {
+        return Ok(Arc::clone(extractor));
+    }
+
+    let extractor = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig {
+        model: Some(embedding_model.to_string_lossy().into_owned()),
+        num_threads: 1,
+        debug: false,
+        provider: Some("cpu".to_string()),
+    })
+    .ok_or_else(|| {
+        AsrPortError::new(
+            AsrPortErrorKind::Model,
+            "Failed to create speaker embedding extractor",
+        )
+    })?;
+
+    let safe_extractor = Arc::new(SafeSpeakerEmbeddingExtractor(extractor));
+    cache.insert(key, Arc::clone(&safe_extractor));
+    Ok(safe_extractor)
+}
+
+pub fn clear_speaker_caches() {
+    let mut cache = EXTRACTOR_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    cache.clear();
+    let mut cache = SAMPLE_EMBEDDING_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    cache.clear();
+}
 const SAMPLE_RATE: i32 = 16_000;
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -147,33 +203,26 @@ impl SpeakerModelThresholds {
 }
 
 pub struct SpeakerEmbeddingIndex {
-    extractor: SpeakerEmbeddingExtractor,
+    pub(crate) model_path: PathBuf,
+    extractor: Arc<SafeSpeakerEmbeddingExtractor>,
     manager: SpeakerEmbeddingManager,
 }
 
 impl SpeakerEmbeddingIndex {
     pub fn new(embedding_model: &Path) -> Result<Self, AsrPortError> {
-        let extractor = SpeakerEmbeddingExtractor::create(&SpeakerEmbeddingExtractorConfig {
-            model: Some(embedding_model.to_string_lossy().into_owned()),
-            num_threads: 1,
-            debug: false,
-            provider: Some("cpu".to_string()),
-        })
-        .ok_or_else(|| {
-            AsrPortError::new(
-                AsrPortErrorKind::Model,
-                "Failed to create speaker embedding extractor",
-            )
-        })?;
-
-        let manager = SpeakerEmbeddingManager::create(extractor.dim()).ok_or_else(|| {
+        let extractor = preload_speaker_embedding_extractor(embedding_model)?;
+        let manager = SpeakerEmbeddingManager::create(extractor.0.dim()).ok_or_else(|| {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
                 "Failed to create speaker embedding manager",
             )
         })?;
 
-        Ok(Self { extractor, manager })
+        Ok(Self {
+            model_path: embedding_model.to_path_buf(),
+            extractor,
+            manager,
+        })
     }
 
     pub fn add_profile_embeddings(
@@ -195,8 +244,39 @@ impl SpeakerEmbeddingIndex {
         &self,
         file_path: &str,
     ) -> Result<Option<Vec<f32>>, AsrPortError> {
+        let path = Path::new(file_path);
+        let metadata = std::fs::metadata(path).ok();
+        let cache_key = metadata.as_ref().and_then(|meta| {
+            let file_size = meta.len();
+            let modified = meta.modified().ok()?;
+            Some(SampleCacheKey {
+                model_path: self.model_path.clone(),
+                file_path: path.to_path_buf(),
+                file_size,
+                modified,
+            })
+        });
+
+        if let Some(key) = &cache_key {
+            let cache = SAMPLE_EMBEDDING_CACHE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            if let Some(emb) = cache.get(key) {
+                return Ok(Some(emb.clone()));
+            }
+        }
+
         let samples = load_profile_sample_wav(file_path)?;
-        self.compute_embedding_for_samples(&samples)
+        let emb = self.compute_embedding_for_samples(&samples)?;
+
+        if let (Some(key), Some(emb_vec)) = (cache_key, emb.as_ref()) {
+            let mut cache = SAMPLE_EMBEDDING_CACHE
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            cache.insert(key, emb_vec.clone());
+        }
+
+        Ok(emb)
     }
 
     pub fn compute_embedding_for_span(
@@ -239,18 +319,18 @@ impl SpeakerEmbeddingIndex {
             return Ok(None);
         }
 
-        let stream = self
-            .extractor
-            .create_stream()
-            .ok_or_else(|| AsrPortError::runtime("Failed to create speaker embedding stream"))?;
+        let stream =
+            self.extractor.0.create_stream().ok_or_else(|| {
+                AsrPortError::runtime("Failed to create speaker embedding stream")
+            })?;
         stream.accept_waveform(SAMPLE_RATE, samples);
         stream.input_finished();
 
-        if !self.extractor.is_ready(&stream) {
+        if !self.extractor.0.is_ready(&stream) {
             return Ok(None);
         }
 
-        Ok(self.extractor.compute(&stream))
+        Ok(self.extractor.0.compute(&stream))
     }
 }
 
@@ -355,5 +435,16 @@ fn load_profile_sample_wav(file_path: &str) -> Result<Vec<f32>, AsrPortError> {
                 })
             })
             .collect(),
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn speaker_caches_can_be_cleared() {
+        clear_speaker_caches();
+        assert_eq!(EXTRACTOR_CACHE.lock().unwrap().len(), 0);
+        assert_eq!(SAMPLE_EMBEDDING_CACHE.lock().unwrap().len(), 0);
     }
 }

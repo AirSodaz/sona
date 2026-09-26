@@ -26,6 +26,7 @@ import {
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
@@ -173,12 +174,17 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           discardLiveRecordingDraft: (...args) => historyService.discardLiveRecordingDraft(...args),
           saveRecording: (...args) => historyService.saveRecording(...args),
           saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
+          updateTranscript: (...args) => historyService.updateTranscript(...args),
         },
         getTranscriptState: () => ({
           config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
           segments: useTranscriptSessionStore.getState().segments,
           setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
           setSegments: setTranscriptSegments,
+          activeSessionId: useTranscriptStore.getState().activeSessionId,
+          setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => {
+            useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
+          },
         }),
         getActiveProjectId: () => useProjectStore.getState().activeProjectId,
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
