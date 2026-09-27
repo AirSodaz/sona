@@ -63,6 +63,10 @@ import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 type ModelScenario = 'live' | 'batch';
 
 const VOLCENGINE_DOUBAO_OPTION_ID = ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
+const MODEL_DROPDOWN_CONTAINER_STYLE: React.CSSProperties = {
+  width: '260px',
+  maxWidth: '100%',
+};
 
 interface SettingsModelsTabProps {
   isActive?: boolean;
@@ -1277,7 +1281,7 @@ export function SettingsModelsTab({
             isBatchScenario ? t('settings.batch_model_hint') : t('settings.streaming_model_hint')
           }
         >
-          <div style={{ width: '220px' }}>
+          <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
             <Dropdown
               id={isBatchScenario ? 'settings-batch-path' : 'settings-streaming-path'}
               value={selectedAsrModelId}
@@ -1377,7 +1381,7 @@ export function SettingsModelsTab({
                   'Used to match diarized speakers against your known speaker profiles.',
               })}
             >
-              <div style={{ width: '220px' }}>
+              <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
                 <Dropdown
                   id="settings-speaker-embedding-path"
                   value={
@@ -1416,7 +1420,7 @@ export function SettingsModelsTab({
                     })
               }
             >
-              <div style={{ width: '220px' }}>
+              <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
                 <Dropdown
                   id="settings-speaker-segmentation-path"
                   value={
@@ -1615,7 +1619,7 @@ export function SettingsModelsTab({
                       'When local speaker embedding model is enabled, cloud speaker turns are matched against local speaker profiles.',
                   })}
                 >
-                  <div style={{ width: '220px' }}>
+                  <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
                     <Dropdown
                       id="settings-cloud-local-speaker-embedding-path"
                       value={
@@ -1731,7 +1735,7 @@ export function SettingsModelsTab({
                 'Used to generate token-level timestamps and refine speaker turn boundaries.',
             })}
           >
-            <div style={{ width: '220px' }}>
+            <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
               <Dropdown
                 id="settings-alignment-path"
                 value={
@@ -1776,7 +1780,7 @@ export function SettingsModelsTab({
                   defaultValue: 'Enabled only when the selected model requires punctuation.',
                 })}
               >
-                <div style={{ width: '220px' }}>
+                <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
                   <Dropdown
                     id="settings-punctuation-path"
                     value={
@@ -1804,7 +1808,7 @@ export function SettingsModelsTab({
                   defaultValue: 'Enabled only when the selected model requires VAD.',
                 })}
               >
-                <div style={{ width: '220px' }}>
+                <div style={MODEL_DROPDOWN_CONTAINER_STYLE}>
                   <Dropdown
                     id="settings-vad-path"
                     value={

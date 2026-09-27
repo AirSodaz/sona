@@ -1928,12 +1928,26 @@ export type OnlineAsrProvider = {
 	defaults: unknown,
 	streaming: OnlineAsrCapability,
 	batch: OnlineAsrBatchCapability,
+	spec?: OnlineAsrProviderSpec | null,
+	models?: OnlineAsrSupportedModel[],
 };
 
 export type OnlineAsrProviderRequest = {
 	providerId: string,
 	profileId: string,
 	config?: unknown,
+};
+
+export type OnlineAsrProviderSpec = {
+	modelName: string,
+};
+
+export type OnlineAsrSupportedModel = {
+	id: string,
+	name: string,
+	modes?: string[],
+	description: string | null,
+	isDefault?: boolean | null,
 };
 
 export type OverviewStats = OverviewStats_Serialize | OverviewStats_Deserialize;

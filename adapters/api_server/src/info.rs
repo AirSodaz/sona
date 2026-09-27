@@ -1,4 +1,4 @@
-﻿use std::collections::HashMap;
+use std::collections::HashMap;
 use std::path::Path as StdPath;
 use std::sync::Arc;
 
@@ -40,6 +40,76 @@ pub struct ApiServerModelInfo {
     pub language_mode: sona_core::models::preset_models::LanguageMode,
 }
 
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ApiServerAvailableModel {
+    pub id: String,
+    pub name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub engine: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub provider_name: Option<String>,
+    pub brand: String,
+    pub languages: Vec<String>,
+    pub language_mode: sona_core::models::preset_models::LanguageMode,
+}
+
+fn resolve_model_brand(id: &str, name: &str) -> String {
+    let token = format!("{id} {name}").to_lowercase();
+    if token.contains("volcengine") || token.contains("doubao") {
+        "volcengine".to_string()
+    } else if token.contains("groq") {
+        "groq".to_string()
+    } else if token.contains("mistral") || token.contains("voxtral") {
+        "mistral".to_string()
+    } else if token.contains("openai") {
+        "openai".to_string()
+    } else if token.contains("deepgram") {
+        "deepgram".to_string()
+    } else if token.contains("assembly") {
+        "assemblyai".to_string()
+    } else if token.contains("elevenlabs") {
+        "elevenlabs".to_string()
+    } else if token.contains("sensevoice")
+        || token.contains("sense-voice")
+        || token.contains("qwen")
+    {
+        "sensevoice".to_string()
+    } else if token.contains("whisper") {
+        "whisper".to_string()
+    } else if token.contains("paraformer") {
+        "paraformer".to_string()
+    } else if token.contains("funasr") {
+        "funasr-nano".to_string()
+    } else if token.contains("zipformer") || token.contains("icefall") || token.contains("k2") {
+        "zipformer".to_string()
+    } else if token.contains("firered") || token.contains("fire-red") {
+        "firered".to_string()
+    } else if token.contains("moonshine") {
+        "moonshine".to_string()
+    } else if token.contains("dolphin") {
+        "dolphin".to_string()
+    } else {
+        "generic".to_string()
+    }
+}
+
+fn provider_friendly_name(provider_id: &str) -> &str {
+    match provider_id {
+        "volcengine-doubao" => "火山引擎 豆包语音大模型",
+        "groq-whisper" => "Groq Whisper",
+        "mistral-voxtral" => "Mistral Voxtral",
+        "openai-whisper" => "OpenAI Whisper",
+        "deepgram" => "Deepgram",
+        "assemblyai" => "AssemblyAI",
+        "elevenlabs" => "ElevenLabs",
+        _ => provider_id,
+    }
+}
+
 #[derive(Debug, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InfoResponse {
@@ -49,6 +119,7 @@ pub struct InfoResponse {
     pub vad_installed: bool,
     pub punctuation_installed: bool,
     pub online_asr_providers: Vec<OnlineAsrProviderInfo>,
+    pub available_models: Vec<ApiServerAvailableModel>,
 }
 
 pub async fn build_info_response(
@@ -87,7 +158,7 @@ pub async fn build_info_response(
         m.id == sona_core::models::preset_models::DEFAULT_PUNCTUATION_MODEL_ID && m.is_installed
     });
 
-    let online_asr_providers = online_asr_providers()
+    let online_asr_providers: Vec<OnlineAsrProviderInfo> = online_asr_providers()
         .iter()
         .map(|provider| {
             let configured = online_asr_config
@@ -106,6 +177,78 @@ pub async fn build_info_response(
         })
         .collect();
 
+    let mut available_models = Vec::new();
+
+    for m in &installed_models {
+        available_models.push(ApiServerAvailableModel {
+            id: m.id.clone(),
+            name: m.name.clone(),
+            description: m.description.clone(),
+            engine: "local".to_string(),
+            provider_id: None,
+            provider_name: None,
+            brand: resolve_model_brand(&m.id, &m.name),
+            languages: m.languages.clone(),
+            language_mode: m.language_mode,
+        });
+    }
+
+    for provider in sona_core::ports::asr::online_asr_providers() {
+        let configured = online_asr_config
+            .get(&provider.id)
+            .and_then(|config| config.get("apiKey"))
+            .and_then(serde_json::Value::as_str)
+            .is_some_and(|api_key| !api_key.is_empty());
+        if !configured || !provider.batch.local_file_mode.supported {
+            continue;
+        }
+
+        let provider_name = provider_friendly_name(&provider.id).to_string();
+        let batch_models: Vec<_> = provider
+            .models
+            .iter()
+            .filter(|m| m.modes.contains(&"batch".to_string()))
+            .collect();
+
+        if batch_models.is_empty() {
+            let model_name = provider
+                .spec
+                .as_ref()
+                .map(|s| s.model_name.clone())
+                .unwrap_or_else(|| provider_name.clone());
+            available_models.push(ApiServerAvailableModel {
+                id: provider.id.clone(),
+                name: model_name,
+                description: None,
+                engine: "online".to_string(),
+                provider_id: Some(provider.id.clone()),
+                provider_name: Some(provider_name),
+                brand: resolve_model_brand(&provider.id, ""),
+                languages: provider.languages.clone(),
+                language_mode: provider.language_mode,
+            });
+        } else {
+            for model in batch_models {
+                let option_id = if provider.models.len() > 1 {
+                    format!("{}::{}", provider.id, model.id)
+                } else {
+                    provider.id.clone()
+                };
+                available_models.push(ApiServerAvailableModel {
+                    id: option_id,
+                    name: model.name.clone(),
+                    description: model.description.clone(),
+                    engine: "online".to_string(),
+                    provider_id: Some(provider.id.clone()),
+                    provider_name: Some(provider_name.clone()),
+                    brand: resolve_model_brand(&provider.id, &model.name),
+                    languages: provider.languages.clone(),
+                    language_mode: provider.language_mode,
+                });
+            }
+        }
+    }
+
     Ok(InfoResponse {
         platform: std::env::consts::OS.to_string(),
         gpu_available,
@@ -113,6 +256,7 @@ pub async fn build_info_response(
         vad_installed,
         punctuation_installed,
         online_asr_providers,
+        available_models,
     })
 }
 

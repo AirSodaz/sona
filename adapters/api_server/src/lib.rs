@@ -15,7 +15,8 @@ pub use handlers::{
     handle_job_status, handle_list_jobs, handle_transcribe,
 };
 pub use info::{
-    ApiServerModelInfo, HealthResponse, InfoResponse, OnlineAsrProviderInfo, build_info_response,
+    ApiServerAvailableModel, ApiServerModelInfo, HealthResponse, InfoResponse,
+    OnlineAsrProviderInfo, build_info_response,
 };
 pub use ip_whitelist::parse_ip_whitelist;
 pub use jobs::{JobEntry, JobManager, JobStatus, TranscriptionJob};
@@ -306,6 +307,16 @@ mod tests {
             info.online_asr_providers
                 .iter()
                 .any(|provider| provider.id == "groq-whisper" && provider.configured)
+        );
+        assert!(
+            info.available_models
+                .iter()
+                .any(|m| m.id == "sherpa-onnx-whisper-turbo" && m.engine == "local")
+        );
+        assert!(
+            info.available_models
+                .iter()
+                .any(|m| m.provider_id.as_deref() == Some("groq-whisper") && m.engine == "online")
         );
     }
 

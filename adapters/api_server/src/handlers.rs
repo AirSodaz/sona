@@ -406,7 +406,12 @@ async fn handle_transcribe_inner(
         )
             .into());
     }
-    let is_online = find_online_asr_provider(&m_id).is_some();
+    let (provider_candidate, _sub_model) = m_id
+        .split_once("::")
+        .map(|(p, m)| (p, Some(m)))
+        .unwrap_or((m_id.as_str(), None));
+    let online_provider = find_online_asr_provider(provider_candidate);
+    let is_online = online_provider.is_some();
     let is_preset = sona_core::models::preset_models::preset_models()
         .iter()
         .any(|m| m.id == m_id || m.group_id.as_deref() == Some(&m_id));
@@ -428,7 +433,7 @@ async fn handle_transcribe_inner(
     let mut online_provider_id = None;
     let mut online_provider_config = None;
 
-    if let Some(provider) = find_online_asr_provider(&m_id) {
+    if let Some(provider) = online_provider {
         let configs = state.online_asr_config.read().await;
         let is_configured = configs
             .get(&provider.id)

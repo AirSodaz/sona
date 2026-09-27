@@ -172,7 +172,9 @@ export function RemoteWebEditor(): React.JSX.Element {
       setIsConnected(true);
 
       let defaultModel = '';
-      if (info.models?.length > 0) {
+      if (info.availableModels && info.availableModels.length > 0) {
+        defaultModel = info.availableModels[0].id;
+      } else if (info.models?.length > 0) {
         const first = info.models.find(isAsrModel);
         if (first) {
           defaultModel = typeof first === 'string' ? first : first.id || '';
@@ -336,6 +338,36 @@ export function RemoteWebEditor(): React.JSX.Element {
   }, [themePreference, t]);
 
   const modelOptions: DropdownOption[] = useMemo(() => {
+    if (serverInfo?.availableModels && serverInfo.availableModels.length > 0) {
+      return serverInfo.availableModels.map((m) => {
+        const isOnline = m.engine === 'online';
+        const displayLabel = m.providerName ? `${m.name} · ${m.providerName}` : m.name;
+        return {
+          value: m.id,
+          ariaLabel: displayLabel,
+          label: (
+            <span className="model-dropdown-option">
+              <span className="model-dropdown-option-icon">
+                <ModelBrandLogo
+                  model={{
+                    id: m.id,
+                    name: m.name,
+                  }}
+                  size={16}
+                  alt=""
+                  aria-hidden="true"
+                />
+              </span>
+              <span className="model-dropdown-option-label">{displayLabel}</span>
+              {isOnline && (
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
+              )}
+            </span>
+          ),
+        };
+      });
+    }
+
     const options: DropdownOption[] = [];
     if (serverInfo?.models) {
       for (const m of serverInfo.models) {
@@ -359,9 +391,11 @@ export function RemoteWebEditor(): React.JSX.Element {
                     type: preset?.type,
                   }}
                   size={16}
+                  alt=""
+                  aria-hidden="true"
                 />
               </span>
-              <span>{label}</span>
+              <span className="model-dropdown-option-label">{label}</span>
             </span>
           ),
         });
@@ -376,20 +410,25 @@ export function RemoteWebEditor(): React.JSX.Element {
                 defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[providerDef.id] ?? providerDef.id,
               })
             : p.id;
-          const onlineBadge = t('web.online_badge', { defaultValue: 'Online' });
-          const label = `${providerName} (${onlineBadge})`;
+          const defaultBatchModel = providerDef?.models.find((m) => m.modes.includes('batch'));
+          const displayLabel = defaultBatchModel
+            ? `${defaultBatchModel.name} · ${providerName}`
+            : providerName;
           options.push({
             value: p.id,
-            ariaLabel: label,
+            ariaLabel: displayLabel,
             label: (
               <span className="model-dropdown-option">
-                <span
-                  className="model-dropdown-option-icon"
-                  style={{ color: 'var(--color-text-muted)' }}
-                >
-                  <OnlineIcon />
+                <span className="model-dropdown-option-icon">
+                  <ModelBrandLogo
+                    model={{ id: p.id, name: providerName }}
+                    size={16}
+                    alt=""
+                    aria-hidden="true"
+                  />
                 </span>
-                <span>{label}</span>
+                <span className="model-dropdown-option-label">{displayLabel}</span>
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
               </span>
             ),
           });

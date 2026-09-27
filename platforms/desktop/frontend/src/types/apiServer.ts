@@ -15,6 +15,18 @@ export interface ApiServerModelInfo {
   languageMode?: string;
 }
 
+export interface ApiServerAvailableModel {
+  id: string;
+  name: string;
+  description?: string;
+  engine: 'local' | 'online';
+  providerId?: string;
+  providerName?: string;
+  brand?: string;
+  languages: string[];
+  languageMode?: string;
+}
+
 export interface ApiServerOnlineAsrProviderInfo {
   id: string;
   languages: string[];
@@ -30,6 +42,7 @@ export interface ApiServerInfo {
   vadInstalled: boolean;
   punctuationInstalled: boolean;
   onlineAsrProviders: ApiServerOnlineAsrProviderInfo[];
+  availableModels?: ApiServerAvailableModel[];
 }
 
 export type ApiServerJobStatus =

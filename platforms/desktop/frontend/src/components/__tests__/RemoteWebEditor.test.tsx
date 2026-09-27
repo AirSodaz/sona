@@ -384,4 +384,55 @@ describe('RemoteWebEditor ASR Model Selection', () => {
       expect(onlineSvg).not.toBeNull();
     });
   });
+
+  it('renders unified availableModels with brand logo, unified label and cloud badge', async () => {
+    vi.mocked(apiServerClient.getInfo).mockResolvedValueOnce({
+      models: [],
+      gpuAvailable: false,
+      availableModels: [
+        {
+          id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17',
+          name: 'SenseVoice · Small',
+          engine: 'local',
+          brand: 'sensevoice',
+          languages: ['zh', 'en', 'ja', 'ko', 'yue'],
+        },
+        {
+          id: 'volcengine-doubao::volc.bigasr.auc_turbo',
+          name: 'Seed-ASR 极速版 (Flash)',
+          providerId: 'volcengine-doubao',
+          providerName: '火山引擎 豆包语音大模型',
+          engine: 'online',
+          brand: 'volcengine',
+          languages: ['zh', 'en'],
+        },
+      ],
+    });
+
+    render(<RemoteWebEditor />);
+
+    await waitFor(() => {
+      expect(apiServerClient.getInfo).toHaveBeenCalled();
+    });
+
+    const dropdownTrigger = await screen.findByRole('button', { name: /SenseVoice · Small/i });
+    expect(dropdownTrigger).toBeDefined();
+
+    fireEvent.click(dropdownTrigger);
+
+    await waitFor(() => {
+      const options = screen.getAllByRole('option');
+      expect(options.length).toBe(2);
+
+      // First option (local)
+      expect(options[0].textContent).toContain('SenseVoice · Small');
+      expect(options[0].querySelector('img.model-brand-logo')).not.toBeNull();
+      expect(options[0].querySelector('.model-dropdown-cloud-icon')).toBeNull();
+
+      // Second option (online)
+      expect(options[1].textContent).toContain('Seed-ASR 极速版 (Flash) · 火山引擎 豆包语音大模型');
+      expect(options[1].querySelector('img.model-brand-logo')).not.toBeNull();
+      expect(options[1].querySelector('.model-dropdown-cloud-icon')).not.toBeNull();
+    });
+  });
 });

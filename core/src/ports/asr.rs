@@ -886,6 +886,26 @@ struct OnlineAsrProviderManifest {
 #[derive(Debug, Clone, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
+pub struct OnlineAsrSupportedModel {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub modes: Vec<String>,
+    pub description: Option<String>,
+    #[serde(default)]
+    pub is_default: Option<bool>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct OnlineAsrProviderSpec {
+    pub model_name: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProvider {
     pub id: String,
     /// Languages the hosted model can recognize, sorted ascending ISO 639
@@ -897,6 +917,10 @@ pub struct OnlineAsrProvider {
     pub defaults: Value,
     pub streaming: OnlineAsrCapability,
     pub batch: OnlineAsrBatchCapability,
+    #[serde(default)]
+    pub spec: Option<OnlineAsrProviderSpec>,
+    #[serde(default)]
+    pub models: Vec<OnlineAsrSupportedModel>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
