@@ -131,3 +131,27 @@ fn migration_normalizes_legacy_gpu_acceleration_options() {
     let result_vulkan = migrate_app_config(Some(config_vulkan), "Default Rules".to_string());
     assert_eq!(result_vulkan.config["gpuAcceleration"], "vulkan");
 }
+
+#[test]
+fn migration_preserves_added_models_for_online_asr_providers() {
+    let mut config = default_config();
+    config["asr"]["providers"]["online"]["volcengine-doubao"]["addedModels"] =
+        json!(["volc.bigasr.auc_turbo", "volc.seedasr.sauc.duration"]);
+    config["asr"]["providers"]["online"]["groq-whisper"] = json!({
+        "apiKey": "test-key",
+        "model": "whisper-large-v3",
+        "batchEndpoint": "https://api.groq.com/openai/v1/audio/transcriptions",
+        "addedModels": ["whisper-large-v3-turbo", "whisper-large-v3"]
+    });
+
+    let result = migrate_app_config(Some(config.clone()), "Default Rules".to_string());
+
+    assert_eq!(
+        result.config["asr"]["providers"]["online"]["volcengine-doubao"]["addedModels"],
+        json!(["volc.bigasr.auc_turbo", "volc.seedasr.sauc.duration"])
+    );
+    assert_eq!(
+        result.config["asr"]["providers"]["online"]["groq-whisper"]["addedModels"],
+        json!(["whisper-large-v3-turbo", "whisper-large-v3"])
+    );
+}

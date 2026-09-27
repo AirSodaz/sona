@@ -302,7 +302,7 @@ export function ModelCard({
           <div className="model-card-title">
             <span className="model-name">
               {baseModel.name}
-              {!isMultiVersion && baseModel.versionLabel ? ` (${baseModel.versionLabel})` : ''}
+              {!isMultiVersion && baseModel.versionLabel ? ` · ${baseModel.versionLabel}` : ''}
             </span>
             <LanguageBadges languages={baseModel.languages} />
           </div>

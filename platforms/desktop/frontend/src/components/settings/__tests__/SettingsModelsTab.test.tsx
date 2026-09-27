@@ -795,7 +795,7 @@ describe('SettingsModelsTab speaker model selections', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
 
     await waitFor(() => {
-      screen.getByRole('button', { name: 'Volcengine' });
+      screen.getByRole('button', { name: /Seed-ASR.*Volcengine/i });
       expect(useConfigStore.getState().config.asr?.selections.batch.engine).toBe('online');
     });
   });
@@ -1097,5 +1097,62 @@ describe('SettingsModelsTab speaker model selections', () => {
 
     // Separation sensitivity should now be visible
     expect(within(cloudSpeakerPanel).getByRole('radiogroup')).toBeDefined();
+  });
+
+  it('formats cloud model dropdown options as "model · provider" for single and multiple models', async () => {
+    setTestConfig({
+      asr: {
+        providers: {
+          online: {
+            'volcengine-doubao': {
+              apiKey: 'test-key',
+              streamingEndpoint: 'wss://openspeech.bytedance.com/api/v3/sauc/bigmodel_async',
+              streamingResourceId: 'volc.seedasr.sauc.duration',
+              batchEndpoint: 'https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash',
+              batchResourceId: 'volc.bigasr.auc_turbo',
+            },
+            'groq-whisper': {
+              apiKey: 'test-groq-key',
+              batchEndpoint: 'https://api.groq.com/openai/v1/audio/transcriptions',
+              addedModels: ['whisper-large-v3-turbo', 'whisper-large-v3'],
+            },
+          },
+        },
+      },
+    });
+    renderTab(new Set());
+
+    // Open Live Streaming model dropdown (Volcengine has 1 streaming model: Seed-ASR)
+    fireEvent.click(screen.getByRole('button', { name: 'settings.select_streaming_model' }));
+    const liveOption = screen.getByRole('option', {
+      name: /Seed-ASR 流式版 \(Streaming\) · Volcengine/i,
+    });
+    expect(liveOption).toBeDefined();
+    // Select the live option to close dropdown and update selection
+    fireEvent.click(liveOption);
+
+    // Switch to Batch Import scenario
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
+    fireEvent.click(screen.getByRole('button', { name: 'settings.select_batch_model' }));
+    // Volcengine has 1 batch model: Seed-ASR 极速版 (Flash)
+    const volcBatchOption = screen.getByRole('option', {
+      name: /Seed-ASR 极速版 \(Flash\) · Volcengine/i,
+    });
+    expect(volcBatchOption).toBeDefined();
+
+    // Groq has 2 batch models: both should be formatted as "model · provider"
+    const options = screen.getAllByRole('option');
+    const labels = options.map((opt) => opt.getAttribute('aria-label') || opt.textContent);
+    expect(labels).toContain('Seed-ASR 极速版 (Flash) · Volcengine');
+    expect(labels).toContain('Whisper Large v3 Turbo · Groq');
+    expect(labels).toContain('Whisper Large v3 · Groq');
+
+    // All cloud model options should render consistent 14x14 cloud icons
+    const cloudIcons = options.map((opt) => opt.querySelector('.model-dropdown-cloud-icon'));
+    expect(cloudIcons.every((icon) => icon !== null)).toBe(true);
+    for (const icon of cloudIcons) {
+      expect(icon?.getAttribute('width')).toBe('14');
+      expect(icon?.getAttribute('height')).toBe('14');
+    }
   });
 });

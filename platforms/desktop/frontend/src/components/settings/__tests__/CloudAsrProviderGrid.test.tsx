@@ -235,4 +235,25 @@ describe('CloudAsrProviderGrid', () => {
     expect(chipContainer?.classList.contains('model-status-installed')).toBe(true);
     expect(chipContainer?.querySelector('svg')).not.toBeNull();
   });
+
+  it('renders a standalone check icon for added models in the model row without capsule badge text', () => {
+    render(<CloudAsrProviderGrid />);
+
+    // Expand Volcengine card
+    const volcengineHeader = screen.getByRole('button', { name: /Volcengine/i });
+    fireEvent.click(volcengineHeader);
+
+    const deleteFlashBtn = screen.getByRole('button', { name: /Delete Seed-ASR.*Flash/i });
+    const flashRow = deleteFlashBtn.closest('.model-version-row') as HTMLElement;
+    expect(flashRow).toBeDefined();
+
+    // Verify standalone .model-version-check icon exists
+    const checkIcon = flashRow.querySelector('.model-version-check');
+    expect(checkIcon).not.toBeNull();
+    expect(checkIcon?.tagName.toLowerCase()).toBe('svg');
+
+    // Verify no capsule badge or "Added" text inside the model row
+    expect(flashRow.querySelector('.cloud-model-added-badge')).toBeNull();
+    expect(within(flashRow).queryByText('Added')).toBeNull();
+  });
 });

@@ -292,7 +292,7 @@ mod tests {
         assert!(info.gpu_available);
         assert_eq!(info.models.len(), 1);
         assert_eq!(info.models[0].id, "sherpa-onnx-whisper-turbo");
-        assert_eq!(info.models[0].name, "Whisper (Large Turbo)");
+        assert_eq!(info.models[0].name, "Whisper · Large Turbo");
         assert!(!info.models[0].languages.is_empty());
         assert!(
             !info

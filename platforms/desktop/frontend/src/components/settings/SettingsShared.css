@@ -2195,23 +2195,6 @@
   transform: translateX(-50%) translateY(-4px);
 }
 
-.cloud-model-added-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  font-weight: 500;
-  color: var(--color-success, #4ea067);
-  background: color-mix(in srgb, var(--color-success, #4ea067) 12%, transparent);
-  padding: 1px 7px;
-  border-radius: var(--radius-full, 9999px);
-  line-height: 1.5;
-}
-
-.cloud-model-added-badge .model-version-check {
-  width: 12px;
-  height: 12px;
-}
 /* --- Responsive --- */
 
 @media (max-width: 480px) {

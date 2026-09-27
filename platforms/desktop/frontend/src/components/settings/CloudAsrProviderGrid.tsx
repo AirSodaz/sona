@@ -584,14 +584,7 @@ export function CloudAsrProviderGrid(): React.JSX.Element {
                                     {tag}
                                   </span>
                                 ))}
-                                {isAdded && (
-                                  <span className="cloud-model-added-badge">
-                                    <CheckIcon className="model-version-check" />
-                                    <span>
-                                      {t('settings.asr.added', { defaultValue: 'Added' })}
-                                    </span>
-                                  </span>
-                                )}
+                                {isAdded && <CheckIcon className="model-version-check" />}
                               </div>
 
                               <div className="model-card-side">

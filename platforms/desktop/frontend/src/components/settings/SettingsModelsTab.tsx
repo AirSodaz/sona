@@ -98,7 +98,7 @@ function toDropdownOptions(
               aria-hidden="true"
             />
           </span>
-          <span>{option.label}</span>
+          <span className="model-dropdown-option-label">{option.label}</span>
         </span>
       ) : (
         option.label
@@ -957,8 +957,8 @@ export function SettingsModelsTab({
                     aria-hidden="true"
                   />
                 </span>
-                <span>{providerLabel}</span>
-                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+                <span className="model-dropdown-option-label">{providerLabel}</span>
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
               </span>
             ),
           });
@@ -966,8 +966,7 @@ export function SettingsModelsTab({
       } else {
         for (const model of activeModels) {
           const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
-          const optionLabel =
-            activeModels.length > 1 ? `${providerLabel} · ${model.name}` : providerLabel;
+          const optionLabel = `${model.name} · ${providerLabel}`;
           cloudOptions.push({
             value: optionValue,
             ariaLabel: optionLabel,
@@ -981,8 +980,8 @@ export function SettingsModelsTab({
                     aria-hidden="true"
                   />
                 </span>
-                <span>{optionLabel}</span>
-                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+                <span className="model-dropdown-option-label">{optionLabel}</span>
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
               </span>
             ),
           });
@@ -1045,8 +1044,8 @@ export function SettingsModelsTab({
                     aria-hidden="true"
                   />
                 </span>
-                <span>{providerLabel}</span>
-                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+                <span className="model-dropdown-option-label">{providerLabel}</span>
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
               </span>
             ),
           });
@@ -1054,8 +1053,7 @@ export function SettingsModelsTab({
       } else {
         for (const model of activeModels) {
           const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
-          const optionLabel =
-            activeModels.length > 1 ? `${providerLabel} · ${model.name}` : providerLabel;
+          const optionLabel = `${model.name} · ${providerLabel}`;
           cloudOptions.push({
             value: optionValue,
             ariaLabel: optionLabel,
@@ -1069,8 +1067,8 @@ export function SettingsModelsTab({
                     aria-hidden="true"
                   />
                 </span>
-                <span>{optionLabel}</span>
-                <OnlineIcon style={{ color: 'var(--color-text-muted)', marginLeft: 'auto' }} />
+                <span className="model-dropdown-option-label">{optionLabel}</span>
+                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
               </span>
             ),
           });

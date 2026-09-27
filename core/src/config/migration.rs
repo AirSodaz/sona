@@ -835,6 +835,17 @@ fn normalize_asr_providers(providers: Option<&Value>) -> Value {
                     }
                 }
             }
+
+            if let Some(added_models) = existing_obj.get("addedModels").and_then(Value::as_array) {
+                let clean_added: Vec<Value> = added_models
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(|s| Value::String(s.to_string()))
+                    .collect();
+                norm.insert("addedModels".to_string(), Value::Array(clean_added));
+            }
         }
         online.insert(provider.id.clone(), Value::Object(norm));
     }

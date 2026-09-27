@@ -474,7 +474,7 @@ impl PresetModel {
     /// Returns the human-readable selection label for this preset model.
     pub fn selection_label(&self) -> String {
         match &self.version_label {
-            Some(version_label) => format!("{} ({})", self.name, version_label),
+            Some(version_label) => format!("{} · {}", self.name, version_label),
             None => self.name.clone(),
         }
     }
@@ -790,7 +790,7 @@ impl ModelSelectionOption {
 
 fn model_selection_label(model: &ModelCatalogModel) -> String {
     match &model.version_label {
-        Some(version_label) => format!("{} ({})", model.name, version_label),
+        Some(version_label) => format!("{} · {}", model.name, version_label),
         None => model.name.clone(),
     }
 }

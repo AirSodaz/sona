@@ -973,3 +973,29 @@ fn supports_language_follows_mode_rules() {
     assert_eq!(v5_vad.id, "silero-v5-vad");
     assert!(!v5_vad.supports_language("auto"));
 }
+
+#[test]
+fn model_selection_labels_are_formatted_with_dot_separator() {
+    let sensevoice =
+        find_preset_model("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17").unwrap();
+    assert_eq!(sensevoice.selection_label(), "SenseVoice · Int8");
+
+    let whisper = find_preset_model("sherpa-onnx-whisper-turbo").unwrap();
+    assert_eq!(whisper.selection_label(), "Whisper · Large Turbo");
+
+    let qwen = find_preset_model("sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25").unwrap();
+    assert_eq!(qwen.selection_label(), "Qwen3 ASR · 0.6B Int8");
+
+    let vad = find_preset_model("silero-vad").unwrap();
+    assert_eq!(vad.selection_label(), "Silero - VAD");
+
+    let snapshot =
+        build_model_catalog_snapshot_with_installed_ids(Path::new("C:/models"), &HashSet::new());
+    let sensevoice_opt = snapshot
+        .selection_options
+        .streaming
+        .iter()
+        .find(|opt| opt.id == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+        .expect("SenseVoice option must exist");
+    assert_eq!(sensevoice_opt.label, "SenseVoice · Int8");
+}

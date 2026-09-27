@@ -59,7 +59,7 @@ describe('ModelCard with ModelBrandLogo', () => {
     expect(img?.getAttribute('alt')).toBe('SenseVoice');
 
     // Verify model title
-    expect(screen.getByText(/SenseVoice \(Int8\)/)).toBeTruthy();
+    expect(screen.getByText(/SenseVoice · Int8/)).toBeTruthy();
   });
 
   it('renders family brand logo when multiple versions are present', () => {
