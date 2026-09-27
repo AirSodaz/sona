@@ -29,7 +29,7 @@ test('computeNextVersion calculates patch, minor, major increments and explicit 
   assert.equal(computeNextVersion('0.8.1', 'v2.0.0'), '2.0.0');
 });
 
-test('bumpVersionFiles updates all 8 metadata files accurately in a repository directory', () => {
+test('bumpVersionFiles updates all 6 configuration files accurately in a repository directory', () => {
   const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sona-bump-test-'));
 
   try {
@@ -73,35 +73,12 @@ test('bumpVersionFiles updates all 8 metadata files accurately in a repository d
       'utf8',
     );
 
-    // 6. Android sample-library build.gradle.kts
-    const androidSampleDir = path.join(
-      tempDir,
-      'platforms', 'android', 'sample-consumer', 'sample-library',
-    );
-    fs.mkdirSync(androidSampleDir, { recursive: true });
+    // 6. Android sample-consumer gradle.properties
+    const sampleConsumerDir = path.join(tempDir, 'platforms', 'android', 'sample-consumer');
+    fs.mkdirSync(sampleConsumerDir, { recursive: true });
     fs.writeFileSync(
-      path.join(androidSampleDir, 'build.gradle.kts'),
-      'group = "com.sona"\nversion = "0.8.1"\n',
-      'utf8',
-    );
-
-    // 7. Android consumer-library build.gradle.kts
-    const androidConsumerDir = path.join(
-      tempDir,
-      'platforms', 'android', 'sample-consumer', 'consumer-library',
-    );
-    fs.mkdirSync(androidConsumerDir, { recursive: true });
-    fs.writeFileSync(
-      path.join(androidConsumerDir, 'build.gradle.kts'),
-      'dependencies {\n    implementation("com.sona:sona-uniffi-bindings:0.8.1")\n}\n',
-      'utf8',
-    );
-
-    // 8. Android README.md
-    const androidReadmeDir = path.join(tempDir, 'platforms', 'android');
-    fs.writeFileSync(
-      path.join(androidReadmeDir, 'README.md'),
-      'written as `com.sona:sona-uniffi-bindings:0.8.1`\nand `com.sona:sona-uniffi-bindings:0.8.1`.\n',
+      path.join(sampleConsumerDir, 'gradle.properties'),
+      'SONA_REPO_ROOT=../../../..\nSONA_VERSION=0.8.1\n',
       'utf8',
     );
 
@@ -140,23 +117,10 @@ test('bumpVersionFiles updates all 8 metadata files accurately in a repository d
       /suppliedAndroidVersionName\.ifEmpty \{ "0\.8\.2" \}/u,
     );
 
-    // Verify Android sample-library gradle
+    // Verify Android sample-consumer gradle.properties
     assert.match(
-      fs.readFileSync(path.join(androidSampleDir, 'build.gradle.kts'), 'utf8'),
-      /^version = "0\.8\.2"$/mu,
-    );
-
-    // Verify Android consumer-library gradle
-    assert.match(
-      fs.readFileSync(path.join(androidConsumerDir, 'build.gradle.kts'), 'utf8'),
-      /com\.sona:sona-uniffi-bindings:0\.8\.2/u,
-    );
-
-    // Verify Android README.md
-    const readmeContent = fs.readFileSync(path.join(androidReadmeDir, 'README.md'), 'utf8');
-    assert.equal(
-      [...readmeContent.matchAll(/com\.sona:sona-uniffi-bindings:0\.8\.2/gu)].length,
-      2,
+      fs.readFileSync(path.join(sampleConsumerDir, 'gradle.properties'), 'utf8'),
+      /^SONA_VERSION=0\.8\.2$/mu,
     );
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });

@@ -93,33 +93,14 @@ export function bumpVersionFiles(targetVersionInput, options = {}) {
     `$1${targetVersion}$2`,
   );
 
-  // 6. Android sample-library build.gradle.kts
-  const androidSampleLibraryPath = path.join(
+  // 6. Android sample-consumer gradle.properties
+  const sampleConsumerGradlePropertiesPath = path.join(
     root,
-    'platforms', 'android', 'sample-consumer', 'sample-library', 'build.gradle.kts',
+    'platforms', 'android', 'sample-consumer', 'gradle.properties',
   );
   replaceInFile(
-    androidSampleLibraryPath,
-    /(^version\s*=\s*)"[^"]+"/mu,
-    `$1"${targetVersion}"`,
-  );
-
-  // 7. Android consumer-library build.gradle.kts
-  const androidConsumerLibraryPath = path.join(
-    root,
-    'platforms', 'android', 'sample-consumer', 'consumer-library', 'build.gradle.kts',
-  );
-  replaceInFile(
-    androidConsumerLibraryPath,
-    /(com\.sona:sona-uniffi-bindings:)[^\s")]+/gu,
-    `$1${targetVersion}`,
-  );
-
-  // 8. Android README.md
-  const androidReadmePath = path.join(root, 'platforms', 'android', 'README.md');
-  replaceInFile(
-    androidReadmePath,
-    /(com\.sona:sona-uniffi-bindings:)[^\s"`)]+/gu,
+    sampleConsumerGradlePropertiesPath,
+    /(^SONA_VERSION\s*=\s*)[^\r\n]+/mu,
     `$1${targetVersion}`,
   );
 
@@ -145,7 +126,7 @@ export function runCli(argv = process.argv.slice(2), options = {}) {
   const targetInput = args[0];
   const { previousVersion, targetVersion } = bumpVersionFiles(targetInput, { repoRoot: root });
 
-  console.log(`Updated metadata from ${previousVersion} to ${targetVersion} in 8 configuration/doc files.`);
+  console.log(`Updated metadata from ${previousVersion} to ${targetVersion} in 6 configuration files.`);
 
   if (!noCargoCheck) {
     console.log('Synchronizing Cargo.lock via `cargo check --workspace --tests`...');

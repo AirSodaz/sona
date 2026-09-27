@@ -32,18 +32,21 @@ test('release version metadata stays aligned with the root package version', () 
     new RegExp(`suppliedAndroidVersionName\\.ifEmpty \\{ "${versionPattern}" \\}`, 'u'),
   );
   assert.match(
+    read('platforms', 'android', 'sample-consumer', 'gradle.properties'),
+    new RegExp(`^SONA_VERSION=${versionPattern}$`, 'mu'),
+  );
+  assert.match(
     read('platforms', 'android', 'sample-consumer', 'sample-library', 'build.gradle.kts'),
-    new RegExp(`^version = "${versionPattern}"$`, 'mu'),
+    /version = sonaVersion/u,
   );
   assert.match(
     read('platforms', 'android', 'sample-consumer', 'consumer-library', 'build.gradle.kts'),
-    new RegExp(`com\\.sona:sona-uniffi-bindings:${versionPattern}`, 'u'),
+    /com\.sona:sona-uniffi-bindings:\$sonaVersion/u,
   );
 
   const androidReadme = read('platforms', 'android', 'README.md');
   assert.equal(
-    [...androidReadme.matchAll(new RegExp(`com\\.sona:sona-uniffi-bindings:${versionPattern}`, 'gu'))]
-      .length,
+    [...androidReadme.matchAll(/com\.sona:sona-uniffi-bindings:<version>/gu)].length,
     2,
   );
 });

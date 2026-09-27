@@ -25,6 +25,8 @@ kotlin {
     }
 }
 
+val sonaVersion = providers.gradleProperty("SONA_VERSION").get()
+
 dependencies {
-    implementation("com.sona:sona-uniffi-bindings:0.9.2")
+    implementation("com.sona:sona-uniffi-bindings:$sonaVersion")
 }

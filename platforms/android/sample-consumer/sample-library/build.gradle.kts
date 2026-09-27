@@ -7,8 +7,10 @@ plugins {
     id("maven-publish")
 }
 
+val sonaVersion = providers.gradleProperty("SONA_VERSION").get()
+
 group = "com.sona"
-version = "0.9.2"
+version = sonaVersion
 
 android {
     namespace = "com.sona.uniffi.sample"
