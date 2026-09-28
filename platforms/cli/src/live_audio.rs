@@ -32,19 +32,19 @@ impl CaptureFailure {
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum LiveAudioChunk {
+pub enum LiveAudioChunk {
     PcmS16Le(Vec<u8>),
     Samples(Vec<f32>),
 }
 
 #[derive(Debug, PartialEq)]
-pub(crate) enum LiveAudioMessage {
+pub enum LiveAudioMessage {
     Chunk(LiveAudioChunk),
     Eof,
     Error(String),
 }
 
-pub(crate) struct RunningAudioInput {
+pub struct RunningAudioInput {
     pub(crate) receiver: tokio::sync::mpsc::Receiver<LiveAudioMessage>,
     stop_sender: Option<std::sync::mpsc::Sender<()>>,
     pub(crate) device_name: Option<String>,
@@ -52,7 +52,7 @@ pub(crate) struct RunningAudioInput {
 }
 
 impl RunningAudioInput {
-    pub(crate) fn from_parts(
+    pub fn from_parts(
         receiver: tokio::sync::mpsc::Receiver<LiveAudioMessage>,
         stop_sender: Option<std::sync::mpsc::Sender<()>>,
         device_name: Option<String>,

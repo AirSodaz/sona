@@ -60,7 +60,7 @@ impl TranscriptAccumulator {
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
-pub(crate) enum LiveStopReason {
+pub enum LiveStopReason {
     CtrlC,
     Eof,
     Duration,
@@ -102,12 +102,12 @@ pub(crate) fn to_ndjson_line(event: &LiveOutputEvent) -> Result<String, serde_js
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum LiveOutputFormat {
+pub enum LiveOutputFormat {
     Text,
     Ndjson,
 }
 
-pub(crate) struct LiveOutputRenderer {
+pub struct LiveOutputRenderer {
     format: LiveOutputFormat,
     terminal: bool,
     session_id: String,
@@ -116,11 +116,7 @@ pub(crate) struct LiveOutputRenderer {
 }
 
 impl LiveOutputRenderer {
-    pub(crate) fn new(
-        format: LiveOutputFormat,
-        terminal: bool,
-        session_id: impl Into<String>,
-    ) -> Self {
+    pub fn new(format: LiveOutputFormat, terminal: bool, session_id: impl Into<String>) -> Self {
         Self {
             format,
             terminal,
@@ -130,7 +126,7 @@ impl LiveOutputRenderer {
         }
     }
 
-    pub(crate) fn write_started<W: Write + ?Sized>(
+    pub fn write_started<W: Write + ?Sized>(
         &mut self,
         writer: &mut W,
         source: &str,
@@ -152,7 +148,7 @@ impl LiveOutputRenderer {
         Ok(())
     }
 
-    pub(crate) fn write_update<W: Write + ?Sized>(
+    pub fn write_update<W: Write + ?Sized>(
         &mut self,
         writer: &mut W,
         stage: &str,
@@ -174,7 +170,7 @@ impl LiveOutputRenderer {
         }
     }
 
-    pub(crate) fn write_stopped<W: Write + ?Sized>(
+    pub fn write_stopped<W: Write + ?Sized>(
         &mut self,
         writer: &mut W,
         reason: LiveStopReason,
@@ -204,7 +200,7 @@ impl LiveOutputRenderer {
         }
     }
 
-    pub(crate) fn write_error<W: Write + ?Sized>(
+    pub fn write_error<W: Write + ?Sized>(
         &mut self,
         writer: &mut W,
         message: &str,
@@ -221,7 +217,7 @@ impl LiveOutputRenderer {
         Ok(())
     }
 
-    pub(crate) fn segments(&self) -> &[TranscriptSegment] {
+    pub fn segments(&self) -> &[TranscriptSegment] {
         self.accumulator.segments()
     }
 

@@ -4,14 +4,14 @@ mod desktop_paths;
 mod diagnostics;
 mod export;
 mod init_config;
-mod live_audio;
-mod live_output;
+pub mod live_audio;
+pub mod live_output;
 mod models;
 mod online_asr;
 mod serve;
 mod table;
 mod transcribe;
-mod transcribe_live;
+pub mod transcribe_live;
 
 use clap::{Parser, Subcommand};
 use std::ffi::OsString;
