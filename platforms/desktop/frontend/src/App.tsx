@@ -247,7 +247,7 @@ function App(): React.JSX.Element {
       {/* Header */}
       <header className="app-header">
         <div className="app-logo">
-          <h1>Sona</h1>
+          <img src="/sona.svg" alt="Sona" className="app-logo-img" width={28} height={28} />
           <ProjectSelectorDropdown onOpenProjects={() => setMode('projects')} />
         </div>
 

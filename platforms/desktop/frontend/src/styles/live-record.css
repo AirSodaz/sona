@@ -7,7 +7,7 @@
   flex-direction: column;
   height: 100%;
   gap: 16px;
-  padding: 16px;
+  padding: 20px;
 }
 
 .live-record-main-content {
@@ -15,13 +15,12 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  /* justify-content: center; Removed to align to top */
   gap: 24px;
 }
 
 .visualizer-wrapper {
   width: 100%;
-  height: 120px;
+  height: 160px;
   border-radius: var(--radius-lg);
   overflow: hidden;
   background: var(--color-bg-secondary);
@@ -75,6 +74,23 @@
   box-shadow: 0 4px 12px var(--color-recording-glow);
 }
 
+/* Breathing pulse animation for active recording button */
+@keyframes recording-breathe {
+  0%,
+  100% {
+    box-shadow: 0 4px 12px var(--color-recording-glow);
+  }
+  50% {
+    box-shadow:
+      0 4px 20px var(--color-recording-glow),
+      0 0 0 6px color-mix(in srgb, var(--color-recording) 12%, transparent);
+  }
+}
+
+.control-button.stop {
+  animation: recording-breathe 2s ease-in-out infinite;
+}
+
 .control-button.start:focus-visible,
 .control-button.stop:focus-visible {
   box-shadow:
@@ -116,4 +132,10 @@
   color: var(--color-text-muted);
   font-size: 0.875rem;
   text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .control-button.stop {
+    animation: none;
+  }
 }

@@ -1,20 +1,17 @@
-.app-logo h1 {
-  font-size: 1rem;
-  font-weight: 500;
-  color: var(--color-text-primary);
-  /* Removed gradient text for cleaner look */
-  background: none;
-  -webkit-text-fill-color: initial;
-  opacity: 0.9;
+.app-logo-img {
+  flex-shrink: 0;
+  border-radius: 6px;
+  opacity: 0.92;
   transition: opacity var(--transition-normal);
 }
 
-.app-logo:hover h1 {
+.app-logo:hover .app-logo-img {
   opacity: 1;
 }
+
 .project-selector {
   position: relative;
-  margin-left: 8px;
+  margin-left: 0;
   z-index: 1001;
 }
 .project-selector-trigger {
@@ -477,6 +474,11 @@
   position: absolute;
   inset: 0 0 0 350px;
   z-index: 2;
+  border-top: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-lg);
+  overflow: hidden;
+  background: var(--color-bg-primary);
 }
 
 .persistent-transcript-host.is-hidden {
@@ -498,23 +500,38 @@
    =========================== */
 
 .tab-navigation {
+  position: relative;
   display: flex;
   background: var(--color-bg-tertiary);
-  /* Container background */
   padding: 4px;
-  /* Padding for the "pills" */
   border-radius: var(--radius-md);
   gap: 4px;
 }
 
+/* Sliding pill indicator */
+.tab-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 8px - 8px) / 3); /* 3 tabs, minus container padding and gaps */
+  height: calc(100% - 8px);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+
 .tab-button {
+  position: relative;
+  z-index: 1;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
   padding: 4px 12px;
   height: 32px;
-  /* Fixed height for consistency */
   border: none;
   background: transparent;
   color: var(--color-text-muted);
@@ -523,9 +540,10 @@
   font-weight: 500;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  transition: all var(--transition-fast);
+  transition:
+    color var(--transition-fast),
+    font-weight var(--transition-fast);
   min-width: 120px;
-  /* Consistent width */
 }
 
 .tab-button:hover {
@@ -539,9 +557,6 @@
 
 .tab-button.active {
   color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
-  /* White pill */
-  box-shadow: var(--shadow-sm);
   font-weight: 600;
 }
 
@@ -562,8 +577,6 @@
 .panel-container {
   display: flex;
   flex: 1;
-  gap: 1px;
-  background: var(--color-border);
   overflow: hidden;
 }
 
@@ -575,23 +588,24 @@
 
 .panel-left {
   flex: 0 0 350px;
-  /* Fixed width sidebar, like Notion */
   background: var(--color-bg-secondary);
-  border-right: 1px solid var(--color-border);
 }
 
 .panel-right {
   flex: 1;
   min-width: 500px;
   background: var(--color-bg-primary);
-  /* Paper background */
+  border-top: 1px solid var(--color-border);
+  border-left: 1px solid var(--color-border);
+  border-top-left-radius: var(--radius-lg);
+  overflow: hidden;
 }
 
 .projects-mode-shell {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  background: var(--color-bg-primary);
+  background: var(--color-bg-secondary);
 }
 
 .workspace-mode-shell {
@@ -599,7 +613,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  background: var(--color-bg-primary);
+  background: var(--color-bg-secondary);
 }
 
 .current-project-tag {

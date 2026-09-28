@@ -26,6 +26,8 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
   const { t } = useTranslation();
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const TAB_MODES: AppMode[] = ['live', 'batch', 'projects'];
+  const activeIndex = TAB_MODES.indexOf(mode);
 
   const handleTabChange = useCallback(
     (newMode: AppMode) => {
@@ -95,6 +97,13 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
       role="tablist"
       aria-label={t('panel.mode_selection')}
     >
+      <div
+        className="tab-slider"
+        style={{
+          transform: `translateX(calc(${activeIndex} * (100% + 4px)))`,
+        }}
+        aria-hidden="true"
+      />
       <button
         className={`tab-button ${mode === 'live' ? 'active' : ''}`}
         onClick={() => handleTabChange('live')}

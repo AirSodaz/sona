@@ -22,8 +22,8 @@
 .drop-zone:hover,
 .drop-zone.drag-over,
 .drop-zone:focus-visible {
-  border-color: var(--color-accent-primary);
-  background: var(--color-bg-hover);
+  border-color: var(--color-brand);
+  background: var(--color-brand-light);
   outline: none;
 }
 
@@ -33,7 +33,19 @@
 
 .drop-zone.drag-over {
   transform: scale(1.005);
-  box-shadow: var(--shadow-lg);
+  box-shadow:
+    0 0 24px var(--color-brand-glow),
+    var(--shadow-lg);
+}
+
+@keyframes drop-zone-icon-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
 }
 
 .drop-zone-icon {
@@ -43,8 +55,8 @@
 }
 
 .drop-zone:hover .drop-zone-icon {
-  color: var(--color-text-secondary);
-  transform: translateY(-4px);
+  color: var(--color-brand);
+  animation: drop-zone-icon-bounce 0.6s ease-in-out;
 }
 
 .drop-zone-text {
@@ -77,6 +89,12 @@
 
 .drop-zone:hover .supported-formats {
   opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .drop-zone:hover .drop-zone-icon {
+    animation: none;
+  }
 }
 
 /* ===========================

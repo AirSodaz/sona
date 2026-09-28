@@ -216,7 +216,8 @@
   transition:
     background-color var(--transition-fast),
     border-color var(--transition-fast),
-    box-shadow var(--transition-fast);
+    box-shadow var(--transition-fast),
+    transform var(--transition-fast);
 }
 
 .history-item.is-selection-mode {
@@ -225,7 +226,8 @@
 
 .history-item:hover {
   border-color: var(--color-border-hover);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
 }
 
 .history-item.selected {
