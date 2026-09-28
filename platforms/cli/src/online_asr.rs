@@ -1,10 +1,9 @@
-use clap::{Args, ValueEnum};
+use clap::Args;
+use clap::builder::PossibleValuesParser;
 use serde_json::{Map, Value};
 use sona_core::ports::asr::{
-    ASSEMBLYAI_PROVIDER_ID, AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind,
-    AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
-    GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID,
-    OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    AsrEngineConfig, AsrMode, AsrPortError, AsrPortErrorKind, AsrTranscriptionRequest,
+    OnlineAsrProviderRequest, find_online_asr_provider, online_asr_provider_ids,
 };
 use sona_core::transcription::postprocess::{
     TranscriptNormalizationOptions, TranscriptPostprocessOptions,
@@ -13,48 +12,15 @@ use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliResult};
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub(crate) enum OnlineAsrProviderArg {
-    VolcengineDoubao,
-    GroqWhisper,
-    MistralVoxtral,
-    OpenaiWhisper,
-    Deepgram,
-    Assemblyai,
-    Elevenlabs,
-}
-
-impl OnlineAsrProviderArg {
-    fn provider_id(self) -> &'static str {
-        match self {
-            Self::VolcengineDoubao => VOLCENGINE_DOUBAO_PROVIDER_ID,
-            Self::GroqWhisper => GROQ_WHISPER_PROVIDER_ID,
-            Self::MistralVoxtral => MISTRAL_VOXTRAL_PROVIDER_ID,
-            Self::OpenaiWhisper => OPENAI_WHISPER_PROVIDER_ID,
-            Self::Deepgram => DEEPGRAM_PROVIDER_ID,
-            Self::Assemblyai => ASSEMBLYAI_PROVIDER_ID,
-            Self::Elevenlabs => ELEVENLABS_PROVIDER_ID,
-        }
-    }
-
-    fn default_api_key_env(self) -> &'static str {
-        match self {
-            Self::VolcengineDoubao => "SONA_VOLCENGINE_ASR_API_KEY",
-            Self::GroqWhisper => "GROQ_API_KEY",
-            Self::MistralVoxtral => "MISTRAL_API_KEY",
-            Self::OpenaiWhisper => "OPENAI_API_KEY",
-            Self::Deepgram => "DEEPGRAM_API_KEY",
-            Self::Assemblyai => "ASSEMBLYAI_API_KEY",
-            Self::Elevenlabs => "ELEVENLABS_API_KEY",
-        }
-    }
+fn online_provider_value_parser() -> PossibleValuesParser {
+    PossibleValuesParser::new(online_asr_provider_ids())
 }
 
 #[derive(Clone, Debug, Args)]
 pub(crate) struct OnlineAsrArgs {
     /// Use an online ASR provider instead of local Sherpa ASR.
-    #[arg(long, value_enum, value_name = "PROVIDER")]
-    pub(crate) online_provider: Option<OnlineAsrProviderArg>,
+    #[arg(long, value_name = "PROVIDER", value_parser = online_provider_value_parser())]
+    pub(crate) online_provider: Option<String>,
     /// Environment variable containing the online ASR API key.
     #[arg(long, value_name = "NAME", requires = "online_provider")]
     api_key_env: Option<String>,
@@ -91,10 +57,9 @@ impl OnlineAsrArgs {
     where
         F: FnOnce(&str) -> Result<String, ()>,
     {
-        let provider = self.online_provider.ok_or_else(|| {
+        let provider_id = self.online_provider.as_deref().ok_or_else(|| {
             CliError::Validation("Missing required --online-provider.".to_string())
         })?;
-        let provider_id = provider.provider_id();
         let manifest = find_online_asr_provider(provider_id).ok_or_else(|| {
             CliError::Validation(format!(
                 "Online ASR provider manifest is missing {provider_id}."
@@ -119,7 +84,12 @@ impl OnlineAsrArgs {
         let env_name = self
             .api_key_env
             .as_deref()
-            .unwrap_or_else(|| provider.default_api_key_env());
+            .or_else(|| manifest.default_api_key_env())
+            .ok_or_else(|| {
+                CliError::Validation(format!(
+                    "Online ASR provider {provider_id} does not declare a default API key environment variable; specify one with --api-key-env."
+                ))
+            })?;
         if env_name.trim().is_empty() {
             return Err(CliError::Validation(
                 "--api-key-env must not be empty.".to_string(),
@@ -212,12 +182,18 @@ pub(crate) fn map_asr_error(error: AsrPortError) -> CliError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use clap::Parser;
     use serde_json::json;
+    use sona_core::ports::asr::{
+        ASSEMBLYAI_PROVIDER_ID, DEEPGRAM_PROVIDER_ID, ELEVENLABS_PROVIDER_ID,
+        GROQ_WHISPER_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID, VOLCENGINE_DOUBAO_PROVIDER_ID,
+        online_asr_providers,
+    };
     use tempfile::tempdir;
 
-    fn online_args(provider: OnlineAsrProviderArg) -> OnlineAsrArgs {
+    fn online_args(provider: impl Into<String>) -> OnlineAsrArgs {
         OnlineAsrArgs {
-            online_provider: Some(provider),
+            online_provider: Some(provider.into()),
             api_key_env: None,
             online_config: None,
         }
@@ -225,7 +201,7 @@ mod tests {
 
     #[test]
     fn builds_batch_request_without_persisting_the_secret() {
-        let request = online_args(OnlineAsrProviderArg::GroqWhisper)
+        let request = online_args(GROQ_WHISPER_PROVIDER_ID)
             .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |name| {
                 assert_eq!(name, "GROQ_API_KEY");
                 Ok("secret-value".to_string())
@@ -241,7 +217,7 @@ mod tests {
 
     #[test]
     fn rejects_batch_only_provider_for_streaming() {
-        let error = online_args(OnlineAsrProviderArg::GroqWhisper)
+        let error = online_args(GROQ_WHISPER_PROVIDER_ID)
             .build_request_with(AsrMode::Streaming, "auto".to_string(), false, None, |_| {
                 Ok("secret-value".to_string())
             })
@@ -260,7 +236,7 @@ mod tests {
         )
         .unwrap();
         let args = OnlineAsrArgs {
-            online_provider: Some(OnlineAsrProviderArg::GroqWhisper),
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
             api_key_env: Some("CUSTOM_ASR_KEY".to_string()),
             online_config: Some(config_path.clone()),
         };
@@ -285,38 +261,79 @@ mod tests {
     }
 
     #[test]
-    fn online_provider_arg_maps_all_providers_to_correct_env_and_id() {
+    fn manifest_providers_have_correct_env_and_id() {
+        for provider in online_asr_providers() {
+            assert!(!provider.id.is_empty());
+            assert!(
+                provider.default_api_key_env().is_some(),
+                "provider {} must declare a default api key env",
+                provider.id
+            );
+        }
         assert_eq!(
-            OnlineAsrProviderArg::OpenaiWhisper.provider_id(),
-            OPENAI_WHISPER_PROVIDER_ID
+            find_online_asr_provider(OPENAI_WHISPER_PROVIDER_ID)
+                .unwrap()
+                .default_api_key_env(),
+            Some("OPENAI_API_KEY")
         );
         assert_eq!(
-            OnlineAsrProviderArg::OpenaiWhisper.default_api_key_env(),
-            "OPENAI_API_KEY"
+            find_online_asr_provider(DEEPGRAM_PROVIDER_ID)
+                .unwrap()
+                .default_api_key_env(),
+            Some("DEEPGRAM_API_KEY")
         );
         assert_eq!(
-            OnlineAsrProviderArg::Deepgram.provider_id(),
-            DEEPGRAM_PROVIDER_ID
+            find_online_asr_provider(ASSEMBLYAI_PROVIDER_ID)
+                .unwrap()
+                .default_api_key_env(),
+            Some("ASSEMBLYAI_API_KEY")
         );
         assert_eq!(
-            OnlineAsrProviderArg::Deepgram.default_api_key_env(),
-            "DEEPGRAM_API_KEY"
+            find_online_asr_provider(ELEVENLABS_PROVIDER_ID)
+                .unwrap()
+                .default_api_key_env(),
+            Some("ELEVENLABS_API_KEY")
         );
         assert_eq!(
-            OnlineAsrProviderArg::Assemblyai.provider_id(),
-            ASSEMBLYAI_PROVIDER_ID
+            find_online_asr_provider(VOLCENGINE_DOUBAO_PROVIDER_ID)
+                .unwrap()
+                .default_api_key_env(),
+            Some("SONA_VOLCENGINE_ASR_API_KEY")
         );
-        assert_eq!(
-            OnlineAsrProviderArg::Assemblyai.default_api_key_env(),
-            "ASSEMBLYAI_API_KEY"
-        );
-        assert_eq!(
-            OnlineAsrProviderArg::Elevenlabs.provider_id(),
-            ELEVENLABS_PROVIDER_ID
-        );
-        assert_eq!(
-            OnlineAsrProviderArg::Elevenlabs.default_api_key_env(),
-            "ELEVENLABS_API_KEY"
+    }
+
+    #[test]
+    fn clap_accepts_all_manifest_providers_and_rejects_unknown() {
+        #[derive(Parser, Debug)]
+        struct TestCli {
+            #[command(flatten)]
+            online: OnlineAsrArgs,
+        }
+
+        for provider in online_asr_providers() {
+            let cli = TestCli::try_parse_from(["test", "--online-provider", &provider.id]).unwrap();
+            assert_eq!(
+                cli.online.online_provider.as_deref(),
+                Some(provider.id.as_str())
+            );
+        }
+
+        let err =
+            TestCli::try_parse_from(["test", "--online-provider", "unknown-provider"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::InvalidValue);
+    }
+
+    #[test]
+    fn rejects_missing_manifest_provider_in_request_builder() {
+        let error = online_args("unknown-provider")
+            .build_request_with(AsrMode::Batch, "auto".to_string(), false, None, |_| {
+                Ok("secret".to_string())
+            })
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Online ASR provider manifest is missing unknown-provider")
         );
     }
 }

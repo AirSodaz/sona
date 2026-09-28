@@ -100,14 +100,17 @@ export SONA_VOLCENGINE_ASR_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
 ```
 
-Supported providers are `volcengine-doubao`, `groq-whisper`, and `mistral-voxtral`. The API key is read from a provider-specific environment variable by default:
+Supported providers include `volcengine-doubao`, `groq-whisper`, `mistral-voxtral`, `openai-whisper`, `deepgram`, `assemblyai`, and `elevenlabs` (dynamically loaded from `online-asr-providers.json`). The API key is read from a provider-specific environment variable by default:
 
 | Provider | Default environment variable |
 | --- | --- |
 | `volcengine-doubao` | `SONA_VOLCENGINE_ASR_API_KEY` |
 | `groq-whisper` | `GROQ_API_KEY` |
 | `mistral-voxtral` | `MISTRAL_API_KEY` |
-
+| `openai-whisper` | `OPENAI_API_KEY` |
+| `deepgram` | `DEEPGRAM_API_KEY` |
+| `assemblyai` | `ASSEMBLYAI_API_KEY` |
+| `elevenlabs` | `ELEVENLABS_API_KEY` |
 Use `--api-key-env NAME` to select another variable. `--online-config FILE` accepts a JSON object for non-secret endpoint/model overrides; it must not contain `apiKey` or `api_key`.
 
 Local-only flags such as `--model-id`, `--models-dir`, VAD/punctuation options, thread count, GPU mode, and `--save-wav` are rejected when an online provider is selected. `--force` is required to replace an existing output file.

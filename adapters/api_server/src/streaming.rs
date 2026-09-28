@@ -628,7 +628,6 @@ mod tests {
 
     #[tokio::test]
     async fn mock_streaming_factory_session_lifecycle() {
-        use sona_core::ports::asr::AsrStreamingSession;
         let session = Arc::new(MockStreamingSession {
             started: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             flushed: Arc::new(std::sync::atomic::AtomicBool::new(false)),

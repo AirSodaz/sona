@@ -100,14 +100,17 @@ set SONA_VOLCENGINE_ASR_API_KEY=...
 sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
 ```
 
-支持的 provider 为 `volcengine-doubao`、`groq-whisper` 和 `mistral-voxtral`。默认环境变量如下：
+支持的 provider 包括 `volcengine-doubao`、`groq-whisper`、`mistral-voxtral`、`openai-whisper`、`deepgram`、`assemblyai` 与 `elevenlabs`（动态同步自 `online-asr-providers.json`）。默认环境变量如下：
 
 | Provider | 默认环境变量 |
 | --- | --- |
 | `volcengine-doubao` | `SONA_VOLCENGINE_ASR_API_KEY` |
 | `groq-whisper` | `GROQ_API_KEY` |
 | `mistral-voxtral` | `MISTRAL_API_KEY` |
-
+| `openai-whisper` | `OPENAI_API_KEY` |
+| `deepgram` | `DEEPGRAM_API_KEY` |
+| `assemblyai` | `ASSEMBLYAI_API_KEY` |
+| `elevenlabs` | `ELEVENLABS_API_KEY` |
 使用 `--api-key-env NAME` 指定其他变量。`--online-config FILE` 接受用于覆盖 endpoint/model 等非敏感配置的 JSON 对象；其中不得包含 `apiKey` 或 `api_key`。
 
 选择在线 provider 后，`--model-id`、`--models-dir`、VAD/标点参数、线程数、GPU 模式和 `--save-wav` 等本地参数会被拒绝。覆盖已有输出文件必须使用 `--force`。

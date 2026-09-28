@@ -913,6 +913,8 @@ pub struct OnlineAsrProvider {
     pub languages: Vec<String>,
     pub language_mode: LanguageMode,
     pub profile_id: String,
+    #[serde(default)]
+    pub api_key_env: Option<String>,
     #[cfg_attr(feature = "specta", specta(type = specta_typescript::Unknown))]
     pub defaults: Value,
     pub streaming: OnlineAsrCapability,
@@ -921,6 +923,15 @@ pub struct OnlineAsrProvider {
     pub spec: Option<OnlineAsrProviderSpec>,
     #[serde(default)]
     pub models: Vec<OnlineAsrSupportedModel>,
+}
+
+impl OnlineAsrProvider {
+    pub fn default_api_key_env(&self) -> Option<&str> {
+        self.api_key_env
+            .as_deref()
+            .map(str::trim)
+            .filter(|env| !env.is_empty())
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -994,6 +1005,11 @@ fn online_asr_provider_manifest() -> &'static OnlineAsrProviderManifest {
                             .any(|field| field == "apiKey"),
                     "online ASR provider requiring an API key should declare apiKey"
                 );
+                assert!(
+                    provider.default_api_key_env().is_some(),
+                    "online ASR provider {} requiring an API key should declare non-empty apiKeyEnv",
+                    provider.id
+                );
             }
             if provider.batch.local_file_mode.supported {
                 assert!(
@@ -1033,6 +1049,12 @@ pub fn find_online_asr_provider(provider_id: &str) -> Option<&'static OnlineAsrP
     online_asr_providers()
         .iter()
         .find(|provider| provider.id == provider_id)
+}
+
+pub fn online_asr_provider_ids() -> impl Iterator<Item = &'static str> {
+    online_asr_providers()
+        .iter()
+        .map(|provider| provider.id.as_str())
 }
 
 bitflags::bitflags! {

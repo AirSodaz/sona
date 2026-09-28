@@ -193,6 +193,22 @@ fn online_asr_provider_manifest_is_owned_by_core_contract() {
         Some("https://openspeech.bytedance.com/api/v3/auc/bigmodel/recognize/flash")
     );
     assert!(volcengine.batch.local_file_mode.supported);
+    assert_eq!(
+        volcengine.default_api_key_env(),
+        Some("SONA_VOLCENGINE_ASR_API_KEY")
+    );
+
+    for provider in providers {
+        assert!(
+            provider.default_api_key_env().is_some(),
+            "every provider in manifest should have default apiKeyEnv"
+        );
+    }
+
+    let ids: Vec<_> = sona_core::ports::asr::online_asr_provider_ids().collect();
+    assert!(ids.contains(&VOLCENGINE_DOUBAO_PROVIDER_ID));
+    assert!(ids.contains(&GROQ_WHISPER_PROVIDER_ID));
+    assert!(ids.contains(&MISTRAL_VOXTRAL_PROVIDER_ID));
 }
 
 #[test]

@@ -1929,6 +1929,7 @@ export type OnlineAsrProvider = {
 	languages: string[],
 	languageMode: LanguageMode,
 	profileId: string,
+	apiKeyEnv?: string | null,
 	defaults: unknown,
 	streaming: OnlineAsrCapability,
 	batch: OnlineAsrBatchCapability,

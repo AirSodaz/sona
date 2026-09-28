@@ -6,6 +6,7 @@
       "languages": ["ar", "bn", "de", "el", "en", "es", "fil", "fr", "id", "it", "ja", "ko", "ms", "ne", "nl", "pl", "pt", "ro", "ru", "th", "tr", "vi", "zh"],
       "languageMode": "selectable",
       "profileId": "volcengine-doubao-default",
+      "apiKeyEnv": "SONA_VOLCENGINE_ASR_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.volcengine_doubao_option",
         "titleKey": "settings.asr.volcengine_title",
@@ -72,6 +73,7 @@
       "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
       "languageMode": "selectable",
       "profileId": "groq-whisper-default",
+      "apiKeyEnv": "GROQ_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.groq_whisper_option",
         "titleKey": "settings.asr.groq_title",
@@ -146,6 +148,7 @@
       "languages": ["ar", "de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pt", "ru", "zh"],
       "languageMode": "selectable",
       "profileId": "mistral-voxtral-default",
+      "apiKeyEnv": "MISTRAL_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.mistral_voxtral_option",
         "titleKey": "settings.asr.mistral_title",
@@ -203,6 +206,7 @@
       "languages": ["af", "am", "ar", "as", "az", "ba", "be", "bg", "bn", "bo", "br", "bs", "ca", "cs", "cy", "da", "de", "el", "en", "es", "et", "eu", "fa", "fi", "fo", "fr", "gl", "gu", "ha", "haw", "he", "hi", "hr", "ht", "hu", "hy", "id", "is", "it", "ja", "jw", "ka", "kk", "km", "kn", "ko", "la", "lb", "ln", "lo", "lt", "lv", "mg", "mi", "mk", "ml", "mn", "mr", "ms", "mt", "my", "ne", "nl", "nn", "no", "oc", "pa", "pl", "ps", "pt", "ro", "ru", "sa", "sd", "si", "sk", "sl", "sn", "so", "sq", "sr", "su", "sv", "sw", "ta", "te", "tg", "th", "tk", "tl", "tr", "tt", "uk", "ur", "uz", "vi", "yi", "yo", "yue", "zh"],
       "languageMode": "selectable",
       "profileId": "openai-whisper-default",
+      "apiKeyEnv": "OPENAI_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.openai_whisper_option",
         "titleKey": "settings.asr.openai_title",
@@ -261,6 +265,7 @@
       "languages": ["ar", "cs", "da", "de", "el", "en", "es", "fi", "fr", "he", "hi", "id", "it", "ja", "ko", "ms", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sv", "ta", "th", "tr", "uk", "vi", "zh"],
       "languageMode": "selectable",
       "profileId": "deepgram-default",
+      "apiKeyEnv": "DEEPGRAM_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.deepgram_option",
         "titleKey": "settings.asr.deepgram_title",
@@ -333,6 +338,7 @@
       "languages": ["de", "en", "es", "fr", "hi", "it", "ja", "ko", "nl", "pl", "pt", "ru", "tr", "uk", "vi", "zh"],
       "languageMode": "selectable",
       "profileId": "assemblyai-default",
+      "apiKeyEnv": "ASSEMBLYAI_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.assemblyai_option",
         "titleKey": "settings.asr.assemblyai_title",
@@ -397,6 +403,7 @@
       "languages": ["de", "en", "es", "fr", "hi", "id", "it", "ja", "ko", "ms", "nl", "pl", "pt", "ru", "sv", "tr", "vi", "zh"],
       "languageMode": "selectable",
       "profileId": "elevenlabs-default",
+      "apiKeyEnv": "ELEVENLABS_API_KEY",
       "ui": {
         "optionLabelKey": "settings.asr.elevenlabs_option",
         "titleKey": "settings.asr.elevenlabs_title",
