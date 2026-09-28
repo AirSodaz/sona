@@ -7,10 +7,6 @@ use super::metrics::{
 };
 use sona_application::live_transcription::LiveTranscriptionCoordinator;
 use sona_application::local_asr::LocalAsrRegistry;
-use sona_core::ports::asr::{
-    AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
-    StreamingAsrFactoryPort, StreamingInferenceSpec,
-};
 use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -120,18 +116,6 @@ impl AsrState {
 
     pub(crate) fn live_coordinator(&self) -> &LiveTranscriptionCoordinator {
         &self.live_coordinator
-    }
-
-    pub(crate) async fn create_independent_streaming_session(
-        &self,
-        session_id: &str,
-        request: &AsrTranscriptionRequest,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
-        let spec = StreamingInferenceSpec::from_request(request)?;
-        DesktopStreamingAsrFactory::new(self.registry.clone(), self.recognizer_pool.clone())
-            .create(session_id, &spec, observer)
-            .await
     }
 
     pub(crate) async fn create_external_source(&self) -> ExternalLiveSource {

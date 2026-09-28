@@ -1,11 +1,6 @@
 use super::types::{TranscriptNormalizationOptions, TranscriptSegment};
 #[cfg(test)]
 use super::types::{TranscriptTimingLevel, TranscriptTimingSource};
-use sona_sherpa_onnx::punctuation::Punctuation;
-
-pub(crate) use sona_core::transcription::transcript::{
-    normalize_recognizer_text, select_final_transcript_text, synthesize_durations,
-};
 
 fn new_transcript_segment_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -20,37 +15,6 @@ pub(crate) fn apply_timeline_normalization(
         options,
         new_transcript_segment_id,
     )
-}
-
-pub(crate) fn format_transcript(text: &str, punctuation: Option<&Punctuation>) -> String {
-    let mut result = text.trim().to_string();
-    if result.is_empty() {
-        return result;
-    }
-
-    let has_ascii_letters = result.chars().any(|c| c.is_ascii_alphabetic());
-    let is_all_caps = has_ascii_letters && result == result.to_uppercase();
-
-    if is_all_caps {
-        let mut chars = result.chars();
-        if let Some(first) = chars.next() {
-            let lower = chars.as_str().to_lowercase();
-            result = first.to_uppercase().collect::<String>() + &lower;
-        }
-    }
-
-    if let Some(p) = punctuation {
-        result = p.add_punct(&result);
-    }
-    result
-}
-
-pub(crate) fn finalize_transcript_text(
-    cleaned_text: &str,
-    punctuation: Option<&Punctuation>,
-) -> String {
-    let formatted_text = format_transcript(cleaned_text, punctuation);
-    select_final_transcript_text(cleaned_text, &formatted_text)
 }
 
 #[cfg(test)]

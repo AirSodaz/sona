@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sona_api_server::{
     ApiServerDashboardSnapshot, ApiServerPlatform, ApiServerPlatformError, ApiServerServiceParts,
     LLM_POLISH_UNAVAILABLE, LLM_TRANSLATE_UNAVAILABLE, ONLINE_ASR_BATCH_UNAVAILABLE,
-    OnlineBatchRequest, RunningApiServer, build_streaming_router, start_api_server_runtime,
+    OnlineBatchRequest, RunningApiServer, start_api_server_runtime,
 };
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
 use std::collections::HashMap;
@@ -83,39 +83,17 @@ impl ApiServerController {
 }
 
 #[derive(Clone)]
-pub(crate) struct TauriStreamingContext {
-    app: Option<tauri::AppHandle>,
-    recognizer_pool: crate::integrations::asr::RecognizerPool,
-}
-
-impl TauriStreamingContext {
-    pub(crate) fn app_handle(&self) -> Option<&tauri::AppHandle> {
-        self.app.as_ref()
-    }
-
-    pub(crate) fn recognizer_pool(&self) -> &crate::integrations::asr::RecognizerPool {
-        &self.recognizer_pool
-    }
-}
-
-#[derive(Clone)]
 struct TauriApiServerPlatform {
-    streaming_context: Arc<TauriStreamingContext>,
+    app: Option<tauri::AppHandle>,
 }
 
 impl TauriApiServerPlatform {
     fn from_app(app: Option<tauri::AppHandle>) -> Self {
-        let recognizer_pool = crate::integrations::asr::recognizer_pool_for_app(app.as_ref());
-        Self {
-            streaming_context: Arc::new(TauriStreamingContext {
-                app,
-                recognizer_pool,
-            }),
-        }
+        Self { app }
     }
 
-    fn streaming_context(&self) -> Arc<TauriStreamingContext> {
-        self.streaming_context.clone()
+    fn app_handle(&self) -> Option<&tauri::AppHandle> {
+        self.app.as_ref()
     }
 }
 
@@ -126,7 +104,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         request: OnlineBatchRequest,
     ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
     {
-        let Some(app_handle) = self.streaming_context.app_handle() else {
+        let Some(app_handle) = self.app_handle() else {
             return Err(ApiServerPlatformError::unavailable(
                 ONLINE_ASR_BATCH_UNAVAILABLE,
             ));
@@ -165,7 +143,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         config: Option<sona_core::llm::requests::LlmConfig>,
     ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
     {
-        let Some(app_handle) = self.streaming_context.app_handle() else {
+        let Some(app_handle) = self.app_handle() else {
             return Err(ApiServerPlatformError::unavailable(LLM_POLISH_UNAVAILABLE));
         };
 
@@ -210,7 +188,7 @@ impl ApiServerPlatform for TauriApiServerPlatform {
         config: Option<sona_core::llm::requests::LlmConfig>,
     ) -> Result<Vec<sona_core::transcription::transcript::TranscriptSegment>, ApiServerPlatformError>
     {
-        let Some(app_handle) = self.streaming_context.app_handle() else {
+        let Some(app_handle) = self.app_handle() else {
             return Err(ApiServerPlatformError::unavailable(
                 LLM_TRANSLATE_UNAVAILABLE,
             ));
@@ -282,7 +260,11 @@ pub async fn start_api_server(
 
     let online_asr_config = controller.online_asr_config();
     let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app.clone())));
-    let streaming_context = platform.streaming_context();
+    let recognizer_pool = crate::integrations::asr::recognizer_pool_for_app(Some(&app));
+    let registry = crate::integrations::asr::local_asr_registry(recognizer_pool.clone());
+    let streaming_transcriber = Arc::new(
+        crate::integrations::asr::DesktopStreamingAsrFactory::new(registry, recognizer_pool),
+    );
     let ffmpeg_path = crate::platform::api_server_config::load_ffmpeg_path_for_app(&app);
     let resolved = resolve_serve_runtime_options(
         ServeRuntimeArgs {
@@ -328,10 +310,7 @@ pub async fn start_api_server(
         model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
         batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
         platform,
-        streaming_router: Some(
-            build_streaming_router(crate::integrations::streaming::handle_streaming)
-                .layer(axum::Extension(streaming_context)),
-        ),
+        streaming_transcriber: Some(streaming_transcriber),
         web_dist_dir: None,
     })
     .await
@@ -402,7 +381,14 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let controller = app_handle.state::<ApiServerController>();
             let online_asr_config = controller.online_asr_config();
             let platform = Arc::new(TauriApiServerPlatform::from_app(Some(app_handle.clone())));
-            let streaming_context = platform.streaming_context();
+            let recognizer_pool =
+                crate::integrations::asr::recognizer_pool_for_app(Some(&app_handle));
+            let registry = crate::integrations::asr::local_asr_registry(recognizer_pool.clone());
+            let streaming_transcriber =
+                Arc::new(crate::integrations::asr::DesktopStreamingAsrFactory::new(
+                    registry,
+                    recognizer_pool,
+                ));
             refresh_online_asr_config(
                 &controller,
                 crate::platform::api_server_config::load_online_asr_config_for_app(&app_handle),
@@ -419,10 +405,7 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
                 model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
                 batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
                 platform,
-                streaming_router: Some(
-                    build_streaming_router(crate::integrations::streaming::handle_streaming)
-                        .layer(axum::Extension(streaming_context)),
-                ),
+                streaming_transcriber: Some(streaming_transcriber),
                 web_dist_dir: None,
             })
             .await

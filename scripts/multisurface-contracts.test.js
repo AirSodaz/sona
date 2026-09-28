@@ -114,17 +114,26 @@ test('PR guardrails execute both sync application and WebDAV adapter tests', () 
   assert.doesNotMatch(prGuardrails, /-p sona-webdav\b/u);
 });
 
-test('desktop streaming context stays typed across the injected route', () => {
-  const apiServerPlatform = read('adapters', 'api_server', 'src', 'platform.rs');
+test('API server receives streaming transcriber from host composition roots without Tauri dependency', () => {
   const desktopServer = read('platforms', 'desktop', 'src', 'app', 'server.rs');
+  const cliServer = read('platforms', 'cli', 'src', 'serve.rs');
+  const apiServerRuntime = read('adapters', 'api_server', 'src', 'runtime.rs');
   const desktopStreaming = read('platforms', 'desktop', 'src', 'integrations', 'streaming.rs');
 
-  assert.doesNotMatch(apiServerPlatform, /\bdyn Any\b|std::any::Any/u);
-  assert.doesNotMatch(desktopStreaming, /Arc::downcast|unexpected type/u);
-  assert.match(desktopServer, /\.layer\(axum::Extension\(streaming_context\)\)/u);
+  assert.doesNotMatch(desktopServer, /TauriStreamingContext/u);
+  assert.doesNotMatch(desktopStreaming, /TauriStreamingContext/u);
+  assert.doesNotMatch(desktopStreaming, /app_handle/u);
   assert.match(
-    desktopStreaming,
-    /Extension\(context\): Extension<Arc<TauriStreamingContext>>/u,
+    desktopServer,
+    /streaming_transcriber:\s*Some\(streaming_transcriber\)/u,
+  );
+  assert.match(
+    cliServer,
+    /streaming_transcriber:\s*Some\(crate::asr_adapter::streaming_transcriber\(\)\)/u,
+  );
+  assert.match(
+    apiServerRuntime,
+    /pub\s+streaming_transcriber:\s*Option<Arc<dyn\s+StreamingAsrFactoryPort>>/u,
   );
 });
 

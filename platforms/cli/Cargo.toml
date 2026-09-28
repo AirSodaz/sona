@@ -11,6 +11,7 @@ build = "build.rs"
 role = "host"
 
 [dependencies]
+async-trait = { workspace = true }
 clap = { workspace = true }
 cpal = { workspace = true }
 crossterm = { workspace = true }

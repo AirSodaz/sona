@@ -8,7 +8,7 @@ use axum::{
     routing::{get, post},
 };
 use ipnet::IpNet;
-use sona_core::ports::asr::BatchTranscriberPort;
+use sona_core::ports::asr::{BatchTranscriberPort, StreamingAsrFactoryPort};
 use sona_core::ports::fs::{FileSystemError, FileSystemOperation};
 use sona_core::ports::runtime::{
     BatchTranscribePlanPort, GpuAvailabilityPort, MediaValidatorPort, ModelCatalogPort,
@@ -55,7 +55,7 @@ pub struct ApiServerRuntimeConfig {
     pub model_catalog: Arc<dyn ModelCatalogPort>,
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
-    pub streaming_router: Option<Router<ServerState>>,
+    pub streaming_transcriber: Option<Arc<dyn StreamingAsrFactoryPort>>,
     pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
@@ -73,7 +73,7 @@ pub struct ApiServerRuntimeParts {
     pub model_catalog: Arc<dyn ModelCatalogPort>,
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
-    pub streaming_router: Option<Router<ServerState>>,
+    pub streaming_transcriber: Option<Arc<dyn StreamingAsrFactoryPort>>,
     pub web_dist_dir: Option<PathBuf>,
     pub shutdown_rx: tokio::sync::oneshot::Receiver<()>,
     pub bind_tx: Option<
@@ -96,7 +96,7 @@ pub struct ApiServerServiceParts {
     pub model_catalog: Arc<dyn ModelCatalogPort>,
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
-    pub streaming_router: Option<Router<ServerState>>,
+    pub streaming_transcriber: Option<Arc<dyn StreamingAsrFactoryPort>>,
     pub web_dist_dir: Option<PathBuf>,
 }
 
@@ -219,7 +219,7 @@ pub fn prepare_runtime_config(
         model_catalog,
         batch_plan_resolver,
         platform,
-        streaming_router,
+        streaming_transcriber,
         web_dist_dir,
         shutdown_rx,
         bind_tx,
@@ -252,7 +252,7 @@ pub fn prepare_runtime_config(
             model_catalog,
             batch_plan_resolver,
             platform,
-            streaming_router,
+            streaming_transcriber,
             web_dist_dir,
             shutdown_rx,
             bind_tx,
@@ -276,7 +276,7 @@ pub async fn start_api_server_runtime(
         model_catalog: parts.model_catalog,
         batch_plan_resolver: parts.batch_plan_resolver,
         platform: parts.platform,
-        streaming_router: parts.streaming_router,
+        streaming_transcriber: parts.streaming_transcriber,
         web_dist_dir: parts.web_dist_dir,
         shutdown_rx,
         bind_tx: Some(bind_tx),
@@ -345,7 +345,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         model_catalog,
         batch_plan_resolver,
         platform,
-        streaming_router,
+        streaming_transcriber,
         web_dist_dir,
         shutdown_rx,
         bind_tx,
@@ -431,6 +431,7 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         model_catalog,
         batch_plan_resolver,
         platform,
+        streaming_transcriber,
     };
 
     let cors = CorsLayer::new()
@@ -466,10 +467,17 @@ pub async fn run_server(config: ApiServerRuntimeConfig) -> Result<(), ApiServerR
         ));
     }
 
-    let streaming_router = streaming_router
-        .unwrap_or_default()
+    let streaming_route = Router::new()
+        .route(
+            "/v1/streaming",
+            get(crate::streaming::handle_streaming_websocket),
+        )
+        .route(
+            "/streaming",
+            get(crate::streaming::handle_streaming_websocket),
+        )
         .with_state(state.clone());
-    let mut router = router.merge(streaming_router).merge(api_router);
+    let mut router = router.merge(streaming_route).merge(api_router);
 
     if let Some(static_dir) = web_dist_dir {
         if static_dir.exists() {

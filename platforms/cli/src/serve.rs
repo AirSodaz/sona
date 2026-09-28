@@ -111,7 +111,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
             model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
             batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: Some(crate::asr_adapter::streaming_transcriber()),
             web_dist_dir: None,
         })
         .await

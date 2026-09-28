@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use ipnet::IpNet;
+use sona_core::ports::asr::StreamingAsrFactoryPort;
 use sona_core::ports::runtime::{
     BatchTranscribePlanPort, GpuAvailabilityPort, MediaValidatorPort, ModelCatalogPort,
 };
@@ -27,4 +28,5 @@ pub struct ServerState {
     pub model_catalog: Arc<dyn ModelCatalogPort>,
     pub batch_plan_resolver: Arc<dyn BatchTranscribePlanPort>,
     pub platform: Arc<dyn ApiServerPlatform>,
+    pub streaming_transcriber: Option<Arc<dyn StreamingAsrFactoryPort>>,
 }

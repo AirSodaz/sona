@@ -31,7 +31,11 @@ pub use runtime::{
     format_bind_error, prepare_runtime_config, run_server, start_api_server_runtime,
 };
 pub use state::ServerState;
-pub use streaming::{authorize_streaming_request, build_streaming_router};
+pub use streaming::{
+    ClientMessage, ServerMessage, authorize_streaming_request, build_streaming_router,
+    handle_streaming_websocket, resolve_punctuation_model_path, resolve_vad_model_path,
+    serialize_server_message,
+};
 pub use worker::build_local_transcribe_options;
 
 #[cfg(test)]
@@ -239,6 +243,7 @@ mod tests {
                 plan: test_batch_plan(PathBuf::from("sample.wav")),
             }),
             platform: Arc::new(DefaultApiServerPlatform),
+            streaming_transcriber: None,
         };
         let boundary = "sona-test-boundary";
         let body = format!(
@@ -422,6 +427,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
+            streaming_transcriber: None,
         }
     }
 
@@ -443,6 +449,7 @@ mod tests {
                 model_catalog,
                 batch_plan_resolver: test_batch_plan_resolver(),
                 platform: Arc::new(DefaultApiServerPlatform),
+                streaming_transcriber: None,
             },
         }
     }
@@ -602,6 +609,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
+            streaming_transcriber: None,
         };
 
         let app = Router::new()
@@ -662,6 +670,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
+            streaming_transcriber: None,
         };
 
         let app = Router::new()
@@ -985,7 +994,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
@@ -1057,7 +1066,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
             shutdown_rx,
             bind_tx: None,
@@ -1103,7 +1112,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
             shutdown_rx,
             bind_tx: Some(bind_tx),
@@ -1156,7 +1165,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
         })
         .await;
@@ -1199,7 +1208,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
         })
         .await;
@@ -1243,7 +1252,7 @@ mod tests {
             model_catalog: test_model_catalog(),
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
-            streaming_router: None,
+            streaming_transcriber: None,
             web_dist_dir: None,
         })
         .await
@@ -1255,6 +1264,70 @@ mod tests {
         assert_eq!(snapshot.health.active_jobs, 0);
         assert_eq!(snapshot.health.pending_jobs, 0);
         assert!(snapshot.jobs.is_empty());
+        server.stop().await.unwrap();
+    }
+    #[tokio::test]
+    async fn streaming_websocket_endpoint_is_exposed_and_responds_to_upgrade() {
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let port = listener.local_addr().unwrap().port();
+        drop(listener);
+        let temp_dir = tempfile::tempdir().unwrap().path().join("api-temp");
+        let models_dir = tempfile::tempdir().unwrap().path().join("models");
+
+        let server = start_api_server_runtime(ApiServerServiceParts {
+            resolved: sona_core::runtime::serve::ResolvedServeRuntimeOptions {
+                host: "127.0.0.1".to_string(),
+                port,
+                api_key: String::new(),
+                models_dir,
+                ip_whitelist: "localhost".to_string(),
+                max_streaming: 2,
+                max_concurrent: 1,
+                max_queue_size: 1,
+                max_upload_size_mb: 1,
+                job_ttl_minutes: 1,
+                transcription_defaults: Default::default(),
+            },
+            temp_dir,
+            online_asr_config: Arc::new(RwLock::new(HashMap::new())),
+            batch_transcriber: test_batch_transcriber(),
+            media_validator: Arc::new(AcceptingMediaValidator),
+            gpu_availability: Arc::new(FixedGpuAvailability(false)),
+            model_catalog: test_model_catalog(),
+            batch_plan_resolver: test_batch_plan_resolver(),
+            platform: Arc::new(DefaultApiServerPlatform),
+            streaming_transcriber: None,
+            web_dist_dir: None,
+        })
+        .await
+        .unwrap();
+
+        let mut stream = tokio::net::TcpStream::connect(format!("127.0.0.1:{port}"))
+            .await
+            .expect("should connect to api server");
+
+        let request = format!(
+            "GET /v1/streaming HTTP/1.1\r\n\
+             Host: 127.0.0.1:{port}\r\n\
+             Upgrade: websocket\r\n\
+             Connection: Upgrade\r\n\
+             Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n\
+             Sec-WebSocket-Version: 13\r\n\r\n"
+        );
+        stream.write_all(request.as_bytes()).await.unwrap();
+
+        let mut response = [0u8; 1024];
+        let n = stream.read(&mut response).await.unwrap();
+        let response_str = String::from_utf8_lossy(&response[..n]);
+
+        assert!(
+            response_str.starts_with("HTTP/1.1 101 Switching Protocols"),
+            "Expected 101 Switching Protocols, got: {}",
+            response_str
+        );
+
         server.stop().await.unwrap();
     }
 
@@ -1276,6 +1349,7 @@ mod tests {
             batch_plan_resolver: test_batch_plan_resolver(),
             platform: Arc::new(DefaultApiServerPlatform),
             transcription_defaults: Default::default(),
+            streaming_transcriber: None,
         };
 
         let app = Router::new()
