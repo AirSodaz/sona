@@ -49,7 +49,8 @@ function getEffectiveLength(text: string): number {
 
   let reduction = 0;
   PUNCTUATION_REPLACE_REGEX.lastIndex = 0;
-  let match;
+  let match: RegExpExecArray | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
   while ((match = PUNCTUATION_REPLACE_REGEX.exec(text)) !== null) {
     reduction += match[0].length;
   }

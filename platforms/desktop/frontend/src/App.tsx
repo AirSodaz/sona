@@ -86,7 +86,7 @@ function getPanelTitle(mode: string, t: (key: string) => string): string {
   }
 }
 
-function App(): React.JSX.Element {
+function App(): React.JSX.Element | null {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [shouldPrewarmSettings, setShouldPrewarmSettings] = useState(false);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
@@ -227,7 +227,7 @@ function App(): React.JSX.Element {
   };
 
   if (!isLoaded) {
-    return <></>; // Wait for config and onboarding state to load
+    return null; // Wait for config and onboarding state to load
   }
 
   const panelTitle = getPanelTitle(mode, t);

@@ -136,7 +136,7 @@ function TokenList({
       onKeyDown={onContextMenuKeyDown}
     >
       {tokensWithIndices ? (
-        tokensWithIndices.map((tokenObj, i) => {
+        tokensWithIndices.map((tokenObj) => {
           const isTimeActive = tokenObj.start === activeUnitStart;
 
           const { isMatch, isActiveMatch, matchIndex } = checkTokenMatch(
@@ -159,7 +159,7 @@ function TokenList({
 
           return (
             <span
-              key={`${tokenObj.start}-${tokenObj.end}-${i}`}
+              key={`${tokenObj.startIndex}-${tokenObj.endIndex}`}
               className={className}
               data-tooltip={formatDisplayTime(tokenObj.start)}
               data-tooltip-pos="top"
@@ -182,11 +182,13 @@ function TokenList({
                   }
                 }
               }}
+              // biome-ignore lint/security/noDangerouslySetInnerHtml: tokenObj.text is sanitized via sanitizeTranscriptHtml
               dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(tokenObj.text) }}
             />
           );
         })
       ) : (
+        // biome-ignore lint/security/noDangerouslySetInnerHtml: segmentText is sanitized via sanitizeTranscriptHtml
         <span dangerouslySetInnerHTML={{ __html: sanitizeTranscriptHtml(segmentText) }} />
       )}
       {!isFinal && <span className="transcript-caret-pulse" aria-hidden="true" />}

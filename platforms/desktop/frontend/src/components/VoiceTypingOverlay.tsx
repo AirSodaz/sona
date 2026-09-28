@@ -341,17 +341,20 @@ export function VoiceTypingOverlay() {
 
   const isSpeaking = isSegment || peakLevel > 0.05;
   const barHeights = WAVEFORM_WEIGHTS.map((weight, i) => {
-    if (isError) return 4;
-    if (isPolishing || isTranslating) {
+    let height: number;
+    if (isError) {
+      height = 4;
+    } else if (isPolishing || isTranslating) {
       const activePattern = [6, 12, 16, 12, 6];
-      return activePattern[i];
-    }
-    if (isSpeaking) {
+      height = activePattern[i];
+    } else if (isSpeaking) {
       const boost = Math.min(1, Math.max(peakLevel * 2.2, isSegment ? 0.35 : 0.15));
-      return Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
+      height = Math.round(MIN_BAR_HEIGHT + (MAX_BAR_HEIGHT - MIN_BAR_HEIGHT) * boost * weight);
+    } else {
+      const idlePattern = [4, 7, 10, 7, 4];
+      height = idlePattern[i];
     }
-    const idlePattern = [4, 7, 10, 7, 4];
-    return idlePattern[i];
+    return { id: `waveform-bar-${i}`, height };
   });
   return (
     <div
@@ -564,12 +567,12 @@ export function VoiceTypingOverlay() {
               flexShrink: 0,
             }}
           >
-            {barHeights.map((barHeight, idx) => (
+            {barHeights.map((bar) => (
               <div
-                key={idx}
+                key={bar.id}
                 style={{
                   width: '3px',
-                  height: `${barHeight}px`,
+                  height: `${bar.height}px`,
                   borderRadius: '999px',
                   background: isError
                     ? '#fca5a5'

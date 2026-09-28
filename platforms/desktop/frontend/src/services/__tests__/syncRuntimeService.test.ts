@@ -17,13 +17,17 @@ const testContext = vi.hoisted(() => {
     setRecording(next: boolean) {
       const previous = { ...transcriptState };
       transcriptState.isRecording = next;
-      transcriptListeners.forEach((listener) => listener(transcriptState, previous));
+      transcriptListeners.forEach((listener) => {
+        listener(transcriptState, previous);
+      });
     },
     setBatchState(next: typeof batchState) {
       const previous = { ...batchState, queueItems: [...batchState.queueItems] };
       batchState.isQueueProcessing = next.isQueueProcessing;
       batchState.queueItems = next.queueItems;
-      batchListeners.forEach((listener) => listener(batchState, previous));
+      batchListeners.forEach((listener) => {
+        listener(batchState, previous);
+      });
     },
     transcriptListeners,
     batchListeners,

@@ -32,7 +32,9 @@ export function notifySyncLocalChangeForCommand(command: string): void {
   if (!SYNC_RELEVANT_MUTATIONS.has(command)) {
     return;
   }
-  listeners.forEach((listener) => listener());
+  listeners.forEach((listener) => {
+    listener();
+  });
 }
 
 export function subscribeToSyncLocalChanges(listener: SyncLocalChangeListener): () => void {

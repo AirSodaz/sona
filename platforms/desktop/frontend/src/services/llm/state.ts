@@ -310,7 +310,9 @@ export function removeCustomProvider(
     current.modelOrder.filter((id) => current.models[id]?.provider === providerId)
   );
   const models = { ...current.models };
-  removedModelIds.forEach((id) => delete models[id]);
+  removedModelIds.forEach((id) => {
+    delete models[id];
+  });
   const selections = { ...current.selections };
   (Object.keys(FEATURE_MODEL_SELECTION_KEYS) as LlmFeature[]).forEach((feature) => {
     const key = FEATURE_MODEL_SELECTION_KEYS[feature];

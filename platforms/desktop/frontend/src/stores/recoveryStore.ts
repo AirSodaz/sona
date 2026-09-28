@@ -179,7 +179,9 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Failed to resume recovery items.';
       logger.error('[Recovery] Failed to resume recovery items:', error);
-      pendingItems.forEach((item) => patchRecoveryTaskRecoverable(item, errorMessage));
+      pendingItems.forEach((item) => {
+        patchRecoveryTaskRecoverable(item, errorMessage);
+      });
       set({
         isBusy: false,
         error: errorMessage,
@@ -249,7 +251,9 @@ export const useRecoveryStore = create<RecoveryState>((set, get) => ({
     } catch (error) {
       const errorMessage = extractErrorMessage(error) || 'Failed to discard recovery items.';
       logger.error('[Recovery] Failed to discard all recovery items:', error);
-      items.forEach((item) => patchRecoveryTaskRecoverable(item, errorMessage));
+      items.forEach((item) => {
+        patchRecoveryTaskRecoverable(item, errorMessage);
+      });
       set({
         isBusy: false,
         error: errorMessage,

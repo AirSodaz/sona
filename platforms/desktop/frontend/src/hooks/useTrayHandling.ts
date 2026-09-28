@@ -91,7 +91,9 @@ export function useTrayHandling(
 
     return () => {
       isMounted = false;
-      unlistenFunctions.forEach((fn) => fn());
+      unlistenFunctions.forEach((fn) => {
+        fn();
+      });
     };
   }, [setIsSettingsOpen, setSettingsInitialTab]);
 }

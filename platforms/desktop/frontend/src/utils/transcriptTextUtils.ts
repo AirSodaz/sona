@@ -67,6 +67,7 @@ function buildFormattedTextUnits(text: string): FormattedTextUnit[] {
   let match: RegExpExecArray | null;
   LEXER_REGEX.lastIndex = 0;
 
+  // biome-ignore lint/suspicious/noAssignInExpressions: standard regex exec loop
   while ((match = LEXER_REGEX.exec(text)) !== null) {
     const [full, inlineTag, blockTag] = match;
 

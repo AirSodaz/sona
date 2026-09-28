@@ -81,7 +81,9 @@ class SyncRuntimeService {
       clearInterval(this.heartbeatTimer);
       this.heartbeatTimer = null;
     }
-    this.unsubscribers.splice(0).forEach((unsubscribe) => unsubscribe());
+    this.unsubscribers.splice(0).forEach((unsubscribe) => {
+      unsubscribe();
+    });
     this.started = false;
     this.running = false;
     this.queued = false;

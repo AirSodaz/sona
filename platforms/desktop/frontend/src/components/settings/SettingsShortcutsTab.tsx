@@ -124,7 +124,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
                   style={{ display: 'flex', gap: '4px', alignItems: 'center', flexWrap: 'wrap' }}
                 >
                   {item.key.split(' / ').map((k, kIndex, arr) => (
-                    <React.Fragment key={`${item.id}-${k}-${kIndex}`}>
+                    <React.Fragment key={`${item.id}-${k}`}>
                       <kbd className="kbd">{k}</kbd>
                       {kIndex < arr.length - 1 && <span className="text-muted mx-1">/</span>}
                     </React.Fragment>

@@ -244,7 +244,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       scheduleRecoverySnapshotSync(nextQueueItems, true);
       nextQueueItems
         .filter((item) => retriedIds.includes(item.id))
-        .forEach((item) => upsertQueueItemTask(item, 'pending'));
+        .forEach((item) => {
+          upsertQueueItemTask(item, 'pending');
+        });
       if (!get().isQueueProcessing && !get().isQueuePaused) {
         void get().processQueue();
       }
@@ -293,7 +295,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       };
     });
     scheduleRecoverySnapshotSync(nextQueueItems, true);
-    newItems.forEach((item) => upsertQueueItemTask(item, 'pending'));
+    newItems.forEach((item) => {
+      upsertQueueItemTask(item, 'pending');
+    });
 
     const state = get();
     if (!state.activeItemId && newItems.length > 0) {
@@ -319,7 +323,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       };
     });
     scheduleRecoverySnapshotSync(nextQueueItems, true);
-    recoveredQueueItems.forEach((item) => upsertQueueItemTask(item, 'pending'));
+    recoveredQueueItems.forEach((item) => {
+      upsertQueueItemTask(item, 'pending');
+    });
 
     const state = get();
     if (!state.activeItemId && recoveredQueueItems.length > 0) {
@@ -643,13 +649,13 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       isQueuePaused: false,
     });
     scheduleRecoverySnapshotSync([], true, state.queueItems.flatMap(getQueueRecoveryIds));
-    state.queueItems.forEach((item) =>
+    state.queueItems.forEach((item) => {
       patchQueueItemTask(item, {
         status: item.status === 'complete' ? 'succeeded' : 'cancelled',
         cancelable: false,
         retryable: false,
-      })
-    );
+      });
+    });
     clearActiveTranscriptSession({ clearAudio: true });
   },
 
@@ -683,13 +689,13 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
 
     scheduleRecoverySnapshotSync(remainingItems, true, completedItems.flatMap(getQueueRecoveryIds));
 
-    completedItems.forEach((item) =>
+    completedItems.forEach((item) => {
       patchQueueItemTask(item, {
         status: 'succeeded',
         cancelable: false,
         retryable: false,
-      })
-    );
+      });
+    });
 
     if (isActiveItemCompleted) {
       get().setActiveItem(newActiveId);

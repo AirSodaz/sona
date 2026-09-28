@@ -77,7 +77,9 @@ function buildDisplayMediaOptions(): DisplayMediaStreamOptions {
 }
 
 function stopStreamTracks(stream: MediaStream): void {
-  stream.getTracks().forEach((track) => track.stop());
+  stream.getTracks().forEach((track) => {
+    track.stop();
+  });
 }
 
 function clearNativePeakListener(unlisten: UnlistenFn | null): void {
@@ -151,7 +153,9 @@ async function requestDisplayMediaFallback(
       throw new Error('No audio track selected in screen share.');
     }
 
-    stream.getVideoTracks().forEach((track) => track.stop());
+    stream.getVideoTracks().forEach((track) => {
+      track.stop();
+    });
     const audioOnlyStream = new MediaStream([audioTracks[0]]);
     audioOnlyStream.getAudioTracks()[0].onended = onStreamEnded;
 

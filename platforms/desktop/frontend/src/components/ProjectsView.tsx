@@ -399,8 +399,12 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   );
   const tagAssignmentItems = useMemo(() => {
     const candidates = new Map<string, HistoryItemType>();
-    historyItems.forEach((item) => candidates.set(item.id, item));
-    browseState.filteredAndSortedItems.forEach((item) => candidates.set(item.id, item));
+    historyItems.forEach((item) => {
+      candidates.set(item.id, item);
+    });
+    browseState.filteredAndSortedItems.forEach((item) => {
+      candidates.set(item.id, item);
+    });
     return projectAssignmentIds
       .map((id) => candidates.get(id))
       .filter((item): item is HistoryItemType => !!item && item.deletedAt == null);

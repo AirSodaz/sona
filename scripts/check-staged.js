@@ -81,7 +81,6 @@ try {
     [
       biomeBin,
       'check',
-      '--error-on-warnings',
       '--no-errors-on-unmatched',
       ...Array.from(lintTargets, (target) => path.relative(frontendRoot, path.join(repoRoot, target))),
     ],

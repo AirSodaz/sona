@@ -263,10 +263,10 @@ export function ModelCard({
   onCancelDownload,
   actionsDisabled = false,
   isAsr: isAsrProp,
-}: ModelCardProps): React.JSX.Element {
+}: ModelCardProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
-  if (!models || models.length === 0) return <></>;
+  if (!models || models.length === 0) return null;
 
   const baseModel = models[0];
   const isMultiVersion = models.length > 1;

@@ -34,21 +34,24 @@
             "allow": ["warn", "error", "info"]
           }
         },
-        "useIterableCallbackReturn": "off",
-        "noAssignInExpressions": "off",
-        "noImplicitAnyLet": "off",
-        "noGlobalIsNan": "off",
-        "noArrayIndexKey": "off"
+        "noAssignInExpressions": "error",
+        "noImplicitAnyLet": "error",
+        "noGlobalIsNan": "error",
+        "noArrayIndexKey": "error",
+        "useIterableCallbackReturn": "error",
+        "noAsyncPromiseExecutor": "error",
+        "noDuplicateJsxProps": "error",
+        "noFallthroughSwitchClause": "error"
       },
       "style": {
-        "noNonNullAssertion": "off",
+        "noNonNullAssertion": "warn",
         "useNodejsImportProtocol": "off",
         "useTemplate": "off",
         "noDescendingSpecificity": "off"
       },
       "complexity": {
         "noUselessSwitchCase": "off",
-        "noUselessFragments": "off"
+        "noUselessFragments": "error"
       },
       "a11y": {
         "noSvgWithoutTitle": "off",
@@ -64,11 +67,16 @@
         "useFocusableInteractive": "off"
       },
       "correctness": {
-        "useExhaustiveDependencies": "error"
+        "useExhaustiveDependencies": "error",
+        "noNestedComponentDefinitions": "error",
+        "useHookAtTopLevel": "error",
+        "noUnsafeOptionalChaining": "error",
+        "noUnsafeFinally": "error",
+        "noConstantCondition": "error"
       },
       "security": {
-        "noDangerouslySetInnerHtml": "off",
-        "noDangerouslySetInnerHtmlWithChildren": "off"
+        "noDangerouslySetInnerHtml": "error",
+        "noDangerouslySetInnerHtmlWithChildren": "error"
       }
     }
   },
@@ -87,6 +95,9 @@
           "suspicious": {
             "noConsole": "off",
             "noExplicitAny": "off"
+          },
+          "style": {
+            "noNonNullAssertion": "off"
           },
           "correctness": {
             "noConstructorReturn": "off"

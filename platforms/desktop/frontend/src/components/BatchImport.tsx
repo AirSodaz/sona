@@ -243,7 +243,9 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
     return () => {
       mounted = false;
-      unlisteners.forEach((unlisten) => unlisten());
+      unlisteners.forEach((unlisten) => {
+        unlisten();
+      });
     };
   }, [handleTauriDrop]);
 

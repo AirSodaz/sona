@@ -25,10 +25,12 @@ const dynamicPatterns = [];
 for (const f of files) {
   const content = fs.readFileSync(f, 'utf8');
   let m;
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop
   while ((m = staticRe.exec(content))) {
     if (!usedKeys.has(m[1])) usedKeys.set(m[1], []);
     usedKeys.get(m[1]).push(path.relative(srcDir, f));
   }
+  // biome-ignore lint/suspicious/noAssignInExpressions: regex exec loop
   while ((m = dynamicRe.exec(content))) {
     dynamicPatterns.push({ file: path.relative(srcDir, f), pattern: m[1] });
   }

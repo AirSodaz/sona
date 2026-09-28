@@ -407,6 +407,8 @@ useTranscriptStore.subscribe = (listener) => {
   ];
 
   return () => {
-    unlisteners.forEach((unlisten) => unlisten());
+    unlisteners.forEach((unlisten) => {
+      unlisten();
+    });
   };
 };

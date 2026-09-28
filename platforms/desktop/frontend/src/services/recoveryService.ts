@@ -264,7 +264,9 @@ function queueSnapshotWrite(
   resolvedIds
     .map((id) => id.trim())
     .filter(Boolean)
-    .forEach((id) => pendingResolvedRecoveryIds.add(id));
+    .forEach((id) => {
+      pendingResolvedRecoveryIds.add(id);
+    });
 
   if (immediate) {
     void flushPendingSnapshotWrite();

@@ -960,6 +960,7 @@ export function UnifiedDictionarySection({
               {/* Gutter */}
               <div className="dict-code-gutter" aria-hidden="true">
                 {Array.from({ length: linesCount }, (_, i) => (
+                  // biome-ignore lint/suspicious/noArrayIndexKey: 1-based gutter line number
                   <div key={i + 1} className="dict-code-gutter-line">
                     {i + 1}
                   </div>
@@ -1040,10 +1041,9 @@ export function UnifiedDictionarySection({
               </div>
 
               <div className="dict-diagnostics-list">
-                {diagnostics.map((diag, i) => (
+                {diagnostics.map((diag) => (
                   <div
-                    key={`${diag.line}-${i}`}
-                    className="dict-diagnostic-item"
+                    key={`${diag.line}-${diag.severity}-${diag.message}`}
                     onClick={() => jumpToLine(diag.line)}
                     title={t('settings.dict_click_to_jump', {
                       defaultValue: 'Click to jump to line',

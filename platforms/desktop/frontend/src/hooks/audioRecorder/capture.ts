@@ -104,7 +104,9 @@ export function createAudioRecorderCapture({
     }
 
     if (refs.activeStreamRef.current) {
-      refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      refs.activeStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
       refs.activeStreamRef.current = null;
     }
 
@@ -347,7 +349,9 @@ export function createAudioRecorderCapture({
       if (audioTracks.length === 0) {
         throw new Error('No audio track found in display media');
       }
-      stream.getVideoTracks().forEach((track) => track.stop());
+      stream.getVideoTracks().forEach((track) => {
+        track.stop();
+      });
       stream = new MediaStream([audioTracks[0]]);
       return stream;
     }
@@ -517,7 +521,9 @@ export function createAudioRecorderCapture({
 
   async function teardownWebCaptureResources(): Promise<void> {
     if (refs.activeStreamRef.current) {
-      refs.activeStreamRef.current.getTracks().forEach((track) => track.stop());
+      refs.activeStreamRef.current.getTracks().forEach((track) => {
+        track.stop();
+      });
       refs.activeStreamRef.current = null;
     }
 

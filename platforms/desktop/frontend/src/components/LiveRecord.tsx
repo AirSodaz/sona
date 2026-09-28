@@ -122,7 +122,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
       if (unpolished.length >= frequency) {
         const toPolish = unpolished.slice(0, frequency);
-        toPolish.forEach((s) => polishedIdsRef.current.add(s.id));
+        toPolish.forEach((s) => {
+          polishedIdsRef.current.add(s.id);
+        });
 
         polishService
           .polishSegments(toPolish, (chunk) => {
