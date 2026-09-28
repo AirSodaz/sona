@@ -6403,6 +6403,7 @@ version = "0.9.3"
 dependencies = [
  "chrono",
  "glob",
+ "log",
  "serde",
  "serde_json",
  "sona-application",

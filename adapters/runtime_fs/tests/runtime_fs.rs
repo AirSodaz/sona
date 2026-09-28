@@ -24,13 +24,14 @@ use sona_core::transcription::runtime::{
 use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
     RealFileSystem, RuntimeBatchTranscribePlanResolver, RuntimeFsError,
-    RuntimeModelCatalogProvider, SystemClock, UuidGenerator,
+    RuntimeModelCatalogProvider, StorageBootstrapConfig, SystemClock, UuidGenerator,
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_transcribe_config_file, load_transcribe_live_config_file,
     path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
     resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
-    select_desktop_models_dir_from_app_roots, validate_native_automation_rule_activation,
-    write_cli_config_template_file, write_json_pretty_atomic, write_transcript_output_file,
+    save_bootstrap_config, select_desktop_models_dir_from_app_roots,
+    validate_native_automation_rule_activation, write_cli_config_template_file,
+    write_json_pretty_atomic, write_transcript_output_file,
 };
 use std::sync::Arc;
 use uuid::{Uuid, Version};
@@ -787,4 +788,43 @@ fn real_file_system_remove_path_if_exists_handles_files_and_missing_paths() {
     assert!(!path.exists());
 
     remove_path_if_exists(&path).unwrap();
+}
+
+#[test]
+fn select_desktop_models_dir_honors_storage_location_custom_models_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app_root");
+    std::fs::create_dir_all(&root).unwrap();
+    let custom_models = dir.path().join("my_custom_models");
+    std::fs::create_dir_all(&custom_models).unwrap();
+
+    let config = StorageBootstrapConfig {
+        custom_data_dir: None,
+        custom_models_dir: Some(custom_models.clone()),
+        pending_cleanup_dirs: Vec::new(),
+    };
+    save_bootstrap_config(&root, &config).unwrap();
+
+    let selected = select_desktop_models_dir_from_app_roots(vec![root.clone()]);
+    assert_eq!(selected, Some(custom_models));
+}
+
+#[test]
+fn select_desktop_models_dir_honors_storage_location_custom_data_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app_root");
+    std::fs::create_dir_all(&root).unwrap();
+    let custom_data = dir.path().join("my_custom_data");
+    let custom_data_models = custom_data.join("models");
+    std::fs::create_dir_all(&custom_data_models).unwrap();
+
+    let config = StorageBootstrapConfig {
+        custom_data_dir: Some(custom_data.clone()),
+        custom_models_dir: None,
+        pending_cleanup_dirs: Vec::new(),
+    };
+    save_bootstrap_config(&root, &config).unwrap();
+
+    let selected = select_desktop_models_dir_from_app_roots(vec![root.clone()]);
+    assert_eq!(selected, Some(custom_data_models));
 }

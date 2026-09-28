@@ -241,7 +241,7 @@ mod tests {
 
     #[test]
     fn rejects_batch_only_provider_for_streaming() {
-        let error = online_args(OnlineAsrProviderArg::MistralVoxtral)
+        let error = online_args(OnlineAsrProviderArg::GroqWhisper)
             .build_request_with(AsrMode::Streaming, "auto".to_string(), false, None, |_| {
                 Ok("secret-value".to_string())
             })

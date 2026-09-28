@@ -3,18 +3,10 @@ use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager, Runtime};
 use tauri_plugin_opener::OpenerExt;
 
-pub const STORAGE_BOOTSTRAP_FILE_NAME: &str = "storage_location.json";
-
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase")]
-pub struct StorageBootstrapConfig {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub custom_data_dir: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub custom_models_dir: Option<PathBuf>,
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub pending_cleanup_dirs: Vec<PathBuf>,
-}
+pub use sona_runtime_fs::{
+    STORAGE_BOOTSTRAP_FILE_NAME, StorageBootstrapConfig, load_bootstrap_config,
+    resolve_active_data_dir, resolve_active_models_dir, save_bootstrap_config,
+};
 
 pub const DATA_MIGRATION_FILE_NAMES: [&str; 8] = [
     "sona.db",
@@ -39,73 +31,6 @@ pub struct StorageDirectoriesInfo {
     pub models_dir: String,
     pub default_models_dir: String,
     pub is_custom_models_dir: bool,
-}
-
-pub fn load_bootstrap_config(default_app_local_data_dir: &Path) -> StorageBootstrapConfig {
-    let path = default_app_local_data_dir.join(STORAGE_BOOTSTRAP_FILE_NAME);
-    if !path.exists() {
-        return StorageBootstrapConfig::default();
-    }
-    match std::fs::read_to_string(&path) {
-        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
-        Err(error) => {
-            log::warn!(
-                "Failed to read storage_location.json at {}: {}",
-                path.display(),
-                error
-            );
-            StorageBootstrapConfig::default()
-        }
-    }
-}
-
-pub fn save_bootstrap_config(
-    default_app_local_data_dir: &Path,
-    config: &StorageBootstrapConfig,
-) -> Result<(), std::io::Error> {
-    std::fs::create_dir_all(default_app_local_data_dir)?;
-    let path = default_app_local_data_dir.join(STORAGE_BOOTSTRAP_FILE_NAME);
-    let content = serde_json::to_string_pretty(config)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
-    let temp_path = default_app_local_data_dir.join(format!("{}.tmp", STORAGE_BOOTSTRAP_FILE_NAME));
-    std::fs::write(&temp_path, content)?;
-    std::fs::rename(&temp_path, &path)?;
-    Ok(())
-}
-
-pub fn resolve_active_data_dir(default_app_local_data_dir: &Path) -> PathBuf {
-    let config = load_bootstrap_config(default_app_local_data_dir);
-    if let Some(custom) = config.custom_data_dir.filter(|p| !p.as_os_str().is_empty()) {
-        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
-            return custom;
-        }
-        log::warn!(
-            "Custom data directory '{}' is inaccessible; falling back to default '{}'",
-            custom.display(),
-            default_app_local_data_dir.display()
-        );
-    }
-    default_app_local_data_dir.to_path_buf()
-}
-
-pub fn resolve_active_models_dir(
-    default_app_local_data_dir: &Path,
-    active_data_dir: &Path,
-) -> PathBuf {
-    let config = load_bootstrap_config(default_app_local_data_dir);
-    if let Some(custom) = config
-        .custom_models_dir
-        .filter(|p| !p.as_os_str().is_empty())
-    {
-        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
-            return custom;
-        }
-        log::warn!(
-            "Custom models directory '{}' is inaccessible; falling back to default",
-            custom.display()
-        );
-    }
-    active_data_dir.join("models")
 }
 
 pub fn default_app_local_data_dir_for_app<R: Runtime>(

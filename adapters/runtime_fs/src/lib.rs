@@ -8,7 +8,7 @@ pub use diagnostics::FsDiagnosticsEnrichmentRepository;
 pub use diagnostics_time::diagnostics_scanned_at_now;
 pub use storage_usage_time::storage_usage_generated_at_now;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sona_application::automation::AutomationValidationService;
 use sona_core::automation::{
     AutomationError, AutomationRule, AutomationRuleValidationResult, AutomationRuntimePathMetadata,
@@ -426,17 +426,118 @@ pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
     }
 }
 
+pub const STORAGE_BOOTSTRAP_FILE_NAME: &str = "storage_location.json";
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageBootstrapConfig {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_data_dir: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub custom_models_dir: Option<PathBuf>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub pending_cleanup_dirs: Vec<PathBuf>,
+}
+
+pub fn load_bootstrap_config(default_app_local_data_dir: &Path) -> StorageBootstrapConfig {
+    let path = default_app_local_data_dir.join(STORAGE_BOOTSTRAP_FILE_NAME);
+    if !path.exists() {
+        return StorageBootstrapConfig::default();
+    }
+    match std::fs::read_to_string(&path) {
+        Ok(content) => serde_json::from_str(&content).unwrap_or_default(),
+        Err(error) => {
+            log::warn!(
+                "Failed to read storage_location.json at {}: {}",
+                path.display(),
+                error
+            );
+            StorageBootstrapConfig::default()
+        }
+    }
+}
+
+pub fn save_bootstrap_config(
+    default_app_local_data_dir: &Path,
+    config: &StorageBootstrapConfig,
+) -> Result<(), std::io::Error> {
+    std::fs::create_dir_all(default_app_local_data_dir)?;
+    let path = default_app_local_data_dir.join(STORAGE_BOOTSTRAP_FILE_NAME);
+    let content = serde_json::to_string_pretty(config)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+    let temp_path = default_app_local_data_dir.join(format!("{}.tmp", STORAGE_BOOTSTRAP_FILE_NAME));
+    std::fs::write(&temp_path, content)?;
+    std::fs::rename(&temp_path, &path)?;
+    Ok(())
+}
+
+pub fn resolve_active_data_dir(default_app_local_data_dir: &Path) -> PathBuf {
+    let config = load_bootstrap_config(default_app_local_data_dir);
+    if let Some(custom) = config.custom_data_dir.filter(|p| !p.as_os_str().is_empty()) {
+        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
+            return custom;
+        }
+        log::warn!(
+            "Custom data directory '{}' is inaccessible; falling back to default '{}'",
+            custom.display(),
+            default_app_local_data_dir.display()
+        );
+    }
+    default_app_local_data_dir.to_path_buf()
+}
+
+pub fn resolve_active_models_dir(
+    default_app_local_data_dir: &Path,
+    active_data_dir: &Path,
+) -> PathBuf {
+    let config = load_bootstrap_config(default_app_local_data_dir);
+    if let Some(custom) = config
+        .custom_models_dir
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        if custom.exists() || std::fs::create_dir_all(&custom).is_ok() {
+            return custom;
+        }
+        log::warn!(
+            "Custom models directory '{}' is inaccessible; falling back to default",
+            custom.display()
+        );
+    }
+    active_data_dir.join("models")
+}
+
 pub fn select_desktop_models_dir_from_app_roots<I>(app_roots: I) -> Option<PathBuf>
 where
     I: IntoIterator<Item = PathBuf>,
 {
     let app_roots = app_roots.into_iter().collect::<Vec<_>>();
 
-    app_roots
+    // 1. Check if any app root has a valid storage_location.json pointing to an existing models dir
+    for root in &app_roots {
+        let bootstrap_path = root.join(STORAGE_BOOTSTRAP_FILE_NAME);
+        if bootstrap_path.exists() {
+            let active_data = resolve_active_data_dir(root);
+            let active_models = resolve_active_models_dir(root, &active_data);
+            if active_models.exists() {
+                return Some(active_models);
+            }
+        }
+    }
+
+    // 2. Check for standard "models" subdirectory in existing roots
+    if let Some(existing) = app_roots
         .iter()
         .map(|path| path.join("models"))
         .find(|path| path.exists())
-        .or_else(|| app_roots.into_iter().next().map(|path| path.join("models")))
+    {
+        return Some(existing);
+    }
+
+    // 3. Fallback to active models dir of first root (if configured) or first root/models
+    app_roots.into_iter().next().map(|root| {
+        let active_data = resolve_active_data_dir(&root);
+        resolve_active_models_dir(&root, &active_data)
+    })
 }
 
 pub fn default_desktop_models_dir() -> Option<PathBuf> {

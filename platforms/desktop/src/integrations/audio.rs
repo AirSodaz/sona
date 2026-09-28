@@ -539,6 +539,7 @@ fn spawn_capture_worker_task(
         let mut writers = HashMap::<String, CaptureWriterState>::new();
         let mut pull_buffer = vec![0.0; 16000];
         let mut sequence = 0_u64;
+        let mut last_peak_emit = std::time::Instant::now();
         let worker_source = CaptureWorkerSource {
             app: &app,
             key: &key,
@@ -600,6 +601,7 @@ fn spawn_capture_worker_task(
                                 &mut writers,
                                 &mut sequence,
                                 sample_cursor.as_ref(),
+                                &mut last_peak_emit,
                             ).await;
                         }
                         None => break,
@@ -616,6 +618,7 @@ fn spawn_capture_worker_task(
                 &mut writers,
                 &mut sequence,
                 sample_cursor.as_ref(),
+                &mut last_peak_emit,
             )
             .await;
             if !had_chunk {
@@ -642,18 +645,33 @@ async fn drain_capture_worker_chunk(
     writers: &mut HashMap<String, CaptureWriterState>,
     sequence: &mut u64,
     sample_cursor: &AtomicU64,
+    last_peak_emit: &mut std::time::Instant,
 ) -> bool {
     let len = task_consumer.pop_slice(pull_buffer);
     if len == 0 {
         return false;
     }
-
     let chunk = &pull_buffer[..len];
+    let mut max_abs = 0.0_f32;
+    for &sample in chunk {
+        let abs_val = sample.abs();
+        if abs_val > max_abs {
+            max_abs = abs_val;
+        }
+    }
+    if last_peak_emit.elapsed() >= std::time::Duration::from_millis(50) {
+        let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
+        let _ = worker_source
+            .app
+            .emit(worker_source.key.kind.peak_event(), peak_i16);
+        *last_peak_emit = std::time::Instant::now();
+    }
+
     for writer in writers.values_mut() {
         if !writer.paused
             && let Err(error) = writer.writer.write_samples(chunk)
         {
-            eprintln!("[Audio] Failed to write WAV samples: {error}");
+            log::error!("[Audio] Failed to write WAV samples: {error}");
         }
     }
 
@@ -849,9 +867,57 @@ fn start_shared_capture(
     })
 }
 
+fn push_downmixed_f32(data: &[f32], channels: usize, producer: &mut impl Producer<Item = f32>) {
+    if channels == 1 {
+        for &sample in data {
+            let _ = producer.try_push(sample);
+        }
+    } else {
+        for frame in data.chunks(channels) {
+            let sum: f32 = frame.iter().sum();
+            let mono_sample = sum / channels as f32;
+            let _ = producer.try_push(mono_sample);
+        }
+    }
+}
+
+fn push_downmixed_i16(data: &[i16], channels: usize, producer: &mut impl Producer<Item = f32>) {
+    if channels == 1 {
+        for &sample in data {
+            let _ = producer.try_push(sample as f32 / 32768.0);
+        }
+    } else {
+        for frame in data.chunks(channels) {
+            let mut sum = 0.0_f32;
+            for &sample in frame {
+                sum += sample as f32 / 32768.0;
+            }
+            let mono_sample = sum / channels as f32;
+            let _ = producer.try_push(mono_sample);
+        }
+    }
+}
+
+fn push_downmixed_u16(data: &[u16], channels: usize, producer: &mut impl Producer<Item = f32>) {
+    if channels == 1 {
+        for &sample in data {
+            let _ = producer.try_push((sample as f32 - 32768.0) / 32768.0);
+        }
+    } else {
+        for frame in data.chunks(channels) {
+            let mut sum = 0.0_f32;
+            for &sample in frame {
+                sum += (sample as f32 - 32768.0) / 32768.0;
+            }
+            let mono_sample = sum / channels as f32;
+            let _ = producer.try_push(mono_sample);
+        }
+    }
+}
+
 #[allow(clippy::too_many_arguments)]
 fn spawn_cpal_startup_thread<R: Runtime + 'static>(
-    window: Window<R>,
+    _window: Window<R>,
     kind: CaptureKind,
     device_name: Option<String>,
     rx: std::sync::mpsc::Receiver<()>,
@@ -929,86 +995,57 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         let mut output_buffer = vec![0.0_f32; resampler.output_frames_max()];
 
         let stream_result = match sample_format {
-            SampleFormat::F32 => {
-                let window_clone = window.clone();
-                let mut last_peak_emit = std::time::Instant::now();
-                device.build_input_stream(
-                    config,
-                    move |data: &[f32], _: &_| {
-                        process_capture_audio(
-                            kind,
-                            data,
-                            channels as usize,
-                            &mut producer,
-                            &mut consumer,
-                            &mut resampler,
-                            &mut input_buffer,
-                            &mut output_buffer,
-                            &window_clone,
-                            &data_tx,
-                            &mut task_producer,
-                            &mut last_peak_emit,
-                        );
-                    },
-                    err_fn,
-                    None,
-                )
-            }
-            SampleFormat::I16 => {
-                let window_clone = window.clone();
-                let mut last_peak_emit = std::time::Instant::now();
-                device.build_input_stream(
-                    config,
-                    move |data: &[i16], _: &_| {
-                        let data_f32: Vec<f32> = data.iter().map(|&s| s as f32 / 32768.0).collect();
-                        process_capture_audio(
-                            kind,
-                            &data_f32,
-                            channels as usize,
-                            &mut producer,
-                            &mut consumer,
-                            &mut resampler,
-                            &mut input_buffer,
-                            &mut output_buffer,
-                            &window_clone,
-                            &data_tx,
-                            &mut task_producer,
-                            &mut last_peak_emit,
-                        );
-                    },
-                    err_fn,
-                    None,
-                )
-            }
-            SampleFormat::U16 => {
-                let window_clone = window.clone();
-                let mut last_peak_emit = std::time::Instant::now();
-                device.build_input_stream(
-                    config,
-                    move |data: &[u16], _: &_| {
-                        let data_f32: Vec<f32> = data
-                            .iter()
-                            .map(|&s| (s as f32 - 32768.0) / 32768.0)
-                            .collect();
-                        process_capture_audio(
-                            kind,
-                            &data_f32,
-                            channels as usize,
-                            &mut producer,
-                            &mut consumer,
-                            &mut resampler,
-                            &mut input_buffer,
-                            &mut output_buffer,
-                            &window_clone,
-                            &data_tx,
-                            &mut task_producer,
-                            &mut last_peak_emit,
-                        );
-                    },
-                    err_fn,
-                    None,
-                )
-            }
+            SampleFormat::F32 => device.build_input_stream(
+                config,
+                move |data: &[f32], _: &_| {
+                    push_downmixed_f32(data, channels as usize, &mut producer);
+                    process_capture_audio(
+                        kind,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &data_tx,
+                        &mut task_producer,
+                    );
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::I16 => device.build_input_stream(
+                config,
+                move |data: &[i16], _: &_| {
+                    push_downmixed_i16(data, channels as usize, &mut producer);
+                    process_capture_audio(
+                        kind,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &data_tx,
+                        &mut task_producer,
+                    );
+                },
+                err_fn,
+                None,
+            ),
+            SampleFormat::U16 => device.build_input_stream(
+                config,
+                move |data: &[u16], _: &_| {
+                    push_downmixed_u16(data, channels as usize, &mut producer);
+                    process_capture_audio(
+                        kind,
+                        &mut consumer,
+                        &mut resampler,
+                        &mut input_buffer,
+                        &mut output_buffer,
+                        &data_tx,
+                        &mut task_producer,
+                    );
+                },
+                err_fn,
+                None,
+            ),
             _ => {
                 fail_start(kind.unsupported_sample_format_message().to_string());
                 return;
@@ -1181,31 +1218,15 @@ async fn feed_capture_audio(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn process_capture_audio<R: Runtime>(
+fn process_capture_audio(
     kind: CaptureKind,
-    data: &[f32],
-    channels: usize,
-    producer: &mut impl Producer<Item = f32>,
     consumer: &mut impl Consumer<Item = f32>,
     resampler: &mut Fft<f32>,
     input_buffer: &mut [f32],
     output_buffer: &mut [f32],
-    window: &Window<R>,
     data_tx: &tokio::sync::mpsc::Sender<()>,
     task_producer: &mut impl Producer<Item = f32>,
-    last_peak_emit: &mut std::time::Instant,
 ) {
-    for frame in data.chunks(channels) {
-        let mut sum = 0.0;
-        for sample in frame {
-            sum += sample;
-        }
-        let mono_sample = sum / channels as f32;
-
-        let _ = producer.try_push(mono_sample);
-    }
-
     while consumer.occupied_len() >= resampler.input_frames_next() {
         let input_frames_needed = resampler.input_frames_next();
         let _read = consumer.pop_slice(&mut input_buffer[..input_frames_needed]);
@@ -1213,7 +1234,7 @@ fn process_capture_audio<R: Runtime>(
         let input_adapter = match InterleavedSlice::new(input_buffer, 1, input_frames_needed) {
             Ok(adapter) => adapter,
             Err(error) => {
-                eprintln!(
+                log::error!(
                     "[Audio] {} resampler input error: {}",
                     kind.resampler_error_label(),
                     error
@@ -1225,7 +1246,7 @@ fn process_capture_audio<R: Runtime>(
         let mut output_adapter = match InterleavedSlice::new_mut(output_buffer, 1, out_capacity) {
             Ok(adapter) => adapter,
             Err(error) => {
-                eprintln!(
+                log::error!(
                     "[Audio] {} resampler output error: {}",
                     kind.resampler_error_label(),
                     error
@@ -1241,23 +1262,10 @@ fn process_capture_audio<R: Runtime>(
 
                     let _ = task_producer.push_slice(output_f32);
                     let _ = data_tx.try_send(());
-
-                    let mut max_abs = 0.0_f32;
-                    for &sample in output_f32 {
-                        let abs_val = sample.abs();
-                        if abs_val > max_abs {
-                            max_abs = abs_val;
-                        }
-                    }
-                    if last_peak_emit.elapsed() >= std::time::Duration::from_millis(50) {
-                        let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-                        let _ = window.app_handle().emit(kind.peak_event(), peak_i16);
-                        *last_peak_emit = std::time::Instant::now();
-                    }
                 }
             }
             Err(e) => {
-                eprintln!(
+                log::error!(
                     "[Audio] {} resampler error: {}",
                     kind.resampler_error_label(),
                     e

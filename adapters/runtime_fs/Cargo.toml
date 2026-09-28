@@ -12,6 +12,7 @@ role = "outbound-adapter"
 [dependencies]
 chrono = { workspace = true }
 glob = { workspace = true }
+log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 sona-core = { workspace = true }
