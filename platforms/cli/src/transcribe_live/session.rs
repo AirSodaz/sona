@@ -10,6 +10,8 @@ use crate::live_audio::{LiveAudioChunk, LiveAudioMessage, RunningAudioInput};
 use crate::live_output::{LiveOutputRenderer, LiveStopReason};
 use crate::{CliError, CliResult};
 
+const FINAL_DRAIN_TIMEOUT: Duration = Duration::from_millis(250);
+
 pub struct CliStreamingObserver {
     pub sender: tokio::sync::mpsc::UnboundedSender<AsrTranscriptUpdateEvent>,
 }
@@ -53,7 +55,7 @@ pub fn spawn_stop_signal(
     receiver
 }
 
-pub async fn run_live_session<W: Write + ?Sized>(
+pub async fn run_live_session<W: Write + ?Sized + Send>(
     session: Arc<dyn AsrStreamingSession>,
     input: &mut RunningAudioInput,
     updates: &mut tokio::sync::mpsc::UnboundedReceiver<AsrTranscriptUpdateEvent>,
@@ -136,7 +138,7 @@ pub async fn run_live_session<W: Write + ?Sized>(
         return Err(error);
     }
     drop(session);
-    while let Some(event) = updates.recv().await {
+    while let Ok(Some(event)) = tokio::time::timeout(FINAL_DRAIN_TIMEOUT, updates.recv()).await {
         renderer
             .write_update(output, &event.stage, event.update)
             .map_err(CliError::Io)?;

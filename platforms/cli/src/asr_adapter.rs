@@ -1,7 +1,9 @@
 use async_trait::async_trait;
-use sona_application::local_asr::{LocalAsrRegistry, LocalStreamingAsrFactory};
+use sona_application::local_asr::{
+    HybridStreamingAsrFactory, IdleResourcePruner, LocalAsrRegistry,
+};
 use sona_core::ports::asr::{
-    AsrEngine, AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
+    AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
     BatchTranscriberPort, OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort,
     StreamingInferenceSpec,
 };
@@ -31,32 +33,43 @@ pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
     sona_application::local_asr::LocalBatchTranscriberRouter::new(registry)
 }
 
-#[derive(Clone)]
-pub struct CliStreamingAsrFactory {
-    local: LocalStreamingAsrFactory,
-    recognizer_pool: RecognizerPool,
+struct CliAsrIdlePruner(RecognizerPool);
+
+#[async_trait]
+impl IdleResourcePruner for CliAsrIdlePruner {
+    async fn prune_idle_resources(&self) {
+        self.0.prune_all_idle().await;
+        sona_llama_cpp::prune_idle_llama_models();
+    }
 }
+
+/// Builds a CLI streaming ASR factory by composing the shared application
+/// hybrid factory with CLI provider adapters and idle resource pruners.
+pub fn create_cli_streaming_asr_factory(
+    registry: LocalAsrRegistry,
+    recognizer_pool: RecognizerPool,
+) -> HybridStreamingAsrFactory {
+    HybridStreamingAsrFactory::from_local_registry(
+        registry,
+        Some(Arc::new(sona_online_asr::OnlineAsrAdapter)),
+    )
+    .with_idle_pruner(Arc::new(CliAsrIdlePruner(recognizer_pool)))
+}
+
+/// CLI composition root for streaming ASR.
+#[derive(Clone)]
+pub struct CliStreamingAsrFactory(HybridStreamingAsrFactory);
 
 impl CliStreamingAsrFactory {
     pub fn new(registry: LocalAsrRegistry, recognizer_pool: RecognizerPool) -> Self {
-        Self {
-            local: LocalStreamingAsrFactory::new(registry),
-            recognizer_pool,
-        }
+        Self(create_cli_streaming_asr_factory(registry, recognizer_pool))
     }
 }
+
 #[async_trait]
 impl StreamingAsrFactoryPort for CliStreamingAsrFactory {
     async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
-        match spec.engine() {
-            AsrEngine::Local => self.local.prepare(spec).await,
-            AsrEngine::Online => {
-                sona_online_asr::OnlineAsrAdapter.prepare(spec).await?;
-                self.recognizer_pool.prune_all_idle().await;
-                sona_llama_cpp::prune_idle_llama_models();
-                Ok(())
-            }
-        }
+        self.0.prepare(spec).await
     }
 
     async fn create(
@@ -65,19 +78,9 @@ impl StreamingAsrFactoryPort for CliStreamingAsrFactory {
         spec: &StreamingInferenceSpec,
         observer: Arc<dyn AsrRuntimeObserver>,
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
-        match spec.engine() {
-            AsrEngine::Local => self.local.create(pipeline_id, spec, observer).await,
-            AsrEngine::Online => {
-                self.recognizer_pool.prune_all_idle().await;
-                sona_llama_cpp::prune_idle_llama_models();
-                sona_online_asr::OnlineAsrAdapter
-                    .create(pipeline_id, spec, observer)
-                    .await
-            }
-        }
+        self.0.create(pipeline_id, spec, observer).await
     }
 }
-
 pub(crate) fn streaming_transcriber() -> Arc<dyn StreamingAsrFactoryPort> {
     let recognizer_pool = RecognizerPool::default();
     let registry = local_asr_registry(recognizer_pool.clone());
@@ -124,7 +127,9 @@ pub(crate) fn online_streaming_session(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sona_core::ports::asr::{AsrEngineConfig, AsrMode, OnlineAsrProviderRequest};
+    use sona_core::ports::asr::{
+        AsrEngineConfig, AsrMode, OnlineAsrProviderRequest, StreamingInferenceSpec,
+    };
 
     #[tokio::test]
     async fn streaming_transcriber_prepares_online_spec() {

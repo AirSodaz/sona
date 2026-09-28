@@ -87,12 +87,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
 
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
-
-    runtime.block_on(async move {
+    crate::runtime::block_on(async move {
         let host = resolved.host.clone();
         let port = resolved.port;
         let RunningApiServer {
@@ -116,9 +111,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
         })
         .await
         .map_err(|error| match error {
-            ApiServerStartError::Configuration(error) => {
-                CliError::Validation(error.to_string())
-            }
+            ApiServerStartError::Configuration(error) => CliError::Validation(error.to_string()),
             ApiServerStartError::Runtime(error) => CliError::Network(error.to_string()),
         })?;
 
@@ -195,7 +188,7 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
                 }
             }
         }
-    })
+    })?
 }
 
 fn load_config(path: Option<&PathBuf>) -> CliResult<Option<ServeConfigSection>> {

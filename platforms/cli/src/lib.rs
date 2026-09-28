@@ -8,6 +8,7 @@ pub mod live_audio;
 pub mod live_output;
 mod models;
 mod online_asr;
+pub(crate) mod runtime;
 mod serve;
 mod table;
 mod transcribe;
@@ -41,8 +42,8 @@ impl CliOutput {
 }
 
 pub(crate) trait CliIo {
-    fn stdout(&mut self) -> &mut dyn Write;
-    fn stderr(&mut self) -> &mut dyn Write;
+    fn stdout(&mut self) -> &mut (dyn Write + Send);
+    fn stderr(&mut self) -> &mut (dyn Write + Send);
     fn stdout_is_terminal(&self) -> bool;
 }
 
@@ -62,14 +63,13 @@ impl MemoryCliIo {
 }
 
 impl CliIo for MemoryCliIo {
-    fn stdout(&mut self) -> &mut dyn Write {
+    fn stdout(&mut self) -> &mut (dyn Write + Send) {
         &mut self.stdout
     }
 
-    fn stderr(&mut self) -> &mut dyn Write {
+    fn stderr(&mut self) -> &mut (dyn Write + Send) {
         &mut self.stderr
     }
-
     fn stdout_is_terminal(&self) -> bool {
         false
     }
@@ -92,14 +92,13 @@ impl Default for StdCliIo {
 }
 
 impl CliIo for StdCliIo {
-    fn stdout(&mut self) -> &mut dyn Write {
+    fn stdout(&mut self) -> &mut (dyn Write + Send) {
         &mut self.stdout
     }
 
-    fn stderr(&mut self) -> &mut dyn Write {
+    fn stderr(&mut self) -> &mut (dyn Write + Send) {
         &mut self.stderr
     }
-
     fn stdout_is_terminal(&self) -> bool {
         self.stdout_is_terminal
     }

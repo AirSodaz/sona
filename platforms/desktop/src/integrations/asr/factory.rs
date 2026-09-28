@@ -1,72 +1,69 @@
 use async_trait::async_trait;
-use sona_application::live_transcription::LiveTranscriptionCoordinator;
-use sona_application::local_asr::{LocalAsrRegistry, LocalStreamingAsrFactory};
-use sona_core::ports::asr::{
-    AsrEngine, AsrPortError, AsrRuntimeObserver, AsrStreamingSession, NoopAsrRuntimeObserver,
-    StreamingAsrFactoryPort, StreamingInferenceSpec,
-};
+pub use sona_application::local_asr::HybridStreamingAsrFactory;
+use sona_application::local_asr::{IdleResourcePruner, LocalAsrRegistry};
 use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::sync::Arc;
 
-/// Desktop composition root for streaming ASR. The application coordinator owns
-/// lifecycle and sharing; this adapter only selects and creates engine sessions
-/// through the local engine registry.
-pub struct DesktopStreamingAsrFactory {
-    local: LocalStreamingAsrFactory,
-    recognizer_pool: RecognizerPool,
+struct DesktopAsrIdlePruner(RecognizerPool);
+
+#[async_trait]
+impl IdleResourcePruner for DesktopAsrIdlePruner {
+    async fn prune_idle_resources(&self) {
+        self.0.prune_all_idle().await;
+        sona_llama_cpp::prune_idle_llama_models();
+    }
 }
+
+/// Builds a desktop streaming ASR factory by composing the shared application
+/// hybrid factory with desktop provider adapters and idle resource pruners.
+pub fn create_desktop_streaming_asr_factory(
+    registry: LocalAsrRegistry,
+    recognizer_pool: RecognizerPool,
+) -> HybridStreamingAsrFactory {
+    HybridStreamingAsrFactory::from_local_registry(
+        registry,
+        Some(Arc::new(sona_online_asr::OnlineAsrAdapter)),
+    )
+    .with_idle_pruner(Arc::new(DesktopAsrIdlePruner(recognizer_pool)))
+}
+
+/// Desktop composition root for streaming ASR.
+#[derive(Clone)]
+pub struct DesktopStreamingAsrFactory(HybridStreamingAsrFactory);
 
 impl DesktopStreamingAsrFactory {
     pub fn new(registry: LocalAsrRegistry, recognizer_pool: RecognizerPool) -> Self {
-        Self {
-            local: LocalStreamingAsrFactory::new(registry),
+        Self(create_desktop_streaming_asr_factory(
+            registry,
             recognizer_pool,
-        }
+        ))
     }
 
-    pub fn coordinator(&self) -> LiveTranscriptionCoordinator {
-        LiveTranscriptionCoordinator::new(Arc::new(self.clone()), Arc::new(NoopAsrRuntimeObserver))
-    }
-}
-
-impl Clone for DesktopStreamingAsrFactory {
-    fn clone(&self) -> Self {
-        Self {
-            local: self.local.clone(),
-            recognizer_pool: self.recognizer_pool.clone(),
-        }
+    pub fn coordinator(
+        &self,
+    ) -> sona_application::live_transcription::LiveTranscriptionCoordinator {
+        self.0.coordinator()
     }
 }
 
 #[async_trait]
-impl StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
-    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
-        match spec.engine() {
-            AsrEngine::Local => self.local.prepare(spec).await,
-            AsrEngine::Online => {
-                sona_online_asr::OnlineAsrAdapter.prepare(spec).await?;
-                self.recognizer_pool.prune_all_idle().await;
-                sona_llama_cpp::prune_idle_llama_models();
-                Ok(())
-            }
-        }
+impl sona_core::ports::asr::StreamingAsrFactoryPort for DesktopStreamingAsrFactory {
+    async fn prepare(
+        &self,
+        spec: &sona_core::ports::asr::StreamingInferenceSpec,
+    ) -> Result<(), sona_core::ports::asr::AsrPortError> {
+        self.0.prepare(spec).await
     }
 
     async fn create(
         &self,
         pipeline_id: &str,
-        spec: &StreamingInferenceSpec,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
-        match spec.engine() {
-            AsrEngine::Local => self.local.create(pipeline_id, spec, observer).await,
-            AsrEngine::Online => {
-                self.recognizer_pool.prune_all_idle().await;
-                sona_llama_cpp::prune_idle_llama_models();
-                sona_online_asr::OnlineAsrAdapter
-                    .create(pipeline_id, spec, observer)
-                    .await
-            }
-        }
+        spec: &sona_core::ports::asr::StreamingInferenceSpec,
+        observer: Arc<dyn sona_core::ports::asr::AsrRuntimeObserver>,
+    ) -> Result<
+        Arc<dyn sona_core::ports::asr::AsrStreamingSession>,
+        sona_core::ports::asr::AsrPortError,
+    > {
+        self.0.create(pipeline_id, spec, observer).await
     }
 }

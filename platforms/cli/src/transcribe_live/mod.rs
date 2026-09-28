@@ -40,17 +40,13 @@ pub(crate) fn run_transcribe_live(args: TranscribeLiveArgs, io: &mut dyn CliIo) 
     let config = load_config(args.config.as_ref())?;
     let resolved = resolve_live_command(args, config)?;
     let stdout_is_terminal = io.stdout_is_terminal();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
     let status = {
         let stdout = io.stdout();
-        runtime.block_on(run_resolved_live_command(
+        crate::runtime::block_on(run_resolved_live_command(
             resolved,
             stdout_is_terminal,
             stdout,
-        ))?
+        ))??
     };
     if let Some(status) = status {
         writeln!(io.stderr(), "{status}")
@@ -62,7 +58,7 @@ pub(crate) fn run_transcribe_live(args: TranscribeLiveArgs, io: &mut dyn CliIo) 
 async fn run_resolved_live_command(
     resolved: ResolvedLiveCommand,
     stdout_is_terminal: bool,
-    stdout: &mut dyn Write,
+    stdout: &mut (dyn Write + Send),
 ) -> CliResult<Option<String>> {
     let session_id = uuid::Uuid::new_v4().to_string();
     let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();

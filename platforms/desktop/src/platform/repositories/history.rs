@@ -72,23 +72,6 @@ where
     .await
 }
 
-pub async fn run_history_query_file_task<R, T, F>(
-    app: &AppHandle<R>,
-    state: &HistoryRepositoryState,
-    task: F,
-) -> Result<T, String>
-where
-    R: Runtime,
-    T: Send + Serialize + 'static,
-    F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
-{
-    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
-        let repository = Arc::new(history_store(&context));
-        task(HistoryQueryService::new(repository))
-    })
-    .await
-}
-
 pub async fn run_history_query_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
 where
     R: Runtime,

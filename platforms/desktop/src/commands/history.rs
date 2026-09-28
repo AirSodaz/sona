@@ -28,17 +28,14 @@ fn validate_history_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<(),
 #[tauri::command]
 pub async fn history_list_items<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
     validate_history_input(&(limit, offset))?;
     let opts = HistoryListOptions { limit, offset };
-    crate::platform::history_repository::run_history_query_file_task(
-        &app,
-        state.inner(),
-        move |service| service.list_items(opts),
-    )
+    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+        service.list_items(opts)
+    })
     .await
 }
 
@@ -46,7 +43,6 @@ pub async fn history_list_items<R: Runtime>(
 #[allow(clippy::too_many_arguments)]
 pub async fn history_query_workspace<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
     scope: HistoryWorkspaceScope,
     query: String,
     filter_type: HistoryWorkspaceFilterType,
@@ -65,11 +61,9 @@ pub async fn history_query_workspace<R: Runtime>(
         offset,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_query_file_task(
-        &app,
-        state.inner(),
-        move |service| service.query_workspace(request),
-    )
+    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+        service.query_workspace(request)
+    })
     .await
 }
 

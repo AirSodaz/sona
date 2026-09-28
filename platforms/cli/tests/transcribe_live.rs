@@ -279,6 +279,45 @@ async fn live_runtime_waits_for_delayed_final_update_before_returning() {
 }
 
 #[tokio::test]
+async fn live_runtime_does_not_hang_if_update_sender_is_retained() {
+    let (input_sender, input_receiver) = tokio::sync::mpsc::channel(1);
+    input_sender.send(LiveAudioMessage::Eof).await.unwrap();
+    drop(input_sender);
+    let mut input = RunningAudioInput::from_parts(input_receiver, None, None, false);
+    let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let _retained_sender = update_sender.clone();
+    let session: Arc<dyn AsrStreamingSession> = Arc::new(RecordingSession {
+        calls: Arc::new(Mutex::new(Vec::new())),
+        updates: update_sender,
+        fail_start: false,
+        fail_feed: false,
+    });
+    let (_stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
+    let mut renderer = LiveOutputRenderer::new(LiveOutputFormat::Text, false, "session-1");
+    let mut output = Vec::new();
+
+    let started = std::time::Instant::now();
+    let reason = run_live_session(
+        session,
+        &mut input,
+        &mut update_receiver,
+        &mut renderer,
+        &mut output,
+        stop_receiver,
+        LiveSessionMetadata {
+            source: "stdin".to_string(),
+            device_name: None,
+            model_id: "streaming-model".to_string(),
+        },
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(reason, LiveStopReason::Eof);
+    assert!(started.elapsed() < Duration::from_secs(2));
+}
+
+#[tokio::test]
 async fn live_runtime_stops_session_and_emits_ndjson_error_on_feed_failure() {
     let (input_sender, input_receiver) = tokio::sync::mpsc::channel(2);
     input_sender

@@ -3,12 +3,49 @@ use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Split};
 use sona_audio_capture::{AudioResampler, build_cpal_input_stream};
 use std::io::Read;
-use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Condvar, Mutex};
+use std::time::Duration;
 
 const STDIN_READ_BUFFER_SIZE: usize = 8192;
 const INPUT_BUFFER_SECONDS: usize = 5;
-const CAPTURE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(5);
 
+#[derive(Default)]
+struct CaptureNotifier {
+    ready: AtomicBool,
+    mutex: Mutex<()>,
+    condvar: Condvar,
+}
+
+impl CaptureNotifier {
+    /// Signals that new audio samples, a capture error, or a stop command is ready.
+    ///
+    /// Non-blocking, zero-allocation, lock-free, and real-time safe for the CPAL audio callback.
+    fn notify(&self) {
+        self.ready.store(true, Ordering::Release);
+        self.condvar.notify_one();
+    }
+
+    /// Waits until an event arrives or until the watchdog timeout expires.
+    fn wait(&self, timeout: Duration) {
+        if self.ready.swap(false, Ordering::AcqRel) {
+            return;
+        }
+
+        if let Ok(mut guard) = self.mutex.lock() {
+            while !self.ready.swap(false, Ordering::AcqRel) {
+                let (next_guard, result) = self
+                    .condvar
+                    .wait_timeout(guard, timeout)
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
+                guard = next_guard;
+                if result.timed_out() {
+                    break;
+                }
+            }
+        }
+    }
+}
 #[derive(Clone, Default)]
 struct CaptureFailure(Arc<Mutex<Option<String>>>);
 
@@ -47,6 +84,7 @@ pub enum LiveAudioMessage {
 pub struct RunningAudioInput {
     pub(crate) receiver: tokio::sync::mpsc::Receiver<LiveAudioMessage>,
     stop_sender: Option<std::sync::mpsc::Sender<()>>,
+    stop_handle: Option<Arc<dyn Fn() + Send + Sync>>,
     pub(crate) device_name: Option<String>,
     drain_on_stop: bool,
 }
@@ -61,19 +99,34 @@ impl RunningAudioInput {
         Self {
             receiver,
             stop_sender,
+            stop_handle: None,
             device_name,
             drain_on_stop,
         }
+    }
+
+    pub fn with_stop_handle(mut self, stop_handle: Arc<dyn Fn() + Send + Sync>) -> Self {
+        self.stop_handle = Some(stop_handle);
+        self
     }
 
     pub(crate) fn request_stop(&mut self) {
         if let Some(sender) = self.stop_sender.take() {
             let _ = sender.send(());
         }
+        if let Some(handle) = self.stop_handle.take() {
+            handle();
+        }
     }
 
     pub(crate) fn should_drain_on_stop(&self) -> bool {
         self.drain_on_stop
+    }
+}
+
+impl Drop for RunningAudioInput {
+    fn drop(&mut self) {
+        self.request_stop();
     }
 }
 
@@ -156,13 +209,20 @@ pub(crate) fn start_microphone_input(
     let (message_sender, receiver) = tokio::sync::mpsc::channel(16);
     let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
     let (startup_sender, startup_receiver) = std::sync::mpsc::sync_channel(1);
+    let stop_requested = Arc::new(AtomicBool::new(false));
+    let notifier = Arc::new(CaptureNotifier::default());
+
     let capture_name = resolved_name.clone();
+    let stop_flag = stop_requested.clone();
+    let capture_notifier = notifier.clone();
     std::thread::spawn(move || {
         run_microphone_capture(
             device,
             capture_name,
             message_sender,
             stop_receiver,
+            stop_flag,
+            capture_notifier,
             startup_sender,
         );
     });
@@ -170,12 +230,19 @@ pub(crate) fn start_microphone_input(
         .recv()
         .map_err(|error| format!("Microphone startup channel closed: {error}"))??;
 
-    Ok(RunningAudioInput::from_parts(
-        receiver,
-        Some(stop_sender),
-        Some(resolved_name),
-        true,
-    ))
+    let stop_handle = {
+        let stop_requested = stop_requested.clone();
+        let notifier = notifier.clone();
+        Arc::new(move || {
+            stop_requested.store(true, Ordering::Release);
+            notifier.notify();
+        })
+    };
+
+    Ok(
+        RunningAudioInput::from_parts(receiver, Some(stop_sender), Some(resolved_name), true)
+            .with_stop_handle(stop_handle),
+    )
 }
 
 fn run_microphone_capture(
@@ -183,6 +250,8 @@ fn run_microphone_capture(
     device_name: String,
     sender: tokio::sync::mpsc::Sender<LiveAudioMessage>,
     stop_receiver: std::sync::mpsc::Receiver<()>,
+    stop_requested: Arc<AtomicBool>,
+    notifier: Arc<CaptureNotifier>,
     startup_sender: std::sync::mpsc::SyncSender<Result<(), String>>,
 ) {
     let supported_config = match device.default_input_config() {
@@ -201,8 +270,17 @@ fn run_microphone_capture(
     let (producer, mut consumer) = buffer.split();
     let capture_failure = CaptureFailure::default();
     let callback_failure = capture_failure.clone();
+    let error_notifier = notifier.clone();
     let stream_error = move |error| {
         callback_failure.record(format!("Microphone stream failed: {error}"));
+        error_notifier.notify();
+    };
+
+    let data_notifier = {
+        let notifier = notifier.clone();
+        move || {
+            notifier.notify();
+        }
     };
 
     let stream = match build_cpal_input_stream(
@@ -210,7 +288,7 @@ fn run_microphone_capture(
         config,
         sample_format,
         producer,
-        move || {},
+        data_notifier,
         stream_error,
     ) {
         Ok(stream) => stream,
@@ -238,6 +316,9 @@ fn run_microphone_capture(
             return;
         }
     };
+
+    const WATCHDOG_INTERVAL: Duration = Duration::from_millis(100);
+
     loop {
         if forward_capture_failure(&capture_failure, &sender) {
             return;
@@ -245,10 +326,14 @@ fn run_microphone_capture(
         if drain_microphone_samples(&mut consumer, &mut resampler, &sender).is_err() {
             return;
         }
+        if stop_requested.load(Ordering::Acquire) {
+            break;
+        }
         match stop_receiver.try_recv() {
             Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-            Err(std::sync::mpsc::TryRecvError::Empty) => std::thread::sleep(CAPTURE_POLL_INTERVAL),
+            Err(std::sync::mpsc::TryRecvError::Empty) => {}
         }
+        notifier.wait(WATCHDOG_INTERVAL);
     }
     drop(stream);
     if forward_capture_failure(&capture_failure, &sender) {
@@ -479,5 +564,27 @@ mod tests {
                 .to_string(),
             "Input device not found: studio mic"
         );
+    }
+
+    #[test]
+    fn capture_notifier_wakes_immediately_on_notify() {
+        let notifier = Arc::new(CaptureNotifier::default());
+        let notifier_clone = notifier.clone();
+        let start = std::time::Instant::now();
+        std::thread::spawn(move || {
+            std::thread::sleep(Duration::from_millis(10));
+            notifier_clone.notify();
+        });
+        notifier.wait(Duration::from_secs(5));
+        assert!(start.elapsed() < Duration::from_millis(500));
+    }
+
+    #[test]
+    fn capture_notifier_pre_notified_does_not_wait() {
+        let notifier = CaptureNotifier::default();
+        notifier.notify();
+        let start = std::time::Instant::now();
+        notifier.wait(Duration::from_secs(5));
+        assert!(start.elapsed() < Duration::from_millis(50));
     }
 }

@@ -105,13 +105,8 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         .map_err(crate::map_runtime_fs_error)?;
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
     let transcriber = crate::asr_adapter::local_batch_transcriber();
-    let segments = runtime
-        .block_on(transcriber.transcribe(plan))
+    let segments = crate::runtime::block_on(async move { transcriber.transcribe(plan).await })?
         .map_err(|error| CliError::Other(error.to_string()))?;
 
     render_transcription(segments, export_format, output_target)
@@ -145,16 +140,11 @@ fn run_online_transcribe(
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
     let output_target = resolve_output_target(args.output.clone());
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
-    let segments = runtime
-        .block_on(crate::asr_adapter::online_batch_transcribe(
-            args.input.clone(),
-            request,
-        ))
-        .map_err(crate::online_asr::map_asr_error)?;
+    let segments = crate::runtime::block_on(crate::asr_adapter::online_batch_transcribe(
+        args.input.clone(),
+        request,
+    ))?
+    .map_err(crate::online_asr::map_asr_error)?;
     render_transcription(segments, export_format, output_target)
 }
 

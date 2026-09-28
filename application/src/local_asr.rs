@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession, BatchTranscriberPort,
-    BatchTranscriptionObserver, EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
-    StreamingAsrFactoryPort, StreamingInferenceSpec,
+    AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
+    BatchTranscriberPort, BatchTranscriptionObserver, EngineCapabilities, LocalAsrAdapter,
+    LocalAsrEngine, NoopAsrRuntimeObserver, StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -170,6 +170,116 @@ impl StreamingAsrFactoryPort for LocalStreamingAsrFactory {
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
         let factory = self.local_streaming_factory(spec)?;
         factory.create(pipeline_id, spec, observer).await
+    }
+}
+
+/// Idle resource cleanup hook invoked when switching to online ASR.
+#[async_trait]
+pub trait IdleResourcePruner: Send + Sync {
+    async fn prune_idle_resources(&self);
+}
+
+#[async_trait]
+impl<F, Fut> IdleResourcePruner for F
+where
+    F: Fn() -> Fut + Send + Sync,
+    Fut: std::future::Future<Output = ()> + Send,
+{
+    async fn prune_idle_resources(&self) {
+        (self)().await;
+    }
+}
+
+/// Routes streaming transcription across local and online ASR engines.
+///
+/// Dispatches `AsrEngine::Local` to an underlying local streaming factory
+/// (such as [`LocalStreamingAsrFactory`]), and `AsrEngine::Online` to an online
+/// streaming factory port, invoking an optional [`IdleResourcePruner`] to
+/// release idle resources (e.g. idle local model weights) before starting
+/// online inference.
+#[derive(Clone)]
+pub struct HybridStreamingAsrFactory {
+    local: Arc<dyn StreamingAsrFactoryPort>,
+    online: Option<Arc<dyn StreamingAsrFactoryPort>>,
+    idle_pruner: Option<Arc<dyn IdleResourcePruner>>,
+}
+
+pub type RoutedStreamingAsrFactory = HybridStreamingAsrFactory;
+
+impl HybridStreamingAsrFactory {
+    pub fn new(
+        local: Arc<dyn StreamingAsrFactoryPort>,
+        online: Option<Arc<dyn StreamingAsrFactoryPort>>,
+    ) -> Self {
+        Self {
+            local,
+            online,
+            idle_pruner: None,
+        }
+    }
+
+    pub fn from_local_registry(
+        registry: LocalAsrRegistry,
+        online: Option<Arc<dyn StreamingAsrFactoryPort>>,
+    ) -> Self {
+        Self::new(Arc::new(LocalStreamingAsrFactory::new(registry)), online)
+    }
+
+    pub fn with_idle_pruner(mut self, pruner: Arc<dyn IdleResourcePruner>) -> Self {
+        self.idle_pruner = Some(pruner);
+        self
+    }
+
+    pub fn coordinator(&self) -> crate::live_transcription::LiveTranscriptionCoordinator {
+        crate::live_transcription::LiveTranscriptionCoordinator::new(
+            Arc::new(self.clone()),
+            Arc::new(NoopAsrRuntimeObserver),
+        )
+    }
+}
+
+#[async_trait]
+impl StreamingAsrFactoryPort for HybridStreamingAsrFactory {
+    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
+        match spec.engine() {
+            AsrEngine::Local => self.local.prepare(spec).await,
+            AsrEngine::Online => {
+                let online = self.online.as_ref().ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Unsupported,
+                        "Online ASR streaming is not configured or supported on this host.",
+                    )
+                })?;
+                online.prepare(spec).await?;
+                if let Some(pruner) = &self.idle_pruner {
+                    pruner.prune_idle_resources().await;
+                }
+                Ok(())
+            }
+        }
+    }
+
+    async fn create(
+        &self,
+        pipeline_id: &str,
+        spec: &StreamingInferenceSpec,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
+        match spec.engine() {
+            AsrEngine::Local => self.local.create(pipeline_id, spec, observer).await,
+            AsrEngine::Online => {
+                let online = self.online.as_ref().ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Unsupported,
+                        "Online ASR streaming is not configured or supported on this host.",
+                    )
+                })?;
+                if let Some(pruner) = &self.idle_pruner {
+                    pruner.prune_idle_resources().await;
+                }
+                online.create(pipeline_id, spec, observer).await
+            }
+        }
     }
 }
 
@@ -420,5 +530,126 @@ mod tests {
 
         let err = factory.prepare(&spec).await.unwrap_err();
         assert_eq!(err.kind, AsrPortErrorKind::Unsupported);
+    }
+
+    fn online_streaming_spec() -> StreamingInferenceSpec {
+        let request = sona_core::ports::asr::AsrTranscriptionRequest {
+            engine_config: sona_core::ports::asr::AsrEngineConfig::Online {
+                provider: sona_core::ports::asr::OnlineAsrProviderRequest {
+                    provider_id: "test-provider".to_string(),
+                    profile_id: "test-profile".to_string(),
+                    config: serde_json::json!({}),
+                },
+            },
+            mode: sona_core::ports::asr::AsrMode::Streaming,
+            enable_itn: false,
+            language: "zh".to_string(),
+            hotwords: None,
+            speaker_processing: None,
+            normalization_options: Default::default(),
+            postprocess_options: Default::default(),
+        };
+        StreamingInferenceSpec::from_request(&request).unwrap()
+    }
+
+    #[tokio::test]
+    async fn hybrid_streaming_factory_routes_local_to_local_factory() {
+        let (registry, sherpa_calls, _) = two_engine_registry();
+        let factory = HybridStreamingAsrFactory::from_local_registry(registry, None);
+        let spec = streaming_spec(LocalAsrEngine::SherpaOnnx);
+
+        factory.prepare(&spec).await.unwrap();
+        assert_eq!(sherpa_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn hybrid_streaming_factory_routes_online_and_invokes_pruner() {
+        let (registry, _, _) = two_engine_registry();
+        let online_calls = Arc::new(AtomicUsize::new(0));
+        let prune_calls = Arc::new(AtomicUsize::new(0));
+
+        let online_factory: Arc<dyn StreamingAsrFactoryPort> = Arc::new(CountingStreamingFactory {
+            calls: online_calls.clone(),
+        });
+        let pruner_counter = prune_calls.clone();
+        let factory =
+            HybridStreamingAsrFactory::from_local_registry(registry, Some(online_factory))
+                .with_idle_pruner(Arc::new(move || {
+                    let counter = pruner_counter.clone();
+                    async move {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                    }
+                }));
+
+        let spec = online_streaming_spec();
+        factory.prepare(&spec).await.unwrap();
+        assert_eq!(online_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(prune_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn hybrid_streaming_factory_rejects_missing_online_factory() {
+        let (registry, _, _) = two_engine_registry();
+        let factory = HybridStreamingAsrFactory::from_local_registry(registry, None);
+        let spec = online_streaming_spec();
+
+        let err = factory.prepare(&spec).await.unwrap_err();
+        assert_eq!(err.kind, AsrPortErrorKind::Unsupported);
+    }
+
+    #[tokio::test]
+    async fn hybrid_streaming_factory_create_routes_online_and_invokes_pruner() {
+        let (registry, _, _) = two_engine_registry();
+        let online_calls = Arc::new(AtomicUsize::new(0));
+        let prune_calls = Arc::new(AtomicUsize::new(0));
+
+        let online_factory: Arc<dyn StreamingAsrFactoryPort> = Arc::new(CountingStreamingFactory {
+            calls: online_calls.clone(),
+        });
+        let pruner_counter = prune_calls.clone();
+        let factory =
+            HybridStreamingAsrFactory::from_local_registry(registry, Some(online_factory))
+                .with_idle_pruner(Arc::new(move || {
+                    let counter = pruner_counter.clone();
+                    async move {
+                        counter.fetch_add(1, Ordering::SeqCst);
+                    }
+                }));
+
+        let spec = online_streaming_spec();
+        let _ = factory
+            .create("test-pipe", &spec, Arc::new(NoopAsrRuntimeObserver))
+            .await;
+        assert_eq!(online_calls.load(Ordering::SeqCst), 1);
+        assert_eq!(prune_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn hybrid_streaming_factory_create_rejects_missing_online_without_pruning() {
+        let (registry, _, _) = two_engine_registry();
+        let prune_calls = Arc::new(AtomicUsize::new(0));
+        let pruner_counter = prune_calls.clone();
+        let factory = HybridStreamingAsrFactory::from_local_registry(registry, None)
+            .with_idle_pruner(Arc::new(move || {
+                let counter = pruner_counter.clone();
+                async move {
+                    counter.fetch_add(1, Ordering::SeqCst);
+                }
+            }));
+
+        let spec = online_streaming_spec();
+        let err = match factory
+            .create("test-pipe", &spec, Arc::new(NoopAsrRuntimeObserver))
+            .await
+        {
+            Err(e) => e,
+            Ok(_) => panic!("expected create to fail without online factory"),
+        };
+        assert_eq!(err.kind, AsrPortErrorKind::Unsupported);
+        assert_eq!(
+            prune_calls.load(Ordering::SeqCst),
+            0,
+            "idle pruner must not be invoked when online factory is absent"
+        );
     }
 }

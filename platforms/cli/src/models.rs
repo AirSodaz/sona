@@ -326,13 +326,9 @@ fn map_download_error(error: sona_model_downloads::DownloadError) -> CliError {
 fn run_async<F, Fut>(factory: F) -> CliResult<CliOutput>
 where
     F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = CliResult<CliOutput>>,
+    Fut: std::future::Future<Output = CliResult<CliOutput>> + Send,
 {
-    let runtime = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .map_err(|error| CliError::Io(format!("Failed to create async runtime: {error}")))?;
-    runtime.block_on(factory())
+    crate::runtime::block_on(factory())?
 }
 
 /// Terminal-friendly language column: full lists would blow up the table for
