@@ -5,7 +5,8 @@ use sona_core::ports::asr::{
     AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest, DEEPGRAM_PROVIDER_ID,
     ELEVENLABS_PROVIDER_ID, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
     OPENAI_WHISPER_PROVIDER_ID, OnlineBatchTranscriberPort, OnlineBatchTranscriptionOutput,
-    OnlineBatchTranscriptionRequest, VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
+    OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort, StreamingInferenceSpec,
+    VOLCENGINE_DOUBAO_PROVIDER_ID, find_online_asr_provider,
 };
 use sona_core::transcription::provider_resolution::{
     AsrProviderCapability, resolve_asr_provider_id, resolve_asr_streaming_provider_id,
@@ -98,6 +99,25 @@ impl OnlineAsrAdapter {
             )
             .with_code("UNSUPPORTED_ONLINE_PROVIDER")),
         }
+    }
+}
+
+#[async_trait]
+impl StreamingAsrFactoryPort for OnlineAsrAdapter {
+    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
+        let request = spec.engine_request();
+        resolve_online_asr_provider_id(&request)?;
+        Ok(())
+    }
+
+    async fn create(
+        &self,
+        pipeline_id: &str,
+        spec: &StreamingInferenceSpec,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
+        let request = spec.engine_request();
+        self.create_streaming_session(pipeline_id.to_string(), request, observer)
     }
 }
 

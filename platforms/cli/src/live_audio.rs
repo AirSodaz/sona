@@ -1,13 +1,8 @@
-use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Split};
-use sona_audio_capture::AudioResampler;
-use sona_audio_capture::{
-    push_downmixed_f32_checked, push_downmixed_i16_checked, push_downmixed_u16_checked,
-};
+use sona_audio_capture::{AudioResampler, build_cpal_input_stream};
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
 const STDIN_READ_BUFFER_SIZE: usize = 8192;
@@ -202,58 +197,22 @@ fn run_microphone_capture(
     let sample_format = supported_config.sample_format();
     let config: cpal::StreamConfig = supported_config.into();
     let sample_rate = config.sample_rate;
-    let channels = config.channels as usize;
     let buffer = HeapRb::<f32>::new(sample_rate as usize * INPUT_BUFFER_SECONDS);
-    let (mut producer, mut consumer) = buffer.split();
-    let overflow = std::sync::Arc::new(AtomicBool::new(false));
+    let (producer, mut consumer) = buffer.split();
     let capture_failure = CaptureFailure::default();
     let callback_failure = capture_failure.clone();
     let stream_error = move |error| {
         callback_failure.record(format!("Microphone stream failed: {error}"));
     };
 
-    let stream_result = match sample_format {
-        SampleFormat::F32 => {
-            let overflow = overflow.clone();
-            device.build_input_stream(
-                config,
-                move |data: &[f32], _| {
-                    push_downmixed_f32_checked(data, channels, &mut producer, &overflow);
-                },
-                stream_error,
-                None,
-            )
-        }
-        SampleFormat::I16 => {
-            let overflow = overflow.clone();
-            device.build_input_stream(
-                config,
-                move |data: &[i16], _| {
-                    push_downmixed_i16_checked(data, channels, &mut producer, &overflow);
-                },
-                stream_error,
-                None,
-            )
-        }
-        SampleFormat::U16 => {
-            let overflow = overflow.clone();
-            device.build_input_stream(
-                config,
-                move |data: &[u16], _| {
-                    push_downmixed_u16_checked(data, channels, &mut producer, &overflow);
-                },
-                stream_error,
-                None,
-            )
-        }
-        _ => {
-            let _ = startup_sender.send(Err(format!(
-                "Unsupported input sample format for {device_name}: {sample_format:?}"
-            )));
-            return;
-        }
-    };
-    let stream = match stream_result {
+    let stream = match build_cpal_input_stream(
+        &device,
+        config,
+        sample_format,
+        producer,
+        move || {},
+        stream_error,
+    ) {
         Ok(stream) => stream,
         Err(error) => {
             let _ = startup_sender.send(Err(format!(
@@ -281,13 +240,6 @@ fn run_microphone_capture(
     };
     loop {
         if forward_capture_failure(&capture_failure, &sender) {
-            return;
-        }
-        if overflow.load(Ordering::Acquire) {
-            let _ = sender.blocking_send(LiveAudioMessage::Error(
-                "Microphone input buffer overflowed; transcription cannot continue reliably."
-                    .to_string(),
-            ));
             return;
         }
         if drain_microphone_samples(&mut consumer, &mut resampler, &sender).is_err() {
@@ -384,7 +336,7 @@ mod tests {
     use super::*;
     use ringbuf::HeapRb;
     use ringbuf::traits::Split;
-    use sona_audio_capture::resolve_device_name;
+    use sona_audio_capture::{push_downmixed_f32_checked, resolve_device_name};
     use std::io::Cursor;
     use std::sync::atomic::{AtomicBool, Ordering};
 

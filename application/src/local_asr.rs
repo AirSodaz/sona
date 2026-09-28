@@ -2,8 +2,9 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use sona_core::ports::asr::{
-    AsrPortError, AsrPortErrorKind, BatchTranscriberPort, BatchTranscriptionObserver,
-    EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
+    AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession, BatchTranscriberPort,
+    BatchTranscriptionObserver, EngineCapabilities, LocalAsrAdapter, LocalAsrEngine,
+    StreamingAsrFactoryPort, StreamingInferenceSpec,
 };
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -110,6 +111,68 @@ impl BatchTranscriberPort for LocalBatchTranscriberRouter {
     }
 }
 
+/// Routes streaming transcription to the local engine selected in each spec.
+#[derive(Clone)]
+pub struct LocalStreamingAsrFactory {
+    registry: LocalAsrRegistry,
+}
+
+impl LocalStreamingAsrFactory {
+    pub fn new(registry: LocalAsrRegistry) -> Self {
+        Self { registry }
+    }
+
+    pub fn registry(&self) -> &LocalAsrRegistry {
+        &self.registry
+    }
+
+    fn local_streaming_factory(
+        &self,
+        spec: &StreamingInferenceSpec,
+    ) -> Result<Arc<dyn StreamingAsrFactoryPort>, AsrPortError> {
+        let request = spec.engine_request();
+        let engine = request.engine_config.local_engine().ok_or_else(|| {
+            AsrPortError::invalid_request("Local streaming requires a local engine selection")
+        })?;
+        let adapter = self.registry.get(engine).ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "The {} local ASR engine is not available on this host.",
+                    engine.as_str()
+                ),
+            )
+        })?;
+        adapter.streaming_factory().ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "The {} local ASR engine does not support streaming transcription.",
+                    engine.as_str()
+                ),
+            )
+        })
+    }
+}
+
+#[async_trait]
+impl StreamingAsrFactoryPort for LocalStreamingAsrFactory {
+    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
+        let factory = self.local_streaming_factory(spec)?;
+        factory.prepare(spec).await
+    }
+
+    async fn create(
+        &self,
+        pipeline_id: &str,
+        spec: &StreamingInferenceSpec,
+        observer: Arc<dyn AsrRuntimeObserver>,
+    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
+        let factory = self.local_streaming_factory(spec)?;
+        factory.create(pipeline_id, spec, observer).await
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -141,6 +204,28 @@ mod tests {
         hotwords: bool,
     }
 
+    struct CountingStreamingFactory {
+        calls: Arc<AtomicUsize>,
+    }
+
+    #[async_trait]
+    impl StreamingAsrFactoryPort for CountingStreamingFactory {
+        async fn prepare(&self, _spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        async fn create(
+            &self,
+            _pipeline_id: &str,
+            _spec: &StreamingInferenceSpec,
+            _observer: Arc<dyn AsrRuntimeObserver>,
+        ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
+            self.calls.fetch_add(1, Ordering::SeqCst);
+            Err(AsrPortError::runtime("mock session creation"))
+        }
+    }
+
     impl LocalAsrAdapter for FakeAdapter {
         fn engine(&self) -> LocalAsrEngine {
             self.engine
@@ -165,7 +250,13 @@ mod tests {
         }
 
         fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>> {
-            None
+            if self.streaming {
+                Some(Arc::new(CountingStreamingFactory {
+                    calls: self.calls.clone(),
+                }))
+            } else {
+                None
+            }
         }
     }
 
@@ -281,5 +372,53 @@ mod tests {
                 .capabilities
                 .contains(EngineCapabilities::STREAMING)
         );
+    }
+    fn streaming_spec(local_engine: LocalAsrEngine) -> StreamingInferenceSpec {
+        let request = sona_core::ports::asr::AsrTranscriptionRequest {
+            mode: sona_core::ports::asr::AsrMode::Streaming,
+            language: "auto".to_string(),
+            enable_itn: false,
+            normalization_options: Default::default(),
+            postprocess_options: Default::default(),
+            hotwords: None,
+            speaker_processing: None,
+            engine_config: sona_core::ports::asr::AsrEngineConfig::Local {
+                local_engine,
+                model_id: None,
+                model_path: "models/demo".to_string(),
+                num_threads: 4,
+                punctuation_model: None,
+                alignment_model: None,
+                vad_model: None,
+                vad_buffer: 5.0,
+                batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
+                model_type: "sense-voice".to_string(),
+                file_config: Box::new(None),
+                gpu_acceleration: None,
+                initial_refresh_rate_ms: None,
+                ffmpeg_path: None,
+            },
+        };
+        StreamingInferenceSpec::from_request(&request).unwrap()
+    }
+
+    #[tokio::test]
+    async fn local_streaming_factory_routes_to_streaming_engine() {
+        let (registry, sherpa_calls, _) = two_engine_registry();
+        let factory = LocalStreamingAsrFactory::new(registry);
+        let spec = streaming_spec(LocalAsrEngine::SherpaOnnx);
+
+        factory.prepare(&spec).await.unwrap();
+        assert_eq!(sherpa_calls.load(Ordering::SeqCst), 1);
+    }
+
+    #[tokio::test]
+    async fn local_streaming_factory_rejects_non_streaming_engine() {
+        let (registry, _, _) = two_engine_registry();
+        let factory = LocalStreamingAsrFactory::new(registry);
+        let spec = streaming_spec(LocalAsrEngine::LlamaCpp);
+
+        let err = factory.prepare(&spec).await.unwrap_err();
+        assert_eq!(err.kind, AsrPortErrorKind::Unsupported);
     }
 }

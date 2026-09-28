@@ -1,9 +1,9 @@
 use async_trait::async_trait;
-use sona_application::local_asr::LocalAsrRegistry;
+use sona_application::local_asr::{LocalAsrRegistry, LocalStreamingAsrFactory};
 use sona_core::ports::asr::{
-    AsrEngine, AsrPortError, AsrPortErrorKind, AsrRuntimeObserver, AsrStreamingSession,
-    AsrTranscriptionRequest, BatchTranscriberPort, OnlineBatchTranscriptionRequest,
-    StreamingAsrFactoryPort, StreamingInferenceSpec,
+    AsrEngine, AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
+    BatchTranscriberPort, OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort,
+    StreamingInferenceSpec,
 };
 use sona_core::transcription::runtime::LiveTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
@@ -33,58 +33,25 @@ pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
 
 #[derive(Clone)]
 pub struct CliStreamingAsrFactory {
-    registry: LocalAsrRegistry,
+    local: LocalStreamingAsrFactory,
     recognizer_pool: RecognizerPool,
 }
 
 impl CliStreamingAsrFactory {
     pub fn new(registry: LocalAsrRegistry, recognizer_pool: RecognizerPool) -> Self {
         Self {
-            registry,
+            local: LocalStreamingAsrFactory::new(registry),
             recognizer_pool,
         }
     }
-
-    fn local_streaming_factory(
-        &self,
-        spec: &StreamingInferenceSpec,
-    ) -> Result<Arc<dyn StreamingAsrFactoryPort>, AsrPortError> {
-        let request = spec.engine_request();
-        let engine = request.engine_config.local_engine().ok_or_else(|| {
-            AsrPortError::invalid_request("Local streaming requires a local engine selection")
-        })?;
-        let adapter = self.registry.get(engine).ok_or_else(|| {
-            AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!(
-                    "The {} local ASR engine is not available on this host.",
-                    engine.as_str()
-                ),
-            )
-        })?;
-        adapter.streaming_factory().ok_or_else(|| {
-            AsrPortError::new(
-                AsrPortErrorKind::Unsupported,
-                format!(
-                    "The {} local ASR engine does not support streaming transcription.",
-                    engine.as_str()
-                ),
-            )
-        })
-    }
 }
-
 #[async_trait]
 impl StreamingAsrFactoryPort for CliStreamingAsrFactory {
     async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
         match spec.engine() {
-            AsrEngine::Local => {
-                let factory = self.local_streaming_factory(spec)?;
-                factory.prepare(spec).await
-            }
+            AsrEngine::Local => self.local.prepare(spec).await,
             AsrEngine::Online => {
-                let request = spec.engine_request();
-                sona_online_asr::resolve_online_asr_provider_id(&request)?;
+                sona_online_asr::OnlineAsrAdapter.prepare(spec).await?;
                 self.recognizer_pool.prune_all_idle().await;
                 sona_llama_cpp::prune_idle_llama_models();
                 Ok(())
@@ -99,20 +66,13 @@ impl StreamingAsrFactoryPort for CliStreamingAsrFactory {
         observer: Arc<dyn AsrRuntimeObserver>,
     ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
         match spec.engine() {
-            AsrEngine::Local => {
-                let factory = self.local_streaming_factory(spec)?;
-                factory.create(pipeline_id, spec, observer).await
-            }
+            AsrEngine::Local => self.local.create(pipeline_id, spec, observer).await,
             AsrEngine::Online => {
-                let request = spec.engine_request();
-                sona_online_asr::resolve_online_asr_provider_id(&request)?;
                 self.recognizer_pool.prune_all_idle().await;
                 sona_llama_cpp::prune_idle_llama_models();
-                sona_online_asr::OnlineAsrAdapter.create_streaming_session(
-                    pipeline_id.to_string(),
-                    request,
-                    observer,
-                )
+                sona_online_asr::OnlineAsrAdapter
+                    .create(pipeline_id, spec, observer)
+                    .await
             }
         }
     }
