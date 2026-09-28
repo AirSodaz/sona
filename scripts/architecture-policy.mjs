@@ -19,6 +19,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-api-server', 'inbound-adapter'],
   ['sona-ts-bind', 'inbound-adapter'],
   ['sona-archive', 'outbound-adapter'],
+  ['sona-audio-capture', 'outbound-adapter'],
   ['sona-export', 'outbound-adapter'],
   ['sona-media-detector', 'outbound-adapter'],
   ['sona-model-downloads', 'outbound-adapter'],

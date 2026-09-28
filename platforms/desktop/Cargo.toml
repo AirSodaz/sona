@@ -25,6 +25,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 sona-application = { workspace = true }
+sona-audio-capture = { workspace = true }
 sona-archive = { workspace = true }
 sona-api-server = { workspace = true }
 sona-core = { workspace = true }

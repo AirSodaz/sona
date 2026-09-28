@@ -4,6 +4,7 @@ members = [
     "application",
     "application/sync",
     "adapters/api_server",
+    "adapters/audio_capture",
     "adapters/archive",
     "adapters/export",
     "providers/asr/local/sherpa_onnx",
@@ -42,6 +43,7 @@ license = "MIT"
 sona = { path = "platforms/desktop" }
 sona-api-server = { path = "adapters/api_server" }
 sona-application = { path = "application" }
+sona-audio-capture = { path = "adapters/audio_capture" }
 sona-archive = { path = "adapters/archive" }
 sona-cli = { path = "platforms/cli" }
 sona-core = { path = "core" }

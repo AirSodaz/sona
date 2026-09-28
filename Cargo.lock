@@ -6124,6 +6124,7 @@ dependencies = [
  "sona-api-server",
  "sona-application",
  "sona-archive",
+ "sona-audio-capture",
  "sona-core",
  "sona-export",
  "sona-llama-cpp",
@@ -6226,6 +6227,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-audio-capture"
+version = "0.9.3"
+dependencies = [
+ "cpal",
+ "log",
+ "ringbuf",
+ "rubato",
+ "serde",
+ "sona-core",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "sona-cli"
 version = "0.9.3"
 dependencies = [
@@ -6241,6 +6255,7 @@ dependencies = [
  "sha2 0.11.0",
  "sona-api-server",
  "sona-application",
+ "sona-audio-capture",
  "sona-core",
  "sona-export",
  "sona-llama-cpp",

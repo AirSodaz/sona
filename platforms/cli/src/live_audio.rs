@@ -1,16 +1,15 @@
 use cpal::SampleFormat;
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{DeviceTrait, StreamTrait};
 use ringbuf::HeapRb;
-use ringbuf::traits::Producer;
 use ringbuf::traits::{Consumer, Split};
-use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Indexing, Resampler};
+use sona_audio_capture::AudioResampler;
+use sona_audio_capture::{
+    push_downmixed_f32_checked, push_downmixed_i16_checked, push_downmixed_u16_checked,
+};
 use std::io::Read;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
-const TARGET_SAMPLE_RATE: usize = 16_000;
-const RESAMPLER_OUTPUT_CHUNK: usize = 1024;
 const STDIN_READ_BUFFER_SIZE: usize = 8192;
 const INPUT_BUFFER_SECONDS: usize = 5;
 const CAPTURE_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(5);
@@ -149,69 +148,15 @@ where
     RunningAudioInput::from_parts(receiver, None, None, false)
 }
 
-fn push_samples_to_ring(
-    producer: &mut impl Producer<Item = f32>,
-    samples: &[f32],
-    overflow: &AtomicBool,
-) {
-    for sample in samples {
-        if producer.try_push(*sample).is_err() {
-            overflow.store(true, Ordering::Release);
-            break;
-        }
-    }
-}
-
-fn resolve_device_name(
-    devices: &[String],
-    default_device: Option<&str>,
-    requested_device: Option<&str>,
-) -> Result<String, String> {
-    if let Some(requested) = requested_device {
-        return devices
-            .iter()
-            .find(|name| name.as_str() == requested)
-            .cloned()
-            .ok_or_else(|| format!("Input device not found: {requested}"));
-    }
-    default_device
-        .map(str::to_string)
-        .ok_or_else(|| "No default input device found".to_string())
-}
-
 pub(crate) fn microphone_device_names() -> Result<Vec<String>, String> {
-    let host = cpal::default_host();
-    let mut devices = host
-        .input_devices()
-        .map_err(|error| format!("Failed to enumerate input devices: {error}"))?
-        .map(|device| device.to_string())
-        .collect::<Vec<_>>();
-    devices.sort();
-    devices.dedup();
-    Ok(devices)
+    sona_audio_capture::enumerate_input_device_names().map_err(|e| e.to_string())
 }
 
 pub(crate) fn start_microphone_input(
     requested_device: Option<&str>,
 ) -> Result<RunningAudioInput, String> {
-    let host = cpal::default_host();
-    let devices = host
-        .input_devices()
-        .map_err(|error| format!("Failed to enumerate input devices: {error}"))?
-        .collect::<Vec<_>>();
-    let device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
-    let default_name = host.default_input_device().map(|device| device.to_string());
-    let resolved_name =
-        resolve_device_name(&device_names, default_name.as_deref(), requested_device)?;
-
-    let device = devices
-        .into_iter()
-        .find(|device| device.to_string() == resolved_name)
-        .or_else(|| {
-            host.default_input_device()
-                .filter(|device| device.to_string() == resolved_name)
-        })
-        .ok_or_else(|| format!("Input device disappeared before capture: {resolved_name}"))?;
+    let (device, resolved_name) =
+        sona_audio_capture::find_input_device(requested_device).map_err(|e| e.to_string())?;
 
     let (message_sender, receiver) = tokio::sync::mpsc::channel(16);
     let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
@@ -273,9 +218,7 @@ fn run_microphone_capture(
             device.build_input_stream(
                 config,
                 move |data: &[f32], _| {
-                    if let Ok(samples) = downmix_f32(data, channels) {
-                        push_samples_to_ring(&mut producer, &samples, &overflow);
-                    }
+                    push_downmixed_f32_checked(data, channels, &mut producer, &overflow);
                 },
                 stream_error,
                 None,
@@ -286,9 +229,7 @@ fn run_microphone_capture(
             device.build_input_stream(
                 config,
                 move |data: &[i16], _| {
-                    if let Ok(samples) = downmix_i16(data, channels) {
-                        push_samples_to_ring(&mut producer, &samples, &overflow);
-                    }
+                    push_downmixed_i16_checked(data, channels, &mut producer, &overflow);
                 },
                 stream_error,
                 None,
@@ -299,9 +240,7 @@ fn run_microphone_capture(
             device.build_input_stream(
                 config,
                 move |data: &[u16], _| {
-                    if let Ok(samples) = downmix_u16(data, channels) {
-                        push_samples_to_ring(&mut producer, &samples, &overflow);
-                    }
+                    push_downmixed_u16_checked(data, channels, &mut producer, &overflow);
                 },
                 stream_error,
                 None,
@@ -333,10 +272,10 @@ fn run_microphone_capture(
         return;
     }
 
-    let mut resampler = match MonoResampler::new(sample_rate) {
+    let mut resampler = match AudioResampler::new(sample_rate) {
         Ok(resampler) => resampler,
         Err(error) => {
-            let _ = sender.blocking_send(LiveAudioMessage::Error(error));
+            let _ = sender.blocking_send(LiveAudioMessage::Error(error.to_string()));
             return;
         }
     };
@@ -366,20 +305,14 @@ fn run_microphone_capture(
     if drain_microphone_samples(&mut consumer, &mut resampler, &sender).is_err() {
         return;
     }
-    match resampler.finish() {
-        Ok(samples) if !samples.is_empty() => {
-            if sender
-                .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(samples)))
-                .is_err()
-            {
-                return;
-            }
-        }
-        Ok(_) => {}
-        Err(error) => {
-            let _ = sender.blocking_send(LiveAudioMessage::Error(error));
-            return;
-        }
+    let mut tail = Vec::new();
+    let finished_count = resampler.drain_finish(&mut consumer, &mut tail);
+    if finished_count > 0
+        && sender
+            .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(tail)))
+            .is_err()
+    {
+        return;
     }
     let _ = sender.blocking_send(LiveAudioMessage::Eof);
 }
@@ -397,152 +330,61 @@ fn forward_capture_failure(
 
 fn drain_microphone_samples(
     consumer: &mut impl Consumer<Item = f32>,
-    resampler: &mut MonoResampler,
+    resampler: &mut AudioResampler,
     sender: &tokio::sync::mpsc::Sender<LiveAudioMessage>,
 ) -> Result<(), ()> {
-    while consumer.occupied_len() > 0 {
-        let mut samples = vec![0.0; consumer.occupied_len().min(4096)];
-        let read = consumer.pop_slice(&mut samples);
-        samples.truncate(read);
-        let output = match resampler.push(&samples) {
-            Ok(output) => output,
-            Err(error) => {
-                let _ = sender.blocking_send(LiveAudioMessage::Error(error));
-                return Err(());
-            }
-        };
-        if !output.is_empty()
-            && sender
-                .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(output)))
-                .is_err()
-        {
-            return Err(());
-        }
+    let mut output = Vec::new();
+    let produced = resampler.drain_from_consumer(consumer, &mut output);
+    if produced > 0
+        && sender
+            .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(output)))
+            .is_err()
+    {
+        return Err(());
     }
     Ok(())
 }
 
-fn downmix<T>(
-    samples: &[T],
-    channels: usize,
-    normalize: impl Fn(&T) -> f32,
-) -> Result<Vec<f32>, String> {
-    if channels == 0 {
-        return Err("audio input reported zero channels".to_string());
-    }
-    Ok(samples
-        .chunks(channels)
-        .map(|frame| frame.iter().map(&normalize).sum::<f32>() / frame.len() as f32)
-        .collect())
-}
-
+#[cfg(test)]
 pub(crate) fn downmix_f32(samples: &[f32], channels: usize) -> Result<Vec<f32>, String> {
-    downmix(samples, channels, |sample| *sample)
+    sona_audio_capture::downmix_f32(samples, channels).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
 pub(crate) fn downmix_i16(samples: &[i16], channels: usize) -> Result<Vec<f32>, String> {
-    downmix(samples, channels, |sample| *sample as f32 / 32_768.0)
+    sona_audio_capture::downmix_i16(samples, channels).map_err(|e| e.to_string())
 }
 
+#[cfg(test)]
 pub(crate) fn downmix_u16(samples: &[u16], channels: usize) -> Result<Vec<f32>, String> {
-    downmix(samples, channels, |sample| {
-        (*sample as f32 - 32_767.5) / 32_767.5
-    })
+    sona_audio_capture::downmix_u16(samples, channels).map_err(|e| e.to_string())
 }
 
-pub(crate) struct MonoResampler {
-    inner: Option<Fft<f32>>,
-    pending: Vec<f32>,
-    out_scratch: Vec<f32>,
-}
+#[cfg(test)]
+pub(crate) struct MonoResampler(AudioResampler);
 
+#[cfg(test)]
 impl MonoResampler {
     pub(crate) fn new(input_sample_rate: u32) -> Result<Self, String> {
-        if input_sample_rate == 0 {
-            return Err("audio input reported a zero sample rate".to_string());
-        }
-        let (inner, out_scratch) = if input_sample_rate as usize == TARGET_SAMPLE_RATE {
-            (None, Vec::new())
-        } else {
-            let resampler = Fft::<f32>::new(
-                input_sample_rate as usize,
-                TARGET_SAMPLE_RATE,
-                RESAMPLER_OUTPUT_CHUNK,
-                1,
-                FixedSync::Output,
-            )
-            .map_err(|error| format!("Failed to create microphone resampler: {error}"))?;
-            let out_scratch = vec![0.0; resampler.output_frames_max()];
-            (Some(resampler), out_scratch)
-        };
-        Ok(Self {
-            inner,
-            pending: Vec::new(),
-            out_scratch,
-        })
+        AudioResampler::new(input_sample_rate)
+            .map(Self)
+            .map_err(|e| e.to_string())
     }
 
     pub(crate) fn push(&mut self, samples: &[f32]) -> Result<Vec<f32>, String> {
-        if self.inner.is_none() {
-            return Ok(samples.to_vec());
-        }
-        self.pending.extend_from_slice(samples);
-        self.drain_pending(false)
+        self.0.process_chunk(samples).map_err(|e| e.to_string())
     }
 
-    pub(crate) fn finish(mut self) -> Result<Vec<f32>, String> {
-        let Some(resampler) = self.inner.as_ref() else {
-            return Ok(Vec::new());
-        };
-        // Pad with silence for the full filter delay (plus one chunk of
-        // margin), so every buffered input sample passes through before the
-        // stream is reported finished.
-        let tail_padding = (resampler.output_delay() as f64 / resampler.resample_ratio()).ceil()
-            as usize
-            + RESAMPLER_OUTPUT_CHUNK;
-        self.pending.resize(self.pending.len() + tail_padding, 0.0);
-        self.drain_pending(true)
-    }
-
-    /// Resample buffered input into whole output chunks. With `allow_partial`
-    /// a final short input chunk is accepted and padded with silence via
-    /// `Indexing::partial_len`; otherwise it stays buffered for the next call.
-    fn drain_pending(&mut self, allow_partial: bool) -> Result<Vec<f32>, String> {
-        let Some(resampler) = self.inner.as_mut() else {
-            return Ok(Vec::new());
-        };
-        let mut output = Vec::new();
-        loop {
-            let needed = resampler.input_frames_next();
-            let available = self.pending.len();
-            if available == 0 || (available < needed && !allow_partial) {
-                break;
-            }
-            let frames = needed.min(available);
-            let indexing = (frames < needed).then(|| Indexing::new().partial_len(frames));
-            let input = InterleavedSlice::new(&self.pending, 1, frames).map_err(|error| {
-                format!("Failed to buffer microphone audio for resampling: {error}")
-            })?;
-            let out_capacity = self.out_scratch.len();
-            let mut output_adapter =
-                InterleavedSlice::new_mut(&mut self.out_scratch, 1, out_capacity).map_err(
-                    |error| format!("Failed to prepare microphone resampling output: {error}"),
-                )?;
-            let (_consumed, written) = resampler
-                .process_into_buffer(&input, &mut output_adapter, indexing.as_ref())
-                .map_err(|error| format!("Failed to resample microphone audio: {error}"))?;
-            output.extend_from_slice(&self.out_scratch[..written]);
-            self.pending.drain(..frames);
-        }
-        Ok(output)
+    pub(crate) fn finish(self) -> Result<Vec<f32>, String> {
+        self.0.finish().map_err(|e| e.to_string())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use ringbuf::HeapRb;
     use ringbuf::traits::Split;
+    use sona_audio_capture::resolve_device_name;
     use std::io::Cursor;
     use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -626,7 +468,7 @@ mod tests {
         let (mut producer, _consumer) = buffer.split();
         let overflow = AtomicBool::new(false);
 
-        push_samples_to_ring(&mut producer, &[0.1, 0.2, 0.3], &overflow);
+        push_downmixed_f32_checked(&[0.1, 0.2, 0.3], 1, &mut producer, &overflow);
 
         assert!(overflow.load(Ordering::Acquire));
     }
@@ -680,7 +522,9 @@ mod tests {
             "Laptop Mic"
         );
         assert_eq!(
-            resolve_device_name(&devices, Some("Laptop Mic"), Some("studio mic")).unwrap_err(),
+            resolve_device_name(&devices, Some("Laptop Mic"), Some("studio mic"))
+                .unwrap_err()
+                .to_string(),
             "Input device not found: studio mic"
         );
     }

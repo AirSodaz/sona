@@ -15,6 +15,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-api-server` | inbound-adapter |
 | `sona-ts-bind` | inbound-adapter |
 | `sona-archive` | outbound-adapter |
+| `sona-audio-capture` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | provider |
 | `sona-vad` | provider |
@@ -62,6 +63,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
+| `adapters/audio_capture/` | `sona-audio-capture` | outbound-adapter | Audio capture, downmixing, and 16kHz resampling |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
 | `providers/asr/local/vad/` | `sona-vad` | provider | Silero/TEN ONNX VAD behind the Core `VadEnginePort` |
 | `providers/asr/local/punct/` | `sona-punct` | provider | Transcript punctuation behind the Core `PunctuationEnginePort` |

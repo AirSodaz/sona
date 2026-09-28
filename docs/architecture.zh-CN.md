@@ -15,6 +15,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-api-server` | inbound-adapter |
 | `sona-ts-bind` | inbound-adapter |
 | `sona-archive` | outbound-adapter |
+| `sona-audio-capture` | outbound-adapter |
 | `sona-export` | outbound-adapter |
 | `sona-sherpa-onnx` | provider |
 | `sona-vad` | provider |
@@ -62,6 +63,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/ts_bind/` | `sona-ts-bind` | inbound-adapter | |
 | `adapters/archive/` | `sona-archive` | outbound-adapter | |
 | `adapters/export/` | `sona-export` | outbound-adapter | |
+| `adapters/audio_capture/` | `sona-audio-capture` | outbound-adapter | 硬件音频采集、降混与 16kHz 重采样 |
 | `providers/asr/local/sherpa_onnx/` | `sona-sherpa-onnx` | provider | |
 | `providers/asr/local/vad/` | `sona-vad` | provider | Core `VadEnginePort` 之后的 Silero/TEN ONNX VAD |
 | `providers/asr/local/punct/` | `sona-punct` | provider | Core `PunctuationEnginePort` 之后的文本标点 |

@@ -1,10 +1,8 @@
-use cpal::SampleFormat;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
-use rubato::audioadapter_buffers::direct::InterleavedSlice;
-use rubato::{Fft, FixedSync, Resampler};
 use sona_application::live_transcription::LiveSourceEpoch;
+use sona_audio_capture::{AudioResampler, build_cpal_input_stream};
 use sona_core::ports::asr::AsrAudioFrame;
 use sona_sherpa_onnx::audio::LiveWavRecorder;
 use std::collections::{HashMap, HashSet};
@@ -43,13 +41,6 @@ impl CaptureKind {
         match self {
             CaptureKind::System => SYSTEM_PEAK_EVENT,
             CaptureKind::Microphone => MICROPHONE_PEAK_EVENT,
-        }
-    }
-
-    fn resampler_error_label(self) -> &'static str {
-        match self {
-            CaptureKind::System => "System",
-            CaptureKind::Microphone => "Mic",
         }
     }
 
@@ -94,27 +85,6 @@ impl CaptureKind {
         match self {
             CaptureKind::System => format!("Failed to get default config: {}", err),
             CaptureKind::Microphone => format!("Failed to get default mic config: {}", err),
-        }
-    }
-
-    fn resampler_error_message(self, err: rubato::ResamplerConstructionError) -> String {
-        match self {
-            CaptureKind::System => format!("Failed to create resampler: {}", err),
-            CaptureKind::Microphone => format!("Failed to create mic resampler: {}", err),
-        }
-    }
-
-    fn unsupported_sample_format_message(self) -> &'static str {
-        match self {
-            CaptureKind::System => "Unsupported sample format",
-            CaptureKind::Microphone => "Unsupported mic sample format",
-        }
-    }
-
-    fn build_stream_error_message(self, err: cpal::Error) -> String {
-        match self {
-            CaptureKind::System => format!("Failed to build input stream: {}", err),
-            CaptureKind::Microphone => format!("Failed to build mic input stream: {}", err),
         }
     }
 
@@ -399,22 +369,10 @@ impl AudioState {
     }
 }
 
-#[derive(serde::Serialize)]
-pub struct AudioDevice {
-    name: String,
-}
+pub use sona_audio_capture::AudioDevice;
 
 pub fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
-    let host = cpal::default_host();
-    let devices = host.output_devices().map_err(|e| e.to_string())?;
-
-    let result = devices
-        .map(|device| AudioDevice {
-            name: device.to_string(),
-        })
-        .collect();
-
-    Ok(result)
+    sona_audio_capture::enumerate_output_devices().map_err(|e| e.to_string())
 }
 
 fn resolve_recording_output_path<F>(
@@ -526,18 +484,20 @@ fn rollback_capture_attachment(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_capture_worker_task(
     app: AppHandle,
     key: CaptureKey,
     source: LiveSourceEpoch,
     sample_cursor: std::sync::Arc<AtomicU64>,
-    mut task_consumer: impl Consumer<Item = f32> + Send + 'static,
+    mut resampler: AudioResampler,
+    mut raw_consumer: impl Consumer<Item = f32> + Send + 'static,
     mut data_rx: tokio::sync::mpsc::Receiver<()>,
     mut recorder_rx: tokio::sync::mpsc::Receiver<RecorderCommand>,
 ) {
     tauri::async_runtime::spawn(async move {
         let mut writers = HashMap::<String, CaptureWriterState>::new();
-        let mut pull_buffer = vec![0.0; 16000];
+        let mut pull_buffer = Vec::with_capacity(16000);
         let mut sequence = 0_u64;
         let mut last_peak_emit = std::time::Instant::now();
         let worker_source = CaptureWorkerSource {
@@ -594,15 +554,18 @@ fn spawn_capture_worker_task(
                 opt = data_rx.recv() => {
                     match opt {
                         Some(()) => {
-                            drain_capture_worker_chunk(
-                                &worker_source,
-                                &mut task_consumer,
-                                &mut pull_buffer,
-                                &mut writers,
-                                &mut sequence,
-                                sample_cursor.as_ref(),
-                                &mut last_peak_emit,
-                            ).await;
+                            pull_buffer.clear();
+                            resampler.drain_from_consumer(&mut raw_consumer, &mut pull_buffer);
+                            if !pull_buffer.is_empty() {
+                                drain_capture_worker_chunk(
+                                    &worker_source,
+                                    &pull_buffer,
+                                    &mut writers,
+                                    &mut sequence,
+                                    sample_cursor.as_ref(),
+                                    &mut last_peak_emit,
+                                ).await;
+                            }
                         }
                         None => break,
                     }
@@ -610,20 +573,18 @@ fn spawn_capture_worker_task(
             }
         }
 
-        loop {
-            let had_chunk = drain_capture_worker_chunk(
+        pull_buffer.clear();
+        resampler.drain_finish(&mut raw_consumer, &mut pull_buffer);
+        if !pull_buffer.is_empty() {
+            drain_capture_worker_chunk(
                 &worker_source,
-                &mut task_consumer,
-                &mut pull_buffer,
+                &pull_buffer,
                 &mut writers,
                 &mut sequence,
                 sample_cursor.as_ref(),
                 &mut last_peak_emit,
             )
             .await;
-            if !had_chunk {
-                break;
-            }
         }
 
         for writer in writers.into_values() {
@@ -640,18 +601,15 @@ struct CaptureWorkerSource<'a> {
 
 async fn drain_capture_worker_chunk(
     worker_source: &CaptureWorkerSource<'_>,
-    task_consumer: &mut impl Consumer<Item = f32>,
-    pull_buffer: &mut [f32],
+    chunk: &[f32],
     writers: &mut HashMap<String, CaptureWriterState>,
     sequence: &mut u64,
     sample_cursor: &AtomicU64,
     last_peak_emit: &mut std::time::Instant,
 ) -> bool {
-    let len = task_consumer.pop_slice(pull_buffer);
-    if len == 0 {
+    if chunk.is_empty() {
         return false;
     }
-    let chunk = &pull_buffer[..len];
     let mut max_abs = 0.0_f32;
     for &sample in chunk {
         let abs_val = sample.abs();
@@ -790,11 +748,11 @@ fn start_shared_capture(
     }
 
     let (stop_tx, rx) = channel::<()>();
-    let task_rb = HeapRb::<f32>::new(16000 * 5);
-    let (task_producer, task_consumer) = task_rb.split();
+    let raw_rb = HeapRb::<f32>::new(192_000 * 2);
+    let (raw_producer, raw_consumer) = raw_rb.split();
     let (data_tx, data_rx) = tokio::sync::mpsc::channel::<()>(100);
     let (recorder_tx, recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(10);
-    let (startup_tx, startup_rx) = channel::<Result<String, String>>();
+    let (startup_tx, startup_rx) = channel::<Result<(String, u32), String>>();
     let source_generation = state.next_source_generation.fetch_add(1, Ordering::Relaxed);
     let source = LiveSourceEpoch::new(
         format!("desktop-source-{source_generation}"),
@@ -802,31 +760,40 @@ fn start_shared_capture(
     );
     let sample_cursor = std::sync::Arc::new(AtomicU64::new(0));
 
-    spawn_capture_worker_task(
-        app.clone(),
-        key.clone(),
-        source.clone(),
-        sample_cursor.clone(),
-        task_consumer,
-        data_rx,
-        recorder_rx,
-    );
     spawn_cpal_startup_thread(
         window,
         kind,
         Some(resolved_device),
         rx,
         startup_tx,
-        data_tx,
-        task_producer,
+        data_tx.clone(),
+        raw_producer,
     );
 
-    match startup_rx.recv() {
-        Ok(Ok(_)) => {}
+    let (_resolved_device_name, sample_rate) = match startup_rx.recv() {
+        Ok(Ok((name, rate))) => (name, rate),
         Ok(Err(err)) => return Err(err),
         Err(err) => return Err(kind.startup_channel_error_message(err)),
-    }
+    };
 
+    let resampler = match AudioResampler::new(sample_rate) {
+        Ok(r) => r,
+        Err(err) => {
+            let _ = stop_tx.send(());
+            return Err(format!("Failed to initialize audio resampler: {err}"));
+        }
+    };
+
+    spawn_capture_worker_task(
+        app.clone(),
+        key.clone(),
+        source.clone(),
+        sample_cursor.clone(),
+        resampler,
+        raw_consumer,
+        data_rx,
+        recorder_rx,
+    );
     {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
         let mut capture = SharedCaptureState::default();
@@ -867,63 +834,15 @@ fn start_shared_capture(
     })
 }
 
-fn push_downmixed_f32(data: &[f32], channels: usize, producer: &mut impl Producer<Item = f32>) {
-    if channels == 1 {
-        for &sample in data {
-            let _ = producer.try_push(sample);
-        }
-    } else {
-        for frame in data.chunks(channels) {
-            let sum: f32 = frame.iter().sum();
-            let mono_sample = sum / channels as f32;
-            let _ = producer.try_push(mono_sample);
-        }
-    }
-}
-
-fn push_downmixed_i16(data: &[i16], channels: usize, producer: &mut impl Producer<Item = f32>) {
-    if channels == 1 {
-        for &sample in data {
-            let _ = producer.try_push(sample as f32 / 32768.0);
-        }
-    } else {
-        for frame in data.chunks(channels) {
-            let mut sum = 0.0_f32;
-            for &sample in frame {
-                sum += sample as f32 / 32768.0;
-            }
-            let mono_sample = sum / channels as f32;
-            let _ = producer.try_push(mono_sample);
-        }
-    }
-}
-
-fn push_downmixed_u16(data: &[u16], channels: usize, producer: &mut impl Producer<Item = f32>) {
-    if channels == 1 {
-        for &sample in data {
-            let _ = producer.try_push((sample as f32 - 32768.0) / 32768.0);
-        }
-    } else {
-        for frame in data.chunks(channels) {
-            let mut sum = 0.0_f32;
-            for &sample in frame {
-                sum += (sample as f32 - 32768.0) / 32768.0;
-            }
-            let mono_sample = sum / channels as f32;
-            let _ = producer.try_push(mono_sample);
-        }
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 fn spawn_cpal_startup_thread<R: Runtime + 'static>(
     _window: Window<R>,
     kind: CaptureKind,
     device_name: Option<String>,
     rx: std::sync::mpsc::Receiver<()>,
-    startup_tx: Sender<Result<String, String>>,
+    startup_tx: Sender<Result<(String, u32), String>>,
     data_tx: tokio::sync::mpsc::Sender<()>,
-    mut task_producer: impl Producer<Item = f32> + Send + 'static,
+    raw_producer: impl Producer<Item = f32> + Send + 'static,
 ) {
     thread::spawn(move || {
         let fail_start = |message: String| {
@@ -971,91 +890,25 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         let sample_format = supported_config.sample_format();
         let config: cpal::StreamConfig = supported_config.into();
         let sample_rate = config.sample_rate;
-        let channels = config.channels;
-        let chunk_size_out = 1024;
 
-        let mut resampler = match Fft::<f32>::new(
-            sample_rate as usize,
-            16000,
-            chunk_size_out,
-            1,
-            FixedSync::Output,
+        let data_notifier = {
+            let data_tx = data_tx.clone();
+            move || {
+                let _ = data_tx.try_send(());
+            }
+        };
+
+        let stream = match build_cpal_input_stream(
+            &device,
+            config,
+            sample_format,
+            raw_producer,
+            data_notifier,
+            err_fn,
         ) {
-            Ok(r) => r,
-            Err(e) => {
-                fail_start(kind.resampler_error_message(e));
-                return;
-            }
-        };
-
-        let input_frames_next = resampler.input_frames_next();
-        let rb = HeapRb::<f32>::new(input_frames_next * 4);
-        let (mut producer, mut consumer) = rb.split();
-        let mut input_buffer = vec![0.0_f32; resampler.input_frames_max()];
-        let mut output_buffer = vec![0.0_f32; resampler.output_frames_max()];
-
-        let stream_result = match sample_format {
-            SampleFormat::F32 => device.build_input_stream(
-                config,
-                move |data: &[f32], _: &_| {
-                    push_downmixed_f32(data, channels as usize, &mut producer);
-                    process_capture_audio(
-                        kind,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::I16 => device.build_input_stream(
-                config,
-                move |data: &[i16], _: &_| {
-                    push_downmixed_i16(data, channels as usize, &mut producer);
-                    process_capture_audio(
-                        kind,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
-            SampleFormat::U16 => device.build_input_stream(
-                config,
-                move |data: &[u16], _: &_| {
-                    push_downmixed_u16(data, channels as usize, &mut producer);
-                    process_capture_audio(
-                        kind,
-                        &mut consumer,
-                        &mut resampler,
-                        &mut input_buffer,
-                        &mut output_buffer,
-                        &data_tx,
-                        &mut task_producer,
-                    );
-                },
-                err_fn,
-                None,
-            ),
-            _ => {
-                fail_start(kind.unsupported_sample_format_message().to_string());
-                return;
-            }
-        };
-
-        let stream = match stream_result {
             Ok(s) => s,
             Err(e) => {
-                fail_start(kind.build_stream_error_message(e));
+                fail_start(e.to_string());
                 return;
             }
         };
@@ -1065,7 +918,10 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             return;
         }
 
-        if startup_tx.send(Ok(resolved_device_name.clone())).is_err() {
+        if startup_tx
+            .send(Ok((resolved_device_name.clone(), sample_rate)))
+            .is_err()
+        {
             return;
         }
 
@@ -1076,16 +932,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
 }
 
 pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
-    let host = cpal::default_host();
-    let devices = host.input_devices().map_err(|e| e.to_string())?;
-
-    let result = devices
-        .map(|device| AudioDevice {
-            name: device.to_string(),
-        })
-        .collect();
-
-    Ok(result)
+    sona_audio_capture::enumerate_input_devices().map_err(|e| e.to_string())
 }
 
 pub fn start_microphone_capture(
@@ -1215,63 +1062,6 @@ async fn feed_capture_audio(
             "[Audio] Failed to feed live source {}: {error}",
             source.source_id
         );
-    }
-}
-
-fn process_capture_audio(
-    kind: CaptureKind,
-    consumer: &mut impl Consumer<Item = f32>,
-    resampler: &mut Fft<f32>,
-    input_buffer: &mut [f32],
-    output_buffer: &mut [f32],
-    data_tx: &tokio::sync::mpsc::Sender<()>,
-    task_producer: &mut impl Producer<Item = f32>,
-) {
-    while consumer.occupied_len() >= resampler.input_frames_next() {
-        let input_frames_needed = resampler.input_frames_next();
-        let _read = consumer.pop_slice(&mut input_buffer[..input_frames_needed]);
-
-        let input_adapter = match InterleavedSlice::new(input_buffer, 1, input_frames_needed) {
-            Ok(adapter) => adapter,
-            Err(error) => {
-                log::error!(
-                    "[Audio] {} resampler input error: {}",
-                    kind.resampler_error_label(),
-                    error
-                );
-                continue;
-            }
-        };
-        let out_capacity = output_buffer.len();
-        let mut output_adapter = match InterleavedSlice::new_mut(output_buffer, 1, out_capacity) {
-            Ok(adapter) => adapter,
-            Err(error) => {
-                log::error!(
-                    "[Audio] {} resampler output error: {}",
-                    kind.resampler_error_label(),
-                    error
-                );
-                continue;
-            }
-        };
-
-        match resampler.process_into_buffer(&input_adapter, &mut output_adapter, None) {
-            Ok((_in_len, out_len)) => {
-                if out_len > 0 {
-                    let output_f32 = &output_buffer[..out_len];
-
-                    let _ = task_producer.push_slice(output_f32);
-                    let _ = data_tx.try_send(());
-                }
-            }
-            Err(e) => {
-                log::error!(
-                    "[Audio] {} resampler error: {}",
-                    kind.resampler_error_label(),
-                    e
-                );
-            }
-        }
     }
 }
 

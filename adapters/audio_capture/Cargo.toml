@@ -1,0 +1,21 @@
+[package]
+name = "sona-audio-capture"
+version.workspace = true
+description = "Hardware audio capture, downmixing, and resampling adapter for Sona"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.sona]
+role = "outbound-adapter"
+
+[dependencies]
+cpal = { workspace = true }
+log = { workspace = true }
+ringbuf = { workspace = true }
+serde = { workspace = true }
+rubato = { workspace = true }
+sona-core = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]

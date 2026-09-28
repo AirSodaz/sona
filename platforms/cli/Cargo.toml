@@ -19,6 +19,7 @@ serde_json = { workspace = true }
 rubato = { workspace = true }
 ringbuf = { workspace = true }
 sona-application = { workspace = true }
+sona-audio-capture = { workspace = true }
 sona-api-server = { workspace = true }
 sona-sherpa-onnx = { workspace = true }
 sona-vad = { workspace = true }
