@@ -48,6 +48,10 @@ export interface UIConfig {
   font?: 'system' | 'serif' | 'sans' | 'mono' | 'arial' | 'georgia';
   /** Whether to minimize to tray on exit. Default: true. */
   minimizeToTrayOnExit?: boolean;
+  /** Whether to launch the application on system startup. Default: false. */
+  autoStart?: boolean;
+  /** Whether to start silently minimized to tray when auto-launched. Default: false. */
+  silentStart?: boolean;
   /** Whether to automatically check for updates on startup. */
   autoCheckUpdates?: boolean;
   /** Whether to enable multi-device cloud sync. Default: false. */

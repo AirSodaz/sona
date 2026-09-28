@@ -78,6 +78,7 @@ unicode-normalization = { workspace = true }
 thiserror = { workspace = true }
 axum = { workspace = true, features = ["multipart", "macros", "ws"] }
 keyring = "4.1.5"
+tauri-plugin-autostart = "2"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-updater = "2"

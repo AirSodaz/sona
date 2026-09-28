@@ -34,6 +34,10 @@ vi.mock('../useLogLevelSyncEffect', () => ({
   useLogLevelSyncEffect: vi.fn(),
 }));
 
+vi.mock('../useAutoStartSyncEffect', () => ({
+  useAutoStartSyncEffect: vi.fn(),
+}));
+
 vi.mock('../../utils/logger', () => ({
   logger: {
     error: (...args: unknown[]) => mockLoggerError(...args),

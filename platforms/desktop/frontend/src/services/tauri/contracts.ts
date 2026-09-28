@@ -257,6 +257,14 @@ type ManualTauriCommandContractMap = {
     args: { enabled: boolean };
     result: undefined;
   };
+  [TauriCommand.app.setAutoStart]: {
+    args: { enabled: boolean };
+    result: undefined;
+  };
+  [TauriCommand.app.isAutoStartEnabled]: {
+    args: undefined;
+    result: boolean;
+  };
   [TauriCommand.app.setLogLevel]: {
     args: { level: AppLogLevel };
     result: undefined;

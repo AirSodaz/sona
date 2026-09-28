@@ -3,6 +3,7 @@ import { effectiveConfigRuntime } from '../services/effectiveConfigRuntime';
 import { hydrateAppStartupState } from '../services/startup/hydration';
 import { startAppRuntimeServices } from '../services/startup/runtime';
 import { logger } from '../utils/logger';
+import { useAutoStartSyncEffect } from './useAutoStartSyncEffect';
 import { useConfigPersistence } from './useConfigPersistence';
 import { useFontEffect } from './useFontEffect';
 import { useLogLevelSyncEffect } from './useLogLevelSyncEffect';
@@ -25,6 +26,7 @@ export function useAppInitialization() {
   useConfigPersistence(isLoaded);
   useTraySyncEffect(isLoaded);
   useLogLevelSyncEffect(isLoaded);
+  useAutoStartSyncEffect(isLoaded);
 
   // Initialize config and onboarding state
   useEffect(() => {

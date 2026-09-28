@@ -89,6 +89,22 @@ pub async fn update_tray_menu(
 pub fn set_minimize_to_tray(state: State<'_, crate::app::settings::AppSettings>, enabled: bool) {
     crate::app::settings::set_minimize_to_tray(state, enabled);
 }
+#[tauri::command]
+pub fn set_auto_start<R: Runtime>(app: AppHandle<R>, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let autolaunch = app.autolaunch();
+    if enabled {
+        autolaunch.enable().map_err(|e| e.to_string())
+    } else {
+        autolaunch.disable().map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+pub fn is_auto_start_enabled<R: Runtime>(app: AppHandle<R>) -> Result<bool, String> {
+    use tauri_plugin_autostart::ManagerExt;
+    app.autolaunch().is_enabled().map_err(|e| e.to_string())
+}
 
 #[tauri::command]
 pub fn set_log_level(

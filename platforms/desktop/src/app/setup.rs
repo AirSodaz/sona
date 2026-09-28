@@ -19,9 +19,29 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         db,
     )?);
 
+    let initial_config = {
+        let adapter = sqlite_context.app_config_adapter(Arc::new(sona_runtime_fs::SystemClock));
+        adapter.load_config().ok().flatten()
+    };
+
+    if let Some(minimize) = initial_config.as_ref().and_then(|config_val| {
+        config_val
+            .get("minimizeToTrayOnExit")
+            .or_else(|| config_val.get("minimize_to_tray_on_exit"))
+            .and_then(|v| v.as_bool())
+    }) {
+        let settings = app.state::<crate::app::settings::AppSettings>();
+        settings.set_minimize_to_tray_enabled(minimize);
+    }
+
+    let start_silently = crate::app::window::should_start_silently_from_args_and_config(
+        std::env::args(),
+        initial_config.as_ref(),
+    );
+
     app.manage(dashboard_service);
     app.manage(sqlite_context);
-    crate::app::window::create_main_window(app.handle())?;
+    crate::app::window::create_main_window(app.handle(), start_silently)?;
     crate::platform::model_downloads::try_auto_activate_cuda_addon(app.handle());
 
     let listener_app_handle = app_handle_for_listener.clone();

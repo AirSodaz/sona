@@ -79,7 +79,7 @@ impl AppSettings {
             .unwrap_or(true)
     }
 
-    fn set_minimize_to_tray_enabled(&self, enabled: bool) {
+    pub(crate) fn set_minimize_to_tray_enabled(&self, enabled: bool) {
         if let Ok(mut minimize) = self.minimize_to_tray.lock() {
             *minimize = enabled;
         }

@@ -62,6 +62,8 @@ export function SettingsGeneralTab({
   const theme = config.theme || 'auto';
   const font = config.font || 'system';
   const minimizeToTrayOnExit = config.minimizeToTrayOnExit ?? true;
+  const autoStart = config.autoStart ?? false;
+  const silentStart = config.silentStart ?? false;
   const autoCheckUpdates = config.autoCheckUpdates ?? true;
   const logLevel = normalizeLogLevel(config.logLevel);
 
@@ -197,15 +199,41 @@ export function SettingsGeneralTab({
           </div>
         </SettingsItem>
 
+        <SettingsItem title={t('settings.auto_start')} hint={t('settings.auto_start_hint')}>
+          <Switch
+            checked={autoStart}
+            onChange={(enabled) =>
+              updateConfig({
+                autoStart: enabled,
+                ...(!enabled ? { silentStart: false } : {}),
+              })
+            }
+          />
+        </SettingsItem>
+
         <SettingsItem
           title={t('settings.minimize_to_tray')}
           hint={t('settings.minimize_to_tray_hint')}
         >
           <Switch
             checked={minimizeToTrayOnExit}
-            onChange={(enabled) => updateConfig({ minimizeToTrayOnExit: enabled })}
+            onChange={(enabled) =>
+              updateConfig({
+                minimizeToTrayOnExit: enabled,
+                ...(!enabled ? { silentStart: false } : {}),
+              })
+            }
           />
         </SettingsItem>
+
+        {autoStart && minimizeToTrayOnExit && (
+          <SettingsItem title={t('settings.silent_start')} hint={t('settings.silent_start_hint')}>
+            <Switch
+              checked={silentStart}
+              onChange={(enabled) => updateConfig({ silentStart: enabled })}
+            />
+          </SettingsItem>
+        )}
 
         <SettingsItem title={t('settings.auto_check_updates')}>
           <Switch

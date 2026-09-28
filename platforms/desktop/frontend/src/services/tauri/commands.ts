@@ -28,6 +28,8 @@ export const TauriCommand = {
     forceExit: 'force_exit',
     updateTrayMenu: 'update_tray_menu',
     setMinimizeToTray: 'set_minimize_to_tray',
+    setAutoStart: 'set_auto_start',
+    isAutoStartEnabled: 'is_auto_start_enabled',
     setLogLevel: 'set_log_level',
     setWindowTheme: 'set_window_theme',
     checkMediaFormats: 'check_media_formats',

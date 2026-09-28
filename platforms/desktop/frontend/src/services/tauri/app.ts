@@ -448,6 +448,14 @@ export async function setMinimizeToTray(enabled: boolean): Promise<void> {
   await invokeTauri(TauriCommand.app.setMinimizeToTray, { enabled });
 }
 
+export async function setAutoStart(enabled: boolean): Promise<void> {
+  await invokeTauri(TauriCommand.app.setAutoStart, { enabled });
+}
+
+export async function isAutoStartEnabled(): Promise<boolean> {
+  return await invokeTauri(TauriCommand.app.isAutoStartEnabled);
+}
+
 export async function setLogLevel(level: AppLogLevel): Promise<void> {
   await invokeTauri(TauriCommand.app.setLogLevel, { level });
 }

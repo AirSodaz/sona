@@ -191,6 +191,10 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimize_to_tray_on_exit: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub silent_start: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_check_updates: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub log_level: Option<AppLogLevel>,

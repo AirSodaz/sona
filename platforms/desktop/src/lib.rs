@@ -131,6 +131,10 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(
             tauri_plugin_window_state::Builder::new()
                 .with_denylist(&["voice-typing", "caption"])
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        .difference(tauri_plugin_window_state::StateFlags::VISIBLE),
+                )
                 .build(),
         )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
@@ -156,6 +160,10 @@ pub fn run_app() -> Result<(), tauri::Error> {
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_http::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--autostart"]),
+        ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(prevent_default)
         .invoke_handler(crate::commands::get_handlers())
