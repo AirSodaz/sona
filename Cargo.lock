@@ -6248,6 +6248,7 @@ dependencies = [
  "cpal",
  "crossterm",
  "hex",
+ "log",
  "ringbuf",
  "serde",
  "serde_json",

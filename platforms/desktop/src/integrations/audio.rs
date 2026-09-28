@@ -1,4 +1,5 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use log::{debug, error, info, warn};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use sona_application::live_transcription::LiveSourceEpoch;
@@ -728,7 +729,7 @@ fn start_shared_capture(
         registry.attach_running(&key, kind, &instance_id)?
     };
     if let Some((lease, recorder_tx)) = existing_attachment {
-        println!(
+        info!(
             "[Audio] {} capture already running. source_id={}",
             kind.label(),
             lease.source_id
@@ -808,7 +809,7 @@ fn start_shared_capture(
             .instance_keys
             .insert((kind, instance_id.clone()), key.clone());
         registry.captures.insert(key.clone(), capture);
-        println!(
+        info!(
             "[Audio] {} capture startup committed. source_id={}",
             kind.label(),
             source.source_id
@@ -846,7 +847,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
 ) {
     thread::spawn(move || {
         let fail_start = |message: String| {
-            eprintln!(
+            error!(
                 "[Audio] Failed to start {} capture: {}",
                 kind.log_name(),
                 message
@@ -854,7 +855,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             let _ = startup_tx.send(Err(message));
         };
 
-        let err_fn = move |err| eprintln!("[Audio] {} error: {}", kind.stream_error_label(), err);
+        let err_fn = move |err| error!("[Audio] {} error: {}", kind.stream_error_label(), err);
         let host = cpal::default_host();
         let device = match (kind, device_name.as_ref()) {
             (CaptureKind::System, Some(name)) => host
@@ -927,7 +928,7 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
 
         let _ = rx.recv();
         let _ = stream.pause();
-        println!("[Audio] {} capture stopped", kind.stop_signal_label());
+        info!("[Audio] {} capture stopped", kind.stop_signal_label());
     });
 }
 
@@ -1058,7 +1059,7 @@ async fn feed_capture_audio(
         .await
         && !error.message.contains("retired")
     {
-        eprintln!(
+        error!(
             "[Audio] Failed to feed live source {}: {error}",
             source.source_id
         );
@@ -1098,12 +1099,12 @@ async fn stop_shared_capture(
             .ok_or_else(|| "Capture registry entry is missing".to_string())?;
         let detach_result = capture.detach_instance(&instance_id);
         if detach_result.should_stop_hardware {
-            println!(
+            info!(
                 "[Audio] {} capture detaching final owner",
                 kind.stop_log_label()
             );
         } else {
-            println!("[Audio] {} capture remains active", kind.stop_log_label());
+            debug!("[Audio] {} capture remains active", kind.stop_log_label());
         }
         if detach_result.should_stop_hardware {
             registry.captures.remove(&key);
@@ -1130,13 +1131,13 @@ async fn stop_shared_capture(
         if sent {
             match rx.await {
                 Ok(path) => saved_path = path,
-                Err(_) => eprintln!(
+                Err(_) => warn!(
                     "[Audio] Failed to receive {} WAV filepath from task",
                     kind.log_name()
                 ),
             }
         } else {
-            eprintln!(
+            warn!(
                 "[Audio] {} recorder stop was requested for {}, but no recorder task was available",
                 kind.stop_log_label(),
                 instance_id
@@ -1149,12 +1150,12 @@ async fn stop_shared_capture(
     }
 
     if let Some(tx) = detach_result.stop_signal {
-        println!("[Audio] Stopping {} capture...", kind.log_name());
+        info!("[Audio] Stopping {} capture...", kind.log_name());
         let _ = tx.send(());
     } else {
         match kind {
-            CaptureKind::System => println!("[Audio] Stop requested but not running"),
-            CaptureKind::Microphone => println!("[Audio] Mic stop requested but not running"),
+            CaptureKind::System => debug!("[Audio] Stop requested but not running"),
+            CaptureKind::Microphone => debug!("[Audio] Mic stop requested but not running"),
         }
     }
 

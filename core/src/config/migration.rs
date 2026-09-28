@@ -799,13 +799,7 @@ fn normalize_asr_providers(providers: Option<&Value>) -> Value {
 
         let mut norm = match provider.defaults.as_object() {
             Some(obj) => obj.clone(),
-            None => {
-                eprintln!(
-                    "[ConfigMigration] Provider defaults is not a JSON object: {}",
-                    provider.id
-                );
-                continue;
-            }
+            None => continue,
         };
         if let Some(existing_obj) = existing.and_then(Value::as_object) {
             for (k, default_v) in &norm.clone() {

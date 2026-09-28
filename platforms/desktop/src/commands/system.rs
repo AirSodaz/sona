@@ -410,7 +410,9 @@ pub async fn stop_api_server(
     controller: State<'_, crate::app::server::ApiServerController>,
     force: Option<bool>,
 ) -> Result<(), String> {
-    crate::app::server::stop_api_server(controller, force.unwrap_or(false)).await
+    crate::app::server::stop_api_server(controller, force.unwrap_or(false))
+        .await
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]

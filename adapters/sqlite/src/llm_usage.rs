@@ -5,6 +5,47 @@ use sona_core::llm::usage::{LlmUsageDashboardStats, LlmUsageStatsFile, UsageBuck
 use std::{collections::BTreeMap, sync::Arc};
 
 pub const MAX_BACKUP_ANALYTICS_ROWS: usize = 100_000;
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum LlmUsageParseError {
+    #[error("Invalid LLM usage content: {0}")]
+    InvalidJson(String),
+    #[error("LLM usage content exceeds the {MAX_BACKUP_ANALYTICS_ROWS} row limit.")]
+    RowCountLimitExceeded,
+    #[error("LLM usage content must be a JSON array or object.")]
+    ExpectedArrayOrObject,
+    #[error("LLM usage row at index {index} must be an object.")]
+    RowMustBeObject { index: usize },
+    #[error("LLM usage row at index {index} has invalid {field}.")]
+    InvalidRowField { index: usize, field: &'static str },
+    #[error("Invalid legacy LLM usage stats: {0}")]
+    InvalidLegacyStats(String),
+    #[error("Unsupported legacy LLM usage schema version: {version}")]
+    UnsupportedLegacySchemaVersion { version: u64 },
+    #[error("Legacy LLM usage {label} is invalid: {reason}")]
+    InvalidLegacyTimestamp { label: String, reason: String },
+    #[error("Legacy LLM usage {label} call counters overflow.")]
+    BucketCallCountersOverflow { label: String },
+    #[error("Legacy LLM usage {label} call counters are inconsistent.")]
+    BucketCallCountersInconsistent { label: String },
+    #[error("Legacy LLM usage {label} token counters overflow.")]
+    BucketTokenCountersOverflow { label: String },
+    #[error("Legacy LLM usage {label} token counters are inconsistent.")]
+    BucketTokenCountersInconsistent { label: String },
+    #[error("Legacy LLM usage {label} usage counters are inconsistent.")]
+    BucketUsageCountersInconsistent { label: String },
+    #[error("Legacy LLM usage {label} call count is not representable as a row count.")]
+    BucketRowCountUnrepresentable { label: String },
+    #[error("Legacy LLM usage {label} row count overflows.")]
+    BucketRowCountOverflow { label: String },
+    #[error("Legacy LLM usage {label} aggregate disagrees with totals.")]
+    BucketAggregateDisagreesWithTotals { label: String },
+    #[error("Legacy LLM usage {label} aggregate {field} overflows.")]
+    BucketAggregateFieldOverflow { label: String, field: &'static str },
+    #[error("Legacy LLM usage daily key is invalid: {reason}")]
+    InvalidDailyKey { reason: String },
+    #[error("Legacy LLM usage {label} cannot be represented in SQLite storage.")]
+    StorageOverflow { label: String },
+}
 
 #[derive(Clone, Debug)]
 pub(crate) struct PreparedLlmUsageRows {
@@ -24,9 +65,9 @@ struct PreparedLlmUsageRow {
     reasoning_tokens: i64,
 }
 
-pub(crate) fn parse_raw(content: &str) -> Result<PreparedLlmUsageRows, String> {
+pub(crate) fn parse_raw(content: &str) -> Result<PreparedLlmUsageRows, LlmUsageParseError> {
     let value: Value = serde_json::from_str(content)
-        .map_err(|error| format!("Invalid LLM usage content: {error}"))?;
+        .map_err(|error| LlmUsageParseError::InvalidJson(error.to_string()))?;
     let rows = match value {
         Value::Array(rows) => {
             ensure_analytics_row_count(rows.len())?;
@@ -36,44 +77,42 @@ pub(crate) fn parse_raw(content: &str) -> Result<PreparedLlmUsageRows, String> {
                 .collect::<Result<Vec<_>, _>>()?
         }
         Value::Object(object) => legacy_stats_object_to_rows(object)?,
-        _ => return Err("LLM usage content must be a JSON array or object.".to_string()),
+        _ => return Err(LlmUsageParseError::ExpectedArrayOrObject),
     };
 
     Ok(PreparedLlmUsageRows { rows })
 }
 
-fn ensure_analytics_row_count(row_count: usize) -> Result<(), String> {
+fn ensure_analytics_row_count(row_count: usize) -> Result<(), LlmUsageParseError> {
     if row_count <= MAX_BACKUP_ANALYTICS_ROWS {
         return Ok(());
     }
-    Err(format!(
-        "LLM usage content exceeds the {MAX_BACKUP_ANALYTICS_ROWS} row limit."
-    ))
+    Err(LlmUsageParseError::RowCountLimitExceeded)
 }
 
-fn parse_usage_row(row: &Value, index: usize) -> Result<PreparedLlmUsageRow, String> {
+fn parse_usage_row(row: &Value, index: usize) -> Result<PreparedLlmUsageRow, LlmUsageParseError> {
     let row = row
         .as_object()
-        .ok_or_else(|| format!("LLM usage row at index {index} must be an object."))?;
-    let string_field = |key: &str| {
+        .ok_or(LlmUsageParseError::RowMustBeObject { index })?;
+    let string_field = |key: &'static str| {
         row.get(key)
             .and_then(Value::as_str)
             .map(Arc::<str>::from)
-            .ok_or_else(|| format!("LLM usage row at index {index} has invalid {key}."))
+            .ok_or(LlmUsageParseError::InvalidRowField { index, field: key })
     };
-    let token_field = |key: &str| {
+    let token_field = |key: &'static str| {
         row.get(key)
             .and_then(Value::as_i64)
             .filter(|value| *value >= 0)
-            .ok_or_else(|| format!("LLM usage row at index {index} has invalid {key}."))
+            .ok_or(LlmUsageParseError::InvalidRowField { index, field: key })
     };
-    let optional_token_field = |key: &str| {
+    let optional_token_field = |key: &'static str| {
         row.get(key)
             .map(|value| {
                 value
                     .as_i64()
                     .filter(|value| *value >= 0)
-                    .ok_or_else(|| format!("LLM usage row at index {index} has invalid {key}."))
+                    .ok_or(LlmUsageParseError::InvalidRowField { index, field: key })
             })
             .transpose()
             .map(|value| value.unwrap_or(0))
@@ -288,20 +327,19 @@ pub fn read_raw(db: &Database) -> Result<String, DatabaseError> {
 }
 
 pub fn replace_raw(db: &Database, content: &str) -> Result<(), DatabaseError> {
-    let prepared = parse_raw(content).map_err(DatabaseError::Internal)?;
+    let prepared = parse_raw(content)?;
     db.with_transaction(|tx| replace_raw_in_transaction(tx, &prepared))
 }
 
 fn legacy_stats_object_to_rows(
     object: serde_json::Map<String, Value>,
-) -> Result<Vec<PreparedLlmUsageRow>, String> {
+) -> Result<Vec<PreparedLlmUsageRow>, LlmUsageParseError> {
     let stats: LlmUsageStatsFile = serde_json::from_value(Value::Object(object))
-        .map_err(|error| format!("Invalid legacy LLM usage stats: {error}"))?;
+        .map_err(|error| LlmUsageParseError::InvalidLegacyStats(error.to_string()))?;
     if stats.schema_version != 1 {
-        return Err(format!(
-            "Unsupported legacy LLM usage schema version: {}",
-            stats.schema_version
-        ));
+        return Err(LlmUsageParseError::UnsupportedLegacySchemaVersion {
+            version: stats.schema_version,
+        });
     }
     validate_legacy_timestamp("startedAt", stats.started_at.as_deref())?;
     validate_legacy_timestamp("lastUpdatedAt", stats.last_updated_at.as_deref())?;
@@ -358,47 +396,59 @@ fn legacy_stats_object_to_rows(
     Ok(rows)
 }
 
-fn validate_legacy_timestamp(label: &str, value: Option<&str>) -> Result<(), String> {
+fn validate_legacy_timestamp(
+    label: &'static str,
+    value: Option<&str>,
+) -> Result<(), LlmUsageParseError> {
     let Some(value) = value else {
         return Ok(());
     };
     DateTime::parse_from_rfc3339(value)
         .map(|_| ())
-        .map_err(|error| format!("Legacy LLM usage {label} is invalid: {error}"))
+        .map_err(|error| LlmUsageParseError::InvalidLegacyTimestamp {
+            label: label.to_string(),
+            reason: error.to_string(),
+        })
 }
 
-fn validate_bucket(label: &str, bucket: &UsageBucket) -> Result<(), String> {
+fn validate_bucket(label: &str, bucket: &UsageBucket) -> Result<(), LlmUsageParseError> {
     let accounted_calls = bucket
         .calls_with_usage
         .checked_add(bucket.calls_without_usage)
-        .ok_or_else(|| format!("Legacy LLM usage {label} call counters overflow."))?;
+        .ok_or_else(|| LlmUsageParseError::BucketCallCountersOverflow {
+            label: label.to_string(),
+        })?;
     if accounted_calls != bucket.call_count {
-        return Err(format!(
-            "Legacy LLM usage {label} call counters are inconsistent."
-        ));
+        return Err(LlmUsageParseError::BucketCallCountersInconsistent {
+            label: label.to_string(),
+        });
     }
     let component_total = bucket
         .prompt_tokens
         .checked_add(bucket.completion_tokens)
-        .ok_or_else(|| format!("Legacy LLM usage {label} token counters overflow."))?;
+        .ok_or_else(|| LlmUsageParseError::BucketTokenCountersOverflow {
+            label: label.to_string(),
+        })?;
     if bucket.total_tokens < component_total {
-        return Err(format!(
-            "Legacy LLM usage {label} token counters are inconsistent."
-        ));
+        return Err(LlmUsageParseError::BucketTokenCountersInconsistent {
+            label: label.to_string(),
+        });
     }
     let has_tokens =
         bucket.prompt_tokens > 0 || bucket.completion_tokens > 0 || bucket.total_tokens > 0;
     if has_tokens != (bucket.calls_with_usage > 0) {
-        return Err(format!(
-            "Legacy LLM usage {label} usage counters are inconsistent."
-        ));
+        return Err(LlmUsageParseError::BucketUsageCountersInconsistent {
+            label: label.to_string(),
+        });
     }
     bucket_row_count(label, bucket).map(|_| ())
 }
 
-fn bucket_row_count(label: &str, bucket: &UsageBucket) -> Result<usize, String> {
+fn bucket_row_count(label: &str, bucket: &UsageBucket) -> Result<usize, LlmUsageParseError> {
     let row_count = usize::try_from(bucket.call_count).map_err(|_| {
-        format!("Legacy LLM usage {label} call count is not representable as a row count.")
+        LlmUsageParseError::BucketRowCountUnrepresentable {
+            label: label.to_string(),
+        }
     })?;
     ensure_analytics_row_count(row_count)?;
     Ok(row_count)
@@ -408,7 +458,7 @@ fn validate_bucket_map(
     label: &str,
     buckets: &BTreeMap<String, UsageBucket>,
     totals: &UsageBucket,
-) -> Result<usize, String> {
+) -> Result<usize, LlmUsageParseError> {
     let mut row_count = 0usize;
     let mut aggregate = UsageBucket::default();
     for (key, bucket) in buckets {
@@ -416,13 +466,15 @@ fn validate_bucket_map(
         checked_add_bucket(&mut aggregate, bucket, label)?;
         row_count = row_count
             .checked_add(bucket_row_count(&format!("{label}.{key}"), bucket)?)
-            .ok_or_else(|| format!("Legacy LLM usage {label} row count overflows."))?;
+            .ok_or_else(|| LlmUsageParseError::BucketRowCountOverflow {
+                label: label.to_string(),
+            })?;
         ensure_analytics_row_count(row_count)?;
     }
     if !buckets.is_empty() && aggregate != *totals {
-        return Err(format!(
-            "Legacy LLM usage {label} aggregate disagrees with totals."
-        ));
+        return Err(LlmUsageParseError::BucketAggregateDisagreesWithTotals {
+            label: label.to_string(),
+        });
     }
     Ok(row_count)
 }
@@ -431,10 +483,13 @@ fn checked_add_bucket(
     aggregate: &mut UsageBucket,
     bucket: &UsageBucket,
     label: &str,
-) -> Result<(), String> {
-    let checked_add = |left: u64, right: u64, field: &str| {
+) -> Result<(), LlmUsageParseError> {
+    let checked_add = |left: u64, right: u64, field: &'static str| {
         left.checked_add(right)
-            .ok_or_else(|| format!("Legacy LLM usage {label} aggregate {field} overflows."))
+            .ok_or_else(|| LlmUsageParseError::BucketAggregateFieldOverflow {
+                label: label.to_string(),
+                field,
+            })
     };
     aggregate.call_count = checked_add(aggregate.call_count, bucket.call_count, "callCount")?;
     aggregate.calls_with_usage = checked_add(
@@ -465,10 +520,13 @@ fn checked_add_bucket(
 fn validate_daily_buckets(
     buckets: &BTreeMap<String, UsageBucket>,
     totals: &UsageBucket,
-) -> Result<usize, String> {
+) -> Result<usize, LlmUsageParseError> {
     for key in buckets.keys() {
-        NaiveDate::parse_from_str(key, "%Y-%m-%d")
-            .map_err(|error| format!("Legacy LLM usage daily key is invalid: {error}"))?;
+        NaiveDate::parse_from_str(key, "%Y-%m-%d").map_err(|error| {
+            LlmUsageParseError::InvalidDailyKey {
+                reason: error.to_string(),
+            }
+        })?;
     }
     validate_bucket_map("daily", buckets, totals)
 }
@@ -479,7 +537,7 @@ fn rows_from_bucket_map(
     provider_for_key: impl Fn(&str) -> Arc<str>,
     category_for_key: impl Fn(&str) -> Arc<str>,
     occurred_at_for_key: impl Fn(&str) -> Arc<str>,
-) -> Result<Vec<PreparedLlmUsageRow>, String> {
+) -> Result<Vec<PreparedLlmUsageRow>, LlmUsageParseError> {
     let mut rows = Vec::with_capacity(row_count);
     for (key, bucket) in buckets {
         let occurred_at = occurred_at_for_key(key);
@@ -496,7 +554,7 @@ fn append_bucket_rows(
     provider: &Arc<str>,
     category: &Arc<str>,
     bucket: &UsageBucket,
-) -> Result<(), String> {
+) -> Result<(), LlmUsageParseError> {
     for index in 0..bucket.calls_with_usage {
         rows.push(PreparedLlmUsageRow {
             occurred_at: Arc::clone(occurred_at),
@@ -541,11 +599,16 @@ fn append_bucket_rows(
     Ok(())
 }
 
-fn checked_split_to_i64(total: u64, parts: u64, index: u64, label: &str) -> Result<i64, String> {
-    i64::try_from(split_u64(total, parts, index))
-        .map_err(|_| format!("Legacy LLM usage {label} cannot be represented in SQLite storage."))
+fn checked_split_to_i64(
+    total: u64,
+    parts: u64,
+    index: u64,
+    label: &'static str,
+) -> Result<i64, LlmUsageParseError> {
+    i64::try_from(split_u64(total, parts, index)).map_err(|_| LlmUsageParseError::StorageOverflow {
+        label: label.to_string(),
+    })
 }
-
 fn split_u64(total: u64, parts: u64, index: u64) -> u64 {
     if parts == 0 {
         return 0;
@@ -926,7 +989,8 @@ mod tests {
         let content = format!("[{}]", vec!["null"; 100_001].join(","));
         let error = parse_raw(&content).unwrap_err();
 
-        assert!(error.contains("100000"));
+        assert_eq!(error, LlmUsageParseError::RowCountLimitExceeded);
+        assert!(error.to_string().contains("100000"));
     }
 
     #[test]

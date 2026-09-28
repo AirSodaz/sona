@@ -18,6 +18,9 @@ pub enum DatabaseError {
     #[error(transparent)]
     FileSystem(#[from] FileSystemError),
 
+    #[error(transparent)]
+    LlmUsage(#[from] crate::llm_usage::LlmUsageParseError),
+
     #[error("All database connections are busy")]
     PoolBusyError,
 

@@ -34,7 +34,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
-type PendingInferenceTask = tokio::task::JoinHandle<Result<(), String>>;
+type PendingInferenceTask = tokio::task::JoinHandle<Result<(), AsrPortError>>;
 
 pub struct LocalSherpaSession {
     instance_id: String,
@@ -52,27 +52,30 @@ fn queue_inference_task(
 ) -> PendingInferenceTask {
     tokio::spawn(async move {
         if let Some(previous) = previous {
-            previous
-                .await
-                .map_err(|error| format!("Offline inference task failed: {error}"))??;
+            previous.await.map_err(|error| {
+                AsrPortError::runtime(format!("Offline inference task failed: {error}"))
+            })??;
         }
-        tokio::task::spawn_blocking(task)
-            .await
-            .map_err(|error| format!("Offline inference task failed: {error}"))
+        tokio::task::spawn_blocking(task).await.map_err(|error| {
+            AsrPortError::runtime(format!("Offline inference task failed: {error}"))
+        })
     })
 }
 
-async fn wait_for_inference_task(pending: &mut Option<PendingInferenceTask>) -> Result<(), String> {
+async fn wait_for_inference_task(
+    pending: &mut Option<PendingInferenceTask>,
+) -> Result<(), AsrPortError> {
     if let Some(task) = pending.take() {
-        task.await
-            .map_err(|error| format!("Offline inference task failed: {error}"))??;
+        task.await.map_err(|error| {
+            AsrPortError::runtime(format!("Offline inference task failed: {error}"))
+        })??;
     }
     Ok(())
 }
 
 async fn prepare_partial_inference_slot(
     pending: &mut Option<PendingInferenceTask>,
-) -> Result<bool, String> {
+) -> Result<bool, AsrPortError> {
     if pending.as_ref().is_some_and(|task| task.is_finished()) {
         wait_for_inference_task(pending).await?;
     }
@@ -83,20 +86,14 @@ async fn prepare_partial_inference_slot(
 impl AsrStreamingSession for LocalSherpaSession {
     async fn start(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
-        start_session_impl_inner(&self.instance_id, &mut instance)
-            .await
-            .map_err(AsrPortError::runtime)
+        start_session_impl_inner(&self.instance_id, &mut instance).await
     }
 
     async fn stop(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
-        wait_for_inference_task(&mut pending)
-            .await
-            .map_err(AsrPortError::runtime)?;
-        let result = stop_session_impl_inner(&self.instance_id, &mut instance)
-            .await
-            .map_err(AsrPortError::runtime);
+        wait_for_inference_task(&mut pending).await?;
+        let result = stop_session_impl_inner(&self.instance_id, &mut instance).await;
         if let (Some(vad), Some(model_path)) = (
             instance.take_vad(),
             instance.vad_model().map(|s| s.to_string()),
@@ -109,12 +106,8 @@ impl AsrStreamingSession for LocalSherpaSession {
     async fn flush(&self) -> Result<(), AsrPortError> {
         let mut instance = self.instance.lock().await;
         let mut pending = self.pending_inference.lock().await;
-        wait_for_inference_task(&mut pending)
-            .await
-            .map_err(AsrPortError::runtime)?;
-        flush_session_impl_inner(self.observer.clone(), &self.instance_id, &mut instance)
-            .await
-            .map_err(AsrPortError::runtime)?;
+        wait_for_inference_task(&mut pending).await?;
+        flush_session_impl_inner(self.observer.clone(), &self.instance_id, &mut instance).await?;
         self.observer.on_stream_boundary(&self.current_boundary());
         Ok(())
     }
@@ -140,7 +133,6 @@ impl AsrStreamingSession for LocalSherpaSession {
             Some(boundary),
         )
         .await
-        .map_err(AsrPortError::runtime)
     }
 }
 
@@ -364,9 +356,12 @@ pub async fn create_streaming_session(
 async fn start_session_impl_inner(
     instance_id: &str,
     instance: &mut SherpaInstance,
-) -> Result<(), String> {
+) -> Result<(), AsrPortError> {
     let Some(recognizer) = instance.recognizer_clone() else {
-        return Err("Recognizer not initialized".to_string());
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Model,
+            "Recognizer not initialized",
+        ));
     };
     let recognizer_kind = recognizer.kind_label();
 
@@ -394,7 +389,7 @@ async fn start_session_impl_inner(
 async fn stop_session_impl_inner(
     instance_id: &str,
     instance: &mut SherpaInstance,
-) -> Result<(), String> {
+) -> Result<(), AsrPortError> {
     {
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!(
@@ -419,7 +414,7 @@ async fn flush_session_impl_inner(
     observer: Arc<dyn AsrRuntimeObserver>,
     instance_id: &str,
     instance: &mut SherpaInstance,
-) -> Result<(), String> {
+) -> Result<(), AsrPortError> {
     info!("Flushing recognizer for instance id: {}", instance_id);
 
     if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -496,9 +491,9 @@ async fn flush_session_impl_inner(
                     );
                 }
             };
-            tokio::task::spawn_blocking(task)
-                .await
-                .map_err(|error| error.to_string())?;
+            tokio::task::spawn_blocking(task).await.map_err(|error| {
+                AsrPortError::runtime(format!("Offline inference task failed: {error}"))
+            })?;
 
             instance.offline_state.clear_speech_buffer();
         } else if let Some(label) = diagnostics_instance_label(instance_id) {
@@ -627,7 +622,7 @@ async fn feed_audio_samples_inner(
     pending_inference: &mut Option<PendingInferenceTask>,
     samples: &[f32],
     boundary: Option<AsrStreamBoundaryEvent>,
-) -> Result<(), String> {
+) -> Result<(), AsrPortError> {
     // instances removed
     // instances lookup removed
 
@@ -663,7 +658,7 @@ async fn feed_audio_samples_inner(
 
     let recognizer = instance
         .recognizer_clone()
-        .ok_or("Recognizer not initialized")?;
+        .ok_or_else(|| AsrPortError::new(AsrPortErrorKind::Model, "Recognizer not initialized"))?;
 
     if recognizer.is_offline() {
         let Some(vad) = instance.vad() else {
@@ -671,7 +666,10 @@ async fn feed_audio_samples_inner(
                 "[Sherpa] feed_audio_samples: VAD model is missing for instance {}",
                 instance_id
             );
-            return Err("VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.".to_string());
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "VAD model is missing or not configured. This model requires VAD for live transcription. Please download the Silero VAD model in Settings -> Model Center.",
+            ));
         };
 
         // Offline live transcription is VAD-driven: we keep feeding audio to
@@ -684,7 +682,7 @@ async fn feed_audio_samples_inner(
             && instance.total_samples % 160000 < 2000
         {
             // Log once every ~10 seconds
-            info!(
+            debug!(
                 "[Sherpa] instance '{label}' running, total_samples: {}, currently_speaking: {}, emitted_any: {}",
                 instance.total_samples,
                 currently_speaking,
@@ -1107,7 +1105,10 @@ async fn feed_audio_samples_inner(
 
         Ok(())
     } else {
-        Err("Unsupported recognizer type".to_string())
+        Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            "Unsupported recognizer type",
+        ))
     }
 }
 

@@ -302,7 +302,7 @@ impl BatchTranscriptionJob {
                     if let Some(notice) = fallback_notice.take()
                         && !self.quiet
                     {
-                        eprintln!(
+                        log::warn!(
                             "DirectML transcription failed, retrying with CPU: {}",
                             notice.error
                         );

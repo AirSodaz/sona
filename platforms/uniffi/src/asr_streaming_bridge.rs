@@ -168,7 +168,7 @@ mod tests {
     use sona_core::ports::asr::{
         AsrAudioFrame, AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver,
         AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
-        AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID,
+        AsrTranscriptionRequest, GROQ_WHISPER_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID,
         OnlineAsrProviderRequest, VOLCENGINE_DOUBAO_PROVIDER_ID,
     };
     use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
@@ -525,7 +525,7 @@ mod tests {
 
     #[test]
     fn batch_only_online_batch_requests_stay_streaming_not_supported() {
-        for provider_id in [GROQ_WHISPER_PROVIDER_ID, MISTRAL_VOXTRAL_PROVIDER_ID] {
+        for provider_id in [GROQ_WHISPER_PROVIDER_ID, OPENAI_WHISPER_PROVIDER_ID] {
             assert_eq!(
                 binding_error_code(request_json(provider_id, "batch")),
                 "STREAMING_NOT_SUPPORTED",

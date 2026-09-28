@@ -320,14 +320,24 @@ pub async fn start_api_server(
 
     Ok(normalized_whitelist)
 }
+#[derive(Debug, thiserror::Error, Clone, PartialEq, Eq)]
+pub enum StopApiServerError {
+    #[error("Active jobs running (processing: {processing}, pending: {pending})")]
+    ActiveJobsRunning { processing: usize, pending: usize },
+    #[error("API server stop failed: {0}")]
+    System(String),
+}
 
 pub async fn stop_api_server(
     controller: tauri::State<'_, ApiServerController>,
     force: bool,
-) -> Result<(), String> {
+) -> Result<(), StopApiServerError> {
     if !force && controller.has_active_jobs().await {
         let (processing, pending) = controller.active_job_count().await;
-        return Err(format!("ACTIVE_JOBS_RUNNING:{}:{}", processing, pending));
+        return Err(StopApiServerError::ActiveJobsRunning {
+            processing,
+            pending,
+        });
     }
     let running_server = controller.take_running_server().await;
     if let Some(server) = running_server {
@@ -335,7 +345,10 @@ pub async fn stop_api_server(
             let aborted = server.dashboard.abort_all_active().await;
             log::info!("Forced stop aborted {} active task(s)", aborted);
         }
-        server.stop().await.map_err(|error| error.to_string())?;
+        server
+            .stop()
+            .await
+            .map_err(|error| StopApiServerError::System(error.to_string()))?;
         log::info!("Sent shutdown signal to API server.");
     }
     Ok(())

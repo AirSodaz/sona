@@ -90,10 +90,9 @@ impl From<ExportTranscriptFileResult> for FfiExportTranscriptFileResultV1 {
 /// `FfiTranscriptSegment` carries timing/speaker leaves that Core validates.
 pub(crate) fn export_request_from_ffi(
     value: FfiExportTranscriptFileRequestV1,
-) -> Result<ExportTranscriptFileRequest, String> {
+) -> Result<ExportTranscriptFileRequest, super::history_mapper::HistoryMapperError> {
     Ok(ExportTranscriptFileRequest {
-        segments: super::history_mapper::history_transcript_segments_from_ffi(value.segments)
-            .map_err(|error| error.to_string())?,
+        segments: super::history_mapper::history_transcript_segments_from_ffi(value.segments)?,
         format: value.format.into(),
         mode: value.mode.into(),
         output_path: value.output_path,

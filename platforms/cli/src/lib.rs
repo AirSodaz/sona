@@ -6,6 +6,7 @@ mod export;
 mod init_config;
 pub mod live_audio;
 pub mod live_output;
+pub mod logger;
 mod models;
 mod online_asr;
 pub(crate) mod runtime;
@@ -218,6 +219,12 @@ where
 }
 
 fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput>> {
+    let default_level = match &command {
+        Commands::Serve(_) => log::LevelFilter::Info,
+        _ => log::LevelFilter::Warn,
+    };
+    logger::init_logger(default_level);
+
     let output = match command {
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args),

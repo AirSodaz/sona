@@ -137,7 +137,7 @@ fn log_text_transform_diagnostics(
         return;
     };
 
-    info!(
+    debug!(
         "[Sherpa] {label} text transform. stage={} segment_id={} final={} raw_len={} cleaned_len={} final_len={} raw_preview={:?} cleaned_preview={:?} final_preview={:?}",
         stage,
         segment_id,
@@ -240,7 +240,7 @@ pub(super) fn run_offline_inference(
             let cleaned_text = normalize_recognizer_text(&result.text);
             if cleaned_text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    info!(
+                    debug!(
                         "[Sherpa] {label} offline inference produced empty text after normalization. stage={} segment_id={} final={} raw_preview={:?}",
                         stage,
                         segment_id,
@@ -260,7 +260,7 @@ pub(super) fn run_offline_inference(
 
             if text.is_empty() {
                 if let Some(label) = diagnostics_instance_label(instance_id) {
-                    info!(
+                    debug!(
                         "[Sherpa] {label} offline inference produced empty output text after normalization/formatting. stage={} segment_id={} final={} raw_preview={:?} cleaned_preview={:?}",
                         stage,
                         segment_id,

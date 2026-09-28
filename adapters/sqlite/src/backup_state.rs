@@ -125,7 +125,8 @@ fn prepare_backup_restore_dataset(
 ) -> Result<PreparedBackupRestore, BackupError> {
     validate_restore_relationships(dataset)?;
     let history = prepare_history_restore(&dataset.history).map_err(BackupError::InvalidBackup)?;
-    let analytics = parse_raw(&dataset.analytics_content).map_err(BackupError::InvalidBackup)?;
+    let analytics = parse_raw(&dataset.analytics_content)
+        .map_err(|error| BackupError::InvalidBackup(error.to_string()))?;
     Ok(PreparedBackupRestore { history, analytics })
 }
 

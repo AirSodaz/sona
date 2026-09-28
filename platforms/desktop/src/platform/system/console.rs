@@ -37,21 +37,21 @@ pub fn fix_console(show_new_console: bool) {
                 Ok(conout) => {
                     let handle = conout.as_raw_handle();
                     if SetStdHandle(STD_OUTPUT_HANDLE, handle) == 0 {
-                        eprintln!(
-                            "[debug] Failed to set STD_OUTPUT_HANDLE: GetLastError() = {}",
+                        log::debug!(
+                            "Failed to set STD_OUTPUT_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     if SetStdHandle(STD_ERROR_HANDLE, handle) == 0 {
-                        eprintln!(
-                            "[debug] Failed to set STD_ERROR_HANDLE: GetLastError() = {}",
+                        log::debug!(
+                            "Failed to set STD_ERROR_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     std::mem::forget(conout); // Leak handle so it stays open for the lifetime of the process
                 }
                 Err(e) => {
-                    eprintln!("[debug] Failed to open CONOUT$: {}", e);
+                    log::debug!("Failed to open CONOUT$: {}", e);
                 }
             }
 
@@ -60,15 +60,15 @@ pub fn fix_console(show_new_console: bool) {
                 Ok(conin) => {
                     let handle = conin.as_raw_handle();
                     if SetStdHandle(STD_INPUT_HANDLE, handle) == 0 {
-                        eprintln!(
-                            "[debug] Failed to set STD_INPUT_HANDLE: GetLastError() = {}",
+                        log::debug!(
+                            "Failed to set STD_INPUT_HANDLE: GetLastError() = {}",
                             GetLastError()
                         );
                     }
                     std::mem::forget(conin); // Leak handle so it stays open for the lifetime of the process
                 }
                 Err(e) => {
-                    eprintln!("[debug] Failed to open CONIN$: {}", e);
+                    log::debug!("Failed to open CONIN$: {}", e);
                 }
             }
         }
