@@ -19,6 +19,9 @@ pub struct SharedConfig {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+    pub online_provider: Option<String>,
+    pub api_key_env: Option<String>,
+    pub online_config: Option<PathBuf>,
 
     pub model_id: Option<String>,
     pub language: Option<String>,
@@ -48,6 +51,9 @@ pub struct TranscribeConfigSection {
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
     pub language: Option<String>,
+    pub online_provider: Option<String>,
+    pub api_key_env: Option<String>,
+    pub online_config: Option<PathBuf>,
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
     pub hotwords: Option<String>,
@@ -69,6 +75,9 @@ pub struct TranscribeLiveConfigSection {
     pub enable_itn: Option<bool>,
     pub hotwords: Option<String>,
     pub vad_buffer_size: Option<f32>,
+    pub online_provider: Option<String>,
+    pub api_key_env: Option<String>,
+    pub online_config: Option<PathBuf>,
     pub gpu_acceleration: Option<String>,
     pub input: Option<String>,
     pub device: Option<String>,
@@ -103,6 +112,9 @@ impl UnifiedConfigFile {
             .punctuation_model_id
             .or(self.shared.punctuation_model_id);
         config.language = config.language.or(self.shared.language);
+        config.online_provider = config.online_provider.or(self.shared.online_provider);
+        config.api_key_env = config.api_key_env.or(self.shared.api_key_env);
+        config.online_config = config.online_config.or(self.shared.online_config);
         config.threads = config.threads.or(self.shared.threads);
         config.enable_itn = config.enable_itn.or(self.shared.enable_itn);
         config.hotwords = config.hotwords.or(self.shared.hotwords);
@@ -143,6 +155,9 @@ impl UnifiedConfigFile {
             .punctuation_model_id
             .or(self.shared.punctuation_model_id);
         config.language = config.language.or(self.shared.language);
+        config.online_provider = config.online_provider.or(self.shared.online_provider);
+        config.api_key_env = config.api_key_env.or(self.shared.api_key_env);
+        config.online_config = config.online_config.or(self.shared.online_config);
         config.threads = config.threads.or(self.shared.threads);
         config.enable_itn = config.enable_itn.or(self.shared.enable_itn);
         config.hotwords = config.hotwords.or(self.shared.hotwords);
@@ -184,4 +199,39 @@ pub fn parse_serve_config_file(
 ) -> Result<ServeConfigSection, RuntimeConfigError> {
     let unified = parse_unified_config_file(contents, source_label)?;
     Ok(unified.into_serve_config())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_and_merges_online_asr_config() {
+        let toml = r#"
+online_provider = "shared-provider"
+api_key_env = "SHARED_KEY"
+
+[transcribe]
+model_id = "test-model"
+
+[transcribe_live]
+online_provider = "live-provider"
+online_config = "./live-config.json"
+"#;
+        let transcribe = parse_transcribe_config_file(toml, "test").unwrap();
+        assert_eq!(
+            transcribe.online_provider.as_deref(),
+            Some("shared-provider")
+        );
+        assert_eq!(transcribe.api_key_env.as_deref(), Some("SHARED_KEY"));
+        assert!(transcribe.online_config.is_none());
+
+        let live = parse_transcribe_live_config_file(toml, "test").unwrap();
+        assert_eq!(live.online_provider.as_deref(), Some("live-provider"));
+        assert_eq!(live.api_key_env.as_deref(), Some("SHARED_KEY"));
+        assert_eq!(
+            live.online_config,
+            Some(PathBuf::from("./live-config.json"))
+        );
+    }
 }

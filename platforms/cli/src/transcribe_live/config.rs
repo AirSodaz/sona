@@ -203,7 +203,17 @@ pub(crate) fn resolve_live_command(
             .transpose()?
             .unwrap_or(LiveOutputFormatArg::Text),
     };
-    let asr = if args.online.is_online() {
+    let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
+        // Explicit --model-id on CLI overrides config-file online provider
+        args.online.clone()
+    } else {
+        args.online.resolve_with_config(
+            config.online_provider.clone(),
+            config.api_key_env.clone(),
+            config.online_config.clone(),
+        )
+    };
+    let asr = if resolved_online.is_online() {
         reject_online_local_options(&args)?;
         validate_online_output(args.output.as_ref(), args.format.as_deref(), args.force)?;
         let language = args
@@ -214,8 +224,7 @@ pub(crate) fn resolve_live_command(
         let enable_itn = args.enable_itn || config.enable_itn.unwrap_or(false);
         let hotwords = args.hotwords.clone().or_else(|| config.hotwords.clone());
         let request =
-            args.online
-                .build_request(AsrMode::Streaming, language, enable_itn, hotwords)?;
+            resolved_online.build_request(AsrMode::Streaming, language, enable_itn, hotwords)?;
         let export_format = args
             .output
             .as_deref()

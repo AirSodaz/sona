@@ -34,6 +34,33 @@ impl OnlineAsrArgs {
         self.online_provider.is_some()
     }
 
+    pub(crate) fn resolve_with_config(
+        &self,
+        config_provider: Option<String>,
+        config_api_key_env: Option<String>,
+        config_online_config: Option<PathBuf>,
+    ) -> Self {
+        let same_provider = match (&self.online_provider, &config_provider) {
+            (Some(cli_p), Some(cfg_p)) => cli_p == cfg_p,
+            (None, _) => true,
+            _ => false,
+        };
+
+        Self {
+            online_provider: self.online_provider.clone().or(config_provider),
+            api_key_env: if same_provider {
+                self.api_key_env.clone().or(config_api_key_env)
+            } else {
+                self.api_key_env.clone()
+            },
+            online_config: if same_provider {
+                self.online_config.clone().or(config_online_config)
+            } else {
+                self.online_config.clone()
+            },
+        }
+    }
+
     pub(crate) fn build_request(
         &self,
         mode: AsrMode,
@@ -335,5 +362,51 @@ mod tests {
                 .to_string()
                 .contains("Online ASR provider manifest is missing unknown-provider")
         );
+    }
+
+    #[test]
+    fn resolves_online_args_from_config_defaults() {
+        let empty_args = OnlineAsrArgs {
+            online_provider: None,
+            api_key_env: None,
+            online_config: None,
+        };
+        assert!(!empty_args.is_online());
+
+        let resolved = empty_args.resolve_with_config(
+            Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
+            Some("MY_KEY_VAR".to_string()),
+            Some(PathBuf::from("conf.json")),
+        );
+
+        assert!(resolved.is_online());
+        assert_eq!(
+            resolved.online_provider.as_deref(),
+            Some(VOLCENGINE_DOUBAO_PROVIDER_ID)
+        );
+        assert_eq!(resolved.api_key_env.as_deref(), Some("MY_KEY_VAR"));
+        assert_eq!(resolved.online_config, Some(PathBuf::from("conf.json")));
+
+        // CLI flags should override config values
+        let cli_override = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key_env: Some("CLI_KEY_VAR".to_string()),
+            online_config: None,
+        };
+        let resolved_override = cli_override.resolve_with_config(
+            Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
+            Some("MY_KEY_VAR".to_string()),
+            Some(PathBuf::from("conf.json")),
+        );
+        assert_eq!(
+            resolved_override.online_provider.as_deref(),
+            Some(GROQ_WHISPER_PROVIDER_ID)
+        );
+        assert_eq!(
+            resolved_override.api_key_env.as_deref(),
+            Some("CLI_KEY_VAR")
+        );
+        // Overridden provider does not inherit another provider's config
+        assert!(resolved_override.online_config.is_none());
     }
 }

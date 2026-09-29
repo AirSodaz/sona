@@ -1,9 +1,9 @@
-use cpal::traits::{HostTrait, StreamTrait};
+use cpal::traits::HostTrait;
 use log::{debug, error, info, warn};
-use ringbuf::HeapRb;
-use ringbuf::traits::{Consumer, Producer, Split};
 use sona_application::live_transcription::LiveSourceEpoch;
-use sona_audio_capture::{AudioResampler, CaptureDirection, open_device_stream};
+use sona_audio_capture::{
+    CaptureDirection, CaptureEvent, LiveAudioCapturePipeline, LiveCaptureConfig,
+};
 use sona_core::ports::asr::AsrAudioFrame;
 use sona_sherpa_onnx::audio::LiveWavRecorder;
 use std::collections::{HashMap, HashSet};
@@ -11,8 +11,7 @@ use std::hash::Hash;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
-use std::thread;
-use tauri::{AppHandle, Emitter, Manager, Runtime, Window};
+use tauri::{AppHandle, Emitter, Manager, Window};
 
 const MICROPHONE_PEAK_EVENT: &str = "microphone-audio";
 const SYSTEM_PEAK_EVENT: &str = "system-audio";
@@ -54,20 +53,6 @@ impl CaptureKind {
         }
     }
 
-    fn stream_error_label(self) -> &'static str {
-        match self {
-            CaptureKind::System => "Stream",
-            CaptureKind::Microphone => "Mic stream",
-        }
-    }
-
-    fn stop_signal_label(self) -> &'static str {
-        match self {
-            CaptureKind::System => "Stop signal",
-            CaptureKind::Microphone => "Mic stop signal",
-        }
-    }
-
     fn stop_log_label(self) -> &'static str {
         match self {
             CaptureKind::System => "System",
@@ -79,28 +64,6 @@ impl CaptureKind {
         match self {
             CaptureKind::System => "No output device found",
             CaptureKind::Microphone => "No input device found",
-        }
-    }
-
-    fn play_stream_error_message(self, err: cpal::Error) -> String {
-        match self {
-            CaptureKind::System => format!("Failed to play stream: {}", err),
-            CaptureKind::Microphone => format!("Failed to play mic stream: {}", err),
-        }
-    }
-
-    fn startup_channel_error_message(self, err: std::sync::mpsc::RecvError) -> String {
-        match self {
-            CaptureKind::System => {
-                format!(
-                    "System capture startup channel closed before completion: {}",
-                    err
-                )
-            }
-            CaptureKind::Microphone => format!(
-                "Microphone capture startup channel closed before completion: {}",
-                err
-            ),
         }
     }
 }
@@ -394,6 +357,16 @@ where
                     "Invalid recording output path containing parent directory traversal: {path}"
                 ));
             }
+            if path_buf
+                .extension()
+                .and_then(|ext| ext.to_str())
+                .map(|s| s.to_ascii_lowercase())
+                != Some("wav".to_string())
+            {
+                return Err(format!(
+                    "Invalid recording output path: must have a .wav extension: {path}"
+                ));
+            }
             Ok(path)
         }
         None => fallback(),
@@ -496,20 +469,33 @@ fn rollback_capture_attachment(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+fn evict_defunct_capture(app: &AppHandle, key: &CaptureKey, source: &LiveSourceEpoch) {
+    if let Some(audio_state) = app.try_state::<AudioState>()
+        && let Ok(mut registry) = audio_state.registry.lock()
+        && let Some(capture) = registry.captures.get(key)
+        && &capture.source == source
+    {
+        registry.captures.remove(key);
+        registry.instance_keys.retain(|_, k| k != key);
+        info!(
+            "[Audio] Evicted defunct {} capture (source={})",
+            key.kind.label(),
+            source.source_id
+        );
+    }
+}
+
 fn spawn_capture_worker_task(
     app: AppHandle,
     key: CaptureKey,
     source: LiveSourceEpoch,
     sample_cursor: std::sync::Arc<AtomicU64>,
-    mut resampler: AudioResampler,
-    mut raw_consumer: impl Consumer<Item = f32> + Send + 'static,
-    mut data_rx: tokio::sync::mpsc::Receiver<()>,
+    stop_tx: Sender<()>,
+    mut event_rx: tokio::sync::mpsc::Receiver<CaptureEvent>,
     mut recorder_rx: tokio::sync::mpsc::Receiver<RecorderCommand>,
 ) {
     tauri::async_runtime::spawn(async move {
         let mut writers = HashMap::<String, CaptureWriterState>::new();
-        let mut pull_buffer = Vec::with_capacity(16000);
         let mut sequence = 0_u64;
         let mut last_peak_emit = std::time::Instant::now();
         let worker_source = CaptureWorkerSource {
@@ -563,45 +549,37 @@ fn spawn_capture_worker_task(
                         None => break,
                     }
                 }
-                opt = data_rx.recv() => {
-                    match opt {
-                        Some(()) => {
-                            pull_buffer.clear();
-                            resampler.drain_from_consumer(&mut raw_consumer, &mut pull_buffer);
-                            if !pull_buffer.is_empty() {
-                                drain_capture_worker_chunk(
-                                    &worker_source,
-                                    &pull_buffer,
-                                    &mut writers,
-                                    &mut sequence,
-                                    sample_cursor.as_ref(),
-                                    &mut last_peak_emit,
-                                ).await;
-                            }
+                event = event_rx.recv() => {
+                    match event {
+                        Some(CaptureEvent::Chunk(chunk)) => {
+                            drain_capture_worker_chunk(
+                                &worker_source,
+                                &chunk,
+                                &mut writers,
+                                &mut sequence,
+                                sample_cursor.as_ref(),
+                                &mut last_peak_emit,
+                            )
+                            .await;
                         }
-                        None => break,
+                        Some(CaptureEvent::Error(err)) => {
+                            error!(
+                                "[Audio] {} capture stream error occurred: {err}",
+                                key.kind.label()
+                            );
+                            break;
+                        }
+                        Some(CaptureEvent::Eof) | None => break,
                     }
                 }
             }
         }
 
-        pull_buffer.clear();
-        resampler.drain_finish(&mut raw_consumer, &mut pull_buffer);
-        if !pull_buffer.is_empty() {
-            drain_capture_worker_chunk(
-                &worker_source,
-                &pull_buffer,
-                &mut writers,
-                &mut sequence,
-                sample_cursor.as_ref(),
-                &mut last_peak_emit,
-            )
-            .await;
-        }
-
         for writer in writers.into_values() {
             let _ = writer.writer.finalize();
         }
+        let _ = stop_tx.send(());
+        evict_defunct_capture(&app, &key, &source);
     });
 }
 
@@ -658,10 +636,10 @@ async fn drain_capture_worker_chunk(
     true
 }
 
-fn resolve_capture_device_name(
+fn resolve_capture_device(
     kind: CaptureKind,
     device_name: &Option<String>,
-) -> Result<String, String> {
+) -> Result<(cpal::Device, String), String> {
     let host = cpal::default_host();
     let device = match (kind, device_name) {
         (CaptureKind::System, Some(name)) => host
@@ -681,7 +659,8 @@ fn resolve_capture_device_name(
             .default_input_device()
             .ok_or_else(|| kind.no_device_message().to_string())?,
     };
-    Ok(device.to_string())
+    let name = device.to_string();
+    Ok((device, name))
 }
 
 pub fn start_system_audio_capture(
@@ -706,7 +685,7 @@ pub fn start_system_audio_capture(
 
 fn start_shared_capture(
     app: AppHandle,
-    window: Window,
+    _window: Window,
     state: &tauri::State<'_, AudioState>,
     kind: CaptureKind,
     device_name: Option<String>,
@@ -721,13 +700,13 @@ fn start_shared_capture(
         .instance_keys
         .get(&(kind, instance_id.clone()))
         .cloned();
-    let resolved_device = if device_name.is_none() {
+    let (device, resolved_device) = if device_name.is_none() {
         match existing_key.as_ref() {
-            Some(key) => key.device_name.clone(),
-            None => resolve_capture_device_name(kind, &device_name)?,
+            Some(key) => resolve_capture_device(kind, &Some(key.device_name.clone()))?,
+            None => resolve_capture_device(kind, &device_name)?,
         }
     } else {
-        resolve_capture_device_name(kind, &device_name)?
+        resolve_capture_device(kind, &device_name)?
     };
     let key = CaptureKey {
         kind,
@@ -758,12 +737,49 @@ fn start_shared_capture(
         return Ok(lease);
     }
 
-    let (stop_tx, rx) = channel::<()>();
-    let raw_rb = HeapRb::<f32>::new(192_000 * 2);
-    let (raw_producer, raw_consumer) = raw_rb.split();
-    let (data_tx, data_rx) = tokio::sync::mpsc::channel::<()>(100);
+    let direction = match kind {
+        CaptureKind::System => CaptureDirection::Output,
+        CaptureKind::Microphone => CaptureDirection::Input,
+    };
+
+    let (event_tx, event_rx) = tokio::sync::mpsc::channel::<CaptureEvent>(100);
+    let pipeline_handle = LiveAudioCapturePipeline::start(
+        &device,
+        &resolved_device,
+        direction,
+        LiveCaptureConfig::default(),
+        move |event| match event {
+            CaptureEvent::Chunk(chunk) => match event_tx.try_send(CaptureEvent::Chunk(chunk)) {
+                Ok(()) => true,
+                Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                    warn!("[Audio] Live capture buffer full; dropping frame");
+                    true
+                }
+                Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => false,
+            },
+            CaptureEvent::Error(err) => {
+                error!("[Audio] Hardware capture stream error: {err}");
+                let _ = event_tx.blocking_send(CaptureEvent::Error(err));
+                false
+            }
+            CaptureEvent::Eof => {
+                let _ = event_tx.blocking_send(CaptureEvent::Eof);
+                false
+            }
+        },
+    )
+    .map_err(|e| format!("Failed to start {} capture pipeline: {e}", kind.log_name()))?;
+
+    let (stop_tx, stop_rx) = channel::<()>();
+    std::thread::Builder::new()
+        .name(format!("audio-stop-{}", resolved_device))
+        .spawn(move || {
+            let _ = stop_rx.recv();
+            pipeline_handle.stop();
+        })
+        .map_err(|e| format!("Failed to spawn audio stop thread: {e}"))?;
+
     let (recorder_tx, recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(10);
-    let (startup_tx, startup_rx) = channel::<Result<(String, u32), String>>();
     let source_generation = state.next_source_generation.fetch_add(1, Ordering::Relaxed);
     let source = LiveSourceEpoch::new(
         format!("desktop-source-{source_generation}"),
@@ -771,38 +787,13 @@ fn start_shared_capture(
     );
     let sample_cursor = std::sync::Arc::new(AtomicU64::new(0));
 
-    spawn_cpal_startup_thread(
-        window,
-        kind,
-        Some(resolved_device),
-        rx,
-        startup_tx,
-        data_tx.clone(),
-        raw_producer,
-    );
-
-    let (_resolved_device_name, sample_rate) = match startup_rx.recv() {
-        Ok(Ok((name, rate))) => (name, rate),
-        Ok(Err(err)) => return Err(err),
-        Err(err) => return Err(kind.startup_channel_error_message(err)),
-    };
-
-    let resampler = match AudioResampler::new(sample_rate) {
-        Ok(r) => r,
-        Err(err) => {
-            let _ = stop_tx.send(());
-            return Err(format!("Failed to initialize audio resampler: {err}"));
-        }
-    };
-
     spawn_capture_worker_task(
         app.clone(),
         key.clone(),
         source.clone(),
         sample_cursor.clone(),
-        resampler,
-        raw_consumer,
-        data_rx,
+        stop_tx.clone(),
+        event_rx,
         recorder_rx,
     );
     {
@@ -844,88 +835,6 @@ fn start_shared_capture(
         source_cursor: 0,
     })
 }
-
-#[allow(clippy::too_many_arguments)]
-fn spawn_cpal_startup_thread<R: Runtime + 'static>(
-    _window: Window<R>,
-    kind: CaptureKind,
-    device_name: Option<String>,
-    rx: std::sync::mpsc::Receiver<()>,
-    startup_tx: Sender<Result<(String, u32), String>>,
-    data_tx: tokio::sync::mpsc::Sender<()>,
-    raw_producer: impl Producer<Item = f32> + Send + 'static,
-) {
-    thread::spawn(move || {
-        let fail_start = |message: String| {
-            error!(
-                "[Audio] Failed to start {} capture: {}",
-                kind.log_name(),
-                message
-            );
-            let _ = startup_tx.send(Err(message));
-        };
-
-        let err_fn = move |err| error!("[Audio] {} error: {}", kind.stream_error_label(), err);
-        let host = cpal::default_host();
-        let device = match (kind, device_name.as_ref()) {
-            (CaptureKind::System, Some(name)) => host
-                .output_devices()
-                .ok()
-                .and_then(|mut devices| devices.find(|device| device.to_string() == *name)),
-            (CaptureKind::Microphone, Some(name)) => host
-                .input_devices()
-                .ok()
-                .and_then(|mut devices| devices.find(|device| device.to_string() == *name)),
-            (CaptureKind::System, None) => host.default_output_device(),
-            (CaptureKind::Microphone, None) => host.default_input_device(),
-        };
-
-        let Some(device) = device else {
-            fail_start(kind.no_device_message().to_string());
-            return;
-        };
-        let resolved_device_name = device.to_string();
-
-        let data_notifier = {
-            let data_tx = data_tx.clone();
-            move || {
-                let _ = data_tx.try_send(());
-            }
-        };
-
-        let direction = match kind {
-            CaptureKind::System => CaptureDirection::Output,
-            CaptureKind::Microphone => CaptureDirection::Input,
-        };
-
-        let (stream, config, _format) =
-            match open_device_stream(&device, direction, raw_producer, data_notifier, err_fn) {
-                Ok(res) => res,
-                Err(e) => {
-                    fail_start(e.to_string());
-                    return;
-                }
-            };
-        let sample_rate = config.sample_rate;
-
-        if let Err(e) = stream.play() {
-            fail_start(kind.play_stream_error_message(e));
-            return;
-        }
-
-        if startup_tx
-            .send(Ok((resolved_device_name.clone(), sample_rate)))
-            .is_err()
-        {
-            return;
-        }
-
-        let _ = rx.recv();
-        let _ = stream.pause();
-        info!("[Audio] {} capture stopped", kind.stop_signal_label());
-    });
-}
-
 pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
     sona_audio_capture::enumerate_input_devices().map_err(|e| e.to_string())
 }
@@ -1208,6 +1117,7 @@ pub fn set_microphone_capture_paused(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::thread;
 
     fn running_capture(
         owner: &str,

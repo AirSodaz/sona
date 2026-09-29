@@ -1,11 +1,15 @@
 use std::path::Path;
 
+use sona_core::models::preset_models::{
+    DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SENSEVOICE_INT8_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID,
+    DEFAULT_WHISPER_TURBO_MODEL_ID,
+};
+
 const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # Generated keys are commented out by default. Uncomment the settings you want
 # before using this file with Sona commands.
-# `sona-cli transcribe` requires model_id to be enabled.
-# Online ASR provider selection and API-key environment variables are command-line-only.
-# Use --online-config for non-secret provider endpoint/model overrides.
+# `sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be set.
+# Online ASR provider selection, api_key_env, and online_config can be set in this file or via CLI flags.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
 #   sona-cli transcribe-live -c ./sona-cli.toml
@@ -19,15 +23,21 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 {models_dir_line}
 
 # gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
+# vad_model_id = "{vad_model_id}"
+# punctuation_model_id = "{punctuation_model_id}"
+# online_provider = "volcengine-doubao"
+# api_key_env = "VOLCENGINE_API_KEY"
+# online_config = "./online-config.json"
 
 [transcribe]
 # models_dir = "..."
 # gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
-# model_id = "sherpa-onnx-whisper-turbo"
+# vad_model_id = "{vad_model_id}"
+# punctuation_model_id = "{punctuation_model_id}"
+# model_id = "{whisper_turbo_model_id}"
+# online_provider = "volcengine-doubao"
+# api_key_env = "VOLCENGINE_API_KEY"
+# online_config = "./online-config.json"
 # language = "auto"
 # threads = 4
 # enable_itn = false
@@ -48,9 +58,12 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # output_format = "text"
 # models_dir = "..."
 # gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
-# model_id = "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+# vad_model_id = "{vad_model_id}"
+# punctuation_model_id = "{punctuation_model_id}"
+# model_id = "{sensevoice_model_id}"
+# online_provider = "volcengine-doubao"
+# api_key_env = "VOLCENGINE_API_KEY"
+# online_config = "./online-config.json"
 # language = "auto"
 # threads = 4
 # enable_itn = false
@@ -61,8 +74,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 [serve]
 # models_dir = "..."
 # gpu_acceleration = "auto"
-# vad_model_id = "silero-vad"
-# punctuation_model_id = "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12"
+# vad_model_id = "{vad_model_id}"
+# punctuation_model_id = "{punctuation_model_id}"
 # host = "127.0.0.1"
 # port = 14200
 # api_key = ""
@@ -82,7 +95,12 @@ pub fn render_config_template(models_dir: Option<&Path>) -> String {
         format!("# models_dir = \"{}\"", default_models_dir_placeholder())
     };
 
-    CONFIG_TEMPLATE.replace("{models_dir_line}", &models_dir_line)
+    CONFIG_TEMPLATE
+        .replace("{models_dir_line}", &models_dir_line)
+        .replace("{vad_model_id}", DEFAULT_SILERO_VAD_MODEL_ID)
+        .replace("{punctuation_model_id}", DEFAULT_PUNCTUATION_MODEL_ID)
+        .replace("{whisper_turbo_model_id}", DEFAULT_WHISPER_TURBO_MODEL_ID)
+        .replace("{sensevoice_model_id}", DEFAULT_SENSEVOICE_INT8_MODEL_ID)
 }
 
 fn default_models_dir_placeholder() -> &'static str {

@@ -72,8 +72,18 @@ pub struct TranscribeArgs {
 
 pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let config = load_config(args.config.as_ref())?;
-    if args.online.is_online() {
-        return run_online_transcribe(&args, config.as_ref());
+    let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
+        // Explicit --model-id on CLI overrides config-file online provider
+        args.online.clone()
+    } else {
+        args.online.resolve_with_config(
+            config.as_ref().and_then(|c| c.online_provider.clone()),
+            config.as_ref().and_then(|c| c.api_key_env.clone()),
+            config.as_ref().and_then(|c| c.online_config.clone()),
+        )
+    };
+    if resolved_online.is_online() {
+        return run_online_transcribe(&args, &resolved_online, config.as_ref());
     }
     let options = BatchTranscribeOptions {
         input: args.input,
@@ -114,6 +124,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
 
 fn run_online_transcribe(
     args: &TranscribeArgs,
+    online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
 ) -> CliResult<CliOutput> {
     reject_online_local_options(args)?;
@@ -129,9 +140,7 @@ fn run_online_transcribe(
         .hotwords
         .clone()
         .or_else(|| config.and_then(|config| config.hotwords.clone()));
-    let request = args
-        .online
-        .build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
+    let request = online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
     let export_format = resolve_export_format(
         args.format
             .as_deref()
