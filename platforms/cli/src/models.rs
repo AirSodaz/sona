@@ -7,8 +7,8 @@ use sona_core::models::catalog::{ModelListEntry, ModelListFilter, ModelSummary, 
 use sona_core::models::downloads::{
     ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
-use sona_model_downloads::{download_model, installed_model_is_valid, remove_model_install_path};
-use sona_runtime_fs::{is_preset_model_installed_at, list_models as list_model_catalog};
+use sona_model_downloads::{download_model, installed_model_is_valid};
+use sona_runtime_fs::list_models as list_model_catalog;
 
 #[derive(Debug, Args)]
 pub struct ModelsArgs {
@@ -157,17 +157,11 @@ fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
         download_one_model(&resolved, yes, quiet, &mut stderr_lines).await?;
 
         let companions = required_companion_models(&resolved.model);
-        if let Some(vad_model_id) = companions.vad_model_id {
-            let vad = resolve_model_download(&vad_model_id, &models_dir)
+        for companion_id in companions.companion_model_ids() {
+            let companion = resolve_model_download(&companion_id, &models_dir)
                 .map_err(|error| CliError::Validation(error.to_string()))?;
-            download_one_model(&vad, yes, quiet, &mut stderr_lines).await?;
+            download_one_model(&companion, yes, quiet, &mut stderr_lines).await?;
         }
-        if let Some(punctuation_model_id) = companions.punctuation_model_id {
-            let punctuation = resolve_model_download(&punctuation_model_id, &models_dir)
-                .map_err(|error| CliError::Validation(error.to_string()))?;
-            download_one_model(&punctuation, yes, quiet, &mut stderr_lines).await?;
-        }
-
         Ok(CliOutput::stderr(stderr_lines.join("\n")))
     })
 }
@@ -179,28 +173,24 @@ fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
         ));
     }
 
+    // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
+    sona_llama_cpp::prune_idle_llm_models();
+    sona_llama_cpp::prune_idle_llama_models();
+
     let models_dir = resolve_models_dir(args.models_dir)?;
-    let model = sona_core::models::preset_models::find_preset_model(&args.model_id)
-        .ok_or_else(|| CliError::Validation(format!("Unknown model id: {}", args.model_id)))?;
-    let install_path = model.resolve_install_path(&models_dir);
-    let install_path_exists = sona_runtime_fs::path_exists(&install_path)
-        .map_err(|error| CliError::Io(error.to_string()))?;
-
-    if !is_preset_model_installed_at(model, &models_dir) && !install_path_exists {
-        return Ok(CliOutput::stderr(format!(
-            "Model {} is not installed at {}",
-            model.id,
-            install_path.display()
-        )));
+    match sona_model_downloads::delete_installed_model(&models_dir, &args.model_id) {
+        Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => Ok(CliOutput::stderr(
+            format!("Deleted {} from {}", args.model_id, path.display()),
+        )),
+        Ok(sona_model_downloads::DeleteModelResult::NotInstalled(path)) => {
+            Ok(CliOutput::stderr(format!(
+                "Model {} is not installed at {}",
+                args.model_id,
+                path.display()
+            )))
+        }
+        Err(error) => Err(map_download_error(error)),
     }
-
-    remove_model_install_path(&install_path).map_err(map_download_error)?;
-
-    Ok(CliOutput::stderr(format!(
-        "Deleted {} from {}",
-        model.id,
-        install_path.display()
-    )))
 }
 
 async fn download_one_model(
@@ -320,6 +310,7 @@ fn map_download_error(error: sona_model_downloads::DownloadError) -> CliError {
         | sona_model_downloads::DownloadError::FileSystem(_) => CliError::Io(message),
         sona_model_downloads::DownloadError::HashMismatch { .. } => CliError::Model(message),
         sona_model_downloads::DownloadError::AlreadyInProgress => CliError::Other(message),
+        sona_model_downloads::DownloadError::Validation(_) => CliError::Validation(message),
     }
 }
 

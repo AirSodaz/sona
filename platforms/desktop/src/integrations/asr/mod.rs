@@ -83,6 +83,36 @@ pub(crate) fn ensure_adapter(
         .with_code("UNSUPPORTED_ONLINE_PROVIDER")
     })
 }
+pub async fn process_batch_file(
+    emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
+    state: &AsrState,
+    file_path: std::path::PathBuf,
+    save_to_path: Option<std::path::PathBuf>,
+    asr_request: AsrTranscriptionRequest,
+    speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
+    instance_id: Option<String>,
+) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+    let adapter = ensure_adapter(&asr_request)?;
+    let processor = adapter
+        .create_batch_processor(&asr_request)?
+        .ok_or_else(|| {
+            AsrPortError::runtime(format!(
+                "Batch mode not supported for provider {}",
+                get_provider_id(&asr_request).unwrap_or("unknown")
+            ))
+        })?;
+    processor
+        .process_file(
+            emitter,
+            state,
+            file_path,
+            save_to_path,
+            asr_request,
+            speaker_processing,
+            instance_id,
+        )
+        .await
+}
 
 pub(crate) fn local_asr_registry(recognizer_pool: RecognizerPool) -> LocalAsrRegistry {
     let vad_engines = sona_vad::built_in_engines();

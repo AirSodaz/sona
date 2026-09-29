@@ -68,6 +68,8 @@ pub enum DownloadError {
     AlreadyInProgress,
     #[error("Failed to create HTTP client: {reason}")]
     HttpClient { reason: String },
+    #[error("{0}")]
+    Validation(String),
     #[error(transparent)]
     FileSystem(DownloadFileSystemError),
 }

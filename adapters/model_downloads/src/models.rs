@@ -7,7 +7,7 @@ use crate::downloads::{
     temporary_download_path,
 };
 use crate::mirror::{DownloadMirror, download_candidates};
-use sona_core::models::downloads::ResolvedModelDownload;
+use sona_core::models::downloads::{ResolvedModelDownload, resolve_model_download};
 use sona_core::models::mirrors::modelscope_mirror_url;
 
 const MAX_ARCHIVE_ENTRIES: usize = 20_000;
@@ -117,6 +117,102 @@ pub fn remove_model_install_path(install_path: &Path) -> Result<(), DownloadErro
                 error.to_string(),
             )
         })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum DeleteModelResult {
+    Deleted(PathBuf),
+    NotInstalled(PathBuf),
+}
+
+/// Uninstalls an installed preset or custom model, cleaning up staging and temporary files.
+pub fn delete_installed_model(
+    models_dir: &Path,
+    model_id: &str,
+) -> Result<DeleteModelResult, DownloadError> {
+    // 1. Try resolving as a known preset model
+    match resolve_model_download(model_id, models_dir) {
+        Ok(resolved) => {
+            let mut staging = resolved.install_path.as_os_str().to_os_string();
+            staging.push(".installing");
+            let staging_path = PathBuf::from(staging);
+            let temp_download = temporary_download_path(&resolved.download_path);
+
+            let install_exists = resolved.install_path.exists();
+            let staging_exists = staging_path.exists();
+            let download_diff_exists =
+                resolved.download_path != resolved.install_path && resolved.download_path.exists();
+            let temp_exists = temp_download.exists();
+
+            if !install_exists && !staging_exists && !download_diff_exists && !temp_exists {
+                return Ok(DeleteModelResult::NotInstalled(resolved.install_path));
+            }
+
+            let _install_lock = InstallLock::acquire(&resolved.install_path)?;
+
+            if install_exists {
+                remove_model_install_path(&resolved.install_path)?;
+            }
+            if staging_exists {
+                let _ = remove_model_install_path(&staging_path);
+            }
+            if download_diff_exists {
+                let _ = remove_model_install_path(&resolved.download_path);
+            }
+            if temp_exists {
+                let _ = remove_model_install_path(&temp_download);
+            }
+
+            Ok(DeleteModelResult::Deleted(resolved.install_path))
+        }
+        Err(err) => {
+            // 2. Fallback: handle custom local models (e.g. "custom-{stem}" or filename)
+            let target_stem = model_id.strip_prefix("custom-").unwrap_or(model_id);
+            if target_stem.contains('/') || target_stem.contains('\\') || target_stem.contains("..")
+            {
+                return Err(DownloadError::Validation(err.to_string()));
+            }
+            let candidate_filename = if target_stem.ends_with(".gguf") {
+                target_stem.to_string()
+            } else {
+                format!("{target_stem}.gguf")
+            };
+
+            let candidate_path = models_dir.join(&candidate_filename);
+            if candidate_path.is_file()
+                && let (Ok(can_models_dir), Ok(can_candidate)) =
+                    (models_dir.canonicalize(), candidate_path.canonicalize())
+                && can_candidate.starts_with(&can_models_dir)
+            {
+                remove_model_install_path(&candidate_path)?;
+                return Ok(DeleteModelResult::Deleted(candidate_path));
+            }
+
+            // Also scan models_dir for matching file stem
+            if let Ok(entries) = std::fs::read_dir(models_dir) {
+                for entry in entries.flatten() {
+                    let path = entry.path();
+                    if path.is_file()
+                        && path
+                            .extension()
+                            .and_then(|e| e.to_str())
+                            .is_some_and(|e| e.eq_ignore_ascii_case("gguf"))
+                        && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
+                        && (stem.eq_ignore_ascii_case(target_stem)
+                            || stem.eq_ignore_ascii_case(model_id))
+                        && let (Ok(can_models_dir), Ok(can_path)) =
+                            (models_dir.canonicalize(), path.canonicalize())
+                        && can_path.starts_with(&can_models_dir)
+                    {
+                        remove_model_install_path(&path)?;
+                        return Ok(DeleteModelResult::Deleted(path));
+                    }
+                }
+            }
+
+            Err(DownloadError::Validation(err.to_string()))
+        }
     }
 }
 

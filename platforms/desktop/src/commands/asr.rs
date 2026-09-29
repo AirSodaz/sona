@@ -1,6 +1,6 @@
 use crate::integrations::asr::{
     AsrPortError, AsrRuntimeMetricsSnapshot, AsrState, AsrTranscriptionRequest,
-    TauriAsrRuntimeObserver, TranscriptSegment, ensure_adapter, get_provider_id,
+    TauriAsrRuntimeObserver, TranscriptSegment,
 };
 use crate::platform::event::{EventEmitterPort, TauriEventEmitter};
 use sona_application::live_transcription::{LiveInputTransform, LiveSourceEpoch};
@@ -366,27 +366,17 @@ pub async fn process_batch_file(
     asr_request: AsrTranscriptionRequest,
     instance_id: Option<String>,
 ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-    let adapter = ensure_adapter(&asr_request)?;
-    let processor = adapter
-        .create_batch_processor(&asr_request)?
-        .ok_or_else(|| {
-            AsrPortError::runtime(format!(
-                "Batch mode not supported for provider {}",
-                get_provider_id(&asr_request).unwrap_or("unknown")
-            ))
-        })?;
-    let emitter = Arc::new(TauriEventEmitter(app.clone())) as Arc<dyn EventEmitterPort>;
-    processor
-        .process_file(
-            emitter,
-            &state,
-            file_path.into(),
-            save_to_path.map(Into::into),
-            asr_request,
-            speaker_processing,
-            instance_id,
-        )
-        .await
+    let emitter = Arc::new(TauriEventEmitter(app)) as Arc<dyn EventEmitterPort>;
+    crate::integrations::asr::process_batch_file(
+        emitter,
+        &state,
+        file_path.into(),
+        save_to_path.map(Into::into),
+        asr_request,
+        speaker_processing,
+        instance_id,
+    )
+    .await
 }
 
 #[tauri::command]

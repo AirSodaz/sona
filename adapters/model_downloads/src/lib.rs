@@ -14,7 +14,7 @@ pub use mirror::{
     download_candidates, parse_download_mirror,
 };
 pub use models::{
-    ModelDownloadProgress, ModelDownloadStage, download_model, download_model_with_cancel,
-    download_model_with_cancel_and_mirror, installed_model_is_complete, installed_model_is_valid,
-    remove_model_install_path,
+    DeleteModelResult, ModelDownloadProgress, ModelDownloadStage, delete_installed_model,
+    download_model, download_model_with_cancel, download_model_with_cancel_and_mirror,
+    installed_model_is_complete, installed_model_is_valid, remove_model_install_path,
 };

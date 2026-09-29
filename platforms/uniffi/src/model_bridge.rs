@@ -431,6 +431,7 @@ fn map_download_error(error: DownloadError) -> SonaCoreBindingError {
         DownloadError::HashMismatch { .. } => "hash_mismatch",
         DownloadError::AlreadyInProgress => "already_in_progress",
         DownloadError::Io(_) | DownloadError::FileSystem(_) => "filesystem",
+        DownloadError::Validation(_) => "validation",
     };
     SonaCoreBindingError::ModelDownload {
         code: code.to_string(),

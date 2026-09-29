@@ -29,6 +29,19 @@ pub struct RequiredCompanionModels {
     pub punctuation_model_id: Option<String>,
 }
 
+impl RequiredCompanionModels {
+    pub fn companion_model_ids(&self) -> Vec<String> {
+        let mut ids = Vec::new();
+        if let Some(vad_id) = &self.vad_model_id {
+            ids.push(vad_id.clone());
+        }
+        if let Some(punct_id) = &self.punctuation_model_id {
+            ids.push(punct_id.clone());
+        }
+        ids
+    }
+}
+
 pub fn resolve_model_download(
     model_id: &str,
     models_dir: &Path,

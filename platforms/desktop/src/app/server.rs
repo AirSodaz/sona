@@ -121,16 +121,18 @@ impl ApiServerPlatform for TauriApiServerPlatform {
             ));
         }
 
-        let inner_app_clone = app_handle.clone();
         let sherpa_state = app_handle.state::<crate::integrations::asr::AsrState>();
         let asr_request = sona_api_server::online_batch_request_to_core_request(&request);
-        crate::commands::asr::process_batch_file(
-            inner_app_clone,
-            sherpa_state,
-            request.file_path.to_string_lossy().to_string(),
-            None,
+        let emitter = Arc::new(crate::platform::event::TauriEventEmitter(
+            app_handle.clone(),
+        )) as Arc<dyn crate::platform::event::EventEmitterPort>;
+        crate::integrations::asr::process_batch_file(
+            emitter,
+            &sherpa_state,
+            request.file_path,
             None,
             asr_request,
+            None,
             None,
         )
         .await

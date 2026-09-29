@@ -2,15 +2,20 @@ pub mod archive;
 pub mod asr;
 pub mod audio;
 pub mod automation;
+pub mod config;
 pub mod downloads;
 pub mod export;
 pub mod history;
 pub mod llm;
 pub mod project;
+pub mod recovery;
+pub mod server;
+pub mod speaker;
 pub mod storage;
 pub mod sync;
 pub mod system;
 pub mod tag;
+pub mod task_ledger;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
     tauri::generate_handler![
@@ -133,23 +138,23 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::system::open_log_folder,
         crate::commands::system::get_runtime_environment_status,
         crate::commands::system::get_path_statuses,
-        crate::commands::system::task_ledger_load_snapshot,
-        crate::commands::system::task_ledger_upsert_task,
-        crate::commands::system::task_ledger_patch_task,
-        crate::commands::system::task_ledger_remove_task,
-        crate::commands::system::task_ledger_clear_resolved,
-        crate::commands::system::recovery_load_snapshot,
-        crate::commands::system::recovery_save_snapshot,
-        crate::commands::system::recovery_persist_queue_snapshot,
+        crate::commands::task_ledger::task_ledger_load_snapshot,
+        crate::commands::task_ledger::task_ledger_upsert_task,
+        crate::commands::task_ledger::task_ledger_patch_task,
+        crate::commands::task_ledger::task_ledger_remove_task,
+        crate::commands::task_ledger::task_ledger_clear_resolved,
+        crate::commands::recovery::recovery_load_snapshot,
+        crate::commands::recovery::recovery_save_snapshot,
+        crate::commands::recovery::recovery_persist_queue_snapshot,
         crate::commands::automation::replace_automation_runtime_rules,
         crate::commands::automation::scan_automation_runtime_rule,
         crate::commands::automation::collect_automation_runtime_rule_paths,
-        crate::commands::system::load_app_config,
-        crate::commands::system::save_app_config,
-        crate::commands::system::get_app_setting,
-        crate::commands::system::set_app_setting,
-        crate::commands::system::migrate_app_config,
-        crate::commands::system::resolve_effective_config,
+        crate::commands::config::load_app_config,
+        crate::commands::config::save_app_config,
+        crate::commands::config::get_app_setting,
+        crate::commands::config::set_app_setting,
+        crate::commands::config::migrate_app_config,
+        crate::commands::config::resolve_effective_config,
         crate::commands::system::inject_text,
         crate::commands::system::get_mouse_position,
         crate::commands::system::get_text_cursor_position,
@@ -193,17 +198,17 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::asr::get_asr_runtime_metrics,
         crate::commands::asr::test_online_asr_provider,
         crate::commands::export::export_transcript_file,
-        crate::commands::system::annotate_speaker_segments_from_file,
-        crate::commands::system::import_speaker_profile_sample,
-        crate::commands::system::enroll_speaker_profile_sample_from_audio,
-        crate::commands::system::build_speaker_review_snapshot,
-        crate::commands::system::apply_speaker_profile_to_group,
-        crate::commands::system::reset_speaker_group_to_anonymous,
-        crate::commands::system::confirm_speaker_group_review,
-        crate::commands::system::start_api_server,
-        crate::commands::system::stop_api_server,
-        crate::commands::system::get_api_server_dashboard_snapshot,
-        crate::commands::system::has_active_api_server_jobs,
+        crate::commands::speaker::annotate_speaker_segments_from_file,
+        crate::commands::speaker::import_speaker_profile_sample,
+        crate::commands::speaker::enroll_speaker_profile_sample_from_audio,
+        crate::commands::speaker::build_speaker_review_snapshot,
+        crate::commands::speaker::apply_speaker_profile_to_group,
+        crate::commands::speaker::reset_speaker_group_to_anonymous,
+        crate::commands::speaker::confirm_speaker_group_review,
+        crate::commands::server::start_api_server,
+        crate::commands::server::stop_api_server,
+        crate::commands::server::get_api_server_dashboard_snapshot,
+        crate::commands::server::has_active_api_server_jobs,
         crate::commands::system::check_media_formats
     ]
 }
