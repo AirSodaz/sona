@@ -90,8 +90,9 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             speaker_processing,
             instance_id,
         )?;
-        let cancel_rx = if let Some(id) = &request.instance_id {
-            Some((id.clone(), state.batch_cancel.register(id).await))
+        let cancel_registration = if let Some(id) = &request.instance_id {
+            let (rx, guard) = state.batch_cancel.register(id).await;
+            Some((id.clone(), rx, guard))
         } else {
             None
         };
@@ -101,7 +102,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             emitter,
             progress_path,
             instance_id: request.instance_id.clone(),
-            cancel_rx: cancel_rx.as_ref().map(|(_, rx)| rx.clone()),
+            cancel_rx: cancel_registration.as_ref().map(|(_, rx, _)| rx.clone()),
         });
         observer.on_progress(0.0);
 
@@ -135,7 +136,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
 
         let transcribe_fut = transcriber.transcribe_with_observer(plan, observer.clone());
 
-        let segments = if let Some((id, mut rx)) = cancel_rx {
+        let segments = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
                 result = transcribe_fut => result,
                 _ = async {
@@ -154,7 +155,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
                     }
                 } => Err(AsrPortError::runtime("Task cancelled.")),
             };
-            state.batch_cancel.remove(&id).await;
+            drop(guard);
             result?
         } else {
             transcribe_fut.await?

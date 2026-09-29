@@ -19,32 +19,71 @@ use tokio::sync::{Mutex, watch};
 /// corresponding `cancel_batch_task` Tauri command looks up the sender and
 /// sends a cancellation signal; the processor's `tokio::select!` branch then
 /// wins and returns an error immediately.
-#[derive(Default)]
+pub(crate) struct BatchCancelGuard {
+    senders: Arc<std::sync::Mutex<HashMap<String, Arc<watch::Sender<bool>>>>>,
+    instance_id: Option<String>,
+    sender: Arc<watch::Sender<bool>>,
+}
+
+impl BatchCancelGuard {
+    #[cfg(test)]
+    pub fn instance_id(&self) -> Option<&str> {
+        self.instance_id.as_deref()
+    }
+}
+
+impl Drop for BatchCancelGuard {
+    fn drop(&mut self) {
+        if let Some(id) = self.instance_id.take()
+            && let Ok(mut senders) = self.senders.lock()
+            && senders
+                .get(&id)
+                .is_some_and(|current| Arc::ptr_eq(current, &self.sender))
+        {
+            senders.remove(&id);
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 pub(crate) struct BatchCancelRegistry {
-    senders: Mutex<HashMap<String, watch::Sender<bool>>>,
+    senders: Arc<std::sync::Mutex<HashMap<String, Arc<watch::Sender<bool>>>>>,
 }
 
 impl BatchCancelRegistry {
+    #[cfg(test)]
+    pub fn new() -> Self {
+        Self {
+            senders: Arc::new(std::sync::Mutex::new(HashMap::new())),
+        }
+    }
+
     /// Register a new cancellation channel for `instance_id`.
     ///
-    /// Returns the receiver that the processor should watch. Dropping the
-    /// sender (on registry removal) also signals cancellation, so the
-    /// processor is always unblocked when the entry is cleaned up.
-    pub async fn register(&self, instance_id: &str) -> watch::Receiver<bool> {
+    /// Returns the receiver that the processor should watch along with a
+    /// RAII `BatchCancelGuard` that removes the registration automatically on drop.
+    pub async fn register(&self, instance_id: &str) -> (watch::Receiver<bool>, BatchCancelGuard) {
         let (tx, rx) = watch::channel(false);
-        self.senders
-            .lock()
-            .await
-            .insert(instance_id.to_string(), tx);
-        rx
+        let tx = Arc::new(tx);
+        if let Ok(mut senders) = self.senders.lock() {
+            senders.insert(instance_id.to_string(), tx.clone());
+        }
+        let guard = BatchCancelGuard {
+            senders: Arc::clone(&self.senders),
+            instance_id: Some(instance_id.to_string()),
+            sender: tx.clone(),
+        };
+        (rx, guard)
     }
 
     /// Send the cancellation signal for `instance_id`.
     ///
     /// Returns `true` if a live registration was found, `false` otherwise.
     pub async fn cancel(&self, instance_id: &str) -> bool {
-        let senders = self.senders.lock().await;
-        if let Some(tx) = senders.get(instance_id) {
+        let senders = self.senders.lock().ok();
+        if let Some(senders) = senders
+            && let Some(tx) = senders.get(instance_id)
+        {
             let _ = tx.send(true);
             true
         } else {
@@ -54,12 +93,15 @@ impl BatchCancelRegistry {
 
     /// Remove the registration for `instance_id` once the task has finished
     /// (either normally or by cancellation).
+    #[cfg(test)]
     pub async fn remove(&self, instance_id: &str) {
-        self.senders.lock().await.remove(instance_id);
+        if let Ok(mut senders) = self.senders.lock() {
+            senders.remove(instance_id);
+        }
     }
 
     pub async fn has_active_tasks(&self) -> bool {
-        !self.senders.lock().await.is_empty()
+        self.senders.lock().map(|s| !s.is_empty()).unwrap_or(false)
     }
 }
 
@@ -220,5 +262,69 @@ impl AsrState {
         self.recognizer_pool.clear().await;
         sona_llama_cpp::clear_all_llama_models();
         sona_llama_cpp::clear_all_llm_models();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn batch_cancel_registry_registers_and_cancels() {
+        let registry = BatchCancelRegistry::new();
+        assert!(!registry.has_active_tasks().await);
+
+        let (rx, guard) = registry.register("task-1").await;
+        assert!(registry.has_active_tasks().await);
+        assert_eq!(guard.instance_id(), Some("task-1"));
+        assert!(!*rx.borrow());
+
+        let cancelled = registry.cancel("task-1").await;
+        assert!(cancelled);
+        assert!(*rx.borrow());
+
+        drop(guard);
+        assert!(!registry.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn batch_cancel_guard_removes_on_drop_without_explicit_remove() {
+        let registry = BatchCancelRegistry::new();
+        assert!(!registry.has_active_tasks().await);
+
+        {
+            let (_rx, guard) = registry.register("task-drop").await;
+            assert!(registry.has_active_tasks().await);
+            assert_eq!(guard.instance_id(), Some("task-drop"));
+        }
+        // Guard dropped here, registration should be cleaned up
+        assert!(!registry.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn batch_cancel_manual_remove_before_guard_drop_is_safe() {
+        let registry = BatchCancelRegistry::new();
+        let (_rx, guard) = registry.register("task-manual").await;
+        assert!(registry.has_active_tasks().await);
+
+        registry.remove("task-manual").await;
+        assert!(!registry.has_active_tasks().await);
+
+        // Dropping guard after manual remove does not panic or resurrect entry
+        drop(guard);
+        assert!(!registry.has_active_tasks().await);
+    }
+
+    #[tokio::test]
+    async fn dropping_superseded_batch_guard_preserves_new_registration() {
+        let registry = BatchCancelRegistry::new();
+        let (_old_rx, old_guard) = registry.register("shared-id").await;
+        let (_new_rx, new_guard) = registry.register("shared-id").await;
+
+        drop(old_guard);
+        assert!(registry.has_active_tasks().await);
+        assert!(registry.cancel("shared-id").await);
+        drop(new_guard);
+        assert!(!registry.has_active_tasks().await);
     }
 }

@@ -96,13 +96,32 @@ struct CaptureKey {
     device_name: String,
 }
 
+#[derive(Clone)]
+pub struct AudioStopSignal(std::sync::Arc<dyn Fn() + Send + Sync>);
+
+impl AudioStopSignal {
+    pub fn new<F: Fn() + Send + Sync + 'static>(f: F) -> Self {
+        Self(std::sync::Arc::new(f))
+    }
+
+    pub fn from_sender(sender: Sender<()>) -> Self {
+        Self::new(move || {
+            let _ = sender.send(());
+        })
+    }
+
+    pub fn stop(&self) {
+        (self.0)();
+    }
+}
+
 #[derive(Default)]
 /// Tracks one live hardware capture that can be shared by multiple logical
 /// recorder instances. Ownership lives at the instance-id layer, so attaching a
 /// second consumer should reuse the same device stream instead of starting a
 /// parallel hardware capture.
 struct SharedCaptureState {
-    stop_signal: Option<Sender<()>>,
+    stop_signal: Option<AudioStopSignal>,
     instance_ids: HashSet<String>,
     paused_instances: HashSet<String>,
     recorder_tx: Option<tokio::sync::mpsc::Sender<RecorderCommand>>,
@@ -122,9 +141,19 @@ pub struct LiveCaptureLease {
 struct CaptureRegistry {
     captures: HashMap<CaptureKey, SharedCaptureState>,
     instance_keys: HashMap<(CaptureKind, String), CaptureKey>,
+    stopping_keys: HashMap<CaptureKey, LiveSourceEpoch>,
 }
 
 impl CaptureRegistry {
+    fn clear_stopping(&mut self, key: &CaptureKey, source: &LiveSourceEpoch) -> bool {
+        if self.stopping_keys.get(key) == Some(source) {
+            self.stopping_keys.remove(key);
+            true
+        } else {
+            false
+        }
+    }
+
     fn attach_running(
         &mut self,
         key: &CaptureKey,
@@ -161,16 +190,18 @@ impl CaptureRegistry {
         kind: CaptureKind,
         instance_id: &str,
         key: &CaptureKey,
-    ) -> Option<Sender<()>> {
+    ) -> Option<AudioStopSignal> {
         let instance_key = (kind, instance_id.to_string());
         if self.instance_keys.get(&instance_key) != Some(key) {
             return None;
         }
         self.instance_keys.remove(&instance_key);
         let capture = self.captures.get_mut(key)?;
+        let source = capture.source.clone();
         let detach = capture.detach_instance(instance_id);
         if detach.should_stop_hardware {
             self.captures.remove(key);
+            self.clear_stopping(key, &source);
         }
         detach.stop_signal
     }
@@ -180,7 +211,7 @@ impl CaptureRegistry {
 /// Callers only stop the underlying device when the final owner leaves.
 struct SharedCaptureDetachResult {
     should_stop_hardware: bool,
-    stop_signal: Option<Sender<()>>,
+    stop_signal: Option<AudioStopSignal>,
     recorder_tx: Option<tokio::sync::mpsc::Sender<RecorderCommand>>,
 }
 
@@ -218,7 +249,7 @@ impl SharedCaptureState {
     fn commit_start(
         &mut self,
         instance_id: String,
-        stop_signal: Sender<()>,
+        stop_signal: AudioStopSignal,
         recorder_tx: tokio::sync::mpsc::Sender<RecorderCommand>,
     ) -> Vec<String> {
         self.commit_start_with_source(
@@ -233,7 +264,7 @@ impl SharedCaptureState {
     fn commit_start_with_source(
         &mut self,
         instance_id: String,
-        stop_signal: Sender<()>,
+        stop_signal: AudioStopSignal,
         recorder_tx: tokio::sync::mpsc::Sender<RecorderCommand>,
         source: LiveSourceEpoch,
         sample_cursor: std::sync::Arc<AtomicU64>,
@@ -307,6 +338,7 @@ impl SharedCaptureState {
 pub struct AudioState {
     start_guard: Mutex<()>,
     registry: Mutex<CaptureRegistry>,
+    stopping_condvar: std::sync::Condvar,
     next_source_generation: AtomicU64,
 }
 
@@ -321,13 +353,14 @@ impl AudioState {
         Self {
             start_guard: Mutex::new(()),
             registry: Mutex::new(CaptureRegistry::default()),
+            stopping_condvar: std::sync::Condvar::new(),
             next_source_generation: AtomicU64::new(1),
         }
     }
 
     pub fn has_active_captures(&self) -> bool {
         match self.registry.lock() {
-            Ok(registry) => !registry.captures.is_empty(),
+            Ok(registry) => !registry.captures.is_empty() || !registry.stopping_keys.is_empty(),
             Err(_) => false,
         }
     }
@@ -459,29 +492,41 @@ fn rollback_capture_attachment(
     instance_id: &str,
     key: &CaptureKey,
 ) {
-    let stop_signal = state
-        .registry
-        .lock()
-        .ok()
-        .and_then(|mut registry| registry.rollback_attachment(kind, instance_id, key));
+    let stop_signal = state.registry.lock().ok().and_then(|mut registry| {
+        let signal = registry.rollback_attachment(kind, instance_id, key);
+        if signal.is_some() {
+            state.stopping_condvar.notify_all();
+        }
+        signal
+    });
     if let Some(stop_signal) = stop_signal {
-        let _ = stop_signal.send(());
+        stop_signal.stop();
     }
 }
 
 fn evict_defunct_capture(app: &AppHandle, key: &CaptureKey, source: &LiveSourceEpoch) {
     if let Some(audio_state) = app.try_state::<AudioState>()
         && let Ok(mut registry) = audio_state.registry.lock()
-        && let Some(capture) = registry.captures.get(key)
-        && &capture.source == source
     {
-        registry.captures.remove(key);
-        registry.instance_keys.retain(|_, k| k != key);
-        info!(
-            "[Audio] Evicted defunct {} capture (source={})",
-            key.kind.label(),
-            source.source_id
-        );
+        let evicted = registry
+            .captures
+            .get(key)
+            .is_some_and(|capture| &capture.source == source);
+        if evicted {
+            registry.captures.remove(key);
+            registry.instance_keys.retain(|_, k| k != key);
+        }
+        let cleared = registry.clear_stopping(key, source);
+        if evicted || cleared {
+            audio_state.stopping_condvar.notify_all();
+        }
+        if evicted {
+            info!(
+                "[Audio] Evicted defunct {} capture (source={})",
+                key.kind.label(),
+                source.source_id
+            );
+        }
     }
 }
 
@@ -490,7 +535,7 @@ fn spawn_capture_worker_task(
     key: CaptureKey,
     source: LiveSourceEpoch,
     sample_cursor: std::sync::Arc<AtomicU64>,
-    stop_tx: Sender<()>,
+    stop_signal: AudioStopSignal,
     mut event_rx: tokio::sync::mpsc::Receiver<CaptureEvent>,
     mut recorder_rx: tokio::sync::mpsc::Receiver<RecorderCommand>,
 ) {
@@ -578,7 +623,7 @@ fn spawn_capture_worker_task(
         for writer in writers.into_values() {
             let _ = writer.writer.finalize();
         }
-        let _ = stop_tx.send(());
+        stop_signal.stop();
         evict_defunct_capture(&app, &key, &source);
     });
 }
@@ -713,6 +758,25 @@ fn start_shared_capture(
         device_name: resolved_device.clone(),
     };
 
+    // Wait if this specific device is still finishing its previous shutdown
+    {
+        let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
+        while registry.stopping_keys.contains_key(&key) {
+            let (next_registry, wait_res) = state
+                .stopping_condvar
+                .wait_timeout(registry, std::time::Duration::from_secs(3))
+                .map_err(|e| e.to_string())?;
+            registry = next_registry;
+            if wait_res.timed_out() && registry.stopping_keys.contains_key(&key) {
+                return Err(format!(
+                    "Timed out waiting for previous {} capture on '{}' to stop",
+                    kind.label(),
+                    key.device_name
+                ));
+            }
+        }
+    }
+
     let existing_attachment = {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
         registry.attach_running(&key, kind, &instance_id)?
@@ -770,14 +834,17 @@ fn start_shared_capture(
     )
     .map_err(|e| format!("Failed to start {} capture pipeline: {e}", kind.log_name()))?;
 
-    let (stop_tx, stop_rx) = channel::<()>();
-    std::thread::Builder::new()
-        .name(format!("audio-stop-{}", resolved_device))
-        .spawn(move || {
-            let _ = stop_rx.recv();
-            pipeline_handle.stop();
+    let pipeline_cell = std::sync::Arc::new(std::sync::Mutex::new(Some(pipeline_handle)));
+    let stop_signal = {
+        let cell = pipeline_cell.clone();
+        AudioStopSignal::new(move || {
+            if let Ok(guard) = cell.lock()
+                && let Some(handle) = guard.as_ref()
+            {
+                handle.stop();
+            }
         })
-        .map_err(|e| format!("Failed to spawn audio stop thread: {e}"))?;
+    };
 
     let (recorder_tx, recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(10);
     let source_generation = state.next_source_generation.fetch_add(1, Ordering::Relaxed);
@@ -792,7 +859,7 @@ fn start_shared_capture(
         key.clone(),
         source.clone(),
         sample_cursor.clone(),
-        stop_tx.clone(),
+        stop_signal.clone(),
         event_rx,
         recorder_rx,
     );
@@ -801,7 +868,7 @@ fn start_shared_capture(
         let mut capture = SharedCaptureState::default();
         capture.commit_start_with_source(
             instance_id.clone(),
-            stop_tx,
+            stop_signal,
             recorder_tx.clone(),
             source.clone(),
             sample_cursor,
@@ -988,7 +1055,7 @@ async fn stop_shared_capture(
     instance_id: String,
 ) -> Result<String, String> {
     let was_recording = kind.should_record(&instance_id);
-    let detach_result = {
+    let (key, source, detach_result) = {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
         let instance_key = (kind, instance_id.clone());
         let key = registry
@@ -1000,19 +1067,31 @@ async fn stop_shared_capture(
             .get_mut(&key)
             .ok_or_else(|| "Capture registry entry is missing".to_string())?;
         let detach_result = capture.detach_instance(&instance_id);
+        let source = capture.source.clone();
         if detach_result.should_stop_hardware {
             info!(
                 "[Audio] {} capture detaching final owner",
                 kind.stop_log_label()
             );
+            registry.captures.remove(&key);
+            registry.stopping_keys.insert(key.clone(), source.clone());
         } else {
             debug!("[Audio] {} capture remains active", kind.stop_log_label());
         }
-        if detach_result.should_stop_hardware {
-            registry.captures.remove(&key);
-        }
-        detach_result
+        (key, source, detach_result)
     };
+
+    if detach_result.should_stop_hardware {
+        if let Some(signal) = detach_result.stop_signal.as_ref() {
+            info!("[Audio] Stopping {} capture...", kind.log_name());
+            signal.stop();
+        } else {
+            match kind {
+                CaptureKind::System => debug!("[Audio] Stop requested but not running"),
+                CaptureKind::Microphone => debug!("[Audio] Mic stop requested but not running"),
+            }
+        }
+    }
 
     let mut saved_path = String::new();
     if was_recording {
@@ -1047,18 +1126,11 @@ async fn stop_shared_capture(
         }
     }
 
-    if !detach_result.should_stop_hardware {
-        return Ok(saved_path);
-    }
-
-    if let Some(tx) = detach_result.stop_signal {
-        info!("[Audio] Stopping {} capture...", kind.log_name());
-        let _ = tx.send(());
-    } else {
-        match kind {
-            CaptureKind::System => debug!("[Audio] Stop requested but not running"),
-            CaptureKind::Microphone => debug!("[Audio] Mic stop requested but not running"),
-        }
+    if detach_result.should_stop_hardware
+        && let Ok(mut registry) = state.registry.lock()
+        && registry.clear_stopping(&key, &source)
+    {
+        state.stopping_condvar.notify_all();
     }
 
     Ok(saved_path)
@@ -1132,7 +1204,7 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         capture.commit_start_with_source(
             owner.to_string(),
-            stop_tx,
+            AudioStopSignal::from_sender(stop_tx),
             recorder_tx,
             LiveSourceEpoch::new(
                 format!("desktop-source-{source_generation}"),
@@ -1141,6 +1213,25 @@ mod tests {
             std::sync::Arc::new(AtomicU64::new(0)),
         );
         (capture, stop_rx, recorder_rx)
+    }
+
+    #[test]
+    fn stopping_marker_is_cleared_only_by_matching_source_epoch() {
+        let key = CaptureKey {
+            kind: CaptureKind::Microphone,
+            device_name: "test-device".to_string(),
+        };
+        let old_source = LiveSourceEpoch::new("source-old", 1);
+        let new_source = LiveSourceEpoch::new("source-new", 2);
+        let mut registry = CaptureRegistry::default();
+        registry
+            .stopping_keys
+            .insert(key.clone(), new_source.clone());
+
+        assert!(!registry.clear_stopping(&key, &old_source));
+        assert!(registry.stopping_keys.contains_key(&key));
+        assert!(registry.clear_stopping(&key, &new_source));
+        assert!(!registry.stopping_keys.contains_key(&key));
     }
 
     #[test]
@@ -1153,7 +1244,11 @@ mod tests {
 
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        let owners = capture.commit_start("record".to_string(), stop_tx, recorder_tx);
+        let owners = capture.commit_start(
+            "record".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
 
         assert!(capture.is_running());
         assert_eq!(owners, vec!["record".to_string()]);
@@ -1176,7 +1271,11 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        capture.commit_start("voice-typing".to_string(), stop_tx, recorder_tx);
+        capture.commit_start(
+            "voice-typing".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
 
         let owners = capture.attach_instance("record".to_string());
 
@@ -1196,7 +1295,11 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        capture.commit_start("record".to_string(), stop_tx, recorder_tx);
+        capture.commit_start(
+            "record".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
 
         let detach_result = capture.detach_instance("record");
 
@@ -1214,7 +1317,11 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        capture.commit_start("voice-typing".to_string(), stop_tx, recorder_tx);
+        capture.commit_start(
+            "voice-typing".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
         capture.attach_instance("record".to_string());
 
         let active_instances = capture.set_instance_paused("record", true).unwrap();
@@ -1232,7 +1339,11 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        capture.commit_start("voice-typing".to_string(), stop_tx, recorder_tx);
+        capture.commit_start(
+            "voice-typing".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
         capture.attach_instance("test_mic".to_string());
 
         let preview_detach = capture.detach_instance("test_mic");
@@ -1254,7 +1365,11 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         let (stop_tx, _stop_rx) = channel::<()>();
         let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
-        capture.commit_start("record".to_string(), stop_tx, recorder_tx);
+        capture.commit_start(
+            "record".to_string(),
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+        );
         capture.set_instance_paused("record", true).unwrap();
 
         let detach_result = capture.detach_instance("record");
@@ -1330,7 +1445,7 @@ mod tests {
         let stop_signal = registry
             .rollback_attachment(CaptureKind::Microphone, "record", &key)
             .unwrap();
-        stop_signal.send(()).unwrap();
+        stop_signal.stop();
 
         assert!(registry.captures.is_empty());
         assert!(registry.instance_keys.is_empty());

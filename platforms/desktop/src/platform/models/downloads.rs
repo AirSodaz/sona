@@ -1,12 +1,37 @@
 use sona_model_downloads::DownloadClient;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::{Mutex, Notify};
+use tokio::sync::Notify;
 
 const DOWNLOAD_PROGRESS_EVENT: &str = "download-progress";
 
+pub struct DownloadRegistrationGuard {
+    downloads: Arc<std::sync::Mutex<HashMap<String, Arc<Notify>>>>,
+    id: Option<String>,
+    notify: Arc<Notify>,
+}
+
+impl DownloadRegistrationGuard {
+    pub fn id(&self) -> Option<&str> {
+        self.id.as_deref()
+    }
+}
+
+impl Drop for DownloadRegistrationGuard {
+    fn drop(&mut self) {
+        if let Some(id) = self.id.take()
+            && let Ok(mut downloads) = self.downloads.lock()
+            && downloads
+                .get(&id)
+                .is_some_and(|current| Arc::ptr_eq(current, &self.notify))
+        {
+            downloads.remove(&id);
+        }
+    }
+}
+
 pub struct DownloadState {
-    downloads: Mutex<HashMap<String, Arc<Notify>>>,
+    downloads: Arc<std::sync::Mutex<HashMap<String, Arc<Notify>>>>,
     client: DownloadClient,
 }
 
@@ -19,7 +44,7 @@ impl Default for DownloadState {
 impl DownloadState {
     pub fn new() -> Self {
         Self {
-            downloads: Mutex::new(HashMap::new()),
+            downloads: Arc::new(std::sync::Mutex::new(HashMap::new())),
             client: DownloadClient::new(),
         }
     }
@@ -28,12 +53,31 @@ impl DownloadState {
         &self.client
     }
 
-    pub(crate) async fn insert_download(&self, id: String, notify: Arc<Notify>) {
-        self.downloads.lock().await.insert(id, notify);
+    pub(crate) fn register_download(
+        &self,
+        id: String,
+        notify: Arc<Notify>,
+    ) -> DownloadRegistrationGuard {
+        if let Ok(mut downloads) = self.downloads.lock() {
+            downloads.insert(id.clone(), notify.clone());
+        }
+        DownloadRegistrationGuard {
+            downloads: Arc::clone(&self.downloads),
+            id: Some(id),
+            notify,
+        }
     }
 
+    #[cfg(test)]
+    pub(crate) async fn insert_download(&self, id: String, notify: Arc<Notify>) {
+        if let Ok(mut downloads) = self.downloads.lock() {
+            downloads.insert(id, notify);
+        }
+    }
+
+    #[cfg(test)]
     pub(crate) async fn remove_download(&self, id: &str) -> Option<Arc<Notify>> {
-        self.downloads.lock().await.remove(id)
+        self.downloads.lock().ok()?.remove(id)
     }
 
     pub(crate) async fn notify_download(&self, id: &str) {
@@ -43,11 +87,14 @@ impl DownloadState {
     }
 
     pub(crate) async fn has_active_downloads(&self) -> bool {
-        !self.downloads.lock().await.is_empty()
+        self.downloads
+            .lock()
+            .map(|d| !d.is_empty())
+            .unwrap_or(false)
     }
 
     async fn notify_for_download(&self, id: &str) -> Option<Arc<Notify>> {
-        self.downloads.lock().await.get(id).cloned()
+        self.downloads.lock().ok()?.get(id).cloned()
     }
 }
 
@@ -78,7 +125,7 @@ pub async fn download_file<R: tauri::Runtime>(
     let temp_path = temporary_download_path(&final_path);
 
     let notify = Arc::new(Notify::new());
-    state.insert_download(id.clone(), notify.clone()).await;
+    let _download_guard = state.register_download(id.clone(), notify.clone());
 
     let app_clone = app.clone();
     let id_clone = id.clone();
@@ -95,7 +142,7 @@ pub async fn download_file<R: tauri::Runtime>(
         .download_file(&url, &temp_path, notify, Some(progress_cb))
         .await;
 
-    state.remove_download(&id).await;
+    drop(_download_guard);
 
     match result {
         Ok(()) => complete_download_file(&temp_path, &final_path, expected_sha256.as_deref())
@@ -129,9 +176,7 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     }
 
     let notify = Arc::new(Notify::new());
-    state
-        .insert_download(download_id.clone(), notify.clone())
-        .await;
+    let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
     let result = download_model_with_cancel_and_mirror(
@@ -152,7 +197,7 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         },
     )
     .await;
-    state.remove_download(&download_id).await;
+    drop(_download_guard);
 
     result
         .map(|path| path.to_string_lossy().into_owned())
@@ -248,9 +293,7 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
     };
 
     let notify = Arc::new(Notify::new());
-    state
-        .insert_download(download_id.clone(), notify.clone())
-        .await;
+    let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
 
@@ -276,7 +319,7 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
     )
     .await;
 
-    state.remove_download(&download_id).await;
+    drop(_download_guard);
     result.map_err(|error| error.to_string())
 }
 
@@ -304,6 +347,38 @@ mod tests {
 
         let removed = state.remove_download("model-a").await;
         assert!(removed.is_some());
+        assert!(!state.has_active_downloads().await);
+    }
+
+    #[tokio::test]
+    async fn download_registration_guard_removes_download_on_drop() {
+        let state = DownloadState::new();
+        let notify = Arc::new(Notify::new());
+
+        assert!(!state.has_active_downloads().await);
+        {
+            let guard = state.register_download("model-drop".to_string(), notify.clone());
+            assert!(state.has_active_downloads().await);
+            assert_eq!(guard.id(), Some("model-drop"));
+        }
+        // After guard drops, the download should be automatically removed
+        assert!(!state.has_active_downloads().await);
+        assert!(state.notify_for_download("model-drop").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn dropping_superseded_download_guard_preserves_new_registration() {
+        let state = DownloadState::new();
+        let old = state.register_download("same-id".to_string(), Arc::new(Notify::new()));
+        let new_notify = Arc::new(Notify::new());
+        let new = state.register_download("same-id".to_string(), new_notify.clone());
+
+        drop(old);
+        assert!(state.has_active_downloads().await);
+        let stored = state.notify_for_download("same-id").await.unwrap();
+        assert!(Arc::ptr_eq(&stored, &new_notify));
+
+        drop(new);
         assert!(!state.has_active_downloads().await);
     }
 }

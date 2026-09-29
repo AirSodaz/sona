@@ -57,8 +57,9 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
         speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
         instance_id: Option<String>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
-        let cancel_rx = if let Some(id) = &instance_id {
-            Some((id.clone(), state.batch_cancel.register(id).await))
+        let cancel_registration = if let Some(id) = &instance_id {
+            let (rx, guard) = state.batch_cancel.register(id).await;
+            Some((id.clone(), rx, guard))
         } else {
             None
         };
@@ -69,7 +70,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 request: request.clone(),
             });
 
-        let output = if let Some((id, mut rx)) = cancel_rx {
+        let output = if let Some((_id, mut rx, guard)) = cancel_registration {
             let result = tokio::select! {
                 result = transcribe_fut => result,
                 _ = async {
@@ -86,7 +87,7 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                     }
                 } => Err(AsrPortError::runtime("Task cancelled.")),
             };
-            state.batch_cancel.remove(&id).await;
+            drop(guard);
             result?
         } else {
             transcribe_fut.await?
