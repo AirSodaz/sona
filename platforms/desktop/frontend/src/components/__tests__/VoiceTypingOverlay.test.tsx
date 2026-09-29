@@ -684,4 +684,28 @@ describe('VoiceTypingOverlay', () => {
       text: 'History from main window payload',
     });
   });
+
+  it('cleans up microphonePeak listener even if unmounted before listen resolves', async () => {
+    const { promise, resolve } = Promise.withResolvers<() => void>();
+    const peakUnlisten = vi.fn();
+    const listenSpy = vi
+      .spyOn(mocks, 'listen')
+      .mockImplementation((event: string, _callback: (event: unknown) => void) => {
+        if (event === 'microphone-audio') {
+          return promise;
+        }
+        return Promise.resolve(() => {});
+      });
+
+    const { unmount } = render(<VoiceTypingOverlay />);
+    unmount();
+    expect(peakUnlisten).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolve(peakUnlisten);
+    });
+
+    expect(peakUnlisten).toHaveBeenCalledTimes(1);
+    listenSpy.mockRestore();
+  });
 });

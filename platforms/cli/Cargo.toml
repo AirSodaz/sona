@@ -11,14 +11,12 @@ build = "build.rs"
 role = "host"
 
 [dependencies]
-async-trait = { workspace = true }
 clap = { workspace = true }
 cpal = { workspace = true }
 crossterm = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-ringbuf = { workspace = true }
 sona-application = { workspace = true }
 sona-audio-capture = { workspace = true }
 sona-api-server = { workspace = true }
@@ -42,6 +40,7 @@ async-trait = { workspace = true }
 hex = { workspace = true }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
+ringbuf = { workspace = true }
 
 [features]
 llama-vulkan = ["sona-llama-cpp/vulkan"]

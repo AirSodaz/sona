@@ -211,7 +211,11 @@ export function VoiceTypingOverlay() {
       setPeakLevel(normalized);
     })
       .then((fn) => {
-        unlisten = fn;
+        if (!isMounted) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
       })
       .catch((err) => {
         logger.debug('[VoiceTypingOverlay] Could not listen to microphonePeak event', err);
