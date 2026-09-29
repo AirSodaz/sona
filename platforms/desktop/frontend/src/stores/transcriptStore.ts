@@ -1,3 +1,4 @@
+import type { LexicalEditor } from 'lexical';
 import { v4 as uuidv4 } from 'uuid';
 import { create, type StateCreator } from 'zustand';
 import { areSpeakerTagsEqual } from '../types/speakerNormalization';
@@ -80,6 +81,7 @@ export interface TranscriptStore {
   isRecording: boolean;
   isCaptionMode: boolean;
   isPaused: boolean;
+  activeEditor: LexicalEditor | null;
 
   // --- Sidecar (Keyed by historyId or 'current') ---
   summaryStates: Record<string, TranscriptSummaryState>;
@@ -123,6 +125,7 @@ export interface TranscriptStore {
   setIsRecording: (isRecording: boolean) => void;
   setIsCaptionMode: (isCaptionMode: boolean) => void;
   setIsPaused: (isPaused: boolean) => void;
+  setActiveEditor: (editor: LexicalEditor | null) => void;
 
   // Session Data Mutations (Applies to activeSessionId)
   setSourceHistoryId: (id: string | null) => void;
@@ -239,6 +242,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   isRecording: false,
   isCaptionMode: false,
   isPaused: false,
+  activeEditor: null,
 
   summaryStates: { current: createDefaultSummaryState() },
   llmStates: { current: { ...DEFAULT_LLM_STATE } },
@@ -251,6 +255,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsCaptionMode: (isCaptionMode) => set({ isCaptionMode }),
   setIsPaused: (isPaused) => set({ isPaused }),
+  setActiveEditor: (activeEditor) => set({ activeEditor }),
 
   // --- Coordinator / Pointers ---
   setRecordingSessionId: (id) => set({ recordingSessionId: id }),

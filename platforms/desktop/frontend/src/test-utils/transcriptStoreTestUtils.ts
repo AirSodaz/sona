@@ -1,3 +1,4 @@
+import type { LexicalEditor } from 'lexical';
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -84,6 +85,7 @@ interface RuntimePatch {
   isRecording?: boolean;
   isCaptionMode?: boolean;
   isPaused?: boolean;
+  activeEditor?: LexicalEditor | null;
 }
 
 interface SidecarPatch {
@@ -119,6 +121,7 @@ const RUNTIME_KEYS = new Set<keyof RuntimePatch>([
   'isRecording',
   'isCaptionMode',
   'isPaused',
+  'activeEditor',
 ]);
 
 const SIDECAR_KEYS = new Set<keyof SidecarPatch>(['llmStates', 'summaryStates', 'autoSaveStates']);
@@ -248,6 +251,7 @@ export function resetTranscriptStores(): void {
     isRecording: false,
     isCaptionMode: false,
     isPaused: false,
+    activeEditor: null,
     ...INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE,
   });
 

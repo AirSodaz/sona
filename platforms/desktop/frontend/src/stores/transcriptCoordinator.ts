@@ -1,83 +1,48 @@
-import { type TranscriptStore, useTranscriptStore } from './transcriptStore';
+import type { TranscriptUpdate } from '../types/transcript';
+import {
+  clearActiveTranscriptSession,
+  clearSegments,
+  clearTranscriptSegments,
+  finalizeLastSegment as finalizeLastTranscriptSegment,
+  loadTranscriptSession,
+  mergeSegments as mergeTranscriptSegments,
+  openSession as openTranscriptSession,
+  sessionActions,
+  setSegments as setTranscriptSegments,
+  splitTranscriptSegment,
+  syncSavedRecordingMeta,
+  updateSegment as updateTranscriptSegment,
+  upsertTranscriptSegmentAndSetActive,
+} from './transcriptSessionStore';
+import { useTranscriptStore } from './transcriptStore';
 
 export { useTranscriptStore } from './transcriptStore';
-
-export const openTranscriptSession = (...args: Parameters<TranscriptStore['openSession']>) => {
-  return useTranscriptStore.getState().openSession(...args);
+export {
+  clearActiveTranscriptSession,
+  clearSegments,
+  clearTranscriptSegments,
+  finalizeLastTranscriptSegment,
+  loadTranscriptSession,
+  mergeTranscriptSegments,
+  openTranscriptSession,
+  setTranscriptSegments,
+  splitTranscriptSegment,
+  syncSavedRecordingMeta,
+  updateTranscriptSegment,
+  upsertTranscriptSegmentAndSetActive,
 };
 
-export const loadTranscriptSession = (
-  ...args: Parameters<TranscriptStore['loadTranscriptSession']>
-) => {
-  return useTranscriptStore.getState().loadTranscriptSession(...args);
-};
-
-export const clearActiveTranscriptSession = (
-  ...args: Parameters<TranscriptStore['clearActiveTranscriptSession']>
-) => {
-  return useTranscriptStore.getState().clearActiveTranscriptSession(...args);
-};
-
-export const clearTranscriptSegments = (
-  ...args: Parameters<TranscriptStore['clearTranscriptSegments']>
-) => {
-  return useTranscriptStore.getState().clearTranscriptSegments(...args);
-};
-
-export const syncSavedRecordingMeta = (
-  ...args: Parameters<TranscriptStore['syncSavedRecordingMeta']>
-) => {
-  return useTranscriptStore.getState().syncSavedRecordingMeta(...args);
-};
-
-export const setTranscriptSegments = (...args: Parameters<TranscriptStore['setSegments']>) => {
-  return useTranscriptStore.getState().setSegments(...args);
-};
-
-export const updateTranscriptSegment = (...args: Parameters<TranscriptStore['updateSegment']>) => {
-  return useTranscriptStore.getState().updateSegment(...args);
-};
-
-export const deleteTranscriptSegment = (...args: Parameters<TranscriptStore['deleteSegment']>) => {
-  return useTranscriptStore.getState().deleteSegment(...args);
-};
-
-export const mergeTranscriptSegments = (...args: Parameters<TranscriptStore['mergeSegments']>) => {
-  return useTranscriptStore.getState().mergeSegments(...args);
-};
-
-export const splitTranscriptSegment = (
-  ...args: Parameters<TranscriptStore['splitTranscriptSegment']>
-) => {
-  return useTranscriptStore.getState().splitTranscriptSegment(...args);
-};
-
-export const finalizeLastTranscriptSegment = (
-  ...args: Parameters<TranscriptStore['finalizeLastSegment']>
-) => {
-  return useTranscriptStore.getState().finalizeLastSegment(...args);
-};
-
-export const applyTranscriptUpdate = (
-  ...args: Parameters<TranscriptStore['applyTranscriptUpdate']>
-) => {
-  return useTranscriptStore.getState().applyTranscriptUpdate(...args);
-};
-
-export const upsertTranscriptSegmentAndSetActive = (
-  ...args: Parameters<TranscriptStore['upsertTranscriptSegmentAndSetActive']>
-) => {
-  return useTranscriptStore.getState().upsertTranscriptSegmentAndSetActive(...args);
-};
+export const deleteTranscriptSegment = sessionActions.deleteSegment;
+export const applyTranscriptUpdate = sessionActions.applyTranscriptUpdate;
 
 export const applyTranscriptUpdateToSession = (
-  ...args: Parameters<TranscriptStore['applyTranscriptUpdateToSession']>
-) => {
-  return useTranscriptStore.getState().applyTranscriptUpdateToSession(...args);
+  sessionId: string,
+  update: TranscriptUpdate,
+  activeSegmentId?: string | null
+): void => {
+  useTranscriptStore.getState().applyTranscriptUpdateToSession(sessionId, update, activeSegmentId);
 };
 
-export const setRecordingSessionId = (
-  ...args: Parameters<TranscriptStore['setRecordingSessionId']>
-) => {
-  return useTranscriptStore.getState().setRecordingSessionId(...args);
+export const setRecordingSessionId = (id: string | null): void => {
+  useTranscriptStore.getState().setRecordingSessionId(id);
 };
