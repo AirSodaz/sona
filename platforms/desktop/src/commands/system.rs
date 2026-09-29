@@ -1,5 +1,4 @@
 use serde_json::Value;
-use std::sync::Arc;
 use tauri::{AppHandle, Manager, Runtime, State};
 
 use sona_core::recovery::types::{RecoveryItemInput, RecoverySnapshot};
@@ -52,17 +51,10 @@ pub fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
 }
 #[tauri::command]
 pub async fn get_dashboard_snapshot(
-    app: AppHandle,
-    service: State<'_, Arc<crate::app::dashboard::AppDashboardService>>,
+    dashboard_state: State<'_, crate::platform::dashboard::DesktopDashboardState>,
     request: crate::app::dashboard::DashboardSnapshotRequest,
 ) -> Result<sona_core::dashboard::models::DashboardSnapshotDomainModel, String> {
-    let active_service = if let Some(dashboard_state) =
-        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
-    {
-        dashboard_state.current_service()?
-    } else {
-        Arc::clone(service.inner())
-    };
+    let active_service = dashboard_state.current_service()?;
     crate::app::dashboard::get_dashboard_snapshot_with_service(&active_service, request).await
 }
 

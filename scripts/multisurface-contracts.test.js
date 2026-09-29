@@ -708,7 +708,7 @@ test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
     'database.rs',
   );
   assert.match(desktopSetup, /\bSqliteApplicationContext::from_database\b/u);
-  assert.match(desktopSetup, /manage\(sqlite_context\)/u);
+  assert.match(desktopSetup, /manage\(sqlite_state\)/u);
   assert.doesNotMatch(desktopSetup, /manage\(db\)/u);
   assert.doesNotMatch(desktopDatabase, /\bDatabase::(?:global|set_global)\b/u);
 

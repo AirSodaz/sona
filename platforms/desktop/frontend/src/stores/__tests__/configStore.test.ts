@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import { useApiServerConfig, useConfigStore } from '../configStore';
+import {
+  CURRENT_CONFIG_VERSION,
+  DEFAULT_CONFIG,
+  useApiServerConfig,
+  useConfigStore,
+} from '../configStore';
 
 describe('configStore - useApiServerConfig', () => {
   it('includes httpServerEnabled in useApiServerConfig selector', () => {
@@ -28,5 +33,10 @@ describe('configStore - useApiServerConfig', () => {
 
     rerender();
     expect(result.current.httpServerEnabled).toBe(false);
+  });
+
+  it('exports CURRENT_CONFIG_VERSION aligned with DEFAULT_CONFIG.configVersion', () => {
+    expect(CURRENT_CONFIG_VERSION).toBe(8);
+    expect(DEFAULT_CONFIG.configVersion).toBe(8);
   });
 });

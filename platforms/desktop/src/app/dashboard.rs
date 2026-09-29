@@ -26,8 +26,9 @@ pub async fn get_dashboard_snapshot_with_service(
 }
 
 pub async fn get_dashboard_snapshot(
-    service: State<'_, Arc<AppDashboardService>>,
+    dashboard_state: State<'_, crate::platform::dashboard::DesktopDashboardState>,
     request: DashboardSnapshotRequest,
 ) -> Result<DashboardSnapshotDomainModel, String> {
-    get_dashboard_snapshot_with_service(service.inner(), request).await
+    let service = dashboard_state.current_service()?;
+    get_dashboard_snapshot_with_service(&service, request).await
 }

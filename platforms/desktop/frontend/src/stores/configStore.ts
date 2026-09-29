@@ -24,11 +24,11 @@ import type {
 // ---------------------------------------------------------------------------
 // Default values
 // ---------------------------------------------------------------------------
+export const CURRENT_CONFIG_VERSION = 8;
 
 export const DEFAULT_CONFIG: AppConfig = {
   // Base
-  configVersion: 7,
-
+  configVersion: CURRENT_CONFIG_VERSION,
   // UI
   appLanguage: 'auto',
   theme: 'auto',

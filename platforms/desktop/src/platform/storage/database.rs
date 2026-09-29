@@ -156,12 +156,10 @@ impl DesktopSqliteState {
 pub fn try_sqlite_application_context<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Arc<sona_sqlite::SqliteApplicationContext>, String> {
-    if let Some(state) = app.try_state::<DesktopSqliteState>() {
-        return state.current_context();
-    }
-    app.try_state::<Arc<sona_sqlite::SqliteApplicationContext>>()
-        .map(|s| Arc::clone(s.inner()))
-        .ok_or_else(|| "Database application context has not been initialized".to_string())
+    let state = app
+        .try_state::<DesktopSqliteState>()
+        .ok_or_else(|| "Database application context has not been initialized".to_string())?;
+    state.current_context()
 }
 
 pub fn reload_sqlite_application_context<R: Runtime>(
@@ -178,10 +176,10 @@ pub fn reload_sqlite_application_context<R: Runtime>(
 pub fn try_sqlite_database<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Arc<sona_sqlite::Database>, String> {
-    if let Some(state) = app.try_state::<DesktopSqliteState>() {
-        return state.current_database();
-    }
-    try_sqlite_application_context(app).map(|ctx| ctx.database())
+    let state = app
+        .try_state::<DesktopSqliteState>()
+        .ok_or_else(|| "Database application context has not been initialized".to_string())?;
+    state.current_database()
 }
 
 pub fn sqlite_application_context<R: Runtime>(
