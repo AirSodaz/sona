@@ -1,11 +1,8 @@
-use async_trait::async_trait;
 use sona_application::local_asr::{HybridStreamingAsrFactory, LocalAsrRegistry};
 use sona_core::ports::asr::{
-    AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
-    BatchTranscriberPort, OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort,
-    StreamingInferenceSpec,
+    AsrTranscriptionRequest, BatchTranscriberPort, OnlineBatchTranscriptionRequest,
+    StreamingAsrFactoryPort,
 };
-use sona_core::transcription::runtime::LiveTranscribePlan;
 use sona_core::transcription::transcript::TranscriptSegment;
 use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::path::PathBuf;
@@ -33,60 +30,20 @@ pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
 
 /// Builds a CLI streaming ASR factory by composing the shared application
 /// hybrid factory with CLI provider adapters and automatic idle resource pruners.
-pub fn create_cli_streaming_asr_factory(
-    registry: LocalAsrRegistry,
-    _recognizer_pool: RecognizerPool,
-) -> HybridStreamingAsrFactory {
+pub fn create_cli_streaming_asr_factory(registry: LocalAsrRegistry) -> HybridStreamingAsrFactory {
     HybridStreamingAsrFactory::from_local_registry(
         registry,
         Some(Arc::new(sona_online_asr::OnlineAsrAdapter)),
     )
 }
-
 /// CLI composition root for streaming ASR.
-#[derive(Clone)]
-pub struct CliStreamingAsrFactory(HybridStreamingAsrFactory);
+#[allow(dead_code)]
+pub type CliStreamingAsrFactory = HybridStreamingAsrFactory;
 
-impl CliStreamingAsrFactory {
-    pub fn new(registry: LocalAsrRegistry, recognizer_pool: RecognizerPool) -> Self {
-        Self(create_cli_streaming_asr_factory(registry, recognizer_pool))
-    }
-}
-
-#[async_trait]
-impl StreamingAsrFactoryPort for CliStreamingAsrFactory {
-    async fn prepare(&self, spec: &StreamingInferenceSpec) -> Result<(), AsrPortError> {
-        self.0.prepare(spec).await
-    }
-
-    async fn create(
-        &self,
-        pipeline_id: &str,
-        spec: &StreamingInferenceSpec,
-        observer: Arc<dyn AsrRuntimeObserver>,
-    ) -> Result<Arc<dyn AsrStreamingSession>, AsrPortError> {
-        self.0.create(pipeline_id, spec, observer).await
-    }
-}
 pub(crate) fn streaming_transcriber() -> Arc<dyn StreamingAsrFactoryPort> {
     let recognizer_pool = RecognizerPool::default();
-    let registry = local_asr_registry(recognizer_pool.clone());
-    Arc::new(CliStreamingAsrFactory::new(registry, recognizer_pool))
-}
-
-pub(crate) async fn local_streaming_session(
-    plan: &LiveTranscribePlan,
-    instance_id: &str,
-    observer: Arc<dyn AsrRuntimeObserver>,
-) -> Result<Arc<dyn AsrStreamingSession>, String> {
-    let session = sona_sherpa_onnx::streaming::create_streaming_session(
-        sona_sherpa_onnx::runtime::RecognizerPool::default(),
-        plan.to_local_streaming_request(instance_id),
-        observer,
-    )
-    .await
-    .map_err(|error| error.to_string())?;
-    Ok(session)
+    let registry = local_asr_registry(recognizer_pool);
+    Arc::new(create_cli_streaming_asr_factory(registry))
 }
 
 pub(crate) async fn online_batch_transcribe(
@@ -97,18 +54,6 @@ pub(crate) async fn online_batch_transcribe(
         .transcribe_batch(OnlineBatchTranscriptionRequest { file_path, request })
         .await
         .map(|output| output.segments)
-}
-
-pub(crate) fn online_streaming_session(
-    request: AsrTranscriptionRequest,
-    instance_id: &str,
-    observer: Arc<dyn AsrRuntimeObserver>,
-) -> Result<Arc<dyn AsrStreamingSession>, sona_core::ports::asr::AsrPortError> {
-    sona_online_asr::OnlineAsrAdapter.create_streaming_session(
-        instance_id.to_string(),
-        request,
-        observer,
-    )
 }
 
 #[cfg(test)]

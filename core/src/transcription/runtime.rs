@@ -104,6 +104,7 @@ pub struct LiveTranscribeOptions {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct LiveTranscribePlan {
+    pub engine: crate::ports::asr::LocalAsrEngine,
     pub model_id: String,
     pub model_path: String,
     pub num_threads: i32,
@@ -149,6 +150,39 @@ impl LiveTranscribePlan {
             )
             .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
         }
+    }
+    pub fn to_streaming_spec(
+        &self,
+    ) -> Result<crate::ports::asr::StreamingInferenceSpec, crate::ports::asr::AsrPortError> {
+        let request = crate::ports::asr::AsrTranscriptionRequest {
+            mode: crate::ports::asr::AsrMode::Streaming,
+            language: self.language.clone(),
+            enable_itn: self.enable_itn,
+            normalization_options: Default::default(),
+            postprocess_options: Default::default(),
+            hotwords: self.hotwords.clone(),
+            speaker_processing: self.speaker_processing.clone(),
+            engine_config: crate::ports::asr::AsrEngineConfig::Local {
+                local_engine: self.engine,
+                model_id: Some(self.model_id.clone()),
+                model_path: self.model_path.clone(),
+                num_threads: self.num_threads,
+                punctuation_model: self.punctuation_model.clone(),
+                alignment_model: self.alignment_model.clone(),
+                vad_model: self.vad_model.clone(),
+                vad_buffer: self.vad_buffer,
+                batch_segmentation_mode: Default::default(),
+                model_type: self.model_type.clone(),
+                file_config: Box::new(self.file_config.clone()),
+                gpu_acceleration: self.gpu_acceleration.clone(),
+                initial_refresh_rate_ms: crate::models::preset_models::find_preset_model(
+                    &self.model_id,
+                )
+                .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
+                ffmpeg_path: None,
+            },
+        };
+        crate::ports::asr::StreamingInferenceSpec::from_request(&request)
     }
 }
 
@@ -404,6 +438,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
     )?;
     let _ = options.force;
     Ok(LiveTranscribePlan {
+        engine: resolved.engine,
         model_id: resolved.model_id,
         model_path: resolved.model_path,
         num_threads: resolved.num_threads,

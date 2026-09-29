@@ -65,25 +65,24 @@ async fn run_resolved_live_command(
     let observer: Arc<dyn AsrRuntimeObserver> = Arc::new(CliStreamingObserver {
         sender: update_sender,
     });
-    let (session, model_id, output_path, export_format) = match resolved.asr {
+    let (spec, model_id, output_path, export_format) = match resolved.asr {
         ResolvedLiveAsr::Local(plan) => {
-            let session = crate::asr_adapter::local_streaming_session(&plan, &session_id, observer)
-                .await
-                .map_err(CliError::Model)?;
-            (session, plan.model_id, plan.output_path, plan.export_format)
+            let spec = plan
+                .to_streaming_spec()
+                .map_err(crate::online_asr::map_asr_error)?;
+            (spec, plan.model_id, plan.output_path, plan.export_format)
         }
         ResolvedLiveAsr::Online(plan) => {
-            let session =
-                crate::asr_adapter::online_streaming_session(plan.request, &session_id, observer)
-                    .map_err(crate::online_asr::map_asr_error)?;
-            (
-                session,
-                plan.provider_id,
-                plan.output_path,
-                plan.export_format,
-            )
+            let spec = sona_core::ports::asr::StreamingInferenceSpec::from_request(&plan.request)
+                .map_err(crate::online_asr::map_asr_error)?;
+            (spec, plan.provider_id, plan.output_path, plan.export_format)
         }
     };
+    let transcriber = crate::asr_adapter::streaming_transcriber();
+    let session = transcriber
+        .create(&session_id, &spec, observer)
+        .await
+        .map_err(crate::online_asr::map_asr_error)?;
     let mut input = match resolved.input {
         LiveInputSource::Microphone => {
             start_microphone_input(resolved.device.as_deref()).map_err(CliError::Io)?

@@ -652,3 +652,52 @@ fn batch_plan_defaults_required_punctuation_constant_when_needed() {
             .contains(DEFAULT_PUNCTUATION_MODEL_ID)
     );
 }
+
+#[test]
+fn live_transcribe_plan_to_streaming_spec_preserves_configuration() {
+    let (_dir, models_dir) = installed_streaming_paraformer_fixture();
+    let mut options = temp_live_options();
+    options.model_id =
+        Some("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en".to_string());
+    options.models_dir = Some(models_dir);
+    options.language = Some("zh".to_string());
+    options.enable_itn = Some(true);
+    options.hotwords = Some("测试热词".to_string());
+
+    let plan = resolve_live_transcribe_plan_with_install_checker(options, None, test_model_exists)
+        .expect("plan should resolve");
+    let spec = plan
+        .to_streaming_spec()
+        .expect("should produce valid streaming spec");
+
+    assert_eq!(spec.engine(), sona_core::ports::asr::AsrEngine::Local);
+    let request = spec.engine_request();
+    assert_eq!(request.mode, sona_core::ports::asr::AsrMode::Streaming);
+    assert_eq!(request.language, "zh");
+    assert!(request.enable_itn);
+    assert_eq!(request.hotwords.as_deref(), Some("测试热词"));
+
+    match request.engine_config {
+        sona_core::ports::asr::AsrEngineConfig::Local {
+            local_engine,
+            model_id,
+            model_path,
+            num_threads,
+            punctuation_model,
+            vad_model,
+            vad_buffer,
+            ..
+        } => {
+            assert_eq!(local_engine, plan.engine);
+            assert_eq!(model_id.as_deref(), Some(plan.model_id.as_str()));
+            assert_eq!(model_path, plan.model_path);
+            assert_eq!(num_threads, plan.num_threads);
+            assert_eq!(punctuation_model, plan.punctuation_model);
+            assert_eq!(vad_model, plan.vad_model);
+            assert_eq!(vad_buffer, plan.vad_buffer);
+        }
+        sona_core::ports::asr::AsrEngineConfig::Online { .. } => {
+            panic!("expected local engine config");
+        }
+    }
+}

@@ -1,4 +1,4 @@
-use super::factory::DesktopStreamingAsrFactory;
+use super::factory::create_desktop_streaming_asr_factory;
 use super::local_asr_registry;
 use super::metrics::{
     AsrInferenceMetric, AsrMetricsStore, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
@@ -98,7 +98,8 @@ impl AsrState {
     pub fn new() -> Self {
         let recognizer_pool = RecognizerPool::new();
         let registry = local_asr_registry(recognizer_pool.clone());
-        let factory = DesktopStreamingAsrFactory::new(registry.clone(), recognizer_pool.clone());
+        let factory =
+            create_desktop_streaming_asr_factory(registry.clone(), recognizer_pool.clone());
         Self {
             recognizer_pool,
             registry,

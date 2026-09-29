@@ -21,7 +21,7 @@ fn recognizer_output_event(instance_id: &str) -> String {
 }
 
 pub use adapter::DesktopLocalProviderAdapter;
-pub use factory::DesktopStreamingAsrFactory;
+pub use factory::{DesktopStreamingAsrFactory, create_desktop_streaming_asr_factory};
 pub(crate) use observer::TauriAsrRuntimeObserver;
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::ports::asr::AsrPortError;

@@ -145,7 +145,7 @@ pub(crate) fn start_microphone_input(
     let (device, resolved_name) =
         sona_audio_capture::find_input_device(requested_device).map_err(|e| e.to_string())?;
 
-    let (message_sender, receiver) = tokio::sync::mpsc::channel(16);
+    let (message_sender, receiver) = tokio::sync::mpsc::channel(128);
     let sender = message_sender.clone();
     let pipeline = LiveAudioCapturePipeline::start(
         &device,
@@ -153,10 +153,20 @@ pub(crate) fn start_microphone_input(
         CaptureDirection::Input,
         LiveCaptureConfig::default(),
         move |event| match event {
-            CaptureEvent::Chunk(samples) => sender
-                .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(samples)))
-                .is_ok(),
+            CaptureEvent::Chunk(samples) => {
+                match sender.try_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(samples))) {
+                    Ok(()) => true,
+                    Err(tokio::sync::mpsc::error::TrySendError::Full(_)) => {
+                        log::warn!(
+                            "[CLI Audio] Audio chunk buffer full; dropping frame to avoid blocking capture thread"
+                        );
+                        true
+                    }
+                    Err(tokio::sync::mpsc::error::TrySendError::Closed(_)) => false,
+                }
+            }
             CaptureEvent::Error(err) => {
+                log::error!("[CLI Audio] Audio capture device error: {err}");
                 let _ = sender.blocking_send(LiveAudioMessage::Error(err));
                 false
             }

@@ -263,7 +263,7 @@ pub async fn start_api_server(
     let recognizer_pool = crate::integrations::asr::recognizer_pool_for_app(Some(&app));
     let registry = crate::integrations::asr::local_asr_registry(recognizer_pool.clone());
     let streaming_transcriber = Arc::new(
-        crate::integrations::asr::DesktopStreamingAsrFactory::new(registry, recognizer_pool),
+        crate::integrations::asr::create_desktop_streaming_asr_factory(registry, recognizer_pool),
     );
     let ffmpeg_path = crate::platform::api_server_config::load_ffmpeg_path_for_app(&app);
     let resolved = resolve_serve_runtime_options(
@@ -397,11 +397,12 @@ pub fn start_from_app_handle(app_handle: &tauri::AppHandle) {
             let recognizer_pool =
                 crate::integrations::asr::recognizer_pool_for_app(Some(&app_handle));
             let registry = crate::integrations::asr::local_asr_registry(recognizer_pool.clone());
-            let streaming_transcriber =
-                Arc::new(crate::integrations::asr::DesktopStreamingAsrFactory::new(
+            let streaming_transcriber = Arc::new(
+                crate::integrations::asr::create_desktop_streaming_asr_factory(
                     registry,
                     recognizer_pool,
-                ));
+                ),
+            );
             refresh_online_asr_config(
                 &controller,
                 crate::platform::api_server_config::load_online_asr_config_for_app(&app_handle),
