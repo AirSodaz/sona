@@ -37,6 +37,12 @@ pub fn prune_idle_llm_models() {
     }
 }
 
+pub fn clear_all_llm_models() {
+    if let Ok(mut cache) = LLM_MODEL_CACHE.lock() {
+        cache.clear();
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct LlamaCppLlmEngine {
     models_dir: Option<PathBuf>,

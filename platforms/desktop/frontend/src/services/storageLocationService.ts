@@ -3,6 +3,7 @@ import { runGuardedQuit } from './quitGuard';
 import { openDialog } from './tauri/platform/dialog';
 import { relaunch } from './tauri/platform/process';
 import {
+  storageCheckCanMigrate,
   storageGetDirectories,
   storageMigrateDataDirectory,
   storageOpenPath,
@@ -13,6 +14,7 @@ import {
 
 export interface StorageLocationServicePorts {
   storageGetDirectories: typeof storageGetDirectories;
+  storageCheckCanMigrate: typeof storageCheckCanMigrate;
   storageMigrateDataDirectory: typeof storageMigrateDataDirectory;
   storageResetDataDirectory: typeof storageResetDataDirectory;
   storageSetModelsDirectory: typeof storageSetModelsDirectory;
@@ -30,6 +32,9 @@ export class StorageLocationService {
     return this.ports.storageGetDirectories();
   }
 
+  async checkCanMigrate(): Promise<void> {
+    await this.ports.storageCheckCanMigrate();
+  }
   async selectDirectory(defaultPath?: string): Promise<string | null> {
     const selected = await this.ports.openDialog({
       directory: true,
@@ -86,6 +91,7 @@ export const storageLocationService = createStorageLocationService({
   storageMigrateDataDirectory,
   storageResetDataDirectory,
   storageSetModelsDirectory,
+  storageCheckCanMigrate,
   storageResetModelsDirectory,
   storageOpenPath,
   openDialog,

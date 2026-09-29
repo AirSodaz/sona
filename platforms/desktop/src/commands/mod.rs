@@ -36,6 +36,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::storage::storage_get_usage_snapshot,
         crate::commands::storage::storage_clear_webview_browsing_data,
         crate::commands::storage::storage_get_directories,
+        crate::commands::storage::storage_check_can_migrate,
         crate::commands::storage::storage_migrate_data_directory,
         crate::commands::storage::storage_reset_data_directory,
         crate::commands::storage::storage_set_models_directory,

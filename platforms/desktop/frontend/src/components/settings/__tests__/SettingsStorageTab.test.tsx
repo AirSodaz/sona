@@ -39,6 +39,7 @@ const mocks = vi.hoisted(() => {
     openPath: vi.fn(),
     relaunchApp: vi.fn(),
     getModelCatalogSnapshot: vi.fn(),
+    checkCanMigrate: vi.fn(),
   };
 });
 
@@ -68,6 +69,7 @@ vi.mock('../../../services/storageUsageService', () => ({
 
 vi.mock('../../../services/storageLocationService', () => ({
   storageLocationService: {
+    checkCanMigrate: (...args: unknown[]) => mocks.checkCanMigrate(...args),
     getDirectories: (...args: unknown[]) => mocks.getDirectories(...args),
     selectDirectory: (...args: unknown[]) => mocks.selectDirectory(...args),
     migrateDataDirectory: (...args: unknown[]) => mocks.migrateDataDirectory(...args),
@@ -77,6 +79,9 @@ vi.mock('../../../services/storageLocationService', () => ({
     openPath: (...args: unknown[]) => mocks.openPath(...args),
     relaunchApp: (...args: unknown[]) => mocks.relaunchApp(...args),
   },
+}));
+vi.mock('../../../services/tauri/platform/events', () => ({
+  listen: vi.fn().mockResolvedValue(() => undefined),
 }));
 
 vi.mock('../../../services/modelService', () => ({
@@ -195,6 +200,7 @@ describe('SettingsStorageTab', () => {
     mocks.previewAudioCleanup.mockResolvedValue(report());
     mocks.refreshHistory.mockResolvedValue(undefined);
     mocks.showError.mockResolvedValue(undefined);
+    mocks.checkCanMigrate.mockResolvedValue(undefined);
     mocks.getDirectories.mockResolvedValue({
       dataDir: '/default/data',
       defaultDataDir: '/default/data',
@@ -460,7 +466,7 @@ describe('SettingsStorageTab', () => {
     expect(modelsOpenBtn?.getAttribute('data-tooltip')).toBeNull();
   });
 
-  it('allows changing data directory and confirms before relaunch', async () => {
+  it('allows changing data directory and confirms with hot reload', async () => {
     render(<SettingsStorageTab />);
     await screen.findByText('/default/data');
 
@@ -477,6 +483,8 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/new/path'),
         expect.objectContaining({
           title: 'Change Data Directory?',
+          confirmLabel: 'Confirm & Migrate',
+          cancelLabel: 'Cancel',
         })
       );
     });
@@ -486,8 +494,9 @@ describe('SettingsStorageTab', () => {
     });
 
     await waitFor(() => {
-      expect(mocks.relaunchApp).toHaveBeenCalledTimes(1);
+      expect(mocks.refreshHistory).toHaveBeenCalled();
     });
+    expect(mocks.relaunchApp).not.toHaveBeenCalled();
   });
 
   it('allows changing models directory and refreshes snapshot without relaunch', async () => {
@@ -507,6 +516,8 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/new/path'),
         expect.objectContaining({
           title: 'Change Models Directory?',
+          confirmLabel: 'Confirm & Migrate',
+          cancelLabel: 'Cancel',
         })
       );
     });
@@ -519,6 +530,69 @@ describe('SettingsStorageTab', () => {
       expect(mocks.getModelCatalogSnapshot).toHaveBeenCalledTimes(1);
     });
     expect(mocks.relaunchApp).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when directory selection is cancelled or unchanged', async () => {
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const changeBtn = dataCard.querySelector('button') as HTMLButtonElement;
+
+    // Selection cancelled
+    mocks.selectDirectory.mockResolvedValueOnce(null);
+    fireEvent.click(changeBtn);
+    await waitFor(() => {
+      expect(mocks.selectDirectory).toHaveBeenCalled();
+    });
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.migrateDataDirectory).not.toHaveBeenCalled();
+
+    // Same directory selected
+    mocks.selectDirectory.mockResolvedValueOnce('/default/data');
+    fireEvent.click(changeBtn);
+    await waitFor(() => {
+      expect(mocks.selectDirectory).toHaveBeenCalledTimes(2);
+    });
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.migrateDataDirectory).not.toHaveBeenCalled();
+  });
+
+  it('aborts migration when user cancels the confirmation dialog', async () => {
+    mocks.confirm.mockResolvedValueOnce(false);
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const changeBtn = dataCard.querySelector('button') as HTMLButtonElement;
+    fireEvent.click(changeBtn);
+
+    await waitFor(() => {
+      expect(mocks.confirm).toHaveBeenCalled();
+    });
+    expect(mocks.migrateDataDirectory).not.toHaveBeenCalled();
+  });
+
+  it('handles migration preflight failure', async () => {
+    mocks.checkCanMigrate.mockRejectedValueOnce(
+      new Error('Cannot migrate storage while audio recording or live capture is active.')
+    );
+    render(<SettingsStorageTab />);
+    await screen.findByText('/default/data');
+
+    const dataCard = screen.getByTestId('settings-storage-data-dir-card');
+    const changeBtn = dataCard.querySelector('button') as HTMLButtonElement;
+    fireEvent.click(changeBtn);
+
+    await waitFor(() => {
+      expect(mocks.showError).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'storage.dir_update_failed',
+        })
+      );
+    });
+    expect(mocks.confirm).not.toHaveBeenCalled();
+    expect(mocks.migrateDataDirectory).not.toHaveBeenCalled();
   });
 
   it('opens storage directory in system file explorer', async () => {
@@ -534,7 +608,7 @@ describe('SettingsStorageTab', () => {
     });
   });
 
-  it('resets custom data directory to default and relaunches', async () => {
+  it('resets custom data directory to default with hot reload', async () => {
     mocks.getDirectories.mockResolvedValue({
       dataDir: '/custom/data',
       defaultDataDir: '/default/data',
@@ -556,6 +630,8 @@ describe('SettingsStorageTab', () => {
         expect.stringContaining('/default/data'),
         expect.objectContaining({
           title: 'Restore Default Data Directory?',
+          confirmLabel: 'Restore & Apply',
+          cancelLabel: 'Cancel',
         })
       );
     });
@@ -565,8 +641,9 @@ describe('SettingsStorageTab', () => {
     });
 
     await waitFor(() => {
-      expect(mocks.relaunchApp).toHaveBeenCalledTimes(1);
+      expect(mocks.refreshHistory).toHaveBeenCalled();
     });
+    expect(mocks.relaunchApp).not.toHaveBeenCalled();
   });
 
   it('resets custom models directory to default', async () => {

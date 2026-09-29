@@ -11,8 +11,8 @@ pub struct DashboardSnapshotRequest {
     pub deep: bool,
 }
 
-pub async fn get_dashboard_snapshot(
-    service: State<'_, Arc<AppDashboardService>>,
+pub async fn get_dashboard_snapshot_with_service(
+    service: &Arc<AppDashboardService>,
     request: DashboardSnapshotRequest,
 ) -> Result<DashboardSnapshotDomainModel, String> {
     let time = sona_runtime_fs::dashboard_snapshot_time_now();
@@ -23,4 +23,11 @@ pub async fn get_dashboard_snapshot(
     sona_ts_bind::validate_dashboard_snapshot_for_typescript(&snapshot)
         .map_err(|error| error.to_string())?;
     Ok(snapshot)
+}
+
+pub async fn get_dashboard_snapshot(
+    service: State<'_, Arc<AppDashboardService>>,
+    request: DashboardSnapshotRequest,
+) -> Result<DashboardSnapshotDomainModel, String> {
+    get_dashboard_snapshot_with_service(service.inner(), request).await
 }

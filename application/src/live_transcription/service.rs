@@ -380,6 +380,11 @@ impl LiveTranscriptionCoordinator {
         }
     }
 
+    pub async fn is_active(&self) -> bool {
+        let state = self.inner.state.lock().await;
+        !state.pipelines.is_empty()
+    }
+
     pub async fn prepare(&self, request: &AsrTranscriptionRequest) -> Result<(), AsrPortError> {
         let spec = StreamingInferenceSpec::from_request(request)?;
         self.inner.factory.prepare(&spec).await

@@ -84,6 +84,7 @@ export const TauriCommand = {
     getUsageSnapshot: 'storage_get_usage_snapshot',
     clearWebviewBrowsingData: 'storage_clear_webview_browsing_data',
     getDirectories: 'storage_get_directories',
+    checkCanMigrate: 'storage_check_can_migrate',
     migrateDataDirectory: 'storage_migrate_data_directory',
     resetDataDirectory: 'storage_reset_data_directory',
     setModelsDirectory: 'storage_set_models_directory',

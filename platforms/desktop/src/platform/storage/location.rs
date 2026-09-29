@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Manager, Runtime};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_opener::OpenerExt;
 
 pub use sona_runtime_fs::{
@@ -17,6 +19,14 @@ pub const DATA_MIGRATION_FILE_NAMES: [&str; 8] = [
     "sona-analytics.db-shm",
     "sync.json",
     ".history.lock",
+];
+
+pub const DATA_MIGRATION_COPY_FILE_NAMES: [&str; 5] = [
+    "sona.db",
+    "sona.db-wal",
+    "sona-analytics.db",
+    "sona-analytics.db-wal",
+    "sync.json",
 ];
 
 pub const DATA_MIGRATION_SUBDIRECTORIES: [&str; 4] =
@@ -113,6 +123,218 @@ pub fn copy_directory_contents(src: &Path, dst: &Path) -> Result<(), std::io::Er
     Ok(())
 }
 
+static MIGRATION_IN_PROGRESS: AtomicBool = AtomicBool::new(false);
+
+pub struct MigrationGuard;
+
+impl MigrationGuard {
+    pub fn acquire() -> Result<Self, String> {
+        if MIGRATION_IN_PROGRESS
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_err()
+        {
+            return Err("Another storage migration is already in progress.".to_string());
+        }
+        Ok(Self)
+    }
+}
+
+impl Drop for MigrationGuard {
+    fn drop(&mut self) {
+        MIGRATION_IN_PROGRESS.store(false, Ordering::Release);
+    }
+}
+
+pub fn is_migration_in_progress() -> bool {
+    MIGRATION_IN_PROGRESS.load(Ordering::Acquire)
+}
+
+pub async fn check_active_tasks_idle<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    if let Some(audio_state) = app.try_state::<crate::integrations::audio::AudioState>()
+        && audio_state.has_active_captures()
+    {
+        return Err(
+            "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
+                .to_string(),
+        );
+    }
+    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>()
+        && asr_state.is_busy().await
+    {
+        return Err(
+            "Cannot migrate storage while speech recognition or batch transcription is in progress. Please wait or stop active tasks."
+                .to_string(),
+        );
+    }
+    if let Some(download_state) = app.try_state::<crate::platform::model_downloads::DownloadState>()
+        && download_state.has_active_downloads().await
+    {
+        return Err(
+            "Cannot migrate storage while model downloads are in progress. Please wait for downloads to finish or cancel them."
+                .to_string(),
+        );
+    }
+    Ok(())
+}
+
+pub async fn check_storage_can_migrate<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+    if is_migration_in_progress() {
+        return Err("Another storage migration is already in progress.".to_string());
+    }
+    check_active_tasks_idle(app).await
+}
+
+pub const STORAGE_MIGRATION_PROGRESS_EVENT: &str = "storage-migration-progress";
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageMigrationProgress {
+    pub phase: String,
+    pub current_file: String,
+    pub copied_bytes: u64,
+    pub total_bytes: u64,
+    pub percent: f64,
+}
+
+pub struct MigrationProgressEmitter<'a, R: Runtime> {
+    app: &'a AppHandle<R>,
+    total_bytes: u64,
+    copied_bytes: u64,
+    last_emit: std::time::Instant,
+}
+
+impl<'a, R: Runtime> MigrationProgressEmitter<'a, R> {
+    pub fn new(app: &'a AppHandle<R>, total_bytes: u64) -> Self {
+        Self {
+            app,
+            total_bytes,
+            copied_bytes: 0,
+            last_emit: std::time::Instant::now(),
+        }
+    }
+
+    pub fn emit(&mut self, phase: &str, current_file: &str) {
+        let percent = if self.total_bytes > 0 {
+            (self.copied_bytes as f64 / self.total_bytes as f64 * 100.0).clamp(0.0, 100.0)
+        } else {
+            100.0
+        };
+        let _ = self.app.emit(
+            STORAGE_MIGRATION_PROGRESS_EVENT,
+            StorageMigrationProgress {
+                phase: phase.to_string(),
+                current_file: current_file.to_string(),
+                copied_bytes: self.copied_bytes,
+                total_bytes: self.total_bytes,
+                percent,
+            },
+        );
+        self.last_emit = std::time::Instant::now();
+    }
+
+    pub fn maybe_emit(&mut self, phase: &str, current_file: &str) {
+        if self.last_emit.elapsed() >= std::time::Duration::from_millis(50) {
+            self.emit(phase, current_file);
+        }
+    }
+
+    pub fn copy_file_streaming(&mut self, src: &Path, dst: &Path) -> Result<(), std::io::Error> {
+        use std::io::{Read, Write};
+        let src_canonical = src.canonicalize().unwrap_or_else(|_| src.to_path_buf());
+        if dst.exists() {
+            let dst_canonical = dst.canonicalize().unwrap_or_else(|_| dst.to_path_buf());
+            if src_canonical == dst_canonical {
+                return Ok(());
+            }
+        }
+        let mut reader = std::fs::File::open(src)?;
+        if let Some(parent) = dst.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        let tmp_dst = dst.with_extension(format!("tmp_{}", uuid::Uuid::new_v4().simple()));
+        let mut writer = std::fs::File::create(&tmp_dst)?;
+        let file_name = src
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
+        let mut buffer = vec![0u8; 64 * 1024];
+        loop {
+            let bytes_read = reader.read(&mut buffer)?;
+            if bytes_read == 0 {
+                break;
+            }
+            writer.write_all(&buffer[..bytes_read])?;
+            self.copied_bytes += bytes_read as u64;
+            self.maybe_emit("copying", &file_name);
+        }
+        writer.flush()?;
+        drop(writer);
+        if let Err(e) = std::fs::rename(&tmp_dst, dst) {
+            let _ = std::fs::remove_file(&tmp_dst);
+            return Err(e);
+        }
+        self.emit("copying", &file_name);
+        Ok(())
+    }
+}
+
+pub fn calculate_directory_size(path: &Path, max_depth: usize) -> u64 {
+    if max_depth == 0 || !path.exists() {
+        return 0;
+    }
+    let mut total = 0;
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            if let Ok(ft) = entry.file_type() {
+                if ft.is_symlink() {
+                    continue;
+                }
+                if ft.is_dir() {
+                    total += calculate_directory_size(&entry.path(), max_depth - 1);
+                } else if ft.is_file()
+                    && let Ok(meta) = entry.metadata()
+                {
+                    total += meta.len();
+                }
+            }
+        }
+    }
+    total
+}
+
+pub fn copy_directory_contents_with_progress<R: Runtime>(
+    src: &Path,
+    dst: &Path,
+    emitter: &mut MigrationProgressEmitter<'_, R>,
+    max_depth: usize,
+) -> Result<(), std::io::Error> {
+    if max_depth == 0 || !src.exists() {
+        return Ok(());
+    }
+    std::fs::create_dir_all(dst)?;
+    for entry in std::fs::read_dir(src)? {
+        let entry = entry?;
+        let ft = entry.file_type()?;
+        if ft.is_symlink() {
+            continue;
+        }
+        let entry_path = entry.path();
+        let target_path = dst.join(entry.file_name());
+        if ft.is_dir() {
+            copy_directory_contents_with_progress(
+                &entry_path,
+                &target_path,
+                emitter,
+                max_depth - 1,
+            )?;
+        } else if ft.is_file() {
+            emitter.copy_file_streaming(&entry_path, &target_path)?;
+        }
+    }
+    Ok(())
+}
+
 pub fn check_path_overlap(src: &Path, dst: &Path) -> Result<(), String> {
     let src_canonical = src.canonicalize().unwrap_or_else(|_| src.to_path_buf());
     let dst_canonical = dst.canonicalize().unwrap_or_else(|_| dst.to_path_buf());
@@ -136,6 +358,36 @@ pub fn check_path_overlap(src: &Path, dst: &Path) -> Result<(), String> {
     }
     Ok(())
 }
+#[allow(clippy::permissions_set_readonly_false)]
+fn clear_readonly_if_present(path: &Path) {
+    if let Ok(metadata) = path.metadata() {
+        let mut perms = metadata.permissions();
+        if perms.readonly() {
+            perms.set_readonly(false);
+            let _ = std::fs::set_permissions(path, perms);
+        }
+    }
+}
+
+fn safe_remove_file(path: &Path) -> std::io::Result<()> {
+    clear_readonly_if_present(path);
+    std::fs::remove_file(path)
+}
+
+fn safe_remove_dir_all(path: &Path) -> std::io::Result<()> {
+    clear_readonly_if_present(path);
+    if let Ok(entries) = std::fs::read_dir(path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.is_dir() {
+                let _ = safe_remove_dir_all(&p);
+            } else {
+                let _ = safe_remove_file(&p);
+            }
+        }
+    }
+    std::fs::remove_dir_all(path)
+}
 
 pub fn cleanup_data_directory_contents(
     src_data_dir: &Path,
@@ -151,7 +403,7 @@ pub fn cleanup_data_directory_contents(
     for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
         let sub = src_data_dir.join(dir_name);
         if sub.exists() {
-            match std::fs::remove_dir_all(&sub) {
+            match safe_remove_dir_all(&sub) {
                 Ok(()) => {}
                 Err(e) => {
                     log::warn!("Failed to remove old subdirectory {}: {}", sub.display(), e);
@@ -164,7 +416,7 @@ pub fn cleanup_data_directory_contents(
     if models_were_copied {
         let models_dir = src_data_dir.join("models");
         if models_dir.exists() {
-            match std::fs::remove_dir_all(&models_dir) {
+            match safe_remove_dir_all(&models_dir) {
                 Ok(()) => {}
                 Err(e) => {
                     log::warn!(
@@ -181,7 +433,7 @@ pub fn cleanup_data_directory_contents(
     for file_name in DATA_MIGRATION_FILE_NAMES {
         let file = src_data_dir.join(file_name);
         if file.exists() {
-            match std::fs::remove_file(&file) {
+            match safe_remove_file(&file) {
                 Ok(()) => {}
                 Err(e) => {
                     log::warn!("Failed to remove old file {}: {}", file.display(), e);
@@ -248,32 +500,75 @@ pub fn cleanup_pending_storage_locations_for_app<R: Runtime>(app: &AppHandle<R>)
     }
 }
 
-pub fn migrate_data_directory<R: Runtime>(
+pub async fn migrate_data_directory<R: Runtime>(
     app: &AppHandle<R>,
     target_dir_str: String,
     copy_existing: bool,
 ) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(app).await?;
     let target_path = PathBuf::from(target_dir_str.trim());
     validate_target_directory(&target_path)?;
 
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
     let active_data_dir = resolve_active_data_dir(&default_data_dir);
 
-    if active_data_dir == target_path {
+    let active_canonical = active_data_dir
+        .canonicalize()
+        .unwrap_or_else(|_| active_data_dir.clone());
+    let target_canonical = target_path
+        .canonicalize()
+        .unwrap_or_else(|_| target_path.clone());
+    if active_canonical == target_canonical {
         return get_storage_directories_info(app);
     }
-
     check_path_overlap(&active_data_dir, &target_path)?;
 
+    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
+        let _ = current_db.with_write_connection(|conn| {
+            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
+            Ok(())
+        });
+    }
+
     let mut unremoved = Vec::new();
+    let mut models_were_copied = false;
     if copy_existing && active_data_dir.exists() {
         std::fs::create_dir_all(&target_path).map_err(|e| e.to_string())?;
 
-        for file_name in DATA_MIGRATION_FILE_NAMES {
+        let bootstrap = load_bootstrap_config(&default_data_dir);
+        let should_copy_models = bootstrap.custom_models_dir.is_none();
+        if should_copy_models
+            && let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>()
+        {
+            asr_state.clear_model_caches().await;
+        }
+
+        let mut total_bytes = 0u64;
+        for file_name in DATA_MIGRATION_COPY_FILE_NAMES {
+            let src_file = active_data_dir.join(file_name);
+            if let Ok(meta) = src_file.metadata() {
+                total_bytes += meta.len();
+            }
+        }
+        for dir_name in DATA_MIGRATION_SUBDIRECTORIES {
+            let src_sub = active_data_dir.join(dir_name);
+            total_bytes += calculate_directory_size(&src_sub, 16);
+        }
+        if should_copy_models {
+            let src_models = active_data_dir.join("models");
+            total_bytes += calculate_directory_size(&src_models, 16);
+        }
+
+        let mut emitter = MigrationProgressEmitter::new(app, total_bytes);
+        emitter.emit("preparing", "");
+        for file_name in DATA_MIGRATION_COPY_FILE_NAMES {
             let src_file = active_data_dir.join(file_name);
             if src_file.exists() && src_file.is_file() {
                 let dst_file = target_path.join(file_name);
-                std::fs::copy(&src_file, &dst_file)
+                emitter
+                    .copy_file_streaming(&src_file, &dst_file)
                     .map_err(|e| format!("Failed to copy {}: {}", src_file.display(), e))?;
             }
         }
@@ -282,24 +577,49 @@ pub fn migrate_data_directory<R: Runtime>(
             let src_sub = active_data_dir.join(dir_name);
             if src_sub.exists() && src_sub.is_dir() {
                 let dst_sub = target_path.join(dir_name);
-                copy_directory_contents(&src_sub, &dst_sub).map_err(|e| {
-                    format!("Failed to copy directory {}: {}", src_sub.display(), e)
-                })?;
+                copy_directory_contents_with_progress(&src_sub, &dst_sub, &mut emitter, 16)
+                    .map_err(|e| {
+                        format!("Failed to copy directory {}: {}", src_sub.display(), e)
+                    })?;
             }
         }
 
-        let bootstrap = load_bootstrap_config(&default_data_dir);
-        let mut models_were_copied = false;
-        if bootstrap.custom_models_dir.is_none() {
+        if should_copy_models {
             let src_models = active_data_dir.join("models");
             if src_models.exists() && src_models.is_dir() {
                 let dst_models = target_path.join("models");
-                copy_directory_contents(&src_models, &dst_models)
+                copy_directory_contents_with_progress(&src_models, &dst_models, &mut emitter, 16)
                     .map_err(|e| format!("Failed to copy models directory: {}", e))?;
                 models_were_copied = true;
             }
         }
+    }
 
+    let new_db = crate::platform::database::open_and_migrate_sqlite_for_path_with_prompt(
+        &target_path,
+        crate::platform::startup_dialog::prompt_legacy_database_migration,
+    )
+    .map_err(|e| format!("Failed to open database at new location: {e}"))?;
+    let new_context = Arc::new(
+        sona_sqlite::SqliteApplicationContext::from_database(&target_path, new_db.clone())
+            .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
+    );
+
+    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
+
+    let new_dashboard_service =
+        crate::platform::dashboard::create_dashboard_service(target_path.clone(), new_db);
+    if let Some(dashboard_state) =
+        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
+    {
+        let _ = dashboard_state.reload(new_dashboard_service);
+    }
+
+    if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>() {
+        sync_manager.reset().await;
+    }
+
+    if copy_existing && active_data_dir.exists() {
         unremoved = cleanup_data_directory_contents(
             &active_data_dir,
             &default_data_dir,
@@ -318,25 +638,83 @@ pub fn migrate_data_directory<R: Runtime>(
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
 
+    let _ = app.emit(
+        STORAGE_MIGRATION_PROGRESS_EVENT,
+        StorageMigrationProgress {
+            phase: "done".to_string(),
+            current_file: String::new(),
+            copied_bytes: 1,
+            total_bytes: 1,
+            percent: 100.0,
+        },
+    );
+
     get_storage_directories_info(app)
 }
 
-pub fn reset_data_directory<R: Runtime>(
+pub async fn reset_data_directory<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(app).await?;
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
+    let active_data_dir = resolve_active_data_dir(&default_data_dir);
+
+    let active_canonical = active_data_dir
+        .canonicalize()
+        .unwrap_or_else(|_| active_data_dir.clone());
+    let default_canonical = default_data_dir
+        .canonicalize()
+        .unwrap_or_else(|_| default_data_dir.clone());
+    if active_canonical == default_canonical {
+        return get_storage_directories_info(app);
+    }
+
+    if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
+        let _ = current_db.with_write_connection(|conn| {
+            conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE);")?;
+            let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
+            Ok(())
+        });
+    }
+
+    let new_db = crate::platform::database::open_and_migrate_sqlite_for_path_with_prompt(
+        &default_data_dir,
+        crate::platform::startup_dialog::prompt_legacy_database_migration,
+    )
+    .map_err(|e| format!("Failed to open database at default location: {e}"))?;
+    let new_context = Arc::new(
+        sona_sqlite::SqliteApplicationContext::from_database(&default_data_dir, new_db.clone())
+            .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
+    );
+
+    let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
+
+    let new_dashboard_service =
+        crate::platform::dashboard::create_dashboard_service(default_data_dir.clone(), new_db);
+    if let Some(dashboard_state) =
+        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
+    {
+        let _ = dashboard_state.reload(new_dashboard_service);
+    }
+
+    if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>() {
+        sync_manager.reset().await;
+    }
+
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     bootstrap.custom_data_dir = None;
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
 
     get_storage_directories_info(app)
 }
-
-pub fn set_models_directory<R: Runtime>(
+pub async fn set_models_directory<R: Runtime>(
     app: &AppHandle<R>,
     target_dir_str: String,
     move_existing: bool,
 ) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(app).await?;
     let target_path = PathBuf::from(target_dir_str.trim());
     validate_target_directory(&target_path)?;
 
@@ -344,17 +722,31 @@ pub fn set_models_directory<R: Runtime>(
     let active_data_dir = resolve_active_data_dir(&default_data_dir);
     let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
 
-    if active_models_dir == target_path {
+    let active_canonical = active_models_dir
+        .canonicalize()
+        .unwrap_or_else(|_| active_models_dir.clone());
+    let target_canonical = target_path
+        .canonicalize()
+        .unwrap_or_else(|_| target_path.clone());
+    if active_canonical == target_canonical {
         return get_storage_directories_info(app);
     }
 
     check_path_overlap(&active_models_dir, &target_path)?;
 
+    // Evict all loaded models before moving files so file locks are released!
+    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
+        asr_state.clear_model_caches().await;
+    }
+
     if move_existing && active_models_dir.exists() {
-        copy_directory_contents(&active_models_dir, &target_path)
+        let total_bytes = calculate_directory_size(&active_models_dir, 16);
+        let mut emitter = MigrationProgressEmitter::new(app, total_bytes);
+        emitter.emit("preparing", "");
+        copy_directory_contents_with_progress(&active_models_dir, &target_path, &mut emitter, 16)
             .map_err(|e| format!("Failed to copy model files: {}", e))?;
 
-        if let Err(e) = std::fs::remove_dir_all(&active_models_dir) {
+        if let Err(e) = safe_remove_dir_all(&active_models_dir) {
             log::warn!(
                 "Failed to remove old models directory {}: {}",
                 active_models_dir.display(),
@@ -372,12 +764,30 @@ pub fn set_models_directory<R: Runtime>(
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
 
+    let _ = app.emit(
+        STORAGE_MIGRATION_PROGRESS_EVENT,
+        StorageMigrationProgress {
+            phase: "done".to_string(),
+            current_file: String::new(),
+            copied_bytes: 1,
+            total_bytes: 1,
+            percent: 100.0,
+        },
+    );
+
     get_storage_directories_info(app)
 }
 
-pub fn reset_models_directory<R: Runtime>(
+pub async fn reset_models_directory<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<StorageDirectoriesInfo, String> {
+    let _guard = MigrationGuard::acquire()?;
+    check_active_tasks_idle(app).await?;
+    // Evict all loaded models before resetting path
+    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
+        asr_state.clear_model_caches().await;
+    }
+
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     bootstrap.custom_models_dir = None;
@@ -692,5 +1102,35 @@ mod tests {
             StoragePathOpenTarget::OpenDirectory(missing_dir.clone())
         );
         assert!(missing_dir.is_dir());
+    }
+
+    #[test]
+    fn test_migration_guard_mutual_exclusion() {
+        assert!(!is_migration_in_progress());
+        let guard1 = MigrationGuard::acquire().unwrap();
+        assert!(is_migration_in_progress());
+
+        let guard2_err = MigrationGuard::acquire();
+        assert!(guard2_err.is_err());
+
+        drop(guard1);
+        assert!(!is_migration_in_progress());
+
+        let guard3 = MigrationGuard::acquire().unwrap();
+        assert!(is_migration_in_progress());
+        drop(guard3);
+        assert!(!is_migration_in_progress());
+    }
+
+    #[test]
+    fn test_calculate_directory_size() {
+        let temp = TempDir::new().unwrap();
+        let sub = temp.path().join("sub");
+        std::fs::create_dir_all(&sub).unwrap();
+        std::fs::write(sub.join("file1.bin"), b"12345").unwrap();
+        std::fs::write(temp.path().join("file2.bin"), b"abcdefgh").unwrap();
+
+        let size = calculate_directory_size(temp.path(), 16);
+        assert_eq!(size, 13);
     }
 }

@@ -20,6 +20,9 @@ export const TauriEvent = {
     checkUpdates: 'check-updates',
     requestQuit: 'request-quit',
   },
+  storage: {
+    migrationProgress: 'storage-migration-progress',
+  },
   automation: {
     runtimeCandidate: 'automation-runtime-candidate',
   },

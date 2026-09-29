@@ -104,6 +104,10 @@ pub struct DesktopSyncManager {
 }
 
 impl DesktopSyncManager {
+    pub async fn reset(&self) {
+        *self.application.lock().await = None;
+    }
+
     async fn application<R: Runtime>(
         &self,
         app: &AppHandle<R>,

@@ -20,6 +20,7 @@ describe('StorageLocationService', () => {
   beforeEach(() => {
     ports = {
       storageGetDirectories: vi.fn().mockResolvedValue(mockDirectoriesInfo),
+      storageCheckCanMigrate: vi.fn().mockResolvedValue(undefined),
       storageMigrateDataDirectory: vi.fn().mockResolvedValue({
         ...mockDirectoriesInfo,
         dataDir: '/new-data',
@@ -44,6 +45,12 @@ describe('StorageLocationService', () => {
     const info = await service.getDirectories();
     expect(info).toEqual(mockDirectoriesInfo);
     expect(ports.storageGetDirectories).toHaveBeenCalledTimes(1);
+  });
+
+  it('checks if storage can migrate', async () => {
+    const service = createStorageLocationService(ports);
+    await service.checkCanMigrate();
+    expect(ports.storageCheckCanMigrate).toHaveBeenCalledTimes(1);
   });
 
   it('selects a directory via openDialog', async () => {

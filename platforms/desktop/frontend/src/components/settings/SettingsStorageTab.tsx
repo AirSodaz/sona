@@ -15,6 +15,8 @@ import { historyService } from '../../services/historyService';
 import { modelService } from '../../services/modelService';
 import { storageLocationService } from '../../services/storageLocationService';
 import { storageUsageService } from '../../services/storageUsageService';
+import { TauriEvent } from '../../services/tauri/events';
+import { listen, type UnlistenFn } from '../../services/tauri/platform/events';
 import { useHistoryStorageConfig, useSetConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -35,6 +37,10 @@ import {
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
+import {
+  StorageMigrationProgressModal,
+  type StorageMigrationProgressPayload,
+} from './StorageMigrationProgressModal';
 import './SettingsShared.css';
 
 const RETENTION_PRESETS = [
@@ -262,7 +268,39 @@ export function SettingsStorageTab(): React.JSX.Element {
   const [webviewResultMessage, setWebviewResultMessage] = React.useState<string | null>(null);
   const [directoriesInfo, setDirectoriesInfo] = React.useState<StorageDirectoriesInfo | null>(null);
   const [isLocationBusy, setIsLocationBusy] = React.useState(false);
+  const [migrationModal, setMigrationModal] = React.useState<{
+    isOpen: boolean;
+    title: string;
+    targetPath: string;
+    progress: StorageMigrationProgressPayload | null;
+    isCompleted: boolean;
+    errorMessage?: string | null;
+  }>({
+    isOpen: false,
+    title: '',
+    targetPath: '',
+    progress: null,
+    isCompleted: false,
+    errorMessage: null,
+  });
+  const unlistenRef = React.useRef<UnlistenFn | null>(null);
+  const timerRef = React.useRef<number | null>(null);
+  const isMountedRef = React.useRef(true);
 
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (unlistenRef.current) {
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+      if (timerRef.current) {
+        window.clearTimeout(timerRef.current);
+        timerRef.current = null;
+      }
+    };
+  }, []);
   const loadDirectories = React.useCallback(async () => {
     try {
       const info = await storageLocationService.getDirectories();
@@ -280,16 +318,19 @@ export function SettingsStorageTab(): React.JSX.Element {
   }, [loadDirectories]);
 
   const handleChangeDataDir = async () => {
+    let modalOpened = false;
     try {
       const selected = await storageLocationService.selectDirectory(directoriesInfo?.dataDir);
       if (!selected || selected === directoriesInfo?.dataDir) {
         return;
       }
 
+      await storageLocationService.checkCanMigrate();
+
       const confirmed = await confirm(
         t('settings.storage.data_dir_change_confirm_message', {
           defaultValue:
-            'Switch data directory to:\n{{path}}\n\nSona will restart to safely reopen the database.',
+            'Switch data directory to:\n{{path}}\n\nSona will safely migrate files and hot-reload database connections.',
           path: selected,
         }),
         {
@@ -297,7 +338,7 @@ export function SettingsStorageTab(): React.JSX.Element {
             defaultValue: 'Change Data Directory?',
           }),
           confirmLabel: t('settings.storage.data_dir_confirm_btn', {
-            defaultValue: 'Confirm & Restart',
+            defaultValue: 'Confirm & Migrate',
           }),
           cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
         }
@@ -308,34 +349,97 @@ export function SettingsStorageTab(): React.JSX.Element {
       }
 
       setIsLocationBusy(true);
-      await storageLocationService.migrateDataDirectory(selected, true);
-      await storageLocationService.relaunchApp();
-    } catch (error) {
-      await showError({
-        code: 'storage.dir_update_failed',
-        messageKey: 'settings.storage.dir_update_failed',
-        cause: error,
+      modalOpened = true;
+      setMigrationModal({
+        isOpen: true,
+        title: t('settings.storage.migrating_data_dir', {
+          defaultValue: 'Migrating Data Directory',
+        }),
+        targetPath: selected,
+        progress: null,
+        isCompleted: false,
+        errorMessage: null,
       });
-    } finally {
-      setIsLocationBusy(false);
+
+      try {
+        const unlisten = await listen<StorageMigrationProgressPayload>(
+          TauriEvent.storage.migrationProgress,
+          (event) => {
+            setMigrationModal((prev) => ({
+              ...prev,
+              progress: event.payload,
+            }));
+          }
+        );
+        if (!isMountedRef.current) {
+          unlisten();
+        } else {
+          unlistenRef.current = unlisten;
+        }
+      } catch (e) {
+        logger.warn('Failed to listen to storage migration progress:', e);
+      }
+
+      try {
+        const updated = await storageLocationService.migrateDataDirectory(selected, true);
+        setDirectoriesInfo(updated);
+        await refreshHistory();
+        await loadUsageSnapshot(true);
+        setMigrationModal((prev) => ({
+          ...prev,
+          isCompleted: true,
+        }));
+        timerRef.current = window.setTimeout(() => {
+          setMigrationModal((prev) => ({ ...prev, isOpen: false }));
+          setIsLocationBusy(false);
+          timerRef.current = null;
+        }, 1200);
+      } catch (err) {
+        logger.error('Failed to migrate data directory:', err);
+        setMigrationModal((prev) => ({
+          ...prev,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        }));
+        timerRef.current = window.setTimeout(() => {
+          setMigrationModal((prev) => ({ ...prev, isOpen: false }));
+          setIsLocationBusy(false);
+          timerRef.current = null;
+        }, 3000);
+      } finally {
+        if (unlistenRef.current) {
+          unlistenRef.current();
+          unlistenRef.current = null;
+        }
+      }
+    } catch (error) {
+      if (!modalOpened) {
+        await showError({
+          code: 'storage.dir_update_failed',
+          messageKey: 'settings.storage.dir_update_failed',
+          cause: error,
+        });
+        setIsLocationBusy(false);
+      }
     }
   };
 
   const handleResetDataDir = async () => {
     if (!directoriesInfo?.defaultDataDir) return;
     try {
+      await storageLocationService.checkCanMigrate();
+
       const confirmed = await confirm(
         t('settings.storage.data_dir_reset_confirm_message', {
           defaultValue:
-            'Restore system default data directory:\n{{path}}\n\nSona will restart to apply the change.',
+            'Restore system default data directory:\n{{path}}\n\nSona will restore default location and hot-reload database connections.',
           path: directoriesInfo.defaultDataDir,
         }),
         {
           title: t('settings.storage.data_dir_reset_confirm_title', {
             defaultValue: 'Restore Default Data Directory?',
           }),
-          confirmLabel: t('settings.storage.data_dir_confirm_btn', {
-            defaultValue: 'Confirm & Restart',
+          confirmLabel: t('settings.storage.data_dir_reset_confirm_btn', {
+            defaultValue: 'Restore & Apply',
           }),
           cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
         }
@@ -346,8 +450,10 @@ export function SettingsStorageTab(): React.JSX.Element {
       }
 
       setIsLocationBusy(true);
-      await storageLocationService.resetDataDirectory();
-      await storageLocationService.relaunchApp();
+      const updated = await storageLocationService.resetDataDirectory();
+      setDirectoriesInfo(updated);
+      await refreshHistory();
+      await loadUsageSnapshot(true);
     } catch (error) {
       await showError({
         code: 'storage.dir_update_failed',
@@ -373,23 +479,28 @@ export function SettingsStorageTab(): React.JSX.Element {
   };
 
   const handleChangeModelsDir = async () => {
+    let modalOpened = false;
     try {
       const selected = await storageLocationService.selectDirectory(directoriesInfo?.modelsDir);
       if (!selected || selected === directoriesInfo?.modelsDir) {
         return;
       }
 
+      await storageLocationService.checkCanMigrate();
+
       const confirmed = await confirm(
         t('settings.storage.models_dir_change_confirm_message', {
           defaultValue:
-            'Switch model storage directory to:\n{{path}}\n\nFuture model downloads and recognition will use the new directory.',
+            'Switch model storage directory to:\n{{path}}\n\nSona will safely migrate files, and future model downloads and recognition will use the new directory.',
           path: selected,
         }),
         {
           title: t('settings.storage.models_dir_change_confirm_title', {
             defaultValue: 'Change Models Directory?',
           }),
-          confirmLabel: t('settings.storage.models_dir_confirm_btn', { defaultValue: 'Confirm' }),
+          confirmLabel: t('settings.storage.models_dir_confirm_btn', {
+            defaultValue: 'Confirm & Migrate',
+          }),
           cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
         }
       );
@@ -399,28 +510,89 @@ export function SettingsStorageTab(): React.JSX.Element {
       }
 
       setIsLocationBusy(true);
-      const updated = await storageLocationService.setModelsDirectory(selected, true);
-      setDirectoriesInfo(updated);
-      try {
-        await modelService.getModelCatalogSnapshot();
-      } catch (err) {
-        logger.warn('Failed to refresh model catalog snapshot:', err);
-      }
-      await loadUsageSnapshot(true);
-    } catch (error) {
-      await showError({
-        code: 'storage.dir_update_failed',
-        messageKey: 'settings.storage.dir_update_failed',
-        cause: error,
+      modalOpened = true;
+      setMigrationModal({
+        isOpen: true,
+        title: t('settings.storage.migrating_models_dir', {
+          defaultValue: 'Migrating Models Directory',
+        }),
+        targetPath: selected,
+        progress: null,
+        isCompleted: false,
+        errorMessage: null,
       });
-    } finally {
-      setIsLocationBusy(false);
+
+      try {
+        const unlisten = await listen<StorageMigrationProgressPayload>(
+          TauriEvent.storage.migrationProgress,
+          (event) => {
+            setMigrationModal((prev) => ({
+              ...prev,
+              progress: event.payload,
+            }));
+          }
+        );
+        if (!isMountedRef.current) {
+          unlisten();
+        } else {
+          unlistenRef.current = unlisten;
+        }
+      } catch (e) {
+        logger.warn('Failed to listen to storage migration progress:', e);
+      }
+
+      try {
+        const updated = await storageLocationService.setModelsDirectory(selected, true);
+        setDirectoriesInfo(updated);
+        try {
+          await modelService.getModelCatalogSnapshot();
+        } catch (err) {
+          logger.warn('Failed to refresh model catalog snapshot:', err);
+        }
+        await loadUsageSnapshot(true);
+        setMigrationModal((prev) => ({
+          ...prev,
+          isCompleted: true,
+        }));
+        timerRef.current = window.setTimeout(() => {
+          setMigrationModal((prev) => ({ ...prev, isOpen: false }));
+          setIsLocationBusy(false);
+          timerRef.current = null;
+        }, 1200);
+      } catch (err) {
+        logger.error('Failed to migrate models directory:', err);
+        setMigrationModal((prev) => ({
+          ...prev,
+          errorMessage: err instanceof Error ? err.message : String(err),
+        }));
+        timerRef.current = window.setTimeout(() => {
+          setMigrationModal((prev) => ({ ...prev, isOpen: false }));
+          setIsLocationBusy(false);
+          timerRef.current = null;
+        }, 3000);
+      } finally {
+        if (unlistenRef.current) {
+          unlistenRef.current();
+          unlistenRef.current = null;
+        }
+      }
+    } catch (error) {
+      if (!modalOpened) {
+        await showError({
+          code: 'storage.dir_update_failed',
+          messageKey: 'settings.storage.dir_update_failed',
+          cause: error,
+        });
+        setIsLocationBusy(false);
+      }
     }
   };
 
   const handleResetModelsDir = async () => {
     if (!directoriesInfo?.defaultModelsDir) return;
     try {
+      await storageLocationService.checkCanMigrate();
+
       const confirmed = await confirm(
         t('settings.storage.models_dir_reset_confirm_message', {
           defaultValue: 'Restore default models directory:\n{{path}}\n\nRestore default location?',
@@ -974,6 +1146,7 @@ export function SettingsStorageTab(): React.JSX.Element {
           </div>
         )}
       </SettingsSection>
+      <StorageMigrationProgressModal {...migrationModal} />
     </SettingsTabContainer>
   );
 }

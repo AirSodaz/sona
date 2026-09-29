@@ -16,7 +16,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     );
     let sqlite_context = Arc::new(sona_sqlite::SqliteApplicationContext::from_database(
         app_local_data_dir,
-        db,
+        db.clone(),
     )?);
 
     let initial_config = {
@@ -39,6 +39,12 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         initial_config.as_ref(),
     );
 
+    let dashboard_state =
+        crate::platform::dashboard::DesktopDashboardState::new(Arc::clone(&dashboard_service));
+    let sqlite_state =
+        crate::platform::database::DesktopSqliteState::new(Arc::clone(&sqlite_context));
+    app.manage(dashboard_state);
+    app.manage(sqlite_state);
     app.manage(dashboard_service);
     app.manage(sqlite_context);
     crate::app::window::create_main_window(app.handle(), start_silently)?;

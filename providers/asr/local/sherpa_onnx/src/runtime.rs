@@ -93,6 +93,23 @@ impl RecognizerPool {
         crate::speaker::clear_speaker_caches();
         crate::batch::prune_offline_batch_caches();
     }
+
+    pub async fn clear(&self) {
+        let mut recognizers = self.recognizers.lock().await;
+        recognizers.clear();
+        drop(recognizers);
+
+        let mut punctuations = self.punctuations.lock().await;
+        punctuations.clear();
+        drop(punctuations);
+
+        let mut vads = self.vads.lock().await;
+        vads.clear();
+        drop(vads);
+
+        crate::speaker::clear_speaker_caches();
+        crate::batch::prune_offline_batch_caches();
+    }
     pub async fn prepare_vad(&self, vad_model_path: &str) -> bool {
         if vad_model_path.trim().is_empty() {
             return false;

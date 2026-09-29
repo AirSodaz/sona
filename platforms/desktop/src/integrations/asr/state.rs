@@ -57,6 +57,10 @@ impl BatchCancelRegistry {
     pub async fn remove(&self, instance_id: &str) {
         self.senders.lock().await.remove(instance_id);
     }
+
+    pub async fn has_active_tasks(&self) -> bool {
+        !self.senders.lock().await.is_empty()
+    }
 }
 
 pub struct AsrState {
@@ -199,5 +203,21 @@ impl AsrState {
 
     pub async fn metrics_snapshot(&self) -> AsrRuntimeMetricsSnapshot {
         snapshot_metrics(&self.metrics)
+    }
+
+    pub async fn is_busy(&self) -> bool {
+        if self.live_coordinator.is_active().await {
+            return true;
+        }
+        if self.batch_cancel.has_active_tasks().await {
+            return true;
+        }
+        false
+    }
+
+    pub async fn clear_model_caches(&self) {
+        self.recognizer_pool.clear().await;
+        sona_llama_cpp::clear_all_llama_models();
+        sona_llama_cpp::clear_all_llm_models();
     }
 }

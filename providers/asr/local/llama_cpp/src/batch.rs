@@ -863,6 +863,15 @@ pub fn prune_idle_llama_models() {
         cache.retain(|_, model| Arc::strong_count(model) > 1);
     }
 }
+
+/// Clears all models from the batch model cache.
+pub fn clear_all_llama_models() {
+    if let Some(cache) = MODEL_CACHE.get()
+        && let Ok(mut cache) = cache.lock()
+    {
+        cache.clear();
+    }
+}
 /// Qwen3-ASR consumes hotwords as background knowledge inside the ChatML
 /// system message — the channel the model was trained on for context
 /// biasing — and forces a language by prefilling

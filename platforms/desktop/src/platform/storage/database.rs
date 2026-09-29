@@ -122,17 +122,65 @@ pub fn open_and_migrate_sqlite_for_app<R: Runtime>(
     Ok((db, app_local_data_dir))
 }
 
+#[derive(Clone)]
+pub struct DesktopSqliteState {
+    context: Arc<std::sync::RwLock<Arc<sona_sqlite::SqliteApplicationContext>>>,
+}
+
+impl DesktopSqliteState {
+    pub fn new(context: Arc<sona_sqlite::SqliteApplicationContext>) -> Self {
+        Self {
+            context: Arc::new(std::sync::RwLock::new(context)),
+        }
+    }
+
+    pub fn current_context(&self) -> Result<Arc<sona_sqlite::SqliteApplicationContext>, String> {
+        let guard = self.context.read().map_err(|e| e.to_string())?;
+        Ok(Arc::clone(&*guard))
+    }
+
+    pub fn current_database(&self) -> Result<Arc<sona_sqlite::Database>, String> {
+        self.current_context().map(|ctx| ctx.database())
+    }
+
+    pub fn reload(
+        &self,
+        new_context: Arc<sona_sqlite::SqliteApplicationContext>,
+    ) -> Result<(), String> {
+        let mut guard = self.context.write().map_err(|e| e.to_string())?;
+        *guard = new_context;
+        Ok(())
+    }
+}
+
 pub fn try_sqlite_application_context<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Arc<sona_sqlite::SqliteApplicationContext>, String> {
+    if let Some(state) = app.try_state::<DesktopSqliteState>() {
+        return state.current_context();
+    }
     app.try_state::<Arc<sona_sqlite::SqliteApplicationContext>>()
         .map(|s| Arc::clone(s.inner()))
         .ok_or_else(|| "Database application context has not been initialized".to_string())
 }
 
+pub fn reload_sqlite_application_context<R: Runtime>(
+    app: &AppHandle<R>,
+    new_context: Arc<sona_sqlite::SqliteApplicationContext>,
+) -> Result<(), String> {
+    let state = app
+        .try_state::<DesktopSqliteState>()
+        .ok_or_else(|| "DesktopSqliteState has not been initialized".to_string())?;
+    state.reload(new_context)?;
+    Ok(())
+}
+
 pub fn try_sqlite_database<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<Arc<sona_sqlite::Database>, String> {
+    if let Some(state) = app.try_state::<DesktopSqliteState>() {
+        return state.current_database();
+    }
     try_sqlite_application_context(app).map(|ctx| ctx.database())
 }
 
@@ -144,7 +192,7 @@ pub fn sqlite_application_context<R: Runtime>(
 }
 
 pub fn sqlite_database<R: Runtime>(app: &AppHandle<R>) -> Arc<sona_sqlite::Database> {
-    sqlite_application_context(app).database()
+    try_sqlite_database(app).expect("Database is requested before being managed")
 }
 
 #[cfg(test)]
@@ -437,5 +485,54 @@ mod tests {
         // Non-database file sync.json must be preserved!
         assert!(root.join("sync.json").exists());
         assert_eq!(std::fs::read(root.join("sync.json")).unwrap(), b"keep_this");
+    }
+
+    #[test]
+    fn test_desktop_sqlite_state_hot_reload() {
+        let temp1 = tempfile::tempdir().unwrap();
+        let temp2 = tempfile::tempdir().unwrap();
+
+        let db1 = open_and_migrate_sqlite_for_path_with_prompt(temp1.path(), |_found, _min| {
+            panic!("Unexpected prompt");
+        })
+        .unwrap();
+        let context1 = Arc::new(
+            sona_sqlite::SqliteApplicationContext::from_database(temp1.path(), db1.clone())
+                .unwrap(),
+        );
+
+        let state = DesktopSqliteState::new(context1);
+        let initial_dir = state
+            .current_context()
+            .unwrap()
+            .app_data_dir()
+            .to_path_buf();
+        assert_eq!(
+            initial_dir,
+            sona_sqlite::SqliteApplicationContext::normalize_existing_app_data_dir(temp1.path())
+                .unwrap()
+        );
+
+        let db2 = open_and_migrate_sqlite_for_path_with_prompt(temp2.path(), |_found, _min| {
+            panic!("Unexpected prompt");
+        })
+        .unwrap();
+        let context2 = Arc::new(
+            sona_sqlite::SqliteApplicationContext::from_database(temp2.path(), db2.clone())
+                .unwrap(),
+        );
+
+        state.reload(context2).unwrap();
+        let reloaded_dir = state
+            .current_context()
+            .unwrap()
+            .app_data_dir()
+            .to_path_buf();
+        assert_eq!(
+            reloaded_dir,
+            sona_sqlite::SqliteApplicationContext::normalize_existing_app_data_dir(temp2.path())
+                .unwrap()
+        );
+        assert_ne!(initial_dir, reloaded_dir);
     }
 }

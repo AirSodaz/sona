@@ -52,10 +52,18 @@ pub fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
 }
 #[tauri::command]
 pub async fn get_dashboard_snapshot(
+    app: AppHandle,
     service: State<'_, Arc<crate::app::dashboard::AppDashboardService>>,
     request: crate::app::dashboard::DashboardSnapshotRequest,
 ) -> Result<sona_core::dashboard::models::DashboardSnapshotDomainModel, String> {
-    crate::app::dashboard::get_dashboard_snapshot(service, request).await
+    let active_service = if let Some(dashboard_state) =
+        app.try_state::<crate::platform::dashboard::DesktopDashboardState>()
+    {
+        dashboard_state.current_service()?
+    } else {
+        Arc::clone(service.inner())
+    };
+    crate::app::dashboard::get_dashboard_snapshot_with_service(&active_service, request).await
 }
 
 #[tauri::command]

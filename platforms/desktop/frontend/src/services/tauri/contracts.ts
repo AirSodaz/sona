@@ -325,6 +325,10 @@ type ManualTauriCommandContractMap = {
     args: undefined;
     result: StorageDirectoriesInfo;
   };
+  [TauriCommand.storage.checkCanMigrate]: {
+    args: undefined;
+    result: undefined;
+  };
   [TauriCommand.storage.migrateDataDirectory]: {
     args: {
       targetDir: string;

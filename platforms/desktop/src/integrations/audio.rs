@@ -368,6 +368,13 @@ impl AudioState {
             next_source_generation: AtomicU64::new(1),
         }
     }
+
+    pub fn has_active_captures(&self) -> bool {
+        match self.registry.lock() {
+            Ok(registry) => !registry.captures.is_empty(),
+            Err(_) => false,
+        }
+    }
 }
 
 pub use sona_audio_capture::AudioDevice;

@@ -18,6 +18,10 @@ export async function storageGetDirectories(): Promise<StorageDirectoriesInfo> {
   return invokeTauri(TauriCommand.storage.getDirectories);
 }
 
+export async function storageCheckCanMigrate(): Promise<void> {
+  return invokeTauri(TauriCommand.storage.checkCanMigrate);
+}
+
 export async function storageMigrateDataDirectory(
   targetDir: string,
   copyExisting: boolean
