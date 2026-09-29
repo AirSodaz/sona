@@ -1,6 +1,7 @@
 pub mod device;
 pub mod downmix;
 pub mod error;
+pub mod pipeline;
 pub mod resampler;
 pub mod stream;
 
@@ -13,5 +14,9 @@ pub use downmix::{
     push_downmixed_i16, push_downmixed_i16_checked, push_downmixed_u16, push_downmixed_u16_checked,
 };
 pub use error::{AudioCaptureError, AudioCaptureResult};
+pub use pipeline::{
+    CaptureEvent, CaptureNotifier, LiveAudioCaptureHandle, LiveAudioCapturePipeline,
+    LiveCaptureConfig,
+};
 pub use resampler::{AudioResampler, DEFAULT_CHUNK_SIZE_OUT, TARGET_SAMPLE_RATE};
-pub use stream::build_cpal_input_stream;
+pub use stream::{CaptureDirection, build_cpal_input_stream, open_device_stream};

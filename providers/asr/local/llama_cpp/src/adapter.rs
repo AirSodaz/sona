@@ -57,6 +57,14 @@ impl LocalAsrAdapter for LlamaCppAdapter {
             self.punct_engines.clone(),
         )))
     }
+
+    fn prune_idle_resources<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(async move {
+            crate::batch::prune_idle_llama_models();
+        })
+    }
 }
 
 #[cfg(test)]

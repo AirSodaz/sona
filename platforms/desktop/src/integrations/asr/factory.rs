@@ -1,30 +1,19 @@
 use async_trait::async_trait;
 pub use sona_application::local_asr::HybridStreamingAsrFactory;
-use sona_application::local_asr::{IdleResourcePruner, LocalAsrRegistry};
+use sona_application::local_asr::LocalAsrRegistry;
 use sona_sherpa_onnx::runtime::RecognizerPool;
 use std::sync::Arc;
 
-struct DesktopAsrIdlePruner(RecognizerPool);
-
-#[async_trait]
-impl IdleResourcePruner for DesktopAsrIdlePruner {
-    async fn prune_idle_resources(&self) {
-        self.0.prune_all_idle().await;
-        sona_llama_cpp::prune_idle_llama_models();
-    }
-}
-
 /// Builds a desktop streaming ASR factory by composing the shared application
-/// hybrid factory with desktop provider adapters and idle resource pruners.
+/// hybrid factory with desktop provider adapters and automatic idle resource pruners.
 pub fn create_desktop_streaming_asr_factory(
     registry: LocalAsrRegistry,
-    recognizer_pool: RecognizerPool,
+    _recognizer_pool: RecognizerPool,
 ) -> HybridStreamingAsrFactory {
     HybridStreamingAsrFactory::from_local_registry(
         registry,
         Some(Arc::new(sona_online_asr::OnlineAsrAdapter)),
     )
-    .with_idle_pruner(Arc::new(DesktopAsrIdlePruner(recognizer_pool)))
 }
 
 /// Desktop composition root for streaming ASR.

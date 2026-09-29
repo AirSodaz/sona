@@ -1,7 +1,5 @@
 use async_trait::async_trait;
-use sona_application::local_asr::{
-    HybridStreamingAsrFactory, IdleResourcePruner, LocalAsrRegistry,
-};
+use sona_application::local_asr::{HybridStreamingAsrFactory, LocalAsrRegistry};
 use sona_core::ports::asr::{
     AsrPortError, AsrRuntimeObserver, AsrStreamingSession, AsrTranscriptionRequest,
     BatchTranscriberPort, OnlineBatchTranscriptionRequest, StreamingAsrFactoryPort,
@@ -33,27 +31,16 @@ pub(crate) fn local_batch_transcriber() -> impl BatchTranscriberPort {
     sona_application::local_asr::LocalBatchTranscriberRouter::new(registry)
 }
 
-struct CliAsrIdlePruner(RecognizerPool);
-
-#[async_trait]
-impl IdleResourcePruner for CliAsrIdlePruner {
-    async fn prune_idle_resources(&self) {
-        self.0.prune_all_idle().await;
-        sona_llama_cpp::prune_idle_llama_models();
-    }
-}
-
 /// Builds a CLI streaming ASR factory by composing the shared application
-/// hybrid factory with CLI provider adapters and idle resource pruners.
+/// hybrid factory with CLI provider adapters and automatic idle resource pruners.
 pub fn create_cli_streaming_asr_factory(
     registry: LocalAsrRegistry,
-    recognizer_pool: RecognizerPool,
+    _recognizer_pool: RecognizerPool,
 ) -> HybridStreamingAsrFactory {
     HybridStreamingAsrFactory::from_local_registry(
         registry,
         Some(Arc::new(sona_online_asr::OnlineAsrAdapter)),
     )
-    .with_idle_pruner(Arc::new(CliAsrIdlePruner(recognizer_pool)))
 }
 
 /// CLI composition root for streaming ASR.

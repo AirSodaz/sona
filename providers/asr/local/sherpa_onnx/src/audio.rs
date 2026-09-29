@@ -89,6 +89,9 @@ pub struct LiveWavRecorder {
 
 impl LiveWavRecorder {
     pub fn create(filepath: &Path, sample_rate: u32) -> hound::Result<Self> {
+        if let Some(parent) = filepath.parent().filter(|p| !p.as_os_str().is_empty()) {
+            std::fs::create_dir_all(parent).map_err(hound::Error::IoError)?;
+        }
         let writer = WavWriter::create(filepath, mono_pcm16_wav_spec(sample_rate))?;
         Ok(Self {
             writer: Some(writer),

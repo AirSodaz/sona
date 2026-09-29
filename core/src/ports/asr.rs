@@ -1103,6 +1103,16 @@ pub trait LocalAsrAdapter: Send + Sync {
     /// Streaming session factory for this engine, or `None` when the engine
     /// does not support live transcription.
     fn streaming_factory(&self) -> Option<Arc<dyn StreamingAsrFactoryPort>>;
+
+    /// Prunes idle engine resources (such as idle model weights or execution
+    /// contexts) to reclaim memory when switching away from this engine.
+    ///
+    /// Default implementation is a no-op.
+    fn prune_idle_resources<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        Box::pin(std::future::ready(()))
+    }
 }
 
 pub fn pcm_i16_to_f32(samples: &[i16]) -> Vec<f32> {

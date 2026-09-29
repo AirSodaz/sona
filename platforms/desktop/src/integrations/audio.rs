@@ -1,9 +1,9 @@
-use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
+use cpal::traits::{HostTrait, StreamTrait};
 use log::{debug, error, info, warn};
 use ringbuf::HeapRb;
 use ringbuf::traits::{Consumer, Producer, Split};
 use sona_application::live_transcription::LiveSourceEpoch;
-use sona_audio_capture::{AudioResampler, build_cpal_input_stream};
+use sona_audio_capture::{AudioResampler, CaptureDirection, open_device_stream};
 use sona_core::ports::asr::AsrAudioFrame;
 use sona_sherpa_onnx::audio::LiveWavRecorder;
 use std::collections::{HashMap, HashSet};
@@ -79,13 +79,6 @@ impl CaptureKind {
         match self {
             CaptureKind::System => "No output device found",
             CaptureKind::Microphone => "No input device found",
-        }
-    }
-
-    fn config_error_message(self, err: cpal::Error) -> String {
-        match self {
-            CaptureKind::System => format!("Failed to get default config: {}", err),
-            CaptureKind::Microphone => format!("Failed to get default mic config: {}", err),
         }
     }
 
@@ -391,7 +384,18 @@ where
     F: FnOnce() -> Result<String, String>,
 {
     match output_path {
-        Some(path) => Ok(path),
+        Some(path) => {
+            let path_buf = std::path::Path::new(&path);
+            if path_buf
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            {
+                return Err(format!(
+                    "Invalid recording output path containing parent directory traversal: {path}"
+                ));
+            }
+            Ok(path)
+        }
         None => fallback(),
     }
 }
@@ -883,22 +887,6 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
         };
         let resolved_device_name = device.to_string();
 
-        let supported_config = match kind {
-            CaptureKind::System => device.default_output_config(),
-            CaptureKind::Microphone => device.default_input_config(),
-        };
-        let supported_config = match supported_config {
-            Ok(c) => c,
-            Err(e) => {
-                fail_start(kind.config_error_message(e));
-                return;
-            }
-        };
-
-        let sample_format = supported_config.sample_format();
-        let config: cpal::StreamConfig = supported_config.into();
-        let sample_rate = config.sample_rate;
-
         let data_notifier = {
             let data_tx = data_tx.clone();
             move || {
@@ -906,20 +894,20 @@ fn spawn_cpal_startup_thread<R: Runtime + 'static>(
             }
         };
 
-        let stream = match build_cpal_input_stream(
-            &device,
-            config,
-            sample_format,
-            raw_producer,
-            data_notifier,
-            err_fn,
-        ) {
-            Ok(s) => s,
-            Err(e) => {
-                fail_start(e.to_string());
-                return;
-            }
+        let direction = match kind {
+            CaptureKind::System => CaptureDirection::Output,
+            CaptureKind::Microphone => CaptureDirection::Input,
         };
+
+        let (stream, config, _format) =
+            match open_device_stream(&device, direction, raw_producer, data_notifier, err_fn) {
+                Ok(res) => res,
+                Err(e) => {
+                    fail_start(e.to_string());
+                    return;
+                }
+            };
+        let sample_rate = config.sample_rate;
 
         if let Err(e) = stream.play() {
             fail_start(kind.play_stream_error_message(e));
@@ -1484,5 +1472,15 @@ mod tests {
             resolve_recording_output_path(None, || Ok("generated.wav".to_string())).unwrap();
 
         assert_eq!(resolved, "generated.wav");
+    }
+
+    #[test]
+    fn resolve_recording_output_path_rejects_parent_traversal() {
+        let error = resolve_recording_output_path(Some("../evil.wav".to_string()), || {
+            Ok("generated.wav".to_string())
+        })
+        .unwrap_err();
+
+        assert!(error.contains("parent directory traversal"));
     }
 }

@@ -75,6 +75,15 @@ impl LocalAsrAdapter for SherpaOnnxAdapter {
             recognizer_pool: self.recognizer_pool.clone(),
         }))
     }
+
+    fn prune_idle_resources<'a>(
+        &'a self,
+    ) -> std::pin::Pin<Box<dyn std::future::Future<Output = ()> + Send + 'a>> {
+        let pool = self.recognizer_pool.clone();
+        Box::pin(async move {
+            pool.prune_all_idle().await;
+        })
+    }
 }
 
 #[derive(Clone)]

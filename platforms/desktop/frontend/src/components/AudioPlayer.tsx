@@ -82,11 +82,14 @@ export function AudioPlayer({ className = '' }: AudioPlayerProps): React.JSX.Ele
   }
 
   function handleAudioError(e: React.SyntheticEvent<HTMLAudioElement, Event>) {
+    if (!audioUrl) {
+      return;
+    }
     const error = e.currentTarget.error;
     const errorContext = {
       code: error?.code,
       message: error?.message,
-      src: e.currentTarget.src,
+      src: audioUrl,
       networkState: e.currentTarget.networkState,
       readyState: e.currentTarget.readyState,
     };

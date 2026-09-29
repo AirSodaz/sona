@@ -1,73 +1,10 @@
-use cpal::traits::{DeviceTrait, StreamTrait};
-use ringbuf::HeapRb;
-use ringbuf::traits::{Consumer, Split};
-use sona_audio_capture::{AudioResampler, build_cpal_input_stream};
+use sona_audio_capture::{
+    CaptureDirection, CaptureEvent, LiveAudioCapturePipeline, LiveCaptureConfig,
+};
 use std::io::Read;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
-use std::time::Duration;
+use std::sync::Arc;
 
 const STDIN_READ_BUFFER_SIZE: usize = 8192;
-const INPUT_BUFFER_SECONDS: usize = 5;
-
-#[derive(Default)]
-struct CaptureNotifier {
-    ready: AtomicBool,
-    mutex: Mutex<()>,
-    condvar: Condvar,
-}
-
-impl CaptureNotifier {
-    /// Signals that new audio samples, a capture error, or a stop command is ready.
-    ///
-    /// Non-blocking, zero-allocation, lock-free, and real-time safe for the CPAL audio callback.
-    fn notify(&self) {
-        self.ready.store(true, Ordering::Release);
-        self.condvar.notify_one();
-    }
-
-    /// Waits until an event arrives or until the watchdog timeout expires.
-    fn wait(&self, timeout: Duration) {
-        if self.ready.swap(false, Ordering::AcqRel) {
-            return;
-        }
-
-        if let Ok(mut guard) = self.mutex.lock() {
-            while !self.ready.swap(false, Ordering::AcqRel) {
-                let (next_guard, result) = self
-                    .condvar
-                    .wait_timeout(guard, timeout)
-                    .unwrap_or_else(std::sync::PoisonError::into_inner);
-                guard = next_guard;
-                if result.timed_out() {
-                    break;
-                }
-            }
-        }
-    }
-}
-#[derive(Clone, Default)]
-struct CaptureFailure(Arc<Mutex<Option<String>>>);
-
-impl CaptureFailure {
-    fn record(&self, error: String) {
-        let mut failure = self
-            .0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
-        if failure.is_none() {
-            *failure = Some(error);
-        }
-    }
-
-    fn take(&self) -> Option<String> {
-        self.0
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-            .take()
-    }
-}
-
 #[derive(Debug, PartialEq)]
 pub enum LiveAudioChunk {
     PcmS16Le(Vec<u8>),
@@ -114,7 +51,7 @@ impl RunningAudioInput {
         if let Some(sender) = self.stop_sender.take() {
             let _ = sender.send(());
         }
-        if let Some(handle) = self.stop_handle.take() {
+        if let Some(handle) = self.stop_handle.as_ref() {
             handle();
         }
     }
@@ -127,6 +64,8 @@ impl RunningAudioInput {
 impl Drop for RunningAudioInput {
     fn drop(&mut self) {
         self.request_stop();
+        self.receiver.close();
+        let _ = self.stop_handle.take();
     }
 }
 
@@ -207,153 +146,63 @@ pub(crate) fn start_microphone_input(
         sona_audio_capture::find_input_device(requested_device).map_err(|e| e.to_string())?;
 
     let (message_sender, receiver) = tokio::sync::mpsc::channel(16);
-    let (stop_sender, stop_receiver) = std::sync::mpsc::channel();
-    let (startup_sender, startup_receiver) = std::sync::mpsc::sync_channel(1);
-    let stop_requested = Arc::new(AtomicBool::new(false));
-    let notifier = Arc::new(CaptureNotifier::default());
+    let sender = message_sender.clone();
+    let pipeline = LiveAudioCapturePipeline::start(
+        &device,
+        &resolved_name,
+        CaptureDirection::Input,
+        LiveCaptureConfig::default(),
+        move |event| match event {
+            CaptureEvent::Chunk(samples) => sender
+                .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(samples)))
+                .is_ok(),
+            CaptureEvent::Error(err) => {
+                let _ = sender.blocking_send(LiveAudioMessage::Error(err));
+                false
+            }
+            CaptureEvent::Eof => {
+                let _ = sender.blocking_send(LiveAudioMessage::Eof);
+                false
+            }
+        },
+    )
+    .map_err(|e| e.to_string())?;
 
-    let capture_name = resolved_name.clone();
-    let stop_flag = stop_requested.clone();
-    let capture_notifier = notifier.clone();
-    std::thread::spawn(move || {
-        run_microphone_capture(
-            device,
-            capture_name,
-            message_sender,
-            stop_receiver,
-            stop_flag,
-            capture_notifier,
-            startup_sender,
-        );
+    let stop_handle = Arc::new(move || {
+        pipeline.stop();
     });
-    startup_receiver
-        .recv()
-        .map_err(|error| format!("Microphone startup channel closed: {error}"))??;
-
-    let stop_handle = {
-        let stop_requested = stop_requested.clone();
-        let notifier = notifier.clone();
-        Arc::new(move || {
-            stop_requested.store(true, Ordering::Release);
-            notifier.notify();
-        })
-    };
 
     Ok(
-        RunningAudioInput::from_parts(receiver, Some(stop_sender), Some(resolved_name), true)
+        RunningAudioInput::from_parts(receiver, None, Some(resolved_name), true)
             .with_stop_handle(stop_handle),
     )
 }
 
-fn run_microphone_capture(
-    device: cpal::Device,
-    device_name: String,
-    sender: tokio::sync::mpsc::Sender<LiveAudioMessage>,
-    stop_receiver: std::sync::mpsc::Receiver<()>,
-    stop_requested: Arc<AtomicBool>,
-    notifier: Arc<CaptureNotifier>,
-    startup_sender: std::sync::mpsc::SyncSender<Result<(), String>>,
-) {
-    let supported_config = match device.default_input_config() {
-        Ok(config) => config,
-        Err(error) => {
-            let _ = startup_sender.send(Err(format!(
-                "Failed to get input config for {device_name}: {error}"
-            )));
-            return;
-        }
-    };
-    let sample_format = supported_config.sample_format();
-    let config: cpal::StreamConfig = supported_config.into();
-    let sample_rate = config.sample_rate;
-    let buffer = HeapRb::<f32>::new(sample_rate as usize * INPUT_BUFFER_SECONDS);
-    let (producer, mut consumer) = buffer.split();
-    let capture_failure = CaptureFailure::default();
-    let callback_failure = capture_failure.clone();
-    let error_notifier = notifier.clone();
-    let stream_error = move |error| {
-        callback_failure.record(format!("Microphone stream failed: {error}"));
-        error_notifier.notify();
-    };
+#[cfg(test)]
+#[derive(Clone, Default)]
+struct CaptureFailure(Arc<std::sync::Mutex<Option<String>>>);
 
-    let data_notifier = {
-        let notifier = notifier.clone();
-        move || {
-            notifier.notify();
+#[cfg(test)]
+impl CaptureFailure {
+    fn record(&self, error: String) {
+        let mut failure = self
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if failure.is_none() {
+            *failure = Some(error);
         }
-    };
-
-    let stream = match build_cpal_input_stream(
-        &device,
-        config,
-        sample_format,
-        producer,
-        data_notifier,
-        stream_error,
-    ) {
-        Ok(stream) => stream,
-        Err(error) => {
-            let _ = startup_sender.send(Err(format!(
-                "Failed to build input stream for {device_name}: {error}"
-            )));
-            return;
-        }
-    };
-    if let Err(error) = stream.play() {
-        let _ = startup_sender.send(Err(format!(
-            "Failed to start input stream for {device_name}: {error}"
-        )));
-        return;
-    }
-    if startup_sender.send(Ok(())).is_err() {
-        return;
     }
 
-    let mut resampler = match AudioResampler::new(sample_rate) {
-        Ok(resampler) => resampler,
-        Err(error) => {
-            let _ = sender.blocking_send(LiveAudioMessage::Error(error.to_string()));
-            return;
-        }
-    };
-
-    const WATCHDOG_INTERVAL: Duration = Duration::from_millis(100);
-
-    loop {
-        if forward_capture_failure(&capture_failure, &sender) {
-            return;
-        }
-        if drain_microphone_samples(&mut consumer, &mut resampler, &sender).is_err() {
-            return;
-        }
-        if stop_requested.load(Ordering::Acquire) {
-            break;
-        }
-        match stop_receiver.try_recv() {
-            Ok(()) | Err(std::sync::mpsc::TryRecvError::Disconnected) => break,
-            Err(std::sync::mpsc::TryRecvError::Empty) => {}
-        }
-        notifier.wait(WATCHDOG_INTERVAL);
+    fn take(&self) -> Option<String> {
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take()
     }
-    drop(stream);
-    if forward_capture_failure(&capture_failure, &sender) {
-        return;
-    }
-    if drain_microphone_samples(&mut consumer, &mut resampler, &sender).is_err() {
-        return;
-    }
-    let mut tail = Vec::new();
-    let finished_count = resampler.drain_finish(&mut consumer, &mut tail);
-    if finished_count > 0
-        && sender
-            .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(tail)))
-            .is_err()
-    {
-        return;
-    }
-    let _ = sender.blocking_send(LiveAudioMessage::Eof);
 }
 
+#[cfg(test)]
 fn forward_capture_failure(
     failure: &CaptureFailure,
     sender: &tokio::sync::mpsc::Sender<LiveAudioMessage>,
@@ -365,22 +214,10 @@ fn forward_capture_failure(
     true
 }
 
-fn drain_microphone_samples(
-    consumer: &mut impl Consumer<Item = f32>,
-    resampler: &mut AudioResampler,
-    sender: &tokio::sync::mpsc::Sender<LiveAudioMessage>,
-) -> Result<(), ()> {
-    let mut output = Vec::new();
-    let produced = resampler.drain_from_consumer(consumer, &mut output);
-    if produced > 0
-        && sender
-            .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::Samples(output)))
-            .is_err()
-    {
-        return Err(());
-    }
-    Ok(())
-}
+#[cfg(test)]
+use sona_audio_capture::{AudioResampler, CaptureNotifier};
+#[cfg(test)]
+use std::time::Duration;
 
 #[cfg(test)]
 pub(crate) fn downmix_f32(samples: &[f32], channels: usize) -> Result<Vec<f32>, String> {

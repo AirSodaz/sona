@@ -214,20 +214,22 @@ export function createRecordingPersistence({
     const segments = transcriptState.segments;
 
     if (segments.length > 0) {
-      transcriptState.setAudioUrl(fileSrcFromPath(savedWavPath));
-
+      if (savedWavPath) {
+        transcriptState.setAudioUrl(fileSrcFromPath(savedWavPath));
+        void applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments);
+      }
       const newItem = await history.completeLiveRecordingDraft(draft.item.id, segments, duration);
       await persistSavedItem(newItem, 'upsert', segments);
-
-      void applyBackgroundSpeakerAnnotation(draft.item.id, savedWavPath, segments);
       return;
     }
 
-    logger.info('[useAudioRecorder] Empty transcript, deleting unsaved WAV file:', savedWavPath);
-    try {
-      await removeFile(savedWavPath);
-    } catch (error) {
-      logger.error('[useAudioRecorder] Failed to delete empty WAV file:', error);
+    if (savedWavPath) {
+      logger.info('[useAudioRecorder] Empty transcript, deleting unsaved WAV file:', savedWavPath);
+      try {
+        await removeFile(savedWavPath);
+      } catch (error) {
+        logger.error('[useAudioRecorder] Failed to delete empty WAV file:', error);
+      }
     }
     await discardLiveRecordingDraft(draft);
   }

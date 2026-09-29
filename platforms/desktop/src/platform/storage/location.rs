@@ -92,6 +92,21 @@ pub fn validate_target_directory(path: &Path) -> Result<(), String> {
     if path.as_os_str().is_empty() {
         return Err("Directory path cannot be empty".to_string());
     }
+    if !path.is_absolute() {
+        return Err(format!(
+            "Directory path '{}' must be an absolute path",
+            path.display()
+        ));
+    }
+    if path
+        .components()
+        .any(|c| matches!(c, std::path::Component::ParentDir))
+    {
+        return Err(format!(
+            "Directory path '{}' cannot contain parent directory traversal (..)",
+            path.display()
+        ));
+    }
     if path.is_file() {
         return Err(format!("'{}' is a file, not a directory", path.display()));
     }
@@ -605,6 +620,13 @@ pub async fn migrate_data_directory<R: Runtime>(
             .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
     );
 
+    let target_history_dir = target_path.join("history");
+    if let Err(e) = app
+        .asset_protocol_scope()
+        .allow_directory(&target_history_dir, true)
+    {
+        log::warn!("Failed to allow target history directory in asset scope: {e}");
+    }
     let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
 
     let new_dashboard_service =
@@ -688,6 +710,13 @@ pub async fn reset_data_directory<R: Runtime>(
             .map_err(|e| format!("Failed to create SQLite application context: {e}"))?,
     );
 
+    let default_history_dir = default_data_dir.join("history");
+    if let Err(e) = app
+        .asset_protocol_scope()
+        .allow_directory(&default_history_dir, true)
+    {
+        log::warn!("Failed to allow default history directory in asset scope: {e}");
+    }
     let _ = crate::platform::database::reload_sqlite_application_context(app, new_context);
 
     let new_dashboard_service =

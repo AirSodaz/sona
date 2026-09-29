@@ -14,6 +14,23 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         app_local_data_dir.clone(),
         Arc::clone(&db),
     );
+    let history_dir = app_local_data_dir.join("history");
+    if let Err(e) = app
+        .asset_protocol_scope()
+        .allow_directory(&history_dir, true)
+    {
+        log::warn!("Failed to allow history directory in asset scope: {e}");
+    }
+    if let Ok(default_dir) = app.path().app_local_data_dir() {
+        let default_history = default_dir.join("history");
+        if default_history != history_dir
+            && let Err(e) = app
+                .asset_protocol_scope()
+                .allow_directory(&default_history, true)
+        {
+            log::warn!("Failed to allow default history directory in asset scope: {e}");
+        }
+    }
     let sqlite_context = Arc::new(sona_sqlite::SqliteApplicationContext::from_database(
         app_local_data_dir,
         db.clone(),

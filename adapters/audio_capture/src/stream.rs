@@ -73,6 +73,44 @@ pub fn build_cpal_input_stream(
     Ok(stream)
 }
 
+/// Direction of audio capture.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CaptureDirection {
+    /// Microphone or line-in capture.
+    Input,
+    /// Loopback or system audio capture.
+    Output,
+}
+
+/// Opens a real-time CPAL stream with automatic configuration negotiation and mono downmixing.
+pub fn open_device_stream(
+    device: &cpal::Device,
+    direction: CaptureDirection,
+    raw_producer: impl Producer<Item = f32> + Send + 'static,
+    data_notifier: impl Fn() + Send + Sync + 'static,
+    error_callback: impl FnMut(cpal::Error) + Send + 'static,
+) -> AudioCaptureResult<(cpal::Stream, cpal::StreamConfig, SampleFormat)> {
+    let supported_config = match direction {
+        CaptureDirection::Input => device.default_input_config().map_err(|e| {
+            AudioCaptureError::ConfigFailed(format!("Failed to get default input config: {e}"))
+        })?,
+        CaptureDirection::Output => device.default_output_config().map_err(|e| {
+            AudioCaptureError::ConfigFailed(format!("Failed to get default output config: {e}"))
+        })?,
+    };
+    let sample_format = supported_config.sample_format();
+    let config: cpal::StreamConfig = supported_config.into();
+    let stream = build_cpal_input_stream(
+        device,
+        config,
+        sample_format,
+        raw_producer,
+        data_notifier,
+        error_callback,
+    )?;
+    Ok((stream, config, sample_format))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

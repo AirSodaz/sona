@@ -58,6 +58,15 @@ impl LocalAsrRegistry {
     }
 }
 
+#[async_trait]
+impl IdleResourcePruner for LocalAsrRegistry {
+    async fn prune_idle_resources(&self) {
+        for adapter in &self.adapters {
+            adapter.prune_idle_resources().await;
+        }
+    }
+}
+
 /// Routes batch transcription to the engine selected in each plan.
 ///
 /// Observers are forwarded to the selected adapter so engines keep their
@@ -222,7 +231,9 @@ impl HybridStreamingAsrFactory {
         registry: LocalAsrRegistry,
         online: Option<Arc<dyn StreamingAsrFactoryPort>>,
     ) -> Self {
+        let pruner: Arc<dyn IdleResourcePruner> = Arc::new(registry.clone());
         Self::new(Arc::new(LocalStreamingAsrFactory::new(registry)), online)
+            .with_idle_pruner(pruner)
     }
 
     pub fn with_idle_pruner(mut self, pruner: Arc<dyn IdleResourcePruner>) -> Self {
