@@ -62,7 +62,7 @@ pub struct ServeArgs {
     punctuation_model_id: Option<String>,
 }
 
-pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
+pub async fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
     let config = load_config(args.config.as_ref())?;
     let temp_dir = default_temp_dir();
     let resolved = resolve_serve_runtime_options(
@@ -87,108 +87,106 @@ pub fn run_serve(args: ServeArgs) -> CliResult<CliOutput> {
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
 
-    crate::runtime::block_on(async move {
-        let host = resolved.host.clone();
-        let port = resolved.port;
-        let RunningApiServer {
-            normalized_ip_whitelist,
-            mut shutdown_tx,
-            mut join_handle,
-            dashboard,
-            ..
-        } = start_api_server_runtime(ApiServerServiceParts {
-            resolved,
-            temp_dir,
-            online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
-            batch_transcriber: Arc::new(crate::asr_adapter::local_batch_transcriber()),
-            media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
-            gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
-            model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
-            batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
-            platform: Arc::new(DefaultApiServerPlatform),
-            streaming_transcriber: Some(crate::asr_adapter::streaming_transcriber()),
-            web_dist_dir: None,
-        })
-        .await
-        .map_err(|error| match error {
-            ApiServerStartError::Configuration(error) => CliError::Validation(error.to_string()),
-            ApiServerStartError::Runtime(error) => CliError::Network(error.to_string()),
-        })?;
+    let host = resolved.host.clone();
+    let port = resolved.port;
+    let RunningApiServer {
+        normalized_ip_whitelist,
+        mut shutdown_tx,
+        mut join_handle,
+        dashboard,
+        ..
+    } = start_api_server_runtime(ApiServerServiceParts {
+        resolved,
+        temp_dir,
+        online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+        batch_transcriber: Arc::new(crate::asr_adapter::local_batch_transcriber()),
+        media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
+        gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
+        model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
+        batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
+        platform: Arc::new(DefaultApiServerPlatform),
+        streaming_transcriber: Some(crate::asr_adapter::streaming_transcriber()),
+        web_dist_dir: None,
+    })
+    .await
+    .map_err(|error| match error {
+        ApiServerStartError::Configuration(error) => CliError::Validation(error.to_string()),
+        ApiServerStartError::Runtime(error) => CliError::Network(error.to_string()),
+    })?;
 
-        eprintln!(
-            "Serving Sona API on http://{}:{} (allowed clients: {})",
-            host, port, normalized_ip_whitelist
-        );
+    eprintln!(
+        "Serving Sona API on http://{}:{} (allowed clients: {})",
+        host, port, normalized_ip_whitelist
+    );
 
-        loop {
-            tokio::select! {
-                ctrl_c = tokio::signal::ctrl_c() => {
-                    ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
-                    let (processing, pending) = dashboard.active_job_count().await;
-                    let total_active = processing + pending;
-                    if total_active > 0 && std::io::stdin().is_terminal() {
-                        use std::io::Write;
-                        eprint!(
-                            "\nWarning: There are {} active/pending transcription task(s) (processing: {}, pending: {}).\nAre you sure you want to exit? [y/N]: ",
-                            total_active, processing, pending
-                        );
-                        let _ = std::io::stderr().flush();
+    loop {
+        tokio::select! {
+            ctrl_c = tokio::signal::ctrl_c() => {
+                ctrl_c.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+                let (processing, pending) = dashboard.active_job_count().await;
+                let total_active = processing + pending;
+                if total_active > 0 && std::io::stdin().is_terminal() {
+                    use std::io::Write;
+                    eprint!(
+                        "\nWarning: There are {} active/pending transcription task(s) (processing: {}, pending: {}).\nAre you sure you want to exit? [y/N]: ",
+                        total_active, processing, pending
+                    );
+                    let _ = std::io::stderr().flush();
 
-                        let mut read_task = tokio::task::spawn_blocking(|| {
-                            let mut line = String::new();
-                            match std::io::stdin().read_line(&mut line) {
-                                Ok(0) => None,
-                                Ok(_) => Some(line),
-                                Err(_) => None,
-                            }
-                        });
+                    let mut read_task = tokio::task::spawn_blocking(|| {
+                        let mut line = String::new();
+                        match std::io::stdin().read_line(&mut line) {
+                            Ok(0) => None,
+                            Ok(_) => Some(line),
+                            Err(_) => None,
+                        }
+                    });
 
-                        tokio::select! {
-                            read_res = &mut read_task => {
-                                match read_res.ok().flatten() {
-                                    Some(line) => {
-                                        let trimmed = line.trim();
-                                        if trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes") {
-                                            // Confirmed exit
-                                        } else {
-                                            eprintln!("Exit cancelled. Continuing Sona API server...");
-                                            continue;
-                                        }
-                                    }
-                                    None => {
-                                        // EOF or read error, proceed with exit
+                    tokio::select! {
+                        read_res = &mut read_task => {
+                            match read_res.ok().flatten() {
+                                Some(line) => {
+                                    let trimmed = line.trim();
+                                    if trimmed.eq_ignore_ascii_case("y") || trimmed.eq_ignore_ascii_case("yes") {
+                                        // Confirmed exit
+                                    } else {
+                                        eprintln!("Exit cancelled. Continuing Sona API server...");
+                                        continue;
                                     }
                                 }
-                            }
-                            ctrl_c_again = tokio::signal::ctrl_c() => {
-                                ctrl_c_again.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
-                                eprintln!("\nForced exit.");
+                                None => {
+                                    // EOF or read error, proceed with exit
+                                }
                             }
                         }
-                    } else if total_active > 0 {
-                        eprintln!(
-                            "\nShutting down Sona API server with {} active/pending task(s)...",
-                            total_active
-                        );
+                        ctrl_c_again = tokio::signal::ctrl_c() => {
+                            ctrl_c_again.map_err(|error| CliError::Io(format!("Failed to wait for Ctrl+C: {error}")))?;
+                            eprintln!("\nForced exit.");
+                        }
                     }
-                    if let Some(sender) = shutdown_tx.take() {
-                        let _ = sender.send(());
-                    }
-                    join_handle
-                        .await
-                        .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                        .map_err(|error| CliError::Other(error.to_string()))?;
-                    return Ok(CliOutput::stderr("Stopped Sona API server".to_string()));
+                } else if total_active > 0 {
+                    eprintln!(
+                        "\nShutting down Sona API server with {} active/pending task(s)...",
+                        total_active
+                    );
                 }
-                result = &mut join_handle => {
-                    result
-                        .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
-                        .map_err(|error| CliError::Other(error.to_string()))?;
-                    return Ok(CliOutput::stderr("API server stopped".to_string()));
+                if let Some(sender) = shutdown_tx.take() {
+                    let _ = sender.send(());
                 }
+                join_handle
+                    .await
+                    .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
+                    .map_err(|error| CliError::Other(error.to_string()))?;
+                return Ok(CliOutput::stderr("Stopped Sona API server".to_string()));
+            }
+            result = &mut join_handle => {
+                result
+                    .map_err(|error| CliError::Other(format!("API server task failed: {error}")))?
+                    .map_err(|error| CliError::Other(error.to_string()))?;
+                return Ok(CliOutput::stderr("API server stopped".to_string()));
             }
         }
-    })?
+    }
 }
 
 fn load_config(path: Option<&PathBuf>) -> CliResult<Option<ServeConfigSection>> {

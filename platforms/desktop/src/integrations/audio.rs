@@ -11,7 +11,7 @@ use std::hash::Hash;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
-use tauri::{AppHandle, Emitter, Manager, Window};
+use tauri::{AppHandle, Emitter, Manager};
 
 const MICROPHONE_PEAK_EVENT: &str = "microphone-audio";
 const SYSTEM_PEAK_EVENT: &str = "system-audio";
@@ -487,7 +487,7 @@ fn update_capture_pause_state(
 }
 
 fn rollback_capture_attachment(
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     kind: CaptureKind,
     instance_id: &str,
     key: &CaptureKey,
@@ -710,16 +710,14 @@ fn resolve_capture_device(
 
 pub fn start_system_audio_capture(
     app: AppHandle,
-    window: Window,
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
     start_shared_capture(
         app,
-        window,
-        &state,
+        state,
         CaptureKind::System,
         device_name,
         instance_id,
@@ -730,8 +728,7 @@ pub fn start_system_audio_capture(
 
 fn start_shared_capture(
     app: AppHandle,
-    _window: Window,
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     kind: CaptureKind,
     device_name: Option<String>,
     instance_id: String,
@@ -908,16 +905,14 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 
 pub fn start_microphone_capture(
     app: AppHandle,
-    window: Window,
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
     start_shared_capture(
         app,
-        window,
-        &state,
+        state,
         CaptureKind::Microphone,
         device_name,
         instance_id,
@@ -929,8 +924,7 @@ pub fn start_microphone_capture(
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_native_live_capture(
     app: AppHandle,
-    window: Window,
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     source_kind: &str,
     device_name: Option<String>,
     consumer_id: String,
@@ -941,15 +935,7 @@ pub(crate) fn start_native_live_capture(
         "microphone" => CaptureKind::Microphone,
         _ => return Err(format!("Unsupported native capture source: {source_kind}")),
     };
-    start_shared_capture(
-        app,
-        window,
-        state,
-        kind,
-        device_name,
-        consumer_id,
-        output_path,
-    )
+    start_shared_capture(app, state, kind, device_name, consumer_id, output_path)
 }
 
 pub(crate) async fn stop_native_live_capture(

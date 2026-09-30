@@ -42,7 +42,7 @@ impl CliOutput {
     }
 }
 
-pub(crate) trait CliIo {
+pub(crate) trait CliIo: Send {
     fn stdout(&mut self) -> &mut (dyn Write + Send);
     fn stderr(&mut self) -> &mut (dyn Write + Send);
     fn stdout_is_terminal(&self) -> bool;
@@ -185,27 +185,42 @@ enum Commands {
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
 }
 
-pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
+pub async fn run_cli_from_args_async<I, T>(args: I) -> CliResult<CliOutput>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
     let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
     let mut io = MemoryCliIo::default();
-    match dispatch(cli.command, &mut io)? {
+    match dispatch(cli.command, &mut io).await? {
         Some(output) => Ok(output),
         None => Ok(io.into_output()),
     }
 }
 
-pub fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
+pub fn run_cli_from_args<I, T>(args: I) -> CliResult<CliOutput>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
+    runtime::block_on(async move {
+        let mut io = MemoryCliIo::default();
+        match dispatch(cli.command, &mut io).await? {
+            Some(output) => Ok(output),
+            None => Ok(io.into_output()),
+        }
+    })?
+}
+
+pub async fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
     let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
     let mut io = StdCliIo::default();
-    if let Some(output) = dispatch(cli.command, &mut io)? {
+    if let Some(output) = dispatch(cli.command, &mut io).await? {
         if !output.stdout.is_empty() {
             writeln!(io.stdout(), "{}", output.stdout)
                 .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
@@ -218,7 +233,7 @@ where
     Ok(())
 }
 
-fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput>> {
+async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<Option<CliOutput>> {
     let default_level = match &command {
         Commands::Serve(_) => log::LevelFilter::Info,
         _ => log::LevelFilter::Warn,
@@ -230,11 +245,11 @@ fn dispatch(command: Commands, io: &mut dyn CliIo) -> CliResult<Option<CliOutput
         Commands::Export(args) => export::run_export(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
-        Commands::Models(args) => models::run_models(args),
-        Commands::Serve(args) => serve::run_serve(args),
-        Commands::Transcribe(args) => transcribe::run_transcribe(args),
+        Commands::Models(args) => models::run_models(args).await,
+        Commands::Serve(args) => serve::run_serve(args).await,
+        Commands::Transcribe(args) => transcribe::run_transcribe(args).await,
         Commands::TranscribeLive(args) => {
-            transcribe_live::run_transcribe_live(args, io)?;
+            transcribe_live::run_transcribe_live(args, io).await?;
             return Ok(None);
         }
     }?;

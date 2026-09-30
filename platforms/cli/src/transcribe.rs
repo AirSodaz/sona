@@ -70,7 +70,7 @@ pub struct TranscribeArgs {
     force: bool,
 }
 
-pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
+pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let config = load_config(args.config.as_ref())?;
     let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
         // Explicit --model-id on CLI overrides config-file online provider
@@ -83,7 +83,7 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         )
     };
     if resolved_online.is_online() {
-        return run_online_transcribe(&args, &resolved_online, config.as_ref());
+        return run_online_transcribe(&args, &resolved_online, config.as_ref()).await;
     }
     let options = BatchTranscribeOptions {
         input: args.input,
@@ -116,13 +116,15 @@ pub fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let transcriber = crate::asr_adapter::local_batch_transcriber();
-    let segments = crate::runtime::block_on(async move { transcriber.transcribe(plan).await })?
+    let segments = transcriber
+        .transcribe(plan)
+        .await
         .map_err(|error| CliError::Other(error.to_string()))?;
 
     render_transcription(segments, export_format, output_target)
 }
 
-fn run_online_transcribe(
+async fn run_online_transcribe(
     args: &TranscribeArgs,
     online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
@@ -149,11 +151,9 @@ fn run_online_transcribe(
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
     let output_target = resolve_output_target(args.output.clone());
-    let segments = crate::runtime::block_on(crate::asr_adapter::online_batch_transcribe(
-        args.input.clone(),
-        request,
-    ))?
-    .map_err(crate::online_asr::map_asr_error)?;
+    let segments = crate::asr_adapter::online_batch_transcribe(args.input.clone(), request)
+        .await
+        .map_err(crate::online_asr::map_asr_error)?;
     render_transcription(segments, export_format, output_target)
 }
 

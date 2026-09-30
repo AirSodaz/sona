@@ -130,7 +130,7 @@ pub struct LiveNativeTranscriptionStart {
 #[tauri::command(async)]
 pub async fn start_native_live_transcription(
     app: AppHandle,
-    window: tauri::Window,
+    _window: tauri::Window,
     audio_state: State<'_, crate::integrations::audio::AudioState>,
     state: State<'_, crate::integrations::asr::AsrState>,
     consumer_id: String,
@@ -147,7 +147,6 @@ pub async fn start_native_live_transcription(
         let capture_state = capture_app.state::<crate::integrations::audio::AudioState>();
         crate::integrations::audio::start_native_live_capture(
             capture_app.clone(),
-            window,
             &capture_state,
             &capture_source_kind,
             device_name,

@@ -19,7 +19,10 @@ use crate::live_audio::{microphone_device_names, spawn_stdin_reader, start_micro
 use crate::live_output::LiveOutputRenderer;
 use crate::{CliError, CliIo, CliResult};
 
-pub(crate) fn run_transcribe_live(args: TranscribeLiveArgs, io: &mut dyn CliIo) -> CliResult<()> {
+pub(crate) async fn run_transcribe_live(
+    args: TranscribeLiveArgs,
+    io: &mut dyn CliIo,
+) -> CliResult<()> {
     if args.list_input_devices {
         let devices = microphone_device_names().map_err(CliError::Io)?;
         let output = if devices.is_empty() {
@@ -42,11 +45,7 @@ pub(crate) fn run_transcribe_live(args: TranscribeLiveArgs, io: &mut dyn CliIo) 
     let stdout_is_terminal = io.stdout_is_terminal();
     let status = {
         let stdout = io.stdout();
-        crate::runtime::block_on(run_resolved_live_command(
-            resolved,
-            stdout_is_terminal,
-            stdout,
-        ))??
+        run_resolved_live_command(resolved, stdout_is_terminal, stdout).await?
     };
     if let Some(status) = status {
         writeln!(io.stderr(), "{status}")

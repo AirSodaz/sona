@@ -1,7 +1,8 @@
 use std::process::ExitCode;
 
-fn main() -> ExitCode {
-    match sona_cli::execute_cli_from_args(std::env::args_os()) {
+#[tokio::main]
+async fn main() -> ExitCode {
+    match sona_cli::execute_cli_from_args(std::env::args_os()).await {
         Ok(()) => ExitCode::SUCCESS,
         Err(error) => {
             eprintln!("{error}");

@@ -112,10 +112,10 @@ pub struct ModelDeleteArgs {
     yes: bool,
 }
 
-pub fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
+pub async fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
-        ModelCommands::Download(args) => run_model_download(args),
+        ModelCommands::Download(args) => run_model_download(args).await,
         ModelCommands::Delete(args) => run_model_delete(args),
     }
 }
@@ -145,25 +145,23 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
     Ok(CliOutput::stdout(output))
 }
 
-fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
-    run_async(move || async move {
-        let quiet = args.quiet;
-        let yes = args.yes;
-        let models_dir = resolve_models_dir(args.models_dir)?;
-        let mut stderr_lines = Vec::new();
+async fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
+    let quiet = args.quiet;
+    let yes = args.yes;
+    let models_dir = resolve_models_dir(args.models_dir)?;
+    let mut stderr_lines = Vec::new();
 
-        let resolved = resolve_model_download(&args.model_id, &models_dir)
+    let resolved = resolve_model_download(&args.model_id, &models_dir)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
+    download_one_model(&resolved, yes, quiet, &mut stderr_lines).await?;
+
+    let companions = required_companion_models(&resolved.model);
+    for companion_id in companions.companion_model_ids() {
+        let companion = resolve_model_download(&companion_id, &models_dir)
             .map_err(|error| CliError::Validation(error.to_string()))?;
-        download_one_model(&resolved, yes, quiet, &mut stderr_lines).await?;
-
-        let companions = required_companion_models(&resolved.model);
-        for companion_id in companions.companion_model_ids() {
-            let companion = resolve_model_download(&companion_id, &models_dir)
-                .map_err(|error| CliError::Validation(error.to_string()))?;
-            download_one_model(&companion, yes, quiet, &mut stderr_lines).await?;
-        }
-        Ok(CliOutput::stderr(stderr_lines.join("\n")))
-    })
+        download_one_model(&companion, yes, quiet, &mut stderr_lines).await?;
+    }
+    Ok(CliOutput::stderr(stderr_lines.join("\n")))
 }
 
 fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
@@ -312,14 +310,6 @@ fn map_download_error(error: sona_model_downloads::DownloadError) -> CliError {
         sona_model_downloads::DownloadError::AlreadyInProgress => CliError::Other(message),
         sona_model_downloads::DownloadError::Validation(_) => CliError::Validation(message),
     }
-}
-
-fn run_async<F, Fut>(factory: F) -> CliResult<CliOutput>
-where
-    F: FnOnce() -> Fut,
-    Fut: std::future::Future<Output = CliResult<CliOutput>> + Send,
-{
-    crate::runtime::block_on(factory())?
 }
 
 /// Terminal-friendly language column: full lists would blow up the table for
