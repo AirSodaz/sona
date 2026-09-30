@@ -233,6 +233,7 @@
   animation: dropdownPop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
   max-height: 300px;
   overflow-y: auto;
+  text-align: left;
 }
 
 .export-dropdown {
@@ -389,6 +390,7 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-sm);
+  text-align: left;
 }
 
 .dropdown-trigger:hover {
@@ -409,6 +411,7 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  text-align: left;
 }
 
 .dropdown-icon {

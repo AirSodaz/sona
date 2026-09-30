@@ -591,6 +591,23 @@
   background: var(--color-bg-secondary);
 }
 
+.panel-footer {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px 16px;
+  background: transparent;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.panel-footer .options-container {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+}
+
 .panel-right {
   flex: 1;
   min-width: 500px;

@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { SettingsIcon } from './Icons';
 import { ParameterSettingsModal } from './ParameterSettingsModal';
 
@@ -21,24 +22,21 @@ interface TranscriptionOptionsProps {
  */
 export function TranscriptionOptions({
   className = '',
-  disabled = false,
-  surface = 'live',
+  disabled: customDisabled,
+  surface: customSurface,
 }: TranscriptionOptionsProps): React.JSX.Element {
   const { t } = useTranslation();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const storeMode = useTranscriptRuntimeStore((state) => state.mode);
+  const storeIsRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+
+  const surface = customSurface ?? (storeMode === 'batch' ? 'batch' : 'live');
+  const disabled = customDisabled ?? (surface === 'live' && storeIsRecording);
 
   return (
-    <div
-      className={`options-container ${className}`}
-      style={{
-        marginTop: 'auto', // Push to bottom of flex container
-        width: '100%',
-        padding: '16px 0 0 0', // Top padding only
-        display: 'flex',
-        justifyContent: 'center',
-      }}
-    >
+    <div className={`options-container ${className}`}>
       <button
+        type="button"
         className="btn btn-parameter-settings"
         onClick={() => setIsModalOpen(true)}
         disabled={disabled}

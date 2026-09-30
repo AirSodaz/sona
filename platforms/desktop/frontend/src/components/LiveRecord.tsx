@@ -23,7 +23,6 @@ import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
 import { RecordingTimer } from './RecordingTimer';
 import { Switch } from './Switch';
-import { TranscriptionOptions } from './TranscriptionOptions';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -357,8 +356,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         />
         <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
       </div>
-
-      <TranscriptionOptions surface="live" disabled={isRecording} />
     </div>
   );
 }

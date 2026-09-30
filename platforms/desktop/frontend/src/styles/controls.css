@@ -289,6 +289,7 @@ select,
   outline: none;
   -webkit-appearance: none;
   appearance: none;
+  text-align: left;
 }
 
 /* Suppress Edge / WebView2 native password reveal button */

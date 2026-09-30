@@ -21,7 +21,6 @@ import { getResumeOnboardingStep } from '../utils/onboarding';
 import { UploadIcon } from './Icons';
 import { QueueGroupedList } from './QueueGroupedList';
 import { QueueSummaryBar } from './QueueSummaryBar';
-import { TranscriptionOptions } from './TranscriptionOptions';
 
 /** Props for BatchImport. */
 interface BatchImportProps {
@@ -282,7 +281,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
       >
         <QueueSummaryBar onAddFiles={handleClick} />
         <QueueGroupedList />
-        <TranscriptionOptions surface="batch" />
       </div>
     );
   }
@@ -323,7 +321,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
           {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
         </p>
       </div>
-      <TranscriptionOptions surface="batch" />
     </div>
   );
 }

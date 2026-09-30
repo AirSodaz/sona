@@ -14,6 +14,7 @@ import { ProjectsView } from './components/ProjectsView';
 import { SyncHeaderPill } from './components/SyncHeaderPill';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { TabNavigation } from './components/TabNavigation';
+import { TranscriptionOptions } from './components/TranscriptionOptions';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
@@ -96,6 +97,7 @@ function App(): React.JSX.Element | null {
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const isProjectsMode = mode === 'projects';
+  const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const audioUrl = useTranscriptPlaybackStore((state) => state.audioUrl);
@@ -331,6 +333,12 @@ function App(): React.JSX.Element | null {
                 <div style={{ display: mode === 'batch' ? undefined : 'none', height: '100%' }}>
                   <BatchImport />
                 </div>
+              </div>
+              <div className="panel-footer">
+                <TranscriptionOptions
+                  surface={mode === 'batch' ? 'batch' : 'live'}
+                  disabled={mode === 'live' && isRecording}
+                />
               </div>
             </div>
 
