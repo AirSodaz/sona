@@ -108,8 +108,11 @@ async fn run_resolved_live_command(
     .await?;
 
     let status = if let Some(path) = output_path.as_ref() {
-        let format =
-            export_format.expect("live plan with output path must include an export format");
+        let format = export_format.ok_or_else(|| {
+            CliError::Validation(
+                "Live plan with output path must include an export format.".to_string(),
+            )
+        })?;
         match write_final_transcript(path, format, renderer.segments()) {
             Ok(status) => Some(status),
             Err(error) => {

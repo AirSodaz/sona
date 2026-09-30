@@ -119,8 +119,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     let segments = transcriber
         .transcribe(plan)
         .await
-        .map_err(|error| CliError::Other(error.to_string()))?;
-
+        .map_err(crate::online_asr::map_asr_error)?;
     render_transcription(segments, export_format, output_target)
 }
 

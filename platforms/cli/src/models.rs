@@ -1,5 +1,5 @@
 use clap::{Args, Subcommand};
-use std::io::{self, IsTerminal, Write};
+use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
@@ -112,10 +112,13 @@ pub struct ModelDeleteArgs {
     yes: bool,
 }
 
-pub async fn run_models(args: ModelsArgs) -> CliResult<CliOutput> {
+pub async fn run_models(
+    args: ModelsArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
-        ModelCommands::Download(args) => run_model_download(args).await,
+        ModelCommands::Download(args) => run_model_download(args, io).await,
         ModelCommands::Delete(args) => run_model_delete(args),
     }
 }
@@ -145,7 +148,10 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
     Ok(CliOutput::stdout(output))
 }
 
-async fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
+async fn run_model_download(
+    args: ModelDownloadArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
     let quiet = args.quiet;
     let yes = args.yes;
     let models_dir = resolve_models_dir(args.models_dir)?;
@@ -153,13 +159,13 @@ async fn run_model_download(args: ModelDownloadArgs) -> CliResult<CliOutput> {
 
     let resolved = resolve_model_download(&args.model_id, &models_dir)
         .map_err(|error| CliError::Validation(error.to_string()))?;
-    download_one_model(&resolved, yes, quiet, &mut stderr_lines).await?;
+    download_one_model(&resolved, yes, quiet, &mut stderr_lines, io).await?;
 
     let companions = required_companion_models(&resolved.model);
     for companion_id in companions.companion_model_ids() {
         let companion = resolve_model_download(&companion_id, &models_dir)
             .map_err(|error| CliError::Validation(error.to_string()))?;
-        download_one_model(&companion, yes, quiet, &mut stderr_lines).await?;
+        download_one_model(&companion, yes, quiet, &mut stderr_lines, io).await?;
     }
     Ok(CliOutput::stderr(stderr_lines.join("\n")))
 }
@@ -196,6 +202,7 @@ async fn download_one_model(
     yes: bool,
     quiet: bool,
     stderr_lines: &mut Vec<String>,
+    io: &mut (dyn crate::CliIo + Send),
 ) -> CliResult<()> {
     if installed_model_is_valid(resolved)
         .await
@@ -213,7 +220,7 @@ async fn download_one_model(
         .map_err(|error| CliError::Io(error.to_string()))?;
     if install_path_exists
         && !yes
-        && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path)?
+        && !confirm_model_overwrite(&resolved.model.id, &resolved.install_path, io)?
     {
         return Err(CliError::Model(
             "Download cancelled: model files are invalid and user declined to overwrite."
@@ -221,7 +228,7 @@ async fn download_one_model(
         ));
     }
 
-    let stderr_is_terminal = io::stderr().is_terminal();
+    let stderr_is_terminal = io.stderr_is_terminal();
     let has_printed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
     let has_printed_clone = has_printed.clone();
     let display_id = resolved.model.id.clone();
@@ -256,25 +263,30 @@ async fn download_one_model(
     Ok(())
 }
 
-fn confirm_model_overwrite(model_id: &str, install_path: &Path) -> CliResult<bool> {
-    if !io::stdin().is_terminal() {
+fn confirm_model_overwrite(
+    model_id: &str,
+    install_path: &Path,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<bool> {
+    if !io.stdin_is_terminal() {
         return Err(CliError::Validation(
             "Cannot prompt for confirmation in non-interactive shell. Use --yes to override."
                 .to_string(),
         ));
     }
 
-    eprint!(
+    write!(
+        io.stderr(),
         "Model {model_id} already exists at {} but is invalid (checksum mismatch). Overwrite? [y/N] ",
         install_path.display()
-    );
-    io::stderr()
+    )
+    .map_err(|error| CliError::Io(format!("Failed to write confirmation prompt: {error}")))?;
+    io.stderr()
         .flush()
         .map_err(|error| CliError::Io(format!("Failed to flush confirmation prompt: {error}")))?;
 
     let mut answer = String::new();
-    io::stdin()
-        .read_line(&mut answer)
+    io.read_line_stdin(&mut answer)
         .map_err(|error| CliError::Io(format!("Failed to read confirmation: {error}")))?;
     Ok(matches!(
         answer.trim().to_ascii_lowercase().as_str(),

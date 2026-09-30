@@ -104,3 +104,16 @@ fn online_asr_rejects_local_model_options() {
         "--model-id can only be used with local ASR."
     );
 }
+
+#[test]
+fn local_transcribe_requires_existing_input_file() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "transcribe", "nonexistent-audio-file.wav"])
+            .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert_eq!(
+        error.to_string(),
+        "Input file must be an existing file: nonexistent-audio-file.wav"
+    );
+}

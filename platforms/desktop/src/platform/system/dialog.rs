@@ -72,19 +72,23 @@ pub enum LegacyDatabaseAction {
     Exit,
 }
 
+pub const LEGACY_DB_BACKUP_AND_RESET_LABEL: &str = "备份并重置数据库";
+pub const LEGACY_DB_EXIT_LABEL: &str = "退出";
+pub const LEGACY_DB_TITLE: &str = "数据库版本不兼容";
+
 pub fn prompt_legacy_database_migration(found: i64, minimum: i64) -> LegacyDatabaseAction {
-    let title = "数据库版本不兼容";
     let message = format!(
-        "当前数据库架构版本（v{found}）低于支持的最低版本（v{minimum}）。\n\n您可以选择备份现有数据库并重置以继续启动，或者退出程序。\n选择“备份并重置数据库”将会备份旧数据库文件，并重新创建新数据库以供正常使用。"
+        "当前数据库架构版本（v{found}）低于支持的最低版本（v{minimum}）。\n\n您可以选择备份现有数据库并重置以继续启动，或者退出程序。\n选择“{}”将会备份旧数据库文件，并重新创建新数据库以供正常使用。",
+        LEGACY_DB_BACKUP_AND_RESET_LABEL
     );
 
     let res = rfd::MessageDialog::new()
-        .set_title(title)
+        .set_title(LEGACY_DB_TITLE)
         .set_description(&message)
         .set_level(rfd::MessageLevel::Warning)
         .set_buttons(rfd::MessageButtons::OkCancelCustom(
-            "备份并重置数据库".to_string(),
-            "退出".to_string(),
+            LEGACY_DB_BACKUP_AND_RESET_LABEL.to_string(),
+            LEGACY_DB_EXIT_LABEL.to_string(),
         ))
         .show();
     resolve_legacy_database_action(&res)
@@ -92,7 +96,7 @@ pub fn prompt_legacy_database_migration(found: i64, minimum: i64) -> LegacyDatab
 
 pub fn resolve_legacy_database_action(res: &rfd::MessageDialogResult) -> LegacyDatabaseAction {
     match res {
-        rfd::MessageDialogResult::Custom(s) if s == "备份并重置数据库" => {
+        rfd::MessageDialogResult::Custom(s) if s == LEGACY_DB_BACKUP_AND_RESET_LABEL => {
             LegacyDatabaseAction::BackupAndReset
         }
         rfd::MessageDialogResult::Ok => LegacyDatabaseAction::BackupAndReset,
@@ -129,7 +133,7 @@ mod tests {
     fn test_resolve_legacy_database_action() {
         assert_eq!(
             resolve_legacy_database_action(&rfd::MessageDialogResult::Custom(
-                "备份并重置数据库".to_string()
+                LEGACY_DB_BACKUP_AND_RESET_LABEL.to_string()
             )),
             LegacyDatabaseAction::BackupAndReset
         );
@@ -138,7 +142,15 @@ mod tests {
             LegacyDatabaseAction::BackupAndReset
         );
         assert_eq!(
-            resolve_legacy_database_action(&rfd::MessageDialogResult::Custom("退出".to_string())),
+            resolve_legacy_database_action(&rfd::MessageDialogResult::Custom(
+                LEGACY_DB_EXIT_LABEL.to_string()
+            )),
+            LegacyDatabaseAction::Exit
+        );
+        assert_eq!(
+            resolve_legacy_database_action(&rfd::MessageDialogResult::Custom(
+                "unexpected".to_string()
+            )),
             LegacyDatabaseAction::Exit
         );
         assert_eq!(

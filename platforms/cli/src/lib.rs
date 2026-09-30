@@ -16,8 +16,11 @@ mod transcribe;
 pub mod transcribe_live;
 
 use clap::{Parser, Subcommand};
+use std::collections::VecDeque;
 use std::ffi::OsString;
+use std::future::Future;
 use std::io::{self, IsTerminal, Write};
+use std::pin::Pin;
 use thiserror::Error;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -46,12 +49,29 @@ pub(crate) trait CliIo: Send {
     fn stdout(&mut self) -> &mut (dyn Write + Send);
     fn stderr(&mut self) -> &mut (dyn Write + Send);
     fn stdout_is_terminal(&self) -> bool;
+    fn stderr_is_terminal(&self) -> bool {
+        false
+    }
+    fn stdin_is_terminal(&self) -> bool {
+        false
+    }
+    fn read_line_stdin(&mut self, _buf: &mut String) -> io::Result<usize> {
+        Ok(0)
+    }
+    fn prompt_line_async<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
+        Box::pin(async { Ok(None) })
+    }
 }
 
 #[derive(Default)]
 struct MemoryCliIo {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
+    stdin_lines: VecDeque<String>,
+    stdin_is_terminal: bool,
+    stderr_is_terminal: bool,
 }
 
 impl MemoryCliIo {
@@ -74,12 +94,31 @@ impl CliIo for MemoryCliIo {
     fn stdout_is_terminal(&self) -> bool {
         false
     }
+    fn stderr_is_terminal(&self) -> bool {
+        self.stderr_is_terminal
+    }
+    fn stdin_is_terminal(&self) -> bool {
+        self.stdin_is_terminal
+    }
+    fn read_line_stdin(&mut self, buf: &mut String) -> io::Result<usize> {
+        if let Some(line) = self.stdin_lines.pop_front() {
+            buf.push_str(&line);
+            Ok(line.len())
+        } else {
+            Ok(0)
+        }
+    }
+    fn prompt_line_async<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
+        let line = self.stdin_lines.pop_front();
+        Box::pin(async move { Ok(line) })
+    }
 }
 
 struct StdCliIo {
     stdout: io::Stdout,
     stderr: io::Stderr,
-    stdout_is_terminal: bool,
 }
 
 impl Default for StdCliIo {
@@ -87,7 +126,6 @@ impl Default for StdCliIo {
         Self {
             stdout: io::stdout(),
             stderr: io::stderr(),
-            stdout_is_terminal: io::stdout().is_terminal(),
         }
     }
 }
@@ -101,7 +139,42 @@ impl CliIo for StdCliIo {
         &mut self.stderr
     }
     fn stdout_is_terminal(&self) -> bool {
-        self.stdout_is_terminal
+        self.stdout.is_terminal()
+    }
+    fn stderr_is_terminal(&self) -> bool {
+        self.stderr.is_terminal()
+    }
+    fn stdin_is_terminal(&self) -> bool {
+        io::stdin().is_terminal()
+    }
+    fn read_line_stdin(&mut self, buf: &mut String) -> io::Result<usize> {
+        io::stdin().read_line(buf)
+    }
+    fn prompt_line_async<'a>(
+        &'a mut self,
+    ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        let spawn_res = std::thread::Builder::new()
+            .name("cli-stdin-prompt".into())
+            .spawn(move || {
+                let mut line = String::new();
+                let res = match io::stdin().read_line(&mut line) {
+                    Ok(0) => Ok(None),
+                    Ok(_) => Ok(Some(line)),
+                    Err(error) => Err(error),
+                };
+                let _ = tx.send(res);
+            });
+
+        Box::pin(async move {
+            match spawn_res {
+                Ok(_) => match rx.await {
+                    Ok(res) => res,
+                    Err(_) => Ok(None),
+                },
+                Err(e) => Err(e),
+            }
+        })
     }
 }
 
@@ -245,8 +318,8 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
         Commands::Export(args) => export::run_export(args),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
-        Commands::Models(args) => models::run_models(args).await,
-        Commands::Serve(args) => serve::run_serve(args).await,
+        Commands::Models(args) => models::run_models(args, io).await,
+        Commands::Serve(args) => serve::run_serve(args, io).await,
         Commands::Transcribe(args) => transcribe::run_transcribe(args).await,
         Commands::TranscribeLive(args) => {
             transcribe_live::run_transcribe_live(args, io).await?;

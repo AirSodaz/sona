@@ -27,6 +27,26 @@ struct AutomationRuntimeInner {
     pending_candidates: Mutex<HashMap<String, JoinHandle<()>>>,
 }
 
+impl AutomationRuntimeInner {
+    pub(super) fn lock_pending_candidates(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, JoinHandle<()>>> {
+        self.pending_candidates.lock().unwrap_or_else(|poison| {
+            warn!("[AutomationRuntime] pending_candidates mutex poisoned; recovering inner map");
+            poison.into_inner()
+        })
+    }
+
+    pub(super) fn lock_watchers(
+        &self,
+    ) -> std::sync::MutexGuard<'_, HashMap<String, AutomationRuleRuntime>> {
+        self.watchers.lock().unwrap_or_else(|poison| {
+            warn!("[AutomationRuntime] watchers mutex poisoned; recovering inner map");
+            poison.into_inner()
+        })
+    }
+}
+
 struct AutomationRuleRuntime {
     _watcher: RecommendedWatcher,
 }
@@ -55,7 +75,7 @@ impl AutomationRuntimeState {
     }
 
     fn abort_pending_candidates_for_rule(&self, rule_id: Option<&str>) {
-        let mut pending = self.inner.pending_candidates.lock().unwrap();
+        let mut pending = self.inner.lock_pending_candidates();
         let keys_to_remove = pending
             .keys()
             .filter(|key| match rule_id {
@@ -73,18 +93,18 @@ impl AutomationRuntimeState {
     }
 
     fn clear_watchers(&self) {
-        let mut watchers = self.inner.watchers.lock().unwrap();
+        let mut watchers = self.inner.lock_watchers();
         watchers.clear();
     }
 
     fn remove_rule_runtime(&self, rule_id: &str) {
         self.abort_pending_candidates_for_rule(Some(rule_id));
-        let mut watchers = self.inner.watchers.lock().unwrap();
+        let mut watchers = self.inner.lock_watchers();
         watchers.remove(rule_id);
     }
 
     fn insert_rule_runtime(&self, rule_id: String, watcher: RecommendedWatcher) {
-        let mut watchers = self.inner.watchers.lock().unwrap();
+        let mut watchers = self.inner.lock_watchers();
         watchers.insert(rule_id, AutomationRuleRuntime { _watcher: watcher });
     }
 }
@@ -162,7 +182,7 @@ fn schedule_candidate(
     let normalized_path = normalize_automation_path(&file_path);
     let pending_key = build_pending_candidate_key(&rule.rule_id, &normalized_path);
 
-    let mut pending = state.inner.pending_candidates.lock().unwrap();
+    let mut pending = state.inner.lock_pending_candidates();
     if pending.contains_key(&pending_key) {
         return;
     }
@@ -180,9 +200,7 @@ fn schedule_candidate(
             Ok(None) => {
                 state_for_task
                     .inner
-                    .pending_candidates
-                    .lock()
-                    .unwrap()
+                    .lock_pending_candidates()
                     .remove(&pending_key_for_task);
                 return;
             }
@@ -193,9 +211,7 @@ fn schedule_candidate(
                 );
                 state_for_task
                     .inner
-                    .pending_candidates
-                    .lock()
-                    .unwrap()
+                    .lock_pending_candidates()
                     .remove(&pending_key_for_task);
                 return;
             }
@@ -209,9 +225,7 @@ fn schedule_candidate(
             Ok(None) => {
                 state_for_task
                     .inner
-                    .pending_candidates
-                    .lock()
-                    .unwrap()
+                    .lock_pending_candidates()
                     .remove(&pending_key_for_task);
                 return;
             }
@@ -222,9 +236,7 @@ fn schedule_candidate(
                 );
                 state_for_task
                     .inner
-                    .pending_candidates
-                    .lock()
-                    .unwrap()
+                    .lock_pending_candidates()
                     .remove(&pending_key_for_task);
                 return;
             }
@@ -233,9 +245,7 @@ fn schedule_candidate(
         if first_snapshot != second_snapshot {
             state_for_task
                 .inner
-                .pending_candidates
-                .lock()
-                .unwrap()
+                .lock_pending_candidates()
                 .remove(&pending_key_for_task);
             return;
         }
@@ -249,9 +259,7 @@ fn schedule_candidate(
 
         state_for_task
             .inner
-            .pending_candidates
-            .lock()
-            .unwrap()
+            .lock_pending_candidates()
             .remove(&pending_key_for_task);
     });
 
@@ -376,9 +384,10 @@ where
 #[cfg(test)]
 mod tests {
     use super::{
-        AutomationRuntimeCandidatePayload, AutomationRuntimePathCollectionOutcome,
-        AutomationRuntimeRuleConfig, AutomationRuntimeState, collect_candidate_paths,
-        collect_rule_path_result, replace_rule_runtimes_with, schedule_candidate,
+        AutomationRuntimeCandidatePayload, AutomationRuntimeInner,
+        AutomationRuntimePathCollectionOutcome, AutomationRuntimeRuleConfig,
+        AutomationRuntimeState, collect_candidate_paths, collect_rule_path_result,
+        replace_rule_runtimes_with, schedule_candidate,
     };
     use std::fs;
     use std::sync::{Arc, Mutex};
@@ -420,7 +429,7 @@ mod tests {
         tokio::time::timeout(Duration::from_secs(1), async {
             loop {
                 let has_expected_payloads = sink.payloads.lock().unwrap().len() >= expected;
-                let scheduler_is_idle = state.inner.pending_candidates.lock().unwrap().is_empty();
+                let scheduler_is_idle = state.inner.lock_pending_candidates().is_empty();
                 if has_expected_payloads && scheduler_is_idle {
                     return;
                 }
@@ -632,5 +641,20 @@ mod tests {
         assert!(results[0].started);
         assert!(!results[1].started);
         assert_eq!(results[1].error.as_deref(), Some("watch failed"));
+    }
+
+    #[test]
+    fn mutex_poison_recovery_recovers_inner_map_without_panicking() {
+        let inner = Arc::new(AutomationRuntimeInner::default());
+        let inner_clone = inner.clone();
+
+        let _ = std::thread::spawn(move || {
+            let _guard = inner_clone.pending_candidates.lock().unwrap();
+            panic!("intentional panic to poison mutex");
+        })
+        .join();
+
+        let guard = inner.lock_pending_candidates();
+        assert!(guard.is_empty());
     }
 }
