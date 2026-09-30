@@ -139,7 +139,7 @@ export class TranslationService {
             taskId,
             taskType: 'translate',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
-            config: llm!,
+            config: llm,
             segments,
             targetLanguage: resolvedTargetLanguage,
             targetLanguageName: langOpt ? langOpt.englishName : undefined,

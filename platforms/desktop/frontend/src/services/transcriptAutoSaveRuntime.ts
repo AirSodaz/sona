@@ -48,15 +48,16 @@ class TranscriptAutoSaveRuntime {
   private unsubscribe: (() => void) | null = null;
   private unsubscribeHistoryUpdate: (() => void) | null = null;
 
-  private beginSession(historyId: string, segments: TranscriptSegment[]) {
+  private beginSession(historyId: string, segments: TranscriptSegment[]): string {
     const editSessionId = uuidv4();
     this.editSessionIds.set(historyId, editSessionId);
     this.baselinesBySessionId.set(editSessionId, cloneSegments(segments));
+    return editSessionId;
   }
 
   private enqueueSave(historyId: string, segments: TranscriptSegment[]) {
-    if (!this.editSessionIds.has(historyId)) this.beginSession(historyId, segments);
-    const editSessionId = this.editSessionIds.get(historyId)!;
+    const editSessionId =
+      this.editSessionIds.get(historyId) ?? this.beginSession(historyId, segments);
     if (this.conflictedSessionIds.has(editSessionId)) {
       const conflictMsg = getI18nText(
         'editor.autosave_conflict',

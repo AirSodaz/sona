@@ -254,14 +254,15 @@ function handleDelimiter(
       segmentEnd = fallbackSegmentEnd;
     }
 
-    if (sliceEnd > state.nextTokenSliceStart) {
-      currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart, sliceEnd);
-      currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart, sliceEnd);
-      if (
-        originalSegment.durations &&
-        originalSegment.durations.length === originalSegment.tokens!.length
-      ) {
-        currentDurations = originalSegment.durations.slice(state.nextTokenSliceStart, sliceEnd);
+    const originalTokens = originalSegment.tokens;
+    const originalTimestamps = originalSegment.timestamps;
+    const originalDurations = originalSegment.durations;
+
+    if (originalTokens && originalTimestamps && sliceEnd > state.nextTokenSliceStart) {
+      currentTokens = originalTokens.slice(state.nextTokenSliceStart, sliceEnd);
+      currentTimestamps = originalTimestamps.slice(state.nextTokenSliceStart, sliceEnd);
+      if (originalDurations && originalDurations.length === originalTokens.length) {
+        currentDurations = originalDurations.slice(state.nextTokenSliceStart, sliceEnd);
       }
       state.nextTokenSliceStart = sliceEnd;
     }
@@ -315,16 +316,19 @@ function finalizeSegment(
   let currentDurations: number[] | undefined;
 
   if (hasTimestamps && tokenMap) {
-    currentTokens = originalSegment.tokens!.slice(state.nextTokenSliceStart);
-    currentTimestamps = originalSegment.timestamps!.slice(state.nextTokenSliceStart);
-    if (
-      originalSegment.durations &&
-      originalSegment.durations.length === originalSegment.tokens!.length
-    ) {
-      currentDurations = originalSegment.durations.slice(state.nextTokenSliceStart);
+    const originalTokens = originalSegment.tokens;
+    const originalTimestamps = originalSegment.timestamps;
+    const originalDurations = originalSegment.durations;
+
+    if (originalTokens && originalTimestamps) {
+      currentTokens = originalTokens.slice(state.nextTokenSliceStart);
+      currentTimestamps = originalTimestamps.slice(state.nextTokenSliceStart);
+      if (originalDurations && originalDurations.length === originalTokens.length) {
+        currentDurations = originalDurations.slice(state.nextTokenSliceStart);
+      }
     }
 
-    if (currentTimestamps.length > 0) {
+    if (currentTimestamps && currentTimestamps.length > 0) {
       state.currentSegmentStart = currentTimestamps[0];
     }
   }

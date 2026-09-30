@@ -89,10 +89,11 @@ export function buildErrorDialogViewModel(
   input: AppErrorInput
 ): ErrorDialogViewModel {
   const { title, message, details } = buildErrorDialogOptions(t, input);
-  const hasPrimaryAction = Boolean(input.primaryActionLabelKey);
+  const primaryActionLabelKey = input.primaryActionLabelKey;
+  const hasPrimaryAction = Boolean(primaryActionLabelKey);
 
-  const primaryLabel = hasPrimaryAction
-    ? t(input.primaryActionLabelKey!, { defaultValue: 'Continue' })
+  const primaryLabel = primaryActionLabelKey
+    ? t(primaryActionLabelKey, { defaultValue: 'Continue' })
     : t('common.ok', { defaultValue: 'OK' });
 
   const cancelLabel = hasPrimaryAction

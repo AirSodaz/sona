@@ -316,11 +316,15 @@ export class SummaryService {
     segments: TranscriptSegment[],
     config: AppConfig
   ): SummaryTranscriptLlmJobRequest {
+    const summaryLlmConfig = getFeatureLlmConfig(config, 'summary');
+    if (!summaryLlmConfig) {
+      throw new Error('LLM Service not fully configured.');
+    }
     return {
       taskId,
       taskType: 'summary',
       jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
-      config: getFeatureLlmConfig(config, 'summary')!,
+      config: summaryLlmConfig,
       template,
       segments,
     };

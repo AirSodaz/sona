@@ -150,7 +150,7 @@ export class PolishService {
             taskId,
             taskType: 'polish',
             jobHistoryId: jobHistoryId === 'current' ? null : jobHistoryId,
-            config: llm!,
+            config: llm,
             segments,
             context: preset.context || undefined,
             mode,

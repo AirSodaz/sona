@@ -316,7 +316,8 @@ export function removeCustomProvider(
   const selections = { ...current.selections };
   (Object.keys(FEATURE_MODEL_SELECTION_KEYS) as LlmFeature[]).forEach((feature) => {
     const key = FEATURE_MODEL_SELECTION_KEYS[feature];
-    if (selections[key] && removedModelIds.has(selections[key]!)) delete selections[key];
+    const selected = selections[key];
+    if (selected && removedModelIds.has(selected)) delete selections[key];
   });
   return {
     ...current,

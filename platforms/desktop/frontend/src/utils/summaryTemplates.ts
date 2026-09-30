@@ -146,7 +146,8 @@ export function resolveSummaryTemplate(
     };
   }
 
-  const fallback = getBuiltInSummaryTemplate(DEFAULT_SUMMARY_TEMPLATE_ID)!;
+  const fallback =
+    getBuiltInSummaryTemplate(DEFAULT_SUMMARY_TEMPLATE_ID) ?? BUILTIN_SUMMARY_TEMPLATES[0];
   return {
     id: fallback.id,
     name: t ? t(fallback.labelKey, { defaultValue: fallback.defaultLabel }) : fallback.defaultLabel,

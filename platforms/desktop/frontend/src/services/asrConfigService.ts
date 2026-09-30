@@ -203,11 +203,12 @@ export class AsrConfigService {
     };
 
     if (selection.engine === 'online') {
+      const providers = normalizedAsr.providers ?? this.normalizeAsrProviders(undefined);
       return {
         ...baseRequest,
         engine: 'online',
         onlineProvider: this.buildOnlineProviderRequest(
-          normalizedAsr.providers!,
+          providers,
           selection
         ) as OnlineAsrProviderRequest,
       };

@@ -384,7 +384,8 @@ export class AutomationRuntimeCoordinator {
 
       const failureResults = results.filter((result) => result.outcome !== 'candidate');
       const candidateResults = results.filter(
-        (result) => result.outcome === 'candidate' && result.candidate
+        (result): result is typeof result & { candidate: AutomationRuntimeCandidatePayload } =>
+          result.outcome === 'candidate' && Boolean(result.candidate)
       );
       const blockedCandidateFailures: Array<{
         candidate: AutomationRuntimeCandidatePayload;
@@ -393,7 +394,7 @@ export class AutomationRuntimeCoordinator {
 
       const handledCandidateResults = await Promise.all(
         candidateResults.map(async (result) => {
-          const candidate = result.candidate!;
+          const candidate = result.candidate;
           const handled = await this.handleRuntimeCandidatePayload(candidate, {
             suppressFailureNotification: true,
           });
@@ -523,7 +524,8 @@ export class AutomationRuntimeCoordinator {
 
       const failureResults = results.filter((result) => result.outcome !== 'candidate');
       const candidateResults = results.filter(
-        (result) => result.outcome === 'candidate' && result.candidate
+        (result): result is typeof result & { candidate: AutomationRuntimeCandidatePayload } =>
+          result.outcome === 'candidate' && Boolean(result.candidate)
       );
       const blockedCandidateFailures: Array<{
         candidate: AutomationRuntimeCandidatePayload;
@@ -532,7 +534,7 @@ export class AutomationRuntimeCoordinator {
 
       const handledCandidateResults = await Promise.all(
         candidateResults.map(async (result) => {
-          const candidate = result.candidate!;
+          const candidate = result.candidate;
           const handled = await this.handleRuntimeCandidatePayload(candidate, {
             suppressFailureNotification: true,
           });

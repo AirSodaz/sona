@@ -89,6 +89,7 @@ function DiagnosticCard({
   busyAction: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): React.JSX.Element {
+  const action = item.action;
   return (
     <article className={`diagnostics-overview-card status-${item.status}`}>
       <div className="diagnostics-overview-top">
@@ -99,17 +100,15 @@ function DiagnosticCard({
       </div>
       <div className="diagnostics-overview-title">{item.title}</div>
       <div className="diagnostics-overview-description">{item.description}</div>
-      {item.action ? (
+      {action ? (
         <button
           type="button"
           className="btn btn-secondary panel-modal-inline-action diagnostics-inline-action"
-          onClick={() => void onAction(item.action!)}
-          disabled={busyAction === item.action.kind}
+          onClick={() => void onAction(action)}
+          disabled={busyAction === action.kind}
         >
-          {busyAction === item.action.kind ? (
-            <Loader2 size={14} className="queue-icon-spin" />
-          ) : null}
-          {item.action.label}
+          {busyAction === action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
+          {action.label}
         </button>
       ) : null}
     </article>
@@ -127,6 +126,7 @@ function DiagnosticCheckRow({
   busyAction: string | null;
   t: (key: string, options?: Record<string, unknown>) => string;
 }): React.JSX.Element {
+  const action = check.action;
   return (
     <div className="diagnostics-check-row">
       <div className="diagnostics-check-main">
@@ -140,17 +140,15 @@ function DiagnosticCheckRow({
         <div className="diagnostics-check-description">{check.description}</div>
         {check.meta ? <div className="diagnostics-check-meta">{check.meta}</div> : null}
       </div>
-      {check.action ? (
+      {action ? (
         <button
           type="button"
           className="btn btn-secondary panel-modal-inline-action diagnostics-inline-action"
-          onClick={() => void onAction(check.action!)}
-          disabled={busyAction === check.action.kind}
+          onClick={() => void onAction(action)}
+          disabled={busyAction === action.kind}
         >
-          {busyAction === check.action.kind ? (
-            <Loader2 size={14} className="queue-icon-spin" />
-          ) : null}
-          {check.action.label}
+          {busyAction === action.kind ? <Loader2 size={14} className="queue-icon-spin" /> : null}
+          {action.label}
         </button>
       ) : null}
     </div>

@@ -131,7 +131,7 @@ export function getFeatureLlmConfig(
   };
 }
 
-export function isLlmConfigComplete(llmConfig: LlmConfig | null): boolean {
+export function isLlmConfigComplete(llmConfig: LlmConfig | null): llmConfig is LlmConfig {
   if (!llmConfig) {
     return false;
   }

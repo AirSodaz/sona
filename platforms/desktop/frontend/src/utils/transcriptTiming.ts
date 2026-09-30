@@ -84,9 +84,10 @@ function buildRawTokenWindows(
   return timestamps.map((timestamp, index) => {
     const start = timestamp;
     const nextStart = timestamps[index + 1];
+    const duration = durations?.[index];
     const explicitEnd =
-      durations && Number.isFinite(durations[index])
-        ? start + Math.max(0, durations[index]!)
+      typeof duration === 'number' && Number.isFinite(duration)
+        ? start + Math.max(0, duration)
         : undefined;
     const end = Math.max(
       start,

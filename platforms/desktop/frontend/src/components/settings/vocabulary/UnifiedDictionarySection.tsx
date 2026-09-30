@@ -148,13 +148,17 @@ export function UnifiedDictionarySection({
         }
 
         if (onUpdateTextReplacementSets) {
-          const globalReplacements = parsed.globalTerms
-            .filter((term) => term.isReplacement && term.from && term.to)
-            .map((term, idx) => ({
-              id: `rep_${idx}`,
-              from: term.from!,
-              to: term.to!,
-            }));
+          const globalReplacements = parsed.globalTerms.flatMap((term, idx) =>
+            term.isReplacement && term.from && term.to
+              ? [
+                  {
+                    id: `rep_${idx}`,
+                    from: term.from,
+                    to: term.to,
+                  },
+                ]
+              : []
+          );
           onUpdateTextReplacementSets([
             {
               id: 'unified-replacements',
