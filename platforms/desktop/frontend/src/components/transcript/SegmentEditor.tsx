@@ -9,7 +9,7 @@ import { RichTextPlugin } from '@lexical/react/LexicalRichTextPlugin';
 import { $getRoot, type EditorState, FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import type React from 'react';
 import { useCallback, useEffect, useRef } from 'react';
-import { setActiveEditor } from '../../stores/transcriptRuntimeStore';
+import { clearActiveEditor, setActiveEditor } from '../../stores/transcriptRuntimeStore';
 import { convertOldFormatToLexical } from '../../utils/dataMigrationUtils';
 import { serializeSplitBlocks } from '../../utils/lexicalSplitUtils';
 import { logger } from '../../utils/logger';
@@ -25,7 +25,7 @@ function ActiveEditorPlugin({ onReady }: ActiveEditorPluginProps): null {
   useEffect(() => {
     onReady(editor);
     return () => {
-      setActiveEditor(null);
+      clearActiveEditor(editor);
     };
   }, [editor, onReady]);
 

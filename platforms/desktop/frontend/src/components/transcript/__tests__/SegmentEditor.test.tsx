@@ -561,4 +561,24 @@ describe('SegmentEditor', () => {
     expect(focusSpy).not.toHaveBeenCalled();
     expect(dispatchSpy).not.toHaveBeenCalled();
   });
+
+  it('does not clear a newer active editor when an older editor unmounts', async () => {
+    const first = renderEditor('First editor');
+    const firstEditor = await waitFor(() => getActiveEditor()!);
+    expect(firstEditor).toBeTruthy();
+
+    const second = renderEditor('Second editor');
+    const secondEditor = await waitFor(() => {
+      const active = getActiveEditor();
+      expect(active).not.toBe(firstEditor);
+      return active!;
+    });
+    expect(secondEditor).toBeTruthy();
+
+    first.unmount();
+    expect(getActiveEditor()).toBe(secondEditor);
+
+    second.unmount();
+    expect(getActiveEditor()).toBeNull();
+  });
 });
