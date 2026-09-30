@@ -80,6 +80,26 @@ impl ApiServerController {
         let (processing, pending) = self.active_job_count().await;
         processing > 0 || pending > 0
     }
+
+    pub(crate) async fn stop_for_storage_migration(&self) -> Result<bool, String> {
+        let mut lock = self.running_server.lock().await;
+        let Some(server) = lock.as_ref() else {
+            return Ok(false);
+        };
+        if server.has_active_jobs().await {
+            let (processing, pending) = server.active_job_count().await;
+            return Err(format!(
+                "Cannot migrate storage while API server has active transcription jobs (processing: {processing}, pending: {pending}). Please wait for tasks to finish or stop the API server."
+            ));
+        }
+        let server = lock.take().expect("checked is_some");
+        drop(lock);
+        server.stop().await.map_err(|error| {
+            format!("Failed to stop API server cleanly before migration: {error}")
+        })?;
+        log::info!("[Storage] API server cleanly stopped for storage migration.");
+        Ok(true)
+    }
 }
 
 #[derive(Clone)]
@@ -477,5 +497,15 @@ mod tests {
                 .and_then(serde_json::Value::as_str),
             Some("sqlite-key")
         );
+    }
+
+    #[tokio::test]
+    async fn stop_for_storage_migration_returns_false_when_no_server_running() {
+        let controller = ApiServerController::default();
+        let stopped = controller
+            .stop_for_storage_migration()
+            .await
+            .expect("should succeed when no server is running");
+        assert!(!stopped);
     }
 }

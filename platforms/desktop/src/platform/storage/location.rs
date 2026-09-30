@@ -164,7 +164,7 @@ pub fn is_migration_in_progress() -> bool {
     MIGRATION_IN_PROGRESS.load(Ordering::Acquire)
 }
 
-pub async fn check_active_tasks_idle<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+pub async fn check_active_tasks_idle(app: &AppHandle) -> Result<(), String> {
     if let Some(audio_state) = app.try_state::<crate::integrations::audio::AudioState>()
         && audio_state.has_active_captures()
     {
@@ -189,14 +189,63 @@ pub async fn check_active_tasks_idle<R: Runtime>(app: &AppHandle<R>) -> Result<(
                 .to_string(),
         );
     }
+    if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>()
+        && server_controller.has_active_jobs().await
+    {
+        return Err(
+            "Cannot migrate storage while API server has active or queued transcription jobs. Please wait for tasks to finish or stop the API server."
+                .to_string(),
+        );
+    }
     Ok(())
 }
 
-pub async fn check_storage_can_migrate<R: Runtime>(app: &AppHandle<R>) -> Result<(), String> {
+pub async fn check_storage_can_migrate(app: &AppHandle) -> Result<(), String> {
     if is_migration_in_progress() {
         return Err("Another storage migration is already in progress.".to_string());
     }
     check_active_tasks_idle(app).await
+}
+
+async fn stop_api_server_for_migration(app: &AppHandle) -> Result<bool, String> {
+    if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>() {
+        server_controller.stop_for_storage_migration().await
+    } else {
+        Ok(false)
+    }
+}
+
+struct ServerRestartGuard<'a> {
+    app: &'a AppHandle,
+    was_running: bool,
+    committed: bool,
+}
+
+impl<'a> ServerRestartGuard<'a> {
+    fn new(app: &'a AppHandle, was_running: bool) -> Self {
+        Self {
+            app,
+            was_running,
+            committed: false,
+        }
+    }
+
+    fn commit_and_restart(mut self) {
+        if self.was_running {
+            self.committed = true;
+            crate::app::server::start_from_app_handle(self.app);
+        }
+    }
+}
+
+impl Drop for ServerRestartGuard<'_> {
+    fn drop(&mut self) {
+        if self.was_running && !self.committed {
+            log::warn!(
+                "[Storage] Migration was aborted or failed. API server will remain stopped to prevent data corruption."
+            );
+        }
+    }
 }
 
 pub const STORAGE_MIGRATION_PROGRESS_EVENT: &str = "storage-migration-progress";
@@ -515,8 +564,8 @@ pub fn cleanup_pending_storage_locations_for_app<R: Runtime>(app: &AppHandle<R>)
     }
 }
 
-pub async fn migrate_data_directory<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn migrate_data_directory(
+    app: &AppHandle,
     target_dir_str: String,
     copy_existing: bool,
 ) -> Result<StorageDirectoriesInfo, String> {
@@ -538,6 +587,9 @@ pub async fn migrate_data_directory<R: Runtime>(
         return get_storage_directories_info(app);
     }
     check_path_overlap(&active_data_dir, &target_path)?;
+
+    let server_was_running = stop_api_server_for_migration(app).await?;
+    let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
     if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
         let _ = current_db.with_write_connection(|conn| {
@@ -659,6 +711,7 @@ pub async fn migrate_data_directory<R: Runtime>(
         bootstrap.pending_cleanup_dirs.push(active_data_dir);
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    restart_guard.commit_and_restart();
 
     let _ = app.emit(
         STORAGE_MIGRATION_PROGRESS_EVENT,
@@ -674,9 +727,7 @@ pub async fn migrate_data_directory<R: Runtime>(
     get_storage_directories_info(app)
 }
 
-pub async fn reset_data_directory<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<StorageDirectoriesInfo, String> {
+pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesInfo, String> {
     let _guard = MigrationGuard::acquire()?;
     check_active_tasks_idle(app).await?;
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
@@ -691,6 +742,9 @@ pub async fn reset_data_directory<R: Runtime>(
     if active_canonical == default_canonical {
         return get_storage_directories_info(app);
     }
+
+    let server_was_running = stop_api_server_for_migration(app).await?;
+    let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
     if let Ok(current_db) = crate::platform::database::try_sqlite_database(app) {
         let _ = current_db.with_write_connection(|conn| {
@@ -734,11 +788,12 @@ pub async fn reset_data_directory<R: Runtime>(
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     bootstrap.custom_data_dir = None;
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    restart_guard.commit_and_restart();
 
     get_storage_directories_info(app)
 }
-pub async fn set_models_directory<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn set_models_directory(
+    app: &AppHandle,
     target_dir_str: String,
     move_existing: bool,
 ) -> Result<StorageDirectoriesInfo, String> {
@@ -767,6 +822,8 @@ pub async fn set_models_directory<R: Runtime>(
     if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
         asr_state.clear_model_caches().await;
     }
+    let server_was_running = stop_api_server_for_migration(app).await?;
+    let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
     if move_existing && active_models_dir.exists() {
         let total_bytes = calculate_directory_size(&active_models_dir, 16);
@@ -792,6 +849,7 @@ pub async fn set_models_directory<R: Runtime>(
         bootstrap.custom_models_dir = Some(target_path);
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    restart_guard.commit_and_restart();
 
     let _ = app.emit(
         STORAGE_MIGRATION_PROGRESS_EVENT,
@@ -807,20 +865,21 @@ pub async fn set_models_directory<R: Runtime>(
     get_storage_directories_info(app)
 }
 
-pub async fn reset_models_directory<R: Runtime>(
-    app: &AppHandle<R>,
-) -> Result<StorageDirectoriesInfo, String> {
+pub async fn reset_models_directory(app: &AppHandle) -> Result<StorageDirectoriesInfo, String> {
     let _guard = MigrationGuard::acquire()?;
     check_active_tasks_idle(app).await?;
     // Evict all loaded models before resetting path
     if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
         asr_state.clear_model_caches().await;
     }
+    let server_was_running = stop_api_server_for_migration(app).await?;
+    let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     bootstrap.custom_models_dir = None;
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    restart_guard.commit_and_restart();
 
     get_storage_directories_info(app)
 }

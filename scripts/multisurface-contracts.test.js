@@ -244,6 +244,170 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   }
 });
 
+// Parameter-name presence smoke check: asserts all Rust command arguments are represented in TS contracts.
+// Note: Full structural type validation, nullability, and return types require compiler/Specta macro integration.
+test('Rust Tauri command handlers and TypeScript contracts parameter names stay synchronized (smoke)', () => {
+  const commandsTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'tauri', 'commands.ts');
+  const contractsTs = read('platforms', 'desktop', 'frontend', 'src', 'services', 'tauri', 'contracts.ts');
+  const tauriContractsRs = read('adapters', 'ts_bind', 'src', 'tauri_contracts.rs');
+  const desktopBindings = read('platforms', 'desktop', 'frontend', 'src', 'bindings.ts');
+
+  const typeDefs = new Map();
+  const typeDefRegex = /(?:export\s+)?(?:type|interface)\s+([a-zA-Z0-9_]+)(?:_Deserialize|_Serialize)?\s*(?:=\s*)?\{([\s\S]*?)\};?/gu;
+  for (const m of contractsTs.matchAll(typeDefRegex)) {
+    typeDefs.set(m[1], m[2]);
+  }
+  for (const m of desktopBindings.matchAll(typeDefRegex)) {
+    if (!typeDefs.has(m[1])) {
+      typeDefs.set(m[1], m[2]);
+    }
+  }
+
+  const rustSources = [];
+  const commandsDir = path.join(repoRoot, 'platforms', 'desktop', 'src', 'commands');
+  for (const entry of fs.readdirSync(commandsDir, { withFileTypes: true })) {
+    if (entry.isFile() && entry.name.endsWith('.rs') && entry.name !== 'mod.rs') {
+      rustSources.push(fs.readFileSync(path.join(commandsDir, entry.name), 'utf8'));
+    }
+  }
+
+  const rustCommands = new Map();
+  const commandRegex = /#\[tauri::command(?:\(([^)]*)\))?\]\s*(?:#\[[^\]]*\]\s*)*pub\s+(?:async\s+)?fn\s+([a-zA-Z0-9_]+)\s*(?:<[^>]*>)?\s*\(([\s\S]*?)\)\s*(?:->\s*([^{]+))?\{/gu;
+  for (const source of rustSources) {
+    for (const match of source.matchAll(commandRegex)) {
+      const attrArgs = match[1] || '';
+      const fnName = match[2];
+      const paramsRaw = match[3];
+
+      const renameMatch = /rename\s*=\s*"([^"]+)"/u.exec(attrArgs);
+      const cmdName = renameMatch ? renameMatch[1] : fnName;
+
+      const cleanParams = paramsRaw.replace(/\s+/gu, ' ');
+      const params = [];
+      let cur = '';
+      let depth = 0;
+      for (const ch of cleanParams) {
+        if ('<([{'.includes(ch)) {
+          depth++;
+        } else if ('>)]}'.includes(ch)) {
+          depth--;
+        } else if (ch === ',' && depth === 0) {
+          if (cur.trim()) {
+            const colonIndex = cur.indexOf(':');
+            if (colonIndex > 0) {
+              let name = cur.slice(0, colonIndex).trim();
+              name = name.replace(/^mut\s+/u, '').trim();
+              const type = cur.slice(colonIndex + 1).trim();
+              if (!/(?:^|::)(?:AppHandle|Window|State)(?:<|$)/u.test(type)) {
+                params.push(name);
+              }
+            }
+          }
+          cur = '';
+          continue;
+        }
+        cur += ch;
+      }
+      if (cur.trim()) {
+        const colonIndex = cur.indexOf(':');
+        if (colonIndex > 0) {
+          let name = cur.slice(0, colonIndex).trim();
+          name = name.replace(/^mut\s+/u, '').trim();
+          const type = cur.slice(colonIndex + 1).trim();
+          if (!/(?:^|::)(?:AppHandle|Window|State)(?:<|$)/u.test(type)) {
+            params.push(name);
+          }
+        }
+      }
+      rustCommands.set(cmdName, params);
+    }
+  }
+
+  const propToCommand = new Map();
+  const groupRegex = /([a-zA-Z0-9_]+):\s*\{([^}]+)\}/gu;
+  for (const gm of commandsTs.matchAll(groupRegex)) {
+    const groupName = gm[1];
+    const body = gm[2];
+    for (const m of body.matchAll(/([a-zA-Z0-9_]+):\s*'([a-z0-9_]+)'/gu)) {
+      propToCommand.set(`TauriCommand.${groupName}.${m[1]}`, m[2]);
+    }
+  }
+
+  const allContracts = new Map();
+  const rustContractRegex = /TauriCommandContract::new\(\s*"([^"]+)",\s*"([^"\\]*(?:\\.[^"\\]*)*)",\s*"([^"\\]*(?:\\.[^"\\]*)*)"\s*,?\s*\),/gu;
+  for (const match of tauriContractsRs.matchAll(rustContractRegex)) {
+    allContracts.set(match[1], match[2].trim());
+  }
+
+  const manualContractRegex = /\[(TauriCommand\.[a-zA-Z0-9_]+\.[a-zA-Z0-9_]+)\]:\s*\{\s*args:([\s\S]*?);\s*result:[\s\S]*?;\s*\}/gu;
+  for (const match of contractsTs.matchAll(manualContractRegex)) {
+    const cmdName = propToCommand.get(match[1]);
+    if (cmdName) {
+      allContracts.set(cmdName, match[2].trim());
+    }
+  }
+
+  const snakeToCamel = (s) => s.replace(/_([a-z])/gu, (_, c) => c.toUpperCase());
+
+  const excludedCommands = new Set(['greet', 'create_tar_bz2', 'check_gpu_availability']);
+
+  // 1. Bi-directional: Verify all Rust commands are present in allContracts
+  for (const [cmdName] of rustCommands) {
+    if (excludedCommands.has(cmdName)) continue;
+    assert.ok(
+      allContracts.has(cmdName),
+      `Rust command '${cmdName}' has no matching TypeScript contract in TauriCommandContractMap`,
+    );
+  }
+
+  // 2. Verify all contracts match Rust command parameter signatures
+  for (const [cmdName, argsStr] of allContracts) {
+    if (excludedCommands.has(cmdName)) continue;
+    assert.ok(
+      rustCommands.has(cmdName),
+      `Contract command '${cmdName}' has no matching Rust #[tauri::command]`,
+    );
+
+    const rustParams = rustCommands.get(cmdName);
+    if (rustParams.length === 0) {
+      assert.ok(
+        argsStr === 'undefined' || argsStr === 'undefined | undefined',
+        `Command '${cmdName}' expects no parameters, but contract declares '${argsStr}'`,
+      );
+    } else {
+      assert.notEqual(
+        argsStr,
+        'undefined',
+        `Command '${cmdName}' expects parameters [${rustParams.join(', ')}], but contract declares undefined`,
+      );
+
+      let cleanArgs = argsStr.trim();
+      if (cleanArgs.endsWith(' | undefined')) {
+        cleanArgs = cleanArgs.slice(0, -' | undefined'.length).trim();
+      }
+
+      let body = '';
+      if (cleanArgs.startsWith('{')) {
+        body = cleanArgs;
+      } else {
+        const baseName = cleanArgs.replace(/(_Deserialize|_Serialize)$/u, '');
+        body = typeDefs.get(baseName) || typeDefs.get(cleanArgs) || '';
+      }
+
+      if (body) {
+        for (const param of rustParams) {
+          const camel = snakeToCamel(param);
+          assert.match(
+            body,
+            new RegExp(`\\b${camel}\\b`, 'u'),
+            `Command '${cmdName}' Rust parameter '${param}' (camelCase '${camel}') is missing in args contract: ${argsStr}`,
+          );
+        }
+      }
+    }
+  }
+});
+
 test('core domain and host ports expose structured errors', () => {
   const structuredErrorFiles = [
     ['core', 'src', 'config', 'repository.rs'],
