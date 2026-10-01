@@ -65,7 +65,7 @@ log = { workspace = true }
 tauri-plugin-single-instance = "2"
 enigo = "0.6"
 tauri-plugin-global-shortcut = "2"
-tauri-plugin-prevent-default = "5.0.0"
+tauri-plugin-prevent-default = "6.0.0"
 chrono = { workspace = true }
 notify = { workspace = true }
 thiserror = { workspace = true }
