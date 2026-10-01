@@ -425,6 +425,8 @@
     "purge_bulk_confirm": "{{count}}개 항목을 영구 삭제할까요? 되돌릴 수 없습니다.",
     "purge_title": "영구 삭제",
     "delete_permanently": "영구 삭제",
+    "delete_directly_checkbox": "휴지통으로 이동하지 않고 영구 삭제",
+    "delete_directly_warning": "이 작업은 영구 삭제되며 되돌릴 수 없습니다.",
     "empty_trash": "휴지통 비우기",
     "empty_trash_confirm": "휴지통의 {{count}}개 항목을 모두 영구 삭제할까요? 되돌릴 수 없습니다.",
     "draft_badge": "Draft",

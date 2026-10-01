@@ -8,8 +8,30 @@ export type DialogType = 'alert' | 'confirm' | 'prompt';
 
 /** Visual variants for dialogs. */
 export type DialogVariant = 'info' | 'success' | 'warning' | 'error';
+
+/** Configuration for an optional checkbox within a confirmation dialog. */
+export interface DialogCheckboxConfig {
+  /** The text displayed next to the checkbox. */
+  label: string;
+  /** Initial checked state (default false). */
+  defaultChecked?: boolean;
+  /** Label for the confirm button when the checkbox is checked. */
+  checkedConfirmLabel?: string;
+  /** Warning or helper note rendered when the checkbox is checked. */
+  checkedNotice?: string;
+  /** Optional callback fired when the checkbox state changes. */
+  onChange?: (checked: boolean) => void;
+}
+
+/** Result returned when confirming a dialog with a checkbox. */
+export interface CheckboxConfirmResult {
+  confirmed: boolean;
+  checked: boolean;
+}
+
 export type DialogResult = undefined | boolean | string | null;
 type DialogResolver = (value: DialogResult) => void;
+type CheckboxDialogResolver = (value: CheckboxConfirmResult) => void;
 
 /** Options for configuring a dialog. */
 export interface DialogOptions {
@@ -33,6 +55,8 @@ export interface DialogOptions {
   inputPlaceholder?: string;
   /** Optional callback for an AI action (e.g., auto-generating text). */
   onAiAction?: () => Promise<string>;
+  /** Optional checkbox configuration for confirm dialogs. */
+  checkbox?: DialogCheckboxConfig;
 }
 
 /** State interface for the dialog store. */
@@ -43,6 +67,8 @@ interface DialogState {
   options: DialogOptions | null;
   /** Resolver function for the current dialog promise. */
   resolveRef: DialogResolver | null;
+  /** Dedicated resolver function for checkbox confirmation dialogs. */
+  checkboxResolveRef: CheckboxDialogResolver | null;
 
   // Actions
   /**
@@ -72,6 +98,18 @@ interface DialogState {
   confirm: (message: string, options?: Omit<DialogOptions, 'message' | 'type'>) => Promise<boolean>;
 
   /**
+   * Shows a confirmation dialog with a checkbox.
+   *
+   * @param message The question/message to display.
+   * @param options Additional options including checkbox configuration.
+   * @return A promise that resolves to CheckboxConfirmResult ({ confirmed, checked }).
+   */
+  checkboxConfirm: (
+    message: string,
+    options: Omit<DialogOptions, 'message' | 'type'> & { checkbox: DialogCheckboxConfig }
+  ) => Promise<CheckboxConfirmResult>;
+
+  /**
    * Shows a prompt dialog with a text input.
    *
    * @param message The message to display.
@@ -89,6 +127,12 @@ interface DialogState {
    * @param result The result value.
    */
   close: (result: DialogResult) => void;
+  /**
+   * Closes a checkbox confirmation dialog with a structured result.
+   *
+   * @param result The CheckboxConfirmResult value.
+   */
+  closeCheckboxConfirm: (result: CheckboxConfirmResult) => void;
 }
 
 /**
@@ -98,7 +142,7 @@ export const useDialogStore = create<DialogState>((set, get) => ({
   isOpen: false,
   options: null,
   resolveRef: null,
-
+  checkboxResolveRef: null,
   alert: (message, options) => {
     return new Promise<void>((resolve) => {
       set({
@@ -110,6 +154,7 @@ export const useDialogStore = create<DialogState>((set, get) => ({
           ...options,
         },
         resolveRef: () => resolve(),
+        checkboxResolveRef: null,
       });
     });
   },
@@ -141,6 +186,23 @@ export const useDialogStore = create<DialogState>((set, get) => ({
           ...options,
         },
         resolveRef: (value) => resolve(value === true),
+        checkboxResolveRef: null,
+      });
+    });
+  },
+
+  checkboxConfirm: (message, options) => {
+    return new Promise<CheckboxConfirmResult>((resolve) => {
+      set({
+        isOpen: true,
+        options: {
+          message,
+          type: 'confirm',
+          variant: 'warning',
+          ...options,
+        },
+        resolveRef: null,
+        checkboxResolveRef: resolve,
       });
     });
   },
@@ -156,19 +218,43 @@ export const useDialogStore = create<DialogState>((set, get) => ({
           ...options,
         },
         resolveRef: (value) => resolve(typeof value === 'string' || value === null ? value : null),
+        checkboxResolveRef: null,
       });
     });
   },
 
   close: (result) => {
-    const { resolveRef } = get();
+    const { resolveRef, checkboxResolveRef } = get();
     if (resolveRef) {
       resolveRef(result);
+    }
+    if (checkboxResolveRef) {
+      checkboxResolveRef({
+        confirmed: result === true,
+        checked: false,
+      });
     }
     set({
       isOpen: false,
       options: null,
       resolveRef: null,
+      checkboxResolveRef: null,
+    });
+  },
+
+  closeCheckboxConfirm: (result) => {
+    const { checkboxResolveRef, resolveRef } = get();
+    if (checkboxResolveRef) {
+      checkboxResolveRef(result);
+    }
+    if (resolveRef) {
+      resolveRef(result.confirmed);
+    }
+    set({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
+      checkboxResolveRef: null,
     });
   },
 }));

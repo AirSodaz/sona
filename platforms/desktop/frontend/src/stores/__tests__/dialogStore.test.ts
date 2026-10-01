@@ -7,6 +7,7 @@ describe('dialogStore', () => {
       isOpen: false,
       options: null,
       resolveRef: null,
+      checkboxResolveRef: null,
     });
   });
 
@@ -76,6 +77,58 @@ describe('dialogStore', () => {
     close(true);
 
     await promise;
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
+
+  it('should open checkboxConfirm and resolve typed CheckboxConfirmResult when confirmed with checked=true', async () => {
+    const { checkboxConfirm, closeCheckboxConfirm } = useDialogStore.getState();
+
+    const promise = checkboxConfirm('Move to trash?', {
+      checkbox: {
+        label: 'Directly delete',
+        checkedConfirmLabel: 'Delete Permanently',
+      },
+    });
+
+    expect(useDialogStore.getState().isOpen).toBe(true);
+    expect(useDialogStore.getState().options?.type).toBe('confirm');
+    expect(useDialogStore.getState().options?.checkbox?.label).toBe('Directly delete');
+
+    closeCheckboxConfirm({ confirmed: true, checked: true });
+
+    const result = await promise;
+    expect(result).toEqual({ confirmed: true, checked: true });
+    expect(useDialogStore.getState().isOpen).toBe(false);
+  });
+
+  it('should open checkboxConfirm and resolve typed CheckboxConfirmResult when confirmed with checked=false', async () => {
+    const { checkboxConfirm, closeCheckboxConfirm } = useDialogStore.getState();
+
+    const promise = checkboxConfirm('Move to trash?', {
+      checkbox: {
+        label: 'Directly delete',
+      },
+    });
+
+    closeCheckboxConfirm({ confirmed: true, checked: false });
+
+    const result = await promise;
+    expect(result).toEqual({ confirmed: true, checked: false });
+  });
+
+  it('should open checkboxConfirm and resolve with confirmed=false when cancelled via generic close', async () => {
+    const { checkboxConfirm, close } = useDialogStore.getState();
+
+    const promise = checkboxConfirm('Move to trash?', {
+      checkbox: {
+        label: 'Directly delete',
+      },
+    });
+
+    close(false);
+
+    const result = await promise;
+    expect(result).toEqual({ confirmed: false, checked: false });
     expect(useDialogStore.getState().isOpen).toBe(false);
   });
 });

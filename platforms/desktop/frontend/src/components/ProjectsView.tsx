@@ -137,6 +137,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
+  const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
   const showError = useDialogStore((state) => state.showError);
 
   const viewMode = globalConfig.projectsViewMode || 'list';
@@ -525,24 +526,45 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
 
     const isTrashItem = initialItem.deletedAt != null;
-    const confirmed = await confirm(
-      isTrashItem
-        ? t('history.purge_confirm', {
-            defaultValue: 'Permanently delete this item? This cannot be undone.',
-          })
-        : t('history.trash_confirm', { defaultValue: 'Move this item to Trash?' }),
-      {
-        title: isTrashItem
-          ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
-          : t('history.trash_title', { defaultValue: 'Move to Trash' }),
-        confirmLabel: isTrashItem
-          ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
-          : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
-        variant: 'error',
-      }
-    );
+    let isConfirmed = false;
+    let isDirectDelete = false;
 
-    if (!confirmed) {
+    if (isTrashItem) {
+      isConfirmed = await confirm(
+        t('history.purge_confirm', {
+          defaultValue: 'Permanently delete this item? This cannot be undone.',
+        }),
+        {
+          title: t('history.purge_title', { defaultValue: 'Delete Permanently' }),
+          confirmLabel: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
+          variant: 'error',
+        }
+      );
+    } else {
+      const result = await checkboxConfirm(
+        t('history.trash_confirm', { defaultValue: 'Move this item to Trash?' }),
+        {
+          title: t('history.trash_title', { defaultValue: 'Move to Trash' }),
+          confirmLabel: t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
+          variant: 'error',
+          checkbox: {
+            label: t('history.delete_directly_checkbox', {
+              defaultValue: 'Directly delete permanently (bypass Trash)',
+            }),
+            checkedConfirmLabel: t('history.delete_permanently', {
+              defaultValue: 'Delete Permanently',
+            }),
+            checkedNotice: t('history.delete_directly_warning', {
+              defaultValue: 'This will permanently delete the records and cannot be undone.',
+            }),
+          },
+        }
+      );
+      isConfirmed = result.confirmed;
+      isDirectDelete = result.checked;
+    }
+
+    if (!isConfirmed) {
       return;
     }
 
@@ -554,7 +576,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    if (isTrashItem) {
+    if (isTrashItem || isDirectDelete) {
       await historyService.purgeRecordings([id]);
     } else {
       await useHistoryStore.getState().deleteItem(id);
@@ -676,36 +698,75 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
       return;
     }
 
-    const isTrashScope = browseState.isTrashScope;
-    const confirmed = await confirm(
-      isTrashScope
-        ? t('history.purge_bulk_confirm', {
-            count: ids.length,
-            defaultValue: `Permanently delete ${ids.length} items? This cannot be undone.`,
-          })
-        : t('history.trash_bulk_confirm', {
-            count: ids.length,
-            defaultValue: `Move ${ids.length} items to Trash?`,
-          }),
-      {
-        title: isTrashScope
-          ? t('history.purge_title', { defaultValue: 'Delete Permanently' })
-          : t('history.trash_title', { defaultValue: 'Move to Trash' }),
-        confirmLabel: isTrashScope
-          ? t('history.delete_permanently', { defaultValue: 'Delete Permanently' })
-          : t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
-        variant: 'error',
-      }
-    );
+    const initialLockState = getLiveDraftLockState();
+    const candidateIds =
+      initialLockState.isLocked && initialLockState.sourceHistoryId
+        ? ids.filter((id) => id !== initialLockState.sourceHistoryId)
+        : ids;
 
-    if (!confirmed) {
+    if (candidateIds.length === 0) {
+      return;
+    }
+    const isTrashScope = browseState.isTrashScope;
+    let isConfirmed = false;
+    let isDirectDelete = false;
+
+    if (isTrashScope) {
+      isConfirmed = await confirm(
+        t('history.purge_bulk_confirm', {
+          count: candidateIds.length,
+          defaultValue: `Permanently delete ${candidateIds.length} items? This cannot be undone.`,
+        }),
+        {
+          title: t('history.purge_title', { defaultValue: 'Delete Permanently' }),
+          confirmLabel: t('history.delete_permanently', { defaultValue: 'Delete Permanently' }),
+          variant: 'error',
+        }
+      );
+    } else {
+      const result = await checkboxConfirm(
+        t('history.trash_bulk_confirm', {
+          count: candidateIds.length,
+          defaultValue: `Move ${candidateIds.length} items to Trash?`,
+        }),
+        {
+          title: t('history.trash_title', { defaultValue: 'Move to Trash' }),
+          confirmLabel: t('history.move_to_trash', { defaultValue: 'Move to Trash' }),
+          variant: 'error',
+          checkbox: {
+            label: t('history.delete_directly_checkbox', {
+              defaultValue: 'Directly delete permanently (bypass Trash)',
+            }),
+            checkedConfirmLabel: t('history.delete_permanently', {
+              defaultValue: 'Delete Permanently',
+            }),
+            checkedNotice: t('history.delete_directly_warning', {
+              defaultValue: 'This will permanently delete the records and cannot be undone.',
+            }),
+          },
+        }
+      );
+      isConfirmed = result.confirmed;
+      isDirectDelete = result.checked;
+    }
+
+    if (!isConfirmed) {
+      return;
+    }
+    const latestLockState = getLiveDraftLockState();
+    const targetIds =
+      latestLockState.isLocked && latestLockState.sourceHistoryId
+        ? candidateIds.filter((id) => id !== latestLockState.sourceHistoryId)
+        : candidateIds;
+
+    if (targetIds.length === 0) {
       return;
     }
 
-    if (isTrashScope) {
-      await historyService.purgeRecordings(ids);
+    if (isTrashScope || isDirectDelete) {
+      await historyService.purgeRecordings(targetIds);
     } else {
-      await deleteHistoryItems(ids);
+      await deleteHistoryItems(targetIds);
     }
     await refreshHistory();
     selectionState.clearSelection();

@@ -425,6 +425,8 @@
     "purge_bulk_confirm": "Permanently delete {{count}} items? This cannot be undone.",
     "purge_title": "Delete Permanently",
     "delete_permanently": "Delete Permanently",
+    "delete_directly_checkbox": "Directly delete permanently (bypass Trash)",
+    "delete_directly_warning": "This will permanently delete the records and cannot be undone.",
     "empty_trash": "Empty Trash",
     "empty_trash_confirm": "Permanently delete all {{count}} items in Trash? This cannot be undone.",
     "draft_badge": "Draft",

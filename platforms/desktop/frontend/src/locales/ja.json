@@ -425,6 +425,8 @@
     "purge_bulk_confirm": "{{count}} 件を完全に削除しますか？元に戻せません。",
     "purge_title": "完全に削除",
     "delete_permanently": "完全に削除",
+    "delete_directly_checkbox": "ゴミ箱に入れずに完全に削除する",
+    "delete_directly_warning": "この操作は完全に削除され、元に戻せません。",
     "empty_trash": "ゴミ箱を空にする",
     "empty_trash_confirm": "ゴミ箱の {{count}} 件をすべて完全に削除しますか？元に戻せません。",
     "draft_badge": "草案",

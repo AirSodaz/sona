@@ -482,6 +482,7 @@ describe('ProjectsView', () => {
     useDialogStore.setState({
       ...useDialogStore.getState(),
       confirm: vi.fn().mockResolvedValue(true),
+      checkboxConfirm: vi.fn().mockResolvedValue({ confirmed: true, checked: false }),
       showError: vi.fn().mockResolvedValue(undefined),
     });
   });
@@ -786,6 +787,70 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(historyService.deleteRecording).toHaveBeenCalledWith('hist-inbox');
     });
+  });
+
+  it('directly purges a history item when direct delete checkbox is checked in confirmation dialog', async () => {
+    const { historyService } = await import('../../services/historyService');
+    const checkboxConfirmSpy = vi.fn().mockResolvedValue({ confirmed: true, checked: true });
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      checkboxConfirm: checkboxConfirmSpy,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    await clickAsync(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(checkboxConfirmSpy).toHaveBeenCalledWith(
+        'Move this item to Trash?',
+        expect.objectContaining({
+          title: 'Move to Trash',
+          confirmLabel: 'Move to Trash',
+          variant: 'error',
+          checkbox: expect.objectContaining({
+            label: 'Directly delete permanently (bypass Trash)',
+            checkedConfirmLabel: 'Delete Permanently',
+            checkedNotice: 'This will permanently delete the records and cannot be undone.',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(historyService.purgeRecordings).toHaveBeenCalledWith(['hist-inbox']);
+      expect(historyService.deleteRecording).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not delete a history item when confirmation dialog is cancelled', async () => {
+    const { historyService } = await import('../../services/historyService');
+    const checkboxConfirmSpy = vi.fn().mockResolvedValue({ confirmed: false, checked: false });
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      checkboxConfirm: checkboxConfirmSpy,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.contextMenu(screen.getByTestId('history-item-hist-inbox'), {
+      clientX: 120,
+      clientY: 180,
+    });
+    await clickAsync(screen.getByRole('menuitem', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(checkboxConfirmSpy).toHaveBeenCalled();
+    });
+
+    expect(historyService.purgeRecordings).not.toHaveBeenCalled();
+    expect(historyService.deleteRecording).not.toHaveBeenCalled();
   });
 
   it('disables opening the current project while keeping project settings available', async () => {
@@ -1574,6 +1639,104 @@ describe('ProjectsView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Open File Directory' }));
     expect(historyService.openHistoryFolder).toHaveBeenCalled();
+  });
+
+  it('directly purges multiple items when direct delete checkbox is checked during bulk delete', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-project-1',
+          title: 'Project Item 1',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-project-1.json',
+          previewText: 'Preview 1',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    const { historyService } = await import('../../services/historyService');
+    const checkboxConfirmSpy = vi.fn().mockResolvedValue({ confirmed: true, checked: true });
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      checkboxConfirm: checkboxConfirmSpy,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(getButtonByContent('All Items'));
+    await waitFor(() => {
+      screen.getByRole('button', { name: 'Project Item 1' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select hist-project-1' }));
+    await clickAsync(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(checkboxConfirmSpy).toHaveBeenCalledWith(
+        'Move 1 items to Trash?',
+        expect.objectContaining({
+          title: 'Move to Trash',
+          confirmLabel: 'Move to Trash',
+          variant: 'error',
+          checkbox: expect.objectContaining({
+            label: 'Directly delete permanently (bypass Trash)',
+            checkedConfirmLabel: 'Delete Permanently',
+            checkedNotice: 'This will permanently delete the records and cannot be undone.',
+          }),
+        })
+      );
+    });
+
+    await waitFor(() => {
+      expect(historyService.purgeRecordings).toHaveBeenCalledWith(['hist-project-1']);
+      expect(historyService.deleteRecordings).not.toHaveBeenCalled();
+    });
+  });
+
+  it('does not delete multiple items when bulk delete confirmation is cancelled', async () => {
+    useHistoryStore.setState({
+      items: [
+        {
+          id: 'hist-project-1',
+          title: 'Project Item 1',
+          timestamp: Date.now(),
+          duration: 12,
+          audioPath: 'audio-1.wav',
+          transcriptPath: 'hist-project-1.json',
+          previewText: 'Preview 1',
+          projectId: 'project-1',
+        },
+      ],
+    } as any);
+
+    const { historyService } = await import('../../services/historyService');
+    const checkboxConfirmSpy = vi.fn().mockResolvedValue({ confirmed: false, checked: false });
+    useDialogStore.setState({
+      ...useDialogStore.getState(),
+      checkboxConfirm: checkboxConfirmSpy,
+    });
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    await clickAsync(getButtonByContent('All Items'));
+    await waitFor(() => {
+      screen.getByRole('button', { name: 'Project Item 1' });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select hist-project-1' }));
+    await clickAsync(screen.getByRole('button', { name: 'Delete' }));
+
+    await waitFor(() => {
+      expect(checkboxConfirmSpy).toHaveBeenCalled();
+    });
+
+    expect(historyService.purgeRecordings).not.toHaveBeenCalled();
+    expect(historyService.deleteRecordings).not.toHaveBeenCalled();
   });
 
   it('jumps into live mode while keeping the active project context', async () => {

@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { type DialogVariant, useDialogStore } from '../stores/dialogStore';
 import { logger } from '../utils/logger';
+import { Checkbox } from './Checkbox';
 import { SparklesIcon } from './Icons';
 import { Modal } from './Modal';
 
@@ -60,24 +61,28 @@ function getDialogTitle(t: TFunction, variant: DialogVariant, title?: string): s
  * @return The rendered dialog or null if closed.
  */
 export function GlobalDialog(): React.JSX.Element | null {
-  const { isOpen, options, close } = useDialogStore();
+  const { isOpen, options, close, closeCheckboxConfirm } = useDialogStore();
   const { t } = useTranslation();
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const cancelButtonRef = useRef<HTMLButtonElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const [inputValue, setInputValue] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
-
-  // Reset input value when dialog opens
+  const [checkboxChecked, setCheckboxChecked] = useState(false);
+  // Reset input value and checkbox state when dialog opens
   useEffect(() => {
-    if (!isOpen || options?.type !== 'prompt') {
+    if (!isOpen || !options) {
       return;
     }
 
-    queueMicrotask(() => {
-      setInputValue(options.defaultValue || '');
-      setIsAiLoading(false);
-    });
+    if (options.type === 'prompt') {
+      queueMicrotask(() => {
+        setInputValue(options.defaultValue || '');
+        setIsAiLoading(false);
+      });
+    }
+
+    setCheckboxChecked(options.checkbox?.defaultChecked ?? false);
   }, [isOpen, options]);
 
   const handleAiClick = async () => {
@@ -127,9 +132,16 @@ export function GlobalDialog(): React.JSX.Element | null {
     onAiAction,
   } = options;
 
+  const handleCheckboxToggle = (checked: boolean) => {
+    setCheckboxChecked(checked);
+    options.checkbox?.onChange?.(checked);
+  };
+
   const handleConfirm = () => {
     if (type === 'prompt') {
       close(inputValue);
+    } else if (options.checkbox) {
+      closeCheckboxConfirm({ confirmed: true, checked: checkboxChecked });
     } else {
       close(true);
     }
@@ -138,6 +150,8 @@ export function GlobalDialog(): React.JSX.Element | null {
   const handleCancel = () => {
     if (type === 'prompt') {
       close(null);
+    } else if (options.checkbox) {
+      closeCheckboxConfirm({ confirmed: false, checked: false });
     } else {
       close(false);
     }
@@ -171,7 +185,8 @@ export function GlobalDialog(): React.JSX.Element | null {
             className={`btn ${variant === 'error' ? 'btn-danger' : 'btn-primary'}`}
             onClick={handleConfirm}
           >
-            {confirmLabel ||
+            {(checkboxChecked && options.checkbox?.checkedConfirmLabel) ||
+              confirmLabel ||
               (type === 'confirm' || type === 'prompt'
                 ? t('common.confirm', { defaultValue: 'Confirm' })
                 : t('common.ok', { defaultValue: 'OK' }))}
@@ -194,6 +209,44 @@ export function GlobalDialog(): React.JSX.Element | null {
         >
           {message}
         </p>
+
+        {options.checkbox && (
+          <div
+            className="dialog-checkbox-group"
+            style={{
+              display: 'flex',
+              flexDirection: 'column',
+              gap: 'var(--spacing-xs, 4px)',
+              padding: '10px 12px',
+              backgroundColor: 'var(--color-bg-secondary)',
+              borderRadius: 'var(--radius-md, 8px)',
+              border: '1px solid var(--color-border)',
+            }}
+          >
+            <Checkbox
+              checked={checkboxChecked}
+              onChange={handleCheckboxToggle}
+              label={options.checkbox.label}
+            />
+            {checkboxChecked && options.checkbox.checkedNotice && (
+              <div
+                className="dialog-checkbox-notice"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '0.78rem',
+                  color: 'var(--color-error, #ef4444)',
+                  paddingLeft: 26,
+                  marginTop: 2,
+                }}
+              >
+                <AlertTriangle size={13} style={{ flexShrink: 0 }} />
+                <span>{options.checkbox.checkedNotice}</span>
+              </div>
+            )}
+          </div>
+        )}
 
         {type === 'prompt' && (
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>

@@ -425,6 +425,8 @@
     "purge_bulk_confirm": "永久刪除 {{count}} 筆記錄？此操作無法復原。",
     "purge_title": "永久刪除",
     "delete_permanently": "永久刪除",
+    "delete_directly_checkbox": "直接徹底刪除（不移至垃圾桶）",
+    "delete_directly_warning": "此操作將永久刪除記錄，無法復原。",
     "empty_trash": "清空垃圾桶",
     "empty_trash_confirm": "永久刪除垃圾桶中的全部 {{count}} 筆記錄？此操作無法復原。",
     "draft_badge": "草稿",
