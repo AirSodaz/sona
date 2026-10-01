@@ -25,51 +25,8 @@
 /* --- Mode Switcher (segmented control) --------------------------------- */
 
 .dict-mode-switcher {
-  display: inline-flex;
-  padding: 3px;
-  border-radius: var(--radius-sm, 10px);
-  background: color-mix(in srgb, var(--color-bg-secondary) 75%, var(--color-bg-primary));
-  border: 1px solid var(--color-border);
-  gap: 2px;
+  flex-shrink: 0;
 }
-
-.dict-mode-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 13px;
-  border-radius: calc(var(--radius-sm, 10px) - 3px);
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-family: inherit;
-  font-size: 0.8rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background var(--transition-fast),
-    color var(--transition-fast),
-    box-shadow var(--transition-fast);
-}
-
-.dict-mode-btn:hover {
-  color: var(--color-text-primary);
-  background: var(--color-bg-hover);
-}
-
-.dict-mode-btn[aria-selected="true"] {
-  background: var(--color-bg-elevated);
-  color: var(--color-text-primary);
-  font-weight: 600;
-  box-shadow: var(--apple-control-shadow-rest);
-}
-
-.dict-mode-btn:focus-visible {
-  outline: none;
-  box-shadow: var(--apple-control-focus-ring);
-}
-
 /* --- Quick-Add Bar ----------------------------------------------------- */
 
 .dict-quick-add {

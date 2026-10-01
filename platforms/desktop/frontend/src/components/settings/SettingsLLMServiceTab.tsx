@@ -35,6 +35,7 @@ import {
 import { LocalProviderAccordionItem } from './llm/LocalProviderAccordionItem';
 import { ProviderAccordionItem } from './llm/ProviderAccordionItem';
 import {
+  ScenarioCardTabs,
   SettingsItem,
   SettingsPageHeader,
   SettingsSection,
@@ -249,14 +250,16 @@ export function SettingsLLMServiceTab({
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
       >
-        <div
-          className="settings-scenario-cards llm-feature-tabs"
-          role="tablist"
-          aria-label={t('settings.llm.feature_models')}
-        >
-          {[
+        <ScenarioCardTabs<LlmFeature>
+          className="llm-feature-tabs"
+          ariaLabel={t('settings.llm.feature_models')}
+          activeTab={activeFeature}
+          onChange={setActiveFeature}
+          idPrefix="settings-llm-feature-tab"
+          getPanelId={() => 'settings-llm-feature-panel'}
+          items={[
             {
-              value: 'polish' as const,
+              value: 'polish',
               label: t('settings.llm.polish_model'),
               description: t('settings.llm.polish_model_description', {
                 defaultValue: 'Improve wording and readability',
@@ -264,7 +267,7 @@ export function SettingsLLMServiceTab({
               icon: <Sparkles size={18} />,
             },
             {
-              value: 'translation' as const,
+              value: 'translation',
               label: t('settings.llm.translation_model'),
               description: t('settings.llm.translation_model_description', {
                 defaultValue: 'Translate transcript text between languages',
@@ -272,33 +275,15 @@ export function SettingsLLMServiceTab({
               icon: <Globe size={18} />,
             },
             {
-              value: 'summary' as const,
+              value: 'summary',
               label: t('settings.llm.summary_model'),
               description: t('settings.llm.summary_model_description', {
                 defaultValue: 'Create concise summaries from transcripts',
               }),
               icon: <AlignLeft size={18} />,
             },
-          ].map(({ value, label, description, icon }) => (
-            <button
-              id={`settings-llm-feature-tab-${value}`}
-              key={value}
-              type="button"
-              role="tab"
-              aria-label={label}
-              aria-selected={activeFeature === value}
-              aria-controls="settings-llm-feature-panel"
-              className={`settings-scenario-card${activeFeature === value ? ' active' : ''}`}
-              onClick={() => setActiveFeature(value)}
-            >
-              <span className="settings-scenario-card-icon">{icon}</span>
-              <span className="settings-scenario-card-text">
-                <span className="settings-scenario-card-label">{label}</span>
-                <span className="settings-scenario-card-description">{description}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+          ]}
+        />
         <div
           id="settings-llm-feature-panel"
           className="llm-feature-panel"

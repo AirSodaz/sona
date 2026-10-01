@@ -255,9 +255,10 @@ describe('SettingsSubtitleTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({
       voiceTypingQuickRecallShortcut: 'Ctrl+Shift+H',
     });
-    fireEvent.change(document.querySelector('#vt-mode-select') as HTMLSelectElement, {
-      target: { value: 'toggle' },
-    });
+    const toggleModeBtn = document.querySelector(
+      '#vt-mode-select [data-tab-value="toggle"]'
+    ) as HTMLElement;
+    fireEvent.click(toggleModeBtn);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingMode: 'toggle' });
 
     fireEvent.change(document.querySelector('#vt-processing-mode-select') as HTMLSelectElement, {
@@ -265,9 +266,10 @@ describe('SettingsSubtitleTab', () => {
     });
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingProcessingMode: 'polish' });
 
-    fireEvent.change(document.querySelector('#vt-placement-select') as HTMLSelectElement, {
-      target: { value: 'bottom_center' },
-    });
+    const bottomCenterPlacementBtn = document.querySelector(
+      '#vt-placement-select [data-tab-value="bottom_center"]'
+    ) as HTMLElement;
+    fireEvent.click(bottomCenterPlacementBtn);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingPlacement: 'bottom_center' });
     fireEvent.click(switchBtns[1]);
     expect(mockUpdateConfig).toHaveBeenCalledWith({ voiceTypingSoundEnabled: false });

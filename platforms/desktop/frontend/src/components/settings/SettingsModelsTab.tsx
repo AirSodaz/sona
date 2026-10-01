@@ -50,6 +50,8 @@ import { Switch } from '../Switch';
 import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
 import { LocalModelManagementSection } from './LocalModelManagementSection';
 import {
+  ScenarioCardTabs,
+  SegmentedSubTabs,
   SettingsAccordion,
   SettingsItem,
   SettingsPageHeader,
@@ -782,15 +784,15 @@ export function SettingsModelsTab({
         description={t('settings.model_selection_desc')}
         icon={<Settings2 size={20} />}
       >
-        <div
+        <ScenarioCardTabs<ModelScenario>
           id="settings-model-scenario"
-          className="settings-scenario-cards"
-          role="tablist"
-          aria-label={t('settings.scenario_selector_label', { defaultValue: 'Model scenario' })}
-        >
-          {[
+          ariaLabel={t('settings.scenario_selector_label', { defaultValue: 'Model scenario' })}
+          activeTab={activeScenario}
+          onChange={setActiveScenario}
+          idPrefix="settings-model-scenario-tab"
+          items={[
             {
-              value: 'live' as ModelScenario,
+              value: 'live',
               icon: <Mic size={18} />,
               label: t('settings.scenario_live', { defaultValue: 'Real-time Live' }),
               description: t('settings.scenario_live_desc', {
@@ -798,31 +800,15 @@ export function SettingsModelsTab({
               }),
             },
             {
-              value: 'batch' as ModelScenario,
+              value: 'batch',
               icon: <PlaySquare size={18} />,
               label: t('settings.scenario_batch', { defaultValue: 'Batch Import' }),
               description: t('settings.scenario_batch_desc', {
                 defaultValue: 'Import audio/video files for offline batch transcription',
               }),
             },
-          ].map((option) => (
-            <button
-              key={option.value}
-              type="button"
-              role="tab"
-              aria-selected={activeScenario === option.value}
-              aria-label={option.label}
-              className={`settings-scenario-card${activeScenario === option.value ? ' active' : ''}`}
-              onClick={() => setActiveScenario(option.value)}
-            >
-              <span className="settings-scenario-card-icon">{option.icon}</span>
-              <span className="settings-scenario-card-text">
-                <span className="settings-scenario-card-label">{option.label}</span>
-                <span className="settings-scenario-card-description">{option.description}</span>
-              </span>
-            </button>
-          ))}
-        </div>
+          ]}
+        />
 
         <SettingsItem
           title={t('settings.asr_model_label', { defaultValue: 'Recognition Model' })}
@@ -1014,63 +1000,64 @@ export function SettingsModelsTab({
                 });
 
                 return (
-                  <div
-                    className={`settings-sensitivity-control${!isEmbeddingActive ? ' is-disabled' : ''}`}
+                  <SegmentedSubTabs<'permissive' | 'balanced' | 'strict'>
                     role="radiogroup"
-                    aria-label={t('settings.speaker_sensitivity_label', {
+                    className="settings-sensitivity-control"
+                    size="sm"
+                    ariaLabel={t('settings.speaker_sensitivity_label', {
                       defaultValue: 'Separation Sensitivity',
                     })}
-                    data-tooltip={!isEmbeddingActive ? disabledHint : undefined}
-                    data-tooltip-pos="top"
-                    data-tooltip-multiline
-                    tabIndex={!isEmbeddingActive ? 0 : undefined}
-                  >
-                    {[
+                    activeTab={currentSensitivity}
+                    onChange={(val) => updateConfig({ speakerDiarizationSensitivity: val })}
+                    disabled={!isEmbeddingActive}
+                    tooltip={!isEmbeddingActive ? disabledHint : undefined}
+                    tooltipPos="top"
+                    tooltipMultiline
+                    items={[
                       {
-                        value: 'permissive' as const,
+                        value: 'permissive',
                         label: t('settings.speaker_sensitivity_permissive', {
                           defaultValue: 'Permissive',
                         }),
-                        desc: t('settings.speaker_sensitivity_permissive_desc', {
-                          defaultValue: 'Tends to merge similar voices',
-                        }),
+                        tooltip: isEmbeddingActive
+                          ? t('settings.speaker_sensitivity_permissive_desc', {
+                              defaultValue: 'Tends to merge similar voices',
+                            })
+                          : undefined,
+                        tooltipPos: 'top',
+                        disabled: localModelActionsDisabled || !isEmbeddingActive,
+                        className: 'settings-sensitivity-btn',
                       },
                       {
-                        value: 'balanced' as const,
+                        value: 'balanced',
                         label: t('settings.speaker_sensitivity_balanced', {
                           defaultValue: 'Balanced',
                         }),
-                        desc: t('settings.speaker_sensitivity_balanced_desc', {
-                          defaultValue: 'Recommended model baseline',
-                        }),
+                        tooltip: isEmbeddingActive
+                          ? t('settings.speaker_sensitivity_balanced_desc', {
+                              defaultValue: 'Recommended model baseline',
+                            })
+                          : undefined,
+                        tooltipPos: 'top',
+                        disabled: localModelActionsDisabled || !isEmbeddingActive,
+                        className: 'settings-sensitivity-btn',
                       },
                       {
-                        value: 'strict' as const,
+                        value: 'strict',
                         label: t('settings.speaker_sensitivity_strict', {
                           defaultValue: 'Strict',
                         }),
-                        desc: t('settings.speaker_sensitivity_strict_desc', {
-                          defaultValue: 'Differentiates close speakers',
-                        }),
+                        tooltip: isEmbeddingActive
+                          ? t('settings.speaker_sensitivity_strict_desc', {
+                              defaultValue: 'Differentiates close speakers',
+                            })
+                          : undefined,
+                        tooltipPos: 'top',
+                        disabled: localModelActionsDisabled || !isEmbeddingActive,
+                        className: 'settings-sensitivity-btn',
                       },
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        type="button"
-                        role="radio"
-                        aria-checked={currentSensitivity === item.value}
-                        className={`settings-sensitivity-btn${
-                          currentSensitivity === item.value ? ' is-active' : ''
-                        }`}
-                        onClick={() => updateConfig({ speakerDiarizationSensitivity: item.value })}
-                        disabled={localModelActionsDisabled || !isEmbeddingActive}
-                        data-tooltip={isEmbeddingActive ? item.desc : undefined}
-                        data-tooltip-pos="top"
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
+                    ]}
+                  />
                 );
               })()}
             </SettingsItem>
@@ -1210,61 +1197,54 @@ export function SettingsModelsTab({
                       const currentSensitivity =
                         modelConfig.speakerDiarizationSensitivity ?? 'balanced';
                       return (
-                        <div
-                          className="settings-radio-pill-group"
+                        <SegmentedSubTabs<'permissive' | 'balanced' | 'strict'>
                           role="radiogroup"
-                          aria-label={t('settings.speaker_sensitivity_label', {
+                          className="settings-sensitivity-control"
+                          size="sm"
+                          ariaLabel={t('settings.speaker_sensitivity_label', {
                             defaultValue: 'Separation Sensitivity',
                           })}
-                        >
-                          {[
+                          activeTab={currentSensitivity}
+                          onChange={(val) => updateConfig({ speakerDiarizationSensitivity: val })}
+                          items={[
                             {
-                              value: 'permissive' as const,
+                              value: 'permissive',
                               label: t('settings.speaker_sensitivity_permissive', {
                                 defaultValue: 'Permissive',
                               }),
-                              desc: t('settings.speaker_sensitivity_permissive_desc', {
+                              tooltip: t('settings.speaker_sensitivity_permissive_desc', {
                                 defaultValue: 'Tends to merge similar voices',
                               }),
+                              tooltipPos: 'top',
+                              disabled: localModelActionsDisabled,
+                              className: 'settings-sensitivity-btn',
                             },
                             {
-                              value: 'balanced' as const,
+                              value: 'balanced',
                               label: t('settings.speaker_sensitivity_balanced', {
                                 defaultValue: 'Balanced',
                               }),
-                              desc: t('settings.speaker_sensitivity_balanced_desc', {
+                              tooltip: t('settings.speaker_sensitivity_balanced_desc', {
                                 defaultValue: 'Recommended model baseline',
                               }),
+                              tooltipPos: 'top',
+                              disabled: localModelActionsDisabled,
+                              className: 'settings-sensitivity-btn',
                             },
                             {
-                              value: 'strict' as const,
+                              value: 'strict',
                               label: t('settings.speaker_sensitivity_strict', {
                                 defaultValue: 'Strict',
                               }),
-                              desc: t('settings.speaker_sensitivity_strict_desc', {
+                              tooltip: t('settings.speaker_sensitivity_strict_desc', {
                                 defaultValue: 'Differentiates close speakers',
                               }),
+                              tooltipPos: 'top',
+                              disabled: localModelActionsDisabled,
+                              className: 'settings-sensitivity-btn',
                             },
-                          ].map((item) => (
-                            <button
-                              key={item.value}
-                              type="button"
-                              role="radio"
-                              aria-checked={currentSensitivity === item.value}
-                              className={`settings-radio-pill ${
-                                currentSensitivity === item.value ? 'active' : ''
-                              }`}
-                              onClick={() =>
-                                updateConfig({ speakerDiarizationSensitivity: item.value })
-                              }
-                              disabled={localModelActionsDisabled}
-                              data-tooltip={item.desc}
-                              data-tooltip-pos="top"
-                            >
-                              {item.label}
-                            </button>
-                          ))}
-                        </div>
+                          ]}
+                        />
                       );
                     })()}
                   </SettingsItem>

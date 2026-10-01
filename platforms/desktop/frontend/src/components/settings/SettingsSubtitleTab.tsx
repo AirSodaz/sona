@@ -42,6 +42,8 @@ import { SubtitleIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { SettingsContextRulesSection } from './SettingsContextRulesSection';
 import {
+  ScenarioCardTabs,
+  SegmentedSubTabs,
   SettingsItem,
   SettingsPageHeader,
   SettingsSection,
@@ -191,27 +193,27 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             defaultValue: 'How the shortcut triggers listening',
           })}
         >
-          <div style={{ width: '180px' }}>
-            <Dropdown
-              id="vt-mode-select"
-              value={vtConfig.voiceTypingMode || 'hold'}
-              onChange={(val) => updateConfig({ voiceTypingMode: val as 'hold' | 'toggle' })}
-              options={[
-                {
-                  value: 'hold',
-                  label: t('settings.voice_typing_mode_hold', {
-                    defaultValue: 'Push to Talk (Hold)',
-                  }),
-                },
-                {
-                  value: 'toggle',
-                  label: t('settings.voice_typing_mode_toggle', {
-                    defaultValue: 'Toggle (Press once)',
-                  }),
-                },
-              ]}
-            />
-          </div>
+          <SegmentedSubTabs<'hold' | 'toggle'>
+            id="vt-mode-select"
+            size="sm"
+            ariaLabel={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
+            activeTab={vtConfig.voiceTypingMode || 'hold'}
+            onChange={(val) => updateConfig({ voiceTypingMode: val })}
+            items={[
+              {
+                value: 'hold',
+                label: t('settings.voice_typing_mode_hold', {
+                  defaultValue: 'Push to Talk',
+                }),
+              },
+              {
+                value: 'toggle',
+                label: t('settings.voice_typing_mode_toggle', {
+                  defaultValue: 'Toggle',
+                }),
+              },
+            ]}
+          />
         </SettingsItem>
 
         <SettingsItem
@@ -220,31 +222,27 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             defaultValue: 'Choose where the floating capsule appears during dictation',
           })}
         >
-          <div style={{ width: '220px' }}>
-            <Dropdown
-              id="vt-placement-select"
-              value={vtConfig.voiceTypingPlacement || 'caret'}
-              onChange={(val) =>
-                updateConfig({
-                  voiceTypingPlacement: val as 'caret' | 'bottom_center',
-                })
-              }
-              options={[
-                {
-                  value: 'caret',
-                  label: t('settings.voice_typing_placement_caret', {
-                    defaultValue: 'Follow Caret (Caret Follower)',
-                  }),
-                },
-                {
-                  value: 'bottom_center',
-                  label: t('settings.voice_typing_placement_bottom_center', {
-                    defaultValue: 'Bottom Center (Dynamic Island)',
-                  }),
-                },
-              ]}
-            />
-          </div>
+          <SegmentedSubTabs<'caret' | 'bottom_center'>
+            id="vt-placement-select"
+            size="sm"
+            ariaLabel={t('settings.voice_typing_placement', { defaultValue: 'Placement Policy' })}
+            activeTab={vtConfig.voiceTypingPlacement || 'caret'}
+            onChange={(val) => updateConfig({ voiceTypingPlacement: val })}
+            items={[
+              {
+                value: 'caret',
+                label: t('settings.voice_typing_placement_caret', {
+                  defaultValue: 'Follow Caret',
+                }),
+              },
+              {
+                value: 'bottom_center',
+                label: t('settings.voice_typing_placement_bottom_center', {
+                  defaultValue: 'Bottom Center',
+                }),
+              },
+            ]}
+          />
         </SettingsItem>
       </SettingsSection>
 
@@ -277,13 +275,13 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
                 {
                   value: 'raw',
                   label: t('settings.voice_typing_processing_mode_raw', {
-                    defaultValue: 'Fast Dictation (Raw)',
+                    defaultValue: 'Fast Dictation',
                   }),
                 },
                 {
                   value: 'polish',
                   label: t('settings.voice_typing_processing_mode_polish', {
-                    defaultValue: 'Smart Polish (AI Rewrite)',
+                    defaultValue: 'Smart Polish',
                   }),
                 },
               ]}
@@ -893,23 +891,6 @@ export function SettingsSubtitleTab({
       setActiveSubTab(initialSubTab);
     }
   }, [initialSubTab]);
-
-  const handleTabKeyDown = (e: React.KeyboardEvent) => {
-    const tabs: SubtitleSubTab[] = ['voice_typing', 'subtitles'];
-    const currentIndex = tabs.indexOf(activeSubTab);
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextTab = tabs[(currentIndex + 1) % tabs.length];
-      setActiveSubTab(nextTab);
-      document.getElementById(`settings-subtitle-subtab-${nextTab}`)?.focus();
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
-      setActiveSubTab(prevTab);
-      document.getElementById(`settings-subtitle-subtab-${prevTab}`)?.focus();
-    }
-  };
-
   const lockWindow = config.lockWindow ?? false;
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;
@@ -930,24 +911,19 @@ export function SettingsSubtitleTab({
           defaultValue: 'Configure the live caption window and voice typing into other apps.',
         })}
       />
-      <div
+      <ScenarioCardTabs<SubtitleSubTab>
         id="settings-subtitle-categories"
-        className="settings-scenario-cards"
-        role="tablist"
-        aria-label={t('settings.subtitle_voice_typing_title', {
+        ariaLabel={t('settings.subtitle_voice_typing_title', {
           defaultValue: 'Subtitles & Voice Typing',
         })}
-        onKeyDown={handleTabKeyDown}
-        style={{
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg, 16px)',
-          background: 'var(--color-bg-primary)',
-          boxShadow: 'var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04))',
-        }}
-      >
-        {[
+        activeTab={activeSubTab}
+        onChange={setActiveSubTab}
+        idPrefix="settings-subtitle-subtab"
+        getPanelId={(value) => `settings-subtitle-panel-${value}`}
+        bordered
+        items={[
           {
-            value: 'voice_typing' as const,
+            value: 'voice_typing',
             label: t('settings.voice_typing', { defaultValue: 'Voice Typing' }),
             description: t('settings.voice_typing_description', {
               defaultValue:
@@ -956,34 +932,15 @@ export function SettingsSubtitleTab({
             icon: <Keyboard size={18} />,
           },
           {
-            value: 'subtitles' as const,
+            value: 'subtitles',
             label: t('live.subtitle_settings', { defaultValue: 'Subtitle Settings' }),
             description: t('settings.subtitle_tab_description', {
               defaultValue: 'Configure live caption window behavior and visual appearance.',
             }),
             icon: <Subtitles size={18} />,
           },
-        ].map((tab) => (
-          <button
-            id={`settings-subtitle-subtab-${tab.value}`}
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={activeSubTab === tab.value}
-            aria-controls={`settings-subtitle-panel-${tab.value}`}
-            aria-label={tab.label}
-            tabIndex={activeSubTab === tab.value ? 0 : -1}
-            className={`settings-scenario-card${activeSubTab === tab.value ? ' active' : ''}`}
-            onClick={() => setActiveSubTab(tab.value)}
-          >
-            <span className="settings-scenario-card-icon">{tab.icon}</span>
-            <span className="settings-scenario-card-text">
-              <span className="settings-scenario-card-label">{tab.label}</span>
-              <span className="settings-scenario-card-description">{tab.description}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+        ]}
+      />
 
       {activeSubTab === 'voice_typing' && (
         <div

@@ -37,7 +37,7 @@ import {
 } from '../../../utils/yamlDictionaryParser';
 import { Dropdown } from '../../Dropdown';
 import { Modal } from '../../Modal';
-import { SettingsSection } from '../SettingsLayout';
+import { SegmentedSubTabs, SettingsSection } from '../SettingsLayout';
 import './vocabulary.css';
 
 interface UnifiedDictionarySectionProps {
@@ -576,28 +576,25 @@ export function UnifiedDictionarySection({
     >
       {/* ── 1. Header Toolbar ── */}
       <div className="dict-toolbar">
-        <div className="dict-mode-switcher" role="tablist" aria-label="Dictionary view mode">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'visual'}
-            onClick={() => setMode('visual')}
-            className="dict-mode-btn"
-          >
-            <Eye size={13} />
-            {t('settings.dict_mode_visual', { defaultValue: 'Visual' })}
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={mode === 'code'}
-            onClick={() => setMode('code')}
-            className="dict-mode-btn"
-          >
-            <Code2 size={13} />
-            {t('settings.dict_mode_code', { defaultValue: 'YAML Code' })}
-          </button>
-        </div>
+        <SegmentedSubTabs<'visual' | 'code'>
+          className="dict-mode-switcher"
+          size="sm"
+          ariaLabel="Dictionary view mode"
+          activeTab={mode}
+          onChange={setMode}
+          items={[
+            {
+              value: 'visual',
+              label: t('settings.dict_mode_visual', { defaultValue: 'Visual' }),
+              icon: <Eye size={13} />,
+            },
+            {
+              value: 'code',
+              label: t('settings.dict_mode_code', { defaultValue: 'YAML Code' }),
+              icon: <Code2 size={13} />,
+            },
+          ]}
+        />
 
         <div className="dict-toolbar-actions">
           {mode === 'visual' && (

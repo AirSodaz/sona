@@ -188,4 +188,21 @@ export function SettingsAccordion({
   );
 }
 
+export {
+  type ScenarioCardTabItem,
+  ScenarioCardTabs,
+  type ScenarioCardTabsProps,
+  type SecondaryTabItem,
+  SecondaryTabs,
+  type SecondaryTabsProps,
+  type SecondaryTabVariant,
+  type SegmentedSubTabItem,
+  SegmentedSubTabs,
+  type SegmentedSubTabsProps,
+} from './SecondaryTabs';
 export { SettingsLocationCard, type SettingsLocationCardProps } from './SettingsLocationCard';
+export {
+  type TabNavigationItem,
+  type UseTabKeyboardNavigationOptions,
+  useTabKeyboardNavigation,
+} from './useTabKeyboardNavigation';

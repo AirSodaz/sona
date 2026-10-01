@@ -7,7 +7,12 @@ import { getFeatureModelEntry } from '../../services/llm/state';
 import { useLlmAssistantConfig, useSetConfig, useVocabularyConfig } from '../../stores/configStore';
 import { BookIcon, SummaryIcon } from '../Icons';
 import { SettingsContextSection } from './SettingsContextSection';
-import { SettingsPageHeader, SettingsTabContainer } from './SettingsLayout';
+import {
+  ScenarioCardTabs,
+  SegmentedSubTabs,
+  SettingsPageHeader,
+  SettingsTabContainer,
+} from './SettingsLayout';
 import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 import { SettingsSpeakerProfilesSection } from './SettingsSpeakerProfilesSection';
 import { SettingsSummaryTemplateSection } from './SettingsSummaryTemplateSection';
@@ -41,38 +46,6 @@ export function SettingsVocabularyTab({
       setActivePromptsSubTab(initialPromptsSubTab);
     }
   }, [initialPromptsSubTab]);
-
-  const handleTabKeyDown = (e: React.KeyboardEvent) => {
-    const tabs: VocabularySubTab[] = ['recognition', 'prompts', 'speakers'];
-    const currentIndex = tabs.indexOf(activeSubTab);
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextTab = tabs[(currentIndex + 1) % tabs.length];
-      setActiveSubTab(nextTab);
-      document.getElementById(`settings-vocab-tab-${nextTab}`)?.focus();
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
-      setActiveSubTab(prevTab);
-      document.getElementById(`settings-vocab-tab-${prevTab}`)?.focus();
-    }
-  };
-
-  const handlePromptsTabKeyDown = (e: React.KeyboardEvent) => {
-    const tabs: PromptsSubTab[] = ['polish', 'translation', 'summary'];
-    const currentIndex = tabs.indexOf(activePromptsSubTab);
-    if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
-      e.preventDefault();
-      const nextTab = tabs[(currentIndex + 1) % tabs.length];
-      setActivePromptsSubTab(nextTab);
-      document.getElementById(`settings-prompts-tab-${nextTab}`)?.focus();
-    } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      const prevTab = tabs[(currentIndex - 1 + tabs.length) % tabs.length];
-      setActivePromptsSubTab(prevTab);
-      document.getElementById(`settings-prompts-tab-${prevTab}`)?.focus();
-    }
-  };
 
   const { t } = useTranslation();
   const config = useVocabularyConfig();
@@ -120,22 +93,18 @@ export function SettingsVocabularyTab({
         })}
       />
 
-      <div
+      <ScenarioCardTabs<VocabularySubTab>
         id="settings-vocab-categories"
-        className="settings-scenario-cards three-columns"
-        role="tablist"
-        aria-label={t('settings.vocabulary_categories', { defaultValue: 'Vocabulary categories' })}
-        onKeyDown={handleTabKeyDown}
-        style={{
-          border: '1px solid var(--color-border)',
-          borderRadius: 'var(--radius-lg, 16px)',
-          background: 'var(--color-bg-primary)',
-          boxShadow: 'var(--shadow-xs, 0 1px 2px rgba(0, 0, 0, 0.04))',
-        }}
-      >
-        {[
+        ariaLabel={t('settings.vocabulary_categories', { defaultValue: 'Vocabulary categories' })}
+        columns={3}
+        activeTab={activeSubTab}
+        onChange={setActiveSubTab}
+        idPrefix="settings-vocab-tab"
+        getPanelId={(value) => `settings-vocab-panel-${value}`}
+        bordered
+        items={[
           {
-            value: 'recognition' as const,
+            value: 'recognition',
             label: t('settings.vocabulary_tab_recognition', { defaultValue: 'Unified Dictionary' }),
             description: t('settings.vocabulary_tab_recognition_desc', {
               defaultValue: 'Global vocabulary, text replacements, and project terms',
@@ -143,7 +112,7 @@ export function SettingsVocabularyTab({
             icon: <SpellCheck size={18} />,
           },
           {
-            value: 'prompts' as const,
+            value: 'prompts',
             label: t('settings.vocabulary_tab_prompts', { defaultValue: 'AI Prompts & Templates' }),
             description: t('settings.vocabulary_tab_prompts_desc', {
               defaultValue: 'Polish keywords, context presets, and summary templates',
@@ -151,34 +120,15 @@ export function SettingsVocabularyTab({
             icon: <Sparkles size={18} />,
           },
           {
-            value: 'speakers' as const,
+            value: 'speakers',
             label: t('settings.vocabulary_tab_speakers', { defaultValue: 'Speaker Profiles' }),
             description: t('settings.vocabulary_tab_speakers_desc', {
               defaultValue: 'Local voice sample profiles and references',
             }),
             icon: <Users size={18} />,
           },
-        ].map((tab) => (
-          <button
-            id={`settings-vocab-tab-${tab.value}`}
-            key={tab.value}
-            type="button"
-            role="tab"
-            aria-selected={activeSubTab === tab.value}
-            aria-controls={`settings-vocab-panel-${tab.value}`}
-            aria-label={tab.label}
-            tabIndex={activeSubTab === tab.value ? 0 : -1}
-            className={`settings-scenario-card${activeSubTab === tab.value ? ' active' : ''}`}
-            onClick={() => setActiveSubTab(tab.value)}
-          >
-            <span className="settings-scenario-card-icon">{tab.icon}</span>
-            <span className="settings-scenario-card-text">
-              <span className="settings-scenario-card-label">{tab.label}</span>
-              <span className="settings-scenario-card-description">{tab.description}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+        ]}
+      />
 
       {activeSubTab === 'recognition' && (
         <div
@@ -218,62 +168,44 @@ export function SettingsVocabularyTab({
           }}
         >
           <div className="settings-vocab-prompts-header">
-            <div
+            <SegmentedSubTabs<PromptsSubTab>
               id="settings-vocab-prompts-subtabs"
-              className="settings-subtab-nav"
-              role="tablist"
-              aria-label={t('settings.vocabulary_prompts_categories', {
+              ariaLabel={t('settings.vocabulary_prompts_categories', {
                 defaultValue: 'AI prompt and template categories',
               })}
-              onKeyDown={handlePromptsTabKeyDown}
-            >
-              {[
+              activeTab={activePromptsSubTab}
+              onChange={setActivePromptsSubTab}
+              idPrefix="settings-prompts-tab"
+              getPanelId={(value) => `settings-prompts-panel-${value}`}
+              items={[
                 {
-                  value: 'polish' as const,
+                  value: 'polish',
                   label: t('settings.vocabulary_prompts_tab_polish', { defaultValue: 'Polish' }),
-                  description: t('settings.vocabulary_prompts_tab_polish_desc', {
+                  tooltip: t('settings.vocabulary_prompts_tab_polish_desc', {
                     defaultValue: 'Auto polish and style presets',
                   }),
                   icon: <Sparkles size={15} />,
                 },
                 {
-                  value: 'translation' as const,
+                  value: 'translation',
                   label: t('settings.vocabulary_prompts_tab_translation', {
                     defaultValue: 'Translation',
                   }),
-                  description: t('settings.vocabulary_prompts_tab_translation_desc', {
+                  tooltip: t('settings.vocabulary_prompts_tab_translation_desc', {
                     defaultValue: 'Auto translation and default target language',
                   }),
                   icon: <Languages size={15} />,
                 },
                 {
-                  value: 'summary' as const,
+                  value: 'summary',
                   label: t('settings.vocabulary_prompts_tab_summary', { defaultValue: 'Summary' }),
-                  description: t('settings.vocabulary_prompts_tab_summary_desc', {
+                  tooltip: t('settings.vocabulary_prompts_tab_summary_desc', {
                     defaultValue: 'Auto summary and custom templates',
                   }),
                   icon: <SummaryIcon width={15} height={15} />,
                 },
-              ].map((tab) => (
-                <button
-                  id={`settings-prompts-tab-${tab.value}`}
-                  key={tab.value}
-                  type="button"
-                  role="tab"
-                  aria-selected={activePromptsSubTab === tab.value}
-                  aria-controls={`settings-prompts-panel-${tab.value}`}
-                  aria-label={tab.label}
-                  data-tooltip={tab.description}
-                  data-tooltip-pos="top"
-                  tabIndex={activePromptsSubTab === tab.value ? 0 : -1}
-                  className={`settings-subtab-btn${activePromptsSubTab === tab.value ? ' active' : ''}`}
-                  onClick={() => setActivePromptsSubTab(tab.value)}
-                >
-                  <span className="settings-subtab-icon">{tab.icon}</span>
-                  <span className="settings-subtab-label">{tab.label}</span>
-                </button>
-              ))}
-            </div>
+              ]}
+            />
 
             <button
               id="settings-vocab-llm-status-btn"
