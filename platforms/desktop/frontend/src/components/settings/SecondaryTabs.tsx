@@ -75,6 +75,9 @@ export function SecondaryTabs<T extends string = string>({
     onChange,
     enabled: keyboardNavigation && !disabled,
   });
+  const isSegmented = variant === 'segmented';
+  const isThreeColumns = columns === 3 || columns === 'three-columns';
+  const hasSlider = isSegmented && animated;
 
   const [sliderStyle, setSliderStyle] = useState<React.CSSProperties>({
     opacity: 0,
@@ -85,7 +88,7 @@ export function SecondaryTabs<T extends string = string>({
 
   const updatePosition = useCallback(
     (targetTab?: T) => {
-      if (!animated) return;
+      if (!hasSlider) return;
       const container = containerRef.current;
       const activeButton =
         (targetTab
@@ -120,14 +123,16 @@ export function SecondaryTabs<T extends string = string>({
 
       setHasMeasured(true);
     },
-    [animated]
+    [hasSlider]
   );
 
   useLayoutEffect(() => {
+    if (!hasSlider) return;
     updatePosition(activeTab);
-  }, [updatePosition, activeTab]);
+  }, [hasSlider, updatePosition, activeTab]);
 
   useEffect(() => {
+    if (!hasSlider) return;
     const container = containerRef.current;
     if (!container || typeof ResizeObserver === 'undefined') return;
 
@@ -148,10 +153,7 @@ export function SecondaryTabs<T extends string = string>({
 
     observer.observe(container);
     return () => observer.disconnect();
-  }, [updatePosition, activeTab]);
-
-  const isSegmented = variant === 'segmented';
-  const isThreeColumns = columns === 3 || columns === 'three-columns';
+  }, [hasSlider, updatePosition, activeTab]);
 
   const isSmall = size === 'sm';
   const isRadioGroup = role === 'radiogroup';
@@ -171,11 +173,13 @@ export function SecondaryTabs<T extends string = string>({
         isThreeColumns ? 'three-columns' : '',
         bordered ? 'is-bordered' : '',
         disabled ? 'is-disabled' : '',
-        hasMeasured ? 'has-slider' : '',
+        animated ? 'is-animated' : '',
         className,
       ]
         .filter(Boolean)
         .join(' ');
+  const hasActiveTab = items.some((tab) => tab.value === activeTab && !tab.disabled);
+  const firstEnabledIndex = items.findIndex((tab) => !tab.disabled);
 
   return (
     <div
@@ -191,20 +195,17 @@ export function SecondaryTabs<T extends string = string>({
       data-tooltip-multiline={tooltipMultiline ? true : undefined}
       tabIndex={disabled && tooltip ? 0 : undefined}
     >
-      {animated && hasMeasured && (
-        <div
-          className={isSegmented ? 'settings-subtab-slider' : 'settings-scenario-cards-slider'}
-          style={sliderStyle}
-          aria-hidden="true"
-        />
+      {hasSlider && hasMeasured && (
+        <div className="settings-subtab-slider" style={sliderStyle} aria-hidden="true" />
       )}
-      {items.map((tab) => {
+      {items.map((tab, index) => {
         const buttonId = tab.id || (idPrefix ? `${idPrefix}-${tab.value}` : undefined);
         const panelId = tab.panelId || (getPanelId ? getPanelId(tab.value) : undefined);
         const isSelected = activeTab === tab.value;
+        const isFocusable =
+          !disabled && !tab.disabled && (hasActiveTab ? isSelected : index === firstEnabledIndex);
         const ariaLabelText =
           tab.ariaLabel || (typeof tab.label === 'string' ? tab.label : undefined);
-
         const buttonClasses = isSegmented
           ? [
               'settings-subtab-btn',
@@ -231,7 +232,7 @@ export function SecondaryTabs<T extends string = string>({
             aria-label={ariaLabelText}
             data-tooltip={tab.tooltip}
             data-tooltip-pos={tab.tooltip ? tab.tooltipPos || 'top' : undefined}
-            tabIndex={isSelected ? 0 : -1}
+            tabIndex={isFocusable ? 0 : -1}
             className={buttonClasses}
             onClick={() => onChange(tab.value)}
             disabled={disabled || tab.disabled}

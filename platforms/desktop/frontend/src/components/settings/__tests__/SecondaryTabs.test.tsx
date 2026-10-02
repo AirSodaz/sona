@@ -120,18 +120,43 @@ describe('SecondaryTabs & ScenarioCardTabs', () => {
     expect(document.activeElement).toBe(tab1);
   });
 
-  it('renders slider element when animated is true and omits when animated is false', () => {
+  it('does not render sliding track for card tabs, using in-place card transitions instead', () => {
     const { container, rerender } = render(
       <ScenarioCardTabs items={cardItems} activeTab="tab1" onChange={vi.fn()} animated={true} />
     );
 
-    expect(container.querySelector('.settings-scenario-cards-slider')).toBeDefined();
+    expect(container.querySelector('.settings-subtab-slider')).toBeNull();
+    expect(container.querySelector('.settings-scenario-cards-slider')).toBeNull();
+    const tablist = screen.getByRole('tablist');
+    expect(tablist.classList.contains('is-animated')).toBe(true);
 
     rerender(
       <ScenarioCardTabs items={cardItems} activeTab="tab1" onChange={vi.fn()} animated={false} />
     );
 
-    expect(container.querySelector('.settings-scenario-cards-slider')).toBeNull();
+    expect(tablist.classList.contains('is-animated')).toBe(false);
+  });
+
+  it('makes the first enabled tab focusable when activeTab does not match or first tab is disabled', () => {
+    const itemsWithDisabledFirst = [
+      { value: 'tab0', label: 'Disabled Tab 0', disabled: true },
+      { value: 'tab1', label: 'Enabled Tab 1' },
+      { value: 'tab2', label: 'Enabled Tab 2' },
+    ];
+    render(
+      <ScenarioCardTabs
+        items={itemsWithDisabledFirst}
+        activeTab="non-existent"
+        onChange={vi.fn()}
+      />
+    );
+
+    const tab0 = screen.getByRole('tab', { name: 'Disabled Tab 0' });
+    const tab1 = screen.getByRole('tab', { name: 'Enabled Tab 1' });
+    const tab2 = screen.getByRole('tab', { name: 'Enabled Tab 2' });
+    expect(tab0.getAttribute('tabindex')).toBe('-1');
+    expect(tab1.getAttribute('tabindex')).toBe('0');
+    expect(tab2.getAttribute('tabindex')).toBe('-1');
   });
 });
 
@@ -219,6 +244,19 @@ describe('SecondaryTabs & SegmentedSubTabs', () => {
     fireEvent.keyDown(tab2, { key: 'ArrowLeft' });
     expect(onChange).toHaveBeenCalledWith('sub1');
     expect(document.activeElement).toBe(tab1);
+  });
+
+  it('omits sliding indicator for segmented tabs when animated is false', () => {
+    const { container } = render(
+      <SegmentedSubTabs
+        items={segmentedItems}
+        activeTab="sub1"
+        onChange={vi.fn()}
+        animated={false}
+      />
+    );
+
+    expect(container.querySelector('.settings-subtab-slider')).toBeNull();
   });
 
   it('renders sliding indicator for segmented tabs and updates position when measured', () => {
