@@ -9,6 +9,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,6 +32,7 @@ import androidx.compose.material3.FilledTonalButton
 import com.sona.android.app.feature.library.messageRes
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -49,7 +51,10 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.sona.android.app.ui.component.SonaBackButton
+import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.R
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.app.notification.SonaNotificationChannels
@@ -59,6 +64,7 @@ import com.sona.android.application.recording.AudioImportJobState
 import com.sona.android.application.recording.AudioImportStage
 import com.sona.android.application.recording.OnlineAsrProvider
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun FileTranscriptionScreen(
     importState: AudioImportJobState,
@@ -68,6 +74,7 @@ internal fun FileTranscriptionScreen(
     onCancel: () -> Unit,
     onConfigure: () -> Unit,
     onViewResult: (String) -> Unit,
+    onNavigateBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val windowHeight = LocalWindowInfo.current.containerSize.height
@@ -135,13 +142,38 @@ internal fun FileTranscriptionScreen(
         null -> false
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (verticallyConstrained) Modifier.verticalScroll(scrollState) else Modifier)
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        SonaTopAppBar(
+            navigationIcon = {
+                SonaBackButton(onClick = onNavigateBack)
+            },
+            title = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.file_workspace_heading),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = recognitionSettings.batchSelection.batchModelLabel(recognitionSettings),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            },
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .then(if (verticallyConstrained) Modifier.verticalScroll(scrollState) else Modifier)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
         if (!configurationAvailable && displayedState is AudioImportJobState.Idle) {
             Text(
                 stringResource(R.string.home_status_unavailable),
@@ -226,6 +258,7 @@ internal fun FileTranscriptionScreen(
                     modifier = Modifier.fillMaxWidth(),
                 ) { Text(stringResource(R.string.file_start_transcription)) }
             }
+        }
         }
     }
 }

@@ -1,5 +1,6 @@
 package com.sona.android.app.feature.home
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,6 +27,7 @@ import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -39,7 +41,9 @@ import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.sona.android.app.BuildConfig
 import com.sona.android.app.R
+import com.sona.android.app.ui.component.SonaTopAppBar
 import com.sona.android.app.feature.library.LibraryItemRow
 import com.sona.android.app.feature.library.LibraryUiState
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
@@ -48,6 +52,7 @@ import com.sona.android.application.recording.AudioImportJobState
 import com.sona.android.application.recording.LiveRecordingState
 import com.sona.android.application.recording.OnlineAsrProvider
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun HomeScreen(
     recordingState: LiveRecordingState,
@@ -71,10 +76,23 @@ internal fun HomeScreen(
         configuredProviders,
     )
 
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter,
-    ) {
+    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        SonaTopAppBar(
+            title = {
+                Text(
+                    text = BuildConfig.APP_NAME,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+            },
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 960.dp)
@@ -190,6 +208,7 @@ internal fun HomeScreen(
                     }
                 }
             }
+        }
         }
     }
 }

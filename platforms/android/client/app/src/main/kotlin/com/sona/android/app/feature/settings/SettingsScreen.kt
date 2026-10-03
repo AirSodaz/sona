@@ -1,6 +1,7 @@
 package com.sona.android.app.feature.settings
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -182,6 +183,7 @@ internal fun SettingsScreen(
     }
 
     NavigableListDetailPaneScaffold(
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         navigator = navigator,
         listPane = {
             AnimatedPane {
@@ -296,7 +298,7 @@ private fun SettingsSectionList(
     showSelection: Boolean,
     onSectionSelected: (SettingsSection) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         SonaTopAppBar(
             title = stringResource(R.string.destination_settings),
         )
@@ -458,7 +460,7 @@ private fun SettingsDetailPane(
     onClearResolvedRecovery: () -> Unit,
     onLlmProvider: (String) -> Unit, onLlmModel: (String) -> Unit, onLlmBaseUrl: (String) -> Unit, onLlmPath: (String) -> Unit, onLlmVersion: (String) -> Unit, onLlmApiKey: (String) -> Unit, onLlmSave: () -> Unit, onLlmClear: () -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         SonaTopAppBar(
             title = stringResource(section.labelRes),
             navigationIcon = {

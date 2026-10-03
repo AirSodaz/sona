@@ -186,7 +186,7 @@ internal fun LibraryDetailScreen(
     val requestExit = {
         if (editor.dirty) exitPending = true else onNavigateBack()
     }
-    BackHandler(onBack = requestExit)
+    BackHandler(enabled = editor.dirty, onBack = requestExit)
 
     LaunchedEffect(exitRequestToken) {
         if (exitRequestToken > 0) requestExit()
@@ -670,7 +670,7 @@ internal fun LibraryDetailScreen(
 
     // Main Layout: Text-Centric
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(

@@ -77,6 +77,9 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import androidx.compose.ui.text.style.TextOverflow
+import com.sona.android.app.ui.component.SonaBackButton
+import com.sona.android.app.ui.component.SonaTopAppBar
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import com.sona.android.app.R
@@ -103,6 +106,7 @@ internal fun RecordScreen(
     onStopRecording: () -> Unit,
     onConfigureCredential: () -> Unit,
     onConfigureRecognition: () -> Unit,
+    onNavigateBack: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }
@@ -252,13 +256,38 @@ internal fun RecordScreen(
         }
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (verticallyConstrained) Modifier.verticalScroll(workspaceScroll) else Modifier)
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        SonaTopAppBar(
+            navigationIcon = {
+                SonaBackButton(onClick = onNavigateBack)
+            },
+            title = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.record_heading),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = recognitionSettings.liveSelection.liveModelSummary(recognitionSettings),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            },
+        )
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .then(if (verticallyConstrained) Modifier.verticalScroll(workspaceScroll) else Modifier)
+                .padding(horizontal = 24.dp, vertical = 20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
         BootstrapStatus(bootstrapState, onRetryBootstrap)
         RecordingNotices(
             state = recordingState,
@@ -300,6 +329,7 @@ internal fun RecordScreen(
             onResume = onResumeRecording,
             onStop = onStopRecording,
         )
+        }
     }
 }
 

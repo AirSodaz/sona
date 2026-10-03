@@ -1,6 +1,7 @@
 package com.sona.android.app.navigation
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.PaddingValues
@@ -9,18 +10,12 @@ import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material.icons.rounded.Refresh
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material.icons.Icons
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBarDefaults
-import com.sona.android.app.ui.component.SonaBackButton
-import com.sona.android.app.ui.component.SonaTopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -214,7 +209,9 @@ internal fun SonaApp(
         val currentRoute = backStackEntry?.destination?.route ?: SonaDestination.HOME.route
         val currentDestination = SonaDestination.entries.firstOrNull { it.matches(currentRoute) }
             ?: SonaDestination.HOME
-        val isLibraryDetail = currentRoute == LIBRARY_DETAIL_ROUTE
+        val registeredRoute = backStackEntry?.destination?.route
+        val isLibraryDetail = registeredRoute == LIBRARY_DETAIL_ROUTE ||
+            (currentRoute.startsWith("${SonaDestination.LIBRARY.route}/") && currentRoute != SonaDestination.LIBRARY.route)
         val isHomeWorkspace = currentRoute == HOME_LIVE_ROUTE || currentRoute == HOME_FILE_ROUTE
         val onConfigureCredential = {
             onCloudProviderSelected(OnlineAsrProvider.VOLCENGINE_DOUBAO)
@@ -241,7 +238,6 @@ internal fun SonaApp(
             }
         }
 
-        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
         NavigationSuiteScaffold(
             navigationSuiteItems = {
@@ -272,102 +268,29 @@ internal fun SonaApp(
             },
         ) {
             Scaffold(
-                modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-                topBar = {
-                    if (currentDestination != SonaDestination.SETTINGS && !isLibraryDetail) {
-                        SonaTopAppBar(
-                            scrollBehavior = scrollBehavior,
-                            navigationIcon = {
-                                if (isHomeWorkspace) {
-                                    SonaBackButton(onClick = { navController.popBackStack() })
-                                }
-                            },
-                            title = {
-                                when (currentRoute) {
-                                    HOME_LIVE_ROUTE -> Column {
-                                        Text(
-                                            text = stringResource(R.string.record_heading),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = recognitionSettingsState.liveSelection.liveModelSummary(recognitionSettingsState),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    HOME_FILE_ROUTE -> Column {
-                                        Text(
-                                            text = stringResource(R.string.file_workspace_heading),
-                                            style = MaterialTheme.typography.titleMedium,
-                                            fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = recognitionSettingsState.batchSelection.batchModelLabel(recognitionSettingsState),
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                    }
-                                    SonaDestination.LIBRARY.route -> Text(
-                                        text = stringResource(R.string.library_heading),
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                    else -> Text(
-                                        text = BuildConfig.APP_NAME,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary,
-                                    )
-                                }
-                            },
-                            actions = {
-                                if (currentRoute == SonaDestination.LIBRARY.route) {
-                                    if (libraryState.isRefreshing) {
-                                        CircularProgressIndicator(
-                                            modifier = Modifier.size(20.dp),
-                                            strokeWidth = 2.dp,
-                                        )
-                                        Spacer(Modifier.width(8.dp))
-                                    }
-                                    IconButton(
-                                        onClick = onRefreshLibrary,
-                                        enabled = !libraryState.isInitialLoading && !libraryState.isRefreshing,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Rounded.Refresh,
-                                            contentDescription = stringResource(R.string.library_refresh_description),
-                                        )
-                                    }
-                                }
-                            },
-                        )
-                    }
-                },
+                modifier = Modifier.fillMaxSize(),
             ) { contentPadding ->
-                val isSubscreenWithOwnTopBar = currentDestination == SonaDestination.SETTINGS || isLibraryDetail
                 val layoutDirection = LocalLayoutDirection.current
                 val navHostPadding = PaddingValues(
                     start = contentPadding.calculateStartPadding(layoutDirection),
-                    top = if (isSubscreenWithOwnTopBar) 0.dp else contentPadding.calculateTopPadding(),
+                    top = 0.dp,
                     end = contentPadding.calculateEndPadding(layoutDirection),
                     bottom = contentPadding.calculateBottomPadding(),
                 )
-                NavHost(
-                    navController = navController,
-                    startDestination = SonaDestination.HOME.route,
+                Surface(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(navHostPadding),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
+                    NavHost(
+                        navController = navController,
+                        startDestination = SonaDestination.HOME.route,
+                        modifier = Modifier.fillMaxSize(),
+                    enterTransition = { sonaEnterTransition() },
+                    exitTransition = { sonaExitTransition() },
+                    popEnterTransition = { sonaPopEnterTransition() },
+                    popExitTransition = { sonaPopExitTransition() },
                 ) {
                     composable(SonaDestination.HOME.route) {
                         LaunchedEffect(Unit) { onRefreshLibrary() }
@@ -401,6 +324,7 @@ internal fun SonaApp(
                             onStopRecording = onStopRecording,
                             onConfigureCredential = onConfigureCredential,
                             onConfigureRecognition = onConfigureRecognition,
+                            onNavigateBack = { navController.popBackStack() },
                         )
                     }
                     composable(HOME_FILE_ROUTE) {
@@ -412,6 +336,7 @@ internal fun SonaApp(
                             onCancel = onCancelAudioImport,
                             onConfigure = onConfigureRecognition,
                             onViewResult = { historyId -> navController.navigate(libraryDetailRoute(historyId)) },
+                            onNavigateBack = { navController.popBackStack() },
                         )
                     }
                     composable(SonaDestination.LIBRARY.route) {
@@ -606,6 +531,7 @@ internal fun SonaApp(
             }
         }
     }
+}
 }
 
 internal fun settingsRoute(section: SettingsSection): String =

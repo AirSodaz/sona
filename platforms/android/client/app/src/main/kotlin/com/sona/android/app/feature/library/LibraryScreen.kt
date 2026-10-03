@@ -29,11 +29,14 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restore
+import com.sona.android.app.ui.component.SonaTopAppBar
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.DropdownMenu
@@ -77,6 +80,7 @@ import java.util.Locale
 import java.util.TimeZone
 import kotlinx.coroutines.flow.distinctUntilChanged
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun LibraryScreen(
     state: LibraryUiState,
@@ -138,10 +142,34 @@ internal fun LibraryScreen(
             }
     }
 
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopCenter,
-    ) {
+    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        SonaTopAppBar(
+            title = stringResource(R.string.library_heading),
+            actions = {
+                if (state.isRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        strokeWidth = 2.dp,
+                    )
+                    Spacer(Modifier.width(8.dp))
+                }
+                IconButton(
+                    onClick = onRefresh,
+                    enabled = !state.isInitialLoading && !state.isRefreshing,
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Refresh,
+                        contentDescription = stringResource(R.string.library_refresh_description),
+                    )
+                }
+            },
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .weight(1f),
+            contentAlignment = Alignment.TopCenter,
+        ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -315,6 +343,7 @@ internal fun LibraryScreen(
                     }
                 }
             }
+        }
         }
     }
 }
