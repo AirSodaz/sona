@@ -3,16 +3,24 @@ package com.sona.android.app.navigation
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import com.sona.android.app.ui.component.SonaBackButton
+import com.sona.android.app.ui.component.SonaTopAppBar
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,6 +31,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -40,8 +50,10 @@ import com.sona.android.app.feature.library.LibraryScreen
 import com.sona.android.app.feature.library.LibraryUiState
 import com.sona.android.app.feature.library.LibraryLlmUiState
 import com.sona.android.app.feature.recording.RecordScreen
+import com.sona.android.app.feature.recording.liveModelSummary
 import com.sona.android.app.feature.home.HomeScreen
 import com.sona.android.app.feature.home.FileTranscriptionScreen
+import com.sona.android.app.feature.home.batchModelLabel
 import com.sona.android.app.feature.settings.AppLanguage
 import com.sona.android.app.feature.settings.AboutSettingsUiState
 import com.sona.android.app.feature.settings.AppearanceSettingsUiState
@@ -229,7 +241,7 @@ internal fun SonaApp(
             }
         }
 
-        val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+        val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
         NavigationSuiteScaffold(
             navigationSuiteItems = {
@@ -262,54 +274,100 @@ internal fun SonaApp(
             Scaffold(
                 modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
                 topBar = {
-                    if (currentDestination != SonaDestination.SETTINGS) {
-                        MediumTopAppBar(
+                    if (currentDestination != SonaDestination.SETTINGS && !isLibraryDetail) {
+                        SonaTopAppBar(
                             scrollBehavior = scrollBehavior,
                             navigationIcon = {
-                                if (isLibraryDetail || isHomeWorkspace) {
-                                    IconButton(onClick = {
-                                        if (isLibraryDetail) {
-                                            pendingDetailDestination = null
-                                            detailExitRequestToken += 1
-                                        }
-                                        else navController.popBackStack()
-                                    }) {
+                                if (isHomeWorkspace) {
+                                    SonaBackButton(onClick = { navController.popBackStack() })
+                                }
+                            },
+                            title = {
+                                when (currentRoute) {
+                                    HOME_LIVE_ROUTE -> Column {
+                                        Text(
+                                            text = stringResource(R.string.record_heading),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = recognitionSettingsState.liveSelection.liveModelSummary(recognitionSettingsState),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    HOME_FILE_ROUTE -> Column {
+                                        Text(
+                                            text = stringResource(R.string.file_workspace_heading),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.SemiBold,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                        Text(
+                                            text = recognitionSettingsState.batchSelection.batchModelLabel(recognitionSettingsState),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                    SonaDestination.LIBRARY.route -> Text(
+                                        text = stringResource(R.string.library_heading),
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                    else -> Text(
+                                        text = BuildConfig.APP_NAME,
+                                        style = MaterialTheme.typography.titleLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            },
+                            actions = {
+                                if (currentRoute == SonaDestination.LIBRARY.route) {
+                                    if (libraryState.isRefreshing) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(20.dp),
+                                            strokeWidth = 2.dp,
+                                        )
+                                        Spacer(Modifier.width(8.dp))
+                                    }
+                                    IconButton(
+                                        onClick = onRefreshLibrary,
+                                        enabled = !libraryState.isInitialLoading && !libraryState.isRefreshing,
+                                    ) {
                                         Icon(
-                                            imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                                            contentDescription = stringResource(R.string.action_back),
+                                            imageVector = Icons.Rounded.Refresh,
+                                            contentDescription = stringResource(R.string.library_refresh_description),
                                         )
                                     }
                                 }
                             },
-                            title = {
-                                Column {
-                                    Text(
-                                        text = BuildConfig.APP_NAME,
-                                        style = MaterialTheme.typography.titleLarge,
-                                        fontWeight = FontWeight.Bold,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Text(
-                                        text = stringResource(currentDestination.labelRes),
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                }
-                            },
-                            colors = TopAppBarDefaults.mediumTopAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.background,
-                                scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer
-                            )
                         )
                     }
                 },
             ) { contentPadding ->
+                val isSubscreenWithOwnTopBar = currentDestination == SonaDestination.SETTINGS || isLibraryDetail
+                val layoutDirection = LocalLayoutDirection.current
+                val navHostPadding = PaddingValues(
+                    start = contentPadding.calculateStartPadding(layoutDirection),
+                    top = if (isSubscreenWithOwnTopBar) 0.dp else contentPadding.calculateTopPadding(),
+                    end = contentPadding.calculateEndPadding(layoutDirection),
+                    bottom = contentPadding.calculateBottomPadding(),
+                )
                 NavHost(
                     navController = navController,
                     startDestination = SonaDestination.HOME.route,
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(contentPadding),
+                        .padding(navHostPadding),
                 ) {
                     composable(SonaDestination.HOME.route) {
                         LaunchedEffect(Unit) { onRefreshLibrary() }
@@ -353,7 +411,7 @@ internal fun SonaApp(
                             onStart = onImportAudio,
                             onCancel = onCancelAudioImport,
                             onConfigure = onConfigureRecognition,
-                            onViewResult = { navController.navigate(libraryDetailRoute(it)) },
+                            onViewResult = { historyId -> navController.navigate(libraryDetailRoute(historyId)) },
                         )
                     }
                     composable(SonaDestination.LIBRARY.route) {

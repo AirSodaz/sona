@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -22,17 +23,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AudioFile
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
@@ -56,6 +60,7 @@ internal fun HomeScreen(
     onOpenItem: (String) -> Unit,
     recoveryPendingCount: Int,
     onOpenRecovery: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val liveAvailable = recognitionSettings.liveSelection.isConfigured(
         recognitionSettings,
@@ -65,7 +70,11 @@ internal fun HomeScreen(
         recognitionSettings,
         configuredProviders,
     )
-    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter,
+    ) {
         Column(
             modifier = Modifier
                 .widthIn(max = 960.dp)
@@ -74,86 +83,113 @@ internal fun HomeScreen(
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-        Text(
-            text = stringResource(R.string.home_heading),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        if (recoveryPendingCount > 0) {
-            TextButton(onClick = onOpenRecovery) {
-                Text(pluralStringResource(R.plurals.recovery_pending_notice, recoveryPendingCount, recoveryPendingCount))
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
-            }
-        }
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val wide = maxWidth >= 600.dp
-            if (wide) {
-                Row(
-                    modifier = Modifier.height(IntrinsicSize.Max),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    HomeActionCard(
-                        title = stringResource(R.string.home_live_title),
-                        subtitle = recognitionSettings.liveSelection.modelLabel(recognitionSettings),
-                        status = recordingState.liveStatus(liveAvailable),
-                        icon = { Icon(Icons.Rounded.Mic, null) },
-                        onClick = onOpenLive,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                    HomeActionCard(
-                        title = stringResource(R.string.home_file_title),
-                        subtitle = recognitionSettings.batchSelection.modelLabel(recognitionSettings),
-                        status = libraryState.audioImport.fileStatus(batchAvailable),
-                        icon = { Icon(Icons.Rounded.AudioFile, null) },
-                        onClick = onOpenFile,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
-                    )
-                }
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    HomeActionCard(
-                        title = stringResource(R.string.home_live_title),
-                        subtitle = recognitionSettings.liveSelection.modelLabel(recognitionSettings),
-                        status = recordingState.liveStatus(liveAvailable),
-                        icon = { Icon(Icons.Rounded.Mic, null) },
-                        onClick = onOpenLive,
-                    )
-                    HomeActionCard(
-                        title = stringResource(R.string.home_file_title),
-                        subtitle = recognitionSettings.batchSelection.modelLabel(recognitionSettings),
-                        status = libraryState.audioImport.fileStatus(batchAvailable),
-                        icon = { Icon(Icons.Rounded.AudioFile, null) },
-                        onClick = onOpenFile,
-                    )
-                }
-            }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
-                text = stringResource(R.string.home_recent_title),
-                style = MaterialTheme.typography.titleLarge,
+                text = stringResource(R.string.home_heading),
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.primary,
             )
-            TextButton(onClick = onOpenLibrary) {
-                Text(stringResource(R.string.home_view_all))
-                Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
-            }
-        }
-        if (libraryState.items.isEmpty()) {
-            Text(
-                text = stringResource(R.string.library_empty),
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 24.dp),
-            )
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                libraryState.items.take(3).forEach { item ->
-                    LibraryItemRow(item, onClick = { onOpenItem(item.historyId) })
+
+            if (recoveryPendingCount > 0) {
+                FilledTonalButton(
+                    onClick = onOpenRecovery,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.WarningAmber,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.recovery_pending_notice,
+                            recoveryPendingCount,
+                            recoveryPendingCount,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.ArrowForward,
+                        contentDescription = null,
+                    )
                 }
             }
-        }
+
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val wide = maxWidth >= 600.dp
+                if (wide) {
+                    Row(
+                        modifier = Modifier.height(IntrinsicSize.Max),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        HomeActionCard(
+                            title = stringResource(R.string.home_live_title),
+                            subtitle = recognitionSettings.liveSelection.modelLabel(recognitionSettings),
+                            status = recordingState.liveStatus(liveAvailable),
+                            icon = { Icon(Icons.Rounded.Mic, null) },
+                            onClick = onOpenLive,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                        )
+                        HomeActionCard(
+                            title = stringResource(R.string.home_file_title),
+                            subtitle = recognitionSettings.batchSelection.modelLabel(recognitionSettings),
+                            status = libraryState.audioImport.fileStatus(batchAvailable),
+                            icon = { Icon(Icons.Rounded.AudioFile, null) },
+                            onClick = onOpenFile,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                        )
+                    }
+                } else {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        HomeActionCard(
+                            title = stringResource(R.string.home_live_title),
+                            subtitle = recognitionSettings.liveSelection.modelLabel(recognitionSettings),
+                            status = recordingState.liveStatus(liveAvailable),
+                            icon = { Icon(Icons.Rounded.Mic, null) },
+                            onClick = onOpenLive,
+                        )
+                        HomeActionCard(
+                            title = stringResource(R.string.home_file_title),
+                            subtitle = recognitionSettings.batchSelection.modelLabel(recognitionSettings),
+                            status = libraryState.audioImport.fileStatus(batchAvailable),
+                            icon = { Icon(Icons.Rounded.AudioFile, null) },
+                            onClick = onOpenFile,
+                        )
+                    }
+                }
+            }
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    text = stringResource(R.string.home_recent_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = onOpenLibrary) {
+                    Text(stringResource(R.string.home_view_all))
+                    Icon(Icons.AutoMirrored.Rounded.ArrowForward, null)
+                }
+            }
+
+            if (libraryState.items.isEmpty()) {
+                Text(
+                    text = stringResource(R.string.library_empty),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(vertical = 24.dp),
+                )
+            } else {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    libraryState.items.take(3).forEach { item ->
+                        LibraryItemRow(item, onClick = { onOpenItem(item.historyId) })
+                    }
+                }
+            }
         }
     }
 }
@@ -179,13 +215,15 @@ private fun HomeActionCard(
             modifier = Modifier.padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            androidx.compose.material3.Surface(
+            Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
                 shape = MaterialTheme.shapes.small,
             ) {
-                androidx.compose.foundation.layout.Box(
-                    Modifier.padding(10.dp).size(24.dp),
+                Box(
+                    Modifier
+                        .padding(10.dp)
+                        .size(24.dp),
                     contentAlignment = Alignment.Center,
                 ) { icon() }
             }

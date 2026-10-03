@@ -26,27 +26,26 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.CallMerge
-import androidx.compose.material.icons.rounded.CallSplit
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.CloudSync
 import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.automirrored.rounded.CallMerge
+import androidx.compose.material.icons.automirrored.rounded.CallSplit
+import androidx.compose.material.icons.automirrored.rounded.Label
+import androidx.compose.material.icons.automirrored.rounded.Redo
+import androidx.compose.material.icons.automirrored.rounded.Undo
 import androidx.compose.material.icons.rounded.Forward5
 import androidx.compose.material.icons.rounded.History
-import androidx.compose.material.icons.rounded.Label
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Redo
 import androidx.compose.material.icons.rounded.Replay
 import androidx.compose.material.icons.rounded.Replay5
 import androidx.compose.material.icons.rounded.Save
-import androidx.compose.material.icons.rounded.Undo
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -108,6 +107,8 @@ import com.sona.android.application.media.AudioPlaybackStatus
 import com.sona.android.application.recording.CloudTranscriptionFailure
 import com.sona.android.application.recording.TranscriptSegment
 import java.util.Locale
+import com.sona.android.app.ui.component.SonaBackButton
+import com.sona.android.app.ui.component.SonaTopAppBar
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -678,147 +679,137 @@ internal fun LibraryDetailScreen(
                 .widthIn(max = 840.dp),
         ) {
             // 1. Top Bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                IconButton(onClick = requestExit) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Rounded.ArrowBack,
-                        contentDescription = stringResource(R.string.action_back),
-                    )
-                }
-
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .padding(horizontal = 8.dp),
-                ) {
-                    Text(
-                        text = item?.title?.ifBlank { fallbackTitle } ?: fallbackTitle,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    item?.let {
+            SonaTopAppBar(
+                navigationIcon = {
+                    SonaBackButton(onClick = requestExit)
+                },
+                title = {
+                    Column(modifier = Modifier.padding(horizontal = 4.dp)) {
                         Text(
-                            text = "${formatLibraryTimestamp(it.timestampEpochMillis)} · ${formatMediaTime(it.durationMillis)}",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = item?.title?.ifBlank { fallbackTitle } ?: fallbackTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
                         )
-                    }
-                }
-
-                // AI Action Button
-                val isAiRunning = llm.task is LlmTaskState.Running
-                IconButton(
-                    onClick = { aiSheetVisible = true },
-                    enabled = !editor.dirty,
-                ) {
-                    if (isAiRunning) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(20.dp),
-                            strokeWidth = 2.dp,
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Rounded.AutoAwesome,
-                            contentDescription = stringResource(R.string.action_ai_actions),
-                            tint = if (llm.summary != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                // Edit Transcript Button
-                if (resolvedDetail is LibraryDetailUiState.Ready && item != null &&
-                    item.status == HistoryItemStatus.COMPLETE && item.deletedAtEpochMillis == null
-                ) {
-                    IconButton(
-                        onClick = {
-                            if (!editor.active) onStartEditing(null)
-                        },
-                    ) {
-                        Icon(
-                            imageVector = Icons.Rounded.Edit,
-                            contentDescription = stringResource(R.string.transcript_edit),
-                            tint = if (editor.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-
-                // Overflow More Options
-                Box {
-                    IconButton(onClick = { moreMenuExpanded = true }) {
-                        Icon(
-                            imageVector = Icons.Rounded.MoreVert,
-                            contentDescription = stringResource(R.string.action_more_options),
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = moreMenuExpanded,
-                        onDismissRequest = { moreMenuExpanded = false },
-                    ) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.history_edit_title)) },
-                            onClick = {
-                                moreMenuExpanded = false
-                                titleEditorVisible = true
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Edit, null) },
-                            enabled = item != null && !operationInProgress,
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.history_export_transcript)) },
-                            onClick = {
-                                moreMenuExpanded = false
-                                exportDialogVisible = true
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.FileDownload, null) },
-                            enabled = resolvedDetail is LibraryDetailUiState.Ready && !operationInProgress,
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.history_tags)) },
-                            onClick = {
-                                moreMenuExpanded = false
-                                tagsDialogVisible = true
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.Label, null) },
-                            enabled = item != null && !operationInProgress,
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.history_snapshots)) },
-                            onClick = {
-                                moreMenuExpanded = false
-                                snapshotsDialogVisible = true
-                            },
-                            leadingIcon = { Icon(Icons.Rounded.History, null) },
-                        )
-                        if (item?.audioAvailable == true) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_transcribe_current_engine)) },
-                                onClick = {
-                                    moreMenuExpanded = false
-                                    onTranscribeWithCurrentEngine(item)
-                                },
-                                leadingIcon = { Icon(Icons.Rounded.Replay, null) },
-                                enabled = !editor.dirty,
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.action_cloud_transcribe)) },
-                                onClick = {
-                                    moreMenuExpanded = false
-                                    onTranscribeWithCloud(item)
-                                },
-                                leadingIcon = { Icon(Icons.Rounded.CloudSync, null) },
-                                enabled = item.audioAvailable && !editor.dirty && cloudTranscription !is CloudTranscriptionUiState.Running,
+                        item?.let {
+                            Text(
+                                text = "${formatLibraryTimestamp(it.timestampEpochMillis)} · ${formatMediaTime(it.durationMillis)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
-                }
-            }
+                },
+                actions = {
+                    // AI Action Button
+                    val isAiRunning = llm.task is LlmTaskState.Running
+                    IconButton(
+                        onClick = { aiSheetVisible = true },
+                        enabled = !editor.dirty,
+                    ) {
+                        if (isAiRunning) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                strokeWidth = 2.dp,
+                            )
+                        } else {
+                            Icon(
+                                imageVector = Icons.Rounded.AutoAwesome,
+                                contentDescription = stringResource(R.string.action_ai_actions),
+                                tint = if (llm.summary != null) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    // Edit Transcript Button
+                    if (resolvedDetail is LibraryDetailUiState.Ready && item != null &&
+                        item.status == HistoryItemStatus.COMPLETE && item.deletedAtEpochMillis == null
+                    ) {
+                        IconButton(
+                            onClick = {
+                                if (!editor.active) onStartEditing(null)
+                            },
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Edit,
+                                contentDescription = stringResource(R.string.transcript_edit),
+                                tint = if (editor.active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    // Overflow More Options
+                    Box {
+                        IconButton(onClick = { moreMenuExpanded = true }) {
+                            Icon(
+                                imageVector = Icons.Rounded.MoreVert,
+                                contentDescription = stringResource(R.string.action_more_options),
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = moreMenuExpanded,
+                            onDismissRequest = { moreMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.history_edit_title)) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    titleEditorVisible = true
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.Edit, null) },
+                                enabled = item != null && !operationInProgress,
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.history_export_transcript)) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    exportDialogVisible = true
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.FileDownload, null) },
+                                enabled = resolvedDetail is LibraryDetailUiState.Ready && !operationInProgress,
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.history_tags)) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    tagsDialogVisible = true
+                                },
+                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Label, null) },
+                                enabled = item != null && !operationInProgress,
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.history_snapshots)) },
+                                onClick = {
+                                    moreMenuExpanded = false
+                                    snapshotsDialogVisible = true
+                                },
+                                leadingIcon = { Icon(Icons.Rounded.History, null) },
+                            )
+                            if (item?.audioAvailable == true) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_transcribe_current_engine)) },
+                                    onClick = {
+                                        moreMenuExpanded = false
+                                        onTranscribeWithCurrentEngine(item)
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.Replay, null) },
+                                    enabled = !editor.dirty,
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.action_cloud_transcribe)) },
+                                    onClick = {
+                                        moreMenuExpanded = false
+                                        onTranscribeWithCloud(item)
+                                    },
+                                    leadingIcon = { Icon(Icons.Rounded.CloudSync, null) },
+                                    enabled = item.audioAvailable && !editor.dirty && cloudTranscription !is CloudTranscriptionUiState.Running,
+                                )
+                            }
+                        }
+                    }
+                },
+            )
 
             // Sub-header compact items
             if (item != null && item.tagIds.isNotEmpty()) {
@@ -1112,10 +1103,10 @@ private fun DockedEditToolbar(
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 IconButton(onClick = onUndo, enabled = editor.undoAvailable && !editor.saving) {
-                    Icon(Icons.Rounded.Undo, stringResource(R.string.action_undo))
+                    Icon(Icons.AutoMirrored.Rounded.Undo, stringResource(R.string.action_undo))
                 }
                 IconButton(onClick = onRedo, enabled = editor.redoAvailable && !editor.saving) {
-                    Icon(Icons.Rounded.Redo, stringResource(R.string.action_redo))
+                    Icon(Icons.AutoMirrored.Rounded.Redo, stringResource(R.string.action_redo))
                 }
             }
 
@@ -1521,10 +1512,10 @@ private fun TranscriptSegmentEditor(
         horizontalArrangement = Arrangement.End,
     ) {
         IconButton(onClick = { splitVisible = true }, enabled = textValue.selection.start in 1 until textValue.text.length) {
-            Icon(Icons.Rounded.CallSplit, stringResource(R.string.transcript_split))
+            Icon(Icons.AutoMirrored.Rounded.CallSplit, stringResource(R.string.transcript_split))
         }
         IconButton(onClick = onMerge, enabled = hasNext) {
-            Icon(Icons.Rounded.CallMerge, stringResource(R.string.transcript_merge_next))
+            Icon(Icons.AutoMirrored.Rounded.CallMerge, stringResource(R.string.transcript_merge_next))
         }
         IconButton(onClick = onDelete) {
             Icon(Icons.Rounded.Delete, stringResource(R.string.action_delete))

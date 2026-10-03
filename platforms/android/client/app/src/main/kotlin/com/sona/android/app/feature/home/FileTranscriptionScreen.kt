@@ -142,12 +142,6 @@ internal fun FileTranscriptionScreen(
             .padding(horizontal = 24.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            stringResource(R.string.file_workspace_heading),
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.primary,
-        )
         if (!configurationAvailable && displayedState is AudioImportJobState.Idle) {
             Text(
                 stringResource(R.string.home_status_unavailable),
@@ -157,11 +151,6 @@ internal fun FileTranscriptionScreen(
                 Text(stringResource(R.string.action_configure))
             }
         }
-        Text(
-            recognitionSettings.batchSelection.batchModelLabel(recognitionSettings),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         if (
             Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
             !notificationPermissionGranted &&
@@ -322,7 +311,7 @@ private fun FailedImport(
 }
 
 @Composable
-private fun AsrModelSelection?.batchModelLabel(state: RecognitionSettingsUiState): String = when (this) {
+internal fun AsrModelSelection?.batchModelLabel(state: RecognitionSettingsUiState): String = when (this) {
     is AsrModelSelection.Local -> state.installedModels.firstOrNull { it.id == modelId }?.displayName
         ?: stringResource(R.string.recognition_model_not_selected)
     is AsrModelSelection.Online -> when (provider) {

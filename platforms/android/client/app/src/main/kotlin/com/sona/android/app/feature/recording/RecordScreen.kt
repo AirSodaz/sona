@@ -259,20 +259,7 @@ internal fun RecordScreen(
             .padding(horizontal = 24.dp, vertical = 20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = stringResource(R.string.record_heading),
-            style = MaterialTheme.typography.headlineMedium,
-            color = MaterialTheme.colorScheme.primary,
-            fontWeight = FontWeight.SemiBold,
-        )
         BootstrapStatus(bootstrapState, onRetryBootstrap)
-
-        Text(
-            text = liveSelection.liveModelSummary(recognitionSettings),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-
         RecordingNotices(
             state = recordingState,
             configurationMissing = configurationMissing,
@@ -319,7 +306,7 @@ internal fun RecordScreen(
 private const val POST_NOTIFICATIONS_PERMISSION = "android.permission.POST_NOTIFICATIONS"
 
 @Composable
-private fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiState): String =
+internal fun AsrModelSelection?.liveModelSummary(state: RecognitionSettingsUiState): String =
     when (this) {
         is AsrModelSelection.Local -> state.installedModels.firstOrNull { it.id == modelId }
             ?.displayName

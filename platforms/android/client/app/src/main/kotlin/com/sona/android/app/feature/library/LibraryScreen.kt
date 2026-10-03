@@ -24,12 +24,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ChevronRight
 import androidx.compose.material.icons.rounded.FolderOpen
-import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DeleteForever
 import androidx.compose.material.icons.rounded.Close
-import androidx.compose.material.icons.rounded.Label
+import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.Restore
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -149,32 +148,6 @@ internal fun LibraryScreen(
                 .widthIn(max = 840.dp)
                 .padding(horizontal = 24.dp, vertical = 20.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = stringResource(R.string.library_heading),
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.weight(1f),
-                )
-                if (state.isRefreshing) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.width(12.dp))
-                }
-                IconButton(
-                    onClick = onRefresh,
-                    enabled = !state.isInitialLoading && !state.isRefreshing,
-                ) {
-                    Icon(
-                        imageVector = Icons.Rounded.Refresh,
-                        contentDescription = stringResource(R.string.library_refresh_description),
-                    )
-                }
-            }
-            Spacer(Modifier.height(16.dp))
             if (recoveryPendingCount > 0) {
                 FilledTonalButton(
                     onClick = onOpenRecovery,
@@ -239,46 +212,60 @@ internal fun LibraryScreen(
                 }
             }
             if (state.selectedIds.isNotEmpty()) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    ),
                 ) {
-                    Text(
-                        pluralStringResource(R.plurals.history_selected_count, state.selectedIds.size, state.selectedIds.size),
-                        modifier = Modifier.weight(1f),
-                    )
-                    if (state.query.scope == HistoryScope.Trash) {
-                        IconButton(onClick = onRestoreSelected) { Icon(Icons.Rounded.Restore, stringResource(R.string.history_restore)) }
-                        IconButton(onClick = { purgeConfirmationVisible = true }) { Icon(Icons.Rounded.DeleteForever, stringResource(R.string.history_delete_forever)) }
-                    } else {
-                        Box {
-                            IconButton(onClick = { tagMenuVisible = true }) {
-                                Icon(Icons.Rounded.Label, stringResource(R.string.history_manage_selected_tags))
-                            }
-                            DropdownMenu(expanded = tagMenuVisible, onDismissRequest = { tagMenuVisible = false }) {
-                                state.tags.forEach { tag ->
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.history_add_tag, tag.name)) },
-                                        onClick = {
-                                            tagMenuVisible = false
-                                            onAddTagToSelected(tag.id)
-                                        },
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.history_remove_tag, tag.name)) },
-                                        onClick = {
-                                            tagMenuVisible = false
-                                            onRemoveTagFromSelected(tag.id)
-                                        },
-                                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = pluralStringResource(R.plurals.history_selected_count, state.selectedIds.size, state.selectedIds.size),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.weight(1f),
+                        )
+                        if (state.query.scope == HistoryScope.Trash) {
+                            IconButton(onClick = onRestoreSelected) { Icon(Icons.Rounded.Restore, stringResource(R.string.history_restore)) }
+                            IconButton(onClick = { purgeConfirmationVisible = true }) { Icon(Icons.Rounded.DeleteForever, stringResource(R.string.history_delete_forever)) }
+                        } else {
+                            Box {
+                                IconButton(onClick = { tagMenuVisible = true }) {
+                                    Icon(Icons.AutoMirrored.Rounded.Label, stringResource(R.string.history_manage_selected_tags))
+                                }
+                                DropdownMenu(expanded = tagMenuVisible, onDismissRequest = { tagMenuVisible = false }) {
+                                    state.tags.forEach { tag ->
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.history_add_tag, tag.name)) },
+                                            onClick = {
+                                                tagMenuVisible = false
+                                                onAddTagToSelected(tag.id)
+                                            },
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(stringResource(R.string.history_remove_tag, tag.name)) },
+                                            onClick = {
+                                                tagMenuVisible = false
+                                                onRemoveTagFromSelected(tag.id)
+                                            },
+                                        )
+                                    }
                                 }
                             }
+                            IconButton(onClick = onTrashSelected) { Icon(Icons.Rounded.Delete, stringResource(R.string.history_move_to_trash)) }
                         }
-                        IconButton(onClick = onTrashSelected) { Icon(Icons.Rounded.Delete, stringResource(R.string.history_move_to_trash)) }
-                    }
-                    IconButton(onClick = onClearSelection) {
-                        Icon(Icons.Rounded.Close, stringResource(R.string.history_clear_selection))
+                        IconButton(onClick = onClearSelection) {
+                            Icon(Icons.Rounded.Close, stringResource(R.string.history_clear_selection))
+                        }
                     }
                 }
             }
