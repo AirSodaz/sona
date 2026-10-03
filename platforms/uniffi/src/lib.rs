@@ -1,3 +1,5 @@
+#[cfg(target_os = "android")]
+mod android_tls;
 mod app_config_repository_bridge;
 mod application_context;
 #[cfg(test)]

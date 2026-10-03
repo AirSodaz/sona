@@ -6,6 +6,16 @@
     <string name="settings_llm_heading">LLM</string>
     <string name="settings_llm_summary">Configure summaries, translation, and polish</string>
     <string name="llm_provider">Provider</string>
+    <string name="llm_provider_open_ai_compatible">OpenAI Compatible</string>
+    <string name="llm_provider_open_ai">OpenAI</string>
+    <string name="llm_provider_open_ai_responses">OpenAI (Responses)</string>
+    <string name="llm_provider_azure_openai">Azure OpenAI</string>
+    <string name="llm_provider_anthropic">Anthropic</string>
+    <string name="llm_provider_gemini">Google Gemini</string>
+    <string name="llm_provider_ollama">Ollama</string>
+    <string name="llm_provider_deep_seek">DeepSeek</string>
+    <string name="llm_provider_moonshot_ai">Moonshot AI</string>
+    <string name="llm_provider_local">Local</string>
     <string name="llm_model">Model</string>
     <string name="llm_base_url">Base URL</string>
     <string name="llm_api_path">API path (optional)</string>

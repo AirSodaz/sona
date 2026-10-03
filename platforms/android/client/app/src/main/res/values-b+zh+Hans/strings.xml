@@ -6,6 +6,16 @@
     <string name="settings_llm_heading">LLM</string>
     <string name="settings_llm_summary">配置摘要、翻译和润色</string>
     <string name="llm_provider">服务商</string>
+    <string name="llm_provider_open_ai_compatible">OpenAI 兼容</string>
+    <string name="llm_provider_open_ai">OpenAI</string>
+    <string name="llm_provider_open_ai_responses">OpenAI (Responses)</string>
+    <string name="llm_provider_azure_openai">Azure OpenAI</string>
+    <string name="llm_provider_anthropic">Anthropic</string>
+    <string name="llm_provider_gemini">Google Gemini</string>
+    <string name="llm_provider_ollama">Ollama</string>
+    <string name="llm_provider_deep_seek">DeepSeek</string>
+    <string name="llm_provider_moonshot_ai">Moonshot AI (月之暗面)</string>
+    <string name="llm_provider_local">本地模型</string>
     <string name="llm_model">模型</string>
     <string name="llm_base_url">基础 URL</string>
     <string name="llm_api_path">API 路径（可选）</string>

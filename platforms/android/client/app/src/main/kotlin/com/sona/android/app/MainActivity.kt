@@ -89,6 +89,7 @@ class MainActivity : AppCompatActivity() {
                     container.recognitionSettings,
                     container.recognitionModelCatalog,
                     container.recognitionDeviceCapabilities,
+                    com.sona.android.app.notification.AndroidModelDownloadNotificationManager(applicationContext),
                 ),
             )
             val syncSettingsViewModel: SyncSettingsViewModel = viewModel(

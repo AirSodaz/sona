@@ -6,6 +6,16 @@
     <string name="settings_llm_heading">LLM</string>
     <string name="settings_llm_summary">要約、翻訳、推敲を設定</string>
     <string name="llm_provider">プロバイダー</string>
+    <string name="llm_provider_open_ai_compatible">OpenAI 互換</string>
+    <string name="llm_provider_open_ai">OpenAI</string>
+    <string name="llm_provider_open_ai_responses">OpenAI (Responses)</string>
+    <string name="llm_provider_azure_openai">Azure OpenAI</string>
+    <string name="llm_provider_anthropic">Anthropic</string>
+    <string name="llm_provider_gemini">Google Gemini</string>
+    <string name="llm_provider_ollama">Ollama</string>
+    <string name="llm_provider_deep_seek">DeepSeek</string>
+    <string name="llm_provider_moonshot_ai">Moonshot AI</string>
+    <string name="llm_provider_local">ローカルモデル</string>
     <string name="llm_model">モデル</string>
     <string name="llm_base_url">ベース URL</string>
     <string name="llm_api_path">API パス（任意）</string>

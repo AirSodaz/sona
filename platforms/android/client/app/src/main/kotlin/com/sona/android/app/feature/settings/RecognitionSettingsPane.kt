@@ -1,5 +1,12 @@
 package com.sona.android.app.feature.settings
 
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.platform.LocalContext
+import com.sona.android.app.notification.SonaNotificationChannels
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -193,6 +200,32 @@ private fun LocalRecognitionSettings(
     modifier: Modifier = Modifier,
 ) {
     var pendingDeleteModelId by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
+    var pendingDownloadModelId by rememberSaveable { mutableStateOf<String?>(null) }
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) {
+        hasRequestedNotificationPermission = true
+        pendingDownloadModelId?.let { id ->
+            pendingDownloadModelId = null
+            onDownloadModel(id)
+        }
+    }
+    val handleDownload: (String) -> Unit = { modelId ->
+        if (
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            !hasRequestedNotificationPermission &&
+            context.checkSelfPermission(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            hasRequestedNotificationPermission = true
+            pendingDownloadModelId = modelId
+            notificationPermissionLauncher.launch(SonaNotificationChannels.PERMISSION_POST_NOTIFICATIONS)
+        } else {
+            onDownloadModel(modelId)
+        }
+    }
     val busy = state.operationModelId != null
 
     pendingDeleteModelId?.let { modelId ->
@@ -442,7 +475,7 @@ private fun LocalRecognitionSettings(
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
             state.catalogModels.forEach { model ->
                 val installed = state.installedModels.any { it.id == model.id }
-                val downloading = state.operationModelId == model.id && state.downloadProgress != null
+                val downloading = state.downloadingModelId == model.id
                 Surface(
                     shape = RoundedCornerShape(12.dp),
                     color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -551,7 +584,7 @@ private fun LocalRecognitionSettings(
                                 }
                             } else {
                                 FilledTonalIconButton(
-                                    onClick = { onDownloadModel(model.id) },
+                                    onClick = { handleDownload(model.id) },
                                     enabled = !busy && state.deviceCapabilities?.supported != false,
                                     modifier = Modifier.size(36.dp),
                                 ) {
@@ -565,8 +598,8 @@ private fun LocalRecognitionSettings(
                         }
 
                         if (downloading) {
-                            val progress = checkNotNull(state.downloadProgress)
-                            val fraction = if (progress.totalBytes > 0) {
+                            val progress = state.downloadProgress
+                            val fraction = if (progress != null && progress.totalBytes > 0) {
                                 (progress.downloadedBytes.toFloat() / progress.totalBytes).coerceIn(0f, 1f)
                             } else {
                                 null
@@ -594,17 +627,21 @@ private fun LocalRecognitionSettings(
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
                                 Text(
-                                    text = stringResource(
-                                        when (progress.stage) {
-                                            LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
-                                            LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
-                                            LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
-                                        },
-                                    ),
+                                    text = if (progress != null) {
+                                        stringResource(
+                                            when (progress.stage) {
+                                                LocalAsrDownloadStage.DOWNLOADING -> R.string.local_model_downloading
+                                                LocalAsrDownloadStage.VERIFYING -> R.string.local_model_verifying
+                                                LocalAsrDownloadStage.INSTALLING -> R.string.local_model_installing
+                                            },
+                                        )
+                                    } else {
+                                        stringResource(R.string.local_model_downloading)
+                                    },
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
-                                if (progress.totalBytes > 0) {
+                                if (progress != null && progress.totalBytes > 0) {
                                     Text(
                                         text = "${(fraction?.times(100))?.toInt() ?: 0}% · ${formatBytes(progress.downloadedBytes.toLong())} / ${formatBytes(progress.totalBytes.toLong())}",
                                         style = MaterialTheme.typography.labelSmall,

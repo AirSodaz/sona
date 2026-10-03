@@ -237,7 +237,26 @@ class LlmSettingsViewModelTest {
             assertEquals("llama3.2", state.model)
             assertTrue(state.hasApiKey)
         }
+    @Test
+    fun `known provider IDs resolve to localized string resources`() {
+        assertEquals(com.sona.android.app.R.string.llm_provider_open_ai_compatible, llmProviderLabelRes("open_ai_compatible"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_open_ai, llmProviderLabelRes("open_ai"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_open_ai_responses, llmProviderLabelRes("open_ai_responses"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_azure_openai, llmProviderLabelRes("azure_openai"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_anthropic, llmProviderLabelRes("anthropic"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_gemini, llmProviderLabelRes("gemini"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_ollama, llmProviderLabelRes("ollama"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_deep_seek, llmProviderLabelRes("deep_seek"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_moonshot_ai, llmProviderLabelRes("moonshot_ai"))
+        assertEquals(com.sona.android.app.R.string.llm_provider_local, llmProviderLabelRes("local"))
+    }
+
+    @Test
+    fun `unknown provider ID returns null resource for fallback formatting`() {
+        assertNull(llmProviderLabelRes("custom_provider_name"))
+    }
 }
+
 
 private class FakeLlmConfigurationPort(
     initialProviders: List<LlmProvider> = emptyList(),

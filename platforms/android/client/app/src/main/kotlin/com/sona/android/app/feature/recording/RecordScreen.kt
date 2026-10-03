@@ -174,11 +174,19 @@ internal fun RecordScreen(
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 permissionRevision += 1
-                if (
-                    context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                val isGranted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
                     PackageManager.PERMISSION_GRANTED
-                ) {
+                if (isGranted) {
                     permissionIssue = null
+                } else if (hasRequestedPermission) {
+                    permissionIssue = MicrophonePermissionPolicy.decide(
+                        isGranted = false,
+                        hasRequestedBefore = true,
+                        shouldShowRationale =
+                            activity?.shouldShowRequestPermissionRationale(
+                                Manifest.permission.RECORD_AUDIO,
+                            ) == true,
+                    )
                 }
             }
         }

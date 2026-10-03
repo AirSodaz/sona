@@ -1,5 +1,6 @@
 package com.sona.android.app.feature.settings
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -99,7 +100,7 @@ internal fun LlmSettingsPane(
                     onExpandedChange = { providerMenuExpanded = !providerMenuExpanded },
                 ) {
                     OutlinedTextField(
-                        value = state.providerId,
+                        value = llmProviderDisplayName(state.providerId),
                         onValueChange = {},
                         readOnly = true,
                         label = { Text(stringResource(R.string.llm_provider)) },
@@ -115,7 +116,7 @@ internal fun LlmSettingsPane(
                     ) {
                         state.providers.forEach { provider ->
                             DropdownMenuItem(
-                                text = { Text(provider.id) },
+                                text = { Text(llmProviderDisplayName(provider.id)) },
                                 onClick = {
                                     onProvider(provider.id)
                                     providerMenuExpanded = false
@@ -331,5 +332,33 @@ internal fun LlmSettingsPane(
                 }
             },
         )
+    }
+}
+
+@StringRes
+internal fun llmProviderLabelRes(providerId: String): Int? = when (providerId) {
+    "open_ai_compatible" -> R.string.llm_provider_open_ai_compatible
+    "open_ai" -> R.string.llm_provider_open_ai
+    "open_ai_responses" -> R.string.llm_provider_open_ai_responses
+    "azure_openai" -> R.string.llm_provider_azure_openai
+    "anthropic" -> R.string.llm_provider_anthropic
+    "gemini" -> R.string.llm_provider_gemini
+    "ollama" -> R.string.llm_provider_ollama
+    "deep_seek" -> R.string.llm_provider_deep_seek
+    "moonshot_ai" -> R.string.llm_provider_moonshot_ai
+    "local" -> R.string.llm_provider_local
+    else -> null
+}
+
+@Composable
+internal fun llmProviderDisplayName(providerId: String): String {
+    val resId = llmProviderLabelRes(providerId)
+    return if (resId != null) {
+        stringResource(resId)
+    } else {
+        providerId.replace('_', ' ')
+            .split(' ')
+            .filter(String::isNotEmpty)
+            .joinToString(" ") { word -> word.replaceFirstChar(Char::uppercase) }
     }
 }

@@ -129,6 +129,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("com.google.android.material:material:1.14.0")
+    implementation("rustls:rustls-platform-verifier:0.1.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

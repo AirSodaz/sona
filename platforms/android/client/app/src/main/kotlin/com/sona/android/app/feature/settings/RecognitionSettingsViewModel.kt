@@ -33,15 +33,27 @@ data class RecognitionSettingsUiState(
     val deviceCapabilities: LocalAsrDeviceCapabilities? = null,
     val catalogLoading: Boolean = true,
     val operationModelId: String? = null,
+    val downloadingModelId: String? = null,
     val downloadProgress: LocalAsrDownloadProgress? = null,
     val operationError: Boolean = false,
     val validationByModelId: Map<String, Boolean> = emptyMap(),
 )
 
+fun interface ModelDownloadNotificationPort {
+    fun update(
+        model: LocalAsrCatalogModel,
+        progress: LocalAsrDownloadProgress?,
+        stage: ModelDownloadNotificationStage,
+    )
+}
+
+enum class ModelDownloadNotificationStage { STARTING, PROGRESS, COMPLETED, FAILED, CANCELLED }
+
 class RecognitionSettingsViewModel(
     private val settingsPort: RecognitionSettingsPort,
     private val catalogPort: LocalAsrModelCatalogPort,
     private val deviceCapabilitiesPort: LocalAsrDeviceCapabilitiesPort,
+    private val notificationPort: ModelDownloadNotificationPort? = null,
 ) : ViewModel() {
     private val mutableUiState = MutableStateFlow(RecognitionSettingsUiState())
     val uiState: StateFlow<RecognitionSettingsUiState> = mutableUiState.asStateFlow()
@@ -68,13 +80,25 @@ class RecognitionSettingsViewModel(
 
     fun downloadLocalModel(modelId: String) {
         val model = mutableUiState.value.catalogModels.firstOrNull { it.id == modelId } ?: return
-        runOperation(modelId, clearProgress = false) {
-            settingsPort.downloadLocalModel(
-                model,
-                LocalAsrDownloadProgressListener { progress ->
-                    mutableUiState.update { it.copy(downloadProgress = progress) }
-                },
-            )
+        runOperation(modelId, isDownload = true, clearProgress = true) {
+            notificationPort?.update(model, null, ModelDownloadNotificationStage.STARTING)
+            try {
+                settingsPort.downloadLocalModel(
+                    model,
+                    LocalAsrDownloadProgressListener { progress ->
+                        mutableUiState.update { it.copy(downloadProgress = progress) }
+                        notificationPort?.update(model, progress, ModelDownloadNotificationStage.PROGRESS)
+                    },
+                )
+                notificationPort?.update(model, null, ModelDownloadNotificationStage.COMPLETED)
+            } catch (error: Exception) {
+                if (error !is CancellationException) {
+                    notificationPort?.update(model, null, ModelDownloadNotificationStage.FAILED)
+                } else {
+                    notificationPort?.update(model, null, ModelDownloadNotificationStage.CANCELLED)
+                }
+                throw error
+            }
         }
     }
 
@@ -120,6 +144,7 @@ class RecognitionSettingsViewModel(
 
     private fun runOperation(
         modelId: String?,
+        isDownload: Boolean = false,
         clearProgress: Boolean = true,
         operation: suspend () -> Unit,
     ) {
@@ -127,6 +152,7 @@ class RecognitionSettingsViewModel(
         mutableUiState.update {
             it.copy(
                 operationModelId = modelId ?: ENGINE_OPERATION_ID,
+                downloadingModelId = if (isDownload) modelId else null,
                 downloadProgress = if (clearProgress) null else it.downloadProgress,
                 operationError = false,
             )
@@ -140,8 +166,22 @@ class RecognitionSettingsViewModel(
                 mutableUiState.update { it.copy(operationError = true) }
             } finally {
                 mutableUiState.update {
-                    it.copy(operationModelId = null, downloadProgress = null)
+                    it.copy(
+                        operationModelId = null,
+                        downloadingModelId = null,
+                        downloadProgress = null,
+                    )
                 }
+            }
+        }
+    }
+
+    override fun onCleared() {
+        val downloadingId = mutableUiState.value.downloadingModelId
+        if (downloadingId != null) {
+            val model = mutableUiState.value.catalogModels.firstOrNull { it.id == downloadingId }
+            if (model != null) {
+                notificationPort?.update(model, null, ModelDownloadNotificationStage.CANCELLED)
             }
         }
     }
@@ -153,6 +193,7 @@ class RecognitionSettingsViewModel(
             settingsPort: RecognitionSettingsPort,
             catalogPort: LocalAsrModelCatalogPort,
             deviceCapabilitiesPort: LocalAsrDeviceCapabilitiesPort,
+            notificationPort: ModelDownloadNotificationPort? = null,
         ): ViewModelProvider.Factory = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
@@ -161,6 +202,7 @@ class RecognitionSettingsViewModel(
                     settingsPort,
                     catalogPort,
                     deviceCapabilitiesPort,
+                    notificationPort,
                 ) as T
             }
         }

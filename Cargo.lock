@@ -6597,7 +6597,9 @@ version = "0.9.4"
 dependencies = [
  "async-trait",
  "hex",
+ "jni 0.22.4",
  "log",
+ "rustls-platform-verifier",
  "serde",
  "serde_json",
  "sha2 0.11.0",

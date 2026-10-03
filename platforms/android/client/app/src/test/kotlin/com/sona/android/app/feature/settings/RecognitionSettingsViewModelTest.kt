@@ -64,6 +64,36 @@ class RecognitionSettingsViewModelTest {
         }
 
     @Test
+    fun `download notifies notificationPort across lifecycle`() =
+        runTest(mainDispatcherRule.dispatcher) {
+            val stages = mutableListOf<ModelDownloadNotificationStage>()
+            val notificationPort = ModelDownloadNotificationPort { _, _, stage ->
+                stages.add(stage)
+            }
+            val port = FakeRecognitionSettingsPort()
+            val viewModel = RecognitionSettingsViewModel(
+                settingsPort = port,
+                catalogPort = LocalAsrModelCatalogPort { listOf(catalogModel()) },
+                deviceCapabilitiesPort = LocalAsrDeviceCapabilitiesPort { deviceCapabilities() },
+                notificationPort = notificationPort,
+            )
+            advanceUntilIdle()
+
+            viewModel.downloadLocalModel("sensevoice")
+            advanceUntilIdle()
+
+            assertEquals(
+                listOf(
+                    ModelDownloadNotificationStage.STARTING,
+                    ModelDownloadNotificationStage.PROGRESS,
+                    ModelDownloadNotificationStage.COMPLETED,
+                ),
+                stages,
+            )
+            assertEquals(null, viewModel.uiState.value.downloadingModelId)
+        }
+
+    @Test
     fun `validation and deletion update model directory state`() =
         runTest(mainDispatcherRule.dispatcher) {
             val port = FakeRecognitionSettingsPort().apply { installModel() }
