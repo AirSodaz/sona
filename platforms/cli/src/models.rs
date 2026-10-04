@@ -11,9 +11,13 @@ use sona_model_downloads::{download_model, installed_model_is_valid};
 use sona_runtime_fs::list_models as list_model_catalog;
 
 #[derive(Debug, Args)]
+#[command(
+    about = "Manage, download, verify, and inspect preset ASR models",
+    after_help = "Examples:\n  sona-cli models list\n  sona-cli models list --recommended\n  sona-cli models download whisper-turbo\n  sona-cli models info whisper-turbo\n  sona-cli models verify whisper-turbo\n  sona-cli models verify --all\n  sona-cli models delete whisper-turbo -y\n  sona-cli models path"
+)]
 pub struct ModelsArgs {
     #[command(subcommand)]
-    command: ModelCommands,
+    pub command: ModelCommands,
 }
 
 #[derive(Debug, Subcommand)]
@@ -74,13 +78,14 @@ pub struct ModelPathArgs {
 }
 
 #[derive(Debug, Args)]
-#[command(about = "Verify the integrity of an installed preset model")]
+#[command(
+    about = "Verify the integrity of an installed preset model (defaults to all installed models when omitted)"
+)]
 pub struct ModelVerifyArgs {
-    /// Preset model id or alias to verify.
+    /// Preset model id or alias to verify. Defaults to all installed models when omitted.
     #[arg(
-        help = "Preset model id, for example whisper-turbo or silero-vad",
-        conflicts_with = "all",
-        required_unless_present = "all"
+        help = "Preset model id, for example whisper-turbo or silero-vad (defaults to all installed models when omitted)",
+        conflicts_with = "all"
     )]
     pub model_id: Option<String>,
     /// Models directory containing installed presets.
@@ -106,7 +111,6 @@ pub struct ModelListArgs {
     models_dir: Option<PathBuf>,
     /// Filter by supported mode: live or batch.
     #[arg(
-        short = 'm',
         long,
         value_name = "MODE",
         value_parser = ["live", "batch"],
@@ -138,6 +142,14 @@ pub struct ModelListArgs {
         help = "Only include models already present in the models directory"
     )]
     installed: bool,
+    /// Include auxiliary companion models (VAD, punctuation, speaker embedding).
+    #[arg(
+        short = 'a',
+        long = "all",
+        alias = "all-types",
+        help = "Include auxiliary companion models (VAD, punctuation, speaker embedding)"
+    )]
+    all: bool,
     /// Prints JSON instead of the default table output.
     #[arg(short = 'j', long, help = "Print machine-readable JSON")]
     json: bool,
@@ -234,7 +246,7 @@ fn run_model_path(args: ModelPathArgs) -> CliResult<CliOutput> {
 
 async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
     let models_dir = resolve_models_dir(args.models_dir)?;
-    if args.all {
+    if args.all || args.model_id.is_none() {
         let installed = list_models(Some(models_dir.clone()))?
             .into_iter()
             .filter(|m| m.installed)
@@ -339,6 +351,13 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
             sona_core::models::preset_models::find_preset_model(&m.id)
                 .and_then(|p| p.is_recommended)
                 .unwrap_or(false)
+        });
+    }
+    if !args.all && args.model_type.is_none() {
+        models.retain(|m| {
+            m.model_type != "vad"
+                && m.model_type != "punctuation"
+                && !m.model_type.starts_with("speaker-")
         });
     }
     let output = if args.json {

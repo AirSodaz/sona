@@ -181,6 +181,46 @@ fn config_subcommands_work() {
     assert!(output.stdout.contains("[transcribe]"));
     assert!(output.stdout.contains("[serve]"));
 
+    // 4b. config get
+    let sample_cfg = dir.path().join("sample_get.toml");
+    std::fs::write(
+        &sample_cfg,
+        "[transcribe]\nmodel_id = \"whisper-turbo\"\nthreads = 4\nenable_itn = true\n",
+    )
+    .unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "transcribe.model_id",
+        "-c",
+        sample_cfg.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert_eq!(output.stdout.trim(), "whisper-turbo");
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "transcribe.threads",
+        "-c",
+        sample_cfg.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert_eq!(output.stdout.trim(), "4");
+
+    let err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "transcribe.nonexistent_key",
+        "-c",
+        sample_cfg.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains("not found"));
+
     // 5. config check on invalid toml
     let bad = dir.path().join("bad.toml");
     std::fs::write(&bad, "invalid = [[[").unwrap();

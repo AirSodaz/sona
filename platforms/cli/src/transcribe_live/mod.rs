@@ -21,7 +21,7 @@ use crate::live_audio::{
     default_microphone_device_name, microphone_device_names, spawn_stdin_reader,
     start_microphone_input,
 };
-use crate::live_output::LiveOutputRenderer;
+use crate::live_output::{LiveOutputRenderer, LiveStopReason};
 use crate::{CliError, CliIo, CliResult};
 
 pub(crate) async fn run_transcribe_live(
@@ -113,7 +113,7 @@ async fn run_resolved_live_command(
     };
     let mut renderer =
         LiveOutputRenderer::new(resolved.output_format, stdout_is_terminal, &session_id);
-    let reason = run_live_session(
+    let session_result = run_live_session(
         session,
         &mut input,
         &mut update_receiver,
@@ -122,7 +122,12 @@ async fn run_resolved_live_command(
         stop_receiver,
         metadata,
     )
-    .await?;
+    .await;
+
+    let (reason, session_err) = match session_result {
+        Ok(reason) => (reason, None),
+        Err(error) => (LiveStopReason::Eof, Some(error)),
+    };
 
     let status = if let Some(path) = output_path.as_ref() {
         let format = export_format.ok_or_else(|| {
@@ -145,6 +150,14 @@ async fn run_resolved_live_command(
     } else {
         None
     };
+
+    if let Some(error) = session_err {
+        if let Some(saved) = status.as_ref() {
+            let mut stderr = std::io::stderr();
+            let _ = writeln!(stderr, "{saved}");
+        }
+        return Err(error);
+    }
     renderer
         .write_stopped(stdout, reason)
         .map_err(CliError::Io)?;

@@ -164,7 +164,7 @@ pub struct InitConfigArgs {
         help = "Path to write the commented starter template, default sona-cli.toml",
         conflicts_with = "global"
     )]
-    path: Option<PathBuf>,
+    pub(crate) path: Option<PathBuf>,
     /// Write the template to the user standard configuration path instead of ./sona-cli.toml.
     #[arg(
         short = 'g',
@@ -173,14 +173,14 @@ pub struct InitConfigArgs {
         help = "Write to user standard configuration path instead of ./sona-cli.toml",
         conflicts_with = "path"
     )]
-    global: bool,
+    pub(crate) global: bool,
     /// Overwrite the target file if it already exists.
     #[arg(
         short = 'F',
         long,
         help = "Overwrite an existing starter template or config file"
     )]
-    force: bool,
+    pub(crate) force: bool,
 }
 
 pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {

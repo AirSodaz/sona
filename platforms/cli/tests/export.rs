@@ -250,7 +250,7 @@ fn export_transcript_rejects_unknown_mode() {
         input.to_str().unwrap(),
         "-o",
         output.to_str().unwrap(),
-        "-m",
+        "--mode",
         "invalid_mode",
     ])
     .unwrap_err();
@@ -329,6 +329,53 @@ fn export_accepts_positional_input_argument() {
 }
 
 #[test]
+fn export_rejects_conflicting_positional_and_named_input() {
+    let dir = tempfile::tempdir().unwrap();
+    let input1 = dir.path().join("seg1.json");
+    let input2 = dir.path().join("seg2.json");
+    write_segments(&input1);
+    write_segments(&input2);
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        input1.to_str().unwrap(),
+        "-i",
+        input2.to_str().unwrap(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn export_rejects_nonexistent_input_with_clear_error() {
+    let error = sona_cli::run_cli_from_args(["sona-cli", "export", "nonexistent_file_xyz.json"])
+        .unwrap_err();
+
+    assert_eq!(error.exit_code(), 5);
+    assert!(
+        error
+            .to_string()
+            .contains("Failed to read transcript input")
+    );
+}
+
+#[test]
+fn export_rejects_empty_stdin_with_clear_error() {
+    let error =
+        sona_cli::run_cli_from_args_with_stdin(["sona-cli", "export", "-f", "srt"], Vec::new())
+            .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Standard input was empty; no transcript segments received.")
+    );
+}
+
+#[test]
 fn export_works_with_verbose_flag_before_and_after_command() {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("segments.json");
@@ -359,4 +406,24 @@ fn export_works_with_verbose_flag_before_and_after_command() {
     ])
     .unwrap();
     assert!(result2.stdout.contains("out2.srt"));
+}
+
+#[test]
+fn export_accepts_short_mode_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("out.srt");
+    write_segments(&input);
+
+    let result = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+        "-m",
+        "bilingual",
+    ])
+    .unwrap();
+    assert!(result.stdout.contains("out.srt"));
 }

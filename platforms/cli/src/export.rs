@@ -37,10 +37,15 @@ enum ExportCommands {
 )]
 pub struct ExportTranscriptArgs {
     /// Positional input JSON file containing an array of transcript segments.
-    #[arg(value_name = "INPUT")]
+    #[arg(value_name = "INPUT", conflicts_with = "input")]
     pub positional_input: Option<PathBuf>,
     /// JSON file containing an array of transcript segments, or "-" for stdin.
-    #[arg(short = 'i', long, value_name = "JSON_FILE")]
+    #[arg(
+        short = 'i',
+        long,
+        value_name = "JSON_FILE",
+        conflicts_with = "positional_input"
+    )]
     pub input: Option<PathBuf>,
     /// Destination file path, or "-" for stdout.
     #[arg(short = 'o', long, value_name = "PATH", default_value = "-")]
@@ -83,6 +88,35 @@ fn run_export_transcript(
     args: ExportTranscriptArgs,
     io: &mut (dyn crate::CliIo + Send),
 ) -> CliResult<CliOutput> {
+    let mode =
+        ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
+
+    let input_path = args
+        .positional_input
+        .or(args.input)
+        .unwrap_or_else(|| PathBuf::from("-"));
+
+    if input_path.as_os_str() != "-" {
+        let metadata = std::fs::metadata(&input_path).map_err(|error| {
+            CliError::Io(format!(
+                "Failed to read transcript input {}: {error}",
+                input_path.display()
+            ))
+        })?;
+        const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
+        if metadata.len() > MAX_INPUT_BYTES {
+            return Err(CliError::Validation(
+                "Transcript input exceeds maximum supported size (64 MB).".to_string(),
+            ));
+        }
+        if metadata.len() == 0 {
+            return Err(CliError::Validation(format!(
+                "Transcript input file {} is empty.",
+                input_path.display()
+            )));
+        }
+    }
+
     let is_stdout = args.output.as_os_str() == "-";
     let format = match args.format {
         Some(value) => ExportFormat::parse(&value),
@@ -96,13 +130,6 @@ fn run_export_transcript(
     }
     .map_err(|error| CliError::Validation(error.to_string()))?;
 
-    let mode =
-        ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
-
-    let input_path = args
-        .positional_input
-        .or(args.input)
-        .unwrap_or_else(|| PathBuf::from("-"));
     let input_bytes = if input_path.as_os_str() == "-" {
         if io.stdin_is_terminal() {
             return Err(CliError::Validation(
@@ -117,6 +144,11 @@ fn run_export_transcript(
                     "Failed to read transcript input from stdin: {error}"
                 ))
             })?;
+        if buf.is_empty() {
+            return Err(CliError::Validation(
+                "Standard input was empty; no transcript segments received.".to_string(),
+            ));
+        }
         if buf.len() > MAX_INPUT_BYTES {
             return Err(CliError::Validation(
                 "Transcript input exceeds maximum supported size (64 MB).".to_string(),
@@ -124,18 +156,6 @@ fn run_export_transcript(
         }
         buf
     } else {
-        let metadata = std::fs::metadata(&input_path).map_err(|error| {
-            CliError::Io(format!(
-                "Failed to read transcript input {}: {error}",
-                input_path.display()
-            ))
-        })?;
-        const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
-        if metadata.len() > MAX_INPUT_BYTES {
-            return Err(CliError::Validation(
-                "Transcript input exceeds maximum supported size (64 MB).".to_string(),
-            ));
-        }
         std::fs::read(&input_path).map_err(|error| {
             CliError::Io(format!(
                 "Failed to read transcript input {}: {error}",
@@ -143,8 +163,9 @@ fn run_export_transcript(
             ))
         })?
     };
+
     let segments: Vec<TranscriptSegment> = serde_json::from_slice(&input_bytes)
-        .map_err(|error| CliError::Validation(error.to_string()))?;
+        .map_err(|error| CliError::Validation(format!("Invalid transcript JSON: {error}")))?;
     if is_stdout {
         let content = sona_core::export::export_segments_with_mode(&segments, format, mode)
             .map_err(map_export_error)?;

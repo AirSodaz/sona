@@ -28,12 +28,14 @@ sona-llama-cpp = { workspace = true }
 sona-media-detector = { workspace = true }
 sona-model-downloads = { workspace = true }
 sona-online-asr = { workspace = true }
+shlex = { workspace = true }
 sona-runtime-fs = { workspace = true }
 sona-core = { workspace = true }
 sona-export = { workspace = true }
 thiserror = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
+toml = { workspace = true }
 unicode-width = "0.2"
 uuid = { workspace = true }
 

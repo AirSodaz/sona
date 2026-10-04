@@ -16,36 +16,57 @@ fn online_provider_value_parser() -> PossibleValuesParser {
     PossibleValuesParser::new(online_asr_provider_ids())
 }
 
-#[derive(Clone, Args)]
+#[derive(Clone, Default, Args)]
 pub(crate) struct OnlineAsrArgs {
     /// Use an online ASR provider instead of local Sherpa ASR (alias: --provider).
     #[arg(
         long,
         value_name = "PROVIDER",
         value_parser = online_provider_value_parser(),
-        alias = "provider"
+        alias = "provider",
+        help_heading = "Online ASR"
     )]
     pub(crate) online_provider: Option<String>,
     /// Direct API key for the online ASR provider. Takes precedence over --api-key-env.
-    #[arg(long = "api-key", value_name = "KEY")]
+    #[arg(long = "api-key", value_name = "KEY", help_heading = "Online ASR")]
     pub(crate) api_key: Option<String>,
     /// Environment variable containing the online ASR API key. Default env vars:
     /// volcengine-doubao: SONA_VOLCENGINE_ASR_API_KEY, groq-whisper: GROQ_API_KEY,
     /// mistral-voxtral: MISTRAL_API_KEY, openai-whisper: OPENAI_API_KEY,
     /// deepgram: DEEPGRAM_API_KEY, assemblyai: ASSEMBLYAI_API_KEY, elevenlabs: ELEVENLABS_API_KEY.
-    #[arg(long, value_name = "NAME")]
+    #[arg(long, value_name = "NAME", help_heading = "Online ASR")]
     pub(crate) api_key_env: Option<String>,
+    /// Override the model name for the online ASR provider (e.g. whisper-large-v3, nova-2).
+    #[arg(
+        long = "online-model",
+        value_name = "MODEL",
+        help_heading = "Online ASR"
+    )]
+    pub(crate) online_model: Option<String>,
+    /// Pass arbitrary KEY=VALUE configuration options to the online provider (can be repeated).
+    #[arg(long = "online-param", value_name = "KEY=VALUE", action = clap::ArgAction::Append, help_heading = "Online ASR")]
+    pub(crate) online_params: Vec<String>,
     /// JSON object overriding non-secret provider endpoint or model settings.
-    #[arg(long, value_name = "FILE")]
+    #[arg(long, value_name = "FILE", help_heading = "Online ASR")]
     pub(crate) online_config: Option<PathBuf>,
 }
 
 impl std::fmt::Debug for OnlineAsrArgs {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let redacted_params = self
+            .online_params
+            .iter()
+            .map(|p| match p.split_once('=') {
+                Some((k, _)) => format!("{k}=***REDACTED***"),
+                None => "***REDACTED***".to_string(),
+            })
+            .collect::<Vec<_>>();
         f.debug_struct("OnlineAsrArgs")
             .field("online_provider", &self.online_provider)
             .field("api_key", &self.api_key.as_ref().map(|_| "***REDACTED***"))
             .field("api_key_env", &self.api_key_env)
+            .field("online_model", &self.online_model)
+            .field("online_params", &redacted_params)
             .field("online_config", &self.online_config)
             .finish()
     }
@@ -70,6 +91,16 @@ impl OnlineAsrArgs {
             if self.online_config.is_some() {
                 return Err(CliError::Validation(
                     "--online-config requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
+                ));
+            }
+            if self.online_model.is_some() {
+                return Err(CliError::Validation(
+                    "--online-model requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
+                ));
+            }
+            if !self.online_params.is_empty() {
+                return Err(CliError::Validation(
+                    "--online-param requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
                 ));
             }
         }
@@ -101,6 +132,8 @@ impl OnlineAsrArgs {
             } else {
                 self.online_config.clone()
             },
+            online_model: self.online_model.clone(),
+            online_params: self.online_params.clone(),
         };
         resolved.validate_provider_presence()?;
         Ok(resolved)
@@ -151,7 +184,42 @@ impl OnlineAsrArgs {
         if let Some(path) = self.online_config.as_deref() {
             merge_config_overrides(config_object, path)?;
         }
-
+        if let Some(model) = &self.online_model {
+            config_object.insert("model".to_string(), Value::String(model.clone()));
+        }
+        for param in &self.online_params {
+            let (key, value) = param.split_once('=').ok_or_else(|| {
+                CliError::Validation(format!(
+                    "Invalid --online-param '{param}'. Expected format: KEY=VALUE"
+                ))
+            })?;
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() {
+                return Err(CliError::Validation(format!(
+                    "Invalid --online-param '{param}': key cannot be empty."
+                )));
+            }
+            let normalized = key
+                .chars()
+                .filter(|c| *c != '_' && *c != '-')
+                .collect::<String>()
+                .to_ascii_lowercase();
+            if normalized.contains("apikey")
+                || normalized.contains("secret")
+                || normalized.contains("token")
+                || normalized.contains("password")
+                || normalized.contains("credential")
+                || normalized.contains("auth")
+            {
+                return Err(CliError::Validation(format!(
+                    "Sensitive credential '{key}' cannot be passed via --online-param; use --api-key-env instead."
+                )));
+            }
+            let json_val =
+                serde_json::from_str(value).unwrap_or_else(|_| Value::String(value.to_string()));
+            config_object.insert(key.to_string(), json_val);
+        }
         let api_key = if let Some(direct_key) = &self.api_key {
             if direct_key.trim().is_empty() {
                 return Err(CliError::Validation(
@@ -275,9 +343,7 @@ mod tests {
     fn online_args(provider: impl Into<String>) -> OnlineAsrArgs {
         OnlineAsrArgs {
             online_provider: Some(provider.into()),
-            api_key: None,
-            api_key_env: None,
-            online_config: None,
+            ..Default::default()
         }
     }
     #[test]
@@ -321,6 +387,7 @@ mod tests {
             api_key: None,
             api_key_env: Some("CUSTOM_ASR_KEY".to_string()),
             online_config: Some(config_path.clone()),
+            ..Default::default()
         };
         let request = args
             .build_request_with(AsrMode::Batch, "auto".to_string(), false, None, |name| {
@@ -426,6 +493,7 @@ mod tests {
             api_key: None,
             api_key_env: None,
             online_config: None,
+            ..Default::default()
         };
 
         let resolved = empty_args
@@ -450,6 +518,7 @@ mod tests {
             api_key: None,
             api_key_env: Some("CLI_KEY_VAR".to_string()),
             online_config: None,
+            ..Default::default()
         };
         let resolved_override = cli_override
             .resolve_with_config(
@@ -476,6 +545,7 @@ mod tests {
             api_key: Some("override-secret-key".to_string()),
             api_key_env: None,
             online_config: None,
+            ..Default::default()
         };
 
         let resolved = cli_args
@@ -501,6 +571,7 @@ mod tests {
             api_key: Some("orphan-key".to_string()),
             api_key_env: None,
             online_config: None,
+            ..Default::default()
         };
 
         let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
@@ -517,6 +588,7 @@ mod tests {
             api_key: None,
             api_key_env: Some("ORPHAN_ENV_VAR".to_string()),
             online_config: None,
+            ..Default::default()
         };
 
         let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
@@ -533,6 +605,7 @@ mod tests {
             api_key: None,
             api_key_env: None,
             online_config: Some(PathBuf::from("orphan.json")),
+            ..Default::default()
         };
 
         let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
@@ -549,6 +622,7 @@ mod tests {
             api_key: Some("direct-secret-key".to_string()),
             api_key_env: Some("MY_ENV_KEY".to_string()),
             online_config: None,
+            ..Default::default()
         };
         let request = args
             .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
@@ -568,6 +642,7 @@ mod tests {
             api_key: Some("   ".to_string()),
             api_key_env: None,
             online_config: None,
+            ..Default::default()
         };
         let error = args
             .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
@@ -584,9 +659,84 @@ mod tests {
             api_key: Some("super-secret-token".to_string()),
             api_key_env: None,
             online_config: None,
+            ..Default::default()
         };
         let debug_str = format!("{args:?}");
         assert!(!debug_str.contains("super-secret-token"));
         assert!(debug_str.contains("***REDACTED***"));
+    }
+
+    #[test]
+    fn online_asr_args_debug_redacts_online_params_values() {
+        let args = OnlineAsrArgs {
+            online_provider: Some("groq-whisper".to_string()),
+            online_params: vec!["custom_header=my-private-value".to_string()],
+            ..Default::default()
+        };
+        let debug_str = format!("{args:?}");
+        assert!(!debug_str.contains("my-private-value"));
+        assert!(debug_str.contains("custom_header=***REDACTED***"));
+    }
+
+    #[test]
+    fn online_model_and_online_params_apply_to_config() {
+        let args = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            online_model: Some("whisper-large-v3".to_string()),
+            online_params: vec![
+                "temperature=0.2".to_string(),
+                "custom_flag=true".to_string(),
+            ],
+            ..Default::default()
+        };
+        let request = args
+            .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
+                Ok("my-key".to_string())
+            })
+            .unwrap();
+        let AsrEngineConfig::Online { provider } = request.engine_config else {
+            panic!("expected online request");
+        };
+        assert_eq!(provider.config["model"], "whisper-large-v3");
+        assert_eq!(provider.config["temperature"], 0.2);
+        assert_eq!(provider.config["custom_flag"], true);
+    }
+
+    #[test]
+    fn rejects_sensitive_keys_in_online_params() {
+        let args = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            online_params: vec!["api_key=secret-in-param".to_string()],
+            ..Default::default()
+        };
+        let err = args
+            .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
+                Ok("my-key".to_string())
+            })
+            .unwrap_err();
+        assert!(err.to_string().contains("Sensitive credential"));
+
+        for compound_key in [
+            "auth_token",
+            "secret_key",
+            "client_secret",
+            "user_password",
+            "credential_id",
+        ] {
+            let args = OnlineAsrArgs {
+                online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+                online_params: vec![format!("{compound_key}=val")],
+                ..Default::default()
+            };
+            let err = args
+                .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
+                    Ok("my-key".to_string())
+                })
+                .unwrap_err();
+            assert!(
+                err.to_string().contains("Sensitive credential"),
+                "expected rejection for {compound_key}"
+            );
+        }
     }
 }

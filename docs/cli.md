@@ -7,14 +7,14 @@ The standalone CLI ships these commands:
 - `doctor` (system dependencies, audio devices, models, real hardware acceleration [CUDA, Vulkan, Metal], and full-section configuration health check)
 - `devices` (list available audio capture / microphone devices with numeric index and default tag)
 - `providers` (list supported online ASR providers, their capabilities, and current environment configuration status)
-- `config init|path|check|show` (configuration management: generate template, print path, validate syntax, and inspect content; supports `--global / --user`)
-- `models list|info|download|delete|verify|path` (preset model lifecycle management: download supports multi-model download and `--mirror`; delete and verify target a single model or `--all`; list supports `--recommended`)
-- `transcribe` (local or online batch ASR, supporting single file, multiple files, directories, stdin pipe `-` or auto-detected pipe, `--provider` alias, single-model auto-inference, and `--mode` text format)
-- `transcribe-live` (alias: `live`, local or online streaming ASR, supporting `--device` index/substring selection, `--stream text|ndjson`, and `--mode` for file export)
-- `export` (export transcript segment JSON to multiple subtitle formats, supporting positional input and stdin/stdout UNIX pipes)
+- `config init|path|check|show|get|edit` (configuration management: generate template, print path, validate syntax, inspect content, read specific keys with `get`, and safely edit with `$EDITOR` via `edit`; supports `--global / --user`)
+- `models list|info|download|delete|verify|path` (preset model lifecycle management: list shows standalone ASR models by default and supports `-a/--all` and `-r/--recommended`; verify defaults to all installed models; download supports multiple models and `--mirror`)
+- `transcribe` (local or online batch ASR, supporting single file, multiple files, directories, stdin pipe `-` or auto-detected pipe, `--continue-on-error` batch fault tolerance, `--online-model` direct parameter, and `--mode` text format)
+- `transcribe-live` (visible alias: `live`, local or online streaming ASR, supporting `--device` index/substring selection, `--stream text|ndjson`, and file export `-f/--format/--output-format` with `--mode`)
 - `completion` (shell auto-completion for bash, zsh, fish, powershell, elvish)
 - `diagnostics` (host facts snapshot reproduction for desktop integration; for routine health checks, use `doctor`)
 - `path-status` (shared runtime path status contract inspection)
+
 ## Run It
 
 ```bash
@@ -40,6 +40,7 @@ sona-cli serve -p 14200
 ## Stateless Boundary
 
 The CLI deliberately excludes SQLite, History, Tag, application backup/recovery, Sync, and Online LLM. Do not add commands that silently create or modify the desktop application data directory. Use `export transcript` and stdout/file output to compose the CLI with other tools.
+
 ## `doctor`
 
 Inspect system environment health including FFmpeg executable and version, audio capture devices, models directory and installed presets count, hardware acceleration detection (checks CUDA, Vulkan, Metal, and CPU modes), and configuration file syntax across all sections (`[transcribe]`, `[transcribe_live]`, and `[serve]`).
@@ -62,6 +63,7 @@ sona-cli devices --json
 ```
 
 ## `config`
+
 Unified configuration management command group supporting template generation, path inspection, validation, and content display:
 
 ```bash
@@ -71,13 +73,18 @@ sona-cli config init ./custom.toml -F # Force overwrite custom path
 sona-cli config path                  # Print resolved active configuration file path
 sona-cli config check                 # Validate [transcribe], [transcribe_live], [serve] sections
 sona-cli config show                  # Display active configuration file content
+sona-cli config get transcribe.model_id # Read a specific configuration value
+sona-cli config edit                  # Open config in $EDITOR and validate syntax upon exit
 ```
+
 Configuration search order:
 1. Explicit `-c / --config <PATH>` command line flag;
 2. `SONA_CONFIG` environment variable;
 3. `./sona-cli.toml` in the current working directory;
 4. User-level standard config location (Linux: `~/.config/sona/sona-cli.toml`, macOS: `~/Library/Application Support/sona/sona-cli.toml` [or `$XDG_CONFIG_HOME/sona/sona-cli.toml` if set], Windows: `%APPDATA%\sona\sona-cli.toml`).
+
 ## `providers`
+
 List supported online ASR providers with their default environment variable names, current configuration status (`configured` / `not set`), and supported modes (`batch`, `streaming`).
 
 ```bash
@@ -86,6 +93,7 @@ sona-cli providers --json
 ```
 
 In `--json` mode, each provider object includes `"configured": true | false`.
+
 ## `path-status`
 
 Resolve one filesystem path through the shared runtime status contract and print JSON to stdout.
@@ -101,8 +109,9 @@ List, inspect, download, or delete preset local ASR models. These commands opera
 ```bash
 sona-cli models list
 sona-cli models list --recommended    # Show only recommended preset models (short flag: -r)
+sona-cli models list --all            # Include auxiliary companion models (VAD, punctuation, diarization; short flag: -a)
 sona-cli models list turbo
-sona-cli models list -m batch -t whisper
+sona-cli models list --mode batch -t whisper
 sona-cli models list -l zh -i -j
 sona-cli models info whisper-turbo
 sona-cli models info sensevoice --json
@@ -110,18 +119,16 @@ sona-cli models download whisper-turbo -q
 sona-cli models download whisper-turbo sensevoice
 sona-cli models download whisper-turbo --mirror hf-mirror # Options: auto, direct, ghproxy, ghnet, hf-mirror
 sona-cli models delete --all -y
-sona-cli models verify whisper-turbo
-sona-cli models verify --all
+sona-cli models verify                # Verifies all installed models by default
+sona-cli models verify whisper-turbo  # Verify a specific model
 sona-cli models path
 ```
 
-`models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`), filter by `--mode` (`live` or `batch`), and filter recommended models with `-r / --recommended`.
+`models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). It shows standalone ASR models by default; pass `-a / --all` (or `--all-types`) to view all auxiliary companion models (VAD, punctuation, speaker embedding). You can filter models by keyword (`sona-cli models list <QUERY>`), filter by `--mode` (`live` or `batch`), and filter recommended models with `-r / --recommended`.
 `models download` supports `--mirror <auto|direct|ghproxy|ghnet|hf-mirror>` to select download mirror strategy.
 `models info` (alias `models inspect`) inspects full metadata for a preset model including name, type, supported modes, full language coverage (untruncated), required companion models, installation status, and download artifact checksums. Supports `--json`.
 `models download`, `models delete`, `models info`, and `models verify` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
-`models verify` validates file integrity of an installed model without re-downloading. Use `--all` to verify every installed model in the models directory.
-`models path` prints the resolved absolute path to the local preset models directory.
-`models delete` deletes a specified model or all installed preset models with `--all`. It prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
+`models verify` validates file integrity of installed models without re-downloading. When `<MODEL_ID>` is omitted, it defaults to verifying all installed models in the models directory. You can also verify a specific model ID or alias.
 
 ## `diagnostics`
 
@@ -171,6 +178,7 @@ sona-cli export -i ./segments.json -o ./transcript.srt -m bilingual
 sona-cli transcribe ./sample.wav | sona-cli export -f srt > ./transcript.srt
 cat ./segments.json | sona-cli export -f vtt
 ```
+
 Input segments JSON format example (array of `TranscriptSegment`):
 
 ```json
@@ -198,20 +206,22 @@ sona-cli transcribe ./sample.wav -o ./out.srt             # When only 1 batch mo
 cat ./sample.wav | sona-cli transcribe -o ./out.srt       # Auto-detects piped standard input (or explicitly pass '-')
 sona-cli transcribe ./sample.wav --mode bilingual -f srt # Supports original, translation, bilingual
 sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f srt
-sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
+sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt --continue-on-error
 sona-cli providers                                       # List supported online ASR providers
 ```
+
 If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG` / user config directory), it is loaded automatically without passing `-c / --config`.
 Single-model auto inference: When `-m / --model-id` is omitted and exactly one batch model is installed locally, the CLI automatically selects it.
 Piped stdin support: When standard input is piped, `sona-cli transcribe` automatically streams from standard input even without specifying `-`.
 Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`, and `--provider` (alias for `--online-provider`). `--jobs` defaults to 1 (batch files are currently transcribed sequentially; concurrent jobs are experimental).
 Use `--mode <original|translation|bilingual>` (default `original`) to select the output subtitle mode.
 Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file. `--gpu-acceleration` supports `auto`, `cpu`, `vulkan`, `metal`, and `cuda`.
+
 ```bash
 export GROQ_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
+sona-cli transcribe ./sample.wav --online-provider groq-whisper --online-model whisper-large-v3 --online-param temperature=0.2
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --api-key gsk_... --format txt
-
 export SONA_VOLCENGINE_ASR_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
 ```
@@ -227,13 +237,15 @@ Supported providers include `volcengine-doubao`, `groq-whisper`, `mistral-voxtra
 | `deepgram` | `DEEPGRAM_API_KEY` |
 | `assemblyai` | `ASSEMBLYAI_API_KEY` |
 | `elevenlabs` | `ELEVENLABS_API_KEY` |
-Use `--api-key-env NAME` to select another variable. `--online-config FILE` accepts a JSON object for non-secret endpoint/model overrides; it must not contain `apiKey` or `api_key`.
+
+Use `--api-key-env NAME` to select another variable. Direct CLI overrides `--online-model <NAME>` and repeated `--online-param KEY=VALUE` allow setting model names and non-secret provider options directly without writing JSON files (sensitive credentials like API keys cannot be passed via `--online-param`). `--online-config FILE` accepts a JSON object for overrides as well.
 
 Local-only flags such as `--model-id`, `--models-dir`, VAD/punctuation options, thread count, GPU mode, and `--save-wav` are rejected when an online provider is selected. `--force` is required to replace an existing output file.
 
 ## `transcribe-live`
 
 Transcribe microphone input or headerless 16 kHz mono signed 16-bit little-endian PCM from stdin.
+
 ```bash
 sona-cli devices
 sona-cli live -m sensevoice --duration 60 -o ./live.srt
@@ -245,15 +257,18 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
     -m paraformer \
     --stream ndjson
 ```
-`sona-cli live` is an alias for `sona-cli transcribe-live`. When exactly one streaming model is installed locally and `-m` is omitted, the CLI automatically selects it.
-`--device` accepts a numeric index (e.g. `--device 0`), exact name, or unique substring (e.g. `--device realtek`). `--stream` (alias `--stream-format`, `--output-format`) selects live stdout format (`text` or `ndjson`). When saving to an output file (`-o / --output`), `--mode` selects subtitle export mode (`original`, `translation`, or `bilingual`); `--mode` does not alter the live terminal stream.
+
+`sona-cli live` is a visible alias for `sona-cli transcribe-live` (displayed in `--help` and shell auto-completion). When exactly one streaming model is installed locally and `-m` is omitted, the CLI automatically selects it.
+`--device` accepts a numeric index (e.g. `--device 0`), exact name, or unique substring (e.g. `--device realtek`). `--stream` (alias `--stream-format`) selects live stdout format (`text` or `ndjson`). When saving to an output file (`-o / --output`), `-f / --format` (alias `--output-format`) specifies the output file format, and `--mode` selects subtitle export mode (`original`, `translation`, or `bilingual`); `--mode` does not alter the live terminal stream.
+
 ```bash
 export SONA_VOLCENGINE_ASR_API_KEY="..."
 ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
-    --online-provider volcengine-doubao --output-format ndjson
+    --online-provider volcengine-doubao --stream ndjson
 ```
-`--input microphone` uses the default input device unless `--device` supplies a numeric index (e.g. `--device 0`), exact name, or unique substring (e.g. `--device realtek`). `--stream` (or `--stream-format` / `--output-format`) can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` specifies the output file format and requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
+
+`--input microphone` uses the default input device unless `--device` supplies a numeric index (e.g. `--device 0`), exact name, or unique substring (e.g. `--device realtek`). `--stream` (or `--stream-format`) can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` (alias `--output-format`) specifies the output file format and requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
 The same online credential and non-secret config rules as `transcribe` apply. Local-only model and runtime flags are rejected for online streaming.
 
 ## `serve`
@@ -276,6 +291,7 @@ Core endpoints exposed:
 - `GET  /v1/transcriptions/jobs`: Transcription task status and queue query
 - `WS   /v1/streaming`: Real-time streaming WebSocket audio transcription API
 When authentication is enabled with `--api-key <KEY>`, client requests to private endpoints must include the HTTP header: `Authorization: Bearer <KEY>`.
+
 ## `completion`
 
 Generate shell auto-completion scripts for `bash`, `zsh`, `fish`, `powershell`, or `elvish`.

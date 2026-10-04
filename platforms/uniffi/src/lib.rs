@@ -2036,7 +2036,7 @@ mod tests {
             serde_json::from_str::<serde_json::Value>(&volcengine.defaults_json).unwrap()["apiKey"],
             serde_json::json!("")
         );
-        assert_eq!(volcengine.streaming.supported, None);
+        assert_eq!(volcengine.streaming.supported, Some(true));
         assert!(volcengine.streaming.requires_api_key);
         assert_eq!(
             volcengine.streaming.required_config_fields,

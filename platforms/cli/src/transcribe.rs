@@ -16,100 +16,126 @@ use sona_core::transcription::transcript::TranscriptSegment;
 )]
 pub struct TranscribeArgs {
     /// Input audio file(s), video file(s), or glob pattern(s). Required unless --input-dir is specified.
-    #[arg(value_name = "INPUT")]
+    #[arg(value_name = "INPUT", help_heading = "Input/Output")]
     inputs: Vec<PathBuf>,
     /// Directory containing input files for batch transcription.
-    #[arg(long = "input-dir", value_name = "DIR")]
+    #[arg(long = "input-dir", value_name = "DIR", help_heading = "Input/Output")]
     input_dir: Option<PathBuf>,
     /// Directory to write transcript files for batch transcription.
-    #[arg(long = "output-dir", value_name = "DIR")]
+    #[arg(long = "output-dir", value_name = "DIR", help_heading = "Input/Output")]
     output_dir: Option<PathBuf>,
     /// Recursively scan input directory.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, help_heading = "Input/Output")]
     recursive: bool,
     /// Output transcript file. Defaults to stdout when omitted (single-input mode only).
-    #[arg(short, long, value_name = "PATH", conflicts_with = "output_dir")]
+    #[arg(
+        short,
+        long,
+        value_name = "PATH",
+        conflicts_with = "output_dir",
+        help_heading = "Input/Output"
+    )]
     output: Option<PathBuf>,
     /// Export format: json, txt, srt, vtt, or md.
     #[arg(
         short,
         long,
         value_name = "FORMAT",
-        value_parser = ["json", "txt", "srt", "vtt", "md"]
+        value_parser = ["json", "txt", "srt", "vtt", "md"],
+        help_heading = "Input/Output"
     )]
     format: Option<String>,
-    /// Optional config file, usually sona-cli.toml.
-    #[arg(short, long, value_name = "FILE")]
-    config: Option<PathBuf>,
-    /// Override the language setting.
-    #[arg(short = 'l', long)]
-    language: Option<String>,
-    /// Preset model id to use.
-    #[arg(short = 'm', long = "model-id")]
-    model_id: Option<String>,
-    #[command(flatten)]
-    online: crate::online_asr::OnlineAsrArgs,
-    /// Models directory containing installed presets.
-    #[arg(long = "models-dir")]
-    models_dir: Option<PathBuf>,
-    /// VAD model id override.
-    #[arg(long = "vad-model-id")]
-    vad_model_id: Option<String>,
-    /// Punctuation model id override.
-    #[arg(long = "punctuation-model-id")]
-    punctuation_model_id: Option<String>,
-    /// Number of recognition threads (default: system auto-configured).
-    #[arg(long)]
-    threads: Option<i32>,
-    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
-    #[arg(long, default_value_t = false)]
-    enable_itn: bool,
-    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
-    #[arg(long)]
-    hotwords: Option<String>,
-    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
-    #[arg(
-        long = "gpu-acceleration",
-        value_name = "MODE",
-        value_parser = crate::runtime::gpu_acceleration_value_parser()
-    )]
-    gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds, for example 0.5.
-    #[arg(long = "vad-buffer")]
-    vad_buffer: Option<f32>,
-    /// Save the resampled WAV to a file.
-    #[arg(long = "save-wav")]
-    save_wav: Option<PathBuf>,
-    /// Custom path to the ffmpeg executable.
-    #[arg(long = "ffmpeg-path", value_name = "PATH")]
-    ffmpeg_path: Option<String>,
-    /// Suppress progress output.
-    #[arg(short = 'q', long, default_value_t = false)]
-    quiet: bool,
-    /// List available online ASR providers and exit.
-    #[arg(long, default_value_t = false)]
-    pub list_providers: bool,
-    /// Overwrite existing output files.
-    #[arg(
-        short = 'F',
-        long,
-        default_value_t = false,
-        help = "Overwrite existing output files"
-    )]
-    force: bool,
-    /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
-    #[arg(long, value_name = "N")]
-    jobs: Option<usize>,
     /// Text selection mode: original, translation, or bilingual.
     #[arg(
         long,
         value_name = "MODE",
         value_parser = ["original", "translation", "bilingual"],
-        default_value = "original"
+        default_value = "original",
+        help_heading = "Input/Output"
     )]
     mode: String,
-}
+    /// Overwrite existing output files.
+    #[arg(
+        short = 'F',
+        long,
+        default_value_t = false,
+        help = "Overwrite existing output files",
+        help_heading = "Input/Output"
+    )]
+    force: bool,
+    /// Continue processing remaining files if an error occurs during batch transcription.
+    #[arg(
+        long = "continue-on-error",
+        alias = "skip-errors",
+        default_value_t = false,
+        help_heading = "Input/Output"
+    )]
+    continue_on_error: bool,
 
+    /// Preset model id to use.
+    #[arg(short = 'm', long = "model-id", help_heading = "Model Options")]
+    model_id: Option<String>,
+    /// Models directory containing installed presets.
+    #[arg(long = "models-dir", help_heading = "Model Options")]
+    models_dir: Option<PathBuf>,
+    /// Override the language setting.
+    #[arg(short = 'l', long, help_heading = "Model Options")]
+    language: Option<String>,
+    /// VAD model id override.
+    #[arg(long = "vad-model-id", help_heading = "Model Options")]
+    vad_model_id: Option<String>,
+    /// Punctuation model id override.
+    #[arg(long = "punctuation-model-id", help_heading = "Model Options")]
+    punctuation_model_id: Option<String>,
+
+    #[command(flatten)]
+    online: crate::online_asr::OnlineAsrArgs,
+
+    /// Number of recognition threads (default: system auto-configured).
+    #[arg(long, help_heading = "Audio & Performance")]
+    threads: Option<i32>,
+    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
+    #[arg(long, default_value_t = false, help_heading = "Audio & Performance")]
+    enable_itn: bool,
+    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
+    #[arg(long, help_heading = "Audio & Performance")]
+    hotwords: Option<String>,
+    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
+    #[arg(
+        long = "gpu-acceleration",
+        value_name = "MODE",
+        value_parser = crate::runtime::gpu_acceleration_value_parser(),
+        help_heading = "Audio & Performance"
+    )]
+    gpu_acceleration: Option<String>,
+    /// VAD buffer size in seconds, for example 0.5.
+    #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
+    vad_buffer: Option<f32>,
+    /// Save the resampled WAV to a file.
+    #[arg(long = "save-wav", help_heading = "Audio & Performance")]
+    save_wav: Option<PathBuf>,
+    /// Custom path to the ffmpeg executable.
+    #[arg(
+        long = "ffmpeg-path",
+        value_name = "PATH",
+        help_heading = "Audio & Performance"
+    )]
+    ffmpeg_path: Option<String>,
+
+    /// Optional config file, usually sona-cli.toml.
+    #[arg(short, long, value_name = "FILE")]
+    config: Option<PathBuf>,
+    /// Suppress progress output.
+    #[arg(short = 'q', long, default_value_t = false)]
+    quiet: bool,
+
+    /// List available online ASR providers and exit.
+    #[arg(long, default_value_t = false, hide = true)]
+    pub list_providers: bool,
+    /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
+    #[arg(long, value_name = "N", hide = true)]
+    jobs: Option<usize>,
+}
 pub async fn run_transcribe(
     args: TranscribeArgs,
     io: &mut (dyn crate::CliIo + Send),
@@ -330,6 +356,9 @@ async fn run_batch_transcribe(
     .map_err(crate::map_runtime_fs_error)?;
 
     let total = plans.len();
+    let mut failures = Vec::new();
+    let mut succeeded = 0;
+
     if resolved_online.is_online() {
         reject_online_local_options(args)?;
         let language = args
@@ -346,28 +375,53 @@ async fn run_batch_transcribe(
             resolved_online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
 
         for (index, plan_item) in plans.iter().enumerate() {
-            let segments = crate::asr_adapter::online_batch_transcribe(
-                plan_item.input_path.clone(),
-                request.clone(),
-            )
-            .await
-            .map_err(crate::online_asr::map_asr_error)?;
+            let res: Result<(), CliError> = async {
+                let segments = crate::asr_adapter::online_batch_transcribe(
+                    plan_item.input_path.clone(),
+                    request.clone(),
+                )
+                .await
+                .map_err(crate::online_asr::map_asr_error)?;
 
-            let content =
-                sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
-                    .map_err(|error| CliError::Serialize(error.to_string()))?;
+                let content = sona_core::export::export_segments_with_mode(
+                    &segments,
+                    export_format,
+                    export_mode,
+                )
+                .map_err(|error| CliError::Serialize(error.to_string()))?;
 
-            sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
-                .map_err(|error| CliError::Io(error.to_string()))?;
+                sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                    .map_err(|error| CliError::Io(error.to_string()))?;
+                Ok(())
+            }
+            .await;
 
-            if !args.quiet {
-                eprintln!(
-                    "[{}/{}] Transcribed {} -> {}",
-                    index + 1,
-                    total,
-                    plan_item.input_path.display(),
-                    plan_item.output_path.display()
-                );
+            match res {
+                Ok(()) => {
+                    succeeded += 1;
+                    if !args.quiet {
+                        eprintln!(
+                            "[{}/{}] Transcribed {} -> {}",
+                            index + 1,
+                            total,
+                            plan_item.input_path.display(),
+                            plan_item.output_path.display()
+                        );
+                    }
+                }
+                Err(err) => {
+                    eprintln!(
+                        "[{}/{}] [FAIL] {}: {err}",
+                        index + 1,
+                        total,
+                        plan_item.input_path.display()
+                    );
+                    if args.continue_on_error {
+                        failures.push((plan_item.input_path.clone(), err.to_string()));
+                    } else {
+                        return Err(err);
+                    }
+                }
             }
         }
     } else {
@@ -380,56 +434,87 @@ async fn run_batch_transcribe(
             sona_core::export::ExportFormat::Md => "md",
         };
         for (index, plan_item) in plans.iter().enumerate() {
-            let single_options = BatchTranscribeOptions {
-                input: plan_item.input_path.clone(),
-                output: Some(plan_item.output_path.clone()),
-                format: Some(format_name.to_string()),
-                language: args.language.clone(),
-                model_id: resolved_model_id.clone(),
-                models_dir: args.models_dir.clone(),
-                default_models_dir: crate::desktop_paths::default_models_dir(),
-                vad_model_id: args.vad_model_id.clone(),
-                punctuation_model_id: args.punctuation_model_id.clone(),
-                threads: args.threads,
-                enable_itn: if args.enable_itn { Some(true) } else { None },
-                hotwords: args.hotwords.clone(),
-                gpu_acceleration: args.gpu_acceleration.clone(),
-                vad_buffer: args.vad_buffer,
-                save_wav: None,
-                quiet: args.quiet,
-                force: args.force,
-                ffmpeg_path: args.ffmpeg_path.clone(),
-            };
+            let res: Result<(), CliError> = async {
+                let single_options = BatchTranscribeOptions {
+                    input: plan_item.input_path.clone(),
+                    output: Some(plan_item.output_path.clone()),
+                    format: Some(format_name.to_string()),
+                    language: args.language.clone(),
+                    model_id: resolved_model_id.clone(),
+                    models_dir: args.models_dir.clone(),
+                    default_models_dir: crate::desktop_paths::default_models_dir(),
+                    vad_model_id: args.vad_model_id.clone(),
+                    punctuation_model_id: args.punctuation_model_id.clone(),
+                    threads: args.threads,
+                    enable_itn: if args.enable_itn { Some(true) } else { None },
+                    hotwords: args.hotwords.clone(),
+                    gpu_acceleration: args.gpu_acceleration.clone(),
+                    vad_buffer: args.vad_buffer,
+                    save_wav: None,
+                    quiet: args.quiet,
+                    force: args.force,
+                    ffmpeg_path: args.ffmpeg_path.clone(),
+                };
 
-            let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
-                single_options,
-                config.cloned(),
-                crate::desktop_paths::models_dir_status,
-            )
-            .map_err(crate::map_runtime_fs_error)?;
+                let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+                    single_options,
+                    config.cloned(),
+                    crate::desktop_paths::models_dir_status,
+                )
+                .map_err(crate::map_runtime_fs_error)?;
 
-            let segments = transcriber
-                .transcribe(file_plan)
-                .await
-                .map_err(crate::online_asr::map_asr_error)?;
+                let segments = transcriber
+                    .transcribe(file_plan)
+                    .await
+                    .map_err(crate::online_asr::map_asr_error)?;
 
-            let content =
-                sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
-                    .map_err(|error| CliError::Serialize(error.to_string()))?;
+                let content =
+                    sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
+                        .map_err(|error| CliError::Serialize(error.to_string()))?;
 
-            sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
-                .map_err(|error| CliError::Io(error.to_string()))?;
+                sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                    .map_err(|error| CliError::Io(error.to_string()))?;
+                Ok(())
+            }
+            .await;
 
-            if !args.quiet {
-                eprintln!(
-                    "[{}/{}] Transcribed {} -> {}",
-                    index + 1,
-                    total,
-                    plan_item.input_path.display(),
-                    plan_item.output_path.display()
-                );
+            match res {
+                Ok(()) => {
+                    succeeded += 1;
+                    if !args.quiet {
+                        eprintln!(
+                            "[{}/{}] Transcribed {} -> {}",
+                            index + 1,
+                            total,
+                            plan_item.input_path.display(),
+                            plan_item.output_path.display()
+                        );
+                    }
+                }
+                Err(err) => {
+                    eprintln!(
+                        "[{}/{}] [FAIL] {}: {err}",
+                        index + 1,
+                        total,
+                        plan_item.input_path.display()
+                    );
+                    if args.continue_on_error {
+                        failures.push((plan_item.input_path.clone(), err.to_string()));
+                    } else {
+                        return Err(err);
+                    }
+                }
             }
         }
+    }
+
+    if !failures.is_empty() {
+        let msg = format!(
+            "Transcribed {succeeded}/{total} file(s) into {}. {} file(s) failed.",
+            output_dir.display(),
+            failures.len()
+        );
+        return Err(CliError::Validation(msg));
     }
 
     Ok(CliOutput::stderr(format!(

@@ -607,6 +607,7 @@
       "accuracy": 3,
       "speed": 4
     },
+    "isRecommended": true,
     "engine": "sherpa-onnx",
     "rules": {
       "requiresVad": true,

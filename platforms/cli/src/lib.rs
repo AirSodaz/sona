@@ -295,7 +295,7 @@ enum Commands {
     /// Transcribe audio with local or online ASR; local ASR also accepts video.
     Transcribe(transcribe::TranscribeArgs),
     /// Transcribe live audio using local or online ASR.
-    #[command(alias = "live")]
+    #[command(visible_alias = "live")]
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
     /// Generates shell auto-completion scripts.
     Completion(CompletionArgs),

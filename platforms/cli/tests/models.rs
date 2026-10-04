@@ -18,8 +18,19 @@ fn models_list_outputs_table_by_default() {
     assert!(output.stdout.contains("Language"));
     assert!(output.stdout.contains("Installed"));
     assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
-    assert!(output.stdout.contains("silero-vad"));
+    assert!(!output.stdout.contains("silero-vad"));
     assert!(!output.stdout.contains("\"installed\""));
+
+    let output_all = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--all",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(output_all.stdout.contains("silero-vad"));
 }
 
 #[test]
@@ -107,6 +118,7 @@ fn models_list_can_filter_recommended_only() {
         sona_cli::run_cli_from_args(["sona-cli", "models", "list", "--recommended"]).unwrap();
 
     assert!(output.stdout.contains("sensevoice"));
+    assert!(output.stdout.contains("whisper-turbo"));
     assert!(!output.stdout.contains("silero-vad"));
     assert!(!output.stdout.contains("streaming-zipformer"));
 }
@@ -332,7 +344,7 @@ fn models_list_accepts_short_flags() {
         "list",
         "--models-dir",
         dir.path().to_string_lossy().as_ref(),
-        "-m",
+        "--mode",
         "batch",
         "-t",
         "whisper",
@@ -457,18 +469,19 @@ fn models_path_prints_resolved_directory() {
 }
 
 #[test]
-fn models_verify_requires_either_model_id_or_all() {
+fn models_verify_defaults_to_all_installed_models() {
     let dir = tempfile::tempdir().unwrap();
-    let error = sona_cli::run_cli_from_args([
+    let output = sona_cli::run_cli_from_args([
         "sona-cli",
         "models",
         "verify",
         "--models-dir",
         dir.path().to_string_lossy().as_ref(),
     ])
-    .unwrap_err();
+    .unwrap();
 
-    assert_eq!(error.exit_code(), 2);
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("No installed models found"));
 }
 
 #[test]

@@ -21,7 +21,11 @@ fn transcribe_live_command_exposes_the_public_input_and_output_flags() {
     assert!(help.contains("Transcribe live audio"));
     assert!(help.contains("--input"));
     assert!(help.contains("--device"));
-    assert!(help.contains("--list-input-devices"));
+    assert!(!help.contains("--list-input-devices"));
+    assert!(!help.contains("--list-providers"));
+    assert!(help.contains("Input/Output"));
+    assert!(help.contains("Model Options"));
+    assert!(help.contains("Audio & Performance"));
     assert!(help.contains("--duration"));
     assert!(help.contains("--output-format"));
     assert!(help.contains("--output"));
@@ -29,6 +33,14 @@ fn transcribe_live_command_exposes_the_public_input_and_output_flags() {
     assert!(help.contains("--online-provider"));
     assert!(help.contains("--api-key-env"));
     assert!(help.contains("--online-config"));
+}
+
+#[test]
+fn transcribe_live_legacy_list_input_devices_flag_still_works() {
+    let output =
+        sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--list-input-devices"])
+            .expect("should succeed");
+    assert_eq!(output.stderr, "");
 }
 
 #[test]
@@ -627,8 +639,10 @@ fn transcribe_live_stream_aliases_parse_correctly() {
     let error3 = sona_cli::run_cli_from_args([
         "sona-cli",
         "transcribe-live",
+        "-o",
+        "out.srt",
         "--output-format",
-        "ndjson",
+        "srt",
         "--duration",
         "0",
     ])
@@ -638,4 +652,20 @@ fn transcribe_live_stream_aliases_parse_correctly() {
             .to_string()
             .contains("--duration must be greater than 0")
     );
+}
+
+#[test]
+fn write_final_transcript_with_mode_creates_file_even_when_segments_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let out = dir.path().join("empty_live.srt");
+    let status = sona_cli::transcribe_live::write_final_transcript_with_mode(
+        &out,
+        sona_core::export::ExportFormat::Srt,
+        &[],
+        sona_core::export::ExportMode::Original,
+    )
+    .unwrap();
+
+    assert!(out.exists());
+    assert!(status.contains("empty_live.srt"));
 }

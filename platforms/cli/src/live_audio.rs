@@ -104,6 +104,8 @@ where
     std::thread::spawn(move || {
         let mut decoder = PcmS16LeDecoder::default();
         let mut buffer = vec![0_u8; STDIN_READ_BUFFER_SIZE];
+        let mut header_prefix = Vec::with_capacity(4);
+        let mut header_checked = false;
         loop {
             let read = match reader.read(&mut buffer) {
                 Ok(read) => read,
@@ -115,12 +117,61 @@ where
                 }
             };
             if read == 0 {
-                let message = match decoder.finish() {
-                    Ok(()) => LiveAudioMessage::Eof,
-                    Err(error) => LiveAudioMessage::Error(error),
-                };
-                let _ = sender.blocking_send(message);
+                if !header_checked && !header_prefix.is_empty() {
+                    let pcm = decoder.push(&header_prefix);
+                    if !pcm.is_empty() {
+                        let _ = sender
+                            .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::PcmS16Le(pcm)));
+                    }
+                }
+                if let Err(warning) = decoder.finish() {
+                    log::warn!("{warning}; discarded 1 orphan trailing byte.");
+                }
+                let _ = sender.blocking_send(LiveAudioMessage::Eof);
                 return;
+            }
+            if !header_checked {
+                let needed = 8 - header_prefix.len();
+                let to_take = needed.min(read);
+                header_prefix.extend_from_slice(&buffer[..to_take]);
+                if header_prefix.len() < 8 {
+                    continue;
+                }
+                header_checked = true;
+                let magic = &header_prefix[..8];
+                let detected_format = if magic.starts_with(b"RIFF") {
+                    Some("WAV")
+                } else if magic.starts_with(b"ID3") {
+                    Some("MP3")
+                } else if magic.starts_with(b"OggS") {
+                    Some("OGG")
+                } else if magic.starts_with(b"fLaC") {
+                    Some("FLAC")
+                } else if &magic[4..8] == b"ftyp" {
+                    Some("MP4/M4A")
+                } else {
+                    None
+                };
+                if let Some(format_name) = detected_format {
+                    let _ = sender.blocking_send(LiveAudioMessage::Error(format!(
+                        "Detected {format_name} container header on raw PCM stdin. Stdin requires raw 16 kHz mono signed 16-bit little-endian PCM. Convert and pipe using: ffmpeg -i <file> -f s16le -ac 1 -ar 16000 -"
+                    )));
+                    return;
+                }
+                let mut initial_pcm = decoder.push(&header_prefix);
+                if to_take < read {
+                    initial_pcm.extend(decoder.push(&buffer[to_take..read]));
+                }
+                if !initial_pcm.is_empty()
+                    && sender
+                        .blocking_send(LiveAudioMessage::Chunk(LiveAudioChunk::PcmS16Le(
+                            initial_pcm,
+                        )))
+                        .is_err()
+                {
+                    return;
+                }
+                continue;
             }
             let pcm = decoder.push(&buffer[..read]);
             if !pcm.is_empty()
@@ -339,15 +390,72 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stdin_reader_reports_incomplete_final_sample() {
+    async fn stdin_reader_discards_incomplete_final_sample_and_emits_eof() {
         let mut input = spawn_stdin_reader(Cursor::new(vec![0xff]));
 
-        assert_eq!(
-            input.receiver.recv().await.unwrap(),
-            LiveAudioMessage::Error(
-                "stdin ended with an incomplete 16-bit PCM sample.".to_string()
-            )
-        );
+        assert_eq!(input.receiver.recv().await.unwrap(), LiveAudioMessage::Eof);
+    }
+
+    #[tokio::test]
+    async fn stdin_reader_detects_container_headers() {
+        let mut input = spawn_stdin_reader(Cursor::new(b"RIFF\x24\x00\x00\x00WAVE".to_vec()));
+
+        match input.receiver.recv().await.unwrap() {
+            LiveAudioMessage::Error(err) => {
+                assert!(err.contains("Detected WAV container header"));
+            }
+            other => panic!("expected Error message, got {other:?}"),
+        }
+    }
+    #[tokio::test]
+    async fn stdin_reader_detects_ftyp_mp4_container_header() {
+        let mut input = spawn_stdin_reader(Cursor::new(
+            b"\x00\x00\x00\x20ftypM4A \x00\x00\x00\x00".to_vec(),
+        ));
+
+        match input.receiver.recv().await.unwrap() {
+            LiveAudioMessage::Error(err) => {
+                assert!(err.contains("Detected MP4/M4A container header"));
+            }
+            other => panic!("expected Error message, got {other:?}"),
+        }
+    }
+
+    struct ByteByByteReader {
+        data: Vec<u8>,
+        pos: usize,
+    }
+
+    impl Read for ByteByByteReader {
+        fn read(&mut self, buf: &mut [u8]) -> std::io::Result<usize> {
+            if self.pos < self.data.len() && !buf.is_empty() {
+                buf[0] = self.data[self.pos];
+                self.pos += 1;
+                Ok(1)
+            } else {
+                Ok(0)
+            }
+        }
+    }
+
+    #[tokio::test]
+    async fn stdin_reader_detects_container_headers_across_fragmented_reads() {
+        let reader = ByteByByteReader {
+            data: b"RIFFchunkdata".to_vec(),
+            pos: 0,
+        };
+        let mut input = spawn_stdin_reader(reader);
+
+        let first_msg = input.receiver.recv().await.unwrap();
+        match first_msg {
+            LiveAudioMessage::Error(err) => {
+                assert!(err.contains("Detected WAV container header"));
+            }
+            LiveAudioMessage::Chunk(chunk) => {
+                panic!("unexpected audio chunk emitted before container check: {chunk:?}");
+            }
+            other => panic!("expected Error message, got {other:?}"),
+        }
     }
 
     #[test]

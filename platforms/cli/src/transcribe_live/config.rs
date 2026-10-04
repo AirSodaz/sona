@@ -63,108 +63,128 @@ impl From<LiveOutputFormatArg> for LiveOutputFormat {
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe live audio with local or online ASR",
-    after_help = "Examples:\n  sona-cli transcribe-live -m sensevoice\n  sona-cli transcribe-live -m sensevoice --duration 30 -o ./meeting.srt\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin -m sensevoice --output-format ndjson"
+    after_help = "Examples:\n  sona-cli transcribe-live -m sensevoice\n  sona-cli transcribe-live -m sensevoice --duration 30 -o ./meeting.srt\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin -m sensevoice --stream ndjson"
 )]
 pub struct TranscribeLiveArgs {
     /// Live input source.
-    #[arg(long, value_enum)]
+    #[arg(long, value_enum, help_heading = "Input/Output")]
     pub(crate) input: Option<LiveInputSource>,
     /// Microphone device index (e.g. 0), exact name, or unique substring (e.g. "realtek").
     #[arg(
         long,
         value_name = "DEVICE",
-        help = "Microphone device index (e.g. 0), exact name, or unique substring (e.g. \"realtek\")"
+        help = "Microphone device index (e.g. 0), exact name, or unique substring (e.g. \"realtek\")",
+        help_heading = "Input/Output"
     )]
     pub(crate) device: Option<String>,
-    /// List microphone input devices and exit.
-    #[arg(long, default_value_t = false, conflicts_with = "list_providers")]
-    pub(crate) list_input_devices: bool,
-    /// List available online ASR providers and exit.
-    #[arg(long, default_value_t = false, conflicts_with = "list_input_devices")]
-    pub(crate) list_providers: bool,
     /// Stop after this many seconds (supports fractional seconds, e.g. 10.5).
-    #[arg(long, value_name = "SECONDS")]
+    #[arg(long, value_name = "SECONDS", help_heading = "Input/Output")]
     pub(crate) duration: Option<f64>,
-    /// Live stdout stream format: text or ndjson (alias: --stream-format, --output-format).
+    /// Live stdout stream format: text or ndjson (alias: --stream-format).
     #[arg(
         long = "stream",
         value_enum,
         value_name = "FORMAT",
         alias = "stream-format",
-        alias = "output-format",
-        help = "Live stdout stream format: text or ndjson (alias: --stream-format, --output-format)"
+        help = "Live stdout stream format: text or ndjson (alias: --stream-format)",
+        help_heading = "Input/Output"
     )]
     pub(crate) output_format: Option<LiveOutputFormatArg>,
     /// Optional final transcript file.
-    #[arg(short, long, value_name = "PATH")]
+    #[arg(short, long, value_name = "PATH", help_heading = "Input/Output")]
     pub(crate) output: Option<PathBuf>,
     /// Final transcript export format (json, txt, srt, vtt, md). Requires --output.
     #[arg(
         short,
         long,
+        visible_alias = "output-format",
         value_name = "FORMAT",
         value_parser = ["json", "txt", "srt", "vtt", "md"],
-        help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output"
+        help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output",
+        help_heading = "Input/Output"
     )]
     pub(crate) format: Option<String>,
-    /// Optional config file, usually sona-cli.toml.
-    #[arg(short, long, value_name = "FILE")]
-    pub(crate) config: Option<PathBuf>,
-    /// Override the language setting.
-    #[arg(short = 'l', long)]
-    pub(crate) language: Option<String>,
-    /// Streaming preset model id to use.
-    #[arg(short = 'm', long = "model-id")]
-    pub(crate) model_id: Option<String>,
-    #[command(flatten)]
-    pub(crate) online: crate::online_asr::OnlineAsrArgs,
-    /// Models directory containing installed presets.
-    #[arg(long = "models-dir")]
-    pub(crate) models_dir: Option<PathBuf>,
-    /// VAD model id override.
-    #[arg(long = "vad-model-id")]
-    pub(crate) vad_model_id: Option<String>,
-    /// Punctuation model id override.
-    #[arg(long = "punctuation-model-id")]
-    pub(crate) punctuation_model_id: Option<String>,
-    /// Number of recognition threads (default: system auto-configured).
-    #[arg(long)]
-    pub(crate) threads: Option<i32>,
-    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
-    #[arg(long, default_value_t = false)]
-    pub(crate) enable_itn: bool,
-    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
-    #[arg(long)]
-    pub(crate) hotwords: Option<String>,
-    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
-    #[arg(
-        long = "gpu-acceleration",
-        value_name = "MODE",
-        value_parser = crate::runtime::gpu_acceleration_value_parser()
-    )]
-    pub(crate) gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds, for example 0.5.
-    #[arg(long = "vad-buffer")]
-    pub(crate) vad_buffer: Option<f32>,
-    /// Overwrite an existing final transcript file.
-    #[arg(
-        short = 'F',
-        long,
-        default_value_t = false,
-        help = "Overwrite an existing final transcript file"
-    )]
-    pub(crate) force: bool,
     /// Text selection mode for final transcript: original, translation, or bilingual.
     #[arg(
         long,
         value_name = "MODE",
         value_parser = ["original", "translation", "bilingual"],
         default_value = "original",
-        help = "Text selection mode for final transcript: original, translation, or bilingual"
+        help = "Text selection mode for final transcript: original, translation, or bilingual",
+        help_heading = "Input/Output"
     )]
     pub(crate) mode: String,
-}
+    /// Overwrite an existing final transcript file.
+    #[arg(
+        short = 'F',
+        long,
+        default_value_t = false,
+        help = "Overwrite an existing final transcript file",
+        help_heading = "Input/Output"
+    )]
+    pub(crate) force: bool,
 
+    /// Streaming preset model id to use.
+    #[arg(short = 'm', long = "model-id", help_heading = "Model Options")]
+    pub(crate) model_id: Option<String>,
+    /// Models directory containing installed presets.
+    #[arg(long = "models-dir", help_heading = "Model Options")]
+    pub(crate) models_dir: Option<PathBuf>,
+    /// Override the language setting.
+    #[arg(short = 'l', long, help_heading = "Model Options")]
+    pub(crate) language: Option<String>,
+    /// VAD model id override.
+    #[arg(long = "vad-model-id", help_heading = "Model Options")]
+    pub(crate) vad_model_id: Option<String>,
+    /// Punctuation model id override.
+    #[arg(long = "punctuation-model-id", help_heading = "Model Options")]
+    pub(crate) punctuation_model_id: Option<String>,
+
+    #[command(flatten)]
+    pub(crate) online: crate::online_asr::OnlineAsrArgs,
+
+    /// Number of recognition threads (default: system auto-configured).
+    #[arg(long, help_heading = "Audio & Performance")]
+    pub(crate) threads: Option<i32>,
+    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
+    #[arg(long, default_value_t = false, help_heading = "Audio & Performance")]
+    pub(crate) enable_itn: bool,
+    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
+    #[arg(long, help_heading = "Audio & Performance")]
+    pub(crate) hotwords: Option<String>,
+    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
+    #[arg(
+        long = "gpu-acceleration",
+        value_name = "MODE",
+        value_parser = crate::runtime::gpu_acceleration_value_parser(),
+        help_heading = "Audio & Performance"
+    )]
+    pub(crate) gpu_acceleration: Option<String>,
+    /// VAD buffer size in seconds, for example 0.5.
+    #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
+    pub(crate) vad_buffer: Option<f32>,
+
+    /// Optional config file, usually sona-cli.toml.
+    #[arg(short, long, value_name = "FILE")]
+    pub(crate) config: Option<PathBuf>,
+
+    /// List microphone input devices and exit.
+    #[arg(
+        long,
+        default_value_t = false,
+        hide = true,
+        conflicts_with = "list_providers"
+    )]
+    pub(crate) list_input_devices: bool,
+    /// List available online ASR providers and exit.
+    #[arg(
+        long,
+        default_value_t = false,
+        hide = true,
+        conflicts_with = "list_input_devices"
+    )]
+    pub(crate) list_providers: bool,
+}
 pub(crate) struct ResolvedLiveCommand {
     pub(crate) input: LiveInputSource,
     pub(crate) device: Option<String>,
