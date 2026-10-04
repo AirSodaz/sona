@@ -8,7 +8,7 @@ const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 #[derive(Debug, Args)]
 #[command(
     about = "Create a commented TOML starter template",
-    after_help = "Examples:\n  sona-cli init-config\n  sona-cli init-config ./sona-cli.toml\n  sona-cli init-config ./sona-cli.toml --force\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires model_id to be enabled."
+    after_help = "Examples:\n  sona-cli init-config\n  sona-cli init-config ./sona-cli.toml\n  sona-cli init-config ./sona-cli.toml --force\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be configured."
 )]
 pub struct InitConfigArgs {
     /// Target TOML path. Defaults to ./sona-cli.toml.

@@ -20,6 +20,10 @@ enum DiagnosticsCommands {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    about = "Builds a diagnostics snapshot from host-provided facts",
+    after_help = "Input JSON format (DiagnosticsCoreInput):\n  {\n    \"config\": {\n      \"streamingModelPath\": \"/path/to/streaming-model\",\n      \"batchModelPath\": \"/path/to/batch-model\",\n      \"vadModelPath\": \"\",\n      \"punctuationModelPath\": \"\",\n      \"microphoneId\": \"default\"\n    },\n    \"permissionState\": \"granted\",\n    \"microphoneProbe\": { \"options\": [], \"available\": true, \"errorMessage\": null },\n    \"systemAudioProbe\": { \"options\": [], \"available\": false, \"errorMessage\": null },\n    \"voiceTypingReadiness\": { \"state\": \"ready\", \"lastErrorMessage\": null }\n  }\n\nExamples:\n  sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json\n  sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json --json"
+)]
 struct DiagnosticsSnapshotArgs {
     /// Application data directory containing the models directory.
     #[arg(long, value_name = "PATH")]

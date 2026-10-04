@@ -188,3 +188,72 @@ fn models_delete_unknown_model_returns_usage_failure() {
     assert_eq!(error.exit_code(), 2);
     assert!(error.to_string().contains("Unknown model id"));
 }
+
+#[test]
+fn models_delete_without_yes_in_non_interactive_shell_fails_with_clear_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let install_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&install_path).unwrap();
+    std::fs::write(install_path.join("model.onnx"), "fake").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "sherpa-onnx-whisper-turbo",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Cannot prompt for confirmation in non-interactive shell")
+    );
+    assert!(error.to_string().contains("--yes"));
+}
+
+#[test]
+fn models_delete_without_yes_when_not_installed_reports_not_installed() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "sherpa-onnx-whisper-turbo",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stdout, "");
+    assert!(
+        output
+            .stderr
+            .contains("Model sherpa-onnx-whisper-turbo is not installed")
+    );
+}
+#[test]
+fn models_list_mode_offline_alias_matches_batch() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+        "--mode",
+        "offline",
+        "--type",
+        "whisper",
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(output.stdout.contains("sherpa-onnx-whisper-large-v3"));
+}

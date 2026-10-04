@@ -13,9 +13,10 @@ use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 
 #[test]
 fn transcribe_live_command_exposes_the_public_input_and_output_flags() {
-    let error = sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--help"])
-        .expect_err("clap help is returned through the usage error path");
-    let help = error.to_string();
+    let output = sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--help"])
+        .expect("clap help should succeed with exit code 0");
+    assert_eq!(output.stderr, "");
+    let help = output.stdout;
 
     assert!(help.contains("Transcribe live audio"));
     assert!(help.contains("--input"));

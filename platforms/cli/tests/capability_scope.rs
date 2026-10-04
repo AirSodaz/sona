@@ -1,8 +1,9 @@
 #[test]
 fn top_level_help_exposes_only_stateless_cli_commands() {
-    let help = sona_cli::run_cli_from_args(["sona-cli", "--help"])
-        .expect_err("clap help is returned through the usage error path")
-        .to_string();
+    let output = sona_cli::run_cli_from_args(["sona-cli", "--help"])
+        .expect("clap help should succeed with exit code 0");
+    assert_eq!(output.stderr, "");
+    let help = output.stdout;
 
     for command in [
         "diagnostics",
@@ -32,10 +33,19 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
 }
 
 #[test]
+fn top_level_version_succeeds_and_outputs_to_stdout() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "--version"])
+        .expect("clap version should succeed with exit code 0");
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("sona-cli"));
+}
+
+#[test]
 fn file_transcription_help_exposes_online_asr_options() {
-    let help = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--help"])
-        .expect_err("clap help is returned through the usage error path")
-        .to_string();
+    let output = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--help"])
+        .expect("clap subcommand help should succeed with exit code 0");
+    assert_eq!(output.stderr, "");
+    let help = output.stdout;
 
     assert!(help.contains("--online-provider"));
     assert!(help.contains("--api-key-env"));

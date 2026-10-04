@@ -19,6 +19,8 @@ fn init_config_writes_commented_template_to_target_path() {
     assert!(output.stderr.contains("Created config template"));
     assert!(contents.contains("# Sona CLI config template"));
     assert!(contents.contains("# model_id = \"sherpa-onnx-whisper-turbo\""));
+    assert!(contents.contains("# api_key_env = \"SONA_VOLCENGINE_ASR_API_KEY\""));
+    assert!(!contents.contains("# api_key_env = \"VOLCENGINE_API_KEY\""));
     assert!(contents.contains("[transcribe]"));
     assert!(contents.contains("[transcribe_live]"));
     assert!(contents.contains("# input = \"microphone\""));

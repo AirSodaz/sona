@@ -60,15 +60,50 @@ Existing files are protected unless `--force` is supplied. Status text is writte
 List, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state.
 
 ```bash
-sona-cli models list --mode offline --type whisper
+sona-cli models list --mode batch --type whisper
 sona-cli models list --language zh --installed --json
 sona-cli models download sherpa-onnx-whisper-turbo
 sona-cli models delete sherpa-onnx-whisper-turbo --yes
 ```
 
+`models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `--yes` in scripts or non-interactive environments.
+
 ## `diagnostics`
 
 Build a diagnostics snapshot from facts supplied by the host. This command does not read the application database.
+
+```bash
+sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
+```
+
+Input facts JSON format example (`DiagnosticsCoreInput`):
+
+```json
+{
+  "config": {
+    "streamingModelPath": "/path/to/streaming-model",
+    "batchModelPath": "/path/to/batch-model",
+    "vadModelPath": "",
+    "punctuationModelPath": "",
+    "microphoneId": "default"
+  },
+  "permissionState": "granted",
+  "microphoneProbe": {
+    "options": [],
+    "available": true,
+    "errorMessage": null
+  },
+  "systemAudioProbe": {
+    "options": [],
+    "available": false,
+    "errorMessage": null
+  },
+  "voiceTypingReadiness": {
+    "state": "ready",
+    "lastErrorMessage": null
+  }
+}
+```
 
 ## `export transcript`
 
@@ -79,8 +114,22 @@ sona-cli export transcript --input ./segments.json --output ./transcript.vtt
 sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
 ```
 
-The format is inferred from the output extension unless `--format` is supplied. Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`.
+Input segments JSON format example (array of `TranscriptSegment`):
 
+```json
+[
+  {
+    "id": "segment-1",
+    "text": "Hello world",
+    "start": 0.0,
+    "end": 2.5,
+    "isFinal": true,
+    "translation": "Bonjour monde"
+  }
+]
+```
+
+The format is inferred from the output extension unless `--format` is supplied. Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`.
 ## `transcribe`
 
 Transcribe one local audio file, or a video file when using local ASR. Without `--online-provider`, the command uses an installed local Sherpa preset.

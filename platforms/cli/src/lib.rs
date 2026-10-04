@@ -258,14 +258,38 @@ enum Commands {
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
 }
 
+enum ParsedCli {
+    Command(Box<Cli>),
+    EarlyExit(CliOutput),
+}
+
+fn parse_cli_args<I, T>(args: I) -> CliResult<ParsedCli>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    match Cli::try_parse_from(args) {
+        Ok(cli) => Ok(ParsedCli::Command(Box::new(cli))),
+        Err(error) => match error.kind() {
+            clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion => {
+                Ok(ParsedCli::EarlyExit(CliOutput::stdout(error.to_string())))
+            }
+            _ => Err(CliError::Usage(error.to_string())),
+        },
+    }
+}
+
 pub async fn run_cli_from_args_async<I, T>(args: I) -> CliResult<CliOutput>
 where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
+    let command = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => cli.command,
+        ParsedCli::EarlyExit(output) => return Ok(output),
+    };
     let mut io = MemoryCliIo::default();
-    match dispatch(cli.command, &mut io).await? {
+    match dispatch(command, &mut io).await? {
         Some(output) => Ok(output),
         None => Ok(io.into_output()),
     }
@@ -276,10 +300,13 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
+    let command = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => cli.command,
+        ParsedCli::EarlyExit(output) => return Ok(output),
+    };
     runtime::block_on(async move {
         let mut io = MemoryCliIo::default();
-        match dispatch(cli.command, &mut io).await? {
+        match dispatch(command, &mut io).await? {
             Some(output) => Ok(output),
             None => Ok(io.into_output()),
         }
@@ -291,9 +318,18 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let cli = Cli::try_parse_from(args).map_err(|error| CliError::Usage(error.to_string()))?;
     let mut io = StdCliIo::default();
-    if let Some(output) = dispatch(cli.command, &mut io).await? {
+    let command = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => cli.command,
+        ParsedCli::EarlyExit(output) => {
+            if !output.stdout.is_empty() {
+                write!(io.stdout(), "{}", output.stdout)
+                    .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
+            }
+            return Ok(());
+        }
+    };
+    if let Some(output) = dispatch(command, &mut io).await? {
         if !output.stdout.is_empty() {
             writeln!(io.stdout(), "{}", output.stdout)
                 .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;

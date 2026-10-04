@@ -21,12 +21,15 @@ pub(crate) struct OnlineAsrArgs {
     /// Use an online ASR provider instead of local Sherpa ASR.
     #[arg(long, value_name = "PROVIDER", value_parser = online_provider_value_parser())]
     pub(crate) online_provider: Option<String>,
-    /// Environment variable containing the online ASR API key.
+    /// Environment variable containing the online ASR API key. Default env vars:
+    /// volcengine-doubao: SONA_VOLCENGINE_ASR_API_KEY, groq-whisper: GROQ_API_KEY,
+    /// mistral-voxtral: MISTRAL_API_KEY, openai-whisper: OPENAI_API_KEY,
+    /// deepgram: DEEPGRAM_API_KEY, assemblyai: ASSEMBLYAI_API_KEY, elevenlabs: ELEVENLABS_API_KEY.
     #[arg(long, value_name = "NAME", requires = "online_provider")]
-    api_key_env: Option<String>,
+    pub(crate) api_key_env: Option<String>,
     /// JSON object overriding non-secret provider endpoint or model settings.
     #[arg(long, value_name = "FILE", requires = "online_provider")]
-    online_config: Option<PathBuf>,
+    pub(crate) online_config: Option<PathBuf>,
 }
 
 impl OnlineAsrArgs {

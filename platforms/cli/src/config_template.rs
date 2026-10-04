@@ -26,7 +26,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # vad_model_id = "{vad_model_id}"
 # punctuation_model_id = "{punctuation_model_id}"
 # online_provider = "volcengine-doubao"
-# api_key_env = "VOLCENGINE_API_KEY"
+# api_key_env = "SONA_VOLCENGINE_ASR_API_KEY"
 # online_config = "./online-config.json"
 
 [transcribe]
@@ -36,7 +36,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # punctuation_model_id = "{punctuation_model_id}"
 # model_id = "{whisper_turbo_model_id}"
 # online_provider = "volcengine-doubao"
-# api_key_env = "VOLCENGINE_API_KEY"
+# api_key_env = "SONA_VOLCENGINE_ASR_API_KEY"
 # online_config = "./online-config.json"
 # language = "auto"
 # threads = 4
@@ -62,7 +62,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # punctuation_model_id = "{punctuation_model_id}"
 # model_id = "{sensevoice_model_id}"
 # online_provider = "volcengine-doubao"
-# api_key_env = "VOLCENGINE_API_KEY"
+# api_key_env = "SONA_VOLCENGINE_ASR_API_KEY"
 # online_config = "./online-config.json"
 # language = "auto"
 # threads = 4

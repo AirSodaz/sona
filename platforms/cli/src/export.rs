@@ -23,6 +23,10 @@ enum ExportCommands {
 }
 
 #[derive(Debug, Args)]
+#[command(
+    about = "Exports transcript segments to a file",
+    after_help = "Input JSON format:\n  [\n    {\n      \"id\": \"segment-1\",\n      \"text\": \"Hello\",\n      \"start\": 0.0,\n      \"end\": 2.5,\n      \"isFinal\": true,\n      \"translation\": \"Bonjour\"\n    }\n  ]\n\nSupported export formats:\n  json, txt, srt, vtt, md (inferred from output file extension when omitted)\n\nExamples:\n  sona-cli export transcript --input ./segments.json --output ./transcript.srt\n  sona-cli export transcript --input ./segments.json --output ./transcript.vtt --mode bilingual"
+)]
 struct ExportTranscriptArgs {
     /// JSON file containing an array of transcript segments.
     #[arg(long, value_name = "JSON_FILE")]

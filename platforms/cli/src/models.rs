@@ -45,9 +45,12 @@ pub struct ModelListArgs {
     )]
     models_dir: Option<PathBuf>,
     /// Filter by supported mode.
-    #[arg(long, value_name = "MODE", help = "Filter by mode: streaming or batch")]
+    #[arg(
+        long,
+        value_name = "MODE",
+        help = "Filter by mode: streaming or batch (offline is accepted as alias for batch)"
+    )]
     mode: Option<String>,
-    /// Filter by model type.
     #[arg(
         long = "type",
         value_name = "TYPE",
@@ -98,7 +101,7 @@ pub struct ModelDownloadArgs {
 #[derive(Debug, Args)]
 #[command(
     about = "Delete an installed preset model",
-    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion."
+    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion without prompting.\n\nExamples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --yes\n  sona-cli models delete silero-vad --models-dir ./models --yes"
 )]
 pub struct ModelDeleteArgs {
     /// Preset model id to delete.
@@ -119,11 +122,16 @@ pub async fn run_models(
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
         ModelCommands::Download(args) => run_model_download(args, io).await,
-        ModelCommands::Delete(args) => run_model_delete(args),
+        ModelCommands::Delete(args) => run_model_delete(args, io),
     }
 }
 
-fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
+fn run_model_list(mut args: ModelListArgs) -> CliResult<CliOutput> {
+    if let Some(mode) = &args.mode
+        && mode.eq_ignore_ascii_case("offline")
+    {
+        args.mode = Some("batch".to_string());
+    }
     let models = select_models(
         list_models(args.models_dir.clone())?,
         &ModelListFilter {
@@ -170,18 +178,53 @@ async fn run_model_download(
     Ok(CliOutput::stderr(stderr_lines.join("\n")))
 }
 
-fn run_model_delete(args: ModelDeleteArgs) -> CliResult<CliOutput> {
+fn run_model_delete(
+    args: ModelDeleteArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
+    let models_dir = resolve_models_dir(args.models_dir)?;
+
+    // Validate model existence and check if installed before prompting
+    let resolved = resolve_model_download(&args.model_id, &models_dir)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
+    if !resolved.install_path.exists() {
+        return Ok(CliOutput::stderr(format!(
+            "Model {} is not installed at {}",
+            args.model_id,
+            resolved.install_path.display()
+        )));
+    }
+
     if !args.yes {
-        return Err(CliError::Validation(
-            "Refusing to delete without --yes in standalone CLI mode.".to_string(),
-        ));
+        if !io.stdin_is_terminal() {
+            return Err(CliError::Validation(
+                "Cannot prompt for confirmation in non-interactive shell. Pass --yes to confirm deletion."
+                    .to_string(),
+            ));
+        }
+
+        write!(
+            io.stderr(),
+            "Are you sure you want to delete model {}? [y/N] ",
+            args.model_id
+        )
+        .map_err(|error| CliError::Io(format!("Failed to write confirmation prompt: {error}")))?;
+        io.stderr().flush().map_err(|error| {
+            CliError::Io(format!("Failed to flush confirmation prompt: {error}"))
+        })?;
+
+        let mut answer = String::new();
+        io.read_line_stdin(&mut answer)
+            .map_err(|error| CliError::Io(format!("Failed to read confirmation: {error}")))?;
+        if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+            return Ok(CliOutput::stderr("Deletion cancelled.".to_string()));
+        }
     }
 
     // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
     sona_llama_cpp::prune_idle_llm_models();
     sona_llama_cpp::prune_idle_llama_models();
 
-    let models_dir = resolve_models_dir(args.models_dir)?;
     match sona_model_downloads::delete_installed_model(&models_dir, &args.model_id) {
         Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => Ok(CliOutput::stderr(
             format!("Deleted {} from {}", args.model_id, path.display()),

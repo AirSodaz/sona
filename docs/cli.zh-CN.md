@@ -60,15 +60,50 @@ sona-cli init-config ./sona-cli.toml --force
 列出、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。
 
 ```bash
-sona-cli models list --mode offline --type whisper
+sona-cli models list --mode batch --type whisper
 sona-cli models list --language zh --installed --json
 sona-cli models download sherpa-onnx-whisper-turbo
 sona-cli models delete sherpa-onnx-whisper-turbo --yes
 ```
 
+`models delete` 在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中必须传入 `--yes`。
+
 ## `diagnostics`
 
 根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。
+
+```bash
+sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
+```
+
+输入事实文件 `facts.json` 格式示例（对应 `DiagnosticsCoreInput`）：
+
+```json
+{
+  "config": {
+    "streamingModelPath": "C:/models/sherpa-onnx-streaming-paraformer",
+    "batchModelPath": "C:/models/sherpa-onnx-whisper-turbo",
+    "vadModelPath": "",
+    "punctuationModelPath": "",
+    "microphoneId": "default"
+  },
+  "permissionState": "granted",
+  "microphoneProbe": {
+    "options": [],
+    "available": true,
+    "errorMessage": null
+  },
+  "systemAudioProbe": {
+    "options": [],
+    "available": false,
+    "errorMessage": null
+  },
+  "voiceTypingReadiness": {
+    "state": "ready",
+    "lastErrorMessage": null
+  }
+}
+```
 
 ## `export transcript`
 
@@ -79,8 +114,22 @@ sona-cli export transcript --input ./segments.json --output ./transcript.vtt
 sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
 ```
 
-未提供 `--format` 时从输出扩展名推断。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。
+输入分段文件 `segments.json` 格式示例（对应 `TranscriptSegment` 数组）：
 
+```json
+[
+  {
+    "id": "segment-1",
+    "text": "Hello world",
+    "start": 0.0,
+    "end": 2.5,
+    "isFinal": true,
+    "translation": "你好世界"
+  }
+]
+```
+
+未提供 `--format` 时从输出扩展名推断。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。
 ## `transcribe`
 
 转写一个本地音频文件；使用本地 ASR 时也可输入视频。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
