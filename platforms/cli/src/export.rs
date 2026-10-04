@@ -40,15 +40,29 @@ pub struct ExportTranscriptArgs {
     /// Destination file path, or "-" for stdout.
     #[arg(short = 'o', long, value_name = "PATH", default_value = "-")]
     pub output: PathBuf,
-    /// Export format; required when output is stdout ("-"), inferred from output file extension otherwise.
-    #[arg(short = 'f', long, value_name = "FORMAT")]
+    /// Export format: json, txt, srt, vtt, or md; required when output is stdout ("-"), inferred from output file extension otherwise.
+    #[arg(
+        short = 'f',
+        long,
+        value_name = "FORMAT",
+        value_parser = ["json", "txt", "srt", "vtt", "md"]
+    )]
     pub format: Option<String>,
     /// Text selection mode: original, translation, or bilingual.
-    #[arg(short = 'm', long, default_value = "original", value_name = "MODE")]
+    #[arg(
+        short = 'm',
+        long,
+        default_value = "original",
+        value_name = "MODE",
+        value_parser = ["original", "translation", "bilingual"]
+    )]
     pub mode: String,
     /// Prints JSON summary instead of the default table output (file output only).
     #[arg(short = 'j', long)]
     pub json: bool,
+    /// Overwrites existing destination file without confirmation.
+    #[arg(short = 'F', long, help = "Overwrite existing destination file")]
+    pub force: bool,
 }
 
 pub fn run_export(args: ExportArgs, io: &mut (dyn crate::CliIo + Send)) -> CliResult<CliOutput> {
@@ -81,14 +95,37 @@ fn run_export_transcript(
         ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
 
     let input_bytes = if args.input.as_os_str() == "-" {
+        if io.stdin_is_terminal() {
+            return Err(CliError::Validation(
+                "No transcript input provided via stdin. Pipe JSON segments into standard input, or specify an input file with -i/--input <FILE>.".to_string(),
+            ));
+        }
         let mut buf = Vec::new();
         io.read_to_end_stdin(&mut buf).map_err(|error| {
             CliError::Io(format!(
                 "Failed to read transcript input from stdin: {error}"
             ))
         })?;
+        const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;
+        if buf.len() > MAX_INPUT_BYTES {
+            return Err(CliError::Validation(
+                "Transcript input exceeds maximum supported size (64 MB).".to_string(),
+            ));
+        }
         buf
     } else {
+        let metadata = std::fs::metadata(&args.input).map_err(|error| {
+            CliError::Io(format!(
+                "Failed to read transcript input {}: {error}",
+                args.input.display()
+            ))
+        })?;
+        const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
+        if metadata.len() > MAX_INPUT_BYTES {
+            return Err(CliError::Validation(
+                "Transcript input exceeds maximum supported size (64 MB).".to_string(),
+            ));
+        }
         std::fs::read(&args.input).map_err(|error| {
             CliError::Io(format!(
                 "Failed to read transcript input {}: {error}",
@@ -102,6 +139,13 @@ fn run_export_transcript(
         let content = sona_core::export::export_segments_with_mode(&segments, format, mode)
             .map_err(map_export_error)?;
         return Ok(CliOutput::stdout(content));
+    }
+
+    if args.output.exists() && !args.force {
+        return Err(CliError::Io(format!(
+            "Output file already exists: {}. Use --force to overwrite.",
+            args.output.display()
+        )));
     }
 
     let request = ExportTranscriptFileRequest {

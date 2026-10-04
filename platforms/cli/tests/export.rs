@@ -117,7 +117,11 @@ fn export_transcript_rejects_unknown_format_before_writing_output() {
     ])
     .unwrap_err();
 
-    assert!(matches!(error, sona_cli::CliError::Validation(_)));
+    assert_eq!(error.exit_code(), 2);
+    assert!(matches!(
+        error,
+        sona_cli::CliError::Usage(_) | sona_cli::CliError::Validation(_)
+    ));
     assert!(!output.exists());
 }
 
@@ -204,5 +208,101 @@ fn export_direct_without_subcommand_works() {
     assert_eq!(result.stderr, "");
     assert!(output.exists());
     let content = std::fs::read_to_string(&output).unwrap();
+    assert!(content.contains("Hello"));
+}
+
+#[test]
+fn export_transcript_stdin_terminal_returns_clear_validation_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = dir.path().join("out.srt");
+
+    let error = sona_cli::run_cli_from_args_with_terminal_stdin([
+        "sona-cli",
+        "export",
+        "transcript",
+        "-o",
+        output.to_str().unwrap(),
+        "-f",
+        "srt",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("No transcript input provided via stdin")
+    );
+}
+
+#[test]
+fn export_transcript_rejects_unknown_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("transcript.srt");
+    write_segments(&input);
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "transcript",
+        "-i",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+        "-m",
+        "invalid_mode",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn export_transcript_rejects_existing_output_without_force() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("transcript.srt");
+    write_segments(&input);
+    fs::write(&output, "already exists").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "transcript",
+        "-i",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 5);
+    assert!(error.to_string().contains("already exists"));
+    assert!(error.to_string().contains("Use --force"));
+}
+
+#[test]
+fn export_transcript_overwrites_existing_output_with_force() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("transcript.srt");
+    write_segments(&input);
+    fs::write(&output, "already exists").unwrap();
+
+    let result = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "transcript",
+        "-i",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+        "--force",
+    ])
+    .unwrap();
+
+    assert!(result.stdout.contains("transcript.srt"));
+    let content = fs::read_to_string(&output).unwrap();
     assert!(content.contains("Hello"));
 }

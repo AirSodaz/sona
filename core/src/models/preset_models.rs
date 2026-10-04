@@ -650,7 +650,13 @@ impl PresetModel {
     pub fn supports_mode(&self, mode: &str) -> bool {
         self.modes
             .as_ref()
-            .map(|modes| modes.iter().any(|item| item == mode))
+            .map(|modes| {
+                modes.iter().any(|item| {
+                    item == mode
+                        || (mode == "live" && item == "streaming")
+                        || (mode == "streaming" && item == "live")
+                })
+            })
             .unwrap_or(false)
     }
 
@@ -743,7 +749,7 @@ fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectio
     ModelCatalogSelectionOptions {
         streaming: models
             .iter()
-            .filter(|model| model.supports_mode("streaming"))
+            .filter(|model| model.supports_mode("live") || model.supports_mode("streaming"))
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
         batch: models
@@ -954,7 +960,13 @@ impl ModelCatalogModel {
     pub fn supports_mode(&self, mode: &str) -> bool {
         self.modes
             .as_ref()
-            .map(|modes| modes.iter().any(|item| item == mode))
+            .map(|modes| {
+                modes.iter().any(|item| {
+                    item == mode
+                        || (mode == "live" && item == "streaming")
+                        || (mode == "streaming" && item == "live")
+                })
+            })
             .unwrap_or(false)
     }
 

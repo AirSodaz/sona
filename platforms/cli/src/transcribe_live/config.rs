@@ -63,7 +63,7 @@ impl From<LiveOutputFormatArg> for LiveOutputFormat {
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe live audio with local or online ASR",
-    after_help = "Examples:\n  sona-cli transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin --online-provider volcengine-doubao --output-format ndjson"
+    after_help = "Examples:\n  sona-cli transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin --online-provider volcengine-doubao --output-format ndjson"
 )]
 pub struct TranscribeLiveArgs {
     /// Live input source.
@@ -96,6 +96,8 @@ pub struct TranscribeLiveArgs {
     #[arg(
         short,
         long,
+        value_name = "FORMAT",
+        value_parser = ["json", "txt", "srt", "vtt", "md"],
         help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output"
     )]
     pub(crate) format: Option<String>,
@@ -128,8 +130,12 @@ pub struct TranscribeLiveArgs {
     /// Optional hotwords string.
     #[arg(long)]
     pub(crate) hotwords: Option<String>,
-    /// GPU acceleration mode.
-    #[arg(long = "gpu-acceleration")]
+    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
+    #[arg(
+        long = "gpu-acceleration",
+        value_name = "MODE",
+        value_parser = crate::runtime::gpu_acceleration_value_parser()
+    )]
     pub(crate) gpu_acceleration: Option<String>,
     /// VAD buffer size in seconds.
     #[arg(long = "vad-buffer")]

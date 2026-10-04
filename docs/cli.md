@@ -67,11 +67,14 @@ sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
 sona-cli models verify whisper-turbo
+sona-cli models verify --all
+sona-cli models path
 ```
 
-`models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`).
+`models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`), and filter by `--mode` (`live` or `batch`).
 `models download`, `models delete`, and `models verify` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
-`models verify` validates file integrity of an installed model without re-downloading.
+`models verify` validates file integrity of an installed model without re-downloading. Use `--all` to verify every installed model in the models directory.
+`models path` prints the resolved absolute path to the local preset models directory.
 `models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
 
 Build a diagnostics snapshot from facts supplied by the host. This command does not read the application database.
@@ -134,7 +137,7 @@ Input segments JSON format example (array of `TranscriptSegment`):
 ]
 ```
 
-The format is inferred from the output extension unless `--format` is supplied (required when outputting to stdout via `-o -` or omitting `-o`). Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`. Input and output default to `-` (stdin and stdout), enabling seamless UNIX pipeline composition.
+The format is inferred from the output extension unless `--format` is supplied (required when outputting to stdout via `-o -` or omitting `-o`). Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`. Input and output default to `-` (stdin and stdout), enabling seamless UNIX pipeline composition. In an interactive terminal without piped input, `export` exits immediately with guidance to specify `-i/--input`, avoiding indefinite terminal hangs. Existing output files are protected unless `-F / --force` is supplied.
 
 ## `transcribe`
 
@@ -147,7 +150,7 @@ sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f 
 sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
 sona-cli transcribe --list-providers
 ```
-If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG`), it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`. Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file.
+If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG`), it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`, `-j / --jobs`. Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file. `--gpu-acceleration` supports `auto`, `cpu`, `vulkan`, `metal`, and `cuda`. Batch concurrency flag `--jobs` defaults to 1 (batch files are currently transcribed sequentially).
 Use `--list-providers` to inspect all supported online ASR providers, their default environment variables, and supported modes (batch / streaming).
 
 ```bash

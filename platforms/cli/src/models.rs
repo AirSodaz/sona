@@ -38,17 +38,41 @@ pub enum ModelCommands {
         after_help = "Examples:\n  sona-cli models verify whisper-turbo\n  sona-cli models verify sherpa-onnx-whisper-turbo --models-dir ./models"
     )]
     Verify(ModelVerifyArgs),
+    /// Prints the resolved models directory path.
+    #[command(
+        after_help = "Examples:\n  sona-cli models path\n  sona-cli models path --models-dir ./models"
+    )]
+    Path(ModelPathArgs),
+}
+
+#[derive(Debug, Args)]
+#[command(about = "Print the resolved models directory path")]
+pub struct ModelPathArgs {
+    /// Override the models directory.
+    #[arg(long, help = "Override the target models directory")]
+    pub models_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
 #[command(about = "Verify the integrity of an installed preset model")]
 pub struct ModelVerifyArgs {
     /// Preset model id or alias to verify.
-    #[arg(help = "Preset model id, for example whisper-turbo or silero-vad")]
-    pub model_id: String,
+    #[arg(
+        help = "Preset model id, for example whisper-turbo or silero-vad",
+        conflicts_with = "all",
+        required_unless_present = "all"
+    )]
+    pub model_id: Option<String>,
     /// Models directory containing installed presets.
     #[arg(long, help = "Override the models directory")]
     pub models_dir: Option<PathBuf>,
+    /// Verify all installed models in the models directory.
+    #[arg(
+        long,
+        help = "Verify all installed models in the models directory",
+        conflicts_with = "model_id"
+    )]
+    pub all: bool,
 }
 
 #[derive(Debug, Args)]
@@ -60,12 +84,13 @@ pub struct ModelListArgs {
         help = "Override the models directory used to detect installed models"
     )]
     models_dir: Option<PathBuf>,
-    /// Filter by supported mode.
+    /// Filter by supported mode: live or batch.
     #[arg(
         short = 'm',
         long,
         value_name = "MODE",
-        help = "Filter by mode: streaming or batch (offline is accepted as alias for batch)"
+        value_parser = ["live", "batch"],
+        help = "Filter by mode: live or batch"
     )]
     mode: Option<String>,
     #[arg(
@@ -151,12 +176,63 @@ pub async fn run_models(
         ModelCommands::Download(args) => run_model_download(args, io).await,
         ModelCommands::Delete(args) => run_model_delete(args, io),
         ModelCommands::Verify(args) => run_model_verify(args).await,
+        ModelCommands::Path(args) => run_model_path(args),
     }
+}
+
+fn run_model_path(args: ModelPathArgs) -> CliResult<CliOutput> {
+    let models_dir = resolve_models_dir(args.models_dir)?;
+    Ok(CliOutput::stdout(models_dir.display().to_string()))
 }
 
 async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
     let models_dir = resolve_models_dir(args.models_dir)?;
-    let resolved = resolve_model_download(&args.model_id, &models_dir)
+    if args.all {
+        let installed = list_models(Some(models_dir.clone()))?
+            .into_iter()
+            .filter(|m| m.installed)
+            .collect::<Vec<_>>();
+        if installed.is_empty() {
+            return Ok(CliOutput::stdout(format!(
+                "No installed models found in {}",
+                models_dir.display()
+            )));
+        }
+        let mut results = Vec::new();
+        let mut failed = 0;
+        for model in &installed {
+            let resolved = resolve_model_download(&model.id, &models_dir)
+                .map_err(|error| CliError::Validation(error.to_string()))?;
+            let is_valid = installed_model_is_valid(&resolved)
+                .await
+                .map_err(map_download_error)?;
+            if is_valid {
+                results.push(format!("  [OK]   {}", model.id));
+            } else {
+                results.push(format!(
+                    "  [FAIL] {} (corrupted or incomplete files)",
+                    model.id
+                ));
+                failed += 1;
+            }
+        }
+        let summary = format!(
+            "Verified {} installed model(s) in {}:\n{}\nTotal: {} valid, {} corrupted.",
+            installed.len(),
+            models_dir.display(),
+            results.join("\n"),
+            installed.len() - failed,
+            failed
+        );
+        if failed > 0 {
+            return Err(CliError::Model(summary));
+        } else {
+            return Ok(CliOutput::stdout(summary));
+        }
+    }
+
+    let model_id = args.model_id.as_ref().unwrap();
+    let resolved = resolve_model_download(model_id, &models_dir)
         .map_err(|error| CliError::Validation(error.to_string()))?;
     if !sona_runtime_fs::path_exists(&resolved.install_path)
         .map_err(|error| CliError::Io(error.to_string()))?
@@ -183,17 +259,12 @@ async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
             "Model '{}' at {} failed verification (corrupted or incomplete files). Run 'sona-cli models download {}' to repair.",
             resolved.model.id,
             resolved.install_path.display(),
-            args.model_id
+            model_id
         )))
     }
 }
 
-fn run_model_list(mut args: ModelListArgs) -> CliResult<CliOutput> {
-    if let Some(mode) = &args.mode
-        && mode.eq_ignore_ascii_case("offline")
-    {
-        args.mode = Some("batch".to_string());
-    }
+fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
     let mut models = select_models(
         list_models(args.models_dir.clone())?,
         &ModelListFilter {
@@ -478,7 +549,15 @@ fn render_model_table(models: &[ModelSummary]) -> String {
                 render_language_column(&model.languages),
                 model.size.clone(),
                 if model.installed { "yes" } else { "no" }.to_string(),
-                model.modes.join(","),
+                model
+                    .modes
+                    .iter()
+                    .map(|m| match m.as_str() {
+                        "streaming" => "live",
+                        other => other,
+                    })
+                    .collect::<Vec<_>>()
+                    .join(","),
             ]
         })
         .collect::<Vec<_>>();

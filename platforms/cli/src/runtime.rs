@@ -56,3 +56,7 @@ where
         }
     }
 }
+
+pub(crate) fn gpu_acceleration_value_parser() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(sona_core::runtime::gpu::GPU_ACCELERATION_VALUES)
+}

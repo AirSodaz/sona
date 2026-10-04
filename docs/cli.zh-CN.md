@@ -67,11 +67,14 @@ sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
 sona-cli models verify whisper-turbo
+sona-cli models verify --all
+sona-cli models path
 ```
 
-`models list` 在表格输出中展示 `Alias` 简短别名列（并在 `--json` 输出中包含 `aliases` 字段）。支持传入关键字参数过滤（`sona-cli models list <QUERY>`）。
+`models list` 在表格输出中展示 `Alias` 简短别名列（并在 `--json` 输出中包含 `aliases` 字段）。支持传入关键字参数过滤（`sona-cli models list <QUERY>`），`--mode` 选项支持 `live` 或 `batch`。
 `models download`、`models delete` 与 `models verify` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
-`models verify` 用于在无需重新下载的情况下校验已安装模型的文件完整性。
+`models verify` 用于在无需重新下载的情况下校验已安装模型的文件完整性，支持传入具体模型别名或通过 `--all` 全量校验模型目录下所有已安装模型。
+`models path` 用于直接输出当前解析生效的本地预置模型根目录绝对路径，便于脚本与目录导航。
 
 `models delete` 在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
 ## `diagnostics`
@@ -137,7 +140,7 @@ cat ./segments.json | sona-cli export -f vtt
 ]
 ```
 
-未提供 `--format` 时从输出扩展名推断（通过 `-o -` 输出到 stdout 或省略 `-o` 时为必填）。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。输入与输出默认均为 `-`（stdin 与 stdout），完全支持标准 UNIX 管道化组合。
+未提供 `--format` 时从输出扩展名推断（通过 `-o -` 输出到 stdout 或省略 `-o` 时为必填）。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式 `--mode` 支持 `original`、`translation`、`bilingual`。输入与输出默认均为 `-`（stdin 与 stdout），完全支持标准 UNIX 管道化组合。在交互式终端下若直接执行且未提供管道输入，命令会立即返回提示指定 `-i/--input`，避免终端无提示阻塞。若目标输出文件已存在，需传入 `-F / --force` 确认覆盖。
 
 ## `transcribe`
 
@@ -150,7 +153,7 @@ sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f 
 sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
 sona-cli transcribe --list-providers
 ```
-如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`），会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`。支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。
+如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`），会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`、`-j / --jobs`。支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。`--gpu-acceleration` 支持 `auto`、`cpu`、`vulkan`、`metal` 与 `cuda`。批处理参数 `--jobs` 默认为 1，当前批处理任务按序执行。
 使用 `--list-providers` 可以快速查看所有受支持的在线 ASR 服务商 ID、默认环境变量名及支持的转写模式（batch / streaming）。
 ```bash
 set GROQ_API_KEY=...

@@ -50,8 +50,12 @@ pub struct ServeArgs {
     /// Completed job retention window in minutes; 0 disables cleanup.
     #[arg(long = "job-ttl-minutes")]
     job_ttl_minutes: Option<u64>,
-    /// GPU acceleration mode.
-    #[arg(long = "gpu-acceleration")]
+    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
+    #[arg(
+        long = "gpu-acceleration",
+        value_name = "MODE",
+        value_parser = crate::runtime::gpu_acceleration_value_parser()
+    )]
     gpu_acceleration: Option<String>,
     /// VAD model id override.
     #[arg(long = "vad-model-id")]

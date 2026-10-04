@@ -322,6 +322,9 @@ pub async fn download_file(
         };
 
         if res.status() == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+            if current_size == 0 {
+                return Err(DownloadError::HttpStatus(res.status()));
+            }
             // The server does not recognise our byte range; truncate the
             // partial file in-place and restart from the beginning.
             file.set_len(0).await?;

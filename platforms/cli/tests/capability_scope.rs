@@ -424,3 +424,89 @@ fn transcribe_live_rejects_conflicting_list_flags() {
     assert_eq!(error.exit_code(), 2);
     assert!(error.to_string().contains("cannot be used with"));
 }
+
+#[test]
+fn transcribe_jobs_zero_rejected() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "transcribe", "sample.wav", "--jobs", "0"])
+            .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("--jobs must be greater than 0"));
+}
+
+#[test]
+fn transcribe_jobs_on_single_file_reports_validation_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("audio.wav");
+    std::fs::write(&file, b"dummy").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        file.to_str().unwrap(),
+        "-m",
+        "whisper-turbo",
+        "--jobs",
+        "2",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("--jobs can only be used in batch transcription mode")
+    );
+}
+
+#[test]
+fn transcribe_jobs_greater_than_one_reports_unsupported() {
+    let dir = tempfile::tempdir().unwrap();
+    let file1 = dir.path().join("audio1.wav");
+    let file2 = dir.path().join("audio2.wav");
+    std::fs::write(&file1, b"dummy1").unwrap();
+    std::fs::write(&file2, b"dummy2").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        file1.to_str().unwrap(),
+        file2.to_str().unwrap(),
+        "-m",
+        "whisper-turbo",
+        "--jobs",
+        "2",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Concurrent batch transcription (--jobs > 1) is not yet supported")
+    );
+}
+
+#[test]
+fn transcribe_rejects_invalid_gpu_acceleration() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "sample.wav",
+        "--gpu-acceleration",
+        "invalid_accel",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn serve_rejects_invalid_gpu_acceleration() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "serve", "--gpu-acceleration", "invalid_accel"])
+            .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}

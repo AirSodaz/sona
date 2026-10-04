@@ -31,7 +31,12 @@ pub struct TranscribeArgs {
     #[arg(short, long, value_name = "PATH", conflicts_with = "output_dir")]
     output: Option<PathBuf>,
     /// Export format: json, txt, srt, vtt, or md.
-    #[arg(short, long)]
+    #[arg(
+        short,
+        long,
+        value_name = "FORMAT",
+        value_parser = ["json", "txt", "srt", "vtt", "md"]
+    )]
     format: Option<String>,
     /// Optional config file, usually sona-cli.toml.
     #[arg(short, long, value_name = "FILE")]
@@ -62,8 +67,12 @@ pub struct TranscribeArgs {
     /// Optional hotwords string.
     #[arg(long)]
     hotwords: Option<String>,
-    /// GPU acceleration mode.
-    #[arg(long = "gpu-acceleration")]
+    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
+    #[arg(
+        long = "gpu-acceleration",
+        value_name = "MODE",
+        value_parser = crate::runtime::gpu_acceleration_value_parser()
+    )]
     gpu_acceleration: Option<String>,
     /// VAD buffer size in seconds.
     #[arg(long = "vad-buffer")]
@@ -83,6 +92,9 @@ pub struct TranscribeArgs {
     /// Overwrite existing output files.
     #[arg(long, default_value_t = false)]
     force: bool,
+    /// Number of batch transcription jobs (default: 1; batch mode only).
+    #[arg(short = 'j', long, value_name = "N")]
+    jobs: Option<usize>,
 }
 
 pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
@@ -101,12 +113,24 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
             config.as_ref().and_then(|c| c.online_config.clone()),
         )?
     };
+    let resolved_jobs = sona_core::transcription::runtime::resolve_batch_jobs(
+        args.jobs.or_else(|| config.as_ref().and_then(|c| c.jobs)),
+    )
+    .map_err(|error| CliError::Validation(error.to_string()))?;
+
     let is_batch = args.input_dir.is_some()
         || args.output_dir.is_some()
         || sona_core::transcription::runtime::should_run_path_batch(&args.inputs);
 
     if is_batch {
-        return run_batch_transcribe(&args, &resolved_online, config.as_ref()).await;
+        return run_batch_transcribe(&args, &resolved_online, config.as_ref(), resolved_jobs).await;
+    }
+
+    if args.jobs.is_some() {
+        return Err(CliError::Validation(
+            "--jobs can only be used in batch transcription mode (multiple files or --input-dir)."
+                .to_string(),
+        ));
     }
 
     let single_input = args.inputs.first().cloned().ok_or_else(|| {
@@ -161,6 +185,7 @@ async fn run_batch_transcribe(
     args: &TranscribeArgs,
     resolved_online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
+    resolved_jobs: usize,
 ) -> CliResult<CliOutput> {
     let batch_source = sona_runtime_fs::resolve_batch_input_source(
         args.input_dir.as_deref(),
@@ -179,6 +204,11 @@ async fn run_batch_transcribe(
         return Err(CliError::Validation(
             "--output cannot be used in batch transcription mode; use --output-dir and --format instead."
                 .to_string(),
+        ));
+    }
+    if resolved_jobs > 1 {
+        return Err(CliError::Validation(
+            "Concurrent batch transcription (--jobs > 1) is not yet supported; batch jobs currently run sequentially.".to_string(),
         ));
     }
 

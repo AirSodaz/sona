@@ -242,7 +242,7 @@ fn models_delete_without_yes_when_not_installed_reports_not_installed() {
     );
 }
 #[test]
-fn models_list_mode_offline_alias_matches_batch() {
+fn models_list_mode_live_filters_live_models() {
     let dir = tempfile::tempdir().unwrap();
     let output = sona_cli::run_cli_from_args([
         "sona-cli",
@@ -251,7 +251,7 @@ fn models_list_mode_offline_alias_matches_batch() {
         "--models-dir",
         dir.path().to_string_lossy().as_ref(),
         "--mode",
-        "offline",
+        "live",
         "--type",
         "whisper",
     ])
@@ -259,6 +259,34 @@ fn models_list_mode_offline_alias_matches_batch() {
 
     assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
     assert!(output.stdout.contains("sherpa-onnx-whisper-large-v3"));
+}
+
+#[test]
+fn models_list_rejects_outdated_mode_offline_or_streaming() {
+    let dir = tempfile::tempdir().unwrap();
+    let error_offline = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+        "--mode",
+        "offline",
+    ])
+    .unwrap_err();
+    assert_eq!(error_offline.exit_code(), 2);
+
+    let error_streaming = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+        "--mode",
+        "streaming",
+    ])
+    .unwrap_err();
+    assert_eq!(error_streaming.exit_code(), 2);
 }
 
 #[test]
@@ -400,4 +428,68 @@ fn models_verify_reports_corrupted_model_files() {
             .to_string()
             .contains("Run 'sona-cli models download whisper-turbo' to repair.")
     );
+}
+
+#[test]
+fn models_path_prints_resolved_directory() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "path",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stderr, "");
+    assert_eq!(output.stdout.trim(), dir.path().to_string_lossy().as_ref());
+}
+
+#[test]
+fn models_verify_requires_either_model_id_or_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "verify",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn models_verify_rejects_both_model_id_and_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "verify",
+        "whisper-turbo",
+        "--all",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn models_verify_all_reports_no_installed_models_when_empty() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "verify",
+        "--all",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("No installed models found"));
 }

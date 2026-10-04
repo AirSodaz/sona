@@ -72,7 +72,13 @@ pub fn select_models(models: Vec<ModelSummary>, filter: &ModelListFilter) -> Vec
             filter
                 .mode
                 .as_deref()
-                .map(|mode| model.modes.iter().any(|item| item == mode))
+                .map(|mode| {
+                    model.modes.iter().any(|item| {
+                        item == mode
+                            || (mode == "live" && item == "streaming")
+                            || (mode == "streaming" && item == "live")
+                    })
+                })
                 .unwrap_or(true)
         })
         .filter(|model| {
@@ -108,7 +114,17 @@ impl From<ModelSummary> for ModelListEntry {
             languages: model.languages,
             language_mode: model.language_mode,
             size: model.size,
-            modes: model.modes,
+            modes: model
+                .modes
+                .into_iter()
+                .map(|m| {
+                    if m == "streaming" {
+                        "live".to_string()
+                    } else {
+                        m
+                    }
+                })
+                .collect(),
             installed: model.installed,
             install_path: model.install_path.to_string_lossy().to_string(),
         }

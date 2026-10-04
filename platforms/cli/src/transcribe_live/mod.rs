@@ -95,7 +95,11 @@ async fn run_resolved_live_command(
         .map_err(crate::online_asr::map_asr_error)?;
     let mut input = match resolved.input {
         LiveInputSource::Microphone => {
-            start_microphone_input(resolved.device.as_deref()).map_err(CliError::Io)?
+            start_microphone_input(resolved.device.as_deref()).map_err(|err| {
+                CliError::Io(format!(
+                    "{err}. Run 'sona-cli transcribe-live --list-input-devices' to see available microphones."
+                ))
+            })?
         }
         LiveInputSource::Stdin => spawn_stdin_reader(std::io::stdin()),
     };

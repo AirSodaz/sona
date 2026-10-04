@@ -245,7 +245,7 @@ pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> Cl
     name = "sona-cli",
     version,
     about = "Standalone CLI backed by sona-core",
-    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli transcribe-live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
+    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli transcribe-live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli transcribe-live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -355,6 +355,27 @@ where
     runtime::block_on(async move {
         let mut io = MemoryCliIo {
             stdin_bytes,
+            ..Default::default()
+        };
+        match dispatch(command, &mut io).await? {
+            Some(output) => Ok(output),
+            None => Ok(io.into_output()),
+        }
+    })?
+}
+
+pub fn run_cli_from_args_with_terminal_stdin<I, T>(args: I) -> CliResult<CliOutput>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let command = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => cli.command,
+        ParsedCli::EarlyExit(output) => return Ok(output),
+    };
+    runtime::block_on(async move {
+        let mut io = MemoryCliIo {
+            stdin_is_terminal: true,
             ..Default::default()
         };
         match dispatch(command, &mut io).await? {
