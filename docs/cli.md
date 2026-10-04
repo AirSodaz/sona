@@ -4,18 +4,18 @@
 
 The standalone CLI ships these commands:
 
-- `doctor` (system dependencies, audio devices, models, and configuration health check)
-- `devices` (list available audio capture / microphone devices)
+- `doctor` (system dependencies, audio devices, models, real hardware acceleration [CUDA, Vulkan, Metal], and full-section configuration health check)
+- `devices` (list available audio capture / microphone devices with numeric index and default tag)
 - `providers` (list supported online ASR providers and their capabilities)
-- `path-status`
-- `init-config`
-- `models list|info|download|delete|verify|path`
-- `diagnostics` (or `diagnostics snapshot`)
-- `export` (or `export transcript`)
-- `serve` (local REST transcription with local ASR)
-- `transcribe` (local or online batch ASR, supports single file, multiple files, directories, and glob patterns)
-- `transcribe-live` (local or online streaming ASR)
+- `config init|path|check|show` (configuration management: generate template, print path, validate syntax, and inspect content)
+- `models list|info|download|delete|verify|path` (preset model lifecycle management, supporting multi-model batch download)
+- `transcribe` (local or online batch ASR, supporting single file, multiple files, directories, stdin pipe `-`, single-model auto-inference, and `--mode` text format)
+- `transcribe-live` (local or online streaming ASR, supporting `--device 0` index/substring selection and `--stream text|ndjson`)
+- `serve` (local REST / WebSocket transcription service with local ASR)
+- `export` (export transcript segment JSON to multiple subtitle formats, supporting stdin/stdout UNIX pipes)
 - `completion` (shell auto-completion for bash, zsh, fish, powershell, elvish)
+- `diagnostics` (host facts snapshot reproduction for desktop integration; for routine health checks, use `doctor`)
+- `path-status` (shared runtime path status contract inspection)
 ## Run It
 
 ```bash
@@ -27,22 +27,21 @@ Examples:
 ```bash
 sona-cli doctor
 sona-cli devices
-sona-cli providers
-sona-cli models list -j
-sona-cli models info whisper-turbo
-sona-cli transcribe ./sample.wav -m whisper-turbo -o ./out.srt
-sona-cli transcribe ./sample.wav --online-provider groq-whisper
-sona-cli transcribe-live -m sensevoice
+sona-cli config init
+sona-cli models download whisper-turbo sensevoice
+sona-cli transcribe ./sample.wav -o ./out.srt
+cat ./sample.wav | sona-cli transcribe - -o ./out.srt
+sona-cli transcribe ./sample.wav --mode bilingual -f srt
+sona-cli transcribe-live --device 0 --stream text
 sona-cli export -i ./segments.json -o ./transcript.vtt
 sona-cli serve -p 14200
-```
 
 ## Stateless Boundary
 
 The CLI deliberately excludes SQLite, History, Tag, application backup/recovery, Sync, and Online LLM. Do not add commands that silently create or modify the desktop application data directory. Use `export transcript` and stdout/file output to compose the CLI with other tools.
 ## `doctor`
 
-Inspect system environment health including FFmpeg executable and version, audio capture devices, models directory and installed presets count, hardware acceleration support, and `sona-cli.toml` configuration syntax.
+Inspect system environment health including FFmpeg executable and version, audio capture devices, models directory and installed presets count, hardware acceleration detection (checks CUDA, Vulkan, Metal, and CPU modes), and configuration file syntax across all sections (`[transcribe]`, `[transcribe_live]`, and `[serve]`).
 
 ```bash
 sona-cli doctor
@@ -54,13 +53,29 @@ Supports `--json` for machine-readable status reports in CI/CD or automation scr
 
 ## `devices`
 
-List available audio capture (microphone) devices on the current host, with the system default marked as `[default]`.
+List available audio capture (microphone) devices on the current host, with numeric indexes (e.g. `[0]`) and the system default marked as `[default]`. Both indexes and names can be passed directly to `transcribe-live --device`.
 
 ```bash
 sona-cli devices
 sona-cli devices --json
 ```
 
+## `config`
+Unified configuration management command group supporting template generation, path inspection, validation, and content display:
+
+```bash
+sona-cli config init                  # Generate default ./sona-cli.toml
+sona-cli config init ./custom.toml -F # Force overwrite custom path
+sona-cli config path                  # Print resolved active configuration file path
+sona-cli config check                 # Validate [transcribe], [transcribe_live], [serve] sections
+sona-cli config show                  # Display active configuration file content
+```
+
+Configuration search order:
+1. Explicit `-c / --config <PATH>` command line flag;
+2. `SONA_CONFIG` environment variable;
+3. `./sona-cli.toml` in the current working directory;
+4. User-level standard config location (Linux: `~/.config/sona/sona-cli.toml`, macOS: `~/Library/Application Support/sona/sona-cli.toml` [or `$XDG_CONFIG_HOME/sona/sona-cli.toml` if set], Windows: `%APPDATA%\sona\sona-cli.toml`).
 ## `providers`
 
 List supported online ASR providers with their default environment variable names and supported modes (`batch`, `streaming`).
@@ -78,17 +93,6 @@ Resolve one filesystem path through the shared runtime status contract and print
 sona-cli path-status ./models
 ```
 
-## `init-config`
-
-Create a commented TOML starter file for local transcription and the local API server.
-
-```bash
-sona-cli init-config
-sona-cli init-config ./sona-cli.toml -F
-```
-Existing files are protected unless `-F / --force` is supplied. Status text is written to stderr.
-When `sona-cli.toml` is present in the current working directory, `transcribe`, `transcribe-live`, and `serve` automatically load it if `-c / --config` is omitted. You can also point to a config file globally via the `SONA_CONFIG` environment variable.
-
 ## `models`
 
 List, inspect, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state. If `--models-dir` is omitted, Sona checks the `SONA_MODELS_DIR` environment variable before falling back to the desktop app location.
@@ -101,7 +105,7 @@ sona-cli models list -l zh -i -j
 sona-cli models info whisper-turbo
 sona-cli models info sensevoice --json
 sona-cli models download whisper-turbo -q
-sona-cli models delete whisper-turbo -y
+sona-cli models download whisper-turbo sensevoice
 sona-cli models delete --all -y
 sona-cli models verify whisper-turbo
 sona-cli models verify --all
@@ -181,18 +185,23 @@ The format is inferred from the output extension unless `--format` is supplied (
 
 ## `transcribe`
 
-Transcribe one or more audio files, video files (local ASR), or entire directories. Without `--online-provider`, the command uses an installed local Sherpa preset.
+Transcribe one or more audio files, video files (local ASR), entire directories, or media piped through standard input (stdin). Without `--online-provider`, the command uses an installed local Sherpa preset.
 
 ```bash
 sona-cli transcribe ./sample.wav -m whisper-turbo
-sona-cli transcribe ./sample.wav -o ./out.srt
+sona-cli transcribe ./sample.wav -o ./out.srt             # When only 1 batch model is installed, -m is auto-inferred
+cat ./sample.wav | sona-cli transcribe - -o ./out.srt        # Accepts standard input via '-'
+sona-cli transcribe ./sample.wav --mode bilingual -f srt # Supports original, translation, bilingual
 sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f srt
 sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
-sona-cli transcribe --list-providers
+sona-cli providers                                       # List supported online ASR providers
 ```
-If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG`), it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`, `-j / --jobs`. Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file. `--gpu-acceleration` supports `auto`, `cpu`, `vulkan`, `metal`, and `cuda`. Batch concurrency flag `--jobs` defaults to 1 (batch files are currently transcribed sequentially).
-Use `--list-providers` to inspect all supported online ASR providers, their default environment variables, and supported modes (batch / streaming).
-
+If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG` / user config directory), it is loaded automatically without passing `-c / --config`.
+Single-model auto inference: When `-m / --model-id` is omitted and exactly one batch model is installed locally, the CLI automatically selects it.
+Piped stdin support: Specify `-` as the input path to stream media from standard input (`cat sample.wav | sona-cli transcribe - -o out.srt`).
+Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`. `--jobs` defaults to 1 (batch files are currently transcribed sequentially).
+Use `--mode <original|translation|bilingual>` (default `original`) to select the output subtitle mode.
+Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file. `--gpu-acceleration` supports `auto`, `cpu`, `vulkan`, `metal`, and `cuda`.
 ```bash
 export GROQ_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
@@ -220,15 +229,15 @@ Local-only flags such as `--model-id`, `--models-dir`, VAD/punctuation options, 
 ## `transcribe-live`
 
 Transcribe microphone input or headerless 16 kHz mono signed 16-bit little-endian PCM from stdin.
-
 ```bash
-sona-cli transcribe-live --list-input-devices
-sona-cli transcribe-live -m sensevoice --duration 60 -o ./live.srt
+sona-cli devices
+sona-cli transcribe-live --device 0 -m sensevoice --duration 60 -o ./live.srt
+sona-cli transcribe-live --device "realtek" --stream text
 
 ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
     -m paraformer \
-    --output-format ndjson
+    --stream ndjson
 ```
 
 Online streaming currently supports `volcengine-doubao`:
@@ -239,7 +248,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
     --online-provider volcengine-doubao --output-format ndjson
 ```
-`--input microphone` uses the default CPAL input device unless `--device` supplies an exact name (`--list-input-devices` marks the system default device with `[default]`). `--output-format` can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` specifies the output file format and requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
+`--input microphone` uses the default input device unless `--device` supplies a numeric index (e.g. `--device 0`), exact name, or unique substring (e.g. `--device realtek`). `--stream` (or `--stream-format` / `--output-format`) can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` specifies the output file format and requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
 The same online credential and non-secret config rules as `transcribe` apply. Local-only model and runtime flags are rejected for online streaming.
 
 ## `serve`
@@ -259,7 +268,8 @@ Core endpoints exposed:
 - `GET  /info`: Server capabilities, model list, and runtime specs
 - `POST /v1/transcriptions`: Native Sona batch transcription API
 - `POST /v1/audio/transcriptions`: OpenAI-compatible audio transcription API
-
+- `GET  /v1/transcriptions/jobs`: Transcription task status and queue query
+- `WS   /v1/streaming`: Real-time streaming WebSocket audio transcription API
 When authentication is enabled with `--api-key <KEY>`, client requests to private endpoints must include the HTTP header: `Authorization: Bearer <KEY>`.
 ## `completion`
 

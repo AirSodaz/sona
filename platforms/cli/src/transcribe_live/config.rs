@@ -81,12 +81,14 @@ pub struct TranscribeLiveArgs {
     /// Stop after this many seconds (supports fractional seconds, e.g. 10.5).
     #[arg(long, value_name = "SECONDS")]
     pub(crate) duration: Option<f64>,
-    /// Live stdout stream format: text or ndjson.
+    /// Live stdout stream format: text or ndjson (alias: --stream, --stream-format).
     #[arg(
         long,
         value_enum,
         value_name = "FORMAT",
-        help = "Live stdout stream format: text or ndjson"
+        alias = "stream-format",
+        alias = "stream",
+        help = "Live stdout stream format: text or ndjson (alias: --stream, --stream-format)"
     )]
     pub(crate) output_format: Option<LiveOutputFormatArg>,
     /// Optional final transcript file.

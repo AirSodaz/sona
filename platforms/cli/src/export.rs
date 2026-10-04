@@ -25,6 +25,7 @@ pub struct ExportArgs {
 #[derive(Debug, Subcommand)]
 enum ExportCommands {
     /// Exports transcript segments to a file or stdout.
+    #[command(hide = true)]
     Transcript(ExportTranscriptArgs),
 }
 
@@ -100,13 +101,14 @@ fn run_export_transcript(
                 "No transcript input provided via stdin. Pipe JSON segments into standard input, or specify an input file with -i/--input <FILE>.".to_string(),
             ));
         }
-        let mut buf = Vec::new();
-        io.read_to_end_stdin(&mut buf).map_err(|error| {
-            CliError::Io(format!(
-                "Failed to read transcript input from stdin: {error}"
-            ))
-        })?;
         const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;
+        let mut buf = Vec::new();
+        io.read_bounded_stdin(&mut buf, MAX_INPUT_BYTES)
+            .map_err(|error| {
+                CliError::Io(format!(
+                    "Failed to read transcript input from stdin: {error}"
+                ))
+            })?;
         if buf.len() > MAX_INPUT_BYTES {
             return Err(CliError::Validation(
                 "Transcript input exceeds maximum supported size (64 MB).".to_string(),

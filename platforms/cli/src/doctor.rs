@@ -74,8 +74,8 @@ pub struct DoctorConfigStatus {
     pub message: String,
 }
 
-pub fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
-    let report = inspect_system(&args);
+pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
+    let report = inspect_system(&args).await;
 
     if args.json {
         let output = serde_json::to_string_pretty(&report)
@@ -135,11 +135,10 @@ pub fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
 
     // 4. Hardware acceleration
     lines.push(format!(
-        "  [OK]   Hardware Acceleration: {} modes supported ({})",
-        report.hardware_acceleration.available_modes.len(),
+        "  [OK]   Hardware Acceleration: {} ({})",
+        report.hardware_acceleration.message,
         report.hardware_acceleration.available_modes.join(", ")
     ));
-
     // 5. Config
     if report.config.found {
         if report.config.valid {
@@ -164,7 +163,7 @@ pub fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
     Ok(CliOutput::stdout(lines.join("\n")))
 }
 
-fn inspect_system(args: &DoctorArgs) -> DoctorReport {
+async fn inspect_system(args: &DoctorArgs) -> DoctorReport {
     // 1. FFmpeg
     let ffmpeg_status = inspect_ffmpeg(args.ffmpeg_path.as_deref());
 
@@ -175,17 +174,7 @@ fn inspect_system(args: &DoctorArgs) -> DoctorReport {
     let models_status = inspect_models(args.models_dir.as_deref());
 
     // 4. Hardware acceleration
-    let hw_status = DoctorHardwareStatus {
-        available_modes: vec![
-            "auto".to_string(),
-            "cpu".to_string(),
-            "vulkan".to_string(),
-            "metal".to_string(),
-            "cuda".to_string(),
-        ],
-        message: "GPU acceleration supports auto, cpu, vulkan, metal, and cuda.".to_string(),
-    };
-
+    let hw_status = inspect_hardware().await;
     // 5. Config
     let config_status = inspect_config(args.config.as_deref());
 
@@ -202,6 +191,87 @@ fn inspect_system(args: &DoctorArgs) -> DoctorReport {
         hardware_acceleration: hw_status,
         config: config_status,
     }
+}
+async fn inspect_hardware() -> DoctorHardwareStatus {
+    let mut available_modes = vec!["auto".to_string(), "cpu".to_string()];
+    let mut details = Vec::new();
+
+    #[cfg(target_os = "macos")]
+    {
+        if std::env::consts::ARCH == "aarch64" {
+            available_modes.push("metal".to_string());
+            details.push("Apple Silicon Metal acceleration supported");
+        }
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let cuda_available = sona_sherpa_onnx::gpu::check_gpu_availability()
+            .await
+            .unwrap_or(false);
+        if cuda_available {
+            available_modes.push("cuda".to_string());
+            details.push("NVIDIA CUDA detected and available");
+        }
+        if check_vulkan_availability().await {
+            available_modes.push("vulkan".to_string());
+            details.push("Vulkan GPU acceleration detected and available");
+        }
+    }
+
+    let message = if details.is_empty() {
+        "CPU mode active (no dedicated GPU detected)".to_string()
+    } else {
+        details.join("; ")
+    };
+
+    DoctorHardwareStatus {
+        available_modes,
+        message,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+async fn check_vulkan_availability() -> bool {
+    // 1. Check if vulkaninfo can query physical devices successfully
+    let vulkaninfo_ok = tokio::process::Command::new("vulkaninfo")
+        .arg("--summary")
+        .output()
+        .await
+        .is_ok_and(|output| output.status.success());
+    if vulkaninfo_ok {
+        return true;
+    }
+    // 2. On Windows, check for vulkan-1.dll loader
+    #[cfg(target_os = "windows")]
+    {
+        let system32_vulkan_ok = std::env::var("SystemRoot").is_ok_and(|root| {
+            std::path::Path::new(&root)
+                .join("System32")
+                .join("vulkan-1.dll")
+                .is_file()
+        });
+        if system32_vulkan_ok
+            || std::path::Path::new("C:\\Windows\\System32\\vulkan-1.dll").is_file()
+        {
+            return true;
+        }
+    }
+    // 3. On Linux, check common libvulkan paths
+    #[cfg(target_os = "linux")]
+    {
+        for path in [
+            "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
+            "/usr/lib/libvulkan.so.1",
+            "/usr/lib64/libvulkan.so.1",
+            "/usr/local/lib/libvulkan.so.1",
+        ] {
+            if std::path::Path::new(path).is_file() {
+                return true;
+            }
+        }
+    }
+    false
 }
 
 fn inspect_ffmpeg(custom_path: Option<&str>) -> DoctorFfmpegStatus {
@@ -335,25 +405,39 @@ fn inspect_config(config_override: Option<&Path>) -> DoctorConfigStatus {
     let resolved_path = crate::init_config::resolve_config_path(override_buf.as_ref());
 
     match resolved_path {
-        Some(path) => match sona_runtime_fs::load_transcribe_config_file(&path) {
-            Ok(_) => DoctorConfigStatus {
-                path: Some(path.display().to_string()),
-                found: true,
-                valid: true,
-                message: format!("Valid configuration at {}", path.display()),
-            },
-            Err(err) => DoctorConfigStatus {
-                path: Some(path.display().to_string()),
-                found: true,
-                valid: false,
-                message: format!("Configuration error in {}: {err}", path.display()),
-            },
-        },
+        Some(path) => {
+            let mut errors = Vec::new();
+            if let Err(err) = sona_runtime_fs::load_transcribe_config_file(&path) {
+                errors.push(format!("[transcribe]: {err}"));
+            }
+            if let Err(err) = sona_runtime_fs::load_transcribe_live_config_file(&path) {
+                errors.push(format!("[transcribe_live]: {err}"));
+            }
+            if let Err(err) = sona_runtime_fs::load_serve_config_file(&path) {
+                errors.push(format!("[serve]: {err}"));
+            }
+
+            if errors.is_empty() {
+                DoctorConfigStatus {
+                    path: Some(path.display().to_string()),
+                    found: true,
+                    valid: true,
+                    message: format!("Valid configuration at {}", path.display()),
+                }
+            } else {
+                DoctorConfigStatus {
+                    path: Some(path.display().to_string()),
+                    found: true,
+                    valid: false,
+                    message: format!("Configuration error in {}: {}", path.display(), errors.join("; ")),
+                }
+            }
+        }
         None => DoctorConfigStatus {
             path: None,
             found: false,
             valid: true,
-            message: "No sona-cli.toml found (using CLI defaults). Create one with 'sona-cli init-config'.".to_string(),
+            message: "No config file found (defaults will be used; create one with 'sona-cli config init').".to_string(),
         },
     }
 }

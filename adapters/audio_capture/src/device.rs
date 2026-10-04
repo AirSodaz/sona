@@ -66,12 +66,47 @@ pub fn resolve_device_name_or(
     requested_device: Option<&str>,
     missing_default_error: AudioCaptureError,
 ) -> AudioCaptureResult<String> {
-    if let Some(requested) = requested_device {
-        return devices
+    if let Some(raw_requested) = requested_device {
+        let requested = raw_requested.trim();
+        if requested.is_empty() {
+            return default_device
+                .map(str::to_string)
+                .ok_or(missing_default_error);
+        }
+        // 1. Exact match (try raw first, then trimmed)
+        if let Some(exact) = devices
             .iter()
-            .find(|name| name.as_str() == requested)
-            .cloned()
-            .ok_or_else(|| AudioCaptureError::DeviceNotFound(requested.to_string()));
+            .find(|name| name.as_str() == raw_requested || name.as_str() == requested)
+        {
+            return Ok(exact.clone());
+        }
+        // 2. Numeric index match (e.g. "0", "1")
+        if let Some(indexed) = requested
+            .parse::<usize>()
+            .ok()
+            .and_then(|index| devices.get(index))
+        {
+            return Ok(indexed.clone());
+        }
+        // 3. Case-insensitive substring match
+        let requested_lower = requested.to_lowercase();
+        let matches: Vec<&String> = devices
+            .iter()
+            .filter(|name| name.to_lowercase().contains(&requested_lower))
+            .collect();
+        if matches.len() == 1 {
+            return Ok(matches[0].clone());
+        } else if matches.len() > 1 {
+            return Err(AudioCaptureError::DeviceNotFound(format!(
+                "Ambiguous device query '{requested}'. Multiple matching devices: {}",
+                matches
+                    .iter()
+                    .map(|s| format!("'{}'", s))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
+        return Err(AudioCaptureError::DeviceNotFound(requested.to_string()));
     }
     default_device
         .map(str::to_string)
@@ -87,7 +122,9 @@ pub fn find_input_device(
         .map_err(|e| AudioCaptureError::EnumerationFailed(e.to_string()))?
         .collect::<Vec<_>>();
 
-    let device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let mut device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    device_names.sort();
+    device_names.dedup();
     let default_name = host.default_input_device().map(|device| device.to_string());
     let resolved_name =
         resolve_device_name(&device_names, default_name.as_deref(), requested_name)?;
@@ -113,7 +150,9 @@ pub fn find_output_device(
         .map_err(|e| AudioCaptureError::EnumerationFailed(e.to_string()))?
         .collect::<Vec<_>>();
 
-    let device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let mut device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    device_names.sort();
+    device_names.dedup();
     let default_name = host
         .default_output_device()
         .map(|device| device.to_string());
@@ -155,5 +194,45 @@ mod tests {
                 .unwrap_err(),
             AudioCaptureError::NoOutputDeviceFound
         ));
+    }
+
+    #[test]
+    fn test_resolve_device_name_by_index_and_substring() {
+        let devices = vec![
+            "Microphone (Realtek High Definition Audio)".to_string(),
+            "USB Audio Device".to_string(),
+            "USB Audio Device 2".to_string(),
+        ];
+        // Numeric index
+        assert_eq!(
+            resolve_device_name(&devices, None, Some("0")).unwrap(),
+            "Microphone (Realtek High Definition Audio)"
+        );
+        assert_eq!(
+            resolve_device_name(&devices, None, Some("1")).unwrap(),
+            "USB Audio Device"
+        );
+        // Substring case-insensitive match
+        assert_eq!(
+            resolve_device_name(&devices, None, Some("realtek")).unwrap(),
+            "Microphone (Realtek High Definition Audio)"
+        );
+        // Ambiguous substring
+        let err = resolve_device_name(&devices, None, Some("usb")).unwrap_err();
+        assert!(err.to_string().contains("Ambiguous device query"));
+        // Not found
+        assert!(matches!(
+            resolve_device_name(&devices, None, Some("bluetooth")).unwrap_err(),
+            AudioCaptureError::DeviceNotFound(_)
+        ));
+        // Empty or whitespace query falls back to default device
+        assert_eq!(
+            resolve_device_name(&devices, Some("USB Audio Device"), Some("")).unwrap(),
+            "USB Audio Device"
+        );
+        assert_eq!(
+            resolve_device_name(&devices, Some("USB Audio Device"), Some("   ")).unwrap(),
+            "USB Audio Device"
+        );
     }
 }

@@ -9,7 +9,8 @@ fn init_config_writes_commented_template_to_target_path() {
 
     let output = sona_cli::run_cli_from_args([
         "sona-cli",
-        "init-config",
+        "config",
+        "init",
         config_path.to_string_lossy().as_ref(),
     ])
     .unwrap();
@@ -37,7 +38,7 @@ fn init_config_writes_default_sona_cli_toml_in_current_dir() {
     let original_dir = std::env::current_dir().unwrap();
     std::env::set_current_dir(dir.path()).unwrap();
 
-    let result = sona_cli::run_cli_from_args(["sona-cli", "init-config"]);
+    let result = sona_cli::run_cli_from_args(["sona-cli", "config", "init"]);
 
     std::env::set_current_dir(original_dir).unwrap();
     let output = result.unwrap();
@@ -56,7 +57,8 @@ fn init_config_rejects_existing_target_without_force() {
 
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
-        "init-config",
+        "config",
+        "init",
         config_path.to_string_lossy().as_ref(),
     ])
     .unwrap_err();
@@ -77,7 +79,8 @@ fn init_config_force_overwrites_existing_target() {
 
     let output = sona_cli::run_cli_from_args([
         "sona-cli",
-        "init-config",
+        "config",
+        "init",
         config_path.to_string_lossy().as_ref(),
         "--force",
     ])
@@ -126,4 +129,68 @@ fn auto_discovers_sona_cli_toml_in_current_dir() {
             || error.to_string().contains("was not found"),
         "Expected model not found error, got: {error}"
     );
+}
+
+#[test]
+fn config_subcommands_work() {
+    let dir = tempfile::tempdir().unwrap();
+    let target = dir.path().join("my-config.toml");
+
+    // 1. config init
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "init",
+        target.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(output.stderr.contains("Created config template"));
+    assert!(target.is_file());
+
+    // 2. config path
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "path",
+        "-c",
+        target.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert_eq!(output.stdout.trim(), target.display().to_string());
+
+    // 3. config check on valid template
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "check",
+        "-c",
+        target.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(output.stdout.contains("is valid"));
+
+    // 4. config show
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "show",
+        "-c",
+        target.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(output.stdout.contains("[transcribe]"));
+    assert!(output.stdout.contains("[serve]"));
+
+    // 5. config check on invalid toml
+    let bad = dir.path().join("bad.toml");
+    std::fs::write(&bad, "invalid = [[[").unwrap();
+    let err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "check",
+        "-c",
+        bad.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    assert!(err.to_string().contains("Configuration error"));
 }

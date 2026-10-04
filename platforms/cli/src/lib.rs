@@ -1,4 +1,5 @@
 mod asr_adapter;
+mod config_cmd;
 mod config_template;
 mod desktop_paths;
 mod diagnostics;
@@ -62,6 +63,9 @@ pub(crate) trait CliIo: Send {
     fn read_to_end_stdin(&mut self, _buf: &mut Vec<u8>) -> io::Result<usize> {
         Ok(0)
     }
+    fn read_bounded_stdin(&mut self, buf: &mut Vec<u8>, _limit: usize) -> io::Result<usize> {
+        self.read_to_end_stdin(buf)
+    }
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
@@ -118,6 +122,11 @@ impl CliIo for MemoryCliIo {
         self.stdin_bytes.clear();
         Ok(len)
     }
+    fn read_bounded_stdin(&mut self, buf: &mut Vec<u8>, limit: usize) -> io::Result<usize> {
+        let max_to_read = self.stdin_bytes.len().min(limit.saturating_add(1));
+        buf.extend(self.stdin_bytes.drain(..max_to_read));
+        Ok(max_to_read)
+    }
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
@@ -163,6 +172,12 @@ impl CliIo for StdCliIo {
     fn read_to_end_stdin(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
         use io::Read;
         io::stdin().read_to_end(buf)
+    }
+    fn read_bounded_stdin(&mut self, buf: &mut Vec<u8>, limit: usize) -> io::Result<usize> {
+        use io::Read;
+        io::stdin()
+            .take(limit.saturating_add(1) as u64)
+            .read_to_end(buf)
     }
     fn prompt_line_async<'a>(
         &'a mut self,
@@ -256,18 +271,19 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Builds diagnostics snapshots from host-provided facts.
+    #[command(hide = true)]
     Diagnostics(diagnostics::DiagnosticsArgs),
     /// Exports transcript segments through the shared core service.
     Export(export::ExportArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
+    #[command(hide = true)]
     PathStatus {
         /// Filesystem path to inspect.
         #[arg(value_name = "PATH", help = "Filesystem path to inspect")]
         path: String,
     },
-    /// Creates a commented TOML starter configuration template.
-    InitConfig(init_config::InitConfigArgs),
-    /// Lists and manages preset models.
+    /// Inspects and manages Sona CLI configuration.
+    Config(config_cmd::ConfigArgs),
     Models(models::ModelsArgs),
     /// Runs the shared local HTTP API server.
     Serve(serve::ServeArgs),
@@ -453,10 +469,10 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
         Commands::Export(args) => export::run_export(args, io),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
-        Commands::InitConfig(args) => init_config::run_init_config(args),
+        Commands::Config(args) => config_cmd::run_config(args),
         Commands::Models(args) => models::run_models(args, io).await,
         Commands::Serve(args) => serve::run_serve(args, io).await,
-        Commands::Transcribe(args) => transcribe::run_transcribe(args).await,
+        Commands::Transcribe(args) => transcribe::run_transcribe(args, io).await,
         Commands::TranscribeLive(args) => {
             transcribe_live::run_transcribe_live(args, io).await?;
             return Ok(None);
@@ -469,7 +485,7 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
                 String::from_utf8(buf).map_err(|error| CliError::Serialize(error.to_string()))?;
             Ok(CliOutput::stdout(script))
         }
-        Commands::Doctor(args) => doctor::run_doctor(args),
+        Commands::Doctor(args) => doctor::run_doctor(args).await,
         Commands::Devices(args) => run_devices(args),
         Commands::Providers(args) => run_providers(args),
     }?;
@@ -482,8 +498,9 @@ fn run_devices(args: DevicesArgs) -> CliResult<CliOutput> {
     if args.json {
         let json_val = serde_json::json!({
             "default_device": default_device,
-            "devices": devices.iter().map(|d| {
+            "devices": devices.iter().enumerate().map(|(idx, d)| {
                 serde_json::json!({
+                    "index": idx,
                     "name": d,
                     "is_default": default_device.as_deref() == Some(d.as_str()),
                 })

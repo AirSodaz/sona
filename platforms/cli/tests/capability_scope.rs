@@ -7,13 +7,11 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
 
     for command in [
         "completion",
+        "config",
         "devices",
-        "diagnostics",
         "doctor",
         "export",
-        "init-config",
         "models",
-        "path-status",
         "providers",
         "serve",
         "transcribe",
@@ -21,18 +19,24 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
     ] {
         assert!(help.contains(command), "help must expose {command}");
     }
-    for removed in [
+    for hidden_or_removed in [
         "app-config",
         "automation",
         "backup",
         "dashboard",
+        "diagnostics",
         "history",
+        "init-config",
         "llm",
+        "path-status",
         "recovery",
         "storage",
         "task-ledger",
     ] {
-        assert!(!help.contains(removed), "help must not expose {removed}");
+        assert!(
+            !help.contains(hidden_or_removed),
+            "help must not expose {hidden_or_removed}"
+        );
     }
 }
 
@@ -642,19 +646,178 @@ fn providers_command_json_outputs_valid_schema() {
 }
 
 #[test]
-fn transcribe_and_init_config_accept_short_force_flag() {
-    // init-config with -F
+fn config_init_accepts_short_force_flag() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("sona-cli.toml");
     std::fs::write(&config_path, "existing").unwrap();
 
     let output = sona_cli::run_cli_from_args([
         "sona-cli",
-        "init-config",
+        "config",
+        "init",
         config_path.to_string_lossy().as_ref(),
         "-F",
     ])
-    .expect("init-config with -F should succeed");
+    .expect("config init with -F should succeed");
 
     assert!(output.stderr.contains("Created config template"));
+}
+
+#[test]
+fn transcribe_stdin_rejects_terminal_input() {
+    let error = sona_cli::run_cli_from_args_with_terminal_stdin([
+        "sona-cli",
+        "transcribe",
+        "-",
+        "-m",
+        "whisper-turbo",
+    ])
+    .unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("No audio input provided via stdin")
+    );
+}
+
+#[test]
+fn transcribe_stdin_rejects_empty_input() {
+    let error = sona_cli::run_cli_from_args_with_stdin(
+        ["sona-cli", "transcribe", "-", "-m", "whisper-turbo"],
+        Vec::new(),
+    )
+    .unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("Standard input was empty"));
+}
+
+#[test]
+fn transcribe_mode_flag_validation() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "audio.wav",
+        "--mode",
+        "invalid-mode",
+    ])
+    .unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("invalid-mode"));
+}
+
+#[test]
+fn transcribe_stream_format_alias_in_transcribe_live() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--help"]).unwrap();
+    assert!(output.stdout.contains("--stream-format"));
+}
+
+#[test]
+fn transcribe_stdin_with_audio_bytes_buffers_and_proceeds_to_model_resolution() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args_with_stdin(
+        [
+            "sona-cli",
+            "transcribe",
+            "-",
+            "-m",
+            "whisper-turbo",
+            "--models-dir",
+            dir.path().to_string_lossy().as_ref(),
+        ],
+        b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00".to_vec(),
+    )
+    .unwrap_err();
+    // Proves stdin buffering finished and execution proceeded into model path resolution
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error.to_string().contains("sherpa-onnx-whisper-turbo")
+            && error.to_string().contains("was not found"),
+        "Expected model resolution error for stdin input, got: {error}"
+    );
+    assert!(!error.to_string().contains("stdin"));
+    assert!(!error.to_string().contains("Standard input was empty"));
+    assert!(
+        !error
+            .to_string()
+            .contains("No audio input provided via stdin")
+    );
+}
+
+#[test]
+fn transcribe_auto_infers_single_installed_batch_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let whisper_dir = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&whisper_dir).unwrap();
+    std::fs::write(whisper_dir.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(whisper_dir.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(whisper_dir.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    let fake_audio = dir.path().join("sample.wav");
+    std::fs::write(&fake_audio, b"fake audio").unwrap();
+
+    // Without -m/--model-id, transcribe should automatically select the only installed batch model (whisper-turbo)
+    // rather than failing with "Missing required batch model"
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        fake_audio.to_string_lossy().as_ref(),
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert!(
+        !error.to_string().contains("Missing required batch model"),
+        "Expected auto-inference of single installed model, got: {error}"
+    );
+}
+
+#[test]
+fn transcribe_requires_model_id_when_multiple_batch_models_installed() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    // 1. Install whisper-turbo
+    let whisper_dir = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&whisper_dir).unwrap();
+    std::fs::write(whisper_dir.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(whisper_dir.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(whisper_dir.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    // 2. Install sensevoice
+    let sensevoice_dir = models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17");
+    std::fs::create_dir_all(&sensevoice_dir).unwrap();
+    std::fs::write(sensevoice_dir.join("model.int8.onnx"), b"fake").unwrap();
+    std::fs::write(sensevoice_dir.join("tokens.txt"), b"fake").unwrap();
+
+    let fake_audio = dir.path().join("sample.wav");
+    std::fs::write(&fake_audio, b"fake audio").unwrap();
+
+    // Multiple installed batch models -> cannot auto-infer, must fail with "Missing required batch model"
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        fake_audio.to_string_lossy().as_ref(),
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert!(
+        error.to_string().contains("Missing required batch model"),
+        "Expected error requiring model_id with multiple candidates, got: {error}"
+    );
+}
+
+#[test]
+fn direct_init_config_subcommand_fails_as_unrecognized_command() {
+    let error = sona_cli::run_cli_from_args(["sona-cli", "init-config"]).unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    let msg = error.to_string();
+    assert!(
+        msg.contains("unrecognized subcommand 'init-config'")
+            || msg.contains("error: unrecognized subcommand"),
+        "Expected unrecognized subcommand error, got: {msg}"
+    );
 }

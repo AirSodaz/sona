@@ -98,11 +98,22 @@ pub struct TranscribeArgs {
     )]
     force: bool,
     /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
-    #[arg(short = 'j', long, value_name = "N")]
+    #[arg(long, value_name = "N")]
     jobs: Option<usize>,
+    /// Text selection mode: original, translation, or bilingual.
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_parser = ["original", "translation", "bilingual"],
+        default_value = "original"
+    )]
+    mode: String,
 }
 
-pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
+pub async fn run_transcribe(
+    args: TranscribeArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
     if args.list_providers {
         return Ok(CliOutput::stdout(render_online_providers_table()));
     }
@@ -122,13 +133,36 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         args.jobs.or_else(|| config.as_ref().and_then(|c| c.jobs)),
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
+    let export_mode = sona_core::export::ExportMode::parse(&args.mode)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
+
+    let mut resolved_model_id = args.model_id.clone();
+    if !resolved_online.is_online()
+        && resolved_model_id.is_none()
+        && config.as_ref().and_then(|c| c.model_id.as_ref()).is_none()
+    {
+        resolved_model_id = infer_single_batch_model(args.models_dir.as_ref()).map(|inferred| {
+            if !args.quiet {
+                eprintln!("Note: Automatically selected installed batch model '{inferred}'");
+            }
+            inferred
+        });
+    }
 
     let is_batch = args.input_dir.is_some()
         || args.output_dir.is_some()
         || sona_core::transcription::runtime::should_run_path_batch(&args.inputs);
 
     if is_batch {
-        return run_batch_transcribe(&args, &resolved_online, config.as_ref(), resolved_jobs).await;
+        return run_batch_transcribe(
+            &args,
+            &resolved_online,
+            config.as_ref(),
+            resolved_jobs,
+            resolved_model_id,
+            export_mode,
+        )
+        .await;
     }
 
     if args.jobs.is_some() {
@@ -140,20 +174,65 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
 
     let single_input = args.inputs.first().cloned().ok_or_else(|| {
         CliError::Validation(
-            "Missing input: specify at least one input file or --input-dir.".to_string(),
+            "Missing input: specify at least one input file, stdin ('-'), or --input-dir."
+                .to_string(),
         )
     })?;
+    let (actual_single_input, _temp_guard): (PathBuf, Option<tempfile::NamedTempFile>) =
+        if single_input.as_os_str() == "-" {
+            if io.stdin_is_terminal() {
+                return Err(CliError::Validation(
+                "No audio input provided via stdin. Pipe audio/video into standard input, or specify an input file.".to_string(),
+            ));
+            }
+            const MAX_STDIN_BYTES: usize = 512 * 1024 * 1024;
+            let mut buf = Vec::new();
+            io.read_bounded_stdin(&mut buf, MAX_STDIN_BYTES)
+                .map_err(|error| {
+                    CliError::Io(format!("Failed to read audio input from stdin: {error}"))
+                })?;
+            if buf.is_empty() {
+                return Err(CliError::Validation(
+                    "Standard input was empty; no audio data received.".to_string(),
+                ));
+            }
+            if buf.len() > MAX_STDIN_BYTES {
+                return Err(CliError::Validation(
+                    "Audio input from stdin exceeds maximum supported size (512 MB).".to_string(),
+                ));
+            }
+            let mut temp_file = tempfile::Builder::new()
+                .prefix("sona_stdin_")
+                .suffix(".tmp")
+                .tempfile()
+                .map_err(|e| {
+                    CliError::Io(format!("Failed to create temporary file for stdin: {e}"))
+                })?;
+            std::io::Write::write_all(&mut temp_file, &buf).map_err(|e| {
+                CliError::Io(format!("Failed to write stdin to temporary file: {e}"))
+            })?;
+            let path = temp_file.path().to_path_buf();
+            (path, Some(temp_file))
+        } else {
+            (single_input, None)
+        };
 
     if resolved_online.is_online() {
-        return run_online_transcribe(&args, &single_input, &resolved_online, config.as_ref())
-            .await;
+        return run_online_transcribe(
+            &args,
+            &actual_single_input,
+            &resolved_online,
+            config.as_ref(),
+            export_mode,
+        )
+        .await;
     }
     let options = BatchTranscribeOptions {
-        input: single_input,
+        input: actual_single_input,
         output: args.output,
         format: args.format,
         language: args.language,
-        model_id: args.model_id,
+        model_id: resolved_model_id,
         models_dir: args.models_dir,
         default_models_dir: crate::desktop_paths::default_models_dir(),
         vad_model_id: args.vad_model_id,
@@ -183,7 +262,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         .transcribe(plan)
         .await
         .map_err(crate::online_asr::map_asr_error)?;
-    render_transcription(segments, export_format, output_target)
+    render_transcription(segments, export_format, output_target, export_mode)
 }
 
 async fn run_batch_transcribe(
@@ -191,6 +270,8 @@ async fn run_batch_transcribe(
     resolved_online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
     resolved_jobs: usize,
+    resolved_model_id: Option<String>,
+    export_mode: sona_core::export::ExportMode,
 ) -> CliResult<CliOutput> {
     let batch_source = sona_runtime_fs::resolve_batch_input_source(
         args.input_dir.as_deref(),
@@ -267,12 +348,9 @@ async fn run_batch_transcribe(
             .await
             .map_err(crate::online_asr::map_asr_error)?;
 
-            let content = sona_core::export::export_segments_with_mode(
-                &segments,
-                export_format,
-                sona_core::export::ExportMode::Original,
-            )
-            .map_err(|error| CliError::Serialize(error.to_string()))?;
+            let content =
+                sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
+                    .map_err(|error| CliError::Serialize(error.to_string()))?;
 
             sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
                 .map_err(|error| CliError::Io(error.to_string()))?;
@@ -302,7 +380,7 @@ async fn run_batch_transcribe(
                 output: Some(plan_item.output_path.clone()),
                 format: Some(format_name.to_string()),
                 language: args.language.clone(),
-                model_id: args.model_id.clone(),
+                model_id: resolved_model_id.clone(),
                 models_dir: args.models_dir.clone(),
                 default_models_dir: crate::desktop_paths::default_models_dir(),
                 vad_model_id: args.vad_model_id.clone(),
@@ -330,12 +408,9 @@ async fn run_batch_transcribe(
                 .await
                 .map_err(crate::online_asr::map_asr_error)?;
 
-            let content = sona_core::export::export_segments_with_mode(
-                &segments,
-                export_format,
-                sona_core::export::ExportMode::Original,
-            )
-            .map_err(|error| CliError::Serialize(error.to_string()))?;
+            let content =
+                sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
+                    .map_err(|error| CliError::Serialize(error.to_string()))?;
 
             sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
                 .map_err(|error| CliError::Io(error.to_string()))?;
@@ -363,6 +438,7 @@ async fn run_online_transcribe(
     input: &std::path::Path,
     online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
+    export_mode: sona_core::export::ExportMode,
 ) -> CliResult<CliOutput> {
     reject_online_local_options(args)?;
     validate_online_paths(input, args.output.as_ref(), args.force)?;
@@ -389,7 +465,7 @@ async fn run_online_transcribe(
     let segments = crate::asr_adapter::online_batch_transcribe(input.to_path_buf(), request)
         .await
         .map_err(crate::online_asr::map_asr_error)?;
-    render_transcription(segments, export_format, output_target)
+    render_transcription(segments, export_format, output_target, export_mode)
 }
 
 fn reject_online_local_options(args: &TranscribeArgs) -> CliResult<()> {
@@ -446,13 +522,11 @@ fn render_transcription(
     segments: Vec<TranscriptSegment>,
     export_format: sona_core::export::ExportFormat,
     output_target: OutputTarget,
+    export_mode: sona_core::export::ExportMode,
 ) -> CliResult<CliOutput> {
-    let output = sona_core::export::export_segments_with_mode(
-        &segments,
-        export_format,
-        sona_core::export::ExportMode::Original,
-    )
-    .map_err(|error| CliError::Serialize(error.to_string()))?;
+    let output =
+        sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
+            .map_err(|error| CliError::Serialize(error.to_string()))?;
     match output_target {
         OutputTarget::Stdout => Ok(CliOutput::stdout(output)),
         OutputTarget::File(path) => {
@@ -512,4 +586,23 @@ pub(crate) fn render_online_providers_table() -> String {
         crate::table::append_table_row(&mut out, &[&row[0], &row[1], &row[2]], &widths);
     }
     out
+}
+
+fn infer_single_batch_model(models_dir: Option<&PathBuf>) -> Option<String> {
+    let resolved_dir = sona_core::models::paths::resolve_models_dir(
+        models_dir.cloned(),
+        crate::desktop_paths::default_models_dir(),
+        crate::desktop_paths::models_dir_status,
+    )
+    .ok()?;
+    let all_models = sona_runtime_fs::list_models(&resolved_dir);
+    let installed_batch: Vec<_> = all_models
+        .into_iter()
+        .filter(|m| m.installed && m.modes.iter().any(|mode| mode == "batch"))
+        .collect();
+    if installed_batch.len() == 1 {
+        Some(installed_batch[0].id.clone())
+    } else {
+        None
+    }
 }

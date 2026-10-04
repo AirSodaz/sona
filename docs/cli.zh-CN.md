@@ -4,18 +4,18 @@
 
 当前独立 CLI 提供以下命令：
 
-- `doctor`（系统依赖、音频设备、模型环境与配置体检）
-- `devices`（列出系统可用音频输入麦克风设备）
+- `doctor`（系统依赖、音频设备、模型环境、真实硬件加速 [CUDA, Vulkan, Metal] 与配置全节体检）
+- `devices`（列出系统可用音频输入麦克风设备，支持数字索引与默认标记）
 - `providers`（列出受支持的在线 ASR 服务商清单及支持模式）
-- `path-status`
-- `init-config`
-- `models list|info|download|delete|verify|path`
-- `diagnostics`（或 `diagnostics snapshot`）
-- `export`（或 `export transcript`）
-- `serve`（使用本地 ASR 的本地 REST 转写）
-- `transcribe`（本地或在线批量 ASR，支持单文件、多文件、目录批量与 glob 通配符）
-- `transcribe-live`（本地或在线流式 ASR）
+- `config init|path|check|show`（配置初始化、查看解析路径、全节语法校验及内容展示）
+- `models list|info|download|delete|verify|path`（预置模型生命周期管理，支持多模型批量下载）
+- `transcribe`（本地或在线批量 ASR，支持单文件、多文件、目录、stdin 管道输入 `-`、单模型自动推导及 `--mode` 字幕模式）
+- `transcribe-live`（本地或在线流式 ASR，支持 `--device 0` 索引/子串选择与 `--stream text|ndjson`）
+- `serve`（使用本地 ASR 的本地 REST / WebSocket 转写服务）
+- `export`（基于分段 JSON 导出多样字幕格式，支持 stdin/stdout 管道）
 - `completion`（Shell 自动补全脚本生成：bash, zsh, fish, powershell, elvish）
+- `diagnostics`（Host 事实快照构造，供桌面端集成调试；日常环境自检请用 `doctor`）
+- `path-status`（共享运行时路径状态解析契约）
 ## 运行方式
 
 ```bash
@@ -27,22 +27,21 @@ cargo run -p sona-cli -- <command> ...
 ```bash
 sona-cli doctor
 sona-cli devices
-sona-cli providers
-sona-cli models list -j
-sona-cli models info whisper-turbo
-sona-cli transcribe ./sample.wav -m whisper-turbo -o ./out.srt
-sona-cli transcribe ./sample.wav --online-provider groq-whisper
-sona-cli transcribe-live -m sensevoice
+sona-cli config init
+sona-cli models download whisper-turbo sensevoice
+sona-cli transcribe ./sample.wav -o ./out.srt
+cat ./sample.wav | sona-cli transcribe - -o ./out.srt
+sona-cli transcribe ./sample.wav --mode bilingual -f srt
+sona-cli transcribe-live --device 0 --stream text
 sona-cli export -i ./segments.json -o ./transcript.vtt
 sona-cli serve -p 14200
-```
 
 ## 无状态边界
 
 CLI 有意排除 SQLite、History、Tag、应用备份/恢复、Sync 和 Online LLM。不要增加会隐式创建或修改桌面应用数据目录的命令。请使用 `export transcript` 以及 stdout/文件输出，把 CLI 与其他工具组合起来。
 ## `doctor`
 
-检查本地运行环境健康状态，包括 FFmpeg 可执行文件及版本、系统音频捕获输入设备、模型目录状态与已安装预置模型数量、硬件加速支持情况以及 `sona-cli.toml` 配置文件的合法性。
+检查本地运行环境健康状态，包括 FFmpeg 可执行文件及版本、系统音频捕获输入设备、模型目录状态与已安装预置模型数量、硬件加速探测（真实检查 CUDA、Vulkan、Metal 与 CPU 模式）以及配置文件的多节合法性（全面校验 `[transcribe]`、`[transcribe_live]` 与 `[serve]`）。
 
 ```bash
 sona-cli doctor
@@ -54,13 +53,29 @@ sona-cli doctor --models-dir ./models --config ./custom.toml
 
 ## `devices`
 
-快速列出当前系统所有可用的音频输入（麦克风）设备，并自动标记当前默认输入设备 `[default]`。
+列出当前系统所有可用的音频输入（麦克风）设备，输出格式带有数字索引（如 `[0]`）并自动标记当前默认输入设备 `[default]`。索引与名称均可直接用于 `transcribe-live --device`。
 
 ```bash
 sona-cli devices
 sona-cli devices --json
 ```
 
+## `config`
+统一的配置管理命令组，支持生成带注释的模板、查看当前生效路径、全节合法性校验与内容查看：
+
+```bash
+sona-cli config init                  # 生成默认 ./sona-cli.toml
+sona-cli config init ./custom.toml -F # 指定输出路径并强制覆盖已有文件
+sona-cli config path                  # 输出当前生效的配置文件绝对路径
+sona-cli config check                 # 校验 [transcribe]、[transcribe_live]、[serve] 全节语法
+sona-cli config show                  # 查看当前生效配置文件的内容
+```
+
+配置文件检索顺序：
+1. 命令行参数明确传入的 `-c / --config <PATH>`；
+2. 全局环境变量 `SONA_CONFIG` 指定的路径；
+3. 当前工作目录下的 `./sona-cli.toml`；
+4. 用户级全局配置路径（Linux: `~/.config/sona/sona-cli.toml`，macOS: `~/Library/Application Support/sona/sona-cli.toml` [若设置了 `$XDG_CONFIG_HOME` 则优先读取 `$XDG_CONFIG_HOME/sona/sona-cli.toml`]，Windows: `%APPDATA%\sona\sona-cli.toml`）。
 ## `providers`
 
 列出所有支持的在线 ASR 服务商清单，展示其服务商 ID、默认环境变量名以及所支持的模式（`batch`、`streaming`）。
@@ -78,17 +93,6 @@ sona-cli providers --json
 sona-cli path-status ./models
 ```
 
-## `init-config`
-
-生成带注释的本地转写和本地 API server 配置模板。
-
-```bash
-sona-cli init-config
-sona-cli init-config ./sona-cli.toml -F
-```
-已有文件默认受保护，只有传入 `-F / --force` 才会覆盖；状态文本写入 stderr。
-当当前工作目录下存在 `sona-cli.toml` 时，`transcribe`、`transcribe-live` 与 `serve` 会在省略 `-c / --config` 时自动加载该配置文件。也可通过全局环境变量 `SONA_CONFIG` 指定配置文件路径。
-
 ## `models`
 
 列出、查看详情、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。省略 `--models-dir` 时，CLI 会优先检查 `SONA_MODELS_DIR` 环境变量，未设置时再回退到桌面端模型路径。
@@ -101,7 +105,7 @@ sona-cli models list -l zh -i -j
 sona-cli models info whisper-turbo
 sona-cli models info sensevoice --json
 sona-cli models download whisper-turbo -q
-sona-cli models delete whisper-turbo -y
+sona-cli models download whisper-turbo sensevoice
 sona-cli models delete --all -y
 sona-cli models verify whisper-turbo
 sona-cli models verify --all
@@ -182,17 +186,23 @@ cat ./segments.json | sona-cli export -f vtt
 
 ## `transcribe`
 
-转写一个或多个本地音视频文件，或转写整个目录。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
+转写一个或多个本地音视频文件，转写整个目录，或从标准输入（stdin）管道接收媒体流。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
 
 ```bash
 sona-cli transcribe ./sample.wav -m whisper-turbo
-sona-cli transcribe ./sample.wav -o ./out.srt
+sona-cli transcribe ./sample.wav -o ./out.srt      # 本地仅安装一个 batch 模型时可自动省略 -m
+cat ./sample.wav | sona-cli transcribe - -o ./out.srt # 支持标准输入管道
+sona-cli transcribe ./sample.wav --mode bilingual -f srt # 支持 original, translation, bilingual
 sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f srt
 sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
-sona-cli transcribe --list-providers
+sona-cli providers                                # 查看受支持的在线 ASR 清单
 ```
-如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`），会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`、`-j / --jobs`。支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。`--gpu-acceleration` 支持 `auto`、`cpu`、`vulkan`、`metal` 与 `cuda`。批处理参数 `--jobs` 默认为 1，当前批处理任务按序执行。
-使用 `--list-providers` 可以快速查看所有受支持的在线 ASR 服务商 ID、默认环境变量名及支持的转写模式（batch / streaming）。
+如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`、或用户目录下存在标准配置文件），会自动加载而无需手动传入 `-c / --config`。
+本地单模型自动推导：当未显式传入 `-m / --model-id` 且模型目录下仅安装了一个批处理模型时，CLI 会自动选中该模型并给出友好提示。
+支持从标准输入接收音视频：传入 `-` 作为输入文件即可（如 `ffmpeg -i in.mp4 -f wav - | sona-cli transcribe - -o out.srt`）。
+高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`。批处理参数 `--jobs` 默认为 1（当前按序处理）。
+支持 `--mode <original|translation|bilingual>`（默认 `original`）选择导出的文本模式。
+支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。`--gpu-acceleration` 支持 `auto`、`cpu`、`vulkan`、`metal` 与 `cuda`。
 ```bash
 set GROQ_API_KEY=...
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
@@ -221,14 +231,14 @@ sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./
 实时转写麦克风，或从 stdin 读取无文件头的 16 kHz、单声道、signed 16-bit little-endian PCM。
 
 ```bash
-sona-cli transcribe-live --list-input-devices
-sona-cli transcribe-live -m sensevoice --duration 60 -o ./live.srt
+sona-cli devices
+sona-cli transcribe-live --device 0 -m sensevoice --duration 60 -o ./live.srt
+sona-cli transcribe-live --device "realtek" --stream text
 
 ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
     -m paraformer \
-    --output-format ndjson
-```
+    --stream ndjson
 
 在线流式目前支持 `volcengine-doubao`：
 
@@ -239,8 +249,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
     --online-provider volcengine-doubao --output-format ndjson
 ```
 
-`--input microphone` 默认使用 CPAL 输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称匹配（`--list-input-devices` 会将系统默认设备标记为 `[default]`）。`--output-format` 支持 `text` 和 `ndjson`；`--output` 可写入最终的 `json`、`txt`、`srt`、`vtt` 或 `md` 快照；`--format` 用于指定输出文件格式并必须同时提供 `--output`。Ctrl+C、stdin EOF 和 `--duration` 都会先 flush/stop 会话再退出。
-在线凭据和非敏感配置规则与 `transcribe` 相同。在线流式使用本地模型参数会被拒绝。
+`--input microphone` 默认使用系统默认输入设备；`--device` 支持传入 `devices` 列表中的数字索引（如 `--device 0`）、麦克风全名或不区分大小写的唯一子串（如 `--device realtek`）。`--stream`（或 `--stream-format` / `--output-format`）支持 `text` 和 `ndjson` 实时流事件；`--output` 可写入最终的 `json`、`txt`、`srt`、`vtt` 或 `md` 快照；`--format` 用于指定输出文件格式并必须同时提供 `--output`。Ctrl+C、stdin EOF 和 `--duration` 都会先 flush/stop 会话再退出。
 
 ## `serve`
 
@@ -259,7 +268,8 @@ sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 - `GET  /info`：服务能力、模型列表与规格清单
 - `POST /v1/transcriptions`：Sona 原生多媒体文件批量转写接口
 - `POST /v1/audio/transcriptions`：OpenAI 兼容的标准音频转录接口
-
+- `GET  /v1/transcriptions/jobs`：转写任务状态与队列查询
+- `WS   /v1/streaming`：实时流式 WebSocket 音频转写接口
 当通过 `--api-key <KEY>` 启用鉴权后，客户端请求私有端点需携带 HTTP 头：`Authorization: Bearer <KEY>`。
 ## `completion`
 

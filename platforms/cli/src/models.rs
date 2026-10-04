@@ -152,9 +152,13 @@ pub struct ModelListArgs {
     after_help = "Required companion models are downloaded automatically when the preset needs VAD or punctuation.\n\nExamples:\n  sona-cli models download whisper-turbo\n  sona-cli models download sensevoice\n  sona-cli models download silero-vad --models-dir ./models"
 )]
 pub struct ModelDownloadArgs {
-    /// Preset model id to download.
-    #[arg(help = "Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad")]
-    model_id: String,
+    /// Preset model id(s) or alias(es) to download.
+    #[arg(
+        help = "Preset model id(s) or alias(es), for example whisper-turbo or sensevoice",
+        required = true,
+        num_args = 1..
+    )]
+    model_ids: Vec<String>,
     /// Models directory containing installed presets.
     #[arg(long, help = "Override the target models directory")]
     models_dir: Option<PathBuf>,
@@ -343,15 +347,31 @@ async fn run_model_download(
     let models_dir = resolve_models_dir(args.models_dir)?;
     let mut stderr_lines = Vec::new();
 
-    let resolved = resolve_model_download(&args.model_id, &models_dir)
-        .map_err(|error| CliError::Validation(error.to_string()))?;
-    download_one_model(&resolved, yes, quiet, &mut stderr_lines, io).await?;
+    let mut download_queue: Vec<ResolvedModelDownload> = Vec::new();
+    let mut seen_ids = std::collections::HashSet::new();
 
-    let companions = required_companion_models(&resolved.model);
-    for companion_id in companions.companion_model_ids() {
-        let companion = resolve_model_download(&companion_id, &models_dir)
+    for model_id in &args.model_ids {
+        let resolved = resolve_model_download(model_id, &models_dir)
             .map_err(|error| CliError::Validation(error.to_string()))?;
-        download_one_model(&companion, yes, quiet, &mut stderr_lines, io).await?;
+        if seen_ids.insert(resolved.model.id.clone()) {
+            let companions = required_companion_models(&resolved.model);
+            let mut resolved_companions = Vec::new();
+            for companion_id in companions.companion_model_ids() {
+                let companion = resolve_model_download(&companion_id, &models_dir)
+                    .map_err(|error| CliError::Validation(error.to_string()))?;
+                resolved_companions.push(companion);
+            }
+            download_queue.push(resolved);
+            for companion in resolved_companions {
+                if seen_ids.insert(companion.model.id.clone()) {
+                    download_queue.push(companion);
+                }
+            }
+        }
+    }
+
+    for model in &download_queue {
+        download_one_model(model, yes, quiet, &mut stderr_lines, io).await?;
     }
     Ok(CliOutput::stderr(stderr_lines.join("\n")))
 }

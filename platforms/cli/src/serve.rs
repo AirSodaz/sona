@@ -14,7 +14,7 @@ use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options}
 #[derive(Debug, Args)]
 #[command(
     about = "Run the shared local HTTP API server",
-    after_help = "Core Endpoints:\n  GET  /health                  Health check and status\n  GET  /info                    Server info, model list, and capabilities\n  POST /v1/transcriptions       Sona native batch transcription\n  POST /v1/audio/transcriptions OpenAI-compatible audio transcription\n\nAuthentication:\n  When --api-key is set, provide header 'Authorization: Bearer <API_KEY>'.\n\nExamples:\n  sona-cli serve\n  sona-cli serve --host 127.0.0.1 --port 14200\n  sona-cli serve --api-key my-secret-token\n  sona-cli serve --config ./sona-cli.toml"
+    after_help = "Core Endpoints:\n  GET  /health                  Health check and status\n  GET  /info                    Server info, model list, and capabilities\n  POST /v1/transcriptions       Sona native batch transcription\n  POST /v1/audio/transcriptions OpenAI-compatible audio transcription\n  GET  /v1/transcriptions/jobs  List transcription jobs\n  WS   /v1/streaming              Real-time streaming\n\nAuthentication:\n  When --api-key is set, provide header 'Authorization: Bearer <API_KEY>'.\n\nExamples:\n  sona-cli serve\n  sona-cli serve --host 127.0.0.1 --port 14200\n  sona-cli serve --api-key my-secret-token\n  sona-cli serve --config ./sona-cli.toml"
 )]
 pub struct ServeArgs {
     /// Optional config file, usually sona-cli.toml.
@@ -136,6 +136,7 @@ pub async fn run_serve(
            GET  http://{host}:{port}/health                  Health check\n\
            GET  http://{host}:{port}/info                    Server info & models\n\
            POST http://{host}:{port}/v1/transcriptions       Submit batch transcription\n\
+           POST http://{host}:{port}/v1/audio/transcriptions OpenAI-compatible audio transcription\n\
            GET  http://{host}:{port}/v1/transcriptions/jobs  List transcription jobs\n\
            WS   ws://{host}:{port}/v1/streaming              Real-time streaming"
     )

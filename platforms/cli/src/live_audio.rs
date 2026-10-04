@@ -398,7 +398,7 @@ mod tests {
     }
 
     #[test]
-    fn device_selection_uses_exact_name_or_default() {
+    fn device_selection_uses_exact_or_index_or_default() {
         let devices = vec!["Laptop Mic".to_string(), "Studio Mic".to_string()];
 
         assert_eq!(
@@ -410,10 +410,18 @@ mod tests {
             "Laptop Mic"
         );
         assert_eq!(
-            resolve_device_name(&devices, Some("Laptop Mic"), Some("studio mic"))
+            resolve_device_name(&devices, Some("Laptop Mic"), Some("1")).unwrap(),
+            "Studio Mic"
+        );
+        assert_eq!(
+            resolve_device_name(&devices, Some("Laptop Mic"), Some("studio mic")).unwrap(),
+            "Studio Mic"
+        );
+        assert_eq!(
+            resolve_device_name(&devices, Some("Laptop Mic"), Some("Unknown Mic"))
                 .unwrap_err()
                 .to_string(),
-            "Input device not found: studio mic"
+            "Input device not found: Unknown Mic"
         );
     }
 

@@ -13,32 +13,98 @@ pub(crate) fn resolve_config_path(configured: Option<&PathBuf>) -> Option<PathBu
     )
 }
 
+pub(crate) fn default_user_config_path<F>(read_env: &F) -> Option<PathBuf>
+where
+    F: Fn(&str) -> Option<std::ffi::OsString>,
+{
+    #[cfg(target_os = "windows")]
+    {
+        let appdata_path = read_env("APPDATA")
+            .filter(|s| !s.is_empty())
+            .map(|appdata| PathBuf::from(appdata).join("sona").join("sona-cli.toml"));
+        if let Some(path) = appdata_path.as_ref().filter(|p| p.is_file()) {
+            return Some(path.clone());
+        }
+        let userprofile_path =
+            read_env("USERPROFILE")
+                .filter(|s| !s.is_empty())
+                .map(|userprofile| {
+                    PathBuf::from(userprofile)
+                        .join(".config")
+                        .join("sona")
+                        .join("sona-cli.toml")
+                });
+        if let Some(path) = userprofile_path.as_ref().filter(|p| p.is_file()) {
+            return Some(path.clone());
+        }
+        appdata_path.or(userprofile_path)
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(xdg) = read_env("XDG_CONFIG_HOME").filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(xdg).join("sona").join("sona-cli.toml"));
+        }
+        if let Some(home) = read_env("HOME").filter(|s| !s.is_empty()) {
+            let app_support = PathBuf::from(&home)
+                .join("Library")
+                .join("Application Support")
+                .join("sona")
+                .join("sona-cli.toml");
+            if app_support.is_file() {
+                return Some(app_support);
+            }
+            return Some(
+                PathBuf::from(home)
+                    .join(".config")
+                    .join("sona")
+                    .join("sona-cli.toml"),
+            );
+        }
+        None
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        if let Some(xdg) = read_env("XDG_CONFIG_HOME").filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(xdg).join("sona").join("sona-cli.toml"));
+        }
+        if let Some(home) = read_env("HOME").filter(|s| !s.is_empty()) {
+            return Some(
+                PathBuf::from(home)
+                    .join(".config")
+                    .join("sona")
+                    .join("sona-cli.toml"),
+            );
+        }
+        None
+    }
+}
+
 pub(crate) fn resolve_config_path_with_env<F>(
     configured: Option<&PathBuf>,
     default_path: &std::path::Path,
     read_env: F,
 ) -> Option<PathBuf>
 where
-    F: FnOnce(&str) -> Option<std::ffi::OsString>,
+    F: Fn(&str) -> Option<std::ffi::OsString>,
 {
     if let Some(path) = configured {
         return Some(path.clone());
     }
     if let Some(env_path) = read_env("SONA_CONFIG").filter(|s| !s.is_empty()) {
-        let env_path = PathBuf::from(env_path);
-        if env_path.is_file() {
-            return Some(env_path);
-        }
+        return Some(PathBuf::from(env_path));
     }
     if default_path.is_file() {
         return Some(default_path.to_path_buf());
+    }
+    if let Some(user_path) = default_user_config_path(&read_env).filter(|p| p.is_file()) {
+        return Some(user_path);
     }
     None
 }
 #[derive(Debug, Args)]
 #[command(
     about = "Create a commented TOML starter template",
-    after_help = "Examples:\n  sona-cli init-config\n  sona-cli init-config ./sona-cli.toml\n  sona-cli init-config ./sona-cli.toml -F\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be configured."
+    after_help = "Examples:\n  sona-cli config init\n  sona-cli config init ./sona-cli.toml\n  sona-cli config init ./sona-cli.toml -F\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be configured."
 )]
 pub struct InitConfigArgs {
     /// Target TOML path. Defaults to ./sona-cli.toml.

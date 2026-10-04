@@ -10,6 +10,7 @@ fn gpu_acceleration_defaults_and_normalizes_without_cli_runtime() {
     assert!(GPU_ACCELERATION_VALUES.contains(&"vulkan"));
     assert!(GPU_ACCELERATION_VALUES.contains(&"metal"));
     assert!(GPU_ACCELERATION_VALUES.contains(&"cuda"));
+    assert!(!GPU_ACCELERATION_VALUES.contains(&"directml"));
     assert_eq!(
         resolve_gpu_acceleration(None).unwrap().as_deref(),
         Some("auto")

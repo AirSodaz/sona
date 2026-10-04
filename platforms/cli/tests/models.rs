@@ -676,3 +676,21 @@ fn models_delete_all_with_yes_deletes_installed_presets_and_preserves_custom_dir
     // The untracked custom directory must be preserved
     assert!(custom_dir.exists());
 }
+
+#[test]
+fn models_download_accepts_multiple_model_arguments() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "download",
+        "whisper-turbo",
+        "sensevoice",
+        "non-existent-xyz",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    // It should have accepted multiple models and failed at network or invalid model, not clap argument error
+    assert_ne!(error.exit_code(), 1);
+}

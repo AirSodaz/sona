@@ -150,11 +150,12 @@ pub(crate) fn format_input_device_list(devices: &[String], default_device: Optio
     }
     let entries = devices
         .iter()
-        .map(|device| {
+        .enumerate()
+        .map(|(idx, device)| {
             if default_device == Some(device.as_str()) {
-                format!("{device} [default]")
+                format!("[{idx}] {device} [default]")
             } else {
-                device.clone()
+                format!("[{idx}] {device}")
             }
         })
         .collect::<Vec<_>>();
@@ -169,14 +170,14 @@ mod tests {
     fn format_input_device_list_annotates_default_device() {
         let devices = vec!["Mic A".to_string(), "Mic B".to_string()];
         let output = format_input_device_list(&devices, Some("Mic A"));
-        assert_eq!(output, "Mic A [default]\nMic B\n");
+        assert_eq!(output, "[0] Mic A [default]\n[1] Mic B\n");
     }
 
     #[test]
     fn format_input_device_list_without_default() {
         let devices = vec!["Mic A".to_string(), "Mic B".to_string()];
         let output = format_input_device_list(&devices, None);
-        assert_eq!(output, "Mic A\nMic B\n");
+        assert_eq!(output, "[0] Mic A\n[1] Mic B\n");
     }
 
     #[test]
