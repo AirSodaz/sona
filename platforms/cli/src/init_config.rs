@@ -6,12 +6,32 @@ use crate::{CliOutput, CliResult};
 pub(crate) const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
 pub(crate) fn resolve_config_path(configured: Option<&PathBuf>) -> Option<PathBuf> {
+    resolve_config_path_with_env(
+        configured,
+        std::path::Path::new(DEFAULT_CONFIG_PATH),
+        |name| std::env::var_os(name),
+    )
+}
+
+pub(crate) fn resolve_config_path_with_env<F>(
+    configured: Option<&PathBuf>,
+    default_path: &std::path::Path,
+    read_env: F,
+) -> Option<PathBuf>
+where
+    F: FnOnce(&str) -> Option<std::ffi::OsString>,
+{
     if let Some(path) = configured {
         return Some(path.clone());
     }
-    let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
+    if let Some(env_path) = read_env("SONA_CONFIG").filter(|s| !s.is_empty()) {
+        let env_path = PathBuf::from(env_path);
+        if env_path.is_file() {
+            return Some(env_path);
+        }
+    }
     if default_path.is_file() {
-        return Some(default_path);
+        return Some(default_path.to_path_buf());
     }
     None
 }
@@ -71,6 +91,7 @@ mod tests {
             "format",
             "quiet",
             "jobs",
+            "ffmpeg_path",
         ] {
             assert!(
                 content.contains(&format!("# {}", key)) || content.contains(&format!("# {key} = ")),
@@ -105,5 +126,39 @@ mod tests {
         let content = crate::config_template::render_config_template(Some(path.as_path()));
 
         assert!(content.contains("# models_dir = \"C:/Users/test/models\""));
+    }
+
+    #[test]
+    fn resolve_config_path_precedence() {
+        use std::ffi::OsString;
+        let dir = tempfile::tempdir().unwrap();
+        let cli_file = dir.path().join("cli.toml");
+        let env_file = dir.path().join("env.toml");
+        let default_file = dir.path().join("default.toml");
+        let non_existent = dir.path().join("non_existent.toml");
+        std::fs::write(&cli_file, "").unwrap();
+        std::fs::write(&env_file, "").unwrap();
+        std::fs::write(&default_file, "").unwrap();
+
+        // 1. CLI flag takes highest precedence over env var and default file
+        let resolved = resolve_config_path_with_env(Some(&cli_file), &default_file, |_| {
+            Some(OsString::from(&env_file))
+        });
+        assert_eq!(resolved, Some(cli_file.clone()));
+
+        // 2. When no CLI flag, valid SONA_CONFIG takes precedence over default file
+        let resolved = resolve_config_path_with_env(None, &default_file, |name| {
+            assert_eq!(name, "SONA_CONFIG");
+            Some(OsString::from(&env_file))
+        });
+        assert_eq!(resolved, Some(env_file));
+
+        // 3. When no CLI flag and empty/absent SONA_CONFIG, falls back to existing default file
+        let resolved = resolve_config_path_with_env(None, &default_file, |_| Some(OsString::new()));
+        assert_eq!(resolved, Some(default_file));
+
+        // 4. When default file does not exist either, returns None
+        let resolved = resolve_config_path_with_env(None, &non_existent, |_| None);
+        assert_eq!(resolved, None);
     }
 }

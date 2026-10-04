@@ -77,6 +77,12 @@ pub struct ModelListArgs {
     /// Prints JSON instead of the default table output.
     #[arg(short = 'j', long, help = "Print machine-readable JSON")]
     json: bool,
+    /// Optional search term to filter models by keyword matching ID, alias, or type.
+    #[arg(
+        value_name = "QUERY",
+        help = "Filter models by keyword matching ID, alias, or type"
+    )]
+    query: Option<String>,
 }
 
 #[derive(Debug, Args)]
@@ -137,7 +143,7 @@ fn run_model_list(mut args: ModelListArgs) -> CliResult<CliOutput> {
     {
         args.mode = Some("batch".to_string());
     }
-    let models = select_models(
+    let mut models = select_models(
         list_models(args.models_dir.clone())?,
         &ModelListFilter {
             mode: args.mode.clone(),
@@ -146,6 +152,19 @@ fn run_model_list(mut args: ModelListArgs) -> CliResult<CliOutput> {
             installed_only: args.installed,
         },
     );
+    if let Some(query) = &args.query {
+        let q = query.trim().to_ascii_lowercase();
+        if !q.is_empty() {
+            models.retain(|m| {
+                m.id.to_ascii_lowercase().contains(&q)
+                    || m.name.to_ascii_lowercase().contains(&q)
+                    || m.model_type.to_ascii_lowercase().contains(&q)
+                    || sona_core::models::preset_models::aliases_for_preset_model(&m.id)
+                        .iter()
+                        .any(|a| a.to_ascii_lowercase().contains(&q))
+            });
+        }
+    }
     let output = if args.json {
         serde_json::to_string_pretty(
             &models
@@ -388,12 +407,22 @@ fn render_language_column(languages: &[String]) -> String {
     label
 }
 
+fn primary_alias_for_model(model_id: &str) -> Option<&'static str> {
+    sona_core::models::preset_models::PRESET_MODEL_ALIASES
+        .iter()
+        .find(|(_, canonical)| *canonical == model_id)
+        .map(|(alias, _)| *alias)
+}
+
 fn render_model_table(models: &[ModelSummary]) -> String {
     let rows = models
         .iter()
         .map(|model| {
             [
                 model.id.clone(),
+                primary_alias_for_model(&model.id)
+                    .unwrap_or("-")
+                    .to_string(),
                 model.model_type.clone(),
                 render_language_column(&model.languages),
                 model.size.clone(),
@@ -402,7 +431,15 @@ fn render_model_table(models: &[ModelSummary]) -> String {
             ]
         })
         .collect::<Vec<_>>();
-    let headers = ["ID", "Type", "Language", "Size", "Installed", "Modes"];
+    let headers = [
+        "ID",
+        "Alias",
+        "Type",
+        "Language",
+        "Size",
+        "Installed",
+        "Modes",
+    ];
     let mut widths = headers.map(str::len);
 
     for row in &rows {
@@ -422,13 +459,14 @@ fn render_model_table(models: &[ModelSummary]) -> String {
             row[3].as_str(),
             row[4].as_str(),
             row[5].as_str(),
+            row[6].as_str(),
         ];
         append_table_row(&mut output, &refs, &widths);
     }
     output
 }
 
-fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]) {
+fn append_table_row(output: &mut String, values: &[&str; 7], widths: &[usize; 7]) {
     for (index, value) in values.iter().enumerate() {
         if index > 0 {
             output.push_str("  ");
@@ -438,7 +476,7 @@ fn append_table_row(output: &mut String, values: &[&str; 6], widths: &[usize; 6]
     output.push('\n');
 }
 
-fn append_table_separator(output: &mut String, widths: &[usize; 6]) {
+fn append_table_separator(output: &mut String, widths: &[usize; 7]) {
     for (index, width) in widths.iter().enumerate() {
         if index > 0 {
             output.push_str("  ");
@@ -478,6 +516,7 @@ mod tests {
         ]);
 
         assert!(table.contains("ID"));
+        assert!(table.contains("Alias"));
         assert!(table.contains("Type"));
         assert!(table.contains("Language"));
         assert!(table.contains("Size"));

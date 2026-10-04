@@ -15,7 +15,10 @@ use std::sync::Arc;
 
 use sona_core::ports::asr::AsrRuntimeObserver;
 
-use crate::live_audio::{microphone_device_names, spawn_stdin_reader, start_microphone_input};
+use crate::live_audio::{
+    default_microphone_device_name, microphone_device_names, spawn_stdin_reader,
+    start_microphone_input,
+};
 use crate::live_output::LiveOutputRenderer;
 use crate::{CliError, CliIo, CliResult};
 
@@ -25,11 +28,8 @@ pub(crate) async fn run_transcribe_live(
 ) -> CliResult<()> {
     if args.list_input_devices {
         let devices = microphone_device_names().map_err(CliError::Io)?;
-        let output = if devices.is_empty() {
-            String::new()
-        } else {
-            format!("{}\n", devices.join("\n"))
-        };
+        let default_device = default_microphone_device_name();
+        let output = format_input_device_list(&devices, default_device.as_deref());
         io.stdout()
             .write_all(output.as_bytes())
             .map_err(|error| CliError::Io(format!("Failed to write input devices: {error}")))?;
@@ -127,4 +127,46 @@ async fn run_resolved_live_command(
         .write_stopped(stdout, reason)
         .map_err(CliError::Io)?;
     Ok(status)
+}
+
+pub(crate) fn format_input_device_list(devices: &[String], default_device: Option<&str>) -> String {
+    if devices.is_empty() {
+        return String::new();
+    }
+    let entries = devices
+        .iter()
+        .map(|device| {
+            if default_device == Some(device.as_str()) {
+                format!("{device} [default]")
+            } else {
+                device.clone()
+            }
+        })
+        .collect::<Vec<_>>();
+    format!("{}\n", entries.join("\n"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn format_input_device_list_annotates_default_device() {
+        let devices = vec!["Mic A".to_string(), "Mic B".to_string()];
+        let output = format_input_device_list(&devices, Some("Mic A"));
+        assert_eq!(output, "Mic A [default]\nMic B\n");
+    }
+
+    #[test]
+    fn format_input_device_list_without_default() {
+        let devices = vec!["Mic A".to_string(), "Mic B".to_string()];
+        let output = format_input_device_list(&devices, None);
+        assert_eq!(output, "Mic A\nMic B\n");
+    }
+
+    #[test]
+    fn format_input_device_list_empty() {
+        let output = format_input_device_list(&[], Some("Mic A"));
+        assert_eq!(output, "");
+    }
 }

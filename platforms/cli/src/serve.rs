@@ -59,6 +59,9 @@ pub struct ServeArgs {
     /// Punctuation model id override.
     #[arg(long = "punctuation-model-id")]
     punctuation_model_id: Option<String>,
+    /// Custom path to the ffmpeg executable.
+    #[arg(long = "ffmpeg-path", value_name = "PATH")]
+    ffmpeg_path: Option<String>,
 }
 
 pub async fn run_serve(
@@ -83,7 +86,7 @@ pub async fn run_serve(
             gpu_acceleration: args.gpu_acceleration,
             vad_model_id: args.vad_model_id,
             punctuation_model_id: args.punctuation_model_id,
-            ffmpeg_path: None,
+            ffmpeg_path: args.ffmpeg_path,
         },
         config,
     )
@@ -91,6 +94,7 @@ pub async fn run_serve(
 
     let host = resolved.host.clone();
     let port = resolved.port;
+    let has_api_key = !resolved.api_key.is_empty();
     let RunningApiServer {
         normalized_ip_whitelist,
         mut shutdown_tx,
@@ -116,12 +120,20 @@ pub async fn run_serve(
         ApiServerStartError::Runtime(error) => CliError::Network(error.to_string()),
     })?;
 
+    let auth_hint = if has_api_key {
+        " (auth: Bearer token required)".to_string()
+    } else {
+        String::new()
+    };
     writeln!(
         io.stderr(),
-        "Serving Sona API on http://{}:{} (allowed clients: {})",
-        host,
-        port,
-        normalized_ip_whitelist
+        "Serving Sona API on http://{host}:{port} (allowed clients: {normalized_ip_whitelist}){auth_hint}\n\
+         Endpoints:\n\
+           GET  http://{host}:{port}/health                  Health check\n\
+           GET  http://{host}:{port}/info                    Server info & models\n\
+           POST http://{host}:{port}/v1/transcriptions       Submit batch transcription\n\
+           GET  http://{host}:{port}/v1/transcriptions/jobs  List transcription jobs\n\
+           WS   ws://{host}:{port}/v1/streaming              Real-time streaming"
     )
     .map_err(|error| CliError::Io(format!("Failed to write banner: {error}")))?;
 

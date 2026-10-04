@@ -56,6 +56,19 @@ fn file_transcription_help_exposes_online_asr_options() {
 }
 
 #[test]
+fn transcribe_and_serve_help_expose_ffmpeg_path() {
+    let transcribe_help = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--help"])
+        .unwrap()
+        .stdout;
+    assert!(transcribe_help.contains("--ffmpeg-path"));
+
+    let serve_help = sona_cli::run_cli_from_args(["sona-cli", "serve", "--help"])
+        .unwrap()
+        .stdout;
+    assert!(serve_help.contains("--ffmpeg-path"));
+}
+
+#[test]
 fn online_batch_requires_api_key_from_the_named_environment_variable() {
     let directory = tempfile::tempdir().unwrap();
     let input = directory.path().join("audio.wav");

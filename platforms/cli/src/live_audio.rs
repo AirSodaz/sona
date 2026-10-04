@@ -139,6 +139,10 @@ pub(crate) fn microphone_device_names() -> Result<Vec<String>, String> {
     sona_audio_capture::enumerate_input_device_names().map_err(|e| e.to_string())
 }
 
+pub(crate) fn default_microphone_device_name() -> Option<String> {
+    sona_audio_capture::default_input_device_name()
+}
+
 pub(crate) fn start_microphone_input(
     requested_device: Option<&str>,
 ) -> Result<RunningAudioInput, String> {

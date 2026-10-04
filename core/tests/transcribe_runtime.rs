@@ -562,6 +562,53 @@ fn batch_plan_config_gpu_and_hotwords_are_used_when_cli_omits_them() {
 }
 
 #[test]
+fn batch_plan_config_ffmpeg_path_used_when_cli_omits_it() {
+    let (_dir, input_path, models_dir) = installed_whisper_fixture();
+
+    let mut cli = temp_transcribe_options();
+    cli.input = input_path;
+    cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+    cli.models_dir = Some(models_dir);
+    cli.vad_model_id = Some("silero-vad".to_string());
+
+    let resolved = resolve_batch_transcribe_plan_with_install_checker(
+        cli,
+        Some(TranscribeConfigSection {
+            ffmpeg_path: Some("/custom/bin/ffmpeg".to_string()),
+            ..Default::default()
+        }),
+        test_model_exists,
+    )
+    .unwrap();
+
+    assert_eq!(resolved.ffmpeg_path.as_deref(), Some("/custom/bin/ffmpeg"));
+}
+
+#[test]
+fn batch_plan_cli_ffmpeg_path_overrides_config_file() {
+    let (_dir, input_path, models_dir) = installed_whisper_fixture();
+
+    let mut cli = temp_transcribe_options();
+    cli.input = input_path;
+    cli.model_id = Some("sherpa-onnx-whisper-turbo".to_string());
+    cli.models_dir = Some(models_dir);
+    cli.vad_model_id = Some("silero-vad".to_string());
+    cli.ffmpeg_path = Some("/cli/bin/ffmpeg".to_string());
+
+    let resolved = resolve_batch_transcribe_plan_with_install_checker(
+        cli,
+        Some(TranscribeConfigSection {
+            ffmpeg_path: Some("/config/bin/ffmpeg".to_string()),
+            ..Default::default()
+        }),
+        test_model_exists,
+    )
+    .unwrap();
+
+    assert_eq!(resolved.ffmpeg_path.as_deref(), Some("/cli/bin/ffmpeg"));
+}
+
+#[test]
 fn batch_plan_cli_gpu_overrides_config_file() {
     let (_dir, input_path, models_dir) = installed_whisper_fixture();
 

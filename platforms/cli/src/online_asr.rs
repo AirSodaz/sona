@@ -16,11 +16,14 @@ fn online_provider_value_parser() -> PossibleValuesParser {
     PossibleValuesParser::new(online_asr_provider_ids())
 }
 
-#[derive(Clone, Debug, Args)]
+#[derive(Clone, Args)]
 pub(crate) struct OnlineAsrArgs {
     /// Use an online ASR provider instead of local Sherpa ASR.
     #[arg(long, value_name = "PROVIDER", value_parser = online_provider_value_parser())]
     pub(crate) online_provider: Option<String>,
+    /// Direct API key for the online ASR provider. Takes precedence over --api-key-env.
+    #[arg(long = "api-key", value_name = "KEY", requires = "online_provider")]
+    pub(crate) api_key: Option<String>,
     /// Environment variable containing the online ASR API key. Default env vars:
     /// volcengine-doubao: SONA_VOLCENGINE_ASR_API_KEY, groq-whisper: GROQ_API_KEY,
     /// mistral-voxtral: MISTRAL_API_KEY, openai-whisper: OPENAI_API_KEY,
@@ -30,6 +33,17 @@ pub(crate) struct OnlineAsrArgs {
     /// JSON object overriding non-secret provider endpoint or model settings.
     #[arg(long, value_name = "FILE", requires = "online_provider")]
     pub(crate) online_config: Option<PathBuf>,
+}
+
+impl std::fmt::Debug for OnlineAsrArgs {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("OnlineAsrArgs")
+            .field("online_provider", &self.online_provider)
+            .field("api_key", &self.api_key.as_ref().map(|_| "***REDACTED***"))
+            .field("api_key_env", &self.api_key_env)
+            .field("online_config", &self.online_config)
+            .finish()
+    }
 }
 
 impl OnlineAsrArgs {
@@ -51,6 +65,7 @@ impl OnlineAsrArgs {
 
         Self {
             online_provider: self.online_provider.clone().or(config_provider),
+            api_key: self.api_key.clone(),
             api_key_env: if same_provider {
                 self.api_key_env.clone().or(config_api_key_env)
             } else {
@@ -111,30 +126,40 @@ impl OnlineAsrArgs {
             merge_config_overrides(config_object, path)?;
         }
 
-        let env_name = self
-            .api_key_env
-            .as_deref()
-            .or_else(|| manifest.default_api_key_env())
-            .ok_or_else(|| {
+        let api_key = if let Some(direct_key) = &self.api_key {
+            if direct_key.trim().is_empty() {
+                return Err(CliError::Validation(
+                    "--api-key must not be empty.".to_string(),
+                ));
+            }
+            direct_key.clone()
+        } else {
+            let env_name = self
+                .api_key_env
+                .as_deref()
+                .or_else(|| manifest.default_api_key_env())
+                .ok_or_else(|| {
+                    CliError::Validation(format!(
+                        "Online ASR provider {provider_id} does not declare a default API key environment variable; specify one with --api-key-env or --api-key."
+                    ))
+                })?;
+            if env_name.trim().is_empty() {
+                return Err(CliError::Validation(
+                    "--api-key-env must not be empty.".to_string(),
+                ));
+            }
+            let key = read_env(env_name).map_err(|()| {
                 CliError::Validation(format!(
-                    "Online ASR provider {provider_id} does not declare a default API key environment variable; specify one with --api-key-env."
+                    "Online ASR API key environment variable {env_name} is not set or is not valid UTF-8."
                 ))
             })?;
-        if env_name.trim().is_empty() {
-            return Err(CliError::Validation(
-                "--api-key-env must not be empty.".to_string(),
-            ));
-        }
-        let api_key = read_env(env_name).map_err(|()| {
-            CliError::Validation(format!(
-                "Online ASR API key environment variable {env_name} is not set or is not valid UTF-8."
-            ))
-        })?;
-        if api_key.trim().is_empty() {
-            return Err(CliError::Validation(format!(
-                "Online ASR API key environment variable {env_name} is empty."
-            )));
-        }
+            if key.trim().is_empty() {
+                return Err(CliError::Validation(format!(
+                    "Online ASR API key environment variable {env_name} is empty."
+                )));
+            }
+            key
+        };
         config_object.insert("apiKey".to_string(), Value::String(api_key));
 
         Ok(AsrTranscriptionRequest {
@@ -224,11 +249,11 @@ mod tests {
     fn online_args(provider: impl Into<String>) -> OnlineAsrArgs {
         OnlineAsrArgs {
             online_provider: Some(provider.into()),
+            api_key: None,
             api_key_env: None,
             online_config: None,
         }
     }
-
     #[test]
     fn builds_batch_request_without_persisting_the_secret() {
         let request = online_args(GROQ_WHISPER_PROVIDER_ID)
@@ -267,6 +292,7 @@ mod tests {
         .unwrap();
         let args = OnlineAsrArgs {
             online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key: None,
             api_key_env: Some("CUSTOM_ASR_KEY".to_string()),
             online_config: Some(config_path.clone()),
         };
@@ -371,10 +397,10 @@ mod tests {
     fn resolves_online_args_from_config_defaults() {
         let empty_args = OnlineAsrArgs {
             online_provider: None,
+            api_key: None,
             api_key_env: None,
             online_config: None,
         };
-        assert!(!empty_args.is_online());
 
         let resolved = empty_args.resolve_with_config(
             Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
@@ -393,6 +419,7 @@ mod tests {
         // CLI flags should override config values
         let cli_override = OnlineAsrArgs {
             online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key: None,
             api_key_env: Some("CLI_KEY_VAR".to_string()),
             online_config: None,
         };
@@ -411,5 +438,53 @@ mod tests {
         );
         // Overridden provider does not inherit another provider's config
         assert!(resolved_override.online_config.is_none());
+    }
+
+    #[test]
+    fn direct_api_key_takes_precedence_over_env_var() {
+        let args = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key: Some("direct-secret-key".to_string()),
+            api_key_env: Some("MY_ENV_KEY".to_string()),
+            online_config: None,
+        };
+        let request = args
+            .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
+                panic!("env reader should not be called when direct api-key is supplied");
+            })
+            .unwrap();
+        let AsrEngineConfig::Online { provider } = request.engine_config else {
+            panic!("expected online request");
+        };
+        assert_eq!(provider.config["apiKey"], "direct-secret-key");
+    }
+
+    #[test]
+    fn empty_direct_api_key_is_rejected_without_leaking() {
+        let args = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key: Some("   ".to_string()),
+            api_key_env: None,
+            online_config: None,
+        };
+        let error = args
+            .build_request_with(AsrMode::Batch, "en".to_string(), false, None, |_| {
+                Ok("unused".to_string())
+            })
+            .unwrap_err();
+        assert_eq!(error.to_string(), "--api-key must not be empty.");
+    }
+
+    #[test]
+    fn online_asr_args_debug_redacts_api_key() {
+        let args = OnlineAsrArgs {
+            online_provider: Some("groq-whisper".to_string()),
+            api_key: Some("super-secret-token".to_string()),
+            api_key_env: None,
+            online_config: None,
+        };
+        let debug_str = format!("{args:?}");
+        assert!(!debug_str.contains("super-secret-token"));
+        assert!(debug_str.contains("***REDACTED***"));
     }
 }

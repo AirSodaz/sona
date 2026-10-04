@@ -515,7 +515,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
-        ffmpeg_path: options.ffmpeg_path,
+        ffmpeg_path: options.ffmpeg_path.or(config.ffmpeg_path),
     })
 }
 

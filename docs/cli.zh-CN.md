@@ -53,19 +53,22 @@ sona-cli init-config
 sona-cli init-config ./sona-cli.toml --force
 ```
 已有文件默认受保护，只有传入 `--force` 才会覆盖；状态文本写入 stderr。
-当当前工作目录下存在 `sona-cli.toml` 时，`transcribe`、`transcribe-live` 与 `serve` 会在省略 `-c / --config` 时自动加载该配置文件。
+当当前工作目录下存在 `sona-cli.toml` 时，`transcribe`、`transcribe-live` 与 `serve` 会在省略 `-c / --config` 时自动加载该配置文件。也可通过全局环境变量 `SONA_CONFIG` 指定配置文件路径。
 
 ## `models`
 
-列出、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。
+列出、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。省略 `--models-dir` 时，CLI 会优先检查 `SONA_MODELS_DIR` 环境变量，未设置时再回退到桌面端模型路径。
 
 ```bash
+sona-cli models list
+sona-cli models list turbo
 sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
 ```
 
+`models list` 在表格输出中展示 `Alias` 简短别名列（并在 `--json` 输出中包含 `aliases` 字段）。支持传入关键字参数过滤（`sona-cli models list <QUERY>`）。
 `models download` 与 `models delete` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
 
 `models delete` 在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
@@ -139,18 +142,17 @@ sona-cli export transcript -i ./segments.json -o ./transcript.srt -m bilingual
 sona-cli transcribe ./sample.wav -m whisper-turbo
 sona-cli transcribe ./sample.wav -o ./out.srt
 ```
-
-如果当前目录存在 `sona-cli.toml`，会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`。
-提供 `--online-provider` 后，CLI 会把本地文件上传到指定服务商，并将结果输出到 stdout 或目标文件：
+如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`），会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`。支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。
+提供 `--online-provider` 后，CLI 会把本地文件上传到指定服务商，并将结果输出到 stdout 或目标文件。可直接通过 `--api-key <KEY>` 传入密钥，或通过环境变量读取：
 
 ```bash
 set GROQ_API_KEY=...
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
+sona-cli transcribe ./sample.wav --online-provider groq-whisper --api-key gsk_... --format txt
 
 set SONA_VOLCENGINE_ASR_API_KEY=...
 sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
 ```
-
 支持的 provider 包括 `volcengine-doubao`、`groq-whisper`、`mistral-voxtral`、`openai-whisper`、`deepgram`、`assemblyai` 与 `elevenlabs`（动态同步自 `online-asr-providers.json`）。默认环境变量如下：
 
 | Provider | 默认环境变量 |
@@ -189,8 +191,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
     --online-provider volcengine-doubao --output-format ndjson
 ```
 
-`--input microphone` 默认使用 CPAL 输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称匹配。`--output-format` 支持 `text` 和 `ndjson`；`--output` 可写入最终的 `json`、`txt`、`srt`、`vtt` 或 `md` 快照；`--format` 必须同时提供 `--output`。Ctrl+C、stdin EOF 和 `--duration` 都会先 flush/stop 会话再退出。
-
+`--input microphone` 默认使用 CPAL 输入设备；`--device` 必须与 `--list-input-devices` 返回的完整名称匹配（`--list-input-devices` 会将系统默认设备标记为 `[default]`）。`--output-format` 支持 `text` 和 `ndjson`；`--output` 可写入最终的 `json`、`txt`、`srt`、`vtt` 或 `md` 快照；`--format` 用于指定输出文件格式并必须同时提供 `--output`。Ctrl+C、stdin EOF 和 `--duration` 都会先 flush/stop 会话再退出。
 在线凭据和非敏感配置规则与 `transcribe` 相同。在线流式使用本地模型参数会被拒绝。
 
 ## `serve`
@@ -201,7 +202,11 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
 sona-cli serve
 sona-cli serve -p 14200 --api-key local-secret
 sona-cli serve -c ./custom-config.toml
+sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
+
+启动时，服务会在 stderr 打印可用端点（`/health`、`/info`、`/v1/transcriptions` 等）以及鉴权提示。
+
 ## 输出和错误
 
 `transcribe` 默认将 JSON 写入 stdout。`transcribe-live` 输出实时 text 或 NDJSON 事件，并可选写入最终文件。参数校验错误退出 2，模型错误退出 3，网络/provider 错误退出 4，文件系统/输入错误退出 5。

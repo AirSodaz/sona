@@ -245,8 +245,11 @@ enum Commands {
     /// Exports transcript segments through the shared core service.
     Export(export::ExportArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
-    PathStatus { path: String },
-    /// Creates a commented TOML starter template.
+    PathStatus {
+        /// Filesystem path to inspect.
+        #[arg(value_name = "PATH", help = "Filesystem path to inspect")]
+        path: String,
+    },
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),

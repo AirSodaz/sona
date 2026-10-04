@@ -22,6 +22,7 @@ pub struct SharedConfig {
     pub online_provider: Option<String>,
     pub api_key_env: Option<String>,
     pub online_config: Option<PathBuf>,
+    pub ffmpeg_path: Option<String>,
 
     pub model_id: Option<String>,
     pub language: Option<String>,
@@ -62,6 +63,7 @@ pub struct TranscribeConfigSection {
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
+    pub ffmpeg_path: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -100,6 +102,7 @@ pub struct ServeConfigSection {
     pub gpu_acceleration: Option<String>,
     pub vad_model_id: Option<String>,
     pub punctuation_model_id: Option<String>,
+    pub ffmpeg_path: Option<String>,
 }
 
 impl UnifiedConfigFile {
@@ -123,6 +126,7 @@ impl UnifiedConfigFile {
         config.vad_buffer_size = config.vad_buffer_size.or(self.shared.vad_buffer_size);
         config.format = config.format.or(self.shared.format);
         config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
+        config.ffmpeg_path = config.ffmpeg_path.or(self.shared.ffmpeg_path.clone());
         config
     }
 
@@ -143,6 +147,7 @@ impl UnifiedConfigFile {
         config.punctuation_model_id = config
             .punctuation_model_id
             .or(self.shared.punctuation_model_id);
+        config.ffmpeg_path = config.ffmpeg_path.or(self.shared.ffmpeg_path);
         config
     }
 

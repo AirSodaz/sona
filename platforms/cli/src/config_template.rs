@@ -28,10 +28,12 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # online_provider = "volcengine-doubao"
 # api_key_env = "SONA_VOLCENGINE_ASR_API_KEY"
 # online_config = "./online-config.json"
+# ffmpeg_path = "..."
 
 [transcribe]
 # models_dir = "..."
 # gpu_acceleration = "auto"
+# ffmpeg_path = "..."
 # vad_model_id = "{vad_model_id}"
 # punctuation_model_id = "{punctuation_model_id}"
 # model_id = "{whisper_turbo_model_id}"
@@ -76,6 +78,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # gpu_acceleration = "auto"
 # vad_model_id = "{vad_model_id}"
 # punctuation_model_id = "{punctuation_model_id}"
+# ffmpeg_path = "..."
 # host = "127.0.0.1"
 # port = 14200
 # api_key = ""

@@ -157,7 +157,7 @@ pub fn resolve_serve_runtime_options(
                 .punctuation_model_id
                 .or(config.punctuation_model_id)
                 .or_else(|| Some(DEFAULT_PUNCTUATION_MODEL_ID.to_string())),
-            ffmpeg_path: args.ffmpeg_path,
+            ffmpeg_path: args.ffmpeg_path.or(config.ffmpeg_path),
         },
     })
 }
@@ -210,6 +210,7 @@ pub fn serve_startup_settings_from_app_config(value: &Value) -> ServeStartupSett
             gpu_acceleration: string_field(config, "gpuAcceleration"),
             vad_model_id: None,
             punctuation_model_id: None,
+            ffmpeg_path: string_field(config, "ffmpegPath"),
         },
     }
 }

@@ -43,6 +43,9 @@ fn models_list_outputs_json_with_json_flag() {
             && model["type"] == "whisper"
             && model["installed"] == false
             && model["install_path"].is_string()
+            && model["aliases"]
+                .as_array()
+                .is_some_and(|a| a.iter().any(|x| x == "whisper-turbo"))
     }));
 }
 
@@ -300,4 +303,57 @@ fn models_list_accepts_short_flags() {
 
     assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
     assert!(output.stdout.contains("sherpa-onnx-whisper-large-v3"));
+}
+
+#[test]
+fn models_list_outputs_alias_column() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("Alias"));
+    assert!(output.stdout.contains("whisper-turbo"));
+    assert!(output.stdout.contains("sensevoice"));
+}
+
+#[test]
+fn models_list_filters_by_keyword_query() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "turbo",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(!output.stdout.contains("sherpa-onnx-whisper-large-v3"));
+}
+
+#[test]
+fn models_list_filters_by_secondary_alias() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "sensevoice-int8",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(
+        output
+            .stdout
+            .contains("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+    );
 }

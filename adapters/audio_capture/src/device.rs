@@ -29,6 +29,12 @@ pub fn enumerate_input_device_names() -> AudioCaptureResult<Vec<String>> {
     Ok(devices)
 }
 
+pub fn default_input_device_name() -> Option<String> {
+    cpal::default_host()
+        .default_input_device()
+        .map(|device| device.to_string())
+}
+
 pub fn enumerate_output_devices() -> AudioCaptureResult<Vec<AudioDevice>> {
     let host = cpal::default_host();
     let mut devices = host

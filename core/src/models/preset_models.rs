@@ -227,6 +227,15 @@ pub fn find_preset_model(model_id: &str) -> Option<&'static PresetModel> {
     preset_models().iter().find(|model| model.id == canonical)
 }
 
+/// Returns all aliases associated with a canonical preset model identifier.
+pub fn aliases_for_preset_model(model_id: &str) -> Vec<String> {
+    PRESET_MODEL_ALIASES
+        .iter()
+        .filter(|(_, canonical)| *canonical == model_id)
+        .map(|(alias, _)| alias.to_string())
+        .collect()
+}
+
 fn levenshtein_distance(a: &str, b: &str) -> usize {
     let a_chars: Vec<char> = a.chars().collect();
     let b_chars: Vec<char> = b.chars().collect();

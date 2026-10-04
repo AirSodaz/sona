@@ -53,21 +53,23 @@ sona-cli init-config
 sona-cli init-config ./sona-cli.toml --force
 ```
 Existing files are protected unless `--force` is supplied. Status text is written to stderr.
-When `sona-cli.toml` is present in the current working directory, `transcribe`, `transcribe-live`, and `serve` automatically load it if `-c / --config` is omitted.
+When `sona-cli.toml` is present in the current working directory, `transcribe`, `transcribe-live`, and `serve` automatically load it if `-c / --config` is omitted. You can also point to a config file globally via the `SONA_CONFIG` environment variable.
 
 ## `models`
 
-List, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state.
+List, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state. If `--models-dir` is omitted, Sona checks the `SONA_MODELS_DIR` environment variable before falling back to the desktop app location.
 
 ```bash
+sona-cli models list
+sona-cli models list turbo
 sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
 ```
 
+`models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`).
 `models download` and `models delete` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
-
 `models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
 ## `diagnostics`
 
@@ -139,13 +141,13 @@ Transcribe one local audio file, or a video file when using local ASR. Without `
 sona-cli transcribe ./sample.wav -m whisper-turbo
 sona-cli transcribe ./sample.wav -o ./out.srt
 ```
-
-If `sona-cli.toml` is present in the current working directory, it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`.
-With `--online-provider`, the command uploads the local file to the selected provider and writes the result to stdout or the requested output file:
+If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG`), it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`. Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file.
+With `--online-provider`, the command uploads the local file to the selected provider and writes the result to stdout or the requested output file. You can supply the API key directly via `--api-key <KEY>` or through an environment variable:
 
 ```bash
 export GROQ_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
+sona-cli transcribe ./sample.wav --online-provider groq-whisper --api-key gsk_... --format txt
 
 export SONA_VOLCENGINE_ASR_API_KEY="..."
 sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --output ./out.srt
@@ -188,9 +190,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
     --online-provider volcengine-doubao --output-format ndjson
 ```
-
-`--input microphone` uses the default CPAL input device unless `--device` supplies an exact name. `--output-format` can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
-
+`--input microphone` uses the default CPAL input device unless `--device` supplies an exact name (`--list-input-devices` marks the system default device with `[default]`). `--output-format` can be `text` or `ndjson`; `--output` writes a final `json`, `txt`, `srt`, `vtt`, or `md` snapshot. `--format` specifies the output file format and requires `--output`. Ctrl+C, stdin EOF, and `--duration` flush and stop the session before exiting.
 The same online credential and non-secret config rules as `transcribe` apply. Local-only model and runtime flags are rejected for online streaming.
 
 ## `serve`
@@ -201,7 +201,11 @@ Run the shared local HTTP API server. The CLI server remains local-ASR-only; use
 sona-cli serve
 sona-cli serve -p 14200 --api-key local-secret
 sona-cli serve -c ./custom-config.toml
+sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
+
+When started, the server prints endpoint hints and authentication requirements to stderr.
+
 ## Output and Errors
 
 `transcribe` writes JSON to stdout by default. `transcribe-live` emits live text or NDJSON events and optionally writes a final output file. Validation errors exit 2, model errors exit 3, network/provider errors exit 4, and filesystem/input errors exit 5.

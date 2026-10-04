@@ -32,6 +32,7 @@ pub struct ModelListEntry {
     pub name: String,
     #[serde(rename = "type")]
     pub model_type: String,
+    pub aliases: Vec<String>,
     pub languages: Vec<String>,
     pub language_mode: LanguageMode,
     pub size: String,
@@ -98,10 +99,12 @@ pub fn select_models(models: Vec<ModelSummary>, filter: &ModelListFilter) -> Vec
 
 impl From<ModelSummary> for ModelListEntry {
     fn from(model: ModelSummary) -> Self {
+        let aliases = crate::models::preset_models::aliases_for_preset_model(&model.id);
         Self {
             id: model.id,
             name: model.name,
             model_type: model.model_type,
+            aliases,
             languages: model.languages,
             language_mode: model.language_mode,
             size: model.size,

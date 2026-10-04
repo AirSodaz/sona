@@ -62,6 +62,9 @@ pub struct TranscribeArgs {
     /// Save the resampled WAV to a file.
     #[arg(long = "save-wav")]
     save_wav: Option<PathBuf>,
+    /// Custom path to the ffmpeg executable.
+    #[arg(long = "ffmpeg-path", value_name = "PATH")]
+    ffmpeg_path: Option<String>,
     /// Suppress progress output.
     #[arg(short = 'q', long, default_value_t = false)]
     quiet: bool,
@@ -103,7 +106,7 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
         save_wav: args.save_wav,
         quiet: args.quiet,
         force: args.force,
-        ffmpeg_path: None,
+        ffmpeg_path: args.ffmpeg_path,
     };
 
     let plan =

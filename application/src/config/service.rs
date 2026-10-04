@@ -438,6 +438,7 @@ fn startup_settings_from_projection(
             gpu_acceleration: Some(projection.gpu_acceleration),
             vad_model_id: None,
             punctuation_model_id: None,
+            ffmpeg_path: None,
         },
     }
 }

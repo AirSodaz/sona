@@ -78,14 +78,23 @@ pub struct TranscribeLiveArgs {
     /// Stop after this many seconds.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) duration: Option<f64>,
-    /// Live stdout format.
-    #[arg(long, value_enum, value_name = "FORMAT")]
+    /// Live stdout stream format: text or ndjson.
+    #[arg(
+        long,
+        value_enum,
+        value_name = "FORMAT",
+        help = "Live stdout stream format: text or ndjson"
+    )]
     pub(crate) output_format: Option<LiveOutputFormatArg>,
     /// Optional final transcript file.
     #[arg(short, long, value_name = "PATH")]
     pub(crate) output: Option<PathBuf>,
-    /// Final transcript format: json, txt, srt, vtt, or md.
-    #[arg(short, long)]
+    /// Final transcript export format (json, txt, srt, vtt, md). Requires --output.
+    #[arg(
+        short,
+        long,
+        help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output"
+    )]
     pub(crate) format: Option<String>,
     /// Optional config file, usually sona-cli.toml.
     #[arg(short, long, value_name = "FILE")]

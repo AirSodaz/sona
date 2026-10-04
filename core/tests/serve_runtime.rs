@@ -25,6 +25,7 @@ fn resolve_serve_runtime_options_merges_args_config_and_defaults() {
         Some(ServeConfigSection {
             gpu_acceleration: Some("cuda".to_string()),
             max_concurrent: Some(2),
+            ffmpeg_path: Some("/config/ffmpeg".to_string()),
             ..Default::default()
         }),
     )
@@ -51,7 +52,36 @@ fn resolve_serve_runtime_options_merges_args_config_and_defaults() {
             .as_deref(),
         Some(DEFAULT_PUNCTUATION_MODEL_ID)
     );
+    assert_eq!(
+        resolved.transcription_defaults.ffmpeg_path.as_deref(),
+        Some("/config/ffmpeg")
+    );
     assert_ne!(resolved.host, DEFAULT_SERVE_HOST);
+}
+
+#[test]
+fn resolve_serve_runtime_options_cli_ffmpeg_path_overrides_config() {
+    let dir = tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    fs::create_dir_all(&models_dir).unwrap();
+
+    let resolved = resolve_serve_runtime_options(
+        ServeRuntimeArgs {
+            models_dir: Some(models_dir),
+            ffmpeg_path: Some("/cli/ffmpeg".to_string()),
+            ..Default::default()
+        },
+        Some(ServeConfigSection {
+            ffmpeg_path: Some("/config/ffmpeg".to_string()),
+            ..Default::default()
+        }),
+    )
+    .unwrap();
+
+    assert_eq!(
+        resolved.transcription_defaults.ffmpeg_path.as_deref(),
+        Some("/cli/ffmpeg")
+    );
 }
 
 #[test]
