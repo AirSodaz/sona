@@ -432,7 +432,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
         },
         "streaming",
         "live_transcribe",
-        "Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider.",
+        "Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider (run 'sona-cli models download sensevoice' or 'sona-cli models list --recommended' to install a model).",
         is_installed,
         models_dir_status,
     )?;
@@ -489,7 +489,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         },
         "batch",
         "batch_transcribe",
-        "Missing required batch model. Pass -m/--model-id, set model_id in --config, or use --online-provider.",
+        "Missing required batch model. Pass -m/--model-id, set model_id in --config, or use --online-provider (run 'sona-cli models download whisper-turbo' or 'sona-cli models list --recommended' to install a model).",
         is_installed,
         models_dir_status,
     )?;

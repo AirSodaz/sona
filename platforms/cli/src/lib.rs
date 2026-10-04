@@ -320,10 +320,19 @@ pub struct DevicesArgs {
 
 #[derive(Debug, clap::Args)]
 #[command(
-    about = "Lists supported online ASR providers",
-    after_help = "Examples:\n  sona-cli providers\n  sona-cli providers --json"
+    about = "Lists supported online ASR providers and their models",
+    after_help = "Examples:\n  sona-cli providers\n  sona-cli providers --models\n  sona-cli providers groq-whisper\n  sona-cli providers --json"
 )]
 pub struct ProvidersArgs {
+    /// Optional provider ID to inspect in detail (e.g. groq-whisper, volcengine-doubao).
+    #[arg(
+        value_name = "PROVIDER",
+        help = "Optional provider ID to inspect in detail"
+    )]
+    pub provider: Option<String>,
+    /// Display supported models and recommendations for all providers.
+    #[arg(short = 'm', long, help = "Show supported models for each provider")]
+    pub models: bool,
     /// Print machine-readable JSON.
     #[arg(short = 'j', long, help = "Print machine-readable JSON")]
     pub json: bool,
@@ -331,7 +340,7 @@ pub struct ProvidersArgs {
 #[derive(Debug, clap::Args)]
 #[command(
     about = "Generates shell auto-completion scripts",
-    after_help = "Examples:\n  sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli\n  sona-cli completion zsh > ~/.zfunc/_sona-cli\n  sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish\n  sona-cli completion powershell >> $PROFILE"
+    after_help = "Examples:\n  sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli\n  sona-cli completion zsh > ~/.zfunc/_sona-cli\n  sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish\n  sona-cli completion powershell | Out-File -Append -Encoding utf8 $PROFILE"
 )]
 pub struct CompletionArgs {
     /// Target shell to generate completions for: bash, elvish, fish, powershell, zsh.
@@ -531,6 +540,31 @@ fn run_devices(args: DevicesArgs) -> CliResult<CliOutput> {
 
 fn run_providers(args: ProvidersArgs) -> CliResult<CliOutput> {
     if args.json {
+        if let Some(provider_id) = &args.provider {
+            let p = sona_core::ports::asr::find_online_asr_provider(provider_id).ok_or_else(|| {
+                CliError::Validation(format!(
+                    "Unknown online ASR provider '{provider_id}'. Run 'sona-cli providers' to see available providers."
+                ))
+            })?;
+            let mut modes = vec!["batch"];
+            if p.streaming.supported.unwrap_or(false) {
+                modes.push("streaming");
+            }
+            let configured = p
+                .default_api_key_env()
+                .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
+            let json_val = serde_json::json!({
+                "id": p.id,
+                "default_env_var": p.default_api_key_env(),
+                "configured": configured,
+                "modes": modes,
+                "spec": p.spec,
+                "models": p.models,
+            });
+            let output = serde_json::to_string_pretty(&json_val)
+                .map_err(|e| CliError::Serialize(e.to_string()))?;
+            return Ok(CliOutput::stdout(output));
+        }
         let providers = sona_core::ports::asr::online_asr_providers();
         let json_arr = providers
             .iter()
@@ -547,12 +581,20 @@ fn run_providers(args: ProvidersArgs) -> CliResult<CliOutput> {
                     "default_env_var": p.default_api_key_env(),
                     "configured": configured,
                     "modes": modes,
+                    "models": p.models,
                 })
             })
             .collect::<Vec<_>>();
         let output = serde_json::to_string_pretty(&json_arr)
             .map_err(|e| CliError::Serialize(e.to_string()))?;
         Ok(CliOutput::stdout(output))
+    } else if let Some(provider_id) = &args.provider {
+        let output = transcribe::render_online_provider_detail(provider_id)?;
+        Ok(CliOutput::stdout(output))
+    } else if args.models {
+        Ok(CliOutput::stdout(
+            transcribe::render_online_providers_with_models(),
+        ))
     } else {
         Ok(CliOutput::stdout(
             transcribe::render_online_providers_table(),

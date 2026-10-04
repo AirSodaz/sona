@@ -645,6 +645,86 @@ fn providers_command_json_outputs_valid_schema() {
     assert!(arr.iter().any(|p| p["id"] == "groq-whisper"));
     assert!(arr.iter().all(|p| p.get("configured").is_some()));
 }
+#[test]
+fn providers_command_with_models_flag_lists_curated_models() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "providers", "--models"])
+        .expect("providers --models should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(
+        output
+            .stdout
+            .contains("Supported Online ASR Providers & Models:")
+    );
+    assert!(output.stdout.contains("volcengine-doubao"));
+    assert!(output.stdout.contains("volc.bigasr.auc_turbo"));
+    assert!(output.stdout.contains("groq-whisper"));
+    assert!(output.stdout.contains("whisper-large-v3"));
+}
+
+#[test]
+fn providers_command_inspect_single_provider_outputs_details_and_models() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "providers", "groq-whisper"])
+        .expect("providers groq-whisper should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("Provider: groq-whisper"));
+    assert!(output.stdout.contains("Env: GROQ_API_KEY"));
+    assert!(output.stdout.contains("whisper-large-v3"));
+    assert!(output.stdout.contains("Usage Examples:"));
+    assert!(output.stdout.contains("--online-provider groq-whisper"));
+}
+
+#[test]
+fn providers_command_inspect_single_provider_json() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "providers", "groq-whisper", "--json"])
+        .expect("providers groq-whisper --json should succeed");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(json["id"], "groq-whisper");
+    assert_eq!(json["default_env_var"], "GROQ_API_KEY");
+    assert!(json["models"].is_array());
+    assert!(
+        json["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "whisper-large-v3")
+    );
+}
+
+#[test]
+fn providers_command_unknown_provider_returns_validation_error() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "providers", "nonexistent-provider"]).unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Unknown online ASR provider 'nonexistent-provider'")
+    );
+}
+
+#[test]
+fn providers_command_json_includes_models_array() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "providers", "--json"])
+        .expect("providers --json command should succeed");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    let arr = json.as_array().unwrap();
+    let groq = arr.iter().find(|p| p["id"] == "groq-whisper").unwrap();
+    assert!(groq["models"].is_array());
+    assert!(
+        groq["models"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|m| m["id"] == "whisper-large-v3")
+    );
+}
 
 #[test]
 fn config_init_accepts_short_force_flag() {
@@ -809,8 +889,13 @@ fn transcribe_requires_model_id_when_multiple_batch_models_installed() {
         error.to_string().contains("Missing required batch model"),
         "Expected error requiring model_id with multiple candidates, got: {error}"
     );
+    assert!(
+        error
+            .to_string()
+            .contains("sona-cli models download whisper-turbo"),
+        "Expected actionable hint in missing model error, got: {error}"
+    );
 }
-
 #[test]
 fn direct_init_config_subcommand_fails_as_unrecognized_command() {
     let error = sona_cli::run_cli_from_args(["sona-cli", "init-config"]).unwrap_err();

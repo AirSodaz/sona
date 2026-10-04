@@ -27,7 +27,8 @@ fn transcribe_live_command_exposes_the_public_input_and_output_flags() {
     assert!(help.contains("Model Options"));
     assert!(help.contains("Audio & Performance"));
     assert!(help.contains("--duration"));
-    assert!(help.contains("--output-format"));
+    assert!(!help.contains("--output-format"));
+    assert!(help.contains("--export-format"));
     assert!(help.contains("--output"));
     assert!(help.contains("--force"));
     assert!(help.contains("--online-provider"));
@@ -84,9 +85,15 @@ fn transcribe_live_requires_a_streaming_model_before_opening_input() {
         .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
-    assert_eq!(
-        error.to_string(),
-        "Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider."
+    assert!(
+        error
+            .to_string()
+            .contains("Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider")
+    );
+    assert!(
+        error
+            .to_string()
+            .contains("sona-cli models download sensevoice")
     );
 }
 
@@ -636,19 +643,36 @@ fn transcribe_live_stream_aliases_parse_correctly() {
             .contains("--duration must be greater than 0")
     );
 
-    let error3 = sona_cli::run_cli_from_args([
+    let rejected = sona_cli::run_cli_from_args([
         "sona-cli",
         "transcribe-live",
         "-o",
         "out.srt",
         "--output-format",
         "srt",
+    ])
+    .unwrap_err();
+    assert!(
+        rejected
+            .to_string()
+            .contains("unexpected argument '--output-format'")
+            || rejected
+                .to_string()
+                .contains("unrecognized option '--output-format'")
+    );
+    let error4 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "-o",
+        "out.srt",
+        "--export-format",
+        "srt",
         "--duration",
         "0",
     ])
     .unwrap_err();
     assert!(
-        error3
+        error4
             .to_string()
             .contains("--duration must be greater than 0")
     );
@@ -668,4 +692,79 @@ fn write_final_transcript_with_mode_creates_file_even_when_segments_empty() {
 
     assert!(out.exists());
     assert!(status.contains("empty_live.srt"));
+}
+
+#[test]
+fn transcribe_live_validates_stream_format_and_format_from_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+
+    // 1. Invalid stream_format in config triggers validation error
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe_live]
+stream_format = "invalid_stream"
+"#,
+    )
+    .unwrap();
+
+    let err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("Invalid transcribe_live stream_format 'invalid_stream'")
+    );
+
+    // 2. stream_format takes precedence over legacy output_format
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe_live]
+stream_format = "invalid_preferred"
+output_format = "text"
+"#,
+    )
+    .unwrap();
+
+    let err2 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    assert!(
+        err2.to_string()
+            .contains("Invalid transcribe_live stream_format 'invalid_preferred'")
+    );
+
+    // 3. Invalid format with output file triggers validation error
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe_live]
+format = "invalid_export"
+"#,
+    )
+    .unwrap();
+
+    let err3 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "-o",
+        "out.bin",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+    assert!(
+        err3.to_string()
+            .contains("Unsupported export format: invalid_export")
+    );
 }

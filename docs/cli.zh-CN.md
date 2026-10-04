@@ -6,16 +6,14 @@
 
 - `doctor`（系统依赖、音频设备、模型环境、真实硬件加速 [CUDA, Vulkan, Metal] 与配置全节体检）
 - `devices`（列出系统可用音频输入麦克风设备，支持数字索引与默认标记）
-- `providers`（列出受支持的在线 ASR 服务商清单、支持模式及当前环境变量配置就绪状态）
-- `config init|path|check|show|get|edit`（配置初始化、查看路径、全节校验、内容展示、读取单项 `get` 及 `$EDITOR` 安全编辑 `edit`；支持 `--global / --user` 写入用户标准目录）
+- `providers`（列出受支持的在线 ASR 服务商与推荐模型清单、支持模式及当前环境变量配置就绪状态；支持指定单服务商详情）
+- `config init|path|check|show|get|set|edit`（配置初始化、查看路径、全节校验、内容展示、读取单项 `get`、免交互直接设定单项 `set` 及 `$EDITOR` 安全编辑 `edit`；子命令全面支持 `--global / --user` 操作用户标准目录）
 - `models list|info|download|delete|verify|path`（预置模型管理：list 默认展示主 ASR 模型，支持 `-a/--all` 展开辅助伴生模型及 `-r/--recommended` 过滤；verify 默认全量校验或指定单模型；download 支持多模型与 `--mirror` 镜像）
 - `transcribe`（本地或在线批量 ASR，支持单文件、多文件、目录、stdin 管道输入或自动推导管道、`--continue-on-error` 批量容错、`--online-model` 直传及 `--mode` 字幕模式）
-- `transcribe-live`（别名：`live`，本地或在线流式 ASR，支持 `--device` 索引/子串选择、`--stream text|ndjson` 与落盘 `-f/--format/--output-format` 及 `--mode`）
+- `transcribe-live`（别名：`live`，本地或在线流式 ASR，支持 `--device` 索引/子串选择、`--stream text|ndjson` 与落盘 `-f/--format/--export-format` 及 `--mode`）
 - `export`（基于分段 JSON 导出多样字幕格式，支持位置参数直接传文件与 stdin/stdout 管道）
+- `serve`（从独立 CLI 启动共享的本地 HTTP API server）
 - `completion`（Shell 自动补全脚本生成：bash, zsh, fish, powershell, elvish）
-- `diagnostics`（Host 事实快照构造，供桌面端集成调试；日常环境自检请用 `doctor`）
-- `path-status`（共享运行时路径状态解析契约）
-
 ## 运行方式
 
 ```bash
@@ -73,9 +71,10 @@ sona-cli config init ./custom.toml -F # 指定输出路径并强制覆盖已有�
 sona-cli config path                  # 输出当前生效的配置文件绝对路径
 sona-cli config check                 # 校验 [transcribe]、[transcribe_live]、[serve] 全节语法
 sona-cli config show                  # 查看当前生效配置文件的内容
-sona-cli config get transcribe.model_id # 读取单个具体配置项
-sona-cli config edit                  # 唤起系统编辑器并在退出时自动校验语法
-```
+sona-cli config get transcribe.model_id        # 读取单个具体配置项
+sona-cli config set transcribe.model_id whisper-turbo # 命令行直接修改配置项（自动保留注释并校验格式）
+sona-cli config set serve.port 14200 --global # 修改用户全局标准配置（--global / --user）
+sona-cli config edit                         # 唤起系统编辑器并在退出时自动校验语法
 
 配置文件检索顺序：
 1. 命令行参数明确传入的 `-c / --config <PATH>`；
@@ -85,22 +84,17 @@ sona-cli config edit                  # 唤起系统编辑器并在退出时自�
 
 ## `providers`
 
-列出所有支持的在线 ASR 服务商清单，展示其服务商 ID、默认环境变量名、当前环境变量配置就绪状态（`configured` / `not set`）以及所支持的模式（`batch`、`streaming`）。
+列出所有支持的在线 ASR 服务商清单，展示其服务商 ID、默认环境变量名、当前环境变量配置就绪状态（`configured` / `not set`）、所支持的模式（`batch`、`streaming`）以及支持的模型。
 
 ```bash
-sona-cli providers
-sona-cli providers --json
+sona-cli providers                        # 查看服务商摘要概览
+sona-cli providers --models               # 查看所有服务商及其支持的模型列表（默认模型标有 [default]）
+sona-cli providers groq-whisper           # 查看单个服务商的完整模型详情与命令行调用示例
+sona-cli providers --json                 # 结构化输出全量服务商与模型元数据
+sona-cli providers groq-whisper --json    # 结构化输出单个服务商详情
 ```
 
-在 `--json` 模式下，每个提供商条目均包含 `"configured": true | false`。
-
-## `path-status`
-
-通过共享运行时状态契约解析一个文件系统路径，并将 JSON 输出到 stdout。
-
-```bash
-sona-cli path-status ./models
-```
+在 `--json` 模式下，每个提供商条目均包含 `"configured": true | false` 以及完整的 `"models"` 数组。
 
 ## `models`
 
@@ -130,44 +124,6 @@ sona-cli models path
 `models verify` 用于校验已安装模型的文件完整性，缺省时默认全量校验已安装模型，亦可传入具体模型别名或显式通过 `--all` 处理。
 `models path` 用于直接输出当前解析生效的本地预置模型根目录绝对路径。
 `models delete` 支持删除单个指定模型或通过 `--all` 批量删除模型目录下所有已安装预置模型。在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
-
-## `diagnostics`
-
-根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。
-
-```bash
-sona-cli diagnostics --app-data-dir ./app_data --input ./facts.json
-sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
-```
-
-输入事实文件 `facts.json` 格式示例（对应 `DiagnosticsCoreInput`）：
-
-```json
-{
-  "config": {
-    "streamingModelPath": "C:/models/sherpa-onnx-streaming-paraformer",
-    "batchModelPath": "C:/models/sherpa-onnx-whisper-turbo",
-    "vadModelPath": "",
-    "punctuationModelPath": "",
-    "microphoneId": "default"
-  },
-  "permissionState": "granted",
-  "microphoneProbe": {
-    "options": [],
-    "available": true,
-    "errorMessage": null
-  },
-  "systemAudioProbe": {
-    "options": [],
-    "available": false,
-    "errorMessage": null
-  },
-  "voiceTypingReadiness": {
-    "state": "ready",
-    "lastErrorMessage": null
-  }
-}
-```
 
 ## `export`
 
@@ -259,7 +215,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
     --stream ndjson
 ```
 
-在线流式目前支持 `volcengine-doubao`：
+在线流式支持 `volcengine-doubao`、`mistral-voxtral`、`deepgram`、`assemblyai` 与 `elevenlabs`：
 
 ```bash
 set SONA_VOLCENGINE_ASR_API_KEY=...
@@ -269,7 +225,7 @@ ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
 ```
 
 `sona-cli live` 为 `sona-cli transcribe-live` 的高亮简写别名（在 `--help` 及 shell 补全中可见）。当本地仅安装了一个流式模型且省略 `-m` 时，CLI 会自动推导选择该模型。
-`--input microphone` 默认使用系统默认输入设备；`--device` 支持传入 `devices` 列表中的数字索引（如 `--device 0`）、麦克风全名或不区分大小写的唯一子串（如 `--device realtek`）。`--stream`（别名 `--stream-format`）控制终端实时流格式（`text` 或 `ndjson`）。当通过 `-o / --output` 保存文件时，`-f / --format`（别名 `--output-format`）控制落盘文件格式，`--mode` 可指定落盘文件的字幕模式（`original`、`translation`、`bilingual`）；`--mode` 不影响终端实时流。
+`--input microphone` 默认使用系统默认输入设备；`--device` 支持传入 `devices` 列表中的数字索引（如 `--device 0`）、麦克风全名或不区分大小写的唯一子串（如 `--device realtek`）。`--stream`（别名 `--stream-format`）控制终端实时流格式（`text` 或 `ndjson`），对应配置文件中 `[transcribe_live]` 的 `stream_format`（兼容旧键名 `output_format`）。当通过 `-o / --output` 保存文件时，`-f / --format`（别名 `--export-format`）控制落盘文件格式，亦支持在配置文件中指定 `format`；`--mode` 可指定落盘文件的字幕模式（`original`、`translation`、`bilingual`）；`--mode` 不影响终端实时流。
 
 ## `serve`
 
@@ -300,7 +256,31 @@ sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli
 sona-cli completion zsh > ~/.zfunc/_sona-cli
 sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish
-sona-cli completion powershell >> $PROFILE
+
+# Windows PowerShell（安全无乱码追加）
+if (!(Test-Path -Path (Split-Path $PROFILE))) { New-Item -ItemType Directory -Path (Split-Path $PROFILE) -Force }
+sona-cli completion powershell | Out-File -Append -Encoding utf8 $PROFILE
+```
+
+## 内部与 Host 集成契约（隐藏命令）
+
+以下命令在 CLI 中默认隐藏（`--help` 中不直接暴露），专供桌面端跨进程通信、事实快照构造与自动化路径契约探测：
+
+### `path-status`
+
+通过共享运行时状态契约解析一个文件系统路径，并将 JSON 输出到 stdout。
+
+```bash
+sona-cli path-status ./models
+```
+
+### `diagnostics`
+
+根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。日常环境自检请用 `doctor`。
+
+```bash
+sona-cli diagnostics --app-data-dir ./app_data --input ./facts.json
+sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
 ```
 
 ## 输出和错误

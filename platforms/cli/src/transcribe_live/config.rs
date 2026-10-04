@@ -45,7 +45,7 @@ impl LiveOutputFormatArg {
             "text" => Ok(Self::Text),
             "ndjson" => Ok(Self::Ndjson),
             _ => Err(CliError::Validation(format!(
-                "Invalid transcribe_live output_format '{value}'. Expected text or ndjson."
+                "Invalid transcribe_live stream_format '{value}'. Expected text or ndjson."
             ))),
         }
     }
@@ -89,7 +89,7 @@ pub struct TranscribeLiveArgs {
         help = "Live stdout stream format: text or ndjson (alias: --stream-format)",
         help_heading = "Input/Output"
     )]
-    pub(crate) output_format: Option<LiveOutputFormatArg>,
+    pub(crate) stream: Option<LiveOutputFormatArg>,
     /// Optional final transcript file.
     #[arg(short, long, value_name = "PATH", help_heading = "Input/Output")]
     pub(crate) output: Option<PathBuf>,
@@ -97,11 +97,10 @@ pub struct TranscribeLiveArgs {
     #[arg(
         short,
         long,
-        visible_alias = "output-format",
+        visible_alias = "export-format",
         value_name = "FORMAT",
         value_parser = ["json", "txt", "srt", "vtt", "md"],
         help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output",
-        help_heading = "Input/Output"
     )]
     pub(crate) format: Option<String>,
     /// Text selection mode for final transcript: original, translation, or bilingual.
@@ -256,11 +255,12 @@ pub(crate) fn resolve_live_command(
     let duration_seconds = args.duration.or(config.duration_seconds);
     validate_direct_input_options(Some(input), device.as_deref(), duration_seconds)?;
     let duration = duration_seconds.map(Duration::from_secs_f64);
-    let output_format = match args.output_format {
+    let output_format = match args.stream {
         Some(format) => format,
         None => config
-            .output_format
+            .stream_format
             .as_deref()
+            .or(config.output_format.as_deref())
             .map(LiveOutputFormatArg::parse_config)
             .transpose()?
             .unwrap_or(LiveOutputFormatArg::Text),
@@ -288,14 +288,12 @@ pub(crate) fn resolve_live_command(
         let hotwords = args.hotwords.clone().or_else(|| config.hotwords.clone());
         let request =
             resolved_online.build_request(AsrMode::Streaming, language, enable_itn, hotwords)?;
+        let format_choice = args.format.as_deref().or(config.format.as_deref());
         let export_format = args
             .output
             .as_deref()
             .map(|path| {
-                sona_core::transcription::runtime::resolve_export_format(
-                    args.format.as_deref(),
-                    Some(path),
-                )
+                sona_core::transcription::runtime::resolve_export_format(format_choice, Some(path))
             })
             .transpose()
             .map_err(|error| CliError::Validation(error.to_string()))?;
@@ -319,7 +317,7 @@ pub(crate) fn resolve_live_command(
         let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
             LiveTranscribeOptions {
                 output: args.output,
-                format: args.format,
+                format: args.format.or(config.format.clone()),
                 model_id: resolved_model_id,
                 models_dir: args.models_dir,
                 default_models_dir: crate::desktop_paths::default_models_dir(),

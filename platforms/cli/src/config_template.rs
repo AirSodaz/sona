@@ -56,7 +56,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # device = ""
 # Stop automatically after this many seconds.
 # duration_seconds = 60.0
-# Live stdout format: text or ndjson.
+# Live stdout stream format: text or ndjson (stream_format or output_format).
+# stream_format = "text"
 # output_format = "text"
 # models_dir = "..."
 # gpu_acceleration = "auto"
@@ -71,7 +72,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # enable_itn = false
 # vad_buffer_size = 5.0
 # hotwords = "Sona,live ASR"
-# Final output path, export format, and overwrite behavior are command-line-only options.
+# Final transcript export format: json, txt, srt, vtt, md.
+# format = "srt"
 
 [serve]
 # models_dir = "..."
@@ -140,6 +142,8 @@ mod tests {
         assert!(content.contains("[transcribe_live]"));
         assert!(content.contains("# input = \"microphone\""));
         assert!(content.contains("# output_format = \"text\""));
+        assert!(content.contains("# stream_format = \"text\""));
+        assert!(content.contains("# format = \"srt\""));
         assert!(content.contains("sona-cli transcribe-live"));
         assert!(content.contains("[serve]"));
         assert!(content.contains("sona-cli serve"));

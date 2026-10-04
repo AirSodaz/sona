@@ -36,6 +36,7 @@ thiserror = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync", "time"] }
 toml = { workspace = true }
+toml_edit = "0.25"
 unicode-width = "0.2"
 uuid = { workspace = true }
 

@@ -883,7 +883,7 @@ struct OnlineAsrProviderManifest {
     providers: Vec<OnlineAsrProvider>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrSupportedModel {
@@ -896,7 +896,7 @@ pub struct OnlineAsrSupportedModel {
     pub is_default: Option<bool>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct OnlineAsrProviderSpec {

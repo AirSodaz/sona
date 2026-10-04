@@ -84,7 +84,9 @@ pub struct TranscribeLiveConfigSection {
     pub input: Option<String>,
     pub device: Option<String>,
     pub duration_seconds: Option<f64>,
+    pub stream_format: Option<String>,
     pub output_format: Option<String>,
+    pub format: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -168,6 +170,8 @@ impl UnifiedConfigFile {
         config.hotwords = config.hotwords.or(self.shared.hotwords);
         config.vad_buffer_size = config.vad_buffer_size.or(self.shared.vad_buffer_size);
         config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
+        config.stream_format = config.stream_format.or(config.output_format.clone());
+        config.format = config.format.or(self.shared.format);
         config
     }
 }

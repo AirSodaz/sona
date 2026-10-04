@@ -98,6 +98,7 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
         lines.push(format!("  [OK]   FFmpeg: {path} ({ver})"));
     } else {
         lines.push(format!("  [WARN] FFmpeg: {}", report.ffmpeg.message));
+        lines.push(format!("         Hint: {}", ffmpeg_install_suggestion()));
     }
 
     // 2. Audio input
@@ -116,6 +117,7 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
             "  [WARN] Audio Input: {}",
             report.audio_input.message
         ));
+        lines.push("         Hint: Connect a microphone or grant microphone permissions in system settings".to_string());
     }
 
     // 3. Models directory
@@ -126,11 +128,13 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
         ));
     } else if report.models.exists {
         lines.push(format!(
-            "  [INFO] Models: {} (0 preset models installed; run 'sona-cli models download whisper-turbo')",
+            "  [INFO] Models: {} (0 preset models installed)",
             report.models.path
         ));
+        lines.push("         Hint: Run 'sona-cli models download whisper-turbo' or 'sona-cli models list --recommended'".to_string());
     } else {
         lines.push(format!("  [WARN] Models: {}", report.models.message));
+        lines.push("         Hint: Create the models directory or run 'sona-cli models download whisper-turbo'".to_string());
     }
 
     // 4. Hardware acceleration
@@ -439,5 +443,24 @@ fn inspect_config(config_override: Option<&Path>) -> DoctorConfigStatus {
             valid: true,
             message: "No config file found (defaults will be used; create one with 'sona-cli config init').".to_string(),
         },
+    }
+}
+
+fn ffmpeg_install_suggestion() -> &'static str {
+    #[cfg(target_os = "windows")]
+    {
+        "Install via 'winget install Gyan.FFmpeg' or 'scoop install ffmpeg', or pass --ffmpeg-path <PATH>"
+    }
+    #[cfg(target_os = "macos")]
+    {
+        "Install via 'brew install ffmpeg', or pass --ffmpeg-path <PATH>"
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "Install via 'sudo apt install ffmpeg' or 'sudo dnf install ffmpeg', or pass --ffmpeg-path <PATH>"
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
+    {
+        "Install FFmpeg from https://ffmpeg.org/download.html and add it to PATH, or pass --ffmpeg-path <PATH>"
     }
 }
