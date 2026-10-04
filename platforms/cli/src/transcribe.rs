@@ -172,12 +172,17 @@ pub async fn run_transcribe(
         ));
     }
 
-    let single_input = args.inputs.first().cloned().ok_or_else(|| {
-        CliError::Validation(
-            "Missing input: specify at least one input file, stdin ('-'), or --input-dir."
-                .to_string(),
-        )
-    })?;
+    let single_input = args.inputs.first().cloned();
+    let single_input = match single_input {
+        Some(input) => input,
+        None if !io.stdin_is_terminal() => PathBuf::from("-"),
+        None => {
+            return Err(CliError::Validation(
+                "Missing input: specify at least one input file, stdin ('-'), or --input-dir."
+                    .to_string(),
+            ));
+        }
+    };
     let (actual_single_input, _temp_guard): (PathBuf, Option<tempfile::NamedTempFile>) =
         if single_input.as_os_str() == "-" {
             if io.stdin_is_terminal() {
@@ -552,15 +557,28 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeConfigSecti
 
 pub(crate) fn render_online_providers_table() -> String {
     let providers = sona_core::ports::asr::online_asr_providers();
-    let headers = ["PROVIDER", "DEFAULT_ENV_VAR", "MODES"];
+    let headers = ["PROVIDER", "DEFAULT_ENV_VAR", "STATUS", "MODES"];
     let mut rows = Vec::new();
     for p in providers {
         let env_var = p.default_api_key_env().unwrap_or("-");
+        let is_configured = p
+            .default_api_key_env()
+            .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
+        let status = if is_configured {
+            "configured"
+        } else {
+            "not set"
+        };
         let mut modes = vec!["batch"];
         if p.streaming.supported.unwrap_or(false) {
             modes.push("streaming");
         }
-        rows.push([p.id.clone(), env_var.to_string(), modes.join(", ")]);
+        rows.push([
+            p.id.clone(),
+            env_var.to_string(),
+            status.to_string(),
+            modes.join(", "),
+        ]);
     }
     let widths = [
         rows.iter()
@@ -576,14 +594,19 @@ pub(crate) fn render_online_providers_table() -> String {
         rows.iter()
             .map(|r| r[2].len())
             .max()
-            .unwrap_or(5)
+            .unwrap_or(6)
             .max(headers[2].len()),
+        rows.iter()
+            .map(|r| r[3].len())
+            .max()
+            .unwrap_or(5)
+            .max(headers[3].len()),
     ];
     let mut out = String::new();
     crate::table::append_table_row(&mut out, &headers, &widths);
     crate::table::append_table_separator(&mut out, &widths);
     for row in rows {
-        crate::table::append_table_row(&mut out, &[&row[0], &row[1], &row[2]], &widths);
+        crate::table::append_table_row(&mut out, &[&row[0], &row[1], &row[2], &row[3]], &widths);
     }
     out
 }

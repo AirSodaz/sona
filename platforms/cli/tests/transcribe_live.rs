@@ -541,3 +541,101 @@ fn final_transcript_is_exported_only_when_the_target_write_succeeds() {
     );
     assert!(!failed_output.exists());
 }
+
+#[test]
+fn final_transcript_respects_bilingual_and_translation_mode() {
+    let dir = tempfile::tempdir().unwrap();
+    let segments = vec![TranscriptSegment {
+        id: "segment-1".to_string(),
+        text: "hello".to_string(),
+        start: 0.0,
+        end: 1.0,
+        is_final: true,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: Some("bonjour".to_string()),
+        speaker: None,
+        speaker_attribution: None,
+    }];
+
+    let srt_bilingual = dir.path().join("bilingual.srt");
+    sona_cli::transcribe_live::write_final_transcript_with_mode(
+        &srt_bilingual,
+        sona_core::export::ExportFormat::Srt,
+        &segments,
+        sona_core::export::ExportMode::Bilingual,
+    )
+    .unwrap();
+    let content = std::fs::read_to_string(&srt_bilingual).unwrap();
+    assert!(content.contains("bonjour\nhello"));
+
+    let srt_translation = dir.path().join("translation.srt");
+    sona_cli::transcribe_live::write_final_transcript_with_mode(
+        &srt_translation,
+        sona_core::export::ExportFormat::Srt,
+        &segments,
+        sona_core::export::ExportMode::Translation,
+    )
+    .unwrap();
+    let content_tr = std::fs::read_to_string(&srt_translation).unwrap();
+    assert!(content_tr.contains("bonjour"));
+    assert!(!content_tr.contains("hello"));
+}
+
+#[test]
+fn transcribe_live_rejects_invalid_mode() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--mode", "invalid-mode"])
+            .unwrap_err();
+    assert!(matches!(error, sona_cli::CliError::Usage(_)));
+}
+
+#[test]
+fn transcribe_live_stream_aliases_parse_correctly() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--stream",
+        "ndjson",
+        "--duration",
+        "0",
+    ])
+    .unwrap_err();
+    assert!(
+        error
+            .to_string()
+            .contains("--duration must be greater than 0")
+    );
+
+    let error2 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--stream-format",
+        "text",
+        "--duration",
+        "0",
+    ])
+    .unwrap_err();
+    assert!(
+        error2
+            .to_string()
+            .contains("--duration must be greater than 0")
+    );
+
+    let error3 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--output-format",
+        "ndjson",
+        "--duration",
+        "0",
+    ])
+    .unwrap_err();
+    assert!(
+        error3
+            .to_string()
+            .contains("--duration must be greater than 0")
+    );
+}

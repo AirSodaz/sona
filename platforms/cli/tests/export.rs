@@ -306,3 +306,57 @@ fn export_transcript_overwrites_existing_output_with_force() {
     let content = fs::read_to_string(&output).unwrap();
     assert!(content.contains("Hello"));
 }
+
+#[test]
+fn export_accepts_positional_input_argument() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("transcript.srt");
+    write_segments(&input);
+
+    let result = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])
+    .unwrap();
+
+    assert!(result.stdout.contains("transcript.srt"));
+    let content = fs::read_to_string(&output).unwrap();
+    assert!(content.contains("Hello"));
+}
+
+#[test]
+fn export_works_with_verbose_flag_before_and_after_command() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output1 = dir.path().join("out1.srt");
+    let output2 = dir.path().join("out2.srt");
+    write_segments(&input);
+
+    // -v before export
+    let result1 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "-v",
+        "export",
+        input.to_str().unwrap(),
+        "-o",
+        output1.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(result1.stdout.contains("out1.srt"));
+
+    // -v after export
+    let result2 = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "-v",
+        input.to_str().unwrap(),
+        "-o",
+        output2.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(result2.stdout.contains("out2.srt"));
+}

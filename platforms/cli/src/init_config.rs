@@ -79,6 +79,57 @@ where
     }
 }
 
+pub(crate) fn canonical_user_config_path<F>(read_env: &F) -> Option<PathBuf>
+where
+    F: Fn(&str) -> Option<std::ffi::OsString>,
+{
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(appdata) = read_env("APPDATA").filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(appdata).join("sona").join("sona-cli.toml"));
+        }
+        if let Some(userprofile) = read_env("USERPROFILE").filter(|s| !s.is_empty()) {
+            return Some(
+                PathBuf::from(userprofile)
+                    .join(".config")
+                    .join("sona")
+                    .join("sona-cli.toml"),
+            );
+        }
+        None
+    }
+    #[cfg(target_os = "macos")]
+    {
+        if let Some(xdg) = read_env("XDG_CONFIG_HOME").filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(xdg).join("sona").join("sona-cli.toml"));
+        }
+        if let Some(home) = read_env("HOME").filter(|s| !s.is_empty()) {
+            return Some(
+                PathBuf::from(home)
+                    .join("Library")
+                    .join("Application Support")
+                    .join("sona")
+                    .join("sona-cli.toml"),
+            );
+        }
+        None
+    }
+    #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+    {
+        if let Some(xdg) = read_env("XDG_CONFIG_HOME").filter(|s| !s.is_empty()) {
+            return Some(PathBuf::from(xdg).join("sona").join("sona-cli.toml"));
+        }
+        if let Some(home) = read_env("HOME").filter(|s| !s.is_empty()) {
+            return Some(
+                PathBuf::from(home)
+                    .join(".config")
+                    .join("sona")
+                    .join("sona-cli.toml"),
+            );
+        }
+        None
+    }
+}
 pub(crate) fn resolve_config_path_with_env<F>(
     configured: Option<&PathBuf>,
     default_path: &std::path::Path,
@@ -110,9 +161,19 @@ pub struct InitConfigArgs {
     /// Target TOML path. Defaults to ./sona-cli.toml.
     #[arg(
         value_name = "PATH",
-        help = "Path to write the commented starter template, default sona-cli.toml"
+        help = "Path to write the commented starter template, default sona-cli.toml",
+        conflicts_with = "global"
     )]
     path: Option<PathBuf>,
+    /// Write the template to the user standard configuration path instead of ./sona-cli.toml.
+    #[arg(
+        short = 'g',
+        long = "global",
+        alias = "user",
+        help = "Write to user standard configuration path instead of ./sona-cli.toml",
+        conflicts_with = "path"
+    )]
+    global: bool,
     /// Overwrite the target file if it already exists.
     #[arg(
         short = 'F',
@@ -123,9 +184,27 @@ pub struct InitConfigArgs {
 }
 
 pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {
-    let path = args
-        .path
-        .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH));
+    let path = if args.global {
+        canonical_user_config_path(&|name| std::env::var_os(name)).ok_or_else(|| {
+            crate::CliError::Validation(
+                "Could not determine standard user configuration directory.".to_string(),
+            )
+        })?
+    } else {
+        args.path
+            .unwrap_or_else(|| PathBuf::from(DEFAULT_CONFIG_PATH))
+    };
+    if let Some(parent) = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty() && !p.exists())
+    {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            crate::CliError::Io(format!(
+                "Failed to create config directory {}: {e}",
+                parent.display()
+            ))
+        })?;
+    }
     let content = generate_config_content();
     sona_runtime_fs::write_cli_config_template_file(&path, &content, args.force)
         .map_err(|error| crate::CliError::Io(error.to_string()))?;
@@ -134,7 +213,6 @@ pub fn run_init_config(args: InitConfigArgs) -> CliResult<CliOutput> {
         path.display()
     )))
 }
-
 fn generate_config_content() -> String {
     crate::config_template::render_config_template(
         crate::desktop_paths::default_models_dir().as_deref(),
@@ -230,5 +308,56 @@ mod tests {
         // 4. When default file does not exist either, returns None
         let resolved = resolve_config_path_with_env(None, &non_existent, |_| None);
         assert_eq!(resolved, None);
+    }
+
+    #[test]
+    fn canonical_user_config_path_resolution() {
+        use std::ffi::OsString;
+
+        #[cfg(target_os = "windows")]
+        {
+            let res = canonical_user_config_path(&|name| {
+                if name == "APPDATA" {
+                    Some(OsString::from("C:\\Users\\alice\\AppData\\Roaming"))
+                } else {
+                    None
+                }
+            });
+            assert_eq!(
+                res,
+                Some(PathBuf::from(
+                    "C:\\Users\\alice\\AppData\\Roaming\\sona\\sona-cli.toml"
+                ))
+            );
+        }
+
+        #[cfg(target_os = "macos")]
+        {
+            let res = canonical_user_config_path(&|name| {
+                if name == "HOME" {
+                    Some(OsString::from("/Users/alice"))
+                } else {
+                    None
+                }
+            });
+            assert_eq!(
+                res,
+                Some(PathBuf::from(
+                    "/Users/alice/Library/Application Support/sona/sona-cli.toml"
+                ))
+            );
+        }
+
+        #[cfg(all(not(target_os = "windows"), not(target_os = "macos")))]
+        {
+            let res = canonical_user_config_path(&|name| {
+                if name == "XDG_CONFIG_HOME" {
+                    Some(OsString::from("/custom/xdg"))
+                } else {
+                    None
+                }
+            });
+            assert_eq!(res, Some(PathBuf::from("/custom/xdg/sona/sona-cli.toml")));
+        }
     }
 }

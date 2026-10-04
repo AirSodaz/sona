@@ -128,6 +128,9 @@ pub struct ModelListArgs {
         help = "Filter by language token, for example zh, en, ja, yue"
     )]
     language: Option<String>,
+    /// Show only recommended preset models.
+    #[arg(short = 'r', long, help = "Only include recommended preset models")]
+    recommended: bool,
     /// Show only installed models.
     #[arg(
         short = 'i',
@@ -165,6 +168,14 @@ pub struct ModelDownloadArgs {
     /// Suppresses progress logs.
     #[arg(short = 'q', long, help = "Hide per-download progress output")]
     quiet: bool,
+    /// Download mirror strategy: auto, direct, ghproxy, ghnet, or hf-mirror.
+    #[arg(
+        long,
+        value_name = "MIRROR",
+        value_parser = ["auto", "direct", "ghproxy", "ghnet", "hf-mirror"],
+        help = "Download mirror strategy: auto, direct, ghproxy, ghnet, or hf-mirror"
+    )]
+    pub mirror: Option<String>,
     /// Overwrites invalid installed files without prompting.
     #[arg(
         short = 'y',
@@ -323,6 +334,13 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
             });
         }
     }
+    if args.recommended {
+        models.retain(|m| {
+            sona_core::models::preset_models::find_preset_model(&m.id)
+                .and_then(|p| p.is_recommended)
+                .unwrap_or(false)
+        });
+    }
     let output = if args.json {
         serde_json::to_string_pretty(
             &models
@@ -344,6 +362,10 @@ async fn run_model_download(
 ) -> CliResult<CliOutput> {
     let quiet = args.quiet;
     let yes = args.yes;
+    let mirror = args
+        .mirror
+        .as_deref()
+        .map(sona_model_downloads::parse_download_mirror);
     let models_dir = resolve_models_dir(args.models_dir)?;
     let mut stderr_lines = Vec::new();
 
@@ -371,7 +393,7 @@ async fn run_model_download(
     }
 
     for model in &download_queue {
-        download_one_model(model, yes, quiet, &mut stderr_lines, io).await?;
+        download_one_model(model, yes, quiet, mirror, &mut stderr_lines, io).await?;
     }
     Ok(CliOutput::stderr(stderr_lines.join("\n")))
 }
@@ -705,10 +727,51 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
     Ok(CliOutput::stdout(lines.join("\n")))
 }
 
+async fn download_model_with_mirror_choice<F>(
+    resolved: &ResolvedModelDownload,
+    mirror: Option<sona_model_downloads::DownloadMirror>,
+    on_progress: F,
+) -> Result<PathBuf, sona_model_downloads::DownloadError>
+where
+    F: FnMut(u64, u64) + Send + 'static,
+{
+    match mirror {
+        None | Some(sona_model_downloads::DownloadMirror::Auto) => {
+            download_model(resolved, on_progress).await
+        }
+        Some(strategy) => {
+            let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+            let notify_clone = notify.clone();
+            let ctrl_c_task = tokio::spawn(async move {
+                if let Ok(()) = tokio::signal::ctrl_c().await {
+                    notify_clone.notify_one();
+                }
+            });
+
+            let mut on_progress = on_progress;
+            let result = sona_model_downloads::download_model_with_cancel_and_mirror(
+                resolved,
+                notify,
+                strategy,
+                move |progress| {
+                    if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
+                        on_progress(progress.downloaded_bytes, progress.total_bytes);
+                    }
+                },
+            )
+            .await;
+
+            ctrl_c_task.abort();
+            result
+        }
+    }
+}
+
 async fn download_one_model(
     resolved: &ResolvedModelDownload,
     yes: bool,
     quiet: bool,
+    mirror: Option<sona_model_downloads::DownloadMirror>,
     stderr_lines: &mut Vec<String>,
     io: &mut (dyn crate::CliIo + Send),
 ) -> CliResult<()> {
@@ -742,23 +805,25 @@ async fn download_one_model(
     let display_id = resolved.model.id.clone();
     let mut last_percentage: Option<i32> = None;
 
-    let install_path = download_model(resolved, move |downloaded, total| {
-        if quiet || total == 0 {
-            return;
-        }
-        let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
-        if stderr_is_terminal {
-            eprint!("\rDownloading {display_id}: {percentage}%");
-            let _ = io::stderr().flush();
-            has_printed_clone.store(true, std::sync::atomic::Ordering::Relaxed);
-        } else if (percentage == 100 || percentage % 10 == 0) && last_percentage != Some(percentage)
-        {
-            eprintln!("Downloading {display_id}: {percentage}%");
-            last_percentage = Some(percentage);
-        }
-    })
-    .await
-    .map_err(map_download_error)?;
+    let install_path =
+        download_model_with_mirror_choice(resolved, mirror, move |downloaded, total| {
+            if quiet || total == 0 {
+                return;
+            }
+            let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
+            if stderr_is_terminal {
+                eprint!("\rDownloading {display_id}: {percentage}%");
+                let _ = io::stderr().flush();
+                has_printed_clone.store(true, std::sync::atomic::Ordering::Relaxed);
+            } else if (percentage == 100 || percentage % 10 == 0)
+                && last_percentage != Some(percentage)
+            {
+                eprintln!("Downloading {display_id}: {percentage}%");
+                last_percentage = Some(percentage);
+            }
+        })
+        .await
+        .map_err(map_download_error)?;
 
     if has_printed.load(std::sync::atomic::Ordering::Relaxed) {
         eprintln!();

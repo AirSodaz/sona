@@ -264,6 +264,10 @@ pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> Cl
     after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli transcribe-live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli transcribe-live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
+    /// Enable verbose logging (-v for info, -vv for debug).
+    #[arg(short = 'v', long, action = clap::ArgAction::Count, global = true)]
+    verbose: u8,
+
     #[command(subcommand)]
     command: Commands,
 }
@@ -284,12 +288,14 @@ enum Commands {
     },
     /// Inspects and manages Sona CLI configuration.
     Config(config_cmd::ConfigArgs),
+    /// Manage, download, verify, and inspect preset ASR models.
     Models(models::ModelsArgs),
     /// Runs the shared local HTTP API server.
     Serve(serve::ServeArgs),
     /// Transcribe audio with local or online ASR; local ASR also accepts video.
     Transcribe(transcribe::TranscribeArgs),
     /// Transcribe live audio using local or online ASR.
+    #[command(alias = "live")]
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
     /// Generates shell auto-completion scripts.
     Completion(CompletionArgs),
@@ -358,12 +364,12 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let command = match parse_cli_args(args)? {
-        ParsedCli::Command(cli) => cli.command,
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
     let mut io = MemoryCliIo::default();
-    match dispatch(command, &mut io).await? {
+    match dispatch(command, verbose, &mut io).await? {
         Some(output) => Ok(output),
         None => Ok(io.into_output()),
     }
@@ -374,13 +380,13 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let command = match parse_cli_args(args)? {
-        ParsedCli::Command(cli) => cli.command,
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
     runtime::block_on(async move {
         let mut io = MemoryCliIo::default();
-        match dispatch(command, &mut io).await? {
+        match dispatch(command, verbose, &mut io).await? {
             Some(output) => Ok(output),
             None => Ok(io.into_output()),
         }
@@ -392,8 +398,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let command = match parse_cli_args(args)? {
-        ParsedCli::Command(cli) => cli.command,
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
     runtime::block_on(async move {
@@ -401,7 +407,7 @@ where
             stdin_bytes,
             ..Default::default()
         };
-        match dispatch(command, &mut io).await? {
+        match dispatch(command, verbose, &mut io).await? {
             Some(output) => Ok(output),
             None => Ok(io.into_output()),
         }
@@ -413,8 +419,8 @@ where
     I: IntoIterator<Item = T>,
     T: Into<OsString> + Clone,
 {
-    let command = match parse_cli_args(args)? {
-        ParsedCli::Command(cli) => cli.command,
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => return Ok(output),
     };
     runtime::block_on(async move {
@@ -422,7 +428,7 @@ where
             stdin_is_terminal: true,
             ..Default::default()
         };
-        match dispatch(command, &mut io).await? {
+        match dispatch(command, verbose, &mut io).await? {
             Some(output) => Ok(output),
             None => Ok(io.into_output()),
         }
@@ -435,8 +441,8 @@ where
     T: Into<OsString> + Clone,
 {
     let mut io = StdCliIo::default();
-    let command = match parse_cli_args(args)? {
-        ParsedCli::Command(cli) => cli.command,
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
         ParsedCli::EarlyExit(output) => {
             if !output.stdout.is_empty() {
                 write!(io.stdout(), "{}", output.stdout)
@@ -445,7 +451,7 @@ where
             return Ok(());
         }
     };
-    if let Some(output) = dispatch(command, &mut io).await? {
+    if let Some(output) = dispatch(command, verbose, &mut io).await? {
         if !output.stdout.is_empty() {
             writeln!(io.stdout(), "{}", output.stdout)
                 .map_err(|error| CliError::Io(format!("Failed to write stdout: {error}")))?;
@@ -458,10 +464,18 @@ where
     Ok(())
 }
 
-async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<Option<CliOutput>> {
-    let default_level = match &command {
-        Commands::Serve(_) => log::LevelFilter::Info,
-        _ => log::LevelFilter::Warn,
+async fn dispatch(
+    command: Commands,
+    verbose: u8,
+    io: &mut (dyn CliIo + Send),
+) -> CliResult<Option<CliOutput>> {
+    let default_level = match verbose {
+        0 => match &command {
+            Commands::Serve(_) => log::LevelFilter::Info,
+            _ => log::LevelFilter::Warn,
+        },
+        1 => log::LevelFilter::Info,
+        _ => log::LevelFilter::Debug,
     };
     logger::init_logger(default_level);
 
@@ -525,9 +539,13 @@ fn run_providers(args: ProvidersArgs) -> CliResult<CliOutput> {
                 if p.streaming.supported.unwrap_or(false) {
                     modes.push("streaming");
                 }
+                let configured = p
+                    .default_api_key_env()
+                    .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
                 serde_json::json!({
                     "id": p.id,
                     "default_env_var": p.default_api_key_env(),
+                    "configured": configured,
                     "modes": modes,
                 })
             })

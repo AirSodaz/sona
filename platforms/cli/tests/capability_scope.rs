@@ -643,6 +643,7 @@ fn providers_command_json_outputs_valid_schema() {
     let arr = json.as_array().unwrap();
     assert!(arr.iter().any(|p| p["id"] == "volcengine-doubao"));
     assert!(arr.iter().any(|p| p["id"] == "groq-whisper"));
+    assert!(arr.iter().all(|p| p.get("configured").is_some()));
 }
 
 #[test]
@@ -819,5 +820,57 @@ fn direct_init_config_subcommand_fails_as_unrecognized_command() {
         msg.contains("unrecognized subcommand 'init-config'")
             || msg.contains("error: unrecognized subcommand"),
         "Expected unrecognized subcommand error, got: {msg}"
+    );
+}
+
+#[test]
+fn transcribe_auto_detects_piped_stdin_when_dash_is_omitted() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args_with_stdin(
+        [
+            "sona-cli",
+            "transcribe",
+            "-m",
+            "whisper-turbo",
+            "--models-dir",
+            dir.path().to_string_lossy().as_ref(),
+        ],
+        b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00".to_vec(),
+    )
+    .unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error.to_string().contains("sherpa-onnx-whisper-turbo")
+            && error.to_string().contains("was not found"),
+        "Expected model resolution error, got: {error}"
+    );
+    assert!(!error.to_string().contains("Missing input"));
+}
+
+#[test]
+fn transcribe_terminal_stdin_without_inputs_reports_missing_input() {
+    let error =
+        sona_cli::run_cli_from_args_with_terminal_stdin(["sona-cli", "transcribe"]).unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("Missing input"));
+}
+
+#[test]
+fn transcribe_accepts_provider_alias_for_online_provider() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = dir.path().join("audio.wav");
+    std::fs::write(&file, b"dummy audio content").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        file.to_str().unwrap(),
+        "--provider",
+        "groq-whisper",
+    ])
+    .unwrap_err();
+    assert!(
+        error.to_string().contains("API key") || error.to_string().contains("GROQ_API_KEY"),
+        "Expected provider-specific API key error proving --provider was parsed, got: {error}"
     );
 }

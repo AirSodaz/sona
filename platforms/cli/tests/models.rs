@@ -102,6 +102,16 @@ fn models_list_can_filter_installed_only() {
 }
 
 #[test]
+fn models_list_can_filter_recommended_only() {
+    let output =
+        sona_cli::run_cli_from_args(["sona-cli", "models", "list", "--recommended"]).unwrap();
+
+    assert!(output.stdout.contains("sensevoice"));
+    assert!(!output.stdout.contains("silero-vad"));
+    assert!(!output.stdout.contains("streaming-zipformer"));
+}
+
+#[test]
 fn models_delete_yes_removes_installed_directory_model() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path().join("models");
@@ -693,4 +703,25 @@ fn models_download_accepts_multiple_model_arguments() {
     .unwrap_err();
     // It should have accepted multiple models and failed at network or invalid model, not clap argument error
     assert_ne!(error.exit_code(), 1);
+}
+
+#[test]
+fn models_download_rejects_invalid_mirror() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "download",
+        "whisper-turbo",
+        "--mirror",
+        "invalid-mirror",
+    ])
+    .unwrap_err();
+    assert!(matches!(error, sona_cli::CliError::Usage(_)));
+}
+
+#[test]
+fn models_download_help_exposes_mirror_options() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "models", "download", "--help"]).unwrap();
+    assert!(output.stdout.contains("--mirror"));
+    assert!(output.stdout.contains("hf-mirror"));
 }

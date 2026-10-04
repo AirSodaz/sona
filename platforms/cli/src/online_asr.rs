@@ -18,8 +18,13 @@ fn online_provider_value_parser() -> PossibleValuesParser {
 
 #[derive(Clone, Args)]
 pub(crate) struct OnlineAsrArgs {
-    /// Use an online ASR provider instead of local Sherpa ASR.
-    #[arg(long, value_name = "PROVIDER", value_parser = online_provider_value_parser())]
+    /// Use an online ASR provider instead of local Sherpa ASR (alias: --provider).
+    #[arg(
+        long,
+        value_name = "PROVIDER",
+        value_parser = online_provider_value_parser(),
+        alias = "provider"
+    )]
     pub(crate) online_provider: Option<String>,
     /// Direct API key for the online ASR provider. Takes precedence over --api-key-env.
     #[arg(long = "api-key", value_name = "KEY")]

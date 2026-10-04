@@ -69,8 +69,12 @@ pub struct TranscribeLiveArgs {
     /// Live input source.
     #[arg(long, value_enum)]
     pub(crate) input: Option<LiveInputSource>,
-    /// Exact microphone device name.
-    #[arg(long, value_name = "NAME")]
+    /// Microphone device index (e.g. 0), exact name, or unique substring (e.g. "realtek").
+    #[arg(
+        long,
+        value_name = "DEVICE",
+        help = "Microphone device index (e.g. 0), exact name, or unique substring (e.g. \"realtek\")"
+    )]
     pub(crate) device: Option<String>,
     /// List microphone input devices and exit.
     #[arg(long, default_value_t = false, conflicts_with = "list_providers")]
@@ -81,14 +85,14 @@ pub struct TranscribeLiveArgs {
     /// Stop after this many seconds (supports fractional seconds, e.g. 10.5).
     #[arg(long, value_name = "SECONDS")]
     pub(crate) duration: Option<f64>,
-    /// Live stdout stream format: text or ndjson (alias: --stream, --stream-format).
+    /// Live stdout stream format: text or ndjson (alias: --stream-format, --output-format).
     #[arg(
-        long,
+        long = "stream",
         value_enum,
         value_name = "FORMAT",
         alias = "stream-format",
-        alias = "stream",
-        help = "Live stdout stream format: text or ndjson (alias: --stream, --stream-format)"
+        alias = "output-format",
+        help = "Live stdout stream format: text or ndjson (alias: --stream-format, --output-format)"
     )]
     pub(crate) output_format: Option<LiveOutputFormatArg>,
     /// Optional final transcript file.
@@ -150,6 +154,15 @@ pub struct TranscribeLiveArgs {
         help = "Overwrite an existing final transcript file"
     )]
     pub(crate) force: bool,
+    /// Text selection mode for final transcript: original, translation, or bilingual.
+    #[arg(
+        long,
+        value_name = "MODE",
+        value_parser = ["original", "translation", "bilingual"],
+        default_value = "original",
+        help = "Text selection mode for final transcript: original, translation, or bilingual"
+    )]
+    pub(crate) mode: String,
 }
 
 pub(crate) struct ResolvedLiveCommand {
@@ -157,6 +170,7 @@ pub(crate) struct ResolvedLiveCommand {
     pub(crate) device: Option<String>,
     pub(crate) duration: Option<Duration>,
     pub(crate) output_format: LiveOutputFormat,
+    pub(crate) export_mode: sona_core::export::ExportMode,
     pub(crate) asr: ResolvedLiveAsr,
 }
 
@@ -207,6 +221,8 @@ pub(crate) fn resolve_live_command(
     config: Option<TranscribeLiveConfigSection>,
 ) -> CliResult<ResolvedLiveCommand> {
     let config = config.unwrap_or_default();
+    let export_mode = sona_core::export::ExportMode::parse(&args.mode)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
     let input = match args.input {
         Some(input) => input,
         None => config
@@ -270,11 +286,21 @@ pub(crate) fn resolve_live_command(
             output_path: args.output,
         }))
     } else {
+        let mut resolved_model_id = args.model_id.clone();
+        if resolved_model_id.is_none() && config.model_id.is_none() {
+            resolved_model_id =
+                infer_single_streaming_model(args.models_dir.as_ref()).map(|inferred| {
+                    eprintln!(
+                        "Note: Automatically selected installed streaming model '{inferred}'"
+                    );
+                    inferred
+                });
+        }
         let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
             LiveTranscribeOptions {
                 output: args.output,
                 format: args.format,
-                model_id: args.model_id,
+                model_id: resolved_model_id,
                 models_dir: args.models_dir,
                 default_models_dir: crate::desktop_paths::default_models_dir(),
                 vad_model_id: args.vad_model_id,
@@ -297,6 +323,7 @@ pub(crate) fn resolve_live_command(
         device,
         duration,
         output_format: output_format.into(),
+        export_mode,
         asr,
     })
 }
@@ -344,6 +371,36 @@ fn validate_online_output(
         )));
     }
     Ok(())
+}
+
+pub(crate) fn select_single_streaming_model(
+    models: &[sona_core::models::catalog::ModelSummary],
+) -> Option<String> {
+    let installed_streaming: Vec<_> = models
+        .iter()
+        .filter(|m| {
+            m.installed
+                && m.modes
+                    .iter()
+                    .any(|mode| mode == "streaming" || mode == "live")
+        })
+        .collect();
+    if installed_streaming.len() == 1 {
+        Some(installed_streaming[0].id.clone())
+    } else {
+        None
+    }
+}
+
+fn infer_single_streaming_model(models_dir: Option<&PathBuf>) -> Option<String> {
+    let resolved_dir = sona_core::models::paths::resolve_models_dir(
+        models_dir.cloned(),
+        crate::desktop_paths::default_models_dir(),
+        crate::desktop_paths::models_dir_status,
+    )
+    .ok()?;
+    let all_models = sona_runtime_fs::list_models(&resolved_dir);
+    select_single_streaming_model(&all_models)
 }
 
 #[cfg(test)]
@@ -397,5 +454,54 @@ mod tests {
     fn validate_online_output_checks_format_and_overwrite() {
         assert!(validate_online_output(None, Some("srt"), false).is_err());
         assert!(validate_online_output(None, None, false).is_ok());
+    }
+
+    #[test]
+    fn select_single_streaming_model_behavior() {
+        use sona_core::models::catalog::ModelSummary;
+        use sona_core::models::preset_models::LanguageMode;
+
+        let make_summary = |id: &str, modes: &[&str], installed: bool| ModelSummary {
+            id: id.to_string(),
+            name: id.to_string(),
+            model_type: "asr".to_string(),
+            languages: vec!["en".to_string()],
+            language_mode: LanguageMode::Selectable,
+            size: "100MB".to_string(),
+            modes: modes.iter().map(|s| s.to_string()).collect(),
+            installed,
+            install_path: PathBuf::from(format!("/models/{id}")),
+        };
+
+        // 1. Empty list -> None
+        assert_eq!(select_single_streaming_model(&[]), None);
+
+        // 2. Installed batch-only model -> None
+        let batch_model = make_summary("whisper-turbo", &["batch"], true);
+        assert_eq!(
+            select_single_streaming_model(std::slice::from_ref(&batch_model)),
+            None
+        );
+
+        // 3. Uninstalled streaming model -> None
+        let uninstalled_streaming = make_summary("sensevoice", &["streaming", "batch"], false);
+        assert_eq!(
+            select_single_streaming_model(std::slice::from_ref(&uninstalled_streaming)),
+            None
+        );
+
+        // 4. Exactly one installed streaming model -> Some("sensevoice")
+        let installed_streaming = make_summary("sensevoice", &["streaming", "batch"], true);
+        assert_eq!(
+            select_single_streaming_model(&[batch_model.clone(), installed_streaming.clone()]),
+            Some("sensevoice".to_string())
+        );
+
+        // 5. Multiple installed streaming models -> None (ambiguous)
+        let second_streaming = make_summary("paraformer", &["live"], true);
+        assert_eq!(
+            select_single_streaming_model(&[installed_streaming, second_streaming]),
+            None
+        );
     }
 }

@@ -194,3 +194,73 @@ fn config_subcommands_work() {
     .unwrap_err();
     assert!(err.to_string().contains("Configuration error"));
 }
+
+#[test]
+fn init_config_rejects_conflicting_path_and_global_flags() {
+    let error1 =
+        sona_cli::run_cli_from_args(["sona-cli", "config", "init", "custom.toml", "--global"])
+            .unwrap_err();
+    assert!(matches!(error1, sona_cli::CliError::Usage(_)));
+
+    let error2 =
+        sona_cli::run_cli_from_args(["sona-cli", "config", "init", "custom.toml", "--user"])
+            .unwrap_err();
+    assert!(matches!(error2, sona_cli::CliError::Usage(_)));
+}
+
+#[test]
+fn init_config_global_writes_to_isolated_subprocess_user_path() {
+    let dir = tempfile::tempdir().unwrap();
+    let work_dir = tempfile::tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_sona-cli");
+    let mut cmd = std::process::Command::new(bin);
+    cmd.current_dir(work_dir.path());
+    cmd.env_remove("SONA_CONFIG");
+
+    #[cfg(target_os = "windows")]
+    {
+        cmd.env("APPDATA", dir.path());
+        cmd.env_remove("USERPROFILE");
+        cmd.env_remove("LOCALAPPDATA");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd.env("XDG_CONFIG_HOME", dir.path());
+        cmd.env_remove("HOME");
+    }
+
+    let output = cmd
+        .args(["config", "init", "--global"])
+        .output()
+        .expect("failed to execute sona-cli binary");
+
+    assert!(output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Created config template"));
+
+    let expected_file = dir.path().join("sona").join("sona-cli.toml");
+    assert!(expected_file.is_file());
+
+    // Also test alias --user with --force
+    let mut cmd_user = std::process::Command::new(bin);
+    cmd_user.current_dir(work_dir.path());
+    cmd_user.env_remove("SONA_CONFIG");
+    #[cfg(target_os = "windows")]
+    {
+        cmd_user.env("APPDATA", dir.path());
+        cmd_user.env_remove("USERPROFILE");
+        cmd_user.env_remove("LOCALAPPDATA");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd_user.env("XDG_CONFIG_HOME", dir.path());
+        cmd_user.env_remove("HOME");
+    }
+
+    let output_user = cmd_user
+        .args(["config", "init", "--user", "-F"])
+        .output()
+        .expect("failed to execute sona-cli binary");
+
+    assert!(output_user.status.success());
+}

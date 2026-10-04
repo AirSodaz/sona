@@ -2,7 +2,9 @@ mod config;
 mod session;
 
 pub(crate) use config::TranscribeLiveArgs;
-pub use session::{LiveSessionMetadata, run_live_session, write_final_transcript};
+pub use session::{
+    LiveSessionMetadata, run_live_session, write_final_transcript, write_final_transcript_with_mode,
+};
 
 use config::{
     LiveInputSource, ResolvedLiveAsr, ResolvedLiveCommand, load_config, resolve_live_command,
@@ -128,7 +130,12 @@ async fn run_resolved_live_command(
                 "Live plan with output path must include an export format.".to_string(),
             )
         })?;
-        match write_final_transcript(path, format, renderer.segments()) {
+        match write_final_transcript_with_mode(
+            path,
+            format,
+            renderer.segments(),
+            resolved.export_mode,
+        ) {
             Ok(status) => Some(status),
             Err(error) => {
                 let _ = renderer.write_error(stdout, &error.to_string());

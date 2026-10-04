@@ -182,12 +182,22 @@ pub fn write_final_transcript(
     format: sona_core::export::ExportFormat,
     segments: &[TranscriptSegment],
 ) -> CliResult<String> {
-    let exported = sona_core::export::export_segments_with_mode(
-        segments,
+    write_final_transcript_with_mode(
+        path,
         format,
+        segments,
         sona_core::export::ExportMode::Original,
     )
-    .map_err(|error| CliError::Serialize(error.to_string()))?;
+}
+
+pub fn write_final_transcript_with_mode(
+    path: &std::path::Path,
+    format: sona_core::export::ExportFormat,
+    segments: &[TranscriptSegment],
+    export_mode: sona_core::export::ExportMode,
+) -> CliResult<String> {
+    let exported = sona_core::export::export_segments_with_mode(segments, format, export_mode)
+        .map_err(|error| CliError::Serialize(error.to_string()))?;
     sona_runtime_fs::write_transcript_output_file(path, &exported)
         .map_err(|error| CliError::Io(error.to_string()))?;
     Ok(format!("Wrote transcript to {}", path.display()))

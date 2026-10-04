@@ -13,7 +13,8 @@ use crate::{CliError, CliOutput, CliResult};
 #[derive(Debug, Args)]
 #[command(
     about = "Exports transcript segments to a file or stdout",
-    after_help = "Examples:\n  sona-cli export -i ./segments.json -o ./transcript.srt\n  sona-cli export transcript -i ./segments.json -o ./transcript.srt\n  sona-cli export -i ./segments.json -o - -f srt"
+    subcommand_precedence_over_arg = true,
+    after_help = "Examples:\n  sona-cli export ./segments.json -o ./transcript.srt\n  sona-cli export -i ./segments.json -o ./transcript.srt\n  sona-cli export transcript -i ./segments.json -o ./transcript.srt\n  sona-cli export ./segments.json -o - -f srt"
 )]
 pub struct ExportArgs {
     #[command(subcommand)]
@@ -35,9 +36,12 @@ enum ExportCommands {
     after_help = "Input JSON format:\n  [\n    {\n      \"id\": \"segment-1\",\n      \"text\": \"Hello\",\n      \"start\": 0.0,\n      \"end\": 2.5,\n      \"isFinal\": true,\n      \"translation\": \"Bonjour\"\n    }\n  ]\n\nSupported export formats:\n  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)\n\nExamples:\n  sona-cli export transcript --input ./segments.json --output ./transcript.srt\n  sona-cli export transcript -i ./segments.json -o - -f srt\n  sona-cli transcribe audio.wav | sona-cli export transcript -f srt"
 )]
 pub struct ExportTranscriptArgs {
+    /// Positional input JSON file containing an array of transcript segments.
+    #[arg(value_name = "INPUT")]
+    pub positional_input: Option<PathBuf>,
     /// JSON file containing an array of transcript segments, or "-" for stdin.
-    #[arg(short = 'i', long, value_name = "JSON_FILE", default_value = "-")]
-    pub input: PathBuf,
+    #[arg(short = 'i', long, value_name = "JSON_FILE")]
+    pub input: Option<PathBuf>,
     /// Destination file path, or "-" for stdout.
     #[arg(short = 'o', long, value_name = "PATH", default_value = "-")]
     pub output: PathBuf,
@@ -95,7 +99,11 @@ fn run_export_transcript(
     let mode =
         ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
 
-    let input_bytes = if args.input.as_os_str() == "-" {
+    let input_path = args
+        .positional_input
+        .or(args.input)
+        .unwrap_or_else(|| PathBuf::from("-"));
+    let input_bytes = if input_path.as_os_str() == "-" {
         if io.stdin_is_terminal() {
             return Err(CliError::Validation(
                 "No transcript input provided via stdin. Pipe JSON segments into standard input, or specify an input file with -i/--input <FILE>.".to_string(),
@@ -116,10 +124,10 @@ fn run_export_transcript(
         }
         buf
     } else {
-        let metadata = std::fs::metadata(&args.input).map_err(|error| {
+        let metadata = std::fs::metadata(&input_path).map_err(|error| {
             CliError::Io(format!(
                 "Failed to read transcript input {}: {error}",
-                args.input.display()
+                input_path.display()
             ))
         })?;
         const MAX_INPUT_BYTES: u64 = 64 * 1024 * 1024;
@@ -128,10 +136,10 @@ fn run_export_transcript(
                 "Transcript input exceeds maximum supported size (64 MB).".to_string(),
             ));
         }
-        std::fs::read(&args.input).map_err(|error| {
+        std::fs::read(&input_path).map_err(|error| {
             CliError::Io(format!(
                 "Failed to read transcript input {}: {error}",
-                args.input.display()
+                input_path.display()
             ))
         })?
     };
