@@ -6,13 +6,13 @@ The standalone CLI ships these commands:
 
 - `path-status`
 - `init-config`
-- `models list|download|delete`
-- `diagnostics`
-- `export transcript`
+- `models list|download|delete|verify`
+- `diagnostics` (or `diagnostics snapshot`)
+- `export` (or `export transcript`)
 - `serve` (local REST transcription with local ASR)
-- `transcribe` (local or online batch ASR)
+- `transcribe` (local or online batch ASR, supports single file, multiple files, directories, and glob patterns)
 - `transcribe-live` (local or online streaming ASR)
-
+- `completion` (shell auto-completion for bash, zsh, fish, powershell, elvish)
 ## Run It
 
 ```bash
@@ -66,18 +66,19 @@ sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
+sona-cli models verify whisper-turbo
 ```
 
 `models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`).
-`models download` and `models delete` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
+`models download`, `models delete`, and `models verify` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
+`models verify` validates file integrity of an installed model without re-downloading.
 `models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
-## `diagnostics`
 
 Build a diagnostics snapshot from facts supplied by the host. This command does not read the application database.
 
 ```bash
+sona-cli diagnostics --app-data-dir ./app_data --input ./facts.json
 sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
-```
 
 Input facts JSON format example (`DiagnosticsCoreInput`):
 
@@ -108,15 +109,16 @@ Input facts JSON format example (`DiagnosticsCoreInput`):
 }
 ```
 
-## `export transcript`
+## `export`
 
-Export a JSON array of transcript segments through the shared Core export service.
+Export a JSON array of transcript segments through the shared Core export service. Can be invoked directly as `sona-cli export` or via `sona-cli export transcript`.
 
 ```bash
-sona-cli export transcript -i ./segments.json -o ./transcript.vtt
-sona-cli export transcript -i ./segments.json -o ./transcript.srt -m bilingual
+sona-cli export -i ./segments.json -o ./transcript.vtt
+sona-cli export -i ./segments.json -o ./transcript.srt -m bilingual
+sona-cli transcribe ./sample.wav | sona-cli export -f srt > ./transcript.srt
+cat ./segments.json | sona-cli export -f vtt
 ```
-
 Input segments JSON format example (array of `TranscriptSegment`):
 
 ```json
@@ -132,17 +134,21 @@ Input segments JSON format example (array of `TranscriptSegment`):
 ]
 ```
 
-The format is inferred from the output extension unless `--format` is supplied. Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`.
+The format is inferred from the output extension unless `--format` is supplied (required when outputting to stdout via `-o -` or omitting `-o`). Supported formats are `json`, `txt`, `srt`, `vtt`, and `md`; supported modes are `original`, `translation`, and `bilingual`. Input and output default to `-` (stdin and stdout), enabling seamless UNIX pipeline composition.
+
 ## `transcribe`
 
-Transcribe one local audio file, or a video file when using local ASR. Without `--online-provider`, the command uses an installed local Sherpa preset.
+Transcribe one or more audio files, video files (local ASR), or entire directories. Without `--online-provider`, the command uses an installed local Sherpa preset.
 
 ```bash
 sona-cli transcribe ./sample.wav -m whisper-turbo
 sona-cli transcribe ./sample.wav -o ./out.srt
+sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f srt
+sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
+sona-cli transcribe --list-providers
 ```
 If `sona-cli.toml` is present in the current working directory (or set via `SONA_CONFIG`), it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`. Custom FFmpeg path can be specified via `--ffmpeg-path <PATH>` or `ffmpeg_path` in the config file.
-With `--online-provider`, the command uploads the local file to the selected provider and writes the result to stdout or the requested output file. You can supply the API key directly via `--api-key <KEY>` or through an environment variable:
+Use `--list-providers` to inspect all supported online ASR providers, their default environment variables, and supported modes (batch / streaming).
 
 ```bash
 export GROQ_API_KEY="..."
@@ -205,6 +211,17 @@ sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
 
 When started, the server prints endpoint hints and authentication requirements to stderr.
+
+## `completion`
+
+Generate shell auto-completion scripts for `bash`, `zsh`, `fish`, `powershell`, or `elvish`.
+
+```bash
+sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli
+sona-cli completion zsh > ~/.zfunc/_sona-cli
+sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish
+sona-cli completion powershell >> $PROFILE
+```
 
 ## Output and Errors
 

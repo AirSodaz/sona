@@ -120,3 +120,89 @@ fn export_transcript_rejects_unknown_format_before_writing_output() {
     assert!(matches!(error, sona_cli::CliError::Validation(_)));
     assert!(!output.exists());
 }
+
+#[test]
+fn export_transcript_from_stdin_to_stdout_pipes_formatted_content() {
+    let json_bytes = serde_json::to_vec_pretty(&serde_json::json!([
+        {
+            "id": "segment-1",
+            "text": "Hello world",
+            "start": 0.0,
+            "end": 2.5,
+            "isFinal": true,
+            "translation": "Bonjour monde"
+        }
+    ]))
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args_with_stdin(
+        ["sona-cli", "export", "transcript", "-f", "srt"],
+        json_bytes,
+    )
+    .expect("streaming export to stdout should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("00:00:00,000 --> 00:00:02,500"));
+    assert!(output.stdout.contains("Hello world"));
+}
+
+#[test]
+fn export_transcript_from_file_to_stdout_pipes_formatted_content() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    write_segments(&input);
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "transcript",
+        "-i",
+        input.to_str().unwrap(),
+        "-o",
+        "-",
+        "-f",
+        "vtt",
+    ])
+    .expect("export to stdout should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.starts_with("WEBVTT"));
+    assert!(output.stdout.contains("Hello"));
+}
+
+#[test]
+fn export_transcript_rejects_stdout_when_format_is_missing() {
+    let error =
+        sona_cli::run_cli_from_args(["sona-cli", "export", "transcript", "-o", "-"]).unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Export format must be specified with -f/--format when exporting to stdout")
+    );
+}
+
+#[test]
+fn export_direct_without_subcommand_works() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("transcript.srt");
+    write_segments(&input);
+
+    // Invoking `sona-cli export` directly without typing `transcript`
+    let result = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        "-i",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])
+    .expect("direct export without subcommand should succeed");
+
+    assert_eq!(result.stderr, "");
+    assert!(output.exists());
+    let content = std::fs::read_to_string(&output).unwrap();
+    assert!(content.contains("Hello"));
+}

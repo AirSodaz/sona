@@ -282,3 +282,28 @@ fn diagnostics_snapshot_accepts_relative_unicode_paths_without_source_changes() 
     assert_eq!(snapshot["selectedModels"]["batch"]["id"], BATCH_MODEL_ID);
     assert_eq!(file_hashes(&app_data_dir), before);
 }
+
+#[test]
+fn diagnostics_direct_without_subcommand_renders_table() {
+    let root = tempfile::tempdir().unwrap();
+    let app_data_dir = root.path().join("app-data");
+    let models_dir = app_data_dir.join("models");
+    fs::create_dir_all(&models_dir).unwrap();
+    let input = root.path().join("input.json");
+    write_input(&input, &models_dir);
+
+    // Invoking `sona-cli diagnostics` directly without `snapshot`
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "diagnostics",
+        "--app-data-dir",
+        app_data_dir.to_string_lossy().as_ref(),
+        "--input",
+        input.to_string_lossy().as_ref(),
+    ])
+    .expect("direct diagnostics invocation should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("MIC"));
+    assert!(output.stdout.contains("SYSTEM_AUDIO"));
+}

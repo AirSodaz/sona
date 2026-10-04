@@ -26,6 +26,17 @@ pub(crate) async fn run_transcribe_live(
     args: TranscribeLiveArgs,
     io: &mut dyn CliIo,
 ) -> CliResult<()> {
+    if args.list_providers {
+        let output = crate::transcribe::render_online_providers_table();
+        io.stdout()
+            .write_all(output.as_bytes())
+            .map_err(|error| CliError::Io(format!("Failed to write online providers: {error}")))?;
+        io.stdout()
+            .flush()
+            .map_err(|error| CliError::Io(format!("Failed to flush online providers: {error}")))?;
+        return Ok(());
+    }
+
     if args.list_input_devices {
         let devices = microphone_device_names().map_err(CliError::Io)?;
         let default_device = default_microphone_device_name();

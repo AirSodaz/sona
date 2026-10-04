@@ -22,16 +22,16 @@ pub(crate) struct OnlineAsrArgs {
     #[arg(long, value_name = "PROVIDER", value_parser = online_provider_value_parser())]
     pub(crate) online_provider: Option<String>,
     /// Direct API key for the online ASR provider. Takes precedence over --api-key-env.
-    #[arg(long = "api-key", value_name = "KEY", requires = "online_provider")]
+    #[arg(long = "api-key", value_name = "KEY")]
     pub(crate) api_key: Option<String>,
     /// Environment variable containing the online ASR API key. Default env vars:
     /// volcengine-doubao: SONA_VOLCENGINE_ASR_API_KEY, groq-whisper: GROQ_API_KEY,
     /// mistral-voxtral: MISTRAL_API_KEY, openai-whisper: OPENAI_API_KEY,
     /// deepgram: DEEPGRAM_API_KEY, assemblyai: ASSEMBLYAI_API_KEY, elevenlabs: ELEVENLABS_API_KEY.
-    #[arg(long, value_name = "NAME", requires = "online_provider")]
+    #[arg(long, value_name = "NAME")]
     pub(crate) api_key_env: Option<String>,
     /// JSON object overriding non-secret provider endpoint or model settings.
-    #[arg(long, value_name = "FILE", requires = "online_provider")]
+    #[arg(long, value_name = "FILE")]
     pub(crate) online_config: Option<PathBuf>,
 }
 
@@ -50,20 +50,40 @@ impl OnlineAsrArgs {
     pub(crate) fn is_online(&self) -> bool {
         self.online_provider.is_some()
     }
+    pub(crate) fn validate_provider_presence(&self) -> CliResult<()> {
+        if self.online_provider.is_none() {
+            if self.api_key.is_some() {
+                return Err(CliError::Validation(
+                    "--api-key requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
+                ));
+            }
+            if self.api_key_env.is_some() {
+                return Err(CliError::Validation(
+                    "--api-key-env requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
+                ));
+            }
+            if self.online_config.is_some() {
+                return Err(CliError::Validation(
+                    "--online-config requires an online ASR provider. Specify --online-provider or configure online_provider in your config file.".to_string(),
+                ));
+            }
+        }
+        Ok(())
+    }
 
     pub(crate) fn resolve_with_config(
         &self,
         config_provider: Option<String>,
         config_api_key_env: Option<String>,
         config_online_config: Option<PathBuf>,
-    ) -> Self {
+    ) -> CliResult<Self> {
         let same_provider = match (&self.online_provider, &config_provider) {
             (Some(cli_p), Some(cfg_p)) => cli_p == cfg_p,
             (None, _) => true,
             _ => false,
         };
 
-        Self {
+        let resolved = Self {
             online_provider: self.online_provider.clone().or(config_provider),
             api_key: self.api_key.clone(),
             api_key_env: if same_provider {
@@ -76,9 +96,10 @@ impl OnlineAsrArgs {
             } else {
                 self.online_config.clone()
             },
-        }
+        };
+        resolved.validate_provider_presence()?;
+        Ok(resolved)
     }
-
     pub(crate) fn build_request(
         &self,
         mode: AsrMode,
@@ -402,11 +423,13 @@ mod tests {
             online_config: None,
         };
 
-        let resolved = empty_args.resolve_with_config(
-            Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
-            Some("MY_KEY_VAR".to_string()),
-            Some(PathBuf::from("conf.json")),
-        );
+        let resolved = empty_args
+            .resolve_with_config(
+                Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
+                Some("MY_KEY_VAR".to_string()),
+                Some(PathBuf::from("conf.json")),
+            )
+            .unwrap();
 
         assert!(resolved.is_online());
         assert_eq!(
@@ -423,11 +446,13 @@ mod tests {
             api_key_env: Some("CLI_KEY_VAR".to_string()),
             online_config: None,
         };
-        let resolved_override = cli_override.resolve_with_config(
-            Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
-            Some("MY_KEY_VAR".to_string()),
-            Some(PathBuf::from("conf.json")),
-        );
+        let resolved_override = cli_override
+            .resolve_with_config(
+                Some(VOLCENGINE_DOUBAO_PROVIDER_ID.to_string()),
+                Some("MY_KEY_VAR".to_string()),
+                Some(PathBuf::from("conf.json")),
+            )
+            .unwrap();
         assert_eq!(
             resolved_override.online_provider.as_deref(),
             Some(GROQ_WHISPER_PROVIDER_ID)
@@ -438,6 +463,78 @@ mod tests {
         );
         // Overridden provider does not inherit another provider's config
         assert!(resolved_override.online_config.is_none());
+    }
+    #[test]
+    fn resolves_online_args_with_config_provider_and_cli_api_key_override() {
+        let cli_args = OnlineAsrArgs {
+            online_provider: None,
+            api_key: Some("override-secret-key".to_string()),
+            api_key_env: None,
+            online_config: None,
+        };
+
+        let resolved = cli_args
+            .resolve_with_config(
+                Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+                Some("CONFIG_KEY_VAR".to_string()),
+                None,
+            )
+            .unwrap();
+
+        assert!(resolved.is_online());
+        assert_eq!(
+            resolved.online_provider.as_deref(),
+            Some(GROQ_WHISPER_PROVIDER_ID)
+        );
+        assert_eq!(resolved.api_key.as_deref(), Some("override-secret-key"));
+    }
+
+    #[test]
+    fn rejects_cli_api_key_without_provider_in_cli_or_config() {
+        let cli_args = OnlineAsrArgs {
+            online_provider: None,
+            api_key: Some("orphan-key".to_string()),
+            api_key_env: None,
+            online_config: None,
+        };
+
+        let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--api-key requires an online ASR provider")
+        );
+    }
+
+    #[test]
+    fn rejects_cli_api_key_env_without_provider_in_cli_or_config() {
+        let cli_args = OnlineAsrArgs {
+            online_provider: None,
+            api_key: None,
+            api_key_env: Some("ORPHAN_ENV_VAR".to_string()),
+            online_config: None,
+        };
+
+        let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--api-key-env requires an online ASR provider")
+        );
+    }
+
+    #[test]
+    fn rejects_cli_online_config_without_provider_in_cli_or_config() {
+        let cli_args = OnlineAsrArgs {
+            online_provider: None,
+            api_key: None,
+            api_key_env: None,
+            online_config: Some(PathBuf::from("orphan.json")),
+        };
+
+        let err = cli_args.resolve_with_config(None, None, None).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("--online-config requires an online ASR provider")
+        );
     }
 
     #[test]

@@ -12,6 +12,7 @@ role = "host"
 
 [dependencies]
 clap = { workspace = true }
+clap_complete = { workspace = true }
 cpal = { workspace = true }
 crossterm = { workspace = true }
 log = { workspace = true }

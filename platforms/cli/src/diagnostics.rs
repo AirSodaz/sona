@@ -8,9 +8,15 @@ use crate::table::{append_table_row, append_table_separator, column_widths, sani
 use crate::{CliError, CliOutput, CliResult};
 
 #[derive(Debug, Args)]
+#[command(
+    about = "Builds diagnostics snapshots from host-provided facts",
+    after_help = "Examples:\n  sona-cli diagnostics --app-data-dir ./app_data --input ./facts.json\n  sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json"
+)]
 pub struct DiagnosticsArgs {
     #[command(subcommand)]
-    command: DiagnosticsCommands,
+    command: Option<DiagnosticsCommands>,
+    #[command(flatten)]
+    direct: DiagnosticsDirectArgs,
 }
 
 #[derive(Debug, Subcommand)]
@@ -19,6 +25,18 @@ enum DiagnosticsCommands {
     Snapshot(DiagnosticsSnapshotArgs),
 }
 
+#[derive(Debug, Args)]
+struct DiagnosticsDirectArgs {
+    /// Application data directory containing the models directory.
+    #[arg(long, value_name = "PATH")]
+    app_data_dir: Option<PathBuf>,
+    /// JSON file containing host diagnostics facts and model paths.
+    #[arg(long, value_name = "JSON_FILE")]
+    input: Option<PathBuf>,
+    /// Prints JSON instead of the default table output.
+    #[arg(long, default_value_t = false)]
+    json: bool,
+}
 #[derive(Debug, Args)]
 #[command(
     about = "Builds a diagnostics snapshot from host-provided facts",
@@ -38,7 +56,20 @@ struct DiagnosticsSnapshotArgs {
 
 pub fn run_diagnostics(args: DiagnosticsArgs) -> CliResult<CliOutput> {
     match args.command {
-        DiagnosticsCommands::Snapshot(args) => run_diagnostics_snapshot(args),
+        Some(DiagnosticsCommands::Snapshot(args)) => run_diagnostics_snapshot(args),
+        None => {
+            let app_data_dir = args.direct.app_data_dir.ok_or_else(|| {
+                CliError::Validation("Missing required option: --app-data-dir <PATH>".to_string())
+            })?;
+            let input = args.direct.input.ok_or_else(|| {
+                CliError::Validation("Missing required option: --input <JSON_FILE>".to_string())
+            })?;
+            run_diagnostics_snapshot(DiagnosticsSnapshotArgs {
+                app_data_dir,
+                input,
+                json: args.direct.json,
+            })
+        }
     }
 }
 

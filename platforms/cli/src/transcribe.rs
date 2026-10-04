@@ -15,11 +15,20 @@ use sona_core::transcription::transcript::TranscriptSegment;
     after_help = "Examples:\n  sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo\n  sona-cli transcribe ./sample.wav --online-provider groq-whisper --output ./out.srt\n  sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --api-key-env MY_ASR_KEY"
 )]
 pub struct TranscribeArgs {
-    /// Input audio file, or a video file when using local ASR.
+    /// Input audio file(s), video file(s), or glob pattern(s). Required unless --input-dir is specified.
     #[arg(value_name = "INPUT")]
-    input: PathBuf,
-    /// Output transcript file. Defaults to stdout when omitted.
-    #[arg(short, long, value_name = "PATH")]
+    inputs: Vec<PathBuf>,
+    /// Directory containing input files for batch transcription.
+    #[arg(long = "input-dir", value_name = "DIR")]
+    input_dir: Option<PathBuf>,
+    /// Directory to write transcript files for batch transcription.
+    #[arg(long = "output-dir", value_name = "DIR")]
+    output_dir: Option<PathBuf>,
+    /// Recursively scan input directory.
+    #[arg(long, default_value_t = false)]
+    recursive: bool,
+    /// Output transcript file. Defaults to stdout when omitted (single-input mode only).
+    #[arg(short, long, value_name = "PATH", conflicts_with = "output_dir")]
     output: Option<PathBuf>,
     /// Export format: json, txt, srt, vtt, or md.
     #[arg(short, long)]
@@ -68,28 +77,50 @@ pub struct TranscribeArgs {
     /// Suppress progress output.
     #[arg(short = 'q', long, default_value_t = false)]
     quiet: bool,
+    /// List available online ASR providers and exit.
+    #[arg(long, default_value_t = false)]
+    pub list_providers: bool,
     /// Overwrite existing output files.
     #[arg(long, default_value_t = false)]
     force: bool,
 }
 
 pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
+    if args.list_providers {
+        return Ok(CliOutput::stdout(render_online_providers_table()));
+    }
     let config = load_config(args.config.as_ref())?;
     let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
         // Explicit --model-id on CLI overrides config-file online provider
+        args.online.validate_provider_presence()?;
         args.online.clone()
     } else {
         args.online.resolve_with_config(
             config.as_ref().and_then(|c| c.online_provider.clone()),
             config.as_ref().and_then(|c| c.api_key_env.clone()),
             config.as_ref().and_then(|c| c.online_config.clone()),
-        )
+        )?
     };
+    let is_batch = args.input_dir.is_some()
+        || args.output_dir.is_some()
+        || sona_core::transcription::runtime::should_run_path_batch(&args.inputs);
+
+    if is_batch {
+        return run_batch_transcribe(&args, &resolved_online, config.as_ref()).await;
+    }
+
+    let single_input = args.inputs.first().cloned().ok_or_else(|| {
+        CliError::Validation(
+            "Missing input: specify at least one input file or --input-dir.".to_string(),
+        )
+    })?;
+
     if resolved_online.is_online() {
-        return run_online_transcribe(&args, &resolved_online, config.as_ref()).await;
+        return run_online_transcribe(&args, &single_input, &resolved_online, config.as_ref())
+            .await;
     }
     let options = BatchTranscribeOptions {
-        input: args.input,
+        input: single_input,
         output: args.output,
         format: args.format,
         language: args.language,
@@ -126,13 +157,180 @@ pub async fn run_transcribe(args: TranscribeArgs) -> CliResult<CliOutput> {
     render_transcription(segments, export_format, output_target)
 }
 
+async fn run_batch_transcribe(
+    args: &TranscribeArgs,
+    resolved_online: &crate::online_asr::OnlineAsrArgs,
+    config: Option<&TranscribeConfigSection>,
+) -> CliResult<CliOutput> {
+    let batch_source = sona_runtime_fs::resolve_batch_input_source(
+        args.input_dir.as_deref(),
+        &args.inputs,
+        args.recursive,
+    )
+    .map_err(crate::map_runtime_fs_error)?;
+
+    if batch_source.inputs.is_empty() {
+        return Err(CliError::Validation(
+            "No supported media files found for batch transcription.".to_string(),
+        ));
+    }
+
+    if args.output.is_some() {
+        return Err(CliError::Validation(
+            "--output cannot be used in batch transcription mode; use --output-dir and --format instead."
+                .to_string(),
+        ));
+    }
+
+    let output_dir = if let Some(dir) = &args.output_dir {
+        dir.clone()
+    } else {
+        batch_source.base_dir.clone()
+    };
+
+    let export_format = match args
+        .format
+        .as_deref()
+        .or_else(|| config.and_then(|c| c.format.as_deref()))
+    {
+        Some(fmt) => sona_core::export::ExportFormat::parse(fmt)
+            .map_err(|error| CliError::Validation(error.to_string()))?,
+        None => sona_core::export::ExportFormat::Json,
+    };
+
+    let plans = sona_runtime_fs::plan_batch_output_files(
+        &batch_source.inputs,
+        &batch_source.base_dir,
+        &output_dir,
+        export_format,
+        batch_source.preserve_relative_paths,
+        args.force,
+    )
+    .map_err(crate::map_runtime_fs_error)?;
+
+    let total = plans.len();
+    if resolved_online.is_online() {
+        reject_online_local_options(args)?;
+        let language = args
+            .language
+            .clone()
+            .or_else(|| config.and_then(|c| c.language.clone()))
+            .unwrap_or_else(|| sona_core::transcription::runtime::DEFAULT_LANGUAGE.to_string());
+        let enable_itn = args.enable_itn || config.and_then(|c| c.enable_itn).unwrap_or(false);
+        let hotwords = args
+            .hotwords
+            .clone()
+            .or_else(|| config.and_then(|c| c.hotwords.clone()));
+        let request =
+            resolved_online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
+
+        for (index, plan_item) in plans.iter().enumerate() {
+            let segments = crate::asr_adapter::online_batch_transcribe(
+                plan_item.input_path.clone(),
+                request.clone(),
+            )
+            .await
+            .map_err(crate::online_asr::map_asr_error)?;
+
+            let content = sona_core::export::export_segments_with_mode(
+                &segments,
+                export_format,
+                sona_core::export::ExportMode::Original,
+            )
+            .map_err(|error| CliError::Serialize(error.to_string()))?;
+
+            sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                .map_err(|error| CliError::Io(error.to_string()))?;
+
+            if !args.quiet {
+                eprintln!(
+                    "[{}/{}] Transcribed {} -> {}",
+                    index + 1,
+                    total,
+                    plan_item.input_path.display(),
+                    plan_item.output_path.display()
+                );
+            }
+        }
+    } else {
+        let transcriber = crate::asr_adapter::local_batch_transcriber();
+        let format_name = match export_format {
+            sona_core::export::ExportFormat::Json => "json",
+            sona_core::export::ExportFormat::Txt => "txt",
+            sona_core::export::ExportFormat::Srt => "srt",
+            sona_core::export::ExportFormat::Vtt => "vtt",
+            sona_core::export::ExportFormat::Md => "md",
+        };
+        for (index, plan_item) in plans.iter().enumerate() {
+            let single_options = BatchTranscribeOptions {
+                input: plan_item.input_path.clone(),
+                output: Some(plan_item.output_path.clone()),
+                format: Some(format_name.to_string()),
+                language: args.language.clone(),
+                model_id: args.model_id.clone(),
+                models_dir: args.models_dir.clone(),
+                default_models_dir: crate::desktop_paths::default_models_dir(),
+                vad_model_id: args.vad_model_id.clone(),
+                punctuation_model_id: args.punctuation_model_id.clone(),
+                threads: args.threads,
+                enable_itn: if args.enable_itn { Some(true) } else { None },
+                hotwords: args.hotwords.clone(),
+                gpu_acceleration: args.gpu_acceleration.clone(),
+                vad_buffer: args.vad_buffer,
+                save_wav: None,
+                quiet: args.quiet,
+                force: args.force,
+                ffmpeg_path: args.ffmpeg_path.clone(),
+            };
+
+            let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+                single_options,
+                config.cloned(),
+                crate::desktop_paths::models_dir_status,
+            )
+            .map_err(crate::map_runtime_fs_error)?;
+
+            let segments = transcriber
+                .transcribe(file_plan)
+                .await
+                .map_err(crate::online_asr::map_asr_error)?;
+
+            let content = sona_core::export::export_segments_with_mode(
+                &segments,
+                export_format,
+                sona_core::export::ExportMode::Original,
+            )
+            .map_err(|error| CliError::Serialize(error.to_string()))?;
+
+            sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                .map_err(|error| CliError::Io(error.to_string()))?;
+
+            if !args.quiet {
+                eprintln!(
+                    "[{}/{}] Transcribed {} -> {}",
+                    index + 1,
+                    total,
+                    plan_item.input_path.display(),
+                    plan_item.output_path.display()
+                );
+            }
+        }
+    }
+
+    Ok(CliOutput::stderr(format!(
+        "Transcribed {total} file(s) into {}",
+        output_dir.display()
+    )))
+}
+
 async fn run_online_transcribe(
     args: &TranscribeArgs,
+    input: &std::path::Path,
     online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
 ) -> CliResult<CliOutput> {
     reject_online_local_options(args)?;
-    validate_online_paths(&args.input, args.output.as_ref(), args.force)?;
+    validate_online_paths(input, args.output.as_ref(), args.force)?;
     let language = args
         .language
         .clone()
@@ -153,7 +351,7 @@ async fn run_online_transcribe(
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
     let output_target = resolve_output_target(args.output.clone());
-    let segments = crate::asr_adapter::online_batch_transcribe(args.input.clone(), request)
+    let segments = crate::asr_adapter::online_batch_transcribe(input.to_path_buf(), request)
         .await
         .map_err(crate::online_asr::map_asr_error)?;
     render_transcription(segments, export_format, output_target)
@@ -183,7 +381,11 @@ fn reject_online_local_options(args: &TranscribeArgs) -> CliResult<()> {
     Ok(())
 }
 
-fn validate_online_paths(input: &PathBuf, output: Option<&PathBuf>, force: bool) -> CliResult<()> {
+fn validate_online_paths(
+    input: &std::path::Path,
+    output: Option<&PathBuf>,
+    force: bool,
+) -> CliResult<()> {
     match std::fs::metadata(input) {
         Ok(metadata) if metadata.is_file() => {}
         Ok(_) | Err(_) => {
@@ -237,4 +439,42 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeConfigSecti
     sona_runtime_fs::load_transcribe_config_file(path)
         .map(Some)
         .map_err(|error| CliError::Validation(error.to_string()))
+}
+
+pub(crate) fn render_online_providers_table() -> String {
+    let providers = sona_core::ports::asr::online_asr_providers();
+    let headers = ["PROVIDER", "DEFAULT_ENV_VAR", "MODES"];
+    let mut rows = Vec::new();
+    for p in providers {
+        let env_var = p.default_api_key_env().unwrap_or("-");
+        let mut modes = vec!["batch"];
+        if p.streaming.supported.unwrap_or(false) {
+            modes.push("streaming");
+        }
+        rows.push([p.id.clone(), env_var.to_string(), modes.join(", ")]);
+    }
+    let widths = [
+        rows.iter()
+            .map(|r| r[0].len())
+            .max()
+            .unwrap_or(8)
+            .max(headers[0].len()),
+        rows.iter()
+            .map(|r| r[1].len())
+            .max()
+            .unwrap_or(15)
+            .max(headers[1].len()),
+        rows.iter()
+            .map(|r| r[2].len())
+            .max()
+            .unwrap_or(5)
+            .max(headers[2].len()),
+    ];
+    let mut out = String::new();
+    crate::table::append_table_row(&mut out, &headers, &widths);
+    crate::table::append_table_separator(&mut out, &widths);
+    for row in rows {
+        crate::table::append_table_row(&mut out, &[&row[0], &row[1], &row[2]], &widths);
+    }
+    out
 }

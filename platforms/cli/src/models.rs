@@ -33,6 +33,22 @@ pub enum ModelCommands {
         after_help = "Examples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --models-dir ./models --yes\n  sona-cli models delete silero-vad --models-dir ./models --yes"
     )]
     Delete(ModelDeleteArgs),
+    /// Verifies the integrity of an installed preset model.
+    #[command(
+        after_help = "Examples:\n  sona-cli models verify whisper-turbo\n  sona-cli models verify sherpa-onnx-whisper-turbo --models-dir ./models"
+    )]
+    Verify(ModelVerifyArgs),
+}
+
+#[derive(Debug, Args)]
+#[command(about = "Verify the integrity of an installed preset model")]
+pub struct ModelVerifyArgs {
+    /// Preset model id or alias to verify.
+    #[arg(help = "Preset model id, for example whisper-turbo or silero-vad")]
+    pub model_id: String,
+    /// Models directory containing installed presets.
+    #[arg(long, help = "Override the models directory")]
+    pub models_dir: Option<PathBuf>,
 }
 
 #[derive(Debug, Args)]
@@ -134,6 +150,41 @@ pub async fn run_models(
         ModelCommands::List(args) => run_model_list(args),
         ModelCommands::Download(args) => run_model_download(args, io).await,
         ModelCommands::Delete(args) => run_model_delete(args, io),
+        ModelCommands::Verify(args) => run_model_verify(args).await,
+    }
+}
+
+async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
+    let models_dir = resolve_models_dir(args.models_dir)?;
+    let resolved = resolve_model_download(&args.model_id, &models_dir)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
+    if !sona_runtime_fs::path_exists(&resolved.install_path)
+        .map_err(|error| CliError::Io(error.to_string()))?
+    {
+        return Err(CliError::Model(format!(
+            "Model '{}' is not installed at {}",
+            resolved.model.id,
+            resolved.install_path.display()
+        )));
+    }
+
+    let is_valid = installed_model_is_valid(&resolved)
+        .await
+        .map_err(map_download_error)?;
+
+    if is_valid {
+        Ok(CliOutput::stdout(format!(
+            "Model '{}' at {} is valid and intact.",
+            resolved.model.id,
+            resolved.install_path.display()
+        )))
+    } else {
+        Err(CliError::Model(format!(
+            "Model '{}' at {} failed verification (corrupted or incomplete files). Run 'sona-cli models download {}' to repair.",
+            resolved.model.id,
+            resolved.install_path.display(),
+            args.model_id
+        )))
     }
 }
 

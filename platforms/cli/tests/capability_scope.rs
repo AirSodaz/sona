@@ -6,6 +6,7 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
     let help = output.stdout;
 
     for command in [
+        "completion",
         "diagnostics",
         "export",
         "init-config",
@@ -38,6 +39,23 @@ fn top_level_version_succeeds_and_outputs_to_stdout() {
         .expect("clap version should succeed with exit code 0");
     assert_eq!(output.stderr, "");
     assert!(output.stdout.contains("sona-cli"));
+}
+
+#[test]
+fn completion_generates_valid_scripts_for_supported_shells() {
+    for shell in ["bash", "zsh", "fish", "powershell"] {
+        let output = sona_cli::run_cli_from_args(["sona-cli", "completion", shell])
+            .expect("completion command should succeed");
+        assert_eq!(output.stderr, "");
+        assert!(
+            !output.stdout.is_empty(),
+            "shell script for {shell} must not be empty"
+        );
+        assert!(
+            output.stdout.contains("sona-cli"),
+            "shell script must contain command name"
+        );
+    }
 }
 
 #[test]
@@ -139,4 +157,270 @@ fn local_transcribe_requires_existing_input_file() {
         error.to_string(),
         "Input file must be an existing file: nonexistent-audio-file.wav"
     );
+}
+
+#[test]
+fn transcribe_with_config_provider_and_cli_api_key_override_resolves_online() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("audio.wav");
+    std::fs::write(&input, b"dummy audio content").unwrap();
+
+    let config_path = directory.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe]
+online_provider = "groq-whisper"
+"#,
+    )
+    .unwrap();
+
+    // Passing a whitespace --api-key proves that:
+    // 1. Clap parses --api-key without requiring --online-provider on CLI
+    // 2. config online_provider is resolved
+    // 3. business validation correctly checks the CLI --api-key override
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        input.to_str().unwrap(),
+        "--config",
+        config_path.to_str().unwrap(),
+        "--api-key",
+        "   ",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert_eq!(error.to_string(), "--api-key must not be empty.");
+}
+
+#[test]
+fn transcribe_rejects_cli_api_key_when_no_provider_configured() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("audio.wav");
+    std::fs::write(&input, b"dummy audio content").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        input.to_str().unwrap(),
+        "--api-key",
+        "gsk_orphan_key",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("--api-key requires an online ASR provider")
+    );
+}
+
+#[test]
+fn transcribe_live_rejects_cli_api_key_when_no_provider_configured() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--input",
+        "stdin",
+        "--api-key",
+        "orphan_key",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("--api-key requires an online ASR provider")
+    );
+}
+
+#[test]
+fn transcribe_live_with_config_provider_and_cli_api_key_resolves_online() {
+    let directory = tempfile::tempdir().unwrap();
+    let config_path = directory.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe_live]
+online_provider = "groq-whisper"
+"#,
+    )
+    .unwrap();
+
+    // groq-whisper does not support streaming transcription.
+    // If Clap failed on --api-key requiring --online-provider, it would error on Clap parsing.
+    // Here it parses, resolves groq-whisper from config, applies --api-key, and fails with
+    // business validation: "groq-whisper does not support streaming transcription."
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--input",
+        "stdin",
+        "--config",
+        config_path.to_str().unwrap(),
+        "--api-key",
+        "test_secret_key",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Online ASR provider groq-whisper does not support streaming transcription.")
+    );
+}
+
+#[test]
+fn transcribe_batch_rejects_missing_input_file() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "missing_file_1.wav",
+        "missing_file_2.wav",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Input file must be an existing file")
+    );
+}
+
+#[test]
+fn transcribe_batch_rejects_nonexistent_input_dir() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "--input-dir",
+        "nonexistent_recordings_dir_xyz",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("--input-dir must be an existing directory")
+    );
+}
+
+#[test]
+fn transcribe_batch_multiple_files_resolves_and_validates_batch_pipeline() {
+    let directory = tempfile::tempdir().unwrap();
+    let file1 = directory.path().join("meeting1.wav");
+    let file2 = directory.path().join("meeting2.wav");
+    std::fs::write(&file1, b"audio 1 content").unwrap();
+    std::fs::write(&file2, b"audio 2 content").unwrap();
+
+    let out_dir = directory.path().join("transcripts");
+    std::fs::create_dir(&out_dir).unwrap();
+
+    // Tests multi-input path batch with whitespace api-key, verifying batch input planning runs
+    // and reaches credential validation deterministically without network calls
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        file1.to_str().unwrap(),
+        file2.to_str().unwrap(),
+        "--output-dir",
+        out_dir.to_str().unwrap(),
+        "--online-provider",
+        "groq-whisper",
+        "--api-key",
+        "   ",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert_eq!(error.to_string(), "--api-key must not be empty.");
+}
+
+#[test]
+fn transcribe_batch_rejects_output_file_flag() {
+    let directory = tempfile::tempdir().unwrap();
+    let file1 = directory.path().join("audio1.wav");
+    let file2 = directory.path().join("audio2.wav");
+    std::fs::write(&file1, b"audio 1 content").unwrap();
+    std::fs::write(&file2, b"audio 2 content").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        file1.to_str().unwrap(),
+        file2.to_str().unwrap(),
+        "-o",
+        "out.srt",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("--output cannot be used in batch transcription mode")
+    );
+}
+
+#[test]
+fn transcribe_rejects_conflicting_output_and_output_dir() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "audio.wav",
+        "-o",
+        "out.srt",
+        "--output-dir",
+        "out_dir",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("cannot be used with"));
+}
+
+#[test]
+fn transcribe_list_providers_outputs_table_with_all_providers() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--list-providers"])
+        .expect("list-providers should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("PROVIDER"));
+    assert!(output.stdout.contains("DEFAULT_ENV_VAR"));
+    assert!(output.stdout.contains("MODES"));
+    assert!(output.stdout.contains("groq-whisper"));
+    assert!(output.stdout.contains("volcengine-doubao"));
+    assert!(output.stdout.contains("openai-whisper"));
+}
+
+#[test]
+fn transcribe_live_list_providers_matches_transcribe_output() {
+    let batch_output = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--list-providers"])
+        .expect("batch list-providers should succeed");
+    let live_output =
+        sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--list-providers"])
+            .expect("live list-providers should succeed");
+
+    assert_eq!(batch_output.stderr, "");
+    assert_eq!(live_output.stderr, "");
+    assert_eq!(batch_output.stdout, live_output.stdout);
+}
+
+#[test]
+fn transcribe_live_rejects_conflicting_list_flags() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--list-input-devices",
+        "--list-providers",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("cannot be used with"));
 }

@@ -73,8 +73,11 @@ pub struct TranscribeLiveArgs {
     #[arg(long, value_name = "NAME")]
     pub(crate) device: Option<String>,
     /// List microphone input devices and exit.
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, conflicts_with = "list_providers")]
     pub(crate) list_input_devices: bool,
+    /// List available online ASR providers and exit.
+    #[arg(long, default_value_t = false, conflicts_with = "list_input_devices")]
+    pub(crate) list_providers: bool,
     /// Stop after this many seconds.
     #[arg(long, value_name = "SECONDS")]
     pub(crate) duration: Option<f64>,
@@ -215,13 +218,14 @@ pub(crate) fn resolve_live_command(
     };
     let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
         // Explicit --model-id on CLI overrides config-file online provider
+        args.online.validate_provider_presence()?;
         args.online.clone()
     } else {
         args.online.resolve_with_config(
             config.online_provider.clone(),
             config.api_key_env.clone(),
             config.online_config.clone(),
-        )
+        )?
     };
     let asr = if resolved_online.is_online() {
         reject_online_local_options(&args)?;

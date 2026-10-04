@@ -58,6 +58,9 @@ pub(crate) trait CliIo: Send {
     fn read_line_stdin(&mut self, _buf: &mut String) -> io::Result<usize> {
         Ok(0)
     }
+    fn read_to_end_stdin(&mut self, _buf: &mut Vec<u8>) -> io::Result<usize> {
+        Ok(0)
+    }
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
@@ -70,10 +73,10 @@ struct MemoryCliIo {
     stdout: Vec<u8>,
     stderr: Vec<u8>,
     stdin_lines: VecDeque<String>,
+    stdin_bytes: Vec<u8>,
     stdin_is_terminal: bool,
     stderr_is_terminal: bool,
 }
-
 impl MemoryCliIo {
     fn into_output(self) -> CliOutput {
         CliOutput {
@@ -107,6 +110,12 @@ impl CliIo for MemoryCliIo {
         } else {
             Ok(0)
         }
+    }
+    fn read_to_end_stdin(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+        let len = self.stdin_bytes.len();
+        buf.extend_from_slice(&self.stdin_bytes);
+        self.stdin_bytes.clear();
+        Ok(len)
     }
     fn prompt_line_async<'a>(
         &'a mut self,
@@ -149,6 +158,10 @@ impl CliIo for StdCliIo {
     }
     fn read_line_stdin(&mut self, buf: &mut String) -> io::Result<usize> {
         io::stdin().read_line(buf)
+    }
+    fn read_to_end_stdin(&mut self, buf: &mut Vec<u8>) -> io::Result<usize> {
+        use io::Read;
+        io::stdin().read_to_end(buf)
     }
     fn prompt_line_async<'a>(
         &'a mut self,
@@ -231,7 +244,8 @@ pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> Cl
 #[command(
     name = "sona-cli",
     version,
-    about = "Standalone CLI backed by sona-core"
+    about = "Standalone CLI backed by sona-core",
+    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli transcribe-live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -250,6 +264,7 @@ enum Commands {
         #[arg(value_name = "PATH", help = "Filesystem path to inspect")]
         path: String,
     },
+    /// Creates a commented TOML starter configuration template.
     InitConfig(init_config::InitConfigArgs),
     /// Lists and manages preset models.
     Models(models::ModelsArgs),
@@ -259,8 +274,20 @@ enum Commands {
     Transcribe(transcribe::TranscribeArgs),
     /// Transcribe live audio using local or online ASR.
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
+    /// Generates shell auto-completion scripts.
+    Completion(CompletionArgs),
 }
 
+#[derive(Debug, clap::Args)]
+#[command(
+    about = "Generates shell auto-completion scripts",
+    after_help = "Examples:\n  sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli\n  sona-cli completion zsh > ~/.zfunc/_sona-cli\n  sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish\n  sona-cli completion powershell >> $PROFILE"
+)]
+pub struct CompletionArgs {
+    /// Target shell to generate completions for: bash, elvish, fish, powershell, zsh.
+    #[arg(value_enum)]
+    pub shell: clap_complete::Shell,
+}
 enum ParsedCli {
     Command(Box<Cli>),
     EarlyExit(CliOutput),
@@ -316,6 +343,27 @@ where
     })?
 }
 
+pub fn run_cli_from_args_with_stdin<I, T>(args: I, stdin_bytes: Vec<u8>) -> CliResult<CliOutput>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let command = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => cli.command,
+        ParsedCli::EarlyExit(output) => return Ok(output),
+    };
+    runtime::block_on(async move {
+        let mut io = MemoryCliIo {
+            stdin_bytes,
+            ..Default::default()
+        };
+        match dispatch(command, &mut io).await? {
+            Some(output) => Ok(output),
+            None => Ok(io.into_output()),
+        }
+    })?
+}
+
 pub async fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
 where
     I: IntoIterator<Item = T>,
@@ -354,7 +402,7 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
 
     let output = match command {
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
-        Commands::Export(args) => export::run_export(args),
+        Commands::Export(args) => export::run_export(args, io),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::InitConfig(args) => init_config::run_init_config(args),
         Commands::Models(args) => models::run_models(args, io).await,
@@ -363,6 +411,14 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
         Commands::TranscribeLive(args) => {
             transcribe_live::run_transcribe_live(args, io).await?;
             return Ok(None);
+        }
+        Commands::Completion(args) => {
+            let mut cmd = <Cli as clap::CommandFactory>::command();
+            let mut buf = Vec::new();
+            clap_complete::generate(args.shell, &mut cmd, "sona-cli", &mut buf);
+            let script =
+                String::from_utf8(buf).map_err(|error| CliError::Serialize(error.to_string()))?;
+            Ok(CliOutput::stdout(script))
         }
     }?;
     Ok(Some(output))

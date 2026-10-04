@@ -6,13 +6,13 @@
 
 - `path-status`
 - `init-config`
-- `models list|download|delete`
-- `diagnostics`
-- `export transcript`
+- `models list|download|delete|verify`
+- `diagnostics`（或 `diagnostics snapshot`）
+- `export`（或 `export transcript`）
 - `serve`（使用本地 ASR 的本地 REST 转写）
-- `transcribe`（本地或在线批量 ASR）
+- `transcribe`（本地或在线批量 ASR，支持单文件、多文件、目录批量与 glob 通配符）
 - `transcribe-live`（本地或在线流式 ASR）
-
+- `completion`（Shell 自动补全脚本生成：bash, zsh, fish, powershell, elvish）
 ## 运行方式
 
 ```bash
@@ -66,10 +66,12 @@ sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
+sona-cli models verify whisper-turbo
 ```
 
 `models list` 在表格输出中展示 `Alias` 简短别名列（并在 `--json` 输出中包含 `aliases` 字段）。支持传入关键字参数过滤（`sona-cli models list <QUERY>`）。
-`models download` 与 `models delete` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
+`models download`、`models delete` 与 `models verify` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
+`models verify` 用于在无需重新下载的情况下校验已安装模型的文件完整性。
 
 `models delete` 在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
 ## `diagnostics`
@@ -77,6 +79,7 @@ sona-cli models delete whisper-turbo -y
 根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。
 
 ```bash
+sona-cli diagnostics --app-data-dir ./app_data --input ./facts.json
 sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
 ```
 
@@ -109,15 +112,16 @@ sona-cli diagnostics snapshot --app-data-dir ./app_data --input ./facts.json
 }
 ```
 
-## `export transcript`
+## `export`
 
-通过共享 Core export service 导出 transcript segment JSON 数组。
+通过共享 Core export service 导出 transcript segment JSON 数组。可直接执行 `sona-cli export` 或使用子命令 `sona-cli export transcript`。
 
 ```bash
-sona-cli export transcript -i ./segments.json -o ./transcript.vtt
-sona-cli export transcript -i ./segments.json -o ./transcript.srt -m bilingual
+sona-cli export -i ./segments.json -o ./transcript.vtt
+sona-cli export -i ./segments.json -o ./transcript.srt -m bilingual
+sona-cli transcribe ./sample.wav | sona-cli export -f srt > ./transcript.srt
+cat ./segments.json | sona-cli export -f vtt
 ```
-
 输入分段文件 `segments.json` 格式示例（对应 `TranscriptSegment` 数组）：
 
 ```json
@@ -133,18 +137,21 @@ sona-cli export transcript -i ./segments.json -o ./transcript.srt -m bilingual
 ]
 ```
 
-未提供 `--format` 时从输出扩展名推断。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。
+未提供 `--format` 时从输出扩展名推断（通过 `-o -` 输出到 stdout 或省略 `-o` 时为必填）。支持 `json`、`txt`、`srt`、`vtt`、`md`；模式支持 `original`、`translation`、`bilingual`。输入与输出默认均为 `-`（stdin 与 stdout），完全支持标准 UNIX 管道化组合。
+
 ## `transcribe`
 
-转写一个本地音频文件；使用本地 ASR 时也可输入视频。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
+转写一个或多个本地音视频文件，或转写整个目录。不提供 `--online-provider` 时使用已安装的本地 Sherpa 预置模型。
 
 ```bash
 sona-cli transcribe ./sample.wav -m whisper-turbo
 sona-cli transcribe ./sample.wav -o ./out.srt
+sona-cli transcribe ./meeting1.wav ./meeting2.wav --output-dir ./transcripts -f srt
+sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts --recursive -f srt
+sona-cli transcribe --list-providers
 ```
 如果当前目录存在 `sona-cli.toml`（或设置了 `SONA_CONFIG`），会自动加载而无需手动传入 `-c / --config`。高频参数支持短选项：`-m / --model-id`、`-l / --language`、`-q / --quiet`、`-o / --output`、`-f / --format`、`-c / --config`。支持通过 `--ffmpeg-path <PATH>` 或配置文件中的 `ffmpeg_path` 指定自定义 FFmpeg 路径。
-提供 `--online-provider` 后，CLI 会把本地文件上传到指定服务商，并将结果输出到 stdout 或目标文件。可直接通过 `--api-key <KEY>` 传入密钥，或通过环境变量读取：
-
+使用 `--list-providers` 可以快速查看所有受支持的在线 ASR 服务商 ID、默认环境变量名及支持的转写模式（batch / streaming）。
 ```bash
 set GROQ_API_KEY=...
 sona-cli transcribe ./sample.wav --online-provider groq-whisper --format txt
@@ -206,6 +213,17 @@ sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
 
 启动时，服务会在 stderr 打印可用端点（`/health`、`/info`、`/v1/transcriptions` 等）以及鉴权提示。
+
+## `completion`
+
+为 `bash`、`zsh`、`fish`、`powershell` 或 `elvish` 生成 Shell 自动补全脚本。
+
+```bash
+sona-cli completion bash > ~/.local/share/bash-completion/completions/sona-cli
+sona-cli completion zsh > ~/.zfunc/_sona-cli
+sona-cli completion fish > ~/.config/fish/completions/sona-cli.fish
+sona-cli completion powershell >> $PROFILE
+```
 
 ## 输出和错误
 

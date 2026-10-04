@@ -357,3 +357,47 @@ fn models_list_filters_by_secondary_alias() {
             .contains("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
     );
 }
+
+#[test]
+fn models_verify_reports_not_installed_when_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "verify",
+        "whisper-turbo",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 3);
+    assert!(error.to_string().contains("is not installed at"));
+}
+
+#[test]
+fn models_verify_reports_corrupted_model_files() {
+    let dir = tempfile::tempdir().unwrap();
+    let install_path = dir.path().join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&install_path).unwrap();
+    // Corrupted file (missing required companion files or wrong hashes)
+    std::fs::write(install_path.join("corrupted.bin"), b"invalid").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "verify",
+        "whisper-turbo",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 3);
+    assert!(error.to_string().contains("failed verification"));
+    assert!(
+        error
+            .to_string()
+            .contains("Run 'sona-cli models download whisper-turbo' to repair.")
+    );
+}
