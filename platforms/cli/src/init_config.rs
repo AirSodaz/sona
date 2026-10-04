@@ -3,8 +3,18 @@ use std::path::PathBuf;
 
 use crate::{CliOutput, CliResult};
 
-const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
+pub(crate) const DEFAULT_CONFIG_PATH: &str = "sona-cli.toml";
 
+pub(crate) fn resolve_config_path(configured: Option<&PathBuf>) -> Option<PathBuf> {
+    if let Some(path) = configured {
+        return Some(path.clone());
+    }
+    let default_path = PathBuf::from(DEFAULT_CONFIG_PATH);
+    if default_path.is_file() {
+        return Some(default_path);
+    }
+    None
+}
 #[derive(Debug, Args)]
 #[command(
     about = "Create a commented TOML starter template",

@@ -999,3 +999,39 @@ fn model_selection_labels_are_formatted_with_dot_separator() {
         .expect("SenseVoice option must exist");
     assert_eq!(sensevoice_opt.label, "SenseVoice · Int8");
 }
+
+#[test]
+fn resolves_canonical_aliases_and_suggestions() {
+    use sona_core::models::preset_models::{
+        canonical_preset_model_id, format_unknown_model_error, suggest_preset_models,
+    };
+
+    assert_eq!(
+        canonical_preset_model_id("whisper-turbo"),
+        Some("sherpa-onnx-whisper-turbo")
+    );
+    assert_eq!(
+        canonical_preset_model_id("sensevoice"),
+        Some("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+    );
+    assert_eq!(
+        canonical_preset_model_id("paraformer"),
+        Some("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8")
+    );
+
+    let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");
+    assert_eq!(whisper.id, "sherpa-onnx-whisper-turbo");
+
+    let sensevoice = find_preset_model("sensevoice").expect("alias sensevoice must resolve");
+    assert_eq!(
+        sensevoice.id,
+        "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+    );
+
+    let suggestions = suggest_preset_models("whispr");
+    assert!(suggestions.contains(&"whisper-turbo"));
+
+    let error_msg = format_unknown_model_error("whispr");
+    assert!(error_msg.contains("Did you mean"));
+    assert!(error_msg.contains("whisper-turbo"));
+}

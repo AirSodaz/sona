@@ -52,7 +52,10 @@ pub fn resolve_model_download(
             crate::llm::local_models::find_local_llm_model(model_id).map(|m| m.to_preset_model())
         })
         .ok_or_else(|| {
-            RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
+            RuntimeValidationError::new(
+                "model_id",
+                crate::models::preset_models::format_unknown_model_error(model_id),
+            )
         })?;
     let download_path = model.resolve_download_path(models_dir);
     let install_path = model.resolve_install_path(models_dir);

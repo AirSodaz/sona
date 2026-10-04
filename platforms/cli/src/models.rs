@@ -46,12 +46,14 @@ pub struct ModelListArgs {
     models_dir: Option<PathBuf>,
     /// Filter by supported mode.
     #[arg(
+        short = 'm',
         long,
         value_name = "MODE",
         help = "Filter by mode: streaming or batch (offline is accepted as alias for batch)"
     )]
     mode: Option<String>,
     #[arg(
+        short = 't',
         long = "type",
         value_name = "TYPE",
         help = "Filter by type, for example whisper, vad, punctuation"
@@ -59,6 +61,7 @@ pub struct ModelListArgs {
     model_type: Option<String>,
     /// Filter by language token.
     #[arg(
+        short = 'l',
         long,
         value_name = "LANG",
         help = "Filter by language token, for example zh, en, ja, yue"
@@ -66,12 +69,13 @@ pub struct ModelListArgs {
     language: Option<String>,
     /// Show only installed models.
     #[arg(
+        short = 'i',
         long,
         help = "Only include models already present in the models directory"
     )]
     installed: bool,
     /// Prints JSON instead of the default table output.
-    #[arg(long, help = "Print machine-readable JSON")]
+    #[arg(short = 'j', long, help = "Print machine-readable JSON")]
     json: bool,
 }
 
@@ -88,10 +92,11 @@ pub struct ModelDownloadArgs {
     #[arg(long, help = "Override the target models directory")]
     models_dir: Option<PathBuf>,
     /// Suppresses progress logs.
-    #[arg(long, help = "Hide per-download progress output")]
+    #[arg(short = 'q', long, help = "Hide per-download progress output")]
     quiet: bool,
     /// Overwrites invalid installed files without prompting.
     #[arg(
+        short = 'y',
         long,
         help = "Overwrite invalid files without prompting for confirmation"
     )]
@@ -111,7 +116,7 @@ pub struct ModelDeleteArgs {
     #[arg(long, help = "Override the models directory")]
     models_dir: Option<PathBuf>,
     /// Confirms deletion without an interactive prompt.
-    #[arg(long, help = "Delete without prompting for confirmation")]
+    #[arg(short = 'y', long, help = "Delete without prompting for confirmation")]
     yes: bool,
 }
 

@@ -74,7 +74,7 @@ fn transcribe_live_requires_a_streaming_model_before_opening_input() {
     assert_eq!(error.exit_code(), 2);
     assert_eq!(
         error.to_string(),
-        "Missing required streaming model. Pass --model-id or set model_id in --config."
+        "Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider."
     );
 }
 

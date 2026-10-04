@@ -128,11 +128,204 @@ pub fn preset_models() -> &'static [PresetModel] {
         .as_slice()
 }
 
-/// Finds a shared preset model by its stable identifier.
-pub fn find_preset_model(model_id: &str) -> Option<&'static PresetModel> {
-    preset_models().iter().find(|model| model.id == model_id)
+/// Canonical alias mappings for preset models, verified against `preset-models.json`.
+pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
+    ("whisper-turbo", DEFAULT_WHISPER_TURBO_MODEL_ID),
+    ("whisper-large-v3", "sherpa-onnx-whisper-large-v3"),
+    (
+        "whisper-medium-aishell",
+        "sherpa-onnx-whisper-medium-aishell",
+    ),
+    ("sensevoice", DEFAULT_SENSEVOICE_INT8_MODEL_ID),
+    ("sensevoice-int8", DEFAULT_SENSEVOICE_INT8_MODEL_ID),
+    ("sensevoice-fp32", DEFAULT_SENSEVOICE_FP32_MODEL_ID),
+    (
+        "paraformer",
+        "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+    ),
+    (
+        "paraformer-trilingual",
+        "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+    ),
+    (
+        "paraformer-int8",
+        "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8",
+    ),
+    (
+        "paraformer-fp32",
+        "sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en",
+    ),
+    ("qwen3-asr-0.6b", "qwen3-asr-0.6b-q8-gguf"),
+    ("qwen3-asr-1.7b", "qwen3-asr-1.7b-q8-gguf"),
+    ("firered", "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
+    (
+        "firered-int8",
+        "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
+    ),
+    ("firered-fp32", "sherpa-onnx-fire-red-asr2-zh_en-2026-02-26"),
+    ("funasr-nano", "sherpa-onnx-funasr-nano-int8-2025-12-30"),
+    (
+        "funasr-nano-int8",
+        "sherpa-onnx-funasr-nano-int8-2025-12-30",
+    ),
+    (
+        "funasr-nano-fp16",
+        "sherpa-onnx-funasr-nano-fp16-2025-12-30",
+    ),
+    ("funasr-nano-fp32", "sherpa-onnx-funasr-nano-2025-12-30"),
+    (
+        "moonshine",
+        "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+    ),
+    (
+        "moonshine-tiny",
+        "sherpa-onnx-moonshine-tiny-en-quantized-2026-02-27",
+    ),
+    (
+        "moonshine-base-en",
+        "sherpa-onnx-moonshine-base-en-quantized-2026-02-27",
+    ),
+    (
+        "moonshine-base-zh",
+        "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+    ),
+    ("punctuation", DEFAULT_PUNCTUATION_MODEL_ID),
+    ("punct", DEFAULT_PUNCTUATION_MODEL_ID),
+    ("vad", DEFAULT_SILERO_VAD_MODEL_ID),
+];
+
+/// Resolves an alias or canonical model identifier to its canonical preset model ID.
+pub fn canonical_preset_model_id(alias_or_id: &str) -> Option<&'static str> {
+    let trimmed = alias_or_id.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    // 1. Direct match with preset model ID
+    if let Some(model) = preset_models().iter().find(|m| m.id == trimmed) {
+        return Some(&model.id);
+    }
+    // 2. Direct match with alias (case-insensitive)
+    for &(alias, canonical) in PRESET_MODEL_ALIASES {
+        if alias.eq_ignore_ascii_case(trimmed) {
+            return Some(canonical);
+        }
+    }
+    // 3. Match without "sherpa-onnx-" prefix against alias
+    if let Some(stripped) = trimmed.strip_prefix("sherpa-onnx-") {
+        for &(alias, canonical) in PRESET_MODEL_ALIASES {
+            if alias.eq_ignore_ascii_case(stripped) {
+                return Some(canonical);
+            }
+        }
+    }
+    None
 }
 
+/// Finds a shared preset model by its stable identifier or recognized alias.
+pub fn find_preset_model(model_id: &str) -> Option<&'static PresetModel> {
+    let canonical = canonical_preset_model_id(model_id)?;
+    preset_models().iter().find(|model| model.id == canonical)
+}
+
+fn levenshtein_distance(a: &str, b: &str) -> usize {
+    let a_chars: Vec<char> = a.chars().collect();
+    let b_chars: Vec<char> = b.chars().collect();
+    let (m, n) = (a_chars.len(), b_chars.len());
+    let mut prev: Vec<usize> = (0..=n).collect();
+    let mut curr = vec![0; n + 1];
+
+    for i in 1..=m {
+        curr[0] = i;
+        for j in 1..=n {
+            let cost = if a_chars[i - 1] == b_chars[j - 1] {
+                0
+            } else {
+                1
+            };
+            curr[j] = (prev[j] + 1).min(curr[j - 1] + 1).min(prev[j - 1] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[n]
+}
+
+/// Computes close-match model suggestions for an unknown model ID.
+pub fn suggest_preset_models(input: &str) -> Vec<&'static str> {
+    let query = input.trim().to_ascii_lowercase();
+    if query.is_empty() {
+        return Vec::new();
+    }
+    let mut candidates: Vec<(&'static str, usize)> = Vec::new();
+
+    // 1. Alias substring match
+    for &(alias, _) in PRESET_MODEL_ALIASES {
+        if alias.contains(&query) || query.contains(alias) {
+            candidates.push((alias, 1));
+        }
+    }
+
+    // 2. Preset model ID substring match
+    for model in preset_models() {
+        let id_lower = model.id.to_ascii_lowercase();
+        if id_lower.contains(&query) {
+            candidates.push((model.id.as_str(), 2));
+        }
+    }
+
+    // 3. If no substring matches, compute edit distance against aliases and their parts
+    if candidates.is_empty() {
+        for &(alias, _) in PRESET_MODEL_ALIASES {
+            let dist = levenshtein_distance(&query, alias);
+            let part_dist = alias
+                .split('-')
+                .map(|part| levenshtein_distance(&query, part))
+                .min()
+                .unwrap_or(usize::MAX);
+            let min_d = dist.min(part_dist);
+            if min_d <= 2 {
+                candidates.push((alias, 10 + min_d));
+            }
+        }
+    }
+
+    candidates.sort_by_key(|&(_, score)| score);
+    let mut results = Vec::new();
+    for (candidate, _) in candidates {
+        if !results.contains(&candidate) {
+            results.push(candidate);
+            if results.len() >= 3 {
+                break;
+            }
+        }
+    }
+    results
+}
+
+/// Formats a standardized unknown model error message with actionable hints.
+pub fn format_unknown_model_error(model_id: &str) -> String {
+    let suggestions = suggest_preset_models(model_id);
+    if suggestions.is_empty() {
+        format!("Unknown model id: {model_id}")
+    } else {
+        format!(
+            "Unknown model id: {model_id}. Did you mean '{}'?",
+            suggestions.join("', '")
+        )
+    }
+}
+
+/// Formats a standardized unknown companion model error message with actionable hints.
+pub fn format_unknown_companion_model_error(model_id: &str) -> String {
+    let suggestions = suggest_preset_models(model_id);
+    if suggestions.is_empty() {
+        format!("Unknown companion model id: {model_id}")
+    } else {
+        format!(
+            "Unknown companion model id: {model_id}. Did you mean '{}'?",
+            suggestions.join("', '")
+        )
+    }
+}
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]

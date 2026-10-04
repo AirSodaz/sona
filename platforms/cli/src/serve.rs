@@ -24,7 +24,7 @@ pub struct ServeArgs {
     #[arg(long)]
     host: Option<String>,
     /// TCP port to bind.
-    #[arg(long)]
+    #[arg(short = 'p', long)]
     port: Option<u16>,
     /// Bearer token required for private endpoints.
     #[arg(long = "api-key")]
@@ -187,7 +187,8 @@ pub async fn run_serve(
 }
 
 fn load_config(path: Option<&PathBuf>) -> CliResult<Option<ServeConfigSection>> {
-    let Some(path) = path else {
+    let resolved = crate::init_config::resolve_config_path(path);
+    let Some(path) = resolved.as_ref() else {
         return Ok(None);
     };
     sona_runtime_fs::load_serve_config_file(path)

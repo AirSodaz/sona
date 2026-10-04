@@ -91,10 +91,10 @@ pub struct TranscribeLiveArgs {
     #[arg(short, long, value_name = "FILE")]
     pub(crate) config: Option<PathBuf>,
     /// Override the language setting.
-    #[arg(long)]
+    #[arg(short = 'l', long)]
     pub(crate) language: Option<String>,
     /// Streaming preset model id to use.
-    #[arg(long = "model-id")]
+    #[arg(short = 'm', long = "model-id")]
     pub(crate) model_id: Option<String>,
     #[command(flatten)]
     pub(crate) online: crate::online_asr::OnlineAsrArgs,
@@ -168,7 +168,8 @@ pub(crate) fn validate_direct_input_options(
 pub(crate) fn load_config(
     path: Option<&PathBuf>,
 ) -> CliResult<Option<TranscribeLiveConfigSection>> {
-    let Some(path) = path else {
+    let resolved = crate::init_config::resolve_config_path(path);
+    let Some(path) = resolved.as_ref() else {
         return Ok(None);
     };
     sona_runtime_fs::load_transcribe_live_config_file(path)

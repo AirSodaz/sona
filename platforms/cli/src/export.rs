@@ -29,19 +29,19 @@ enum ExportCommands {
 )]
 struct ExportTranscriptArgs {
     /// JSON file containing an array of transcript segments.
-    #[arg(long, value_name = "JSON_FILE")]
+    #[arg(short = 'i', long, value_name = "JSON_FILE")]
     input: PathBuf,
     /// Destination file path.
-    #[arg(long, value_name = "PATH")]
+    #[arg(short = 'o', long, value_name = "PATH")]
     output: PathBuf,
     /// Export format; inferred from the output extension when omitted.
-    #[arg(long, value_name = "FORMAT")]
+    #[arg(short = 'f', long, value_name = "FORMAT")]
     format: Option<String>,
     /// Text selection mode: original, translation, or bilingual.
-    #[arg(long, default_value = "original", value_name = "MODE")]
+    #[arg(short = 'm', long, default_value = "original", value_name = "MODE")]
     mode: String,
     /// Prints JSON instead of the default table output.
-    #[arg(long)]
+    #[arg(short = 'j', long)]
     json: bool,
 }
 

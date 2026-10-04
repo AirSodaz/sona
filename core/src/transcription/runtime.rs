@@ -432,7 +432,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
         },
         "streaming",
         "live_transcribe",
-        "Missing required streaming model. Pass --model-id or set model_id in --config.",
+        "Missing required streaming model. Pass -m/--model-id, set model_id in --config, or use --online-provider.",
         is_installed,
         models_dir_status,
     )?;
@@ -489,7 +489,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         },
         "batch",
         "batch_transcribe",
-        "Missing required batch model. Pass --model-id or set model_id in --config.",
+        "Missing required batch model. Pass -m/--model-id, set model_id in --config, or use --online-provider.",
         is_installed,
         models_dir_status,
     )?;
@@ -651,7 +651,10 @@ fn resolve_model_for_mode(
     mode: &'static str,
 ) -> Result<&'static PresetModel, RuntimeValidationError> {
     let model = find_preset_model(model_id).ok_or_else(|| {
-        RuntimeValidationError::new("model_id", format!("Unknown model id: {model_id}"))
+        RuntimeValidationError::new(
+            "model_id",
+            crate::models::preset_models::format_unknown_model_error(model_id),
+        )
     })?;
     if !model.supports_mode(mode) {
         return Err(RuntimeValidationError::new(
@@ -672,9 +675,10 @@ fn require_installed_model(
         return Err(RuntimeValidationError::new(
             "model_id",
             format!(
-                "Model '{}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+                "Model '{}' was not found at {}. Download it with 'sona-cli models download {}', or pass --models-dir explicitly if your models live elsewhere.",
                 model.id,
-                path.display()
+                path.display(),
+                model.id,
             ),
         ));
     }
@@ -690,7 +694,7 @@ fn require_installed_companion(
     let model = find_preset_model(model_id).ok_or_else(|| {
         RuntimeValidationError::new(
             validation_subject,
-            format!("Unknown companion model id: {model_id}"),
+            crate::models::preset_models::format_unknown_companion_model_error(model_id),
         )
     })?;
     let path = model.resolve_install_path(models_dir);
@@ -698,7 +702,7 @@ fn require_installed_companion(
         return Err(RuntimeValidationError::new(
             validation_subject,
             format!(
-                "Companion model '{model_id}' was not found at {}. Pass --models-dir explicitly if your desktop models live elsewhere.",
+                "Companion model '{model_id}' was not found at {}. Download it with 'sona-cli models download {model_id}', or pass --models-dir explicitly if your models live elsewhere.",
                 path.display()
             ),
         ));

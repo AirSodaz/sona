@@ -28,10 +28,10 @@ pub struct TranscribeArgs {
     #[arg(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
     /// Override the language setting.
-    #[arg(long)]
+    #[arg(short = 'l', long)]
     language: Option<String>,
     /// Preset model id to use.
-    #[arg(long = "model-id")]
+    #[arg(short = 'm', long = "model-id")]
     model_id: Option<String>,
     #[command(flatten)]
     online: crate::online_asr::OnlineAsrArgs,
@@ -63,7 +63,7 @@ pub struct TranscribeArgs {
     #[arg(long = "save-wav")]
     save_wav: Option<PathBuf>,
     /// Suppress progress output.
-    #[arg(long, default_value_t = false)]
+    #[arg(short = 'q', long, default_value_t = false)]
     quiet: bool,
     /// Overwrite existing output files.
     #[arg(long, default_value_t = false)]
@@ -227,7 +227,8 @@ fn render_transcription(
 }
 
 fn load_config(path: Option<&PathBuf>) -> CliResult<Option<TranscribeConfigSection>> {
-    let Some(path) = path else {
+    let resolved = crate::init_config::resolve_config_path(path);
+    let Some(path) = resolved.as_ref() else {
         return Ok(None);
     };
     sona_runtime_fs::load_transcribe_config_file(path)

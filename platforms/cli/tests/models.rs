@@ -257,3 +257,47 @@ fn models_list_mode_offline_alias_matches_batch() {
     assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
     assert!(output.stdout.contains("sherpa-onnx-whisper-large-v3"));
 }
+
+#[test]
+fn models_delete_accepts_model_alias_and_short_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let install_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&install_path).unwrap();
+    std::fs::write(install_path.join("model.onnx"), "fake").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "whisper-turbo",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+        "-y",
+    ])
+    .unwrap();
+
+    assert_eq!(output.stdout, "");
+    assert!(output.stderr.contains("Deleted"));
+    assert!(!install_path.exists());
+}
+
+#[test]
+fn models_list_accepts_short_flags() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+        "-m",
+        "batch",
+        "-t",
+        "whisper",
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(output.stdout.contains("sherpa-onnx-whisper-large-v3"));
+}

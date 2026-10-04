@@ -91,3 +91,39 @@ fn init_config_force_overwrites_existing_target() {
     assert!(contents.contains("[serve]"));
     assert!(contents.contains("sona-cli serve"));
 }
+
+#[test]
+fn auto_discovers_sona_cli_toml_in_current_dir() {
+    let _guard = CURRENT_DIR_LOCK.lock().unwrap();
+    let dir = tempfile::tempdir().unwrap();
+    let original_dir = std::env::current_dir().unwrap();
+    std::env::set_current_dir(dir.path()).unwrap();
+
+    let config_content = "[transcribe]\nmodel_id = \"whisper-turbo\"\n";
+    std::fs::write(dir.path().join("sona-cli.toml"), config_content).unwrap();
+
+    // Fake an audio file so we get past the input file existence check
+    let fake_audio = dir.path().join("sample.wav");
+    std::fs::write(&fake_audio, b"fake").unwrap();
+
+    // Running transcribe WITHOUT -c/--config should pick up model_id from ./sona-cli.toml
+    // and fail at model-not-found-on-disk (meaning config was successfully loaded!),
+    // rather than "Missing required batch model"
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        fake_audio.to_string_lossy().as_ref(),
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    std::env::set_current_dir(original_dir).unwrap();
+
+    // If config was loaded, model_id was set to whisper-turbo, so error will say model was not found
+    assert!(
+        error.to_string().contains("sherpa-onnx-whisper-turbo")
+            || error.to_string().contains("was not found"),
+        "Expected model not found error, got: {error}"
+    );
+}

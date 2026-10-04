@@ -24,12 +24,12 @@ Examples:
 ```bash
 cargo run -p sona-cli -- path-status ./models
 cargo run -p sona-cli -- init-config
-cargo run -p sona-cli -- models list --json
-cargo run -p sona-cli -- transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
+cargo run -p sona-cli -- models list -j
+cargo run -p sona-cli -- transcribe ./sample.wav -m whisper-turbo
 cargo run -p sona-cli -- transcribe ./sample.wav --online-provider groq-whisper
 cargo run -p sona-cli -- transcribe-live --online-provider volcengine-doubao
-cargo run -p sona-cli -- export transcript --input ./segments.json --output ./transcript.vtt
-cargo run -p sona-cli -- serve --host 127.0.0.1 --port 14200
+cargo run -p sona-cli -- export transcript -i ./segments.json -o ./transcript.vtt
+cargo run -p sona-cli -- serve -p 14200
 ```
 
 ## Stateless Boundary
@@ -52,22 +52,23 @@ Create a commented TOML starter file for local transcription and the local API s
 sona-cli init-config
 sona-cli init-config ./sona-cli.toml --force
 ```
-
 Existing files are protected unless `--force` is supplied. Status text is written to stderr.
+When `sona-cli.toml` is present in the current working directory, `transcribe`, `transcribe-live`, and `serve` automatically load it if `-c / --config` is omitted.
 
 ## `models`
 
 List, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state.
 
 ```bash
-sona-cli models list --mode batch --type whisper
-sona-cli models list --language zh --installed --json
-sona-cli models download sherpa-onnx-whisper-turbo
-sona-cli models delete sherpa-onnx-whisper-turbo --yes
+sona-cli models list -m batch -t whisper
+sona-cli models list -l zh -i -j
+sona-cli models download whisper-turbo -q
+sona-cli models delete whisper-turbo -y
 ```
 
-`models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `--yes` in scripts or non-interactive environments.
+`models download` and `models delete` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
 
+`models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
 ## `diagnostics`
 
 Build a diagnostics snapshot from facts supplied by the host. This command does not read the application database.
@@ -110,8 +111,8 @@ Input facts JSON format example (`DiagnosticsCoreInput`):
 Export a JSON array of transcript segments through the shared Core export service.
 
 ```bash
-sona-cli export transcript --input ./segments.json --output ./transcript.vtt
-sona-cli export transcript --input ./segments.json --output ./transcript.srt --mode bilingual
+sona-cli export transcript -i ./segments.json -o ./transcript.vtt
+sona-cli export transcript -i ./segments.json -o ./transcript.srt -m bilingual
 ```
 
 Input segments JSON format example (array of `TranscriptSegment`):
@@ -135,10 +136,11 @@ The format is inferred from the output extension unless `--format` is supplied. 
 Transcribe one local audio file, or a video file when using local ASR. Without `--online-provider`, the command uses an installed local Sherpa preset.
 
 ```bash
-sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo
-sona-cli transcribe ./sample.wav --config ./sona-cli.toml --output ./out.srt
+sona-cli transcribe ./sample.wav -m whisper-turbo
+sona-cli transcribe ./sample.wav -o ./out.srt
 ```
 
+If `sona-cli.toml` is present in the current working directory, it is loaded automatically without passing `-c / --config`. Common flags support short options: `-m / --model-id`, `-l / --language`, `-q / --quiet`, `-o / --output`, `-f / --format`, `-c / --config`.
 With `--online-provider`, the command uploads the local file to the selected provider and writes the result to stdout or the requested output file:
 
 ```bash
@@ -170,13 +172,11 @@ Transcribe microphone input or headerless 16 kHz mono signed 16-bit little-endia
 
 ```bash
 sona-cli transcribe-live --list-input-devices
-sona-cli transcribe-live \
-  --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17 \
-  --device "Studio Mic" --duration 60 --output ./live.srt
+sona-cli transcribe-live -m sensevoice --duration 60 -o ./live.srt
 
 ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
   sona-cli transcribe-live --input stdin \
-    --model-id sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en \
+    -m paraformer \
     --output-format ndjson
 ```
 
@@ -199,10 +199,9 @@ Run the shared local HTTP API server. The CLI server remains local-ASR-only; use
 
 ```bash
 sona-cli serve
-sona-cli serve --config ./sona-cli.toml
-sona-cli serve --host 127.0.0.1 --port 14200 --api-key local-secret
+sona-cli serve -p 14200 --api-key local-secret
+sona-cli serve -c ./custom-config.toml
 ```
-
 ## Output and Errors
 
 `transcribe` writes JSON to stdout by default. `transcribe-live` emits live text or NDJSON events and optionally writes a final output file. Validation errors exit 2, model errors exit 3, network/provider errors exit 4, and filesystem/input errors exit 5.
