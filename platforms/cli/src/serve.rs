@@ -14,17 +14,17 @@ use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options}
 #[derive(Debug, Args)]
 #[command(
     about = "Run the shared local HTTP API server",
-    after_help = "Examples:\n  sona-cli serve\n  sona-cli serve --host 127.0.0.1 --port 14200\n  sona-cli serve --config ./sona-cli.toml"
+    after_help = "Core Endpoints:\n  GET  /health                  Health check and status\n  GET  /info                    Server info, model list, and capabilities\n  POST /v1/transcriptions       Sona native batch transcription\n  POST /v1/audio/transcriptions OpenAI-compatible audio transcription\n\nAuthentication:\n  When --api-key is set, provide header 'Authorization: Bearer <API_KEY>'.\n\nExamples:\n  sona-cli serve\n  sona-cli serve --host 127.0.0.1 --port 14200\n  sona-cli serve --api-key my-secret-token\n  sona-cli serve --config ./sona-cli.toml"
 )]
 pub struct ServeArgs {
     /// Optional config file, usually sona-cli.toml.
     #[arg(short, long, value_name = "FILE")]
     config: Option<PathBuf>,
-    /// Host/IP address to bind.
-    #[arg(long)]
+    /// Host/IP address to bind [default: 127.0.0.1].
+    #[arg(long, help = "Host/IP address to bind [default: 127.0.0.1]")]
     host: Option<String>,
-    /// TCP port to bind.
-    #[arg(short = 'p', long)]
+    /// TCP port to bind [default: 14200].
+    #[arg(short = 'p', long, help = "TCP port to bind [default: 14200]")]
     port: Option<u16>,
     /// Bearer token required for private endpoints.
     #[arg(long = "api-key")]

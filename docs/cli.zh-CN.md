@@ -4,9 +4,12 @@
 
 当前独立 CLI 提供以下命令：
 
+- `doctor`（系统依赖、音频设备、模型环境与配置体检）
+- `devices`（列出系统可用音频输入麦克风设备）
+- `providers`（列出受支持的在线 ASR 服务商清单及支持模式）
 - `path-status`
 - `init-config`
-- `models list|download|delete|verify`
+- `models list|info|download|delete|verify|path`
 - `diagnostics`（或 `diagnostics snapshot`）
 - `export`（或 `export transcript`）
 - `serve`（使用本地 ASR 的本地 REST 转写）
@@ -22,19 +25,50 @@ cargo run -p sona-cli -- <command> ...
 示例：
 
 ```bash
-cargo run -p sona-cli -- path-status ./models
-cargo run -p sona-cli -- init-config
-cargo run -p sona-cli -- models list -j
-cargo run -p sona-cli -- transcribe ./sample.wav -m whisper-turbo
-cargo run -p sona-cli -- transcribe ./sample.wav --online-provider groq-whisper
-cargo run -p sona-cli -- transcribe-live --online-provider volcengine-doubao
-cargo run -p sona-cli -- export transcript -i ./segments.json -o ./transcript.vtt
-cargo run -p sona-cli -- serve -p 14200
+sona-cli doctor
+sona-cli devices
+sona-cli providers
+sona-cli models list -j
+sona-cli models info whisper-turbo
+sona-cli transcribe ./sample.wav -m whisper-turbo -o ./out.srt
+sona-cli transcribe ./sample.wav --online-provider groq-whisper
+sona-cli transcribe-live -m sensevoice
+sona-cli export -i ./segments.json -o ./transcript.vtt
+sona-cli serve -p 14200
 ```
 
 ## 无状态边界
 
 CLI 有意排除 SQLite、History、Tag、应用备份/恢复、Sync 和 Online LLM。不要增加会隐式创建或修改桌面应用数据目录的命令。请使用 `export transcript` 以及 stdout/文件输出，把 CLI 与其他工具组合起来。
+## `doctor`
+
+检查本地运行环境健康状态，包括 FFmpeg 可执行文件及版本、系统音频捕获输入设备、模型目录状态与已安装预置模型数量、硬件加速支持情况以及 `sona-cli.toml` 配置文件的合法性。
+
+```bash
+sona-cli doctor
+sona-cli doctor --json
+sona-cli doctor --models-dir ./models --config ./custom.toml
+```
+
+支持 `--json` 输出结构化健康检查报告（包含 `all_ok` 布尔值与各组件状态），便于 CI/CD 或自动化部署脚本集成。
+
+## `devices`
+
+快速列出当前系统所有可用的音频输入（麦克风）设备，并自动标记当前默认输入设备 `[default]`。
+
+```bash
+sona-cli devices
+sona-cli devices --json
+```
+
+## `providers`
+
+列出所有支持的在线 ASR 服务商清单，展示其服务商 ID、默认环境变量名以及所支持的模式（`batch`、`streaming`）。
+
+```bash
+sona-cli providers
+sona-cli providers --json
+```
 
 ## `path-status`
 
@@ -50,33 +84,37 @@ sona-cli path-status ./models
 
 ```bash
 sona-cli init-config
-sona-cli init-config ./sona-cli.toml --force
+sona-cli init-config ./sona-cli.toml -F
 ```
-已有文件默认受保护，只有传入 `--force` 才会覆盖；状态文本写入 stderr。
+已有文件默认受保护，只有传入 `-F / --force` 才会覆盖；状态文本写入 stderr。
 当当前工作目录下存在 `sona-cli.toml` 时，`transcribe`、`transcribe-live` 与 `serve` 会在省略 `-c / --config` 时自动加载该配置文件。也可通过全局环境变量 `SONA_CONFIG` 指定配置文件路径。
 
 ## `models`
 
-列出、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。省略 `--models-dir` 时，CLI 会优先检查 `SONA_MODELS_DIR` 环境变量，未设置时再回退到桌面端模型路径。
+列出、查看详情、下载或删除本地 ASR 预置模型。这些命令只操作模型目录，不操作 SQLite 应用状态。省略 `--models-dir` 时，CLI 会优先检查 `SONA_MODELS_DIR` 环境变量，未设置时再回退到桌面端模型路径。
 
 ```bash
 sona-cli models list
 sona-cli models list turbo
 sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
+sona-cli models info whisper-turbo
+sona-cli models info sensevoice --json
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
+sona-cli models delete --all -y
 sona-cli models verify whisper-turbo
 sona-cli models verify --all
 sona-cli models path
 ```
 
 `models list` 在表格输出中展示 `Alias` 简短别名列（并在 `--json` 输出中包含 `aliases` 字段）。支持传入关键字参数过滤（`sona-cli models list <QUERY>`），`--mode` 选项支持 `live` 或 `batch`。
-`models download`、`models delete` 与 `models verify` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
-`models verify` 用于在无需重新下载的情况下校验已安装模型的文件完整性，支持传入具体模型别名或通过 `--all` 全量校验模型目录下所有已安装模型。
+`models info`（别名 `models inspect`）用于查看单个预置模型的完整元数据，包括名称、类型、支持模式、完整支持语言清单（不截断）、必需的 Companion 模型、安装状态及 Artifact 下载哈希清单。支持 `--json`。
+`models download`、`models delete`、`models info` 与 `models verify` 支持便捷的简短模型别名（如 `whisper-turbo`、`sensevoice`、`paraformer`、`firered`、`qwen3-asr-0.6b`、`vad`、`punct`），输入未知模型时会提供相似相近名称推荐提示（"Did you mean ...?"）。
+`models verify` 用于在无需重新下载的情况下校验已安装模型的文件完整性，支持传入具体模型别名或通过 `--all` 全量校验模型目录下所有已安装预置模型。
 `models path` 用于直接输出当前解析生效的本地预置模型根目录绝对路径，便于脚本与目录导航。
 
-`models delete` 在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
+`models delete` 支持删除单个指定模型或通过 `--all` 批量删除模型目录下所有已安装预置模型。在交互式终端下会提示确认 `[y/N]`；在非交互式 Shell/脚本中传入 `-y / --yes`。
 ## `diagnostics`
 
 根据 Host 提供的事实构造 diagnostics 快照，不读取应用数据库。
@@ -215,8 +253,14 @@ sona-cli serve -c ./custom-config.toml
 sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
 
-启动时，服务会在 stderr 打印可用端点（`/health`、`/info`、`/v1/transcriptions` 等）以及鉴权提示。
+启动时，服务会在 stderr 打印可用端点以及鉴权提示。
+核心暴露端点包括：
+- `GET  /health`：健康检查与服务状态
+- `GET  /info`：服务能力、模型列表与规格清单
+- `POST /v1/transcriptions`：Sona 原生多媒体文件批量转写接口
+- `POST /v1/audio/transcriptions`：OpenAI 兼容的标准音频转录接口
 
+当通过 `--api-key <KEY>` 启用鉴权后，客户端请求私有端点需携带 HTTP 头：`Authorization: Bearer <KEY>`。
 ## `completion`
 
 为 `bash`、`zsh`、`fish`、`powershell` 或 `elvish` 生成 Shell 自动补全脚本。

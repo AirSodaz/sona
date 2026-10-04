@@ -12,7 +12,7 @@ use sona_core::transcription::transcript::TranscriptSegment;
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe audio with local or online ASR; local ASR also accepts video",
-    after_help = "Examples:\n  sona-cli transcribe ./sample.wav --model-id sherpa-onnx-whisper-turbo\n  sona-cli transcribe ./sample.wav --online-provider groq-whisper --output ./out.srt\n  sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --api-key-env MY_ASR_KEY"
+    after_help = "Examples:\n  sona-cli transcribe ./sample.wav -m whisper-turbo\n  sona-cli transcribe ./sample.wav -m sensevoice -l zh -f txt\n  sona-cli transcribe ./sample.wav -m whisper-turbo -o ./out.srt\n  sona-cli transcribe --input-dir ./recordings --output-dir ./transcripts -f srt\n  sona-cli transcribe ./sample.wav --online-provider groq-whisper --output ./out.srt\n  sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --api-key-env MY_ASR_KEY"
 )]
 pub struct TranscribeArgs {
     /// Input audio file(s), video file(s), or glob pattern(s). Required unless --input-dir is specified.
@@ -58,13 +58,13 @@ pub struct TranscribeArgs {
     /// Punctuation model id override.
     #[arg(long = "punctuation-model-id")]
     punctuation_model_id: Option<String>,
-    /// Number of threads to use.
+    /// Number of recognition threads (default: system auto-configured).
     #[arg(long)]
     threads: Option<i32>,
-    /// Enable ITN.
+    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
     #[arg(long, default_value_t = false)]
     enable_itn: bool,
-    /// Optional hotwords string.
+    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
     #[arg(long)]
     hotwords: Option<String>,
     /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
@@ -74,7 +74,7 @@ pub struct TranscribeArgs {
         value_parser = crate::runtime::gpu_acceleration_value_parser()
     )]
     gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds.
+    /// VAD buffer size in seconds, for example 0.5.
     #[arg(long = "vad-buffer")]
     vad_buffer: Option<f32>,
     /// Save the resampled WAV to a file.
@@ -90,9 +90,14 @@ pub struct TranscribeArgs {
     #[arg(long, default_value_t = false)]
     pub list_providers: bool,
     /// Overwrite existing output files.
-    #[arg(long, default_value_t = false)]
+    #[arg(
+        short = 'F',
+        long,
+        default_value_t = false,
+        help = "Overwrite existing output files"
+    )]
     force: bool,
-    /// Number of batch transcription jobs (default: 1; batch mode only).
+    /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
     #[arg(short = 'j', long, value_name = "N")]
     jobs: Option<usize>,
 }

@@ -131,7 +131,7 @@ impl OnlineAsrArgs {
                 "Online ASR provider manifest is missing {provider_id}."
             ))
         })?;
-        if mode == AsrMode::Streaming && !manifest.streaming.supported.unwrap_or(true) {
+        if mode == AsrMode::Streaming && !manifest.streaming.supported.unwrap_or(false) {
             return Err(CliError::Validation(format!(
                 "Online ASR provider {provider_id} does not support streaming transcription."
             )));

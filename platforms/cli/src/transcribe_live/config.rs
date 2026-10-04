@@ -63,7 +63,7 @@ impl From<LiveOutputFormatArg> for LiveOutputFormat {
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe live audio with local or online ASR",
-    after_help = "Examples:\n  sona-cli transcribe-live --model-id sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin --online-provider volcengine-doubao --output-format ndjson"
+    after_help = "Examples:\n  sona-cli transcribe-live -m sensevoice\n  sona-cli transcribe-live -m sensevoice --duration 30 -o ./meeting.srt\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin -m sensevoice --output-format ndjson"
 )]
 pub struct TranscribeLiveArgs {
     /// Live input source.
@@ -78,7 +78,7 @@ pub struct TranscribeLiveArgs {
     /// List available online ASR providers and exit.
     #[arg(long, default_value_t = false, conflicts_with = "list_input_devices")]
     pub(crate) list_providers: bool,
-    /// Stop after this many seconds.
+    /// Stop after this many seconds (supports fractional seconds, e.g. 10.5).
     #[arg(long, value_name = "SECONDS")]
     pub(crate) duration: Option<f64>,
     /// Live stdout stream format: text or ndjson.
@@ -121,13 +121,13 @@ pub struct TranscribeLiveArgs {
     /// Punctuation model id override.
     #[arg(long = "punctuation-model-id")]
     pub(crate) punctuation_model_id: Option<String>,
-    /// Number of recognition threads.
+    /// Number of recognition threads (default: system auto-configured).
     #[arg(long)]
     pub(crate) threads: Option<i32>,
-    /// Enable inverse text normalization.
+    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
     #[arg(long, default_value_t = false)]
     pub(crate) enable_itn: bool,
-    /// Optional hotwords string.
+    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
     #[arg(long)]
     pub(crate) hotwords: Option<String>,
     /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
@@ -137,11 +137,16 @@ pub struct TranscribeLiveArgs {
         value_parser = crate::runtime::gpu_acceleration_value_parser()
     )]
     pub(crate) gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds.
+    /// VAD buffer size in seconds, for example 0.5.
     #[arg(long = "vad-buffer")]
     pub(crate) vad_buffer: Option<f32>,
     /// Overwrite an existing final transcript file.
-    #[arg(long, default_value_t = false)]
+    #[arg(
+        short = 'F',
+        long,
+        default_value_t = false,
+        help = "Overwrite an existing final transcript file"
+    )]
     pub(crate) force: bool,
 }
 

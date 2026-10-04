@@ -48,6 +48,7 @@
         "speakerDiarization": true
       },
       "streaming": {
+        "supported": true,
         "requiresApiKey": true,
         "requiredConfigFields": [
           "streamingEndpoint",

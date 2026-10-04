@@ -493,3 +493,186 @@ fn models_verify_all_reports_no_installed_models_when_empty() {
 
     assert!(output.stdout.contains("No installed models found"));
 }
+
+#[test]
+fn models_info_text_outputs_full_metadata() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "info",
+        "whisper-turbo",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(output.stdout.contains("whisper-turbo"));
+    assert!(output.stdout.contains("Languages:"));
+    assert!(output.stdout.contains("Companions:"));
+    assert!(output.stdout.contains("silero-v5-vad"));
+    assert!(output.stdout.contains("Artifacts:"));
+}
+
+#[test]
+fn models_info_json_outputs_valid_schema() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "info",
+        "sensevoice",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+        "-j",
+    ])
+    .unwrap();
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(
+        json["id"],
+        "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17"
+    );
+    assert!(
+        json["aliases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|a| a == "sensevoice")
+    );
+    assert_eq!(json["installed"], false);
+    assert!(json["languages"].as_array().unwrap().len() >= 5);
+    assert!(!json["artifacts"].as_array().unwrap().is_empty());
+}
+
+#[test]
+fn models_info_unknown_model_reports_suggestion() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "info",
+        "whisper-turb",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("Did you mean"));
+}
+
+#[test]
+fn models_delete_requires_either_model_id_or_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn models_delete_rejects_both_model_id_and_all() {
+    let dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "whisper-turbo",
+        "--all",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn models_delete_all_empty_directory_reports_none_found() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "--all",
+        "--yes",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stdout, "");
+    assert!(output.stderr.contains("No installed models found in"));
+}
+
+#[test]
+fn models_delete_all_without_yes_in_noninteractive_fails() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let install_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&install_path).unwrap();
+    std::fs::write(install_path.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(install_path.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(install_path.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "--all",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Cannot prompt for confirmation in non-interactive shell")
+    );
+}
+
+#[test]
+fn models_delete_all_with_yes_deletes_installed_presets_and_preserves_custom_dir() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let preset_install_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&preset_install_path).unwrap();
+    std::fs::write(preset_install_path.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(preset_install_path.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(preset_install_path.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    // An unknown custom directory that is not part of the preset catalog
+    let custom_dir = models_dir.join("my-custom-untracked-model");
+    std::fs::create_dir_all(&custom_dir).unwrap();
+    std::fs::write(custom_dir.join("weights.bin"), "custom").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "--all",
+        "--yes",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stderr.contains("Deleted 1 installed model(s)"));
+    assert!(output.stderr.contains("sherpa-onnx-whisper-turbo"));
+    // The preset model directory should be removed
+    assert!(!preset_install_path.exists());
+    // The untracked custom directory must be preserved
+    assert!(custom_dir.exists());
+}

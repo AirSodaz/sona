@@ -4,9 +4,12 @@
 
 The standalone CLI ships these commands:
 
+- `doctor` (system dependencies, audio devices, models, and configuration health check)
+- `devices` (list available audio capture / microphone devices)
+- `providers` (list supported online ASR providers and their capabilities)
 - `path-status`
 - `init-config`
-- `models list|download|delete|verify`
+- `models list|info|download|delete|verify|path`
 - `diagnostics` (or `diagnostics snapshot`)
 - `export` (or `export transcript`)
 - `serve` (local REST transcription with local ASR)
@@ -22,19 +25,50 @@ cargo run -p sona-cli -- <command> ...
 Examples:
 
 ```bash
-cargo run -p sona-cli -- path-status ./models
-cargo run -p sona-cli -- init-config
-cargo run -p sona-cli -- models list -j
-cargo run -p sona-cli -- transcribe ./sample.wav -m whisper-turbo
-cargo run -p sona-cli -- transcribe ./sample.wav --online-provider groq-whisper
-cargo run -p sona-cli -- transcribe-live --online-provider volcengine-doubao
-cargo run -p sona-cli -- export transcript -i ./segments.json -o ./transcript.vtt
-cargo run -p sona-cli -- serve -p 14200
+sona-cli doctor
+sona-cli devices
+sona-cli providers
+sona-cli models list -j
+sona-cli models info whisper-turbo
+sona-cli transcribe ./sample.wav -m whisper-turbo -o ./out.srt
+sona-cli transcribe ./sample.wav --online-provider groq-whisper
+sona-cli transcribe-live -m sensevoice
+sona-cli export -i ./segments.json -o ./transcript.vtt
+sona-cli serve -p 14200
 ```
 
 ## Stateless Boundary
 
 The CLI deliberately excludes SQLite, History, Tag, application backup/recovery, Sync, and Online LLM. Do not add commands that silently create or modify the desktop application data directory. Use `export transcript` and stdout/file output to compose the CLI with other tools.
+## `doctor`
+
+Inspect system environment health including FFmpeg executable and version, audio capture devices, models directory and installed presets count, hardware acceleration support, and `sona-cli.toml` configuration syntax.
+
+```bash
+sona-cli doctor
+sona-cli doctor --json
+sona-cli doctor --models-dir ./models --config ./custom.toml
+```
+
+Supports `--json` for machine-readable status reports in CI/CD or automation scripts.
+
+## `devices`
+
+List available audio capture (microphone) devices on the current host, with the system default marked as `[default]`.
+
+```bash
+sona-cli devices
+sona-cli devices --json
+```
+
+## `providers`
+
+List supported online ASR providers with their default environment variable names and supported modes (`batch`, `streaming`).
+
+```bash
+sona-cli providers
+sona-cli providers --json
+```
 
 ## `path-status`
 
@@ -50,32 +84,38 @@ Create a commented TOML starter file for local transcription and the local API s
 
 ```bash
 sona-cli init-config
-sona-cli init-config ./sona-cli.toml --force
+sona-cli init-config ./sona-cli.toml -F
 ```
-Existing files are protected unless `--force` is supplied. Status text is written to stderr.
+Existing files are protected unless `-F / --force` is supplied. Status text is written to stderr.
 When `sona-cli.toml` is present in the current working directory, `transcribe`, `transcribe-live`, and `serve` automatically load it if `-c / --config` is omitted. You can also point to a config file globally via the `SONA_CONFIG` environment variable.
 
 ## `models`
 
-List, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state. If `--models-dir` is omitted, Sona checks the `SONA_MODELS_DIR` environment variable before falling back to the desktop app location.
+List, inspect, download, or delete preset local ASR models. These commands operate only on the selected models directory, not on SQLite application state. If `--models-dir` is omitted, Sona checks the `SONA_MODELS_DIR` environment variable before falling back to the desktop app location.
 
 ```bash
 sona-cli models list
 sona-cli models list turbo
 sona-cli models list -m batch -t whisper
 sona-cli models list -l zh -i -j
+sona-cli models info whisper-turbo
+sona-cli models info sensevoice --json
 sona-cli models download whisper-turbo -q
 sona-cli models delete whisper-turbo -y
+sona-cli models delete --all -y
 sona-cli models verify whisper-turbo
 sona-cli models verify --all
 sona-cli models path
 ```
 
 `models list` displays canonical short aliases in the `Alias` column (and in the `aliases` JSON field). You can filter models by keyword (`sona-cli models list <QUERY>`), and filter by `--mode` (`live` or `batch`).
-`models download`, `models delete`, and `models verify` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
+`models info` (alias `models inspect`) inspects full metadata for a preset model including name, type, supported modes, full language coverage (untruncated), required companion models, installation status, and download artifact checksums. Supports `--json`.
+`models download`, `models delete`, `models info`, and `models verify` support convenient short aliases (such as `whisper-turbo`, `sensevoice`, `paraformer`, `firered`, `qwen3-asr-0.6b`, `vad`, `punct`) alongside full preset IDs. Close-match suggestions are provided when an unknown model ID is entered.
 `models verify` validates file integrity of an installed model without re-downloading. Use `--all` to verify every installed model in the models directory.
 `models path` prints the resolved absolute path to the local preset models directory.
-`models delete` prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
+`models delete` deletes a specified model or all installed preset models with `--all`. It prompts for confirmation `[y/N]` when run in an interactive terminal; pass `-y / --yes` in scripts or non-interactive environments.
+
+## `diagnostics`
 
 Build a diagnostics snapshot from facts supplied by the host. This command does not read the application database.
 
@@ -214,7 +254,13 @@ sona-cli serve --ffmpeg-path /usr/bin/ffmpeg
 ```
 
 When started, the server prints endpoint hints and authentication requirements to stderr.
+Core endpoints exposed:
+- `GET  /health`: Health check and server status
+- `GET  /info`: Server capabilities, model list, and runtime specs
+- `POST /v1/transcriptions`: Native Sona batch transcription API
+- `POST /v1/audio/transcriptions`: OpenAI-compatible audio transcription API
 
+When authentication is enabled with `--api-key <KEY>`, client requests to private endpoints must include the HTTP header: `Authorization: Bearer <KEY>`.
 ## `completion`
 
 Generate shell auto-completion scripts for `bash`, `zsh`, `fish`, `powershell`, or `elvish`.

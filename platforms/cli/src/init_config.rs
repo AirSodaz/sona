@@ -38,7 +38,7 @@ where
 #[derive(Debug, Args)]
 #[command(
     about = "Create a commented TOML starter template",
-    after_help = "Examples:\n  sona-cli init-config\n  sona-cli init-config ./sona-cli.toml\n  sona-cli init-config ./sona-cli.toml --force\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be configured."
+    after_help = "Examples:\n  sona-cli init-config\n  sona-cli init-config ./sona-cli.toml\n  sona-cli init-config ./sona-cli.toml -F\n\nThe generated file is fully commented out. Uncomment the keys you need before using it with --config.\n`sona-cli transcribe` requires either model_id (local) or online_provider (cloud) to be configured."
 )]
 pub struct InitConfigArgs {
     /// Target TOML path. Defaults to ./sona-cli.toml.
@@ -48,7 +48,11 @@ pub struct InitConfigArgs {
     )]
     path: Option<PathBuf>,
     /// Overwrite the target file if it already exists.
-    #[arg(long, help = "Overwrite an existing starter template or config file")]
+    #[arg(
+        short = 'F',
+        long,
+        help = "Overwrite an existing starter template or config file"
+    )]
     force: bool,
 }
 

@@ -2,6 +2,7 @@ mod asr_adapter;
 mod config_template;
 mod desktop_paths;
 mod diagnostics;
+mod doctor;
 mod export;
 mod init_config;
 pub mod live_audio;
@@ -276,8 +277,35 @@ enum Commands {
     TranscribeLive(transcribe_live::TranscribeLiveArgs),
     /// Generates shell auto-completion scripts.
     Completion(CompletionArgs),
+    /// Checks system dependencies, audio devices, and models directory.
+    Doctor(doctor::DoctorArgs),
+    /// Lists available audio input (microphone) devices.
+    Devices(DevicesArgs),
+    /// Lists supported online ASR providers.
+    Providers(ProvidersArgs),
 }
 
+#[derive(Debug, clap::Args)]
+#[command(
+    about = "Lists available audio input (microphone) devices",
+    after_help = "Examples:\n  sona-cli devices\n  sona-cli devices --json"
+)]
+pub struct DevicesArgs {
+    /// Print machine-readable JSON.
+    #[arg(short = 'j', long, help = "Print machine-readable JSON")]
+    pub json: bool,
+}
+
+#[derive(Debug, clap::Args)]
+#[command(
+    about = "Lists supported online ASR providers",
+    after_help = "Examples:\n  sona-cli providers\n  sona-cli providers --json"
+)]
+pub struct ProvidersArgs {
+    /// Print machine-readable JSON.
+    #[arg(short = 'j', long, help = "Print machine-readable JSON")]
+    pub json: bool,
+}
 #[derive(Debug, clap::Args)]
 #[command(
     about = "Generates shell auto-completion scripts",
@@ -441,8 +469,60 @@ async fn dispatch(command: Commands, io: &mut (dyn CliIo + Send)) -> CliResult<O
                 String::from_utf8(buf).map_err(|error| CliError::Serialize(error.to_string()))?;
             Ok(CliOutput::stdout(script))
         }
+        Commands::Doctor(args) => doctor::run_doctor(args),
+        Commands::Devices(args) => run_devices(args),
+        Commands::Providers(args) => run_providers(args),
     }?;
     Ok(Some(output))
+}
+
+fn run_devices(args: DevicesArgs) -> CliResult<CliOutput> {
+    let devices = live_audio::microphone_device_names().map_err(CliError::Io)?;
+    let default_device = live_audio::default_microphone_device_name();
+    if args.json {
+        let json_val = serde_json::json!({
+            "default_device": default_device,
+            "devices": devices.iter().map(|d| {
+                serde_json::json!({
+                    "name": d,
+                    "is_default": default_device.as_deref() == Some(d.as_str()),
+                })
+            }).collect::<Vec<_>>()
+        });
+        let output = serde_json::to_string_pretty(&json_val)
+            .map_err(|e| CliError::Serialize(e.to_string()))?;
+        Ok(CliOutput::stdout(output))
+    } else {
+        let output = transcribe_live::format_input_device_list(&devices, default_device.as_deref());
+        Ok(CliOutput::stdout(output))
+    }
+}
+
+fn run_providers(args: ProvidersArgs) -> CliResult<CliOutput> {
+    if args.json {
+        let providers = sona_core::ports::asr::online_asr_providers();
+        let json_arr = providers
+            .iter()
+            .map(|p| {
+                let mut modes = vec!["batch"];
+                if p.streaming.supported.unwrap_or(false) {
+                    modes.push("streaming");
+                }
+                serde_json::json!({
+                    "id": p.id,
+                    "default_env_var": p.default_api_key_env(),
+                    "modes": modes,
+                })
+            })
+            .collect::<Vec<_>>();
+        let output = serde_json::to_string_pretty(&json_arr)
+            .map_err(|e| CliError::Serialize(e.to_string()))?;
+        Ok(CliOutput::stdout(output))
+    } else {
+        Ok(CliOutput::stdout(
+            transcribe::render_online_providers_table(),
+        ))
+    }
 }
 
 pub fn render_path_status_json(path: &str) -> CliResult<String> {

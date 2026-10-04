@@ -43,6 +43,26 @@ pub enum ModelCommands {
         after_help = "Examples:\n  sona-cli models path\n  sona-cli models path --models-dir ./models"
     )]
     Path(ModelPathArgs),
+    /// Displays detailed metadata and configuration for a preset model.
+    #[command(
+        alias = "inspect",
+        after_help = "Examples:\n  sona-cli models info whisper-turbo\n  sona-cli models info sensevoice -j\n  sona-cli models info silero-vad --models-dir ./models"
+    )]
+    Info(ModelInfoArgs),
+}
+
+#[derive(Debug, Args)]
+#[command(about = "Display detailed metadata and configuration for a preset model")]
+pub struct ModelInfoArgs {
+    /// Preset model id or alias to inspect.
+    #[arg(help = "Preset model id or alias, for example whisper-turbo or sensevoice")]
+    pub model_id: String,
+    /// Override the target models directory.
+    #[arg(long, help = "Override the target models directory")]
+    pub models_dir: Option<PathBuf>,
+    /// Prints machine-readable JSON.
+    #[arg(short = 'j', long, help = "Print machine-readable JSON")]
+    pub json: bool,
 }
 
 #[derive(Debug, Args)]
@@ -129,7 +149,7 @@ pub struct ModelListArgs {
 #[derive(Debug, Args)]
 #[command(
     about = "Download a preset model and any required companion models",
-    after_help = "Required companion models are downloaded automatically when the preset needs VAD or punctuation."
+    after_help = "Required companion models are downloaded automatically when the preset needs VAD or punctuation.\n\nExamples:\n  sona-cli models download whisper-turbo\n  sona-cli models download sensevoice\n  sona-cli models download silero-vad --models-dir ./models"
 )]
 pub struct ModelDownloadArgs {
     /// Preset model id to download.
@@ -153,18 +173,29 @@ pub struct ModelDownloadArgs {
 #[derive(Debug, Args)]
 #[command(
     about = "Delete an installed preset model",
-    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion without prompting.\n\nExamples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --yes\n  sona-cli models delete silero-vad --models-dir ./models --yes"
+    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion without prompting.\n\nExamples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --yes\n  sona-cli models delete whisper-turbo -y\n  sona-cli models delete --all -y\n  sona-cli models delete silero-vad --models-dir ./models --yes"
 )]
 pub struct ModelDeleteArgs {
     /// Preset model id to delete.
-    #[arg(help = "Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad")]
-    model_id: String,
+    #[arg(
+        help = "Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad",
+        conflicts_with = "all",
+        required_unless_present = "all"
+    )]
+    model_id: Option<String>,
     /// Models directory containing installed presets.
     #[arg(long, help = "Override the models directory")]
     models_dir: Option<PathBuf>,
     /// Confirms deletion without an interactive prompt.
     #[arg(short = 'y', long, help = "Delete without prompting for confirmation")]
     yes: bool,
+    /// Delete all installed preset models.
+    #[arg(
+        long,
+        help = "Delete all installed preset models in the models directory",
+        conflicts_with = "model_id"
+    )]
+    all: bool,
 }
 
 pub async fn run_models(
@@ -177,6 +208,7 @@ pub async fn run_models(
         ModelCommands::Delete(args) => run_model_delete(args, io),
         ModelCommands::Verify(args) => run_model_verify(args).await,
         ModelCommands::Path(args) => run_model_path(args),
+        ModelCommands::Info(args) => run_model_info(args).await,
     }
 }
 
@@ -330,13 +362,113 @@ fn run_model_delete(
 ) -> CliResult<CliOutput> {
     let models_dir = resolve_models_dir(args.models_dir)?;
 
+    if args.all {
+        let installed = list_models(Some(models_dir.clone()))?
+            .into_iter()
+            .filter(|m| m.installed)
+            .collect::<Vec<_>>();
+        if installed.is_empty() {
+            return Ok(CliOutput::stderr(format!(
+                "No installed models found in {}",
+                models_dir.display()
+            )));
+        }
+
+        if !args.yes {
+            if !io.stdin_is_terminal() {
+                return Err(CliError::Validation(
+                    "Cannot prompt for confirmation in non-interactive shell. Pass --yes to confirm deletion."
+                        .to_string(),
+                ));
+            }
+
+            write!(
+                io.stderr(),
+                "Are you sure you want to delete all {} installed model(s) in {}? [y/N] ",
+                installed.len(),
+                models_dir.display()
+            )
+            .map_err(|error| {
+                CliError::Io(format!("Failed to write confirmation prompt: {error}"))
+            })?;
+            io.stderr().flush().map_err(|error| {
+                CliError::Io(format!("Failed to flush confirmation prompt: {error}"))
+            })?;
+
+            let mut answer = String::new();
+            io.read_line_stdin(&mut answer)
+                .map_err(|error| CliError::Io(format!("Failed to read confirmation: {error}")))?;
+            if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
+                return Ok(CliOutput::stderr("Deletion cancelled.".to_string()));
+            }
+        }
+
+        sona_llama_cpp::prune_idle_llm_models();
+        sona_llama_cpp::prune_idle_llama_models();
+
+        let mut deleted = Vec::new();
+        let mut failed = Vec::new();
+        for model in &installed {
+            match sona_model_downloads::delete_installed_model(&models_dir, &model.id) {
+                Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => {
+                    deleted.push((model.id.clone(), path));
+                }
+                Ok(sona_model_downloads::DeleteModelResult::NotInstalled(_)) => {}
+                Err(error) => {
+                    failed.push((model.id.clone(), error));
+                }
+            }
+        }
+
+        if !failed.is_empty() {
+            let error_msgs = failed
+                .iter()
+                .map(|(id, err)| format!("{id}: {err}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if !deleted.is_empty() {
+                return Err(CliError::Model(format!(
+                    "Deleted {} model(s), but {} model(s) failed to delete: {}",
+                    deleted.len(),
+                    failed.len(),
+                    error_msgs
+                )));
+            } else {
+                return Err(CliError::Model(format!(
+                    "Failed to delete {} model(s): {}",
+                    failed.len(),
+                    error_msgs
+                )));
+            }
+        }
+
+        let deleted_lines = deleted
+            .iter()
+            .map(|(id, path)| format!("  - {id} ({})", path.display()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Ok(CliOutput::stderr(format!(
+            "Deleted {} installed model(s) from {}:\n{}",
+            deleted.len(),
+            models_dir.display(),
+            deleted_lines
+        )));
+    }
+
+    let model_id = args.model_id.as_deref().ok_or_else(|| {
+        CliError::Validation(
+            "Specify a model id or alias to delete, or pass --all to delete all installed models."
+                .to_string(),
+        )
+    })?;
+
     // Validate model existence and check if installed before prompting
-    let resolved = resolve_model_download(&args.model_id, &models_dir)
+    let resolved = resolve_model_download(model_id, &models_dir)
         .map_err(|error| CliError::Validation(error.to_string()))?;
     if !resolved.install_path.exists() {
         return Ok(CliOutput::stderr(format!(
             "Model {} is not installed at {}",
-            args.model_id,
+            model_id,
             resolved.install_path.display()
         )));
     }
@@ -352,7 +484,7 @@ fn run_model_delete(
         write!(
             io.stderr(),
             "Are you sure you want to delete model {}? [y/N] ",
-            args.model_id
+            model_id
         )
         .map_err(|error| CliError::Io(format!("Failed to write confirmation prompt: {error}")))?;
         io.stderr().flush().map_err(|error| {
@@ -371,19 +503,186 @@ fn run_model_delete(
     sona_llama_cpp::prune_idle_llm_models();
     sona_llama_cpp::prune_idle_llama_models();
 
-    match sona_model_downloads::delete_installed_model(&models_dir, &args.model_id) {
+    match sona_model_downloads::delete_installed_model(&models_dir, model_id) {
         Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => Ok(CliOutput::stderr(
-            format!("Deleted {} from {}", args.model_id, path.display()),
+            format!("Deleted {} from {}", model_id, path.display()),
         )),
-        Ok(sona_model_downloads::DeleteModelResult::NotInstalled(path)) => {
-            Ok(CliOutput::stderr(format!(
-                "Model {} is not installed at {}",
-                args.model_id,
-                path.display()
-            )))
-        }
+        Ok(sona_model_downloads::DeleteModelResult::NotInstalled(path)) => Ok(CliOutput::stderr(
+            format!("Model {} is not installed at {}", model_id, path.display()),
+        )),
         Err(error) => Err(map_download_error(error)),
     }
+}
+
+#[derive(serde::Serialize)]
+struct ModelInfoJson {
+    id: String,
+    name: String,
+    aliases: Vec<String>,
+    #[serde(rename = "type")]
+    model_type: String,
+    modes: Vec<String>,
+    size: String,
+    installed: bool,
+    installed_valid: bool,
+    install_path: String,
+    languages: Vec<String>,
+    language_mode: String,
+    companion_models: Vec<String>,
+    artifacts: Vec<ModelInfoArtifactJson>,
+}
+
+#[derive(serde::Serialize)]
+struct ModelInfoArtifactJson {
+    filename: String,
+    url: String,
+    sha256: Option<String>,
+    size_bytes: Option<u64>,
+}
+
+async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
+    let models_dir = resolve_models_dir(args.models_dir)?;
+    let resolved = resolve_model_download(&args.model_id, &models_dir)
+        .map_err(|error| CliError::Validation(error.to_string()))?;
+
+    let is_installed = resolved.install_path.exists();
+    let is_valid = if is_installed {
+        installed_model_is_valid(&resolved).await.unwrap_or(false)
+    } else {
+        false
+    };
+
+    let aliases = sona_core::models::preset_models::aliases_for_preset_model(&resolved.model.id);
+    let companions = required_companion_models(&resolved.model);
+    let companion_ids = companions
+        .companion_model_ids()
+        .into_iter()
+        .map(|s| s.to_string())
+        .collect::<Vec<_>>();
+
+    let language_mode_str = match resolved.model.language_mode {
+        sona_core::models::preset_models::LanguageMode::Selectable => "selectable",
+        sona_core::models::preset_models::LanguageMode::Auto => "auto",
+        sona_core::models::preset_models::LanguageMode::Fixed => "fixed",
+        sona_core::models::preset_models::LanguageMode::None => "none",
+    };
+
+    if args.json {
+        let json_obj = ModelInfoJson {
+            id: resolved.model.id.clone(),
+            name: resolved.model.name.clone(),
+            aliases,
+            model_type: resolved.model.model_type.clone(),
+            modes: resolved.model.modes.clone().unwrap_or_default(),
+            size: resolved.model.size.clone(),
+            installed: is_installed,
+            installed_valid: is_valid,
+            install_path: resolved.install_path.display().to_string(),
+            languages: resolved.model.languages.clone(),
+            language_mode: language_mode_str.to_string(),
+            companion_models: companion_ids,
+            artifacts: resolved
+                .model
+                .artifacts
+                .iter()
+                .map(|a| ModelInfoArtifactJson {
+                    filename: a.filename.clone(),
+                    url: a.url.clone(),
+                    sha256: a.sha256.clone(),
+                    size_bytes: a.size_bytes,
+                })
+                .collect(),
+        };
+        let output = serde_json::to_string_pretty(&json_obj)
+            .map_err(|e| CliError::Serialize(e.to_string()))?;
+        return Ok(CliOutput::stdout(output));
+    }
+
+    let install_status = if is_installed {
+        if is_valid {
+            format!("Yes (valid, at {})", resolved.install_path.display())
+        } else {
+            format!(
+                "Yes (corrupted/incomplete, at {})",
+                resolved.install_path.display()
+            )
+        }
+    } else {
+        format!("No (expected at {})", resolved.install_path.display())
+    };
+
+    let alias_str = if aliases.is_empty() {
+        "-".to_string()
+    } else {
+        aliases.join(", ")
+    };
+
+    let modes_str = resolved
+        .model
+        .modes
+        .as_ref()
+        .map(|m| m.join(", "))
+        .unwrap_or_else(|| "-".to_string());
+
+    let companions_str = if companion_ids.is_empty() {
+        "None".to_string()
+    } else {
+        companion_ids.join(", ")
+    };
+
+    let languages_str = if resolved.model.languages.is_empty() {
+        "-".to_string()
+    } else {
+        format!(
+            "{} ({language_mode_str})",
+            resolved.model.languages.join(", ")
+        )
+    };
+
+    let mut lines = Vec::new();
+    lines.push("Model Information:".to_string());
+    lines.push(format!("  ID:          {}", resolved.model.id));
+    lines.push(format!("  Name:        {}", resolved.model.name));
+    lines.push(format!("  Aliases:     {}", alias_str));
+    lines.push(format!("  Type:        {}", resolved.model.model_type));
+    lines.push(format!("  Modes:       {}", modes_str));
+    lines.push(format!("  Size:        {}", resolved.model.size));
+    lines.push(format!("  Installed:   {}", install_status));
+    lines.push(format!("  Languages:   {}", languages_str));
+    lines.push(format!("  Companions:  {}", companions_str));
+    if !resolved.model.artifacts.is_empty() {
+        lines.push("  Artifacts:".to_string());
+        for artifact in &resolved.model.artifacts {
+            let sha = artifact
+                .sha256
+                .as_deref()
+                .map(|s| {
+                    if s.len() > 16 {
+                        format!("sha256: {}...", &s[..16])
+                    } else {
+                        format!("sha256: {s}")
+                    }
+                })
+                .unwrap_or_else(|| "no hash".to_string());
+            let size = artifact
+                .size_bytes
+                .map(|b| {
+                    if b >= 1024 * 1024 * 1024 {
+                        format!("{:.2} GB", b as f64 / (1024.0 * 1024.0 * 1024.0))
+                    } else if b >= 1024 * 1024 {
+                        format!("{:.1} MB", b as f64 / (1024.0 * 1024.0))
+                    } else if b >= 1024 {
+                        format!("{:.1} KB", b as f64 / 1024.0)
+                    } else {
+                        format!("{b} B")
+                    }
+                })
+                .unwrap_or_else(|| "variable".to_string());
+            lines.push(format!("    - {} ({}, {})", artifact.filename, size, sha));
+        }
+    }
+
+    Ok(CliOutput::stdout(lines.join("\n")))
 }
 
 async fn download_one_model(

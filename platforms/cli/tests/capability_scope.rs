@@ -7,11 +7,14 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
 
     for command in [
         "completion",
+        "devices",
         "diagnostics",
+        "doctor",
         "export",
         "init-config",
         "models",
         "path-status",
+        "providers",
         "serve",
         "transcribe",
         "transcribe-live",
@@ -396,8 +399,26 @@ fn transcribe_list_providers_outputs_table_with_all_providers() {
     assert!(output.stdout.contains("groq-whisper"));
     assert!(output.stdout.contains("volcengine-doubao"));
     assert!(output.stdout.contains("openai-whisper"));
+    // Regression test: volcengine-doubao must support both batch and streaming in manifest
+    let volcengine_line = output
+        .stdout
+        .lines()
+        .find(|line| line.contains("volcengine-doubao"))
+        .expect("volcengine-doubao must be present in providers table");
+    assert!(
+        volcengine_line.contains("batch, streaming"),
+        "volcengine-doubao must support both batch and streaming, got: {volcengine_line}"
+    );
+    let groq_line = output
+        .stdout
+        .lines()
+        .find(|line| line.contains("groq-whisper"))
+        .expect("groq-whisper must be present in providers table");
+    assert!(
+        !groq_line.contains("streaming"),
+        "groq-whisper must be batch-only, got: {groq_line}"
+    );
 }
-
 #[test]
 fn transcribe_live_list_providers_matches_transcribe_output() {
     let batch_output = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--list-providers"])
@@ -509,4 +530,131 @@ fn serve_rejects_invalid_gpu_acceleration() {
             .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
+}
+
+#[test]
+fn doctor_outputs_readable_status_summary() {
+    let output =
+        sona_cli::run_cli_from_args(["sona-cli", "doctor"]).expect("doctor command should succeed");
+
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("Sona CLI System Health Check:"));
+    assert!(output.stdout.contains("FFmpeg:"));
+    assert!(output.stdout.contains("Audio Input:"));
+    assert!(output.stdout.contains("Models:"));
+    assert!(output.stdout.contains("Hardware Acceleration:"));
+    assert!(output.stdout.contains("Configuration:"));
+}
+
+#[test]
+fn doctor_json_outputs_valid_schema() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "doctor", "--json"])
+        .expect("doctor --json command should succeed");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert!(json["all_ok"].is_boolean());
+    assert!(json["ffmpeg"]["found"].is_boolean());
+    assert!(json["audio_input"]["available"].is_boolean());
+    assert!(json["models"]["path"].is_string());
+    assert!(json["hardware_acceleration"]["available_modes"].is_array());
+    assert!(json["config"]["valid"].is_boolean());
+}
+
+#[test]
+fn doctor_with_missing_ffmpeg_reports_warning_without_failing() {
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "doctor",
+        "--ffmpeg-path",
+        "/path/that/definitely/does/not/exist/ffmpeg",
+        "--json",
+    ])
+    .expect("doctor should succeed even with missing ffmpeg");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(json["ffmpeg"]["found"], false);
+    assert_eq!(json["all_ok"], false);
+}
+
+#[test]
+fn doctor_with_invalid_config_reports_failure_without_panicking() {
+    let dir = tempfile::tempdir().unwrap();
+    let bad_config = dir.path().join("invalid.toml");
+    std::fs::write(&bad_config, "this is not valid toml = [[[").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "doctor",
+        "--config",
+        bad_config.to_string_lossy().as_ref(),
+        "--json",
+    ])
+    .expect("doctor should succeed even with invalid config to report status");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(json["config"]["found"], true);
+    assert_eq!(json["config"]["valid"], false);
+    assert_eq!(json["all_ok"], false);
+}
+
+#[test]
+fn devices_command_outputs_device_list_or_empty() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "devices"])
+        .expect("devices command should succeed");
+
+    assert_eq!(output.stderr, "");
+}
+
+#[test]
+fn devices_command_json_outputs_valid_schema() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "devices", "-j"])
+        .expect("devices -j command should succeed");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert!(json["devices"].is_array());
+}
+
+#[test]
+fn providers_command_matches_transcribe_list_providers() {
+    let providers_output = sona_cli::run_cli_from_args(["sona-cli", "providers"])
+        .expect("providers command should succeed");
+    let list_output = sona_cli::run_cli_from_args(["sona-cli", "transcribe", "--list-providers"])
+        .expect("transcribe --list-providers should succeed");
+
+    assert_eq!(providers_output.stderr, "");
+    assert_eq!(providers_output.stdout, list_output.stdout);
+}
+
+#[test]
+fn providers_command_json_outputs_valid_schema() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "providers", "--json"])
+        .expect("providers --json command should succeed");
+
+    assert_eq!(output.stderr, "");
+    let json: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    let arr = json.as_array().unwrap();
+    assert!(arr.iter().any(|p| p["id"] == "volcengine-doubao"));
+    assert!(arr.iter().any(|p| p["id"] == "groq-whisper"));
+}
+
+#[test]
+fn transcribe_and_init_config_accept_short_force_flag() {
+    // init-config with -F
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(&config_path, "existing").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "init-config",
+        config_path.to_string_lossy().as_ref(),
+        "-F",
+    ])
+    .expect("init-config with -F should succeed");
+
+    assert!(output.stderr.contains("Created config template"));
 }
