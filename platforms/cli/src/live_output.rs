@@ -1,6 +1,7 @@
 use crossterm::{cursor, queue, terminal};
 use serde::Serialize;
 use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
+use std::collections::HashSet;
 use std::io::Write;
 use unicode_width::UnicodeWidthStr;
 
@@ -113,6 +114,7 @@ pub struct LiveOutputRenderer {
     session_id: String,
     accumulator: TranscriptAccumulator,
     rendered_lines: usize,
+    emitted_segment_ids: HashSet<String>,
 }
 
 impl LiveOutputRenderer {
@@ -123,6 +125,7 @@ impl LiveOutputRenderer {
             session_id: session_id.into(),
             accumulator: TranscriptAccumulator::default(),
             rendered_lines: 0,
+            emitted_segment_ids: HashSet::new(),
         }
     }
 
@@ -166,7 +169,25 @@ impl LiveOutputRenderer {
                 },
             ),
             LiveOutputFormat::Text if self.terminal => self.refresh_terminal(writer, false),
-            LiveOutputFormat::Text => Ok(()),
+            LiveOutputFormat::Text => {
+                for segment in &update.upsert_segments {
+                    if segment.is_final && !self.emitted_segment_ids.contains(&segment.id) {
+                        let text = segment.text.trim();
+                        if !text.is_empty() {
+                            writer
+                                .write_all(format!("{text}\n").as_bytes())
+                                .map_err(|error| {
+                                    format!("Failed to stream live transcript: {error}")
+                                })?;
+                            writer.flush().map_err(|error| {
+                                format!("Failed to flush live transcript: {error}")
+                            })?;
+                            self.emitted_segment_ids.insert(segment.id.clone());
+                        }
+                    }
+                }
+                Ok(())
+            }
         }
     }
 
@@ -186,14 +207,21 @@ impl LiveOutputRenderer {
             ),
             LiveOutputFormat::Text if self.terminal => self.refresh_terminal(writer, true),
             LiveOutputFormat::Text => {
-                let text = self.accumulator.plain_text();
-                if !text.is_empty() {
-                    writer
-                        .write_all(format!("{text}\n").as_bytes())
-                        .map_err(|error| format!("Failed to write live transcript: {error}"))?;
-                    writer
-                        .flush()
-                        .map_err(|error| format!("Failed to flush live transcript: {error}"))?;
+                for segment in self.accumulator.segments() {
+                    if !self.emitted_segment_ids.contains(&segment.id) {
+                        let text = segment.text.trim();
+                        if !text.is_empty() {
+                            writer
+                                .write_all(format!("{text}\n").as_bytes())
+                                .map_err(|error| {
+                                    format!("Failed to write live transcript: {error}")
+                                })?;
+                            writer.flush().map_err(|error| {
+                                format!("Failed to flush live transcript: {error}")
+                            })?;
+                            self.emitted_segment_ids.insert(segment.id.clone());
+                        }
+                    }
                 }
                 Ok(())
             }
@@ -499,5 +527,54 @@ mod tests {
         assert_eq!(rendered_terminal_rows("ab\n12345", 4), 3);
         assert_eq!(rendered_terminal_rows("你好", 3), 2);
         assert_eq!(rendered_terminal_rows("", 4), 1);
+    }
+
+    #[test]
+    fn non_terminal_text_streams_final_segments_in_real_time() {
+        let mut renderer = LiveOutputRenderer::new(LiveOutputFormat::Text, false, "session-1");
+        let mut output = Vec::new();
+        renderer
+            .write_update(
+                &mut output,
+                "partial",
+                TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: vec![segment("one", "hello", 0.0, 1.0, false)],
+                },
+            )
+            .unwrap();
+        assert_eq!(String::from_utf8(output.clone()).unwrap(), "");
+
+        renderer
+            .write_update(
+                &mut output,
+                "final",
+                TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: vec![segment("one", "hello world", 0.0, 1.0, true)],
+                },
+            )
+            .unwrap();
+        assert_eq!(String::from_utf8(output.clone()).unwrap(), "hello world\n");
+
+        renderer
+            .write_update(
+                &mut output,
+                "partial",
+                TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: vec![segment("two", "second sentence", 1.0, 2.0, false)],
+                },
+            )
+            .unwrap();
+        assert_eq!(String::from_utf8(output.clone()).unwrap(), "hello world\n");
+
+        renderer
+            .write_stopped(&mut output, LiveStopReason::CtrlC)
+            .unwrap();
+        assert_eq!(
+            String::from_utf8(output).unwrap(),
+            "hello world\nsecond sentence\n"
+        );
     }
 }

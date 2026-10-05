@@ -805,3 +805,111 @@ fn live_command_primary_syntax_and_unified_model() {
     assert_eq!(conflict_err.exit_code(), 2);
     assert!(conflict_err.to_string().contains("Conflicting model names"));
 }
+
+#[tokio::test]
+async fn live_runtime_records_audio_to_wav_file() {
+    let dir = tempfile::tempdir().unwrap();
+    let wav_path = dir.path().join("recorded.wav");
+
+    let (input_sender, input_receiver) = tokio::sync::mpsc::channel(4);
+    let pcm = vec![0xe8, 0x03, 0x30, 0xf8];
+    input_sender
+        .send(LiveAudioMessage::Chunk(LiveAudioChunk::PcmS16Le(pcm)))
+        .await
+        .unwrap();
+    input_sender.send(LiveAudioMessage::Eof).await.unwrap();
+
+    let (input_stop_sender, _input_stop_receiver) = std::sync::mpsc::channel();
+    let mut input = RunningAudioInput::from_parts(
+        input_receiver,
+        Some(input_stop_sender),
+        Some("Mock Mic".to_string()),
+        false,
+    );
+
+    let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let session: Arc<dyn AsrStreamingSession> = Arc::new(RecordingSession {
+        calls: calls.clone(),
+        updates: update_sender,
+        fail_start: false,
+        fail_feed: false,
+    });
+    let (_stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
+    let mut renderer = LiveOutputRenderer::new(LiveOutputFormat::Text, false, "session-1");
+    let mut output = Vec::new();
+
+    let reason = sona_cli::transcribe_live::run_live_session_with_save_audio(
+        session,
+        &mut input,
+        &mut update_receiver,
+        &mut renderer,
+        &mut output,
+        stop_receiver,
+        LiveSessionMetadata {
+            source: "microphone".to_string(),
+            device_name: Some("Mock Mic".to_string()),
+            model_id: "streaming-model".to_string(),
+        },
+        Some(&wav_path),
+    )
+    .await
+    .unwrap();
+    assert_eq!(reason, LiveStopReason::Eof);
+
+    assert!(wav_path.exists());
+    let mut reader = hound::WavReader::open(&wav_path).expect("valid wav file");
+    assert_eq!(reader.spec().channels, 1);
+    assert_eq!(reader.spec().sample_rate, 16000);
+    assert_eq!(reader.spec().bits_per_sample, 16);
+    let samples: Vec<i16> = reader.samples::<i16>().map(|s| s.unwrap()).collect();
+    assert_eq!(samples, vec![1000, -2000]);
+}
+
+#[tokio::test]
+async fn live_runtime_fails_cleanly_on_unwritable_save_audio_path() {
+    let unwritable_path = std::path::PathBuf::from("/nonexistent_dir_12345/unwritable.wav");
+    let (_input_sender, input_receiver) = tokio::sync::mpsc::channel(4);
+    let (input_stop_sender, input_stop_receiver) = std::sync::mpsc::channel();
+    let mut input = RunningAudioInput::from_parts(
+        input_receiver,
+        Some(input_stop_sender),
+        Some("Mock Mic".to_string()),
+        false,
+    );
+    let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    let session: Arc<dyn AsrStreamingSession> = Arc::new(RecordingSession {
+        calls: calls.clone(),
+        updates: update_sender,
+        fail_start: false,
+        fail_feed: false,
+    });
+    let (_stop_sender, stop_receiver) = tokio::sync::oneshot::channel();
+    let mut renderer = LiveOutputRenderer::new(LiveOutputFormat::Text, false, "session-1");
+    let mut output = Vec::new();
+
+    let err = sona_cli::transcribe_live::run_live_session_with_save_audio(
+        session,
+        &mut input,
+        &mut update_receiver,
+        &mut renderer,
+        &mut output,
+        stop_receiver,
+        LiveSessionMetadata {
+            source: "microphone".to_string(),
+            device_name: Some("Mock Mic".to_string()),
+            model_id: "streaming-model".to_string(),
+        },
+        Some(&unwritable_path),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(
+        err.to_string()
+            .contains("Failed to create audio recording file")
+    );
+    assert!(input_stop_receiver.try_recv().is_ok());
+    assert!(calls.lock().unwrap().is_empty());
+}

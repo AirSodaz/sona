@@ -91,6 +91,12 @@ pub fn run_export(args: ExportArgs, io: &mut (dyn crate::CliIo + Send)) -> CliRe
             )));
         }
     }
+    if input_path.as_os_str() == "-" && io.stdin_is_terminal() {
+        return Err(CliError::Validation(
+            "No transcript input provided. Specify an input file or pipe JSON segments via stdin."
+                .to_string(),
+        ));
+    }
 
     let is_stdout = args.output.as_os_str() == "-";
     let format = match args.format {
@@ -108,7 +114,7 @@ pub fn run_export(args: ExportArgs, io: &mut (dyn crate::CliIo + Send)) -> CliRe
     let input_bytes = if input_path.as_os_str() == "-" {
         if io.stdin_is_terminal() {
             return Err(CliError::Validation(
-                "No transcript input provided via stdin. Pipe JSON segments into standard input, or specify an input file with -i/--input <FILE>.".to_string(),
+                "No transcript input provided. Specify an input file or pipe JSON segments via stdin.".to_string(),
             ));
         }
         const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;

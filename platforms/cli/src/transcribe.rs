@@ -137,7 +137,7 @@ pub struct TranscribeArgs {
     /// List available online ASR providers and exit (deprecated: use 'sona-cli providers' instead).
     #[arg(long, default_value_t = false, hide = true)]
     pub list_providers: bool,
-    /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
+    /// Number of batch transcription jobs (experimental; current execution is sequential).
     #[arg(long, value_name = "N", hide = true)]
     jobs: Option<usize>,
 }
@@ -330,13 +330,13 @@ async fn run_batch_transcribe(
 
     if args.output.is_some() {
         return Err(CliError::Validation(
-            "--output cannot be used in batch transcription mode; use --output-dir and --format instead."
+            "--output cannot be used with multiple input files. Specify --format <FORMAT> (and optionally --output-dir <DIR>) to export each transcript individually."
                 .to_string(),
         ));
     }
     if resolved_jobs > 1 {
         return Err(CliError::Validation(
-            "Concurrent batch transcription (--jobs > 1) is not yet supported; batch jobs currently run sequentially.".to_string(),
+            "Concurrent batch transcription (--jobs > 1) is experimental; current execution is sequential.".to_string(),
         ));
     }
 

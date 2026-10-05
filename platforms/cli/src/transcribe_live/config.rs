@@ -93,6 +93,15 @@ pub struct TranscribeLiveArgs {
     /// Optional final transcript file.
     #[arg(short, long, value_name = "PATH", help_heading = "Input/Output")]
     pub(crate) output: Option<PathBuf>,
+    /// Save the live audio input to a WAV file.
+    #[arg(
+        long = "save-audio",
+        visible_alias = "save-wav",
+        value_name = "PATH",
+        help = "Save recorded audio input to a WAV file",
+        help_heading = "Input/Output"
+    )]
+    pub(crate) save_audio: Option<PathBuf>,
     /// Final transcript export format (json, txt, srt, vtt, md). Requires --output.
     #[arg(
         short,
@@ -204,6 +213,7 @@ pub(crate) struct ResolvedLiveCommand {
     pub(crate) output_format: LiveOutputFormat,
     pub(crate) export_mode: sona_core::export::ExportMode,
     pub(crate) asr: ResolvedLiveAsr,
+    pub(crate) save_audio: Option<PathBuf>,
 }
 
 pub(crate) enum ResolvedLiveAsr {
@@ -274,6 +284,7 @@ pub(crate) fn resolve_live_command(
     let duration_seconds = args.duration.or(config.duration_seconds);
     validate_direct_input_options(Some(input), device.as_deref(), duration_seconds)?;
     let duration = duration_seconds.map(Duration::from_secs_f64);
+    let save_audio = args.save_audio.clone().or_else(|| config.save_wav.clone());
     let output_format = match args.stream {
         Some(format) => format,
         None => config
@@ -369,6 +380,7 @@ pub(crate) fn resolve_live_command(
         output_format: output_format.into(),
         export_mode,
         asr,
+        save_audio,
     })
 }
 

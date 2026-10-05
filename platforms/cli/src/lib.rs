@@ -255,12 +255,40 @@ pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> Cl
     }
 }
 
+const CLI_HELP_TEMPLATE: &str = "\
+{about-with-newline}
+{usage-heading} {usage}
+
+Transcription:
+  transcribe  Transcribe audio with local or online ASR; local ASR also accepts video
+  live        Transcribe live audio using local or online ASR [alias: transcribe-live]
+
+Resources & Devices:
+  models      Manage, download, verify, and inspect preset ASR models
+  providers   Lists supported online ASR providers
+  devices     Lists available audio input (microphone) devices
+
+Conversion & Formatting:
+  export      Exports transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json) [alias: convert]
+
+Configuration & Service:
+  config      Inspects and manages Sona CLI configuration
+  serve       Runs the shared local HTTP API server
+
+System & Diagnostics:
+  doctor      Checks system dependencies, audio devices, and models directory
+  completion  Generates shell auto-completion scripts
+
+Options:
+{options}{after-help}";
+
 /// Standalone Sona command line interface.
 #[derive(Debug, Parser)]
 #[command(
     name = "sona-cli",
     version,
     about = "Standalone CLI backed by sona-core",
+    help_template = CLI_HELP_TEMPLATE,
     after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
@@ -276,15 +304,14 @@ struct Cli {
 pub fn cli_command() -> clap::Command {
     <Cli as clap::CommandFactory>::command()
 }
-
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Builds diagnostics snapshots from host-provided facts.
     #[command(hide = true)]
     Diagnostics(diagnostics::DiagnosticsArgs),
-    /// Converts transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json).
-    #[command(name = "convert", visible_alias = "export")]
-    Convert(export::ExportArgs),
+    /// Exports transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json).
+    #[command(name = "export", visible_alias = "convert")]
+    Export(export::ExportArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     #[command(hide = true)]
     PathStatus {
@@ -496,7 +523,7 @@ async fn dispatch(
 
     let output = match command {
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
-        Commands::Convert(args) => export::run_export(args, io),
+        Commands::Export(args) => export::run_export(args, io),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::Config(args) => config_cmd::run_config(args),
         Commands::Models(args) => models::run_models(args, io).await,

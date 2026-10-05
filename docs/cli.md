@@ -22,10 +22,12 @@ Configuration options are resolved in the following priority order:
 ## Exit Codes & Errors
 
 - `0`: Success;
-- `2`: Validation or CLI usage error (invalid argument, missing provider, duration <= 0);
+- `1`: General failure (e.g. `doctor --strict` health check failure, serialization error);
+- `2`: Validation or CLI usage error (invalid argument, missing provider, nonexistent input file, duration <= 0);
 - `3`: Model error (missing preset, corrupted download, uninstalled companion);
 - `4`: Network or online provider error (authentication failure, API timeout);
-- `5`: Filesystem or input error (file not found, existing file without `--force`).
+- `5`: Filesystem error (output file already exists without `--force`, directory write failure);
+- `130`: Cancelled (interrupted by Ctrl-C signal).
 
 ## Public Command Reference
 
@@ -241,11 +243,52 @@ Examples:
   sona-cli config show -c ./custom.toml
 ```
 
-#### `sona-cli convert`
+#### `sona-cli devices`
 
-Converts transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json)
+Lists available audio input (microphone) devices
 
-**Aliases:** `export`
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `--json` | `-j` | - | Print machine-readable JSON |
+
+**Usage & Examples:**
+
+```text
+Examples:
+  sona-cli devices
+  sona-cli devices --json
+```
+
+#### `sona-cli doctor`
+
+Checks system dependencies, audio devices, and models directory
+
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `--models-dir` | - | - | Override the target models directory |
+| `--config` | `-c` | - | Optional config file to inspect |
+| `--ffmpeg-path` | - | - | Custom path to the ffmpeg executable |
+| `--json` | `-j` | - | Print machine-readable JSON |
+| `--strict` | - | - | Return non-zero exit code if health check fails or has warnings |
+
+**Usage & Examples:**
+
+```text
+Examples:
+  sona-cli doctor
+  sona-cli doctor --json
+  sona-cli doctor --models-dir ./models
+```
+
+#### `sona-cli export`
+
+Exports transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json)
+
+**Aliases:** `convert`
 
 **Options & Arguments:**
 
@@ -284,46 +327,6 @@ Examples:
   sona-cli export ./segments.json -f txt
 ```
 
-#### `sona-cli devices`
-
-Lists available audio input (microphone) devices
-
-**Options & Arguments:**
-
-| Option / Argument | Short | Default | Description |
-| --- | --- | --- | --- |
-| `--json` | `-j` | - | Print machine-readable JSON |
-
-**Usage & Examples:**
-
-```text
-Examples:
-  sona-cli devices
-  sona-cli devices --json
-```
-
-#### `sona-cli doctor`
-
-Checks system dependencies, audio devices, and models directory
-
-**Options & Arguments:**
-
-| Option / Argument | Short | Default | Description |
-| --- | --- | --- | --- |
-| `--models-dir` | - | - | Override the target models directory |
-| `--config` | `-c` | - | Optional config file to inspect |
-| `--ffmpeg-path` | - | - | Custom path to the ffmpeg executable |
-| `--json` | `-j` | - | Print machine-readable JSON |
-
-**Usage & Examples:**
-
-```text
-Examples:
-  sona-cli doctor
-  sona-cli doctor --json
-  sona-cli doctor --models-dir ./models
-```
-
 #### `sona-cli live`
 
 Transcribe live audio using local or online ASR
@@ -339,6 +342,7 @@ Transcribe live audio using local or online ASR
 | `--duration` | - | - | Stop after this many seconds (supports fractional seconds, e.g. 10.5) |
 | `--stream` | - | - | Live stdout stream format: text or ndjson (alias: --stream-format) |
 | `--output` | `-o` | - | Optional final transcript file |
+| `--save-audio` | - | - | Save recorded audio input to a WAV file |
 | `--format` | `-f` | - | Final transcript export format (json, txt, srt, vtt, md). Requires --output |
 | `--mode` | - | `original` | Text selection mode for final transcript: original, translation, or bilingual |
 | `--force` | `-F` | `false` | Overwrite an existing final transcript file |
@@ -471,6 +475,7 @@ Lists preset models known to the CLI
 | `--all` | `-a` | - | Include auxiliary companion models (VAD, punctuation, speaker embedding) |
 | `--json` | `-j` | - | Print machine-readable JSON |
 | `<QUERY>` | - | - | Filter models by keyword matching ID, alias, or type |
+| `--online` | - | - | Show supported online cloud providers alongside local models |
 
 **Usage & Examples:**
 

@@ -3,7 +3,8 @@ mod session;
 
 pub(crate) use config::TranscribeLiveArgs;
 pub use session::{
-    LiveSessionMetadata, run_live_session, write_final_transcript, write_final_transcript_with_mode,
+    LiveSessionMetadata, run_live_session, run_live_session_with_save_audio,
+    write_final_transcript, write_final_transcript_with_mode,
 };
 
 use config::{
@@ -57,10 +58,18 @@ pub(crate) async fn run_transcribe_live(
     let stdin_is_terminal = io.stdin_is_terminal();
     let resolved = resolve_live_command(args, config, stdin_is_terminal)?;
     let stdout_is_terminal = io.stdout_is_terminal();
-    let status = {
+    let (status, saved_audio) = {
         let stdout = io.stdout();
         run_resolved_live_command(resolved, stdout_is_terminal, stdout).await?
     };
+    if let Some(path) = saved_audio {
+        writeln!(
+            io.stderr(),
+            "Saved live audio recording to {}",
+            path.display()
+        )
+        .map_err(|error| CliError::Io(format!("Failed to write audio status: {error}")))?;
+    }
     if let Some(status) = status {
         writeln!(io.stderr(), "{status}")
             .map_err(|error| CliError::Io(format!("Failed to write live status: {error}")))?;
@@ -72,7 +81,7 @@ async fn run_resolved_live_command(
     resolved: ResolvedLiveCommand,
     stdout_is_terminal: bool,
     stdout: &mut (dyn Write + Send),
-) -> CliResult<Option<String>> {
+) -> CliResult<(Option<String>, Option<std::path::PathBuf>)> {
     let session_id = uuid::Uuid::new_v4().to_string();
     let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();
     let observer: Arc<dyn AsrRuntimeObserver> = Arc::new(CliStreamingObserver {
@@ -114,7 +123,7 @@ async fn run_resolved_live_command(
     };
     let mut renderer =
         LiveOutputRenderer::new(resolved.output_format, stdout_is_terminal, &session_id);
-    let session_result = run_live_session(
+    let session_result = run_live_session_with_save_audio(
         session,
         &mut input,
         &mut update_receiver,
@@ -122,6 +131,7 @@ async fn run_resolved_live_command(
         stdout,
         stop_receiver,
         metadata,
+        resolved.save_audio.as_deref(),
     )
     .await;
 
@@ -162,7 +172,7 @@ async fn run_resolved_live_command(
     renderer
         .write_stopped(stdout, reason)
         .map_err(CliError::Io)?;
-    Ok(status)
+    Ok((status, resolved.save_audio))
 }
 
 pub(crate) fn format_input_device_list(devices: &[String], default_device: Option<&str>) -> String {

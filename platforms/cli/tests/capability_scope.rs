@@ -19,6 +19,19 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
     ] {
         assert!(help.contains(command), "help must expose {command}");
     }
+    for heading in [
+        "Transcription:",
+        "Resources & Devices:",
+        "Conversion & Formatting:",
+        "Configuration & Service:",
+        "System & Diagnostics:",
+    ] {
+        assert!(help.contains(heading), "help must expose heading {heading}");
+    }
+    assert!(
+        !help.contains("\n\n\n"),
+        "help output must not have excessive blank lines"
+    );
     for hidden_or_removed in [
         "app-config",
         "automation",
@@ -486,7 +499,7 @@ fn transcribe_batch_rejects_output_file_flag() {
     assert!(
         error
             .to_string()
-            .contains("--output cannot be used in batch transcription mode")
+            .contains("--output cannot be used with multiple input files")
     );
 }
 
@@ -625,7 +638,7 @@ fn transcribe_jobs_greater_than_one_reports_unsupported() {
     assert!(
         error
             .to_string()
-            .contains("Concurrent batch transcription (--jobs > 1) is not yet supported")
+            .contains("Concurrent batch transcription (--jobs > 1) is experimental; current execution is sequential")
     );
 }
 
@@ -718,6 +731,21 @@ fn doctor_with_invalid_config_reports_failure_without_panicking() {
     assert_eq!(json["config"]["found"], true);
     assert_eq!(json["config"]["valid"], false);
     assert_eq!(json["all_ok"], false);
+}
+
+#[test]
+fn doctor_strict_mode_fails_with_exit_code_1_on_warnings() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "doctor",
+        "--ffmpeg-path",
+        "/path/that/definitely/does/not/exist/ffmpeg",
+        "--strict",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 1);
+    assert!(error.to_string().contains("Doctor health check failed"));
 }
 
 #[test]

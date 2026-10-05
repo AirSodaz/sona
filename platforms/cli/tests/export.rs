@@ -218,10 +218,20 @@ fn export_transcript_stdin_terminal_returns_clear_validation_error() {
     .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
-    assert!(
-        error
-            .to_string()
-            .contains("No transcript input provided via stdin")
+    assert_eq!(
+        error.to_string(),
+        "No transcript input provided. Specify an input file or pipe JSON segments via stdin."
+    );
+}
+
+#[test]
+fn export_without_args_in_terminal_rejects_missing_input_before_format() {
+    let error =
+        sona_cli::run_cli_from_args_with_terminal_stdin(["sona-cli", "export"]).unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert_eq!(
+        error.to_string(),
+        "No transcript input provided. Specify an input file or pipe JSON segments via stdin."
     );
 }
 

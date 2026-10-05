@@ -236,6 +236,77 @@ fn config_subcommands_work() {
 }
 
 #[test]
+fn config_check_warns_on_unknown_keys_and_accepts_aliases() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("check.toml");
+    std::fs::write(
+        &cfg,
+        r#"
+vad_buffer = 1.5
+unknown_top_level = "foo"
+
+[transcribe]
+save_wav = "./test.wav"
+invalid_transcribe_key = 123
+
+[live]
+duration = 45.0
+stream = "ndjson"
+unknown_live_setting = true
+"#,
+    )
+    .unwrap();
+
+    let output =
+        sona_cli::run_cli_from_args(["sona-cli", "config", "check", "-c", cfg.to_str().unwrap()])
+            .unwrap();
+
+    let path_str = cfg.display().to_string();
+    assert!(output.stdout.contains("is valid"));
+    assert!(output.stdout.contains(&format!(
+        "Warning: Unrecognized key 'unknown_top_level' in {path_str}; this key will have no effect."
+    )));
+    assert!(output.stdout.contains(&format!(
+        "Warning: Unrecognized key 'transcribe.invalid_transcribe_key' in {path_str}; this key will have no effect."
+    )));
+    assert!(output.stdout.contains(&format!(
+        "Warning: Unrecognized key 'live.unknown_live_setting' in {path_str}; this key will have no effect."
+    )));
+
+    // Regression check: valid config with aliases has no warnings
+    let valid_cfg = dir.path().join("valid.toml");
+    std::fs::write(
+        &valid_cfg,
+        r#"
+vad_buffer = 1.5
+save_audio = "./recordings/all.wav"
+mode = "bilingual"
+continue_on_error = true
+
+[transcribe]
+save_wav = "./transcribe.wav"
+
+[live]
+duration = 30.0
+stream = "ndjson"
+sentence_only = true
+"#,
+    )
+    .unwrap();
+
+    let valid_output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "check",
+        "-c",
+        valid_cfg.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(valid_output.stdout.contains("is valid"));
+    assert!(!valid_output.stdout.contains("Warning:"));
+}
+
+#[test]
 fn init_config_rejects_conflicting_path_and_global_flags() {
     let error1 =
         sona_cli::run_cli_from_args(["sona-cli", "config", "init", "custom.toml", "--global"])

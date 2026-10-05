@@ -503,7 +503,7 @@ fn models_verify_defaults_to_all_installed_models() {
 }
 
 #[test]
-fn models_verify_rejects_both_model_id_and_all() {
+fn models_verify_accepts_both_model_id_and_all() {
     let dir = tempfile::tempdir().unwrap();
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
@@ -516,7 +516,8 @@ fn models_verify_rejects_both_model_id_and_all() {
     ])
     .unwrap_err();
 
-    assert_eq!(error.exit_code(), 2);
+    assert_eq!(error.exit_code(), 3);
+    assert!(error.to_string().contains("not installed"));
 }
 
 #[test]
@@ -837,4 +838,27 @@ fn models_delete_partial_installed_models_notices_skipped() {
             .contains("Note: 1 model(s) not installed, skipped: silero-vad")
     );
     assert!(!whisper_path.exists());
+}
+
+#[test]
+fn models_list_online_flag_includes_cloud_providers_in_table_and_json() {
+    // Table mode
+    let output = sona_cli::run_cli_from_args(["sona-cli", "models", "list", "--online"]).unwrap();
+    assert_eq!(output.stderr, "");
+    assert!(
+        output
+            .stdout
+            .contains("Supported Online ASR Providers & Models")
+    );
+    assert!(output.stdout.contains("openai-whisper"));
+    assert!(output.stdout.contains("groq-whisper"));
+
+    // JSON mode
+    let json_output =
+        sona_cli::run_cli_from_args(["sona-cli", "models", "list", "--online", "-j"]).unwrap();
+    assert_eq!(json_output.stderr, "");
+    let parsed: serde_json::Value = serde_json::from_str(&json_output.stdout).unwrap();
+    assert!(parsed.get("local_models").is_some());
+    let providers = parsed.get("online_providers").unwrap().as_array().unwrap();
+    assert!(providers.iter().any(|p| p["id"] == "openai-whisper"));
 }

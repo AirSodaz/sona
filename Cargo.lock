@@ -6395,6 +6395,7 @@ dependencies = [
  "cpal",
  "crossterm",
  "hex",
+ "hound",
  "log",
  "ringbuf",
  "serde",

@@ -22,6 +22,12 @@ pub struct DoctorArgs {
     /// Print machine-readable JSON.
     #[arg(short = 'j', long, help = "Print machine-readable JSON")]
     pub json: bool,
+    /// Return non-zero exit code if health check fails or has warnings.
+    #[arg(
+        long,
+        help = "Return non-zero exit code if health check fails or has warnings"
+    )]
+    pub strict: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -76,6 +82,13 @@ pub struct DoctorConfigStatus {
 
 pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
     let report = inspect_system(&args).await;
+
+    if args.strict && !report.all_ok {
+        return Err(CliError::Other(
+            "Doctor health check failed: environment has warnings or missing dependencies."
+                .to_string(),
+        ));
+    }
 
     if args.json {
         let output = serde_json::to_string_pretty(&report)
@@ -163,7 +176,6 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
     } else {
         lines.push("Environment has warnings. Some optional features may be limited.".to_string());
     }
-
     Ok(CliOutput::stdout(lines.join("\n")))
 }
 

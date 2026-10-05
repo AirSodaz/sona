@@ -32,9 +32,13 @@ pub struct SharedConfig {
     pub hotwords: Option<String>,
     pub quiet: Option<bool>,
     pub jobs: Option<usize>,
+    #[serde(alias = "vad_buffer")]
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
-
+    #[serde(alias = "save_audio")]
+    pub save_wav: Option<PathBuf>,
+    pub mode: Option<String>,
+    pub continue_on_error: Option<bool>,
     pub host: Option<String>,
     pub port: Option<u16>,
     pub api_key: Option<String>,
@@ -61,10 +65,15 @@ pub struct TranscribeConfigSection {
     pub hotwords: Option<String>,
     pub quiet: Option<bool>,
     pub jobs: Option<usize>,
+    #[serde(alias = "vad_buffer")]
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
     pub ffmpeg_path: Option<String>,
+    #[serde(alias = "save_audio")]
+    pub save_wav: Option<PathBuf>,
+    pub mode: Option<String>,
+    pub continue_on_error: Option<bool>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -77,6 +86,7 @@ pub struct TranscribeLiveConfigSection {
     pub threads: Option<i32>,
     pub enable_itn: Option<bool>,
     pub hotwords: Option<String>,
+    #[serde(alias = "vad_buffer")]
     pub vad_buffer_size: Option<f32>,
     pub online_provider: Option<String>,
     pub api_key_env: Option<String>,
@@ -84,10 +94,16 @@ pub struct TranscribeLiveConfigSection {
     pub gpu_acceleration: Option<String>,
     pub input: Option<String>,
     pub device: Option<String>,
+    #[serde(alias = "duration")]
     pub duration_seconds: Option<f64>,
+    #[serde(alias = "stream")]
     pub stream_format: Option<String>,
     pub output_format: Option<String>,
     pub format: Option<String>,
+    #[serde(alias = "save_audio")]
+    pub save_wav: Option<PathBuf>,
+    pub sentence_only: Option<bool>,
+    pub mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -130,6 +146,9 @@ impl UnifiedConfigFile {
         config.format = config.format.or(self.shared.format);
         config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
         config.ffmpeg_path = config.ffmpeg_path.or(self.shared.ffmpeg_path.clone());
+        config.save_wav = config.save_wav.or(self.shared.save_wav.clone());
+        config.mode = config.mode.or(self.shared.mode.clone());
+        config.continue_on_error = config.continue_on_error.or(self.shared.continue_on_error);
         config
     }
 
@@ -173,6 +192,8 @@ impl UnifiedConfigFile {
         config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
         config.stream_format = config.stream_format.or(config.output_format.clone());
         config.format = config.format.or(self.shared.format);
+        config.save_wav = config.save_wav.or(self.shared.save_wav);
+        config.mode = config.mode.or(self.shared.mode);
         config
     }
 }
@@ -257,5 +278,36 @@ duration_seconds = 45.0
         let live = parse_transcribe_live_config_file(toml, "test").unwrap();
         assert_eq!(live.model_id.as_deref(), Some("test-live"));
         assert_eq!(live.duration_seconds, Some(45.0));
+    }
+
+    #[test]
+    fn parses_config_aliases_and_extended_fields() {
+        let toml = r#"
+vad_buffer = 1.5
+save_audio = "./recordings/all.wav"
+mode = "bilingual"
+continue_on_error = true
+
+[transcribe]
+save_wav = "./transcribe.wav"
+
+[live]
+duration = 30.0
+stream = "ndjson"
+sentence_only = true
+"#;
+        let transcribe = parse_transcribe_config_file(toml, "test").unwrap();
+        assert_eq!(transcribe.vad_buffer_size, Some(1.5));
+        assert_eq!(transcribe.save_wav, Some(PathBuf::from("./transcribe.wav")));
+        assert_eq!(transcribe.mode.as_deref(), Some("bilingual"));
+        assert_eq!(transcribe.continue_on_error, Some(true));
+
+        let live = parse_transcribe_live_config_file(toml, "test").unwrap();
+        assert_eq!(live.vad_buffer_size, Some(1.5));
+        assert_eq!(live.duration_seconds, Some(30.0));
+        assert_eq!(live.stream_format.as_deref(), Some("ndjson"));
+        assert_eq!(live.sentence_only, Some(true));
+        assert_eq!(live.save_wav, Some(PathBuf::from("./recordings/all.wav")));
+        assert_eq!(live.mode.as_deref(), Some("bilingual"));
     }
 }

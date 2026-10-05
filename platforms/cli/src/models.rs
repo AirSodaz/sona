@@ -84,19 +84,14 @@ pub struct ModelPathArgs {
 pub struct ModelVerifyArgs {
     /// Preset model id or alias to verify. Defaults to all installed models when omitted.
     #[arg(
-        help = "Preset model id, for example whisper-turbo or silero-vad (defaults to all installed models when omitted)",
-        conflicts_with = "all"
+        help = "Preset model id, for example whisper-turbo or silero-vad (defaults to all installed models when omitted)"
     )]
     pub model_id: Option<String>,
     /// Models directory containing installed presets.
     #[arg(long, help = "Override the models directory")]
     pub models_dir: Option<PathBuf>,
     /// Verify all installed models in the models directory.
-    #[arg(
-        long,
-        help = "Verify all installed models in the models directory",
-        conflicts_with = "model_id"
-    )]
+    #[arg(long, help = "Verify all installed models in the models directory")]
     pub all: bool,
 }
 
@@ -159,6 +154,12 @@ pub struct ModelListArgs {
         help = "Filter models by keyword matching ID, alias, or type"
     )]
     query: Option<String>,
+    /// Include supported cloud/online ASR providers and their models.
+    #[arg(
+        long,
+        help = "Show supported online cloud providers alongside local models"
+    )]
+    pub online: bool,
 }
 
 #[derive(Debug, Args)]
@@ -248,7 +249,7 @@ fn run_model_path(args: ModelPathArgs) -> CliResult<CliOutput> {
 
 async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
     let models_dir = resolve_models_dir(args.models_dir)?;
-    if args.all || args.model_id.is_none() {
+    let Some(model_id) = args.model_id.as_ref() else {
         let installed = list_models(Some(models_dir.clone()))?
             .into_iter()
             .filter(|m| m.installed)
@@ -290,9 +291,7 @@ async fn run_model_verify(args: ModelVerifyArgs) -> CliResult<CliOutput> {
         } else {
             return Ok(CliOutput::stdout(summary));
         }
-    }
-
-    let model_id = args.model_id.as_ref().unwrap();
+    };
     let resolved = resolve_model_download(model_id, &models_dir)
         .map_err(|error| CliError::Validation(error.to_string()))?;
     if !sona_runtime_fs::path_exists(&resolved.install_path)
@@ -364,17 +363,55 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         });
     }
     let output = if args.json {
-        serde_json::to_string_pretty(
-            &models
+        if args.online {
+            let local_json = models
                 .into_iter()
                 .map(ModelListEntry::from)
-                .collect::<Vec<_>>(),
-        )
-        .map_err(|error| CliError::Serialize(format!("Failed to serialize model list: {error}")))?
+                .collect::<Vec<_>>();
+            let providers_json = sona_core::ports::asr::online_asr_providers()
+                .iter()
+                .map(|p| {
+                    let mut modes = vec!["batch"];
+                    if p.streaming.supported.unwrap_or(false) {
+                        modes.push("streaming");
+                    }
+                    serde_json::json!({
+                        "id": p.id,
+                        "default_env_var": p.default_api_key_env(),
+                        "modes": modes,
+                        "models": p.models,
+                    })
+                })
+                .collect::<Vec<_>>();
+            serde_json::to_string_pretty(&serde_json::json!({
+                "local_models": local_json,
+                "online_providers": providers_json,
+            }))
+            .map_err(|error| {
+                CliError::Serialize(format!("Failed to serialize model list: {error}"))
+            })?
+        } else {
+            serde_json::to_string_pretty(
+                &models
+                    .into_iter()
+                    .map(ModelListEntry::from)
+                    .collect::<Vec<_>>(),
+            )
+            .map_err(|error| {
+                CliError::Serialize(format!("Failed to serialize model list: {error}"))
+            })?
+        }
+    } else if args.online {
+        let mut table = render_model_table(&models);
+        table.push_str("\n\n");
+        table.push_str(&crate::transcribe::render_online_providers_with_models());
+        table.push_str(
+            "(Use 'sona-cli providers <PROVIDER>' to see options, authentication, and examples)\n",
+        );
+        table
     } else {
         render_model_table(&models)
     };
-
     Ok(CliOutput::stdout(output))
 }
 

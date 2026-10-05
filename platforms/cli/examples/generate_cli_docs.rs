@@ -146,7 +146,12 @@ pub fn generate_cli_markdown() -> String {
 
     doc.push_str("## Exit Codes & Errors\n\n");
     doc.push_str("- `0`: Success;\n");
-    doc.push_str("- `2`: Validation or CLI usage error (invalid argument, missing provider, duration <= 0);\n");
+    doc.push_str(
+        "- `1`: General failure (e.g. `doctor --strict` health check failure, serialization error);\n",
+    );
+    doc.push_str(
+        "- `2`: Validation or CLI usage error (invalid argument, missing provider, nonexistent input file, duration <= 0);\n",
+    );
     doc.push_str(
         "- `3`: Model error (missing preset, corrupted download, uninstalled companion);\n",
     );
@@ -154,8 +159,9 @@ pub fn generate_cli_markdown() -> String {
         "- `4`: Network or online provider error (authentication failure, API timeout);\n",
     );
     doc.push_str(
-        "- `5`: Filesystem or input error (file not found, existing file without `--force`).\n\n",
+        "- `5`: Filesystem error (output file already exists without `--force`, directory write failure);\n",
     );
+    doc.push_str("- `130`: Cancelled (interrupted by Ctrl-C signal).\n\n");
 
     doc.push_str("## Public Command Reference\n\n");
     doc.push_str(&generate_command_markdown(&root, "", 3));
