@@ -28,7 +28,6 @@ fn export_transcript_writes_requested_format_and_returns_json_result() {
     let result = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "--input",
         input.to_string_lossy().as_ref(),
         "--output",
@@ -60,7 +59,6 @@ fn export_transcript_infers_format_and_defaults_to_original_table_output() {
     let result = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "--input",
         input.to_string_lossy().as_ref(),
         "--output",
@@ -84,7 +82,6 @@ fn export_transcript_rejects_invalid_json_before_writing_output() {
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "--input",
         input.to_string_lossy().as_ref(),
         "--output",
@@ -107,7 +104,6 @@ fn export_transcript_rejects_unknown_format_before_writing_output() {
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "--input",
         input.to_string_lossy().as_ref(),
         "--output",
@@ -139,11 +135,9 @@ fn export_transcript_from_stdin_to_stdout_pipes_formatted_content() {
     ]))
     .unwrap();
 
-    let output = sona_cli::run_cli_from_args_with_stdin(
-        ["sona-cli", "export", "transcript", "-f", "srt"],
-        json_bytes,
-    )
-    .expect("streaming export to stdout should succeed");
+    let output =
+        sona_cli::run_cli_from_args_with_stdin(["sona-cli", "export", "-f", "srt"], json_bytes)
+            .expect("streaming export to stdout should succeed");
 
     assert_eq!(output.stderr, "");
     assert!(output.stdout.contains("00:00:00,000 --> 00:00:02,500"));
@@ -159,7 +153,6 @@ fn export_transcript_from_file_to_stdout_pipes_formatted_content() {
     let output = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "-i",
         input.to_str().unwrap(),
         "-o",
@@ -176,9 +169,7 @@ fn export_transcript_from_file_to_stdout_pipes_formatted_content() {
 
 #[test]
 fn export_transcript_rejects_stdout_when_format_is_missing() {
-    let error =
-        sona_cli::run_cli_from_args(["sona-cli", "export", "transcript", "-o", "-"]).unwrap_err();
-
+    let error = sona_cli::run_cli_from_args(["sona-cli", "export", "-o", "-"]).unwrap_err();
     assert_eq!(error.exit_code(), 2);
     assert!(
         error
@@ -219,7 +210,6 @@ fn export_transcript_stdin_terminal_returns_clear_validation_error() {
     let error = sona_cli::run_cli_from_args_with_terminal_stdin([
         "sona-cli",
         "export",
-        "transcript",
         "-o",
         output.to_str().unwrap(),
         "-f",
@@ -245,7 +235,6 @@ fn export_transcript_rejects_unknown_mode() {
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "-i",
         input.to_str().unwrap(),
         "-o",
@@ -269,7 +258,6 @@ fn export_transcript_rejects_existing_output_without_force() {
     let error = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "-i",
         input.to_str().unwrap(),
         "-o",
@@ -293,7 +281,6 @@ fn export_transcript_overwrites_existing_output_with_force() {
     let result = sona_cli::run_cli_from_args([
         "sona-cli",
         "export",
-        "transcript",
         "-i",
         input.to_str().unwrap(),
         "-o",
@@ -426,4 +413,24 @@ fn export_accepts_short_mode_flag() {
     ])
     .unwrap();
     assert!(result.stdout.contains("out.srt"));
+}
+
+#[test]
+fn convert_alias_works_identically_to_export() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("segments.json");
+    let output = dir.path().join("converted.srt");
+    write_segments(&input);
+
+    let result = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "convert",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+    ])
+    .unwrap();
+    assert!(result.stdout.contains("converted.srt"));
+    let content = fs::read_to_string(&output).unwrap();
+    assert!(content.contains("Hello"));
 }

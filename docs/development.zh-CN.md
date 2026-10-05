@@ -2,7 +2,7 @@
 
 [English](development.md) | [简体中文](development.zh-CN.md) | [项目 README](../README.zh-CN.md) | [参与贡献](../CONTRIBUTING.md)
 
-本指南介绍本地环境、开发、测试和源码构建。命令用法请查看 [CLI 指南](cli.zh-CN.md)，Android 专用构建说明请查看 [Android 指南](../platforms/android/README.md)。
+本指南介绍本地环境、开发、测试和源码构建。命令用法请查看 [CLI 指南 (English)](cli.md)，Android 专用构建说明请查看 [Android 指南](../platforms/android/README.md)。
 
 ## 前置条件
 

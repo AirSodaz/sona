@@ -1,6 +1,6 @@
 use std::path::PathBuf;
 
-use clap::{Args, Subcommand};
+use clap::Args;
 use sona_core::export::{
     ExportError, ExportFormat, ExportMode, ExportTranscriptFileRequest, ExportTranscriptFileResult,
 };
@@ -12,39 +12,19 @@ use crate::{CliError, CliOutput, CliResult};
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Exports transcript segments to a file or stdout",
-    subcommand_precedence_over_arg = true,
-    after_help = "Examples:\n  sona-cli export ./segments.json -o ./transcript.srt\n  sona-cli export -i ./segments.json -o ./transcript.srt\n  sona-cli export transcript -i ./segments.json -o ./transcript.srt\n  sona-cli export ./segments.json -o - -f srt"
+    about = "Exports or converts transcript segments to a subtitle/text file or stdout",
+    after_help = "Input JSON format:\n  [\n    {\n      \"id\": \"segment-1\",\n      \"text\": \"Hello\",\n      \"start\": 0.0,\n      \"end\": 2.5,\n      \"isFinal\": true,\n      \"translation\": \"Bonjour\"\n    }\n  ]\n\nSupported export formats:\n  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)\n\nExamples:\n  sona-cli export ./segments.json -o ./transcript.srt\n  sona-cli convert ./segments.json -o ./transcript.vtt\n  cat ./segments.json | sona-cli export -f srt > ./transcript.srt\n  sona-cli export ./segments.json -f txt"
 )]
 pub struct ExportArgs {
-    #[command(subcommand)]
-    command: Option<ExportCommands>,
-    #[command(flatten)]
-    direct: ExportTranscriptArgs,
-}
-
-#[derive(Debug, Subcommand)]
-enum ExportCommands {
-    /// Exports transcript segments to a file or stdout.
-    #[command(hide = true)]
-    Transcript(ExportTranscriptArgs),
-}
-
-#[derive(Debug, Args)]
-#[command(
-    about = "Exports transcript segments to a file or stdout",
-    after_help = "Input JSON format:\n  [\n    {\n      \"id\": \"segment-1\",\n      \"text\": \"Hello\",\n      \"start\": 0.0,\n      \"end\": 2.5,\n      \"isFinal\": true,\n      \"translation\": \"Bonjour\"\n    }\n  ]\n\nSupported export formats:\n  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)\n\nExamples:\n  sona-cli export transcript --input ./segments.json --output ./transcript.srt\n  sona-cli export transcript -i ./segments.json -o - -f srt\n  sona-cli transcribe audio.wav | sona-cli export transcript -f srt"
-)]
-pub struct ExportTranscriptArgs {
     /// Positional input JSON file containing an array of transcript segments.
-    #[arg(value_name = "INPUT", conflicts_with = "input")]
+    #[arg(value_name = "INPUT")]
     pub positional_input: Option<PathBuf>,
-    /// JSON file containing an array of transcript segments, or "-" for stdin.
+    /// Optional flag for JSON file containing an array of transcript segments (alternative to positional INPUT).
     #[arg(
         short = 'i',
         long,
         value_name = "JSON_FILE",
-        conflicts_with = "positional_input"
+        help = "JSON file containing transcript segments (alternative to positional INPUT)"
     )]
     pub input: Option<PathBuf>,
     /// Destination file path, or "-" for stdout.
@@ -76,26 +56,21 @@ pub struct ExportTranscriptArgs {
 }
 
 pub fn run_export(args: ExportArgs, io: &mut (dyn crate::CliIo + Send)) -> CliResult<CliOutput> {
-    match args.command {
-        Some(ExportCommands::Transcript(transcript_args)) => {
-            run_export_transcript(transcript_args, io)
-        }
-        None => run_export_transcript(args.direct, io),
-    }
-}
-
-fn run_export_transcript(
-    args: ExportTranscriptArgs,
-    io: &mut (dyn crate::CliIo + Send),
-) -> CliResult<CliOutput> {
     let mode =
         ExportMode::parse(&args.mode).map_err(|error| CliError::Validation(error.to_string()))?;
 
-    let input_path = args
-        .positional_input
-        .or(args.input)
-        .unwrap_or_else(|| PathBuf::from("-"));
-
+    let input_path = match (&args.positional_input, &args.input) {
+        (Some(pos), Some(flag)) if pos != flag => {
+            return Err(CliError::Validation(format!(
+                "Conflicting input files: positional '{}' vs flag '{}'. Specify only one.",
+                pos.display(),
+                flag.display()
+            )));
+        }
+        (Some(pos), _) => pos.clone(),
+        (None, Some(flag)) => flag.clone(),
+        (None, None) => PathBuf::from("-"),
+    };
     if input_path.as_os_str() != "-" {
         let metadata = std::fs::metadata(&input_path).map_err(|error| {
             CliError::Io(format!(

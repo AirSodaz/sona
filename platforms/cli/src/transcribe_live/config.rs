@@ -123,8 +123,13 @@ pub struct TranscribeLiveArgs {
     )]
     pub(crate) force: bool,
 
-    /// Streaming preset model id to use.
-    #[arg(short = 'm', long = "model-id", help_heading = "Model Options")]
+    /// Streaming preset model id to use, or online model name when an online provider is selected.
+    #[arg(
+        short = 'm',
+        long = "model",
+        alias = "model-id",
+        help_heading = "Model Options"
+    )]
     pub(crate) model_id: Option<String>,
     /// Models directory containing installed presets.
     #[arg(long = "models-dir", help_heading = "Model Options")]
@@ -246,18 +251,24 @@ pub(crate) fn load_config(
 pub(crate) fn resolve_live_command(
     args: TranscribeLiveArgs,
     config: Option<TranscribeLiveConfigSection>,
+    stdin_is_terminal: bool,
 ) -> CliResult<ResolvedLiveCommand> {
     let config = config.unwrap_or_default();
     let export_mode = sona_core::export::ExportMode::parse(&args.mode)
         .map_err(|error| CliError::Validation(error.to_string()))?;
     let input = match args.input {
         Some(input) => input,
-        None => config
-            .input
-            .as_deref()
-            .map(LiveInputSource::parse_config)
-            .transpose()?
-            .unwrap_or(LiveInputSource::Microphone),
+        None => {
+            if args.device.is_some() {
+                LiveInputSource::Microphone
+            } else if let Some(cfg_input) = config.input.as_deref() {
+                LiveInputSource::parse_config(cfg_input)?
+            } else if !stdin_is_terminal {
+                LiveInputSource::Stdin
+            } else {
+                LiveInputSource::Microphone
+            }
+        }
     };
     let device = args.device.clone().or(config.device.clone());
     let duration_seconds = args.duration.or(config.duration_seconds);
@@ -273,17 +284,23 @@ pub(crate) fn resolve_live_command(
             .transpose()?
             .unwrap_or(LiveOutputFormatArg::Text),
     };
-    let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
-        // Explicit --model-id on CLI overrides config-file online provider
-        args.online.validate_provider_presence()?;
-        args.online.clone()
-    } else {
-        args.online.resolve_with_config(
-            config.online_provider.clone(),
-            config.api_key_env.clone(),
-            config.online_config.clone(),
-        )?
-    };
+    let mut resolved_online = args.online.resolve_with_config(
+        config.online_provider.clone(),
+        config.api_key_env.clone(),
+        config.online_config.clone(),
+    )?;
+
+    if let (true, Some(cli_model)) = (resolved_online.is_online(), &args.model_id) {
+        if let Some(existing_online_model) = &resolved_online.online_model {
+            if existing_online_model != cli_model {
+                return Err(CliError::Validation(format!(
+                    "Conflicting model names specified: -m/--model '{cli_model}' vs --online-model '{existing_online_model}'."
+                )));
+            }
+        } else {
+            resolved_online.online_model = Some(cli_model.clone());
+        }
+    }
     let asr = if resolved_online.is_online() {
         reject_online_local_options(&args)?;
         validate_online_output(args.output.as_ref(), args.format.as_deref(), args.force)?;
@@ -357,7 +374,6 @@ pub(crate) fn resolve_live_command(
 
 fn reject_online_local_options(args: &TranscribeLiveArgs) -> CliResult<()> {
     let local_option = [
-        (args.model_id.is_some(), "--model-id"),
         (args.models_dir.is_some(), "--models-dir"),
         (args.vad_model_id.is_some(), "--vad-model-id"),
         (
@@ -530,5 +546,24 @@ mod tests {
             select_single_streaming_model(&[installed_streaming, second_streaming]),
             None
         );
+    }
+
+    #[test]
+    fn device_flag_overrides_config_input_stdin() {
+        use clap::Parser;
+        #[derive(Parser)]
+        struct TestCli {
+            #[command(flatten)]
+            args: TranscribeLiveArgs,
+        }
+        let parsed =
+            TestCli::try_parse_from(["live", "--device", "Test Mic", "-m", "sensevoice"]).unwrap();
+        let config = TranscribeLiveConfigSection {
+            input: Some("stdin".to_string()),
+            ..Default::default()
+        };
+        let resolved = resolve_live_command(parsed.args, Some(config), true).unwrap();
+        assert_eq!(resolved.input, LiveInputSource::Microphone);
+        assert_eq!(resolved.device.as_deref(), Some("Test Mic"));
     }
 }

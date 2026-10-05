@@ -72,8 +72,13 @@ pub struct TranscribeArgs {
     )]
     continue_on_error: bool,
 
-    /// Preset model id to use.
-    #[arg(short = 'm', long = "model-id", help_heading = "Model Options")]
+    /// Preset model id to use, or online model name when an online provider is selected.
+    #[arg(
+        short = 'm',
+        long = "model",
+        alias = "model-id",
+        help_heading = "Model Options"
+    )]
     model_id: Option<String>,
     /// Models directory containing installed presets.
     #[arg(long = "models-dir", help_heading = "Model Options")]
@@ -129,7 +134,7 @@ pub struct TranscribeArgs {
     #[arg(short = 'q', long, default_value_t = false)]
     quiet: bool,
 
-    /// List available online ASR providers and exit.
+    /// List available online ASR providers and exit (deprecated: use 'sona-cli providers' instead).
     #[arg(long, default_value_t = false, hide = true)]
     pub list_providers: bool,
     /// Number of batch transcription jobs (currently runs sequentially; concurrent jobs experimental).
@@ -144,17 +149,23 @@ pub async fn run_transcribe(
         return Ok(CliOutput::stdout(render_online_providers_table()));
     }
     let config = load_config(args.config.as_ref())?;
-    let resolved_online = if args.model_id.is_some() && args.online.online_provider.is_none() {
-        // Explicit --model-id on CLI overrides config-file online provider
-        args.online.validate_provider_presence()?;
-        args.online.clone()
-    } else {
-        args.online.resolve_with_config(
-            config.as_ref().and_then(|c| c.online_provider.clone()),
-            config.as_ref().and_then(|c| c.api_key_env.clone()),
-            config.as_ref().and_then(|c| c.online_config.clone()),
-        )?
-    };
+    let mut resolved_online = args.online.resolve_with_config(
+        config.as_ref().and_then(|c| c.online_provider.clone()),
+        config.as_ref().and_then(|c| c.api_key_env.clone()),
+        config.as_ref().and_then(|c| c.online_config.clone()),
+    )?;
+
+    if let (true, Some(cli_model)) = (resolved_online.is_online(), &args.model_id) {
+        if let Some(existing_online_model) = &resolved_online.online_model {
+            if existing_online_model != cli_model {
+                return Err(CliError::Validation(format!(
+                    "Conflicting model names specified: -m/--model '{cli_model}' vs --online-model '{existing_online_model}'."
+                )));
+            }
+        } else {
+            resolved_online.online_model = Some(cli_model.clone());
+        }
+    }
     let resolved_jobs = sona_core::transcription::runtime::resolve_batch_jobs(
         args.jobs.or_else(|| config.as_ref().and_then(|c| c.jobs)),
     )
@@ -560,7 +571,6 @@ async fn run_online_transcribe(
 
 fn reject_online_local_options(args: &TranscribeArgs) -> CliResult<()> {
     let local_option = [
-        (args.model_id.is_some(), "--model-id"),
         (args.models_dir.is_some(), "--models-dir"),
         (args.vad_model_id.is_some(), "--vad-model-id"),
         (

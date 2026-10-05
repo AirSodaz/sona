@@ -409,6 +409,24 @@ fn models_list_filters_by_secondary_alias() {
 }
 
 #[test]
+fn models_list_query_matches_auxiliary_models_without_all_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "list",
+        "vad",
+        "--models-dir",
+        dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(
+        output.stdout.contains("silero-vad"),
+        "searching 'vad' must not be silently filtered out"
+    );
+}
+
+#[test]
 fn models_verify_reports_not_installed_when_missing() {
     let dir = tempfile::tempdir().unwrap();
     let error = sona_cli::run_cli_from_args([

@@ -141,16 +141,59 @@ fn online_asr_rejects_local_model_options() {
         "missing.wav",
         "--online-provider",
         "groq-whisper",
-        "--model-id",
-        "local-model",
+        "--models-dir",
+        "./models",
     ])
     .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
     assert_eq!(
         error.to_string(),
-        "--model-id can only be used with local ASR."
+        "--models-dir can only be used with local ASR."
     );
+}
+
+#[test]
+fn online_asr_rejects_conflicting_model_arguments() {
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        "missing.wav",
+        "--online-provider",
+        "groq-whisper",
+        "-m",
+        "whisper-large-v3",
+        "--online-model",
+        "distil-whisper",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(error.to_string().contains("Conflicting model names"));
+}
+
+#[test]
+fn online_asr_accepts_unified_model_flag() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("audio.wav");
+    std::fs::write(&input, b"dummy audio content").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        input.to_str().unwrap(),
+        "--online-provider",
+        "groq-whisper",
+        "-m",
+        "whisper-large-v3",
+        "--api-key-env",
+        "SONA_CLI_TEST_MISSING_KEY_XYZ",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    // It validates API key presence rather than rejecting -m, proving -m was accepted as online model
+    assert!(error.to_string().contains("SONA_CLI_TEST_MISSING_KEY_XYZ"));
 }
 
 #[test]
@@ -199,6 +242,79 @@ online_provider = "groq-whisper"
 
     assert_eq!(error.exit_code(), 2);
     assert_eq!(error.to_string(), "--api-key must not be empty.");
+}
+
+#[test]
+fn transcribe_with_config_provider_and_cli_model_resolves_online() {
+    let directory = tempfile::tempdir().unwrap();
+    let input = directory.path().join("audio.wav");
+    std::fs::write(&input, b"dummy audio content").unwrap();
+
+    let config_path = directory.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe]
+online_provider = "groq-whisper"
+api_key_env = "SONA_CLI_TEST_CONFIG_PROVIDER_KEY_8F1A"
+"#,
+    )
+    .unwrap();
+
+    // If CLI -m dropped config provider, this would fail looking for local model.
+    // With unified -m and config merging, it resolves groq-whisper with model whisper-large-v3,
+    // and fails at missing api_key_env, proving online resolution succeeded.
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        input.to_str().unwrap(),
+        "--config",
+        config_path.to_str().unwrap(),
+        "-m",
+        "whisper-large-v3",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("SONA_CLI_TEST_CONFIG_PROVIDER_KEY_8F1A")
+    );
+}
+
+#[test]
+fn live_with_config_provider_and_cli_model_resolves_online() {
+    let directory = tempfile::tempdir().unwrap();
+    let config_path = directory.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[transcribe_live]
+online_provider = "volcengine-doubao"
+api_key_env = "SONA_CLI_TEST_LIVE_CONFIG_PROVIDER_KEY_8F1A"
+"#,
+    )
+    .unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "live",
+        "--input",
+        "stdin",
+        "--config",
+        config_path.to_str().unwrap(),
+        "-m",
+        "doubao-streaming",
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("SONA_CLI_TEST_LIVE_CONFIG_PROVIDER_KEY_8F1A")
+    );
 }
 
 #[test]

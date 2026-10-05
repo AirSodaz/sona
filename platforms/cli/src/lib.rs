@@ -272,12 +272,18 @@ struct Cli {
     command: Commands,
 }
 
+/// Returns the clap Command definition for sona-cli, suitable for doc generation, reflection, and completion.
+pub fn cli_command() -> clap::Command {
+    <Cli as clap::CommandFactory>::command()
+}
+
 #[derive(Debug, Subcommand)]
 enum Commands {
     /// Builds diagnostics snapshots from host-provided facts.
     #[command(hide = true)]
     Diagnostics(diagnostics::DiagnosticsArgs),
-    /// Exports transcript segments through the shared core service.
+    /// Exports or converts transcript segments through the shared core service.
+    #[command(visible_alias = "convert")]
     Export(export::ExportArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     #[command(hide = true)]
@@ -295,8 +301,8 @@ enum Commands {
     /// Transcribe audio with local or online ASR; local ASR also accepts video.
     Transcribe(transcribe::TranscribeArgs),
     /// Transcribe live audio using local or online ASR.
-    #[command(visible_alias = "live")]
-    TranscribeLive(transcribe_live::TranscribeLiveArgs),
+    #[command(name = "live", visible_alias = "transcribe-live")]
+    Live(transcribe_live::TranscribeLiveArgs),
     /// Generates shell auto-completion scripts.
     Completion(CompletionArgs),
     /// Checks system dependencies, audio devices, and models directory.
@@ -496,7 +502,7 @@ async fn dispatch(
         Commands::Models(args) => models::run_models(args, io).await,
         Commands::Serve(args) => serve::run_serve(args, io).await,
         Commands::Transcribe(args) => transcribe::run_transcribe(args, io).await,
-        Commands::TranscribeLive(args) => {
+        Commands::Live(args) => {
             transcribe_live::run_transcribe_live(args, io).await?;
             return Ok(None);
         }

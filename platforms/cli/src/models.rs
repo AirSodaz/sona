@@ -353,7 +353,8 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
                 .unwrap_or(false)
         });
     }
-    if !args.all && args.model_type.is_none() {
+    let has_explicit_query = args.query.as_ref().is_some_and(|q| !q.trim().is_empty());
+    if !args.all && args.model_type.is_none() && !has_explicit_query {
         models.retain(|m| {
             m.model_type != "vad"
                 && m.model_type != "punctuation"

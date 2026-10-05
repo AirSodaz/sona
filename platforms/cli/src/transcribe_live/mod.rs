@@ -54,7 +54,8 @@ pub(crate) async fn run_transcribe_live(
 
     validate_direct_input_options(args.input, args.device.as_deref(), args.duration)?;
     let config = load_config(args.config.as_ref())?;
-    let resolved = resolve_live_command(args, config)?;
+    let stdin_is_terminal = io.stdin_is_terminal();
+    let resolved = resolve_live_command(args, config, stdin_is_terminal)?;
     let stdout_is_terminal = io.stdout_is_terminal();
     let status = {
         let stdout = io.stdout();

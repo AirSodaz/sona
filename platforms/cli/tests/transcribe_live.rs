@@ -768,3 +768,40 @@ format = "invalid_export"
             .contains("Unsupported export format: invalid_export")
     );
 }
+
+#[test]
+fn live_command_primary_syntax_and_unified_model() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "live", "--help"])
+        .expect("clap help should succeed for live");
+    assert!(output.stdout.contains("--model"));
+
+    // Verify -m is accepted for online provider in live mode
+    let err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "live",
+        "--online-provider",
+        "volcengine-doubao",
+        "-m",
+        "doubao-streaming",
+        "--api-key-env",
+        "SONA_CLI_TEST_MISSING_LIVE_KEY",
+    ])
+    .unwrap_err();
+    assert_eq!(err.exit_code(), 2);
+    assert!(err.to_string().contains("SONA_CLI_TEST_MISSING_LIVE_KEY"));
+
+    // Verify conflict check
+    let conflict_err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "live",
+        "--online-provider",
+        "volcengine-doubao",
+        "-m",
+        "model-a",
+        "--online-model",
+        "model-b",
+    ])
+    .unwrap_err();
+    assert_eq!(conflict_err.exit_code(), 2);
+    assert!(conflict_err.to_string().contains("Conflicting model names"));
+}

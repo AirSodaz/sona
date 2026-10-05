@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { validateMarkdown } from './markdown-rules.js';
 const repoRoot = fileURLToPath(new URL('../', import.meta.url));
 const frontendRoot = path.join(repoRoot, 'platforms', 'desktop', 'frontend');
 const biomeBin = path.join(frontendRoot, 'node_modules', '@biomejs', 'biome', 'bin', 'biome');
@@ -59,6 +60,12 @@ for (const fileArg of filesToCheck) {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown JSON parse error';
       errors.push(`${relativePath}: staged JSON is invalid (${message}).`);
+    }
+  }
+  if (extension === '.md') {
+    const mdErrors = validateMarkdown(stagedContent, relativePath);
+    for (const err of mdErrors) {
+      errors.push(`${relativePath}: ${err}`);
     }
   }
 }
