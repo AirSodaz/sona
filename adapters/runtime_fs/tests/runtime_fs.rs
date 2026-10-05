@@ -209,6 +209,7 @@ fn live_plan_rejects_existing_output_before_model_resolution() {
             gpu_acceleration: None,
             vad_buffer: None,
             force: false,
+            enable_partial_decoding: None,
         },
         None,
     )

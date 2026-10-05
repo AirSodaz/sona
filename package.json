@@ -4,7 +4,7 @@
   "version": "0.9.4",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@12.3.4",
+  "packageManager": "pnpm@12.9.1",
   "scripts": {
     "dev": "pnpm --filter sona-desktop-frontend run dev",
     "prepare": "husky",

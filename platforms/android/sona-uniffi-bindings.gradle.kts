@@ -95,7 +95,7 @@ plugins.withId("com.android.library") {
     }
 
     dependencies.add("implementation", "net.java.dev.jna:jna:5.19.1@aar")
-    dependencies.add("implementation", "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.6.4")
+    dependencies.add("implementation", "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
     tasks.matching { it.name == "preBuild" }
         .configureEach {

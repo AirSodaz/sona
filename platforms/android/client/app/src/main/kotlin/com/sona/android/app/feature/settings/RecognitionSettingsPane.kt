@@ -4,7 +4,6 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.platform.LocalContext
 import com.sona.android.app.notification.SonaNotificationChannels
 import androidx.compose.foundation.layout.Arrangement
@@ -201,8 +200,8 @@ private fun LocalRecognitionSettings(
 ) {
     var pendingDeleteModelId by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current
-    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
-    var pendingDownloadModelId by rememberSaveable { mutableStateOf<String?>(null) }
+    var hasRequestedNotificationPermission by remember { mutableStateOf(false) }
+    var pendingDownloadModelId by remember { mutableStateOf<String?>(null) }
     val notificationPermissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) {
