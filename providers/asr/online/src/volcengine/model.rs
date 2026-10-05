@@ -121,15 +121,17 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
             .send()
             .await
             .map_err(|e| {
-                AiMuxError::ApiCall(ApiCallError {
+                AiMuxError::ApiCall(Box::new(ApiCallError {
+                    url: self.config.batch_endpoint.clone(),
+                    request_body_values: serde_json::json!({}),
                     status_code: e.status().map(|s| s.as_u16()),
                     provider_code: None,
                     message: format!("Volcengine batch network request failed: {e}"),
                     response_body: None,
-                    request_id: None,
-                    retry_after_ms: None,
+                    response_headers: None,
+                    data: None,
                     is_retryable: e.is_connect() || e.is_timeout(),
-                })
+                }))
             })?;
 
         let status = response.status();
@@ -164,15 +166,17 @@ impl TranscriptionModel for VolcengineTranscriptionModel {
                 api_code.as_deref(),
                 api_message.as_deref(),
             );
-            return Err(AiMuxError::ApiCall(ApiCallError {
+            return Err(AiMuxError::ApiCall(Box::new(ApiCallError {
+                url: self.config.batch_endpoint.clone(),
+                request_body_values: serde_json::json!({}),
                 status_code: Some(effective_status),
                 provider_code: api_code,
                 message,
                 response_body: None,
-                request_id: None,
-                retry_after_ms: None,
+                response_headers: None,
+                data: None,
                 is_retryable: effective_status == 429 || (500..=599).contains(&effective_status),
-            }));
+            })));
         }
 
         let response_value = response.json::<Value>().await.map_err(|e| {

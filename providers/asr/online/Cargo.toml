@@ -10,8 +10,8 @@ license.workspace = true
 role = "provider"
 
 [dependencies]
-aimux-core = "0.3.0"
-aimux-providers = "0.3.0"
+aimux-core = { workspace = true }
+aimux-providers = { workspace = true }
 async-trait = { workspace = true }
 base64 = { workspace = true }
 futures-util = { workspace = true }

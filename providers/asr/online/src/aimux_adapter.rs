@@ -1290,43 +1290,49 @@ mod tests {
 
     #[test]
     fn maps_aimux_errors_to_typed_asr_port_errors() {
-        let auth_error = AiMuxError::ApiCall(ApiCallError {
+        let auth_error = AiMuxError::ApiCall(Box::new(ApiCallError {
+            url: "https://api.example.com".to_string(),
+            request_body_values: serde_json::json!({}),
             status_code: Some(401),
             provider_code: None,
             message: "Unauthorized".to_string(),
             response_body: None,
-            request_id: None,
-            retry_after_ms: None,
+            response_headers: None,
+            data: None,
             is_retryable: false,
-        });
+        }));
         assert_eq!(
             map_aimux_asr_error(auth_error).kind,
             AsrPortErrorKind::Authentication
         );
 
-        let rate_limit_error = AiMuxError::ApiCall(ApiCallError {
+        let rate_limit_error = AiMuxError::ApiCall(Box::new(ApiCallError {
+            url: "https://api.example.com".to_string(),
+            request_body_values: serde_json::json!({}),
             status_code: Some(429),
             provider_code: None,
             message: "Rate limit reached".to_string(),
             response_body: None,
-            request_id: None,
-            retry_after_ms: Some(1000),
+            response_headers: None,
+            data: None,
             is_retryable: true,
-        });
+        }));
         assert_eq!(
             map_aimux_asr_error(rate_limit_error).kind,
             AsrPortErrorKind::RateLimited
         );
 
-        let unavailable_error = AiMuxError::ApiCall(ApiCallError {
+        let unavailable_error = AiMuxError::ApiCall(Box::new(ApiCallError {
+            url: "https://api.example.com".to_string(),
+            request_body_values: serde_json::json!({}),
             status_code: Some(503),
             provider_code: None,
             message: "Service Unavailable".to_string(),
             response_body: None,
-            request_id: None,
-            retry_after_ms: None,
+            response_headers: None,
+            data: None,
             is_retryable: true,
-        });
+        }));
         assert_eq!(
             map_aimux_asr_error(unavailable_error).kind,
             AsrPortErrorKind::Unavailable
@@ -1338,29 +1344,33 @@ mod tests {
             AsrPortErrorKind::Timeout
         );
 
-        let not_found_error = AiMuxError::ApiCall(ApiCallError {
+        let not_found_error = AiMuxError::ApiCall(Box::new(ApiCallError {
+            url: "https://api.example.com".to_string(),
+            request_body_values: serde_json::json!({}),
             status_code: Some(404),
             provider_code: None,
             message: "Not found".to_string(),
             response_body: None,
-            request_id: None,
-            retry_after_ms: None,
+            response_headers: None,
+            data: None,
             is_retryable: false,
-        });
+        }));
         assert_eq!(
             map_aimux_asr_error(not_found_error).kind,
             AsrPortErrorKind::InvalidRequest
         );
 
-        let payload_too_large = AiMuxError::ApiCall(ApiCallError {
+        let payload_too_large = AiMuxError::ApiCall(Box::new(ApiCallError {
+            url: "https://api.example.com".to_string(),
+            request_body_values: serde_json::json!({}),
             status_code: Some(413),
             provider_code: None,
             message: "Payload Too Large".to_string(),
             response_body: None,
-            request_id: None,
-            retry_after_ms: None,
+            response_headers: None,
+            data: None,
             is_retryable: false,
-        });
+        }));
         assert_eq!(
             map_aimux_asr_error(payload_too_large).kind,
             AsrPortErrorKind::InvalidRequest

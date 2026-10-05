@@ -67,6 +67,8 @@ sona-uniffi-bindgen = { path = "tools/uniffi_bindgen" }
 sona-vad = { path = "providers/asr/local/vad" }
 
 # External shared dependencies
+aimux-core = "0.5.0"
+aimux-providers = "0.5.0"
 async-trait = "0.1"
 axum = "0.8"
 base64 = "0.22"
