@@ -63,7 +63,7 @@ impl From<LiveOutputFormatArg> for LiveOutputFormat {
 #[derive(Debug, Args)]
 #[command(
     about = "Transcribe live audio with local or online ASR",
-    after_help = "Examples:\n  sona-cli transcribe-live -m sensevoice\n  sona-cli transcribe-live -m sensevoice --duration 30 -o ./meeting.srt\n  sona-cli transcribe-live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli transcribe-live --input stdin -m sensevoice --stream ndjson"
+    after_help = "Examples:\n  sona-cli live -m sensevoice\n  sona-cli live -m sensevoice --duration 30 -o ./meeting.srt\n  sona-cli live --online-provider volcengine-doubao\n  ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \\\n    sona-cli live --input stdin -m sensevoice --stream ndjson"
 )]
 pub struct TranscribeLiveArgs {
     /// Live input source.

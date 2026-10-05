@@ -292,6 +292,37 @@ fn run_config_show(args: ConfigShowArgs) -> CliResult<CliOutput> {
     Ok(CliOutput::stdout(content))
 }
 
+fn get_toml_value<'a>(toml_val: &'a toml::Value, key: &str) -> Option<&'a toml::Value> {
+    let parts: Vec<&str> = key.split('.').collect();
+    if parts.is_empty() {
+        return None;
+    }
+
+    let traverse = |target_parts: &[&str]| -> Option<&'a toml::Value> {
+        let mut current = toml_val;
+        for part in target_parts {
+            current = current.get(part)?;
+        }
+        Some(current)
+    };
+
+    if let Some(val) = traverse(&parts) {
+        return Some(val);
+    }
+
+    if parts[0] == "live" {
+        let mut alt_parts = parts.clone();
+        alt_parts[0] = "transcribe_live";
+        return traverse(&alt_parts);
+    } else if parts[0] == "transcribe_live" {
+        let mut alt_parts = parts.clone();
+        alt_parts[0] = "live";
+        return traverse(&alt_parts);
+    }
+
+    None
+}
+
 fn run_config_get(args: ConfigGetArgs) -> CliResult<CliOutput> {
     let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
     let content = std::fs::read_to_string(&path)
@@ -300,22 +331,15 @@ fn run_config_get(args: ConfigGetArgs) -> CliResult<CliOutput> {
         CliError::Validation(format!("Invalid TOML syntax in {}: {e}", path.display()))
     })?;
 
-    let parts: Vec<&str> = args.key.split('.').collect();
-    let mut current = &toml_val;
-    for part in parts {
-        match current.get(part) {
-            Some(next) => current = next,
-            None => {
-                return Err(CliError::Validation(format!(
-                    "Key '{}' not found in {}",
-                    args.key,
-                    path.display()
-                )));
-            }
-        }
-    }
+    let value = get_toml_value(&toml_val, &args.key).ok_or_else(|| {
+        CliError::Validation(format!(
+            "Key '{}' not found in {}",
+            args.key,
+            path.display()
+        ))
+    })?;
 
-    let rendered = match current {
+    let rendered = match value {
         toml::Value::String(s) => s.clone(),
         toml::Value::Integer(i) => i.to_string(),
         toml::Value::Float(f) => f.to_string(),
@@ -361,13 +385,27 @@ fn set_in_document(
     key_path: &str,
     item: toml_edit::Item,
 ) -> CliResult<()> {
-    let parts: Vec<&str> = key_path
+    let mut parts: Vec<&str> = key_path
         .split('.')
         .map(str::trim)
         .filter(|s| !s.is_empty())
         .collect();
     if parts.is_empty() {
         return Err(CliError::Validation("Key cannot be empty.".to_string()));
+    }
+
+    if parts.len() > 1 {
+        if parts[0] == "live"
+            && doc.as_table().contains_key("transcribe_live")
+            && !doc.as_table().contains_key("live")
+        {
+            parts[0] = "transcribe_live";
+        } else if parts[0] == "transcribe_live"
+            && doc.as_table().contains_key("live")
+            && !doc.as_table().contains_key("transcribe_live")
+        {
+            parts[0] = "live";
+        }
     }
 
     if parts.len() == 1 {
@@ -402,10 +440,12 @@ fn run_config_set(args: ConfigSetArgs) -> CliResult<CliOutput> {
     let path = resolve_target_file_path(args.config.as_ref(), args.global)?;
     let file_existed = path.is_file();
 
-    if let Some(parent) = path
+    let parent = path
         .parent()
-        .filter(|p| !p.as_os_str().is_empty() && !p.exists())
-    {
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
+
+    if !parent.exists() {
         std::fs::create_dir_all(parent).map_err(|e| {
             CliError::Io(format!(
                 "Failed to create config directory {}: {e}",
@@ -429,20 +469,26 @@ fn run_config_set(args: ConfigSetArgs) -> CliResult<CliOutput> {
     set_in_document(&mut doc, &args.key, parsed_item)?;
 
     let new_content = doc.to_string();
-    std::fs::write(&path, &new_content)
-        .map_err(|e| CliError::Io(format!("Failed to write {}: {e}", path.display())))?;
 
-    if let Err(err) = check_config_file(&path) {
-        if file_existed {
-            let _ = std::fs::write(&path, &existing_content);
-        } else {
-            let _ = std::fs::remove_file(&path);
-        }
+    let mut temp_file = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| CliError::Io(format!("Failed to create temporary config file: {e}")))?;
+
+    std::io::Write::write_all(&mut temp_file, new_content.as_bytes())
+        .map_err(|e| CliError::Io(format!("Failed to write temporary config file: {e}")))?;
+
+    std::io::Write::flush(&mut temp_file)
+        .map_err(|e| CliError::Io(format!("Failed to flush temporary config file: {e}")))?;
+
+    if let Err(err) = check_config_file(temp_file.path()) {
         return Err(CliError::Validation(format!(
             "Failed to set '{} = {}': resulting configuration is invalid: {}",
             args.key, args.value, err
         )));
     }
+
+    temp_file
+        .persist(&path)
+        .map_err(|e| CliError::Io(format!("Failed to save config to {}: {e}", path.display())))?;
 
     Ok(CliOutput::stdout(format!(
         "Set {} = {} in {}",

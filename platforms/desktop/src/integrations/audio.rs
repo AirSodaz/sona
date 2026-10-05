@@ -1,4 +1,3 @@
-use cpal::traits::HostTrait;
 use log::{debug, error, info, warn};
 use sona_application::live_transcription::LiveSourceEpoch;
 use sona_audio_capture::{
@@ -57,13 +56,6 @@ impl CaptureKind {
         match self {
             CaptureKind::System => "System",
             CaptureKind::Microphone => "Mic",
-        }
-    }
-
-    fn no_device_message(self) -> &'static str {
-        match self {
-            CaptureKind::System => "No output device found",
-            CaptureKind::Microphone => "No input device found",
         }
     }
 }
@@ -685,27 +677,12 @@ fn resolve_capture_device(
     kind: CaptureKind,
     device_name: &Option<String>,
 ) -> Result<(cpal::Device, String), String> {
-    let host = cpal::default_host();
-    let device = match (kind, device_name) {
-        (CaptureKind::System, Some(name)) => host
-            .output_devices()
-            .map_err(|error| error.to_string())?
-            .find(|device| device.to_string() == *name)
-            .ok_or_else(|| format!("Requested system audio device is unavailable: {name}"))?,
-        (CaptureKind::Microphone, Some(name)) => host
-            .input_devices()
-            .map_err(|error| error.to_string())?
-            .find(|device| device.to_string() == *name)
-            .ok_or_else(|| format!("Requested microphone device is unavailable: {name}"))?,
-        (CaptureKind::System, None) => host
-            .default_output_device()
-            .ok_or_else(|| kind.no_device_message().to_string())?,
-        (CaptureKind::Microphone, None) => host
-            .default_input_device()
-            .ok_or_else(|| kind.no_device_message().to_string())?,
-    };
-    let name = device.to_string();
-    Ok((device, name))
+    match kind {
+        CaptureKind::Microphone => sona_audio_capture::find_input_device(device_name.as_deref())
+            .map_err(|error| error.to_string()),
+        CaptureKind::System => sona_audio_capture::find_output_device(device_name.as_deref())
+            .map_err(|error| error.to_string()),
+    }
 }
 
 pub fn start_system_audio_capture(

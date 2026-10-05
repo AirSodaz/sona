@@ -261,7 +261,7 @@ pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> Cl
     name = "sona-cli",
     version,
     about = "Standalone CLI backed by sona-core",
-    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli transcribe-live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli transcribe-live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
+    after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."
 )]
 struct Cli {
     /// Enable verbose logging (-v for info, -vv for debug).
@@ -282,9 +282,9 @@ enum Commands {
     /// Builds diagnostics snapshots from host-provided facts.
     #[command(hide = true)]
     Diagnostics(diagnostics::DiagnosticsArgs),
-    /// Exports or converts transcript segments through the shared core service.
-    #[command(visible_alias = "convert")]
-    Export(export::ExportArgs),
+    /// Converts transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json).
+    #[command(name = "convert", visible_alias = "export")]
+    Convert(export::ExportArgs),
     /// Resolves a filesystem path using the shared runtime status contract.
     #[command(hide = true)]
     PathStatus {
@@ -496,7 +496,7 @@ async fn dispatch(
 
     let output = match command {
         Commands::Diagnostics(args) => diagnostics::run_diagnostics(args),
-        Commands::Export(args) => export::run_export(args, io),
+        Commands::Convert(args) => export::run_export(args, io),
         Commands::PathStatus { path } => render_path_status_json(&path).map(CliOutput::stdout),
         Commands::Config(args) => config_cmd::run_config(args),
         Commands::Models(args) => models::run_models(args, io).await,

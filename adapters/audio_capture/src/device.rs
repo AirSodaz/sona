@@ -1,15 +1,52 @@
 use crate::error::{AudioCaptureError, AudioCaptureResult};
 use cpal::traits::HostTrait;
 
-#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AudioDevice {
     pub name: String,
 }
 
 impl AudioDevice {
     pub fn new(name: impl Into<String>) -> Self {
-        Self { name: name.into() }
+        Self {
+            name: sanitize_device_name(&name.into()),
+        }
     }
+}
+
+pub fn sanitize_device_name(name: &str) -> String {
+    let mut sanitized = String::with_capacity(name.len());
+    for character in name.chars() {
+        if character.is_control() {
+            sanitized.extend(character.escape_default());
+        } else {
+            sanitized.push(character);
+        }
+    }
+    sanitized
+}
+
+pub const NO_INPUT_DEVICES_FOUND: &str = "No audio input devices found.";
+
+pub fn format_device_list(devices: &[String], default_device: Option<&str>) -> String {
+    if devices.is_empty() {
+        return format!("{NO_INPUT_DEVICES_FOUND}\n");
+    }
+    let entries = devices
+        .iter()
+        .enumerate()
+        .map(|(idx, device)| {
+            let clean_device = sanitize_device_name(device);
+            if default_device == Some(device.as_str())
+                || default_device == Some(clean_device.as_str())
+            {
+                format!("[{idx}] {clean_device} [default]")
+            } else {
+                format!("[{idx}] {clean_device}")
+            }
+        })
+        .collect::<Vec<_>>();
+    format!("{}\n", entries.join("\n"))
 }
 
 pub fn enumerate_input_devices() -> AudioCaptureResult<Vec<AudioDevice>> {
@@ -22,7 +59,7 @@ pub fn enumerate_input_device_names() -> AudioCaptureResult<Vec<String>> {
     let mut devices = host
         .input_devices()
         .map_err(|e| AudioCaptureError::EnumerationFailed(e.to_string()))?
-        .map(|device| device.to_string())
+        .map(|device| sanitize_device_name(&device.to_string()))
         .collect::<Vec<_>>();
     devices.sort();
     devices.dedup();
@@ -32,7 +69,7 @@ pub fn enumerate_input_device_names() -> AudioCaptureResult<Vec<String>> {
 pub fn default_input_device_name() -> Option<String> {
     cpal::default_host()
         .default_input_device()
-        .map(|device| device.to_string())
+        .map(|device| sanitize_device_name(&device.to_string()))
 }
 
 pub fn enumerate_output_devices() -> AudioCaptureResult<Vec<AudioDevice>> {
@@ -122,19 +159,24 @@ pub fn find_input_device(
         .map_err(|e| AudioCaptureError::EnumerationFailed(e.to_string()))?
         .collect::<Vec<_>>();
 
-    let mut device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let mut device_names = devices
+        .iter()
+        .map(|device| sanitize_device_name(&device.to_string()))
+        .collect::<Vec<_>>();
     device_names.sort();
     device_names.dedup();
-    let default_name = host.default_input_device().map(|device| device.to_string());
+    let default_name = host
+        .default_input_device()
+        .map(|device| sanitize_device_name(&device.to_string()));
     let resolved_name =
         resolve_device_name(&device_names, default_name.as_deref(), requested_name)?;
 
     let device = devices
         .into_iter()
-        .find(|device| device.to_string() == resolved_name)
+        .find(|device| sanitize_device_name(&device.to_string()) == resolved_name)
         .or_else(|| {
             host.default_input_device()
-                .filter(|device| device.to_string() == resolved_name)
+                .filter(|device| sanitize_device_name(&device.to_string()) == resolved_name)
         })
         .ok_or_else(|| AudioCaptureError::DeviceNotFound(resolved_name.clone()))?;
 
@@ -150,12 +192,15 @@ pub fn find_output_device(
         .map_err(|e| AudioCaptureError::EnumerationFailed(e.to_string()))?
         .collect::<Vec<_>>();
 
-    let mut device_names = devices.iter().map(ToString::to_string).collect::<Vec<_>>();
+    let mut device_names = devices
+        .iter()
+        .map(|device| sanitize_device_name(&device.to_string()))
+        .collect::<Vec<_>>();
     device_names.sort();
     device_names.dedup();
     let default_name = host
         .default_output_device()
-        .map(|device| device.to_string());
+        .map(|device| sanitize_device_name(&device.to_string()));
     let resolved_name = resolve_device_name_or(
         &device_names,
         default_name.as_deref(),
@@ -164,10 +209,10 @@ pub fn find_output_device(
     )?;
     let device = devices
         .into_iter()
-        .find(|device| device.to_string() == resolved_name)
+        .find(|device| sanitize_device_name(&device.to_string()) == resolved_name)
         .or_else(|| {
             host.default_output_device()
-                .filter(|device| device.to_string() == resolved_name)
+                .filter(|device| sanitize_device_name(&device.to_string()) == resolved_name)
         })
         .ok_or_else(|| AudioCaptureError::DeviceNotFound(resolved_name.clone()))?;
 
@@ -234,5 +279,28 @@ mod tests {
             resolve_device_name(&devices, Some("USB Audio Device"), Some("   ")).unwrap(),
             "USB Audio Device"
         );
+    }
+
+    #[test]
+    fn test_sanitize_device_name() {
+        assert_eq!(
+            sanitize_device_name("Mic\x1b[31m\r\n\tTest"),
+            "Mic\\u{1b}[31m\\r\\n\\tTest"
+        );
+        assert_eq!(sanitize_device_name("Clean Microphone"), "Clean Microphone");
+    }
+
+    #[test]
+    fn test_format_device_list() {
+        assert_eq!(
+            format_device_list(&[], None),
+            "No audio input devices found.\n"
+        );
+        let devices = vec!["Mic A".to_string(), "Mic B".to_string()];
+        assert_eq!(
+            format_device_list(&devices, Some("Mic A")),
+            "[0] Mic A [default]\n[1] Mic B\n"
+        );
+        assert_eq!(format_device_list(&devices, None), "[0] Mic A\n[1] Mic B\n");
     }
 }

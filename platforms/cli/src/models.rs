@@ -79,7 +79,7 @@ pub struct ModelPathArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Verify the integrity of an installed preset model (defaults to all installed models when omitted)"
+    about = "Verify the integrity of installed preset models. Defaults to verifying all installed models when MODEL_ID is omitted"
 )]
 pub struct ModelVerifyArgs {
     /// Preset model id or alias to verify. Defaults to all installed models when omitted.
@@ -199,17 +199,19 @@ pub struct ModelDownloadArgs {
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Delete an installed preset model",
-    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion without prompting.\n\nExamples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --yes\n  sona-cli models delete whisper-turbo -y\n  sona-cli models delete --all -y\n  sona-cli models delete silero-vad --models-dir ./models --yes"
+    about = "Delete one or more installed preset models",
+    after_help = "Companion models are not deleted automatically. Pass --yes to confirm deletion without prompting.\n\nExamples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --yes\n  sona-cli models delete whisper-turbo silero-vad -y\n  sona-cli models delete --all -y\n  sona-cli models delete silero-vad --models-dir ./models --yes"
 )]
 pub struct ModelDeleteArgs {
-    /// Preset model id to delete.
+    /// Preset model id(s) or alias(es) to delete.
     #[arg(
-        help = "Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad",
+        value_name = "MODEL_ID",
+        help = "Preset model id(s) or alias(es) to delete, for example sherpa-onnx-whisper-turbo or silero-vad",
         conflicts_with = "all",
-        required_unless_present = "all"
+        required_unless_present = "all",
+        num_args = 1..
     )]
-    model_id: Option<String>,
+    model_ids: Vec<String>,
     /// Models directory containing installed presets.
     #[arg(long, help = "Override the models directory")]
     models_dir: Option<PathBuf>,
@@ -220,7 +222,7 @@ pub struct ModelDeleteArgs {
     #[arg(
         long,
         help = "Delete all installed preset models in the models directory",
-        conflicts_with = "model_id"
+        conflicts_with = "model_ids"
     )]
     all: bool,
 }
@@ -517,22 +519,39 @@ fn run_model_delete(
         )));
     }
 
-    let model_id = args.model_id.as_deref().ok_or_else(|| {
-        CliError::Validation(
-            "Specify a model id or alias to delete, or pass --all to delete all installed models."
+    if args.model_ids.is_empty() {
+        return Err(CliError::Validation(
+            "Specify one or more model ids or aliases to delete, or pass --all to delete all installed models."
                 .to_string(),
-        )
-    })?;
+        ));
+    }
 
-    // Validate model existence and check if installed before prompting
-    let resolved = resolve_model_download(model_id, &models_dir)
-        .map_err(|error| CliError::Validation(error.to_string()))?;
-    if !resolved.install_path.exists() {
-        return Ok(CliOutput::stderr(format!(
-            "Model {} is not installed at {}",
-            model_id,
-            resolved.install_path.display()
-        )));
+    let mut resolved_models = Vec::new();
+    for mid in &args.model_ids {
+        let resolved = resolve_model_download(mid, &models_dir)
+            .map_err(|error| CliError::Validation(error.to_string()))?;
+        resolved_models.push((mid.clone(), resolved));
+    }
+
+    let (installed_targets, uninstalled_targets): (Vec<_>, Vec<_>) = resolved_models
+        .into_iter()
+        .partition(|(_, resolved)| resolved.install_path.exists());
+
+    if installed_targets.is_empty() {
+        if args.model_ids.len() == 1 {
+            let mid = &args.model_ids[0];
+            let resolved = resolve_model_download(mid, &models_dir)
+                .map_err(|error| CliError::Validation(error.to_string()))?;
+            return Ok(CliOutput::stderr(format!(
+                "Model {} is not installed at {}",
+                mid,
+                resolved.install_path.display()
+            )));
+        } else {
+            return Ok(CliOutput::stderr(
+                "None of the specified models are installed.".to_string(),
+            ));
+        }
     }
 
     if !args.yes {
@@ -543,12 +562,31 @@ fn run_model_delete(
             ));
         }
 
-        write!(
-            io.stderr(),
-            "Are you sure you want to delete model {}? [y/N] ",
-            model_id
-        )
-        .map_err(|error| CliError::Io(format!("Failed to write confirmation prompt: {error}")))?;
+        if installed_targets.len() == 1 {
+            write!(
+                io.stderr(),
+                "Are you sure you want to delete model {}? [y/N] ",
+                installed_targets[0].0
+            )
+            .map_err(|error| {
+                CliError::Io(format!("Failed to write confirmation prompt: {error}"))
+            })?;
+        } else {
+            let names = installed_targets
+                .iter()
+                .map(|(id, _)| id.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            write!(
+                io.stderr(),
+                "Are you sure you want to delete {} model(s) ({})? [y/N] ",
+                installed_targets.len(),
+                names
+            )
+            .map_err(|error| {
+                CliError::Io(format!("Failed to write confirmation prompt: {error}"))
+            })?;
+        }
         io.stderr().flush().map_err(|error| {
             CliError::Io(format!("Failed to flush confirmation prompt: {error}"))
         })?;
@@ -561,18 +599,94 @@ fn run_model_delete(
         }
     }
 
-    // Prune idle models from LLM and ASR llama.cpp caches so memory-mapped file handles are released
     sona_llama_cpp::prune_idle_llm_models();
     sona_llama_cpp::prune_idle_llama_models();
 
-    match sona_model_downloads::delete_installed_model(&models_dir, model_id) {
-        Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => Ok(CliOutput::stderr(
-            format!("Deleted {} from {}", model_id, path.display()),
-        )),
-        Ok(sona_model_downloads::DeleteModelResult::NotInstalled(path)) => Ok(CliOutput::stderr(
-            format!("Model {} is not installed at {}", model_id, path.display()),
-        )),
-        Err(error) => Err(map_download_error(error)),
+    let uninstalled_note = if !uninstalled_targets.is_empty() && args.model_ids.len() > 1 {
+        let uninstalled_names = uninstalled_targets
+            .iter()
+            .map(|(id, _)| id.as_str())
+            .collect::<Vec<_>>()
+            .join(", ");
+        format!(
+            "\nNote: {} model(s) not installed, skipped: {}",
+            uninstalled_targets.len(),
+            uninstalled_names
+        )
+    } else {
+        String::new()
+    };
+
+    if installed_targets.len() == 1 {
+        let (mid, _) = &installed_targets[0];
+        match sona_model_downloads::delete_installed_model(&models_dir, mid) {
+            Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => {
+                Ok(CliOutput::stderr(format!(
+                    "Deleted {} from {}{}",
+                    mid,
+                    path.display(),
+                    uninstalled_note
+                )))
+            }
+            Ok(sona_model_downloads::DeleteModelResult::NotInstalled(path)) => {
+                Ok(CliOutput::stderr(format!(
+                    "Model {} is not installed at {}{}",
+                    mid,
+                    path.display(),
+                    uninstalled_note
+                )))
+            }
+            Err(error) => Err(map_download_error(error)),
+        }
+    } else {
+        let mut deleted = Vec::new();
+        let mut failed = Vec::new();
+        for (mid, _) in &installed_targets {
+            match sona_model_downloads::delete_installed_model(&models_dir, mid) {
+                Ok(sona_model_downloads::DeleteModelResult::Deleted(path)) => {
+                    deleted.push((mid.clone(), path));
+                }
+                Ok(sona_model_downloads::DeleteModelResult::NotInstalled(_)) => {}
+                Err(error) => {
+                    failed.push((mid.clone(), error));
+                }
+            }
+        }
+
+        if !failed.is_empty() {
+            let error_msgs = failed
+                .iter()
+                .map(|(id, err)| format!("{id}: {err}"))
+                .collect::<Vec<_>>()
+                .join("; ");
+            if !deleted.is_empty() {
+                return Err(CliError::Model(format!(
+                    "Deleted {} model(s), but {} model(s) failed to delete: {}",
+                    deleted.len(),
+                    failed.len(),
+                    error_msgs
+                )));
+            } else {
+                return Err(CliError::Model(format!(
+                    "Failed to delete {} model(s): {}",
+                    failed.len(),
+                    error_msgs
+                )));
+            }
+        }
+
+        let deleted_lines = deleted
+            .iter()
+            .map(|(id, path)| format!("  - {id} ({})", path.display()))
+            .collect::<Vec<_>>()
+            .join("\n");
+        Ok(CliOutput::stderr(format!(
+            "Deleted {} installed model(s) from {}:\n{}{}",
+            deleted.len(),
+            models_dir.display(),
+            deleted_lines,
+            uninstalled_note
+        )))
     }
 }
 

@@ -100,7 +100,7 @@ async fn run_resolved_live_command(
         LiveInputSource::Microphone => {
             start_microphone_input(resolved.device.as_deref()).map_err(|err| {
                 CliError::Io(format!(
-                    "{err}. Run 'sona-cli transcribe-live --list-input-devices' to see available microphones."
+                    "{err}. Run 'sona-cli devices' to see available microphones."
                 ))
             })?
         }
@@ -166,21 +166,7 @@ async fn run_resolved_live_command(
 }
 
 pub(crate) fn format_input_device_list(devices: &[String], default_device: Option<&str>) -> String {
-    if devices.is_empty() {
-        return String::new();
-    }
-    let entries = devices
-        .iter()
-        .enumerate()
-        .map(|(idx, device)| {
-            if default_device == Some(device.as_str()) {
-                format!("[{idx}] {device} [default]")
-            } else {
-                format!("[{idx}] {device}")
-            }
-        })
-        .collect::<Vec<_>>();
-    format!("{}\n", entries.join("\n"))
+    sona_audio_capture::format_device_list(devices, default_device)
 }
 
 #[cfg(test)]
@@ -204,6 +190,14 @@ mod tests {
     #[test]
     fn format_input_device_list_empty() {
         let output = format_input_device_list(&[], Some("Mic A"));
-        assert_eq!(output, "");
+        assert_eq!(output, "No audio input devices found.\n");
+    }
+
+    #[test]
+    fn format_input_device_list_sanitizes_control_chars() {
+        let devices = vec!["Mic\x1b[31mA\n".to_string()];
+        let output = format_input_device_list(&devices, None);
+        assert!(!output.contains('\x1b'));
+        assert_eq!(output, "[0] Mic\\u{1b}[31mA\\n\n");
     }
 }

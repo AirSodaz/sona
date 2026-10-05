@@ -6,8 +6,9 @@ pub mod resampler;
 pub mod stream;
 
 pub use device::{
-    AudioDevice, default_input_device_name, enumerate_input_device_names, enumerate_input_devices,
-    enumerate_output_devices, find_input_device, find_output_device, resolve_device_name,
+    AudioDevice, NO_INPUT_DEVICES_FOUND, default_input_device_name, enumerate_input_device_names,
+    enumerate_input_devices, enumerate_output_devices, find_input_device, find_output_device,
+    format_device_list, resolve_device_name, sanitize_device_name,
 };
 pub use downmix::{
     downmix_f32, downmix_i16, downmix_u16, push_downmixed_f32, push_downmixed_f32_checked,

@@ -9,6 +9,7 @@ pub struct UnifiedConfigFile {
     pub shared: SharedConfig,
 
     pub transcribe: Option<TranscribeConfigSection>,
+    #[serde(alias = "live")]
     pub transcribe_live: Option<TranscribeLiveConfigSection>,
     pub serve: Option<ServeConfigSection>,
 }
@@ -242,5 +243,19 @@ online_config = "./live-config.json"
             live.online_config,
             Some(PathBuf::from("./live-config.json"))
         );
+    }
+
+    #[test]
+    fn parses_live_config_section_alias() {
+        let toml = r#"
+model_id = "shared-model"
+
+[live]
+model_id = "test-live"
+duration_seconds = 45.0
+"#;
+        let live = parse_transcribe_live_config_file(toml, "test").unwrap();
+        assert_eq!(live.model_id.as_deref(), Some("test-live"));
+        assert_eq!(live.duration_seconds, Some(45.0));
     }
 }

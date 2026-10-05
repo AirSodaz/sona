@@ -12,8 +12,8 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # Online ASR provider selection, api_key_env, and online_config can be set in this file or via CLI flags.
 # Save as sona-cli.toml, then pass it with:
 #   sona-cli transcribe ./sample.wav -c ./sona-cli.toml
-#   sona-cli transcribe-live -c ./sona-cli.toml
-#   ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli transcribe-live --input stdin -c ./sona-cli.toml
+#   sona-cli live -c ./sona-cli.toml
+#   ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | sona-cli live --input stdin -c ./sona-cli.toml
 #   sona-cli serve -c ./sona-cli.toml
 #
 # Top-level keys are shared defaults for CLI commands.
@@ -49,7 +49,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # quiet = false
 # jobs = 1 # Note: Concurrent batch jobs (>1) are not yet supported
 
-[transcribe_live]
+[transcribe_live] # (alias: [live])
 # Input source: microphone or stdin. stdin must be 16 kHz mono signed 16-bit little-endian PCM.
 # input = "microphone"
 # Exact CPAL input device name. Only valid with microphone input.
@@ -144,7 +144,7 @@ mod tests {
         assert!(content.contains("# output_format = \"text\""));
         assert!(content.contains("# stream_format = \"text\""));
         assert!(content.contains("# format = \"srt\""));
-        assert!(content.contains("sona-cli transcribe-live"));
+        assert!(content.contains("sona-cli live"));
         assert!(content.contains("[serve]"));
         assert!(content.contains("sona-cli serve"));
         assert!(content.contains("# api_key = \"\""));

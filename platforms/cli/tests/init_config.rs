@@ -616,3 +616,87 @@ fn config_set_and_get_global_via_isolated_subprocess() {
         "whisper-turbo"
     );
 }
+
+#[test]
+fn config_get_resolves_live_alias_from_transcribe_live_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[transcribe_live]\nmodel_id = \"test-live-model\"\n",
+    )
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "live.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stdout.trim(), "test-live-model");
+}
+
+#[test]
+fn config_set_updates_existing_live_alias_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[transcribe_live]\nmodel_id = \"initial-model\"\n",
+    )
+    .unwrap();
+
+    let output_set = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "set",
+        "live.model_id",
+        "updated-model",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(output_set.stdout.contains("updated-model"));
+
+    let contents = std::fs::read_to_string(&config_path).unwrap();
+    assert!(contents.contains("[transcribe_live]"));
+    assert!(!contents.contains("[live]"));
+    assert!(contents.contains("updated-model"));
+
+    let output_get = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "live.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert_eq!(output_get.stdout.trim(), "updated-model");
+}
+
+#[test]
+fn config_check_accepts_live_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[live]\nmodel_id = \"whisper-turbo\"\nformat = \"text\"\n",
+    )
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "check",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("is valid"));
+}

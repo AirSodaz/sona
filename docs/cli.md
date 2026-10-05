@@ -53,9 +53,9 @@ Quick Start:
        export GROQ_API_KEY="..."
        sona-cli transcribe ./sample.wav --online-provider groq-whisper
   4. Live streaming transcription:
-       sona-cli transcribe-live -m sensevoice
+       sona-cli live -m sensevoice
        ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \
-         sona-cli transcribe-live --input stdin -m sensevoice
+         sona-cli live --input stdin -m sensevoice
   5. Generate shell completion:
        sona-cli completion bash > /etc/bash_completion.d/sona-cli
 
@@ -241,6 +241,49 @@ Examples:
   sona-cli config show -c ./custom.toml
 ```
 
+#### `sona-cli convert`
+
+Converts transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json)
+
+**Aliases:** `export`
+
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `<INPUT>` | - | - | Positional input JSON file containing an array of transcript segments |
+| `--input` | `-i` | - | JSON file containing transcript segments (alternative to positional INPUT) |
+| `--output` | `-o` | `-` | Destination file path, or "-" for stdout |
+| `--format` | `-f` | - | Export format: json, txt, srt, vtt, or md; required when output is stdout ("-"), inferred from output file extension otherwise |
+| `--mode` | `-m` | `original` | Text selection mode: original, translation, or bilingual |
+| `--json` | `-j` | - | Prints JSON summary instead of the default table output (file output only) |
+| `--force` | `-F` | - | Overwrite existing destination file |
+
+**Usage & Examples:**
+
+```text
+Input JSON format:
+  [
+    {
+      "id": "segment-1",
+      "text": "Hello",
+      "start": 0.0,
+      "end": 2.5,
+      "isFinal": true,
+      "translation": "Bonjour"
+    }
+  ]
+
+Supported export formats:
+  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)
+
+Examples:
+  sona-cli export ./segments.json -o ./transcript.srt
+  sona-cli convert ./segments.json -o ./transcript.vtt
+  cat ./segments.json | sona-cli export -f srt > ./transcript.srt
+  sona-cli export ./segments.json -f txt
+```
+
 #### `sona-cli devices`
 
 Lists available audio input (microphone) devices
@@ -279,49 +322,6 @@ Examples:
   sona-cli doctor
   sona-cli doctor --json
   sona-cli doctor --models-dir ./models
-```
-
-#### `sona-cli export`
-
-Exports or converts transcript segments through the shared core service
-
-**Aliases:** `convert`
-
-**Options & Arguments:**
-
-| Option / Argument | Short | Default | Description |
-| --- | --- | --- | --- |
-| `<INPUT>` | - | - | Positional input JSON file containing an array of transcript segments |
-| `--input` | `-i` | - | JSON file containing transcript segments (alternative to positional INPUT) |
-| `--output` | `-o` | `-` | Destination file path, or "-" for stdout |
-| `--format` | `-f` | - | Export format: json, txt, srt, vtt, or md; required when output is stdout ("-"), inferred from output file extension otherwise |
-| `--mode` | `-m` | `original` | Text selection mode: original, translation, or bilingual |
-| `--json` | `-j` | - | Prints JSON summary instead of the default table output (file output only) |
-| `--force` | `-F` | - | Overwrite existing destination file |
-
-**Usage & Examples:**
-
-```text
-Input JSON format:
-  [
-    {
-      "id": "segment-1",
-      "text": "Hello",
-      "start": 0.0,
-      "end": 2.5,
-      "isFinal": true,
-      "translation": "Bonjour"
-    }
-  ]
-
-Supported export formats:
-  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)
-
-Examples:
-  sona-cli export ./segments.json -o ./transcript.srt
-  sona-cli convert ./segments.json -o ./transcript.vtt
-  cat ./segments.json | sona-cli export -f srt > ./transcript.srt
-  sona-cli export ./segments.json -f txt
 ```
 
 #### `sona-cli live`
@@ -365,11 +365,11 @@ Transcribe live audio using local or online ASR
 
 ```text
 Examples:
-  sona-cli transcribe-live -m sensevoice
-  sona-cli transcribe-live -m sensevoice --duration 30 -o ./meeting.srt
-  sona-cli transcribe-live --online-provider volcengine-doubao
+  sona-cli live -m sensevoice
+  sona-cli live -m sensevoice --duration 30 -o ./meeting.srt
+  sona-cli live --online-provider volcengine-doubao
   ffmpeg -i sample.wav -f s16le -ac 1 -ar 16000 - | \
-    sona-cli transcribe-live --input stdin -m sensevoice --stream ndjson
+    sona-cli live --input stdin -m sensevoice --stream ndjson
 ```
 
 #### `sona-cli models`
@@ -398,7 +398,7 @@ Deletes an installed preset model from the models directory
 
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
-| `<MODEL_ID>` | - | - | Preset model id, for example sherpa-onnx-whisper-turbo or silero-vad |
+| `<MODEL_ID>` | - | - | Preset model id(s) or alias(es) to delete, for example sherpa-onnx-whisper-turbo or silero-vad |
 | `--models-dir` | - | - | Override the models directory |
 | `--yes` | `-y` | - | Delete without prompting for confirmation |
 | `--all` | - | - | Delete all installed preset models in the models directory |

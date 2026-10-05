@@ -756,3 +756,85 @@ fn models_download_help_exposes_mirror_options() {
     assert!(output.stdout.contains("--mirror"));
     assert!(output.stdout.contains("hf-mirror"));
 }
+
+#[test]
+fn models_delete_multiple_models_with_yes() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let whisper_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    let vad_path = models_dir.join("silero_vad.onnx");
+
+    std::fs::create_dir_all(&whisper_path).unwrap();
+    std::fs::write(whisper_path.join("turbo-tokens.txt"), b"fake").unwrap();
+    std::fs::write(&vad_path, b"fake-vad").unwrap();
+
+    assert!(whisper_path.exists());
+    assert!(vad_path.exists());
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "whisper-turbo",
+        "silero-vad",
+        "--yes",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert_eq!(output.stdout, "");
+    assert!(output.stderr.contains("Deleted 2 installed model(s)"));
+    assert!(output.stderr.contains("sherpa-onnx-whisper-turbo"));
+    assert!(output.stderr.contains("silero-vad"));
+    assert!(!whisper_path.exists());
+    assert!(!vad_path.exists());
+
+    // Deleting again reports none installed
+    let output_again = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "whisper-turbo",
+        "silero-vad",
+        "--yes",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+    assert!(
+        output_again
+            .stderr
+            .contains("None of the specified models are installed")
+    );
+}
+
+#[test]
+fn models_delete_partial_installed_models_notices_skipped() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let whisper_path = models_dir.join("sherpa-onnx-whisper-turbo");
+
+    std::fs::create_dir_all(&whisper_path).unwrap();
+    std::fs::write(whisper_path.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "delete",
+        "whisper-turbo",
+        "silero-vad",
+        "--yes",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stderr.contains("Deleted whisper-turbo"));
+    assert!(
+        output
+            .stderr
+            .contains("Note: 1 model(s) not installed, skipped: silero-vad")
+    );
+    assert!(!whisper_path.exists());
+}

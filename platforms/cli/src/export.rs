@@ -12,7 +12,7 @@ use crate::{CliError, CliOutput, CliResult};
 
 #[derive(Debug, Args)]
 #[command(
-    about = "Exports or converts transcript segments to a subtitle/text file or stdout",
+    about = "Converts transcript JSON segments into subtitle or text files (srt, vtt, txt, md, json)",
     after_help = "Input JSON format:\n  [\n    {\n      \"id\": \"segment-1\",\n      \"text\": \"Hello\",\n      \"start\": 0.0,\n      \"end\": 2.5,\n      \"isFinal\": true,\n      \"translation\": \"Bonjour\"\n    }\n  ]\n\nSupported export formats:\n  json, txt, srt, vtt, md (inferred from output file extension when omitted; required when exporting to stdout)\n\nExamples:\n  sona-cli export ./segments.json -o ./transcript.srt\n  sona-cli convert ./segments.json -o ./transcript.vtt\n  cat ./segments.json | sona-cli export -f srt > ./transcript.srt\n  sona-cli export ./segments.json -f txt"
 )]
 pub struct ExportArgs {
