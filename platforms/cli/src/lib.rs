@@ -79,6 +79,7 @@ struct MemoryCliIo {
     stderr: Vec<u8>,
     stdin_lines: VecDeque<String>,
     stdin_bytes: Vec<u8>,
+    stdout_is_terminal: bool,
     stdin_is_terminal: bool,
     stderr_is_terminal: bool,
 }
@@ -100,7 +101,7 @@ impl CliIo for MemoryCliIo {
         &mut self.stderr
     }
     fn stdout_is_terminal(&self) -> bool {
-        false
+        self.stdout_is_terminal
     }
     fn stderr_is_terminal(&self) -> bool {
         self.stderr_is_terminal
@@ -468,6 +469,27 @@ where
     runtime::block_on(async move {
         let mut io = MemoryCliIo {
             stdin_is_terminal: true,
+            ..Default::default()
+        };
+        match dispatch(command, verbose, &mut io).await? {
+            Some(output) => Ok(output),
+            None => Ok(io.into_output()),
+        }
+    })?
+}
+
+pub fn run_cli_from_args_with_terminal_stdout<I, T>(args: I) -> CliResult<CliOutput>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
+        ParsedCli::EarlyExit(output) => return Ok(output),
+    };
+    runtime::block_on(async move {
+        let mut io = MemoryCliIo {
+            stdout_is_terminal: true,
             ..Default::default()
         };
         match dispatch(command, verbose, &mut io).await? {

@@ -771,3 +771,192 @@ fn config_check_accepts_live_section() {
 
     assert!(output.stdout.contains("is valid"));
 }
+
+#[test]
+fn config_unset_removes_existing_key_from_local_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[transcribe]\nmodel_id = \"whisper-turbo\"\nlanguage = \"zh\"\n",
+    )
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "unset",
+        "transcribe.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("Removed transcribe.model_id"));
+    let contents = std::fs::read_to_string(&config_path).unwrap();
+    assert!(!contents.contains("model_id"));
+    assert!(contents.contains("language = \"zh\""));
+
+    let get_res = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "get",
+        "transcribe.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ]);
+    assert!(get_res.is_err());
+}
+
+#[test]
+fn config_rm_alias_works_identically_to_unset() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[serve]\nport = 14200\nhost = \"127.0.0.1\"\n",
+    )
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "rm",
+        "serve.port",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("Removed serve.port"));
+    let contents = std::fs::read_to_string(&config_path).unwrap();
+    assert!(!contents.contains("port = 14200"));
+    assert!(contents.contains("host = \"127.0.0.1\""));
+}
+
+#[test]
+fn config_unset_rejects_missing_key_with_validation_error() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(&config_path, "[transcribe]\nlanguage = \"zh\"\n").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "unset",
+        "transcribe.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Key 'transcribe.model_id' not found")
+    );
+}
+
+#[test]
+fn config_unset_resolves_live_alias_section() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("sona-cli.toml");
+    std::fs::write(
+        &config_path,
+        "[transcribe_live]\nmodel_id = \"sensevoice\"\nformat = \"txt\"\n",
+    )
+    .unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "config",
+        "unset",
+        "live.model_id",
+        "-c",
+        config_path.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("Removed live.model_id"));
+    let contents = std::fs::read_to_string(&config_path).unwrap();
+    assert!(!contents.contains("model_id"));
+    assert!(contents.contains("format = \"txt\""));
+}
+
+#[test]
+fn config_unset_global_via_isolated_subprocess() {
+    let dir = tempfile::tempdir().unwrap();
+    let work_dir = tempfile::tempdir().unwrap();
+    let bin = env!("CARGO_BIN_EXE_sona-cli");
+
+    let mut cmd_set = std::process::Command::new(bin);
+    cmd_set.current_dir(work_dir.path());
+    cmd_set.env_remove("SONA_CONFIG");
+    #[cfg(target_os = "windows")]
+    {
+        cmd_set.env("APPDATA", dir.path());
+        cmd_set.env_remove("USERPROFILE");
+        cmd_set.env_remove("LOCALAPPDATA");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd_set.env("XDG_CONFIG_HOME", dir.path());
+        cmd_set.env_remove("HOME");
+    }
+
+    let output_set = cmd_set
+        .args([
+            "config",
+            "set",
+            "transcribe.model_id",
+            "whisper-turbo",
+            "--global",
+        ])
+        .output()
+        .expect("failed to execute config set --global");
+    assert!(output_set.status.success());
+
+    let mut cmd_unset = std::process::Command::new(bin);
+    cmd_unset.current_dir(work_dir.path());
+    cmd_unset.env_remove("SONA_CONFIG");
+    #[cfg(target_os = "windows")]
+    {
+        cmd_unset.env("APPDATA", dir.path());
+        cmd_unset.env_remove("USERPROFILE");
+        cmd_unset.env_remove("LOCALAPPDATA");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd_unset.env("XDG_CONFIG_HOME", dir.path());
+        cmd_unset.env_remove("HOME");
+    }
+
+    let output_unset = cmd_unset
+        .args(["config", "unset", "transcribe.model_id", "--global"])
+        .output()
+        .expect("failed to execute config unset --global");
+    assert!(output_unset.status.success());
+    assert!(String::from_utf8_lossy(&output_unset.stdout).contains("Removed transcribe.model_id"));
+
+    let mut cmd_get = std::process::Command::new(bin);
+    cmd_get.current_dir(work_dir.path());
+    cmd_get.env_remove("SONA_CONFIG");
+    #[cfg(target_os = "windows")]
+    {
+        cmd_get.env("APPDATA", dir.path());
+        cmd_get.env_remove("USERPROFILE");
+        cmd_get.env_remove("LOCALAPPDATA");
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        cmd_get.env("XDG_CONFIG_HOME", dir.path());
+        cmd_get.env_remove("HOME");
+    }
+
+    let output_get = cmd_get
+        .args(["config", "get", "transcribe.model_id", "--global"])
+        .output()
+        .expect("failed to execute config get --global");
+    assert!(!output_get.status.success());
+}

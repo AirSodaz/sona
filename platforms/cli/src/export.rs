@@ -40,7 +40,6 @@ pub struct ExportArgs {
     pub format: Option<String>,
     /// Text selection mode: original, translation, or bilingual.
     #[arg(
-        short = 'm',
         long,
         default_value = "original",
         value_name = "MODE",

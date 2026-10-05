@@ -57,6 +57,13 @@ pub enum ConfigCommands {
     )]
     Set(ConfigSetArgs),
 
+    /// Remove a specific configuration key (e.g. transcribe.model_id).
+    #[command(
+        about = "Remove a specific configuration key (e.g. transcribe.model_id)",
+        visible_alias = "rm",
+        after_help = "Examples:\n  sona-cli config unset transcribe.model_id\n  sona-cli config rm serve.port\n  sona-cli config unset transcribe.model_id --global"
+    )]
+    Unset(ConfigUnsetArgs),
     /// Open the configuration file in $EDITOR and validate syntax upon exit.
     #[command(
         about = "Open the configuration file in $EDITOR and validate syntax upon exit",
@@ -175,6 +182,28 @@ pub struct ConfigSetArgs {
 }
 
 #[derive(Debug, Args)]
+pub struct ConfigUnsetArgs {
+    /// Dot-separated key path, e.g. transcribe.model_id or serve.port.
+    #[arg(value_name = "KEY")]
+    pub key: String,
+    /// Optional config file to modify.
+    #[arg(
+        short = 'c',
+        long = "config",
+        value_name = "FILE",
+        conflicts_with = "global"
+    )]
+    pub config: Option<PathBuf>,
+    /// Target user standard configuration path instead of local directory.
+    #[arg(
+        short = 'g',
+        long = "global",
+        alias = "user",
+        conflicts_with = "config"
+    )]
+    pub global: bool,
+}
+#[derive(Debug, Args)]
 pub struct ConfigEditArgs {
     /// Optional config file to edit.
     #[arg(
@@ -201,6 +230,7 @@ pub fn run_config(args: ConfigArgs) -> CliResult<CliOutput> {
         ConfigCommands::Show(show_args) => run_config_show(show_args),
         ConfigCommands::Get(get_args) => run_config_get(get_args),
         ConfigCommands::Set(set_args) => run_config_set(set_args),
+        ConfigCommands::Unset(unset_args) => run_config_unset(unset_args),
         ConfigCommands::Edit(edit_args) => run_config_edit(edit_args),
     }
 }
@@ -642,6 +672,110 @@ fn run_config_set(args: ConfigSetArgs) -> CliResult<CliOutput> {
         "Set {} = {} in {}",
         args.key,
         args.value,
+        path.display()
+    )))
+}
+
+fn unset_in_document(doc: &mut toml_edit::DocumentMut, key_path: &str) -> CliResult<()> {
+    let mut parts: Vec<&str> = key_path
+        .split('.')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    if parts.is_empty() {
+        return Err(CliError::Validation("Key cannot be empty.".to_string()));
+    }
+
+    if parts.len() > 1 {
+        if parts[0] == "live"
+            && doc.as_table().contains_key("transcribe_live")
+            && !doc.as_table().contains_key("live")
+        {
+            parts[0] = "transcribe_live";
+        } else if parts[0] == "transcribe_live"
+            && doc.as_table().contains_key("live")
+            && !doc.as_table().contains_key("transcribe_live")
+        {
+            parts[0] = "live";
+        }
+    }
+
+    if parts.len() == 1 {
+        if doc.as_table_mut().remove(parts[0]).is_some() {
+            return Ok(());
+        } else {
+            return Err(CliError::Validation(format!("Key '{key_path}' not found.")));
+        }
+    }
+
+    let mut current_table = doc.as_table_mut();
+    for &part in &parts[..parts.len() - 1] {
+        match current_table.get_mut(part) {
+            Some(toml_edit::Item::Table(table)) => {
+                current_table = table;
+            }
+            _ => {
+                return Err(CliError::Validation(format!("Key '{key_path}' not found.")));
+            }
+        }
+    }
+
+    let last_key = parts.last().unwrap();
+    if current_table.remove(last_key).is_some() {
+        Ok(())
+    } else {
+        Err(CliError::Validation(format!("Key '{key_path}' not found.")))
+    }
+}
+
+fn run_config_unset(args: ConfigUnsetArgs) -> CliResult<CliOutput> {
+    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+
+    let parent = path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or_else(|| std::path::Path::new("."));
+
+    let existing_content = std::fs::read_to_string(&path)
+        .map_err(|e| CliError::Io(format!("Failed to read {}: {e}", path.display())))?;
+
+    let mut doc: toml_edit::DocumentMut = existing_content.parse().map_err(|e| {
+        CliError::Validation(format!("Invalid TOML syntax in {}: {e}", path.display()))
+    })?;
+
+    unset_in_document(&mut doc, &args.key).map_err(|_| {
+        CliError::Validation(format!(
+            "Key '{}' not found in {}.",
+            args.key,
+            path.display()
+        ))
+    })?;
+
+    let new_content = doc.to_string();
+
+    let mut temp_file = tempfile::NamedTempFile::new_in(parent)
+        .map_err(|e| CliError::Io(format!("Failed to create temporary config file: {e}")))?;
+
+    std::io::Write::write_all(&mut temp_file, new_content.as_bytes())
+        .map_err(|e| CliError::Io(format!("Failed to write temporary config file: {e}")))?;
+
+    std::io::Write::flush(&mut temp_file)
+        .map_err(|e| CliError::Io(format!("Failed to flush temporary config file: {e}")))?;
+
+    if let Err(err) = check_config_file(temp_file.path()) {
+        return Err(CliError::Validation(format!(
+            "Failed to unset '{}': resulting configuration is invalid: {}",
+            args.key, err
+        )));
+    }
+
+    temp_file
+        .persist(&path)
+        .map_err(|e| CliError::Io(format!("Failed to save config to {}: {e}", path.display())))?;
+
+    Ok(CliOutput::stdout(format!(
+        "Removed {} from {}",
+        args.key,
         path.display()
     )))
 }

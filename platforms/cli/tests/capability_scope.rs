@@ -1000,47 +1000,6 @@ fn transcribe_auto_infers_single_installed_batch_model() {
 }
 
 #[test]
-fn transcribe_requires_model_id_when_multiple_batch_models_installed() {
-    let dir = tempfile::tempdir().unwrap();
-    let models_dir = dir.path().join("models");
-    // 1. Install whisper-turbo
-    let whisper_dir = models_dir.join("sherpa-onnx-whisper-turbo");
-    std::fs::create_dir_all(&whisper_dir).unwrap();
-    std::fs::write(whisper_dir.join("turbo-encoder.int8.onnx"), b"fake").unwrap();
-    std::fs::write(whisper_dir.join("turbo-decoder.int8.onnx"), b"fake").unwrap();
-    std::fs::write(whisper_dir.join("turbo-tokens.txt"), b"fake").unwrap();
-
-    // 2. Install sensevoice
-    let sensevoice_dir = models_dir.join("sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17");
-    std::fs::create_dir_all(&sensevoice_dir).unwrap();
-    std::fs::write(sensevoice_dir.join("model.int8.onnx"), b"fake").unwrap();
-    std::fs::write(sensevoice_dir.join("tokens.txt"), b"fake").unwrap();
-
-    let fake_audio = dir.path().join("sample.wav");
-    std::fs::write(&fake_audio, b"fake audio").unwrap();
-
-    // Multiple installed batch models -> cannot auto-infer, must fail with "Missing required batch model"
-    let error = sona_cli::run_cli_from_args([
-        "sona-cli",
-        "transcribe",
-        fake_audio.to_string_lossy().as_ref(),
-        "--models-dir",
-        models_dir.to_string_lossy().as_ref(),
-    ])
-    .unwrap_err();
-
-    assert!(
-        error.to_string().contains("Missing required batch model"),
-        "Expected error requiring model_id with multiple candidates, got: {error}"
-    );
-    assert!(
-        error
-            .to_string()
-            .contains("sona-cli models download whisper-turbo"),
-        "Expected actionable hint in missing model error, got: {error}"
-    );
-}
-#[test]
 fn direct_init_config_subcommand_fails_as_unrecognized_command() {
     let error = sona_cli::run_cli_from_args(["sona-cli", "init-config"]).unwrap_err();
     assert_eq!(error.exit_code(), 2);
@@ -1101,5 +1060,48 @@ fn transcribe_accepts_provider_alias_for_online_provider() {
     assert!(
         error.to_string().contains("API key") || error.to_string().contains("GROQ_API_KEY"),
         "Expected provider-specific API key error proving --provider was parsed, got: {error}"
+    );
+}
+
+#[test]
+fn transcribe_reports_error_when_multiple_ambiguous_batch_models_installed() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let audio_file = dir.path().join("test.wav");
+    std::fs::write(&audio_file, b"fake audio content").unwrap();
+
+    let model1_dir = models_dir.join("sherpa-onnx-whisper-large-v3");
+    std::fs::create_dir_all(&model1_dir).unwrap();
+    std::fs::write(model1_dir.join("large-v3-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model1_dir.join("large-v3-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model1_dir.join("large-v3-tokens.txt"), b"fake").unwrap();
+
+    let model2_dir = models_dir.join("sherpa-onnx-whisper-medium-aishell");
+    std::fs::create_dir_all(&model2_dir).unwrap();
+    std::fs::write(model2_dir.join("medium-aishell-encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("medium-aishell-decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("medium-aishell-tokens.txt"), b"fake").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe",
+        audio_file.to_str().unwrap(),
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Multiple batch models installed"),
+        "Unexpected error: {error}"
+    );
+    assert!(
+        error
+            .to_string()
+            .contains("Specify one with -m/--model <MODEL_ID>"),
+        "Unexpected error: {error}"
     );
 }

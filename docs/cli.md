@@ -243,6 +243,29 @@ Examples:
   sona-cli config show -c ./custom.toml
 ```
 
+##### `sona-cli config unset`
+
+Remove a specific configuration key (e.g. transcribe.model_id)
+
+**Aliases:** `rm`
+
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `<KEY>` | - | - | Dot-separated key path, e.g. transcribe.model_id or serve.port |
+| `--config` | `-c` | - | Optional config file to modify |
+| `--global` | `-g` | - | Target user standard configuration path instead of local directory |
+
+**Usage & Examples:**
+
+```text
+Examples:
+  sona-cli config unset transcribe.model_id
+  sona-cli config rm serve.port
+  sona-cli config unset transcribe.model_id --global
+```
+
 #### `sona-cli devices`
 
 Lists available audio input (microphone) devices
@@ -298,7 +321,7 @@ Exports transcript JSON segments into subtitle or text files (srt, vtt, txt, md,
 | `--input` | `-i` | - | JSON file containing transcript segments (alternative to positional INPUT) |
 | `--output` | `-o` | `-` | Destination file path, or "-" for stdout |
 | `--format` | `-f` | - | Export format: json, txt, srt, vtt, or md; required when output is stdout ("-"), inferred from output file extension otherwise |
-| `--mode` | `-m` | `original` | Text selection mode: original, translation, or bilingual |
+| `--mode` | - | `original` | Text selection mode: original, translation, or bilingual |
 | `--json` | `-j` | - | Prints JSON summary instead of the default table output (file output only) |
 | `--force` | `-F` | - | Overwrite existing destination file |
 
@@ -427,7 +450,7 @@ Downloads a preset model into the models directory
 | `--models-dir` | - | - | Override the target models directory |
 | `--quiet` | `-q` | - | Hide per-download progress output |
 | `--mirror` | - | - | Download mirror strategy: auto, direct, ghproxy, ghnet, or hf-mirror |
-| `--yes` | `-y` | - | Overwrite invalid files without prompting for confirmation |
+| `--yes` | `-y` | - | Overwrite invalid files without prompting for confirmation (alias: -F, --force) |
 
 **Usage & Examples:**
 

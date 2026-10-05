@@ -406,7 +406,7 @@ fn export_works_with_verbose_flag_before_and_after_command() {
 }
 
 #[test]
-fn export_accepts_short_mode_flag() {
+fn export_accepts_mode_flag() {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("segments.json");
     let output = dir.path().join("out.srt");
@@ -418,11 +418,29 @@ fn export_accepts_short_mode_flag() {
         input.to_str().unwrap(),
         "-o",
         output.to_str().unwrap(),
-        "-m",
+        "--mode",
         "bilingual",
     ])
     .unwrap();
     assert!(result.stdout.contains("out.srt"));
+
+    // Verify -m is rejected on export to avoid flag collision
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "export",
+        input.to_str().unwrap(),
+        "-o",
+        output.to_str().unwrap(),
+        "-m",
+        "bilingual",
+    ])
+    .unwrap_err();
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error.to_string().contains("unexpected argument '-m'")
+            || error.to_string().contains("error: unexpected argument"),
+        "Expected unexpected argument error for -m, got: {error}"
+    );
 }
 
 #[test]

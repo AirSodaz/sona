@@ -110,6 +110,7 @@ pub struct TranscribeLiveArgs {
         value_name = "FORMAT",
         value_parser = ["json", "txt", "srt", "vtt", "md"],
         help = "Final transcript export format (json, txt, srt, vtt, md). Requires --output",
+        help_heading = "Input/Output"
     )]
     pub(crate) format: Option<String>,
     /// Text selection mode for final transcript: original, translation, or bilingual.
@@ -342,13 +343,21 @@ pub(crate) fn resolve_live_command(
     } else {
         let mut resolved_model_id = args.model_id.clone();
         if resolved_model_id.is_none() && config.model_id.is_none() {
-            resolved_model_id =
-                infer_single_streaming_model(args.models_dir.as_ref()).map(|inferred| {
+            match infer_streaming_model(args.models_dir.as_ref()) {
+                StreamingModelInference::AutoSelected(inferred) => {
                     eprintln!(
                         "Note: Automatically selected installed streaming model '{inferred}'"
                     );
-                    inferred
-                });
+                    resolved_model_id = Some(inferred);
+                }
+                StreamingModelInference::MultipleInstalled(names) => {
+                    return Err(CliError::Validation(format!(
+                        "Multiple streaming models installed ([{}]). Specify one with -m/--model <MODEL_ID>, or configure model_id in sona-cli.toml.",
+                        names.join(", ")
+                    )));
+                }
+                StreamingModelInference::NoneInstalled => {}
+            }
         }
         let plan = sona_runtime_fs::resolve_live_transcribe_plan_with_runtime_paths(
             LiveTranscribeOptions {
@@ -428,9 +437,16 @@ fn validate_online_output(
     Ok(())
 }
 
-pub(crate) fn select_single_streaming_model(
+#[derive(Debug, PartialEq, Eq)]
+pub(crate) enum StreamingModelInference {
+    AutoSelected(String),
+    MultipleInstalled(Vec<String>),
+    NoneInstalled,
+}
+
+pub(crate) fn infer_streaming_model_from_summaries(
     models: &[sona_core::models::catalog::ModelSummary],
-) -> Option<String> {
+) -> StreamingModelInference {
     let installed_streaming: Vec<_> = models
         .iter()
         .filter(|m| {
@@ -440,22 +456,50 @@ pub(crate) fn select_single_streaming_model(
                     .any(|mode| mode == "streaming" || mode == "live")
         })
         .collect();
-    if installed_streaming.len() == 1 {
-        Some(installed_streaming[0].id.clone())
+
+    if installed_streaming.is_empty() {
+        StreamingModelInference::NoneInstalled
+    } else if installed_streaming.len() == 1 {
+        StreamingModelInference::AutoSelected(installed_streaming[0].id.clone())
     } else {
-        None
+        use sona_core::models::preset_models::DEFAULT_SENSEVOICE_INT8_MODEL_ID;
+        if let Some(preferred) = installed_streaming
+            .iter()
+            .find(|m| m.id == DEFAULT_SENSEVOICE_INT8_MODEL_ID)
+        {
+            StreamingModelInference::AutoSelected(preferred.id.clone())
+        } else {
+            let names = installed_streaming
+                .into_iter()
+                .map(|m| m.id.clone())
+                .collect();
+            StreamingModelInference::MultipleInstalled(names)
+        }
     }
 }
 
-fn infer_single_streaming_model(models_dir: Option<&PathBuf>) -> Option<String> {
-    let resolved_dir = sona_core::models::paths::resolve_models_dir(
+#[cfg(test)]
+pub(crate) fn select_single_streaming_model(
+    models: &[sona_core::models::catalog::ModelSummary],
+) -> Option<String> {
+    match infer_streaming_model_from_summaries(models) {
+        StreamingModelInference::AutoSelected(id) => Some(id),
+        StreamingModelInference::MultipleInstalled(_) | StreamingModelInference::NoneInstalled => {
+            None
+        }
+    }
+}
+
+fn infer_streaming_model(models_dir: Option<&PathBuf>) -> StreamingModelInference {
+    let Ok(resolved_dir) = sona_core::models::paths::resolve_models_dir(
         models_dir.cloned(),
         crate::desktop_paths::default_models_dir(),
         crate::desktop_paths::models_dir_status,
-    )
-    .ok()?;
+    ) else {
+        return StreamingModelInference::NoneInstalled;
+    };
     let all_models = sona_runtime_fs::list_models(&resolved_dir);
-    select_single_streaming_model(&all_models)
+    infer_streaming_model_from_summaries(&all_models)
 }
 
 #[cfg(test)]
@@ -538,24 +582,58 @@ mod tests {
             None
         );
 
+        use sona_core::models::preset_models::DEFAULT_SENSEVOICE_INT8_MODEL_ID;
+
         // 3. Uninstalled streaming model -> None
-        let uninstalled_streaming = make_summary("sensevoice", &["streaming", "batch"], false);
+        let uninstalled_streaming = make_summary(
+            DEFAULT_SENSEVOICE_INT8_MODEL_ID,
+            &["streaming", "batch"],
+            false,
+        );
         assert_eq!(
             select_single_streaming_model(std::slice::from_ref(&uninstalled_streaming)),
             None
         );
 
-        // 4. Exactly one installed streaming model -> Some("sensevoice")
-        let installed_streaming = make_summary("sensevoice", &["streaming", "batch"], true);
+        // 4. Exactly one installed streaming model -> Some(DEFAULT_SENSEVOICE_INT8_MODEL_ID)
+        let installed_streaming = make_summary(
+            DEFAULT_SENSEVOICE_INT8_MODEL_ID,
+            &["streaming", "batch"],
+            true,
+        );
         assert_eq!(
             select_single_streaming_model(&[batch_model.clone(), installed_streaming.clone()]),
-            Some("sensevoice".to_string())
+            Some(DEFAULT_SENSEVOICE_INT8_MODEL_ID.to_string())
         );
 
-        // 5. Multiple installed streaming models -> None (ambiguous)
+        // 5. Multiple installed streaming models with default sensevoice -> AutoSelected(DEFAULT_SENSEVOICE_INT8_MODEL_ID)
         let second_streaming = make_summary("paraformer", &["live"], true);
         assert_eq!(
-            select_single_streaming_model(&[installed_streaming, second_streaming]),
+            infer_streaming_model_from_summaries(&[
+                installed_streaming.clone(),
+                second_streaming.clone()
+            ]),
+            StreamingModelInference::AutoSelected(DEFAULT_SENSEVOICE_INT8_MODEL_ID.to_string())
+        );
+        assert_eq!(
+            select_single_streaming_model(&[installed_streaming, second_streaming.clone()]),
+            Some(DEFAULT_SENSEVOICE_INT8_MODEL_ID.to_string())
+        );
+
+        // 6. Multiple installed streaming models without default -> None (ambiguous)
+        let third_streaming = make_summary("zipformer", &["streaming"], true);
+        assert_eq!(
+            infer_streaming_model_from_summaries(&[
+                second_streaming.clone(),
+                third_streaming.clone()
+            ]),
+            StreamingModelInference::MultipleInstalled(vec![
+                "paraformer".to_string(),
+                "zipformer".to_string()
+            ])
+        );
+        assert_eq!(
+            select_single_streaming_model(&[second_streaming, third_streaming]),
             None
         );
     }

@@ -193,7 +193,9 @@ pub struct ModelDownloadArgs {
     #[arg(
         short = 'y',
         long,
-        help = "Overwrite invalid files without prompting for confirmation"
+        short_alias = 'F',
+        visible_alias = "force",
+        help = "Overwrite invalid files without prompting for confirmation (alias: -F, --force)"
     )]
     yes: bool,
 }

@@ -117,7 +117,11 @@ pub struct TranscribeArgs {
     #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
     vad_buffer: Option<f32>,
     /// Save the resampled WAV to a file.
-    #[arg(long = "save-wav", help_heading = "Audio & Performance")]
+    #[arg(
+        long = "save-wav",
+        visible_alias = "save-audio",
+        help_heading = "Audio & Performance"
+    )]
     save_wav: Option<PathBuf>,
     /// Custom path to the ffmpeg executable.
     #[arg(
@@ -178,12 +182,21 @@ pub async fn run_transcribe(
         && resolved_model_id.is_none()
         && config.as_ref().and_then(|c| c.model_id.as_ref()).is_none()
     {
-        resolved_model_id = infer_single_batch_model(args.models_dir.as_ref()).map(|inferred| {
-            if !args.quiet {
-                eprintln!("Note: Automatically selected installed batch model '{inferred}'");
+        match infer_batch_model(args.models_dir.as_ref()) {
+            BatchModelInference::AutoSelected(inferred) => {
+                if !args.quiet {
+                    eprintln!("Note: Automatically selected installed batch model '{inferred}'");
+                }
+                resolved_model_id = Some(inferred);
             }
-            inferred
-        });
+            BatchModelInference::MultipleInstalled(names) => {
+                return Err(CliError::Validation(format!(
+                    "Multiple batch models installed ([{}]). Specify one with -m/--model <MODEL_ID>, or configure model_id in sona-cli.toml.",
+                    names.join(", ")
+                )));
+            }
+            BatchModelInference::NoneInstalled => {}
+        }
     }
 
     let is_batch = args.input_dir.is_some()
@@ -259,6 +272,13 @@ pub async fn run_transcribe(
             (single_input, None)
         };
 
+    let single_format = resolve_single_transcribe_format(
+        args.format.clone(),
+        args.output.as_deref(),
+        config.as_ref().and_then(|c| c.format.as_deref()),
+        io.stdout_is_terminal(),
+    );
+
     if resolved_online.is_online() {
         return run_online_transcribe(
             &args,
@@ -266,13 +286,14 @@ pub async fn run_transcribe(
             &resolved_online,
             config.as_ref(),
             export_mode,
+            single_format.as_deref(),
         )
         .await;
     }
     let options = BatchTranscribeOptions {
         input: actual_single_input,
         output: args.output,
-        format: args.format,
+        format: single_format,
         language: args.language,
         model_id: resolved_model_id,
         models_dir: args.models_dir,
@@ -540,6 +561,7 @@ async fn run_online_transcribe(
     online: &crate::online_asr::OnlineAsrArgs,
     config: Option<&TranscribeConfigSection>,
     export_mode: sona_core::export::ExportMode,
+    resolved_format: Option<&str>,
 ) -> CliResult<CliOutput> {
     reject_online_local_options(args)?;
     validate_online_paths(input, args.output.as_ref(), args.force)?;
@@ -556,9 +578,11 @@ async fn run_online_transcribe(
         .or_else(|| config.and_then(|config| config.hotwords.clone()));
     let request = online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
     let export_format = resolve_export_format(
-        args.format
-            .as_deref()
-            .or_else(|| config.and_then(|config| config.format.as_deref())),
+        resolved_format.or_else(|| {
+            args.format
+                .as_deref()
+                .or_else(|| config.and_then(|config| config.format.as_deref()))
+        }),
         args.output.as_deref(),
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
@@ -841,21 +865,101 @@ pub(crate) fn render_online_provider_detail(provider_id: &str) -> CliResult<Stri
     Ok(out)
 }
 
-fn infer_single_batch_model(models_dir: Option<&PathBuf>) -> Option<String> {
-    let resolved_dir = sona_core::models::paths::resolve_models_dir(
+enum BatchModelInference {
+    AutoSelected(String),
+    MultipleInstalled(Vec<String>),
+    NoneInstalled,
+}
+
+fn infer_batch_model(models_dir: Option<&PathBuf>) -> BatchModelInference {
+    let Ok(resolved_dir) = sona_core::models::paths::resolve_models_dir(
         models_dir.cloned(),
         crate::desktop_paths::default_models_dir(),
         crate::desktop_paths::models_dir_status,
-    )
-    .ok()?;
+    ) else {
+        return BatchModelInference::NoneInstalled;
+    };
     let all_models = sona_runtime_fs::list_models(&resolved_dir);
     let installed_batch: Vec<_> = all_models
         .into_iter()
         .filter(|m| m.installed && m.modes.iter().any(|mode| mode == "batch"))
         .collect();
-    if installed_batch.len() == 1 {
-        Some(installed_batch[0].id.clone())
+
+    if installed_batch.is_empty() {
+        BatchModelInference::NoneInstalled
+    } else if installed_batch.len() == 1 {
+        BatchModelInference::AutoSelected(installed_batch[0].id.clone())
     } else {
-        None
+        use sona_core::models::preset_models::DEFAULT_WHISPER_TURBO_MODEL_ID;
+        if let Some(preferred) = installed_batch
+            .iter()
+            .find(|m| m.id == DEFAULT_WHISPER_TURBO_MODEL_ID)
+        {
+            BatchModelInference::AutoSelected(preferred.id.clone())
+        } else {
+            let names = installed_batch.into_iter().map(|m| m.id).collect();
+            BatchModelInference::MultipleInstalled(names)
+        }
+    }
+}
+
+fn resolve_single_transcribe_format(
+    cli_format: Option<String>,
+    output: Option<&std::path::Path>,
+    config_format: Option<&str>,
+    stdout_is_terminal: bool,
+) -> Option<String> {
+    cli_format.or_else(|| {
+        if output.is_none() && config_format.is_none() && stdout_is_terminal {
+            Some("txt".to_string())
+        } else {
+            None
+        }
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn single_transcribe_format_defaults_to_txt_on_terminal_stdout() {
+        assert_eq!(
+            resolve_single_transcribe_format(None, None, None, true),
+            Some("txt".to_string())
+        );
+    }
+
+    #[test]
+    fn single_transcribe_format_preserves_none_on_piped_stdout() {
+        assert_eq!(
+            resolve_single_transcribe_format(None, None, None, false),
+            None
+        );
+    }
+
+    #[test]
+    fn single_transcribe_format_preserves_explicit_cli_format() {
+        assert_eq!(
+            resolve_single_transcribe_format(Some("json".to_string()), None, None, true),
+            Some("json".to_string())
+        );
+    }
+
+    #[test]
+    fn single_transcribe_format_preserves_none_when_output_file_provided() {
+        let path = std::path::Path::new("out.srt");
+        assert_eq!(
+            resolve_single_transcribe_format(None, Some(path), None, true),
+            None
+        );
+    }
+
+    #[test]
+    fn single_transcribe_format_preserves_none_when_config_format_present() {
+        assert_eq!(
+            resolve_single_transcribe_format(None, None, Some("srt"), true),
+            None
+        );
     }
 }

@@ -81,8 +81,16 @@ fn transcribe_live_rejects_device_for_stdin_before_model_resolution() {
 
 #[test]
 fn transcribe_live_requires_a_streaming_model_before_opening_input() {
-    let error = sona_cli::run_cli_from_args(["sona-cli", "transcribe-live", "--input", "stdin"])
-        .unwrap_err();
+    let empty_dir = tempfile::tempdir().unwrap();
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--input",
+        "stdin",
+        "--models-dir",
+        empty_dir.path().to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
     assert!(
@@ -912,4 +920,49 @@ async fn live_runtime_fails_cleanly_on_unwritable_save_audio_path() {
     );
     assert!(input_stop_receiver.try_recv().is_ok());
     assert!(calls.lock().unwrap().is_empty());
+}
+
+#[test]
+fn transcribe_live_reports_error_when_multiple_ambiguous_models_installed() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+
+    let model1_dir =
+        models_dir.join("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8");
+    std::fs::create_dir_all(&model1_dir).unwrap();
+    std::fs::write(model1_dir.join("encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model1_dir.join("decoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model1_dir.join("tokens.txt"), b"fake").unwrap();
+
+    let model2_dir = models_dir.join("sherpa-onnx-streaming-zipformer-zh-xlarge-int8-2025-06-30");
+    std::fs::create_dir_all(&model2_dir).unwrap();
+    std::fs::write(model2_dir.join("encoder.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("decoder.onnx"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("joiner.int8.onnx"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("tokens.txt"), b"fake").unwrap();
+    std::fs::write(model2_dir.join("bpe.model"), b"fake").unwrap();
+
+    let error = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "transcribe-live",
+        "--input",
+        "stdin",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 2);
+    assert!(
+        error
+            .to_string()
+            .contains("Multiple streaming models installed"),
+        "Unexpected error: {error}"
+    );
+    assert!(
+        error
+            .to_string()
+            .contains("Specify one with -m/--model <MODEL_ID>"),
+        "Unexpected error: {error}"
+    );
 }
