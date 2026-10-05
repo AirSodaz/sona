@@ -91,6 +91,7 @@ export function normalizeAsrRequest(request: AsrTranscriptionRequest): CoreAsrTr
     fileConfig: fileConfig ?? null,
     gpuAcceleration: request.gpuAcceleration ?? null,
     initialRefreshRateMs: request.initialRefreshRateMs ?? null,
+    enablePartialDecoding: request.enablePartialDecoding ?? null,
     ffmpegPath: request.ffmpegPath ?? null,
   };
 }

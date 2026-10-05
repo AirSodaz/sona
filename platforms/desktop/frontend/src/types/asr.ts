@@ -48,6 +48,7 @@ export type LocalAsrRequest = AsrTranscriptionRequestBase & {
   gpuAcceleration?: string;
   initialRefreshRateMs?: number | null;
   ffmpegPath?: string | null;
+  enablePartialDecoding?: boolean | null;
 };
 
 export type OnlineAsrRequest = AsrTranscriptionRequestBase & {

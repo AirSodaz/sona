@@ -184,7 +184,9 @@ export class AsrConfigService {
     config: AppConfig,
     slot: AsrSelectionSlot,
     overrides: Partial<
-      Pick<AsrTranscriptionRequest, 'language' | 'hotwords' | 'postprocessOptions'>
+      Pick<AsrTranscriptionRequest, 'language' | 'hotwords' | 'postprocessOptions'> & {
+        enablePartialDecoding?: boolean | null;
+      }
     > = {}
   ): AsrTranscriptionRequest => {
     const normalizedAsr = this.normalizeAsrConfig(config);
@@ -265,6 +267,11 @@ export class AsrConfigService {
       fileConfig: modelInfo?.fileConfig,
       gpuAcceleration: config.gpuAcceleration ?? 'auto',
       ffmpegPath: config.ffmpegPath || undefined,
+      ...(overrides.enablePartialDecoding !== undefined
+        ? { enablePartialDecoding: overrides.enablePartialDecoding }
+        : scenario !== 'batch' && config.liveSentenceOnly
+          ? { enablePartialDecoding: false }
+          : {}),
     };
   };
 

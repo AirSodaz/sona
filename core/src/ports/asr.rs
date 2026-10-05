@@ -474,6 +474,7 @@ pub struct LocalSherpaStreamingRequest {
     pub postprocess_options: TranscriptPostprocessOptions,
     pub gpu_acceleration: Option<String>,
     pub initial_refresh_rate_ms: Option<u32>,
+    pub enable_partial_decoding: Option<bool>,
 }
 
 impl LocalSherpaStreamingRequest {
@@ -508,6 +509,7 @@ impl LocalSherpaStreamingRequest {
                 file_config,
                 gpu_acceleration,
                 initial_refresh_rate_ms,
+                enable_partial_decoding,
                 ..
             } => {
                 if local_engine != LocalAsrEngine::SherpaOnnx {
@@ -539,6 +541,7 @@ impl LocalSherpaStreamingRequest {
                             .and_then(crate::models::preset_models::find_preset_model)
                             .and_then(|m| m.resolved_rules().initial_refresh_rate_ms)
                     }),
+                    enable_partial_decoding,
                 })
             }
             _ => Err(AsrPortError::invalid_request(
@@ -620,6 +623,8 @@ pub enum AsrEngineConfig {
         #[serde(default)]
         initial_refresh_rate_ms: Option<u32>,
         #[serde(default)]
+        enable_partial_decoding: Option<bool>,
+        #[serde(default)]
         ffmpeg_path: Option<String>,
     },
     #[serde(rename = "online", rename_all = "camelCase")]
@@ -680,6 +685,7 @@ impl AsrTranscriptionRequest {
                 file_config: Box::new(file_config),
                 gpu_acceleration,
                 initial_refresh_rate_ms: None,
+                enable_partial_decoding: None,
                 ffmpeg_path: None,
             },
         }
@@ -691,6 +697,16 @@ impl AsrTranscriptionRequest {
         } = self.engine_config
         {
             *model = alignment_model;
+        }
+        self
+    }
+    pub fn with_enable_partial_decoding(mut self, enable_partial_decoding: Option<bool>) -> Self {
+        if let AsrEngineConfig::Local {
+            enable_partial_decoding: ref mut enabled,
+            ..
+        } = self.engine_config
+        {
+            *enabled = enable_partial_decoding;
         }
         self
     }

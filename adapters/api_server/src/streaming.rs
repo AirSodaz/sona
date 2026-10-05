@@ -298,6 +298,7 @@ async fn handle_streaming_socket(
                 file_config: Box::new(preset.file_config.clone()),
                 gpu_acceleration: state.transcription_defaults.gpu_acceleration.clone(),
                 initial_refresh_rate_ms: preset.resolved_rules().initial_refresh_rate_ms,
+                enable_partial_decoding: None,
             },
             mode: AsrMode::Streaming,
             enable_itn: false,

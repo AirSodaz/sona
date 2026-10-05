@@ -517,6 +517,7 @@ mod tests {
                 file_config: Box::new(None),
                 gpu_acceleration: None,
                 initial_refresh_rate_ms: None,
+                enable_partial_decoding: None,
                 ffmpeg_path: None,
             },
         };

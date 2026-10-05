@@ -1864,6 +1864,8 @@
     "batch_vad_enabled": "Batch VAD Segmentation",
     "batch_vad_enabled_hint": "Split local batch transcription by speech activity. Turn this off to recognize the whole file at once, which may be slower and use more memory.",
     "batch_vad_forced_hint": "Except for Qwen3 ASR and Parakeet TDT, the current model requires batch VAD segmentation to ensure proper recognition and segmentation.",
+    "live_sentence_only": "Low-Power Sentence-Only Mode",
+    "live_sentence_only_hint": "Wait for VAD speech pause and transcribe complete sentences at once. Reduces repetitive calculations and saves battery on laptops.",
     "vad_buffer_size": "VAD Buffer Size (s)",
     "vad_buffer_hint": "Buffer duration (seconds) to capture before speech is detected. Helps avoid cutting off the start of sentences.",
     "max_concurrent_label": "Max Concurrent Transcriptions",

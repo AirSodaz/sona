@@ -87,6 +87,7 @@ async fn pseudo_streaming_session_end_to_end_flow() {
         normalization_options: TranscriptNormalizationOptions::default(),
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -143,6 +144,89 @@ async fn pseudo_streaming_session_end_to_end_flow() {
         let last = updates.last().unwrap();
         assert_eq!(last.stage, "final");
         assert!(last.update.upsert_segments[0].is_final);
+
+        let boundaries = observer.boundaries.lock().unwrap();
+        assert_eq!(boundaries.len(), 1);
+        assert_eq!(boundaries[0].sequence, 4);
+    }
+
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn pseudo_streaming_session_sentence_only_flow() {
+    let speech_flag = Arc::new(AtomicBool::new(false));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-sentence-only".to_string(),
+        decoder: Arc::new(TestDecoder),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: Some(false),
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    // 1. Feed silence (1600 samples = 100ms)
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.0f32; 1600]))
+        .await
+        .unwrap();
+    assert_eq!(observer.transcript_updates.lock().unwrap().len(), 0);
+
+    // 2. Speech starts (speech_flag = true)
+    speech_flag.store(true, Ordering::Release);
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    // Wait 60ms to let refresh rate interval (50ms) expire
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    // Feed another chunk during speech
+    session
+        .feed_audio_frame(AsrAudioFrame::new(3, 3200, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    // With partial decoding disabled, NO partial updates must be emitted during speech
+    assert_eq!(
+        observer.transcript_updates.lock().unwrap().len(),
+        0,
+        "Sentence-only mode must not emit any partial transcript during speech"
+    );
+
+    // 3. Speech ends (speech_flag = false) -> triggers single final whole-sentence inference
+    speech_flag.store(false, Ordering::Release);
+    session
+        .feed_audio_frame(AsrAudioFrame::new(4, 4800, vec![0.0f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        assert_eq!(
+            updates.len(),
+            1,
+            "Sentence-only mode must emit exactly one update at sentence boundary"
+        );
+        let final_update = &updates[0];
+        assert_eq!(final_update.stage, "final");
+        assert!(final_update.update.upsert_segments[0].is_final);
 
         let boundaries = observer.boundaries.lock().unwrap();
         assert_eq!(boundaries.len(), 1);

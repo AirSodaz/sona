@@ -577,4 +577,54 @@ projects:
     expect(untyped.vadModel).toBeUndefined();
     expect(untyped.punctuationModel).toBeUndefined();
   });
+
+  it('resolves live request with enablePartialDecoding false when liveSentenceOnly is enabled', () => {
+    const config = buildAsrConfig({
+      liveSentenceOnly: true,
+    });
+    const request = resolveAsrTranscriptionRequest(config, 'live');
+    expect(request.engine).toBe('local');
+    if (request.engine === 'local') {
+      expect(request.enablePartialDecoding).toBe(false);
+    }
+  });
+
+  it('resolves live request without enablePartialDecoding false by default', () => {
+    const config = buildAsrConfig({
+      liveSentenceOnly: false,
+    });
+    const request = resolveAsrTranscriptionRequest(config, 'live');
+    expect(request.engine).toBe('local');
+    if (request.engine === 'local') {
+      expect(request.enablePartialDecoding).toBeUndefined();
+    }
+  });
+
+  it('respects explicit enablePartialDecoding override on live requests', () => {
+    const config = buildAsrConfig({
+      liveSentenceOnly: true,
+    });
+    const request = resolveAsrTranscriptionRequest(config, 'live', {
+      enablePartialDecoding: true,
+    });
+    expect(request.engine).toBe('local');
+    if (request.engine === 'local') {
+      expect(request.enablePartialDecoding).toBe(true);
+    }
+  });
+  it('resolves caption and voiceTyping requests with enablePartialDecoding false when liveSentenceOnly is enabled', () => {
+    const config = buildAsrConfig({
+      liveSentenceOnly: true,
+    });
+    const captionReq = resolveAsrTranscriptionRequest(config, 'caption');
+    const voiceTypingReq = resolveAsrTranscriptionRequest(config, 'voiceTyping');
+    expect(captionReq.engine).toBe('local');
+    if (captionReq.engine === 'local') {
+      expect(captionReq.enablePartialDecoding).toBe(false);
+    }
+    expect(voiceTypingReq.engine).toBe('local');
+    if (voiceTypingReq.engine === 'local') {
+      expect(voiceTypingReq.enablePartialDecoding).toBe(false);
+    }
+  });
 });

@@ -247,7 +247,25 @@ fn temp_live_options() -> LiveTranscribeOptions {
         gpu_acceleration: None,
         vad_buffer: None,
         force: false,
+        enable_partial_decoding: None,
     }
+}
+
+#[test]
+fn resolve_live_transcribe_plan_passes_enable_partial_decoding() {
+    let (_dir, models_dir) = installed_streaming_paraformer_fixture();
+    let mut options = temp_live_options();
+    options.model_id =
+        Some("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en".to_string());
+    options.models_dir = Some(models_dir);
+    options.enable_partial_decoding = Some(false);
+
+    let plan = resolve_live_transcribe_plan_with_install_checker(options, None, test_model_exists)
+        .unwrap();
+
+    assert_eq!(plan.enable_partial_decoding, Some(false));
+    let req = plan.to_local_streaming_request("test");
+    assert_eq!(req.enable_partial_decoding, Some(false));
 }
 
 fn installed_streaming_paraformer_fixture() -> (tempfile::TempDir, PathBuf) {

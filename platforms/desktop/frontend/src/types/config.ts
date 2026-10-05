@@ -205,6 +205,8 @@ export interface TranscriptionConfig {
   enableITN?: boolean;
   /** Whether batch transcription uses VAD speech segmentation. Default: true. */
   batchVadEnabled?: boolean;
+  /** Whether live pseudo-streaming models only transcribe full sentences upon VAD truncation (low compute / battery saver). Default: false. */
+  liveSentenceOnly?: boolean;
   /** VAD buffer size in seconds for live recording. Default: 5. */
   liveVadBufferSize?: number;
   /** VAD buffer size in seconds for batch import. Default: 5. */

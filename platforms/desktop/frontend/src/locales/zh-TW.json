@@ -1864,6 +1864,8 @@
     "batch_vad_enabled": "批次 VAD 分割",
     "batch_vad_enabled_hint": "本機批次轉錄時按語音活動分割音訊。關閉後會整段辨識檔案，可能會更慢並佔用更多記憶體。",
     "batch_vad_forced_hint": "除 Qwen3 ASR 與 Parakeet TDT 外，目前模型必須開啟批次 VAD 分割以保證正常辨識與分段。",
+    "live_sentence_only": "低負載整句轉錄",
+    "live_sentence_only_hint": "等待 VAD 停頓截斷後再進行整句轉錄。避免說話過程中的重複試探計算，大幅降低能耗並節省筆記型電腦電量。",
     "vad_buffer_size": "VAD 緩衝時間 (秒)",
     "vad_buffer_hint": "在偵測到語音之前採集的緩衝時長。有助於避免切掉句首。",
     "max_concurrent_label": "最大平行轉錄數",

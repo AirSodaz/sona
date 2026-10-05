@@ -1396,6 +1396,22 @@ export function SettingsModelsTab({
                   />
                 </SettingsItem>
               )}
+              {!isBatchScenario && (
+                <SettingsItem
+                  title={t('settings.live_sentence_only', {
+                    defaultValue: 'Low-Power Sentence-Only Mode',
+                  })}
+                  hint={t('settings.live_sentence_only_hint', {
+                    defaultValue:
+                      'Wait for VAD speech pause and transcribe complete sentences at once. Reduces repetitive calculations and saves battery on laptops.',
+                  })}
+                >
+                  <Switch
+                    checked={Boolean(transcriptionConfig.liveSentenceOnly)}
+                    onChange={(checked) => updateConfig({ liveSentenceOnly: checked })}
+                  />
+                </SettingsItem>
+              )}
             </>
           )}
         </SettingsAccordion>

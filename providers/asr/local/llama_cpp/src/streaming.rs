@@ -46,6 +46,7 @@ pub(crate) struct ValidatedStreamingRequest {
     pub(crate) normalization_options: TranscriptNormalizationOptions,
     pub(crate) postprocess_options: TranscriptPostprocessOptions,
     pub(crate) initial_refresh_rate_ms: Option<u32>,
+    pub(crate) enable_partial_decoding: Option<bool>,
 }
 
 pub(crate) fn validate_streaming_request(
@@ -65,6 +66,7 @@ pub(crate) fn validate_streaming_request(
         file_config,
         gpu_acceleration,
         initial_refresh_rate_ms,
+        enable_partial_decoding,
     ) = match &request.engine_config {
         AsrEngineConfig::Local {
             local_engine,
@@ -78,6 +80,7 @@ pub(crate) fn validate_streaming_request(
             file_config,
             gpu_acceleration,
             initial_refresh_rate_ms,
+            enable_partial_decoding,
             ..
         } => (
             *local_engine,
@@ -91,6 +94,7 @@ pub(crate) fn validate_streaming_request(
             file_config.clone(),
             gpu_acceleration.clone(),
             *initial_refresh_rate_ms,
+            *enable_partial_decoding,
         ),
         _ => {
             return Err(AsrPortError::invalid_request(
@@ -150,6 +154,7 @@ pub(crate) fn validate_streaming_request(
         normalization_options: request.normalization_options,
         postprocess_options: request.postprocess_options.clone(),
         initial_refresh_rate_ms,
+        enable_partial_decoding,
     })
 }
 
@@ -448,6 +453,7 @@ impl StreamingAsrFactoryPort for LlamaCppStreamingFactory {
                 normalization_options: validated.normalization_options,
                 postprocess_options: validated.postprocess_options,
                 initial_refresh_rate_ms: validated.initial_refresh_rate_ms,
+                enable_partial_decoding: validated.enable_partial_decoding,
             })?;
 
             Ok(Arc::new(session) as Arc<dyn AsrStreamingSession>)
@@ -502,6 +508,7 @@ mod tests {
                 })),
                 gpu_acceleration: Some("auto".to_string()),
                 initial_refresh_rate_ms: None,
+                enable_partial_decoding: None,
                 ffmpeg_path: None,
             },
         }
@@ -520,6 +527,16 @@ mod tests {
         assert_eq!(validated.vad_buffer, 0.5);
         assert_eq!(validated.model_file, dir.join("model.gguf"));
         assert_eq!(validated.mmproj_file, dir.join("mmproj.gguf"));
+        assert_eq!(validated.enable_partial_decoding, None);
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validate_streaming_request_respects_enable_partial_decoding() {
+        let dir = create_test_model_dir();
+        let request = sample_streaming_request(&dir).with_enable_partial_decoding(Some(false));
+        let validated = validate_streaming_request(&request).expect("validation should succeed");
+        assert_eq!(validated.enable_partial_decoding, Some(false));
         let _ = std::fs::remove_dir_all(dir);
     }
 

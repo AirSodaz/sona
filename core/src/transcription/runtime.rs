@@ -100,6 +100,7 @@ pub struct LiveTranscribeOptions {
     pub gpu_acceleration: Option<String>,
     pub vad_buffer: Option<f32>,
     pub force: bool,
+    pub enable_partial_decoding: Option<bool>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -121,6 +122,7 @@ pub struct LiveTranscribePlan {
     pub gpu_acceleration: Option<String>,
     pub export_format: Option<ExportFormat>,
     pub output_path: Option<PathBuf>,
+    pub enable_partial_decoding: Option<bool>,
 }
 
 impl LiveTranscribePlan {
@@ -149,6 +151,7 @@ impl LiveTranscribePlan {
                 &self.model_id,
             )
             .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
+            enable_partial_decoding: self.enable_partial_decoding,
         }
     }
     pub fn to_streaming_spec(
@@ -179,6 +182,7 @@ impl LiveTranscribePlan {
                     &self.model_id,
                 )
                 .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
+                enable_partial_decoding: self.enable_partial_decoding,
                 ffmpeg_path: None,
             },
         };
@@ -455,6 +459,7 @@ pub fn resolve_live_transcribe_plan_with_install_checker_and_models_dir_status(
         gpu_acceleration: resolved.gpu_acceleration,
         export_format,
         output_path: options.output,
+        enable_partial_decoding: options.enable_partial_decoding,
     })
 }
 

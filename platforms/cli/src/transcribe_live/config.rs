@@ -162,6 +162,14 @@ pub struct TranscribeLiveArgs {
     /// VAD buffer size in seconds, for example 0.5.
     #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
     pub(crate) vad_buffer: Option<f32>,
+    /// Only transcribe complete sentences upon VAD truncation (reduces compute/battery load).
+    #[arg(
+        long = "sentence-only",
+        default_value_t = false,
+        help = "Only transcribe complete sentences upon VAD truncation (reduces compute/battery load)",
+        help_heading = "Audio & Performance"
+    )]
+    pub(crate) sentence_only: bool,
 
     /// Optional config file, usually sona-cli.toml.
     #[arg(short, long, value_name = "FILE")]
@@ -330,6 +338,7 @@ pub(crate) fn resolve_live_command(
                 gpu_acceleration: args.gpu_acceleration,
                 vad_buffer: args.vad_buffer,
                 force: args.force,
+                enable_partial_decoding: args.sentence_only.then_some(false),
             },
             Some(config),
         )

@@ -286,7 +286,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
 /**
  *  Local offline transcription through a provider-crate engine.
  *
@@ -309,7 +309,7 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
 /**
@@ -334,7 +334,7 @@ export type AsrEngineConfig_Serialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
-} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
+} | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; enablePartialDecoding: boolean | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
 /**  Local offline transcription. */

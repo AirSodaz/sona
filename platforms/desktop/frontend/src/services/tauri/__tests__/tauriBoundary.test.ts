@@ -69,7 +69,7 @@ import {
   translateTranscriptSegments,
 } from '../llm';
 import { llmUsageEnsureStorage, llmUsageReadRaw, llmUsageReplaceRaw } from '../llmUsage';
-import { processBatchFile } from '../recognizer';
+import { normalizeAsrRequest, processBatchFile } from '../recognizer';
 import {
   recoveryLoadSnapshot,
   recoveryPersistQueueSnapshot,
@@ -2182,5 +2182,29 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.system.getAuxWindowState, {
       label: 'voice-typing',
     });
+  });
+  it('normalizes local ASR requests while preserving enablePartialDecoding', () => {
+    const request = normalizeAsrRequest({
+      engine: 'local',
+      mode: 'streaming',
+      language: 'zh',
+      enableItn: true,
+      normalizationOptions: { enableTimeline: false },
+      postprocessOptions: { textReplacementSets: [], dropFinalDotSegments: false },
+      hotwords: null,
+      modelId: 'sensevoice',
+      modelPath: '/models/sensevoice',
+      numThreads: 4,
+      punctuationModel: null,
+      vadModel: '/models/silero_vad.onnx',
+      vadBuffer: 0.5,
+      modelType: 'sensevoice',
+      enablePartialDecoding: false,
+    });
+
+    expect(request.engine).toBe('local');
+    if (request.engine === 'local') {
+      expect(request.enablePartialDecoding).toBe(false);
+    }
   });
 });

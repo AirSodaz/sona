@@ -307,7 +307,6 @@ fn reset_instance_runtime_state(instance: &mut SherpaInstance) {
     }
 }
 
-#[derive(Default)]
 pub struct SherpaInstance {
     recognizer: Option<Arc<Recognizer>>,
     stream: Option<SafeStream>,
@@ -328,6 +327,32 @@ pub struct SherpaInstance {
     pub speaker_tracker:
         Option<Arc<std::sync::Mutex<crate::streaming::speaker_tracker::OnlineSpeakerTracker>>>,
     pub current_turn_samples: Vec<f32>,
+    pub enable_partial_decoding: bool,
+}
+impl Default for SherpaInstance {
+    fn default() -> Self {
+        Self {
+            recognizer: None,
+            stream: None,
+            vad: None,
+            punctuation: None,
+            total_samples: 0,
+            segment_start_time: 0.0,
+            offline_state: OfflineState::default(),
+            vad_model: None,
+            vad_buffer: 0.0,
+            current_segment_id: None,
+            last_partial_metric_sample: 0,
+            is_running: false,
+            record_diagnostics: RecordDiagnosticsState::default(),
+            normalization_options: TranscriptNormalizationOptions::default(),
+            postprocessor: TranscriptPostprocessor::default(),
+            last_partial_decode_ms: Arc::new(AtomicU64::new(0)),
+            speaker_tracker: None,
+            current_turn_samples: Vec::new(),
+            enable_partial_decoding: true,
+        }
+    }
 }
 
 impl SherpaInstance {
