@@ -1,9 +1,10 @@
-﻿use std::fs::{self, File};
+use std::fs::{self, File};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
 
 use bzip2::write::BzEncoder;
 use serde_json::{Value, json};
+use sona_application::backup::BackupService;
 use sona_archive::{
     FsBackupAdapter, FsBackupArchiveRepository, MAX_BACKUP_ENTRIES, MAX_BACKUP_FILE_BYTES,
 };
@@ -481,6 +482,83 @@ fn filesystem_backup_adapter_composes_archive_state_and_clock() {
 
     assert_eq!(preview.manifest.app_version, TEST_APP_VERSION);
     assert_eq!(preview.manifest.counts.tags, 1);
+}
+
+#[test]
+fn export_archive_strips_sensitive_api_keys_from_config() {
+    let temp = tempfile::tempdir().unwrap();
+    let archive_path = temp.path().join("sanitized.sona-backup");
+    let archive_path_str = archive_path.to_string_lossy().into_owned();
+
+    let mut custom_dataset = dataset();
+    custom_dataset.config = json!({
+        "language": "en",
+        "httpServerApiKey": "secret-server-token",
+        "llmSettings": {
+            "providers": {
+                "openai": {
+                    "apiKey": "sk-secret-openai-key",
+                    "model": "gpt-4o"
+                }
+            }
+        },
+        "asr": {
+            "providers": {
+                "online": {
+                    "doubao": {
+                        "api_key": "doubao-secret-key",
+                        "app_id": "app-id-123"
+                    }
+                }
+            }
+        }
+    });
+
+    let repository = FsBackupArchiveRepository::new();
+    let state = FixedBackupState(custom_dataset);
+    let clock = FixedClock(1_234);
+    let service = BackupService::new(&repository, &state, &clock);
+
+    service
+        .export_archive(BackupExportRequest {
+            archive_path: archive_path_str.clone(),
+            app_version: TEST_APP_VERSION.to_string(),
+        })
+        .unwrap();
+
+    let file = File::open(&archive_path).unwrap();
+    let decoder = bzip2::read::BzDecoder::new(file);
+    let mut archive = tar::Archive::new(decoder);
+    let mut config_json_bytes = Vec::new();
+    for entry in archive.entries().unwrap() {
+        let mut entry = entry.unwrap();
+        let path = entry.path().unwrap().to_string_lossy().replace('\\', "/");
+        if path == "config/sona-config.json" {
+            entry.read_to_end(&mut config_json_bytes).unwrap();
+            break;
+        }
+    }
+    assert!(
+        !config_json_bytes.is_empty(),
+        "config/sona-config.json not found in archive"
+    );
+    let parsed: Value = serde_json::from_slice(&config_json_bytes).unwrap();
+
+    assert_eq!(parsed["language"], "en");
+    assert_eq!(parsed["httpServerApiKey"], "");
+    assert_eq!(parsed["llmSettings"]["providers"]["openai"]["apiKey"], "");
+    assert_eq!(
+        parsed["llmSettings"]["providers"]["openai"]["model"],
+        "gpt-4o"
+    );
+    assert_eq!(
+        parsed["asr"]["providers"]["online"]["doubao"]["api_key"],
+        ""
+    );
+    assert_eq!(
+        parsed["asr"]["providers"]["online"]["doubao"]["app_id"],
+        "app-id-123"
+    );
 }
 
 #[test]

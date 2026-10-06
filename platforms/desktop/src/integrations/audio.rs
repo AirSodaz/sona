@@ -43,21 +43,28 @@ impl CaptureKind {
         }
     }
 
-    fn should_record(self, instance_id: &str) -> bool {
-        match self {
-            CaptureKind::System => instance_id == "record",
-            CaptureKind::Microphone => {
-                instance_id != "voice-typing" && !instance_id.starts_with("test_")
-            }
-        }
-    }
-
     fn stop_log_label(self) -> &'static str {
         match self {
             CaptureKind::System => "System",
             CaptureKind::Microphone => "Mic",
         }
     }
+}
+
+#[derive(Debug, thiserror::Error, PartialEq, Eq)]
+pub enum AudioCaptureError {
+    #[error("Unsupported native capture source: {0}")]
+    UnsupportedSource(String),
+    #[error("Capture instance '{0}' is not active")]
+    InstanceNotActive(String),
+    #[error("Capture registry entry is missing")]
+    MissingRegistryEntry,
+    #[error("Failed to update pause state: {0}")]
+    PauseState(String),
+    #[error("Poisoned lock: {0}")]
+    LockPoisoned(String),
+    #[error("{0}")]
+    Other(String),
 }
 
 pub enum RecorderCommand {
@@ -107,15 +114,16 @@ impl AudioStopSignal {
     }
 }
 
-#[derive(Default)]
 /// Tracks one live hardware capture that can be shared by multiple logical
 /// recorder instances. Ownership lives at the instance-id layer, so attaching a
 /// second consumer should reuse the same device stream instead of starting a
 /// parallel hardware capture.
+#[derive(Default)]
 struct SharedCaptureState {
     stop_signal: Option<AudioStopSignal>,
     instance_ids: HashSet<String>,
     paused_instances: HashSet<String>,
+    recording_instances: HashSet<String>,
     recorder_tx: Option<tokio::sync::mpsc::Sender<RecorderCommand>>,
     source: LiveSourceEpoch,
     sample_cursor: std::sync::Arc<AtomicU64>,
@@ -151,6 +159,7 @@ impl CaptureRegistry {
         key: &CaptureKey,
         kind: CaptureKind,
         instance_id: &str,
+        should_record: bool,
     ) -> Result<Option<(LiveCaptureLease, tokio::sync::mpsc::Sender<RecorderCommand>)>, String>
     {
         let instance_key = (kind, instance_id.to_string());
@@ -171,7 +180,7 @@ impl CaptureRegistry {
             .recorder_tx
             .clone()
             .ok_or_else(|| "Capture recorder task is unavailable".to_string())?;
-        capture.attach_instance(instance_id.to_string());
+        capture.attach_instance(instance_id.to_string(), should_record);
         let lease = capture.lease();
         self.instance_keys.insert(instance_key, key.clone());
         Ok(Some((lease, recorder_tx)))
@@ -203,6 +212,7 @@ impl CaptureRegistry {
 /// Callers only stop the underlying device when the final owner leaves.
 struct SharedCaptureDetachResult {
     should_stop_hardware: bool,
+    was_recording: bool,
     stop_signal: Option<AudioStopSignal>,
     recorder_tx: Option<tokio::sync::mpsc::Sender<RecorderCommand>>,
 }
@@ -229,11 +239,16 @@ impl SharedCaptureState {
         active_instances
     }
 
-    fn attach_instance(&mut self, instance_id: String) -> Vec<String> {
+    fn attach_instance(&mut self, instance_id: String, should_record: bool) -> Vec<String> {
         // Re-attaching an existing instance should also make it active again if
         // it had previously been paused.
         self.paused_instances.remove(&instance_id);
-        self.instance_ids.insert(instance_id);
+        self.instance_ids.insert(instance_id.clone());
+        if should_record {
+            self.recording_instances.insert(instance_id);
+        } else {
+            self.recording_instances.remove(&instance_id);
+        }
         self.owners()
     }
 
@@ -246,6 +261,7 @@ impl SharedCaptureState {
     ) -> Vec<String> {
         self.commit_start_with_source(
             instance_id,
+            true,
             stop_signal,
             recorder_tx,
             LiveSourceEpoch::default(),
@@ -256,6 +272,7 @@ impl SharedCaptureState {
     fn commit_start_with_source(
         &mut self,
         instance_id: String,
+        should_record: bool,
         stop_signal: AudioStopSignal,
         recorder_tx: tokio::sync::mpsc::Sender<RecorderCommand>,
         source: LiveSourceEpoch,
@@ -265,7 +282,11 @@ impl SharedCaptureState {
         // state so future attach/detach calls describe only the current run.
         self.instance_ids.clear();
         self.paused_instances.clear();
-        self.instance_ids.insert(instance_id);
+        self.recording_instances.clear();
+        self.instance_ids.insert(instance_id.clone());
+        if should_record {
+            self.recording_instances.insert(instance_id);
+        }
         self.stop_signal = Some(stop_signal);
         self.recorder_tx = Some(recorder_tx);
         self.source = source;
@@ -297,6 +318,7 @@ impl SharedCaptureState {
     fn detach_instance(&mut self, instance_id: &str) -> SharedCaptureDetachResult {
         self.instance_ids.remove(instance_id);
         self.paused_instances.remove(instance_id);
+        let was_recording = self.recording_instances.remove(instance_id);
         let should_stop_hardware = self.instance_ids.is_empty();
         // Keep the recorder channel available while at least one owner still
         // depends on the shared capture. Only the final detach consumes the
@@ -313,6 +335,7 @@ impl SharedCaptureState {
         };
         SharedCaptureDetachResult {
             should_stop_hardware,
+            was_recording,
             stop_signal,
             recorder_tx,
         }
@@ -751,9 +774,10 @@ fn start_shared_capture(
         }
     }
 
+    let should_record = output_path.is_some();
     let existing_attachment = {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
-        registry.attach_running(&key, kind, &instance_id)?
+        registry.attach_running(&key, kind, &instance_id, should_record)?
     };
     if let Some((lease, recorder_tx)) = existing_attachment {
         info!(
@@ -763,7 +787,7 @@ fn start_shared_capture(
         );
         if let Err(error) = queue_recording_start(
             Some(&recorder_tx),
-            kind.should_record(&instance_id),
+            should_record,
             kind.label(),
             &instance_id,
             output_path.clone(),
@@ -842,6 +866,7 @@ fn start_shared_capture(
         let mut capture = SharedCaptureState::default();
         capture.commit_start_with_source(
             instance_id.clone(),
+            should_record,
             stop_signal,
             recorder_tx.clone(),
             source.clone(),
@@ -860,7 +885,7 @@ fn start_shared_capture(
 
     if let Err(error) = queue_recording_start(
         Some(&recorder_tx),
-        kind.should_record(&instance_id),
+        should_record,
         kind.label(),
         &instance_id,
         output_path,
@@ -869,7 +894,6 @@ fn start_shared_capture(
         rollback_capture_attachment(state, kind, &instance_id, &key);
         return Err(error);
     }
-
     Ok(LiveCaptureLease {
         source_id: source.source_id,
         source_generation: source.generation,
@@ -929,33 +953,36 @@ pub(crate) async fn stop_native_live_capture(
 }
 
 pub(crate) fn set_native_live_capture_paused(
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     source_kind: &str,
     consumer_id: &str,
     paused: bool,
-) -> Result<LiveCaptureLease, String> {
+) -> Result<LiveCaptureLease, AudioCaptureError> {
     let kind = match source_kind {
         "system" => CaptureKind::System,
         "microphone" => CaptureKind::Microphone,
-        _ => return Err(format!("Unsupported native capture source: {source_kind}")),
+        _ => {
+            return Err(AudioCaptureError::UnsupportedSource(
+                source_kind.to_string(),
+            ));
+        }
     };
-    let mut registry = state.registry.lock().map_err(|error| error.to_string())?;
+    let mut registry = state
+        .registry
+        .lock()
+        .map_err(|error| AudioCaptureError::LockPoisoned(error.to_string()))?;
     let key = registry
         .instance_keys
         .get(&(kind, consumer_id.to_string()))
         .cloned()
-        .ok_or_else(|| format!("Capture instance '{consumer_id}' is not active"))?;
+        .ok_or_else(|| AudioCaptureError::InstanceNotActive(consumer_id.to_string()))?;
     let capture = registry
         .captures
         .get_mut(&key)
-        .ok_or_else(|| "Capture registry entry is missing".to_string())?;
-    update_capture_pause_state(
-        capture,
-        consumer_id,
-        paused,
-        kind.label(),
-        kind.should_record(consumer_id),
-    )?;
+        .ok_or(AudioCaptureError::MissingRegistryEntry)?;
+    let should_record = capture.recording_instances.contains(consumer_id);
+    update_capture_pause_state(capture, consumer_id, paused, kind.label(), should_record)
+        .map_err(AudioCaptureError::PauseState)?;
     Ok(capture.lease())
 }
 
@@ -1017,7 +1044,6 @@ async fn stop_shared_capture(
     kind: CaptureKind,
     instance_id: String,
 ) -> Result<String, String> {
-    let was_recording = kind.should_record(&instance_id);
     let (key, source, detach_result) = {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
         let instance_key = (kind, instance_id.clone());
@@ -1043,6 +1069,7 @@ async fn stop_shared_capture(
         }
         (key, source, detach_result)
     };
+    let was_recording = detach_result.was_recording;
 
     if detach_result.should_stop_hardware {
         if let Some(signal) = detach_result.stop_signal.as_ref() {
@@ -1115,13 +1142,8 @@ pub fn set_system_audio_capture_paused(
         .captures
         .get_mut(&key)
         .ok_or_else(|| "Capture registry entry is missing".to_string())?;
-    update_capture_pause_state(
-        capture,
-        &instance_id,
-        paused,
-        kind.label(),
-        kind.should_record(&instance_id),
-    )
+    let should_record = capture.recording_instances.contains(&instance_id);
+    update_capture_pause_state(capture, &instance_id, paused, kind.label(), should_record)
 }
 
 pub fn set_microphone_capture_paused(
@@ -1140,15 +1162,9 @@ pub fn set_microphone_capture_paused(
         .captures
         .get_mut(&key)
         .ok_or_else(|| "Capture registry entry is missing".to_string())?;
-    update_capture_pause_state(
-        capture,
-        &instance_id,
-        paused,
-        kind.label(),
-        kind.should_record(&instance_id),
-    )
+    let should_record = capture.recording_instances.contains(&instance_id);
+    update_capture_pause_state(capture, &instance_id, paused, kind.label(), should_record)
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1167,6 +1183,7 @@ mod tests {
         let mut capture = SharedCaptureState::default();
         capture.commit_start_with_source(
             owner.to_string(),
+            true,
             AudioStopSignal::from_sender(stop_tx),
             recorder_tx,
             LiveSourceEpoch::new(
@@ -1240,7 +1257,7 @@ mod tests {
             recorder_tx,
         );
 
-        let owners = capture.attach_instance("record".to_string());
+        let owners = capture.attach_instance("record".to_string(), true);
 
         assert_eq!(
             owners,
@@ -1285,7 +1302,7 @@ mod tests {
             AudioStopSignal::from_sender(stop_tx),
             recorder_tx,
         );
-        capture.attach_instance("record".to_string());
+        capture.attach_instance("record".to_string(), true);
 
         let active_instances = capture.set_instance_paused("record", true).unwrap();
 
@@ -1307,7 +1324,7 @@ mod tests {
             AudioStopSignal::from_sender(stop_tx),
             recorder_tx,
         );
-        capture.attach_instance("test_mic".to_string());
+        capture.attach_instance("test_mic".to_string(), false);
 
         let preview_detach = capture.detach_instance("test_mic");
 
@@ -1367,7 +1384,7 @@ mod tests {
         );
 
         let (shared_lease, _) = registry
-            .attach_running(&microphone_a, CaptureKind::Microphone, "caption")
+            .attach_running(&microphone_a, CaptureKind::Microphone, "caption", false)
             .unwrap()
             .unwrap();
 
@@ -1390,7 +1407,7 @@ mod tests {
             device_name: "device-a".to_string(),
         };
         let (mut capture, stop_rx, _recorder_rx) = running_capture("record", 13);
-        capture.attach_instance("caption".to_string());
+        capture.attach_instance("caption".to_string(), false);
         let mut registry = CaptureRegistry::default();
         registry.captures.insert(key.clone(), capture);
         for owner in ["record", "caption"] {
@@ -1468,5 +1485,31 @@ mod tests {
         .unwrap_err();
 
         assert!(error.contains("parent directory traversal"));
+    }
+
+    #[test]
+    fn shared_capture_state_tracks_recording_instances_explicitly() {
+        let mut capture = SharedCaptureState::default();
+        let (stop_tx, _stop_rx) = channel::<()>();
+        let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(1);
+        capture.commit_start_with_source(
+            "inst-1".to_string(),
+            true,
+            AudioStopSignal::from_sender(stop_tx),
+            recorder_tx,
+            LiveSourceEpoch::default(),
+            std::sync::Arc::new(AtomicU64::new(0)),
+        );
+        assert!(capture.recording_instances.contains("inst-1"));
+
+        capture.attach_instance("inst-2".to_string(), false);
+        assert!(!capture.recording_instances.contains("inst-2"));
+
+        let detach_2 = capture.detach_instance("inst-2");
+        assert!(!detach_2.was_recording);
+
+        let detach_1 = capture.detach_instance("inst-1");
+        assert!(detach_1.was_recording);
+        assert!(!capture.recording_instances.contains("inst-1"));
     }
 }

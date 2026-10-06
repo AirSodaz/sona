@@ -37,7 +37,8 @@ impl<'a> BackupService<'a> {
         require_non_empty(&request.archive_path, "archive_path")?;
         require_non_empty(&request.app_version, "app_version")?;
 
-        let dataset = self.state.snapshot()?;
+        let mut dataset = self.state.snapshot()?;
+        sona_core::config::strip_config_credentials(&mut dataset.config);
         validate_dataset(&dataset)?;
         let manifest = manifest_for_dataset(self.now_ms()?, request.app_version, &dataset)?;
         self.archive

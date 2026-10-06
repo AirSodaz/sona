@@ -5,12 +5,28 @@ use std::sync::Arc;
 
 use crate::{CliError, CliOutput, CliResult};
 use sona_api_server::{
-    ApiServerServiceParts, ApiServerStartError, DefaultApiServerPlatform, RunningApiServer,
-    start_api_server_runtime,
+    ApiServerPlatform, ApiServerPlatformError, ApiServerServiceParts, ApiServerStartError,
+    OnlineBatchRequest, RunningApiServer, start_api_server_runtime,
 };
 use sona_core::runtime::config::ServeConfigSection;
 use sona_core::runtime::serve::{ServeRuntimeArgs, resolve_serve_runtime_options};
+use sona_core::transcription::transcript::TranscriptSegment;
 
+#[derive(Clone, Default)]
+struct CliApiServerPlatform;
+
+#[async_trait::async_trait]
+impl ApiServerPlatform for CliApiServerPlatform {
+    async fn transcribe_online_batch(
+        &self,
+        request: OnlineBatchRequest,
+    ) -> Result<Vec<TranscriptSegment>, ApiServerPlatformError> {
+        let core_request = request.to_core_request();
+        crate::asr_adapter::online_batch_transcribe(request.file_path, core_request)
+            .await
+            .map_err(|error| ApiServerPlatformError::transcription(error.to_string()))
+    }
+}
 #[derive(Debug, Args)]
 #[command(
     about = "Run the shared local HTTP API server",
@@ -114,7 +130,7 @@ pub async fn run_serve(
         gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
         model_catalog: Arc::new(sona_runtime_fs::RuntimeModelCatalogProvider),
         batch_plan_resolver: Arc::new(sona_runtime_fs::RuntimeBatchTranscribePlanResolver),
-        platform: Arc::new(DefaultApiServerPlatform),
+        platform: Arc::new(CliApiServerPlatform),
         streaming_transcriber: Some(crate::asr_adapter::streaming_transcriber()),
         web_dist_dir: None,
     })
@@ -333,5 +349,29 @@ mod tests {
             ExitConfirmation::Proceed
         );
         assert!(String::from_utf8_lossy(&stderr).contains("Forced exit"));
+    }
+
+    #[tokio::test]
+    async fn cli_api_server_platform_routes_online_batch() {
+        let platform = CliApiServerPlatform;
+        let request = OnlineBatchRequest {
+            file_path: PathBuf::from("non-existent.wav"),
+            provider_id: "groq-whisper".to_string(),
+            profile_id: "default".to_string(),
+            config: serde_json::json!({ "apiKey": "test-key" }),
+            language: "en".to_string(),
+            hotwords: None,
+        };
+        let result = platform.transcribe_online_batch(request).await;
+        match result {
+            Err(err) => {
+                assert!(
+                    !err.to_string()
+                        .contains(sona_api_server::ONLINE_ASR_BATCH_UNAVAILABLE),
+                    "CliApiServerPlatform should route online batch instead of returning unavailable"
+                );
+            }
+            Ok(_) => {}
+        }
     }
 }

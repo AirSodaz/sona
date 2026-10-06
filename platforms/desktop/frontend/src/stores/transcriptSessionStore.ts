@@ -89,9 +89,24 @@ export const {
   clearSegments,
 } = sessionActions;
 
+let lastActiveSessionRef: SessionData | null = null;
+let lastSessionId: string | null = null;
+let cachedSessionStoreState: SessionStoreState | null = null;
+
 export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
   const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  return Object.assign(Object.create(sessionActions), activeSession);
+  if (
+    cachedSessionStoreState &&
+    lastActiveSessionRef === activeSession &&
+    lastSessionId === state.activeSessionId
+  ) {
+    return cachedSessionStoreState;
+  }
+  lastActiveSessionRef = activeSession;
+  lastSessionId = state.activeSessionId;
+  const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);
+  cachedSessionStoreState = nextState;
+  return nextState;
 }
 
 export const transcriptSessionStore = {

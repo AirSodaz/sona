@@ -161,6 +161,24 @@ impl OnlineAsrArgs {
     where
         F: FnOnce(&str) -> Result<String, ()>,
     {
+        self.build_request_with_warn(mode, language, enable_itn, hotwords, read_env, |warning| {
+            eprintln!("{warning}");
+        })
+    }
+
+    fn build_request_with_warn<F, W>(
+        &self,
+        mode: AsrMode,
+        language: String,
+        enable_itn: bool,
+        hotwords: Option<String>,
+        read_env: F,
+        mut warn: W,
+    ) -> CliResult<AsrTranscriptionRequest>
+    where
+        F: FnOnce(&str) -> Result<String, ()>,
+        W: FnMut(&str),
+    {
         let provider_id = self.online_provider.as_deref().ok_or_else(|| {
             CliError::Validation("Missing required --online-provider.".to_string())
         })?;
@@ -226,6 +244,9 @@ impl OnlineAsrArgs {
                     "--api-key must not be empty.".to_string(),
                 ));
             }
+            warn(
+                "Warning: Passing API keys via --api-key exposes them in OS process tables. Consider using --api-key-env instead.",
+            );
             direct_key.clone()
         } else {
             let env_name = self
@@ -633,6 +654,35 @@ mod tests {
             panic!("expected online request");
         };
         assert_eq!(provider.config["apiKey"], "direct-secret-key");
+    }
+
+    #[test]
+    fn direct_api_key_emits_security_warning_and_builds_request() {
+        let args = OnlineAsrArgs {
+            online_provider: Some(GROQ_WHISPER_PROVIDER_ID.to_string()),
+            api_key: Some("direct-key-warning-test".to_string()),
+            ..Default::default()
+        };
+        let mut warnings = Vec::new();
+        let request = args
+            .build_request_with_warn(
+                AsrMode::Batch,
+                "en".to_string(),
+                false,
+                None,
+                |_| Ok("unused".to_string()),
+                |msg| warnings.push(msg.to_string()),
+            )
+            .unwrap();
+        let AsrEngineConfig::Online { provider } = request.engine_config else {
+            panic!("expected online request");
+        };
+        assert_eq!(provider.config["apiKey"], "direct-key-warning-test");
+        assert_eq!(warnings.len(), 1);
+        assert!(
+            warnings[0]
+                .contains("Passing API keys via --api-key exposes them in OS process tables")
+        );
     }
 
     #[test]

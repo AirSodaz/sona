@@ -1,3 +1,4 @@
+import { flushConfigPersistence } from '../hooks/useConfigPersistence';
 import i18n from '../i18n';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -5,6 +6,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { logger } from '../utils/logger';
 import { forceExit, hasActiveApiServerJobs, hasActiveDownloads } from './tauri/app';
+import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 type TranscriptQuitTaskSnapshot = Pick<
   ReturnType<typeof useTranscriptRuntimeStore.getState>,
@@ -95,6 +97,11 @@ export async function runGuardedQuit(onExit: () => Promise<void>): Promise<boole
     if (!confirmed) {
       return false;
     }
+  }
+  try {
+    await Promise.allSettled([transcriptAutoSaveRuntime.flushPending(), flushConfigPersistence()]);
+  } catch (error) {
+    logger.error('Failed to flush pending data before quit:', error);
   }
 
   await onExit();

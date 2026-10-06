@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { resetTranscriptStores } from '../../test-utils/transcriptStoreTestUtils';
+import {
+  resetTranscriptStores,
+  useTranscriptStore,
+} from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_CONFIG, useConfigStore } from '../configStore';
 import { getEffectiveConfigSnapshot, useEffectiveConfigStore } from '../effectiveConfigStore';
 import { useProjectStore } from '../projectStore';
@@ -11,7 +14,7 @@ import {
 } from '../transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../transcriptRuntimeStore';
-import { useTranscriptSessionStore } from '../transcriptSessionStore';
+import { getSessionStoreState, useTranscriptSessionStore } from '../transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
 
 vi.mock('../../services/tauri/app', () => ({
@@ -300,5 +303,26 @@ describe('Transcript Stores', () => {
         translationLanguage: 'zh',
       })
     );
+  });
+
+  it('getSessionStoreState maintains referential stability when active session is unchanged', () => {
+    const state = useTranscriptStore.getState();
+    const firstCall = getSessionStoreState(state);
+    const secondCall = getSessionStoreState(state);
+
+    expect(firstCall).toBe(secondCall);
+
+    useTranscriptStore.setState({ processingStatus: 'processing' });
+    const afterUnrelatedUpdate = getSessionStoreState(useTranscriptStore.getState());
+    expect(afterUnrelatedUpdate).toBe(firstCall);
+
+    useTranscriptSessionStore.getState().addSegment({
+      text: 'New segment',
+      start: 0,
+      end: 1,
+      isFinal: true,
+    });
+    const afterSessionUpdate = getSessionStoreState(useTranscriptStore.getState());
+    expect(afterSessionUpdate).not.toBe(firstCall);
   });
 });

@@ -224,6 +224,28 @@ mod tests {
         writer.await.unwrap();
         assert_eq!(lease.source_id, "test-source");
     }
+
+    #[test]
+    fn audio_capture_error_instance_not_active_matches_for_idempotent_pause() {
+        let audio_state = crate::integrations::audio::AudioState::new();
+        let result = crate::integrations::audio::set_native_live_capture_paused(
+            &audio_state,
+            "system",
+            "unknown-consumer",
+            true,
+        );
+        assert!(matches!(
+            &result,
+            Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(id)) if id == "unknown-consumer"
+        ));
+        let handled = match result {
+            Ok(_) | Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(_)) => {
+                Ok(())
+            }
+            Err(e) => Err(e),
+        };
+        assert!(handled.is_ok());
+    }
 }
 
 #[tauri::command(async)]
@@ -250,8 +272,7 @@ pub async fn pause_native_live_transcription(
         &source_kind,
         &consumer_id,
         true,
-    )
-    .map_err(AsrPortError::runtime);
+    );
     let release_result = if state.live_coordinator().has_consumer(&consumer_id).await {
         state.live_coordinator().release(&consumer_id).await
     } else {
@@ -268,12 +289,10 @@ pub async fn pause_native_live_transcription(
         }
         return Err(error);
     }
-    if let Err(err) = &pause_result
-        && err.to_string().contains("is not active")
-    {
-        return Ok(());
+    match pause_result {
+        Ok(_) | Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(_)) => Ok(()),
+        Err(err) => Err(AsrPortError::runtime(err.to_string())),
     }
-    pause_result.map(|_| ())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -293,7 +312,7 @@ pub async fn resume_native_live_transcription(
         &consumer_id,
         false,
     )
-    .map_err(AsrPortError::runtime)?;
+    .map_err(|err| AsrPortError::runtime(err.to_string()))?;
     let observer = Arc::new(TauriAsrRuntimeObserver::new(
         Arc::new(TauriEventEmitter(app)),
         state.metrics_store(),

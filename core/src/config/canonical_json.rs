@@ -31,6 +31,43 @@ pub fn to_canonical_json_string(value: &Value) -> Result<String, serde_json::Err
     serde_json::to_string(&canonical)
 }
 
+/// Recursively sanitizes credentials and sensitive API keys in an application configuration JSON value.
+/// Replaces sensitive string values with an empty string (`""`).
+pub fn strip_config_credentials(config: &mut Value) {
+    match config {
+        Value::Object(map) => {
+            for (key, value) in map.iter_mut() {
+                let lower_key = key.to_ascii_lowercase();
+                if lower_key == "httpserverapikey"
+                    || lower_key == "http_server_api_key"
+                    || lower_key == "apikey"
+                    || lower_key == "api_key"
+                    || lower_key == "apisecret"
+                    || lower_key == "api_secret"
+                    || lower_key == "accesstoken"
+                    || lower_key == "access_token"
+                    || lower_key == "secretkey"
+                    || lower_key == "secret_key"
+                {
+                    if let Value::String(s) = value {
+                        if !s.is_empty() {
+                            *s = String::new();
+                        }
+                    }
+                } else {
+                    strip_config_credentials(value);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for item in arr.iter_mut() {
+                strip_config_credentials(item);
+            }
+        }
+        _ => {}
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -52,6 +89,56 @@ mod tests {
         assert_eq!(
             canonical_str,
             r#"{"a":[{"c":3,"d":4}],"m":{"a":1,"b":2},"z":1}"#
+        );
+    }
+
+    #[test]
+    fn strips_sensitive_credentials_from_config() {
+        let mut config = json!({
+            "language": "en",
+            "httpServerApiKey": "my-secret-token",
+            "llmSettings": {
+                "providers": {
+                    "openai": {
+                        "apiKey": "sk-123456",
+                        "model": "gpt-4o"
+                    }
+                },
+                "models": {
+                    "custom": {
+                        "apiKey": "sk-custom"
+                    }
+                }
+            },
+            "asr": {
+                "providers": {
+                    "online": {
+                        "doubao": {
+                            "api_key": "doubao-secret",
+                            "app_id": "app-123"
+                        }
+                    }
+                }
+            }
+        });
+
+        strip_config_credentials(&mut config);
+
+        assert_eq!(config["language"], "en");
+        assert_eq!(config["httpServerApiKey"], "");
+        assert_eq!(config["llmSettings"]["providers"]["openai"]["apiKey"], "");
+        assert_eq!(
+            config["llmSettings"]["providers"]["openai"]["model"],
+            "gpt-4o"
+        );
+        assert_eq!(config["llmSettings"]["models"]["custom"]["apiKey"], "");
+        assert_eq!(
+            config["asr"]["providers"]["online"]["doubao"]["api_key"],
+            ""
+        );
+        assert_eq!(
+            config["asr"]["providers"]["online"]["doubao"]["app_id"],
+            "app-123"
         );
     }
 }

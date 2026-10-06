@@ -1,9 +1,11 @@
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import * as configPersistence from '../../hooks/useConfigPersistence';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { hasActiveFrontendQuitTasks, runGuardedQuit } from '../quitGuard';
+import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -150,6 +152,48 @@ describe('quitGuard', () => {
 
     expect(result).toBe(true);
     expect(confirmMock).toHaveBeenCalledTimes(1);
+    expect(exitMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('flushes pending transcript and config persistence before executing onExit', async () => {
+    const exitMock = vi.fn().mockResolvedValue(undefined);
+    const callOrder: string[] = [];
+
+    const flushAutoSaveSpy = vi
+      .spyOn(transcriptAutoSaveRuntime, 'flushPending')
+      .mockImplementation(async () => {
+        callOrder.push('flushAutoSave');
+      });
+    const flushConfigSpy = vi
+      .spyOn(configPersistence, 'flushConfigPersistence')
+      .mockImplementation(async () => {
+        callOrder.push('flushConfig');
+      });
+    exitMock.mockImplementation(async () => {
+      callOrder.push('exit');
+    });
+
+    const result = await runGuardedQuit(exitMock);
+
+    expect(result).toBe(true);
+    expect(flushAutoSaveSpy).toHaveBeenCalledTimes(1);
+    expect(flushConfigSpy).toHaveBeenCalledTimes(1);
+    expect(callOrder).toHaveLength(3);
+    expect(callOrder[2]).toBe('exit');
+  });
+
+  it('still proceeds with onExit even if flush operations reject', async () => {
+    const exitMock = vi.fn().mockResolvedValue(undefined);
+    vi.spyOn(transcriptAutoSaveRuntime, 'flushPending').mockRejectedValue(
+      new Error('autosave failure')
+    );
+    vi.spyOn(configPersistence, 'flushConfigPersistence').mockRejectedValue(
+      new Error('config persistence failure')
+    );
+
+    const result = await runGuardedQuit(exitMock);
+
+    expect(result).toBe(true);
     expect(exitMock).toHaveBeenCalledTimes(1);
   });
 });
