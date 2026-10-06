@@ -1,15 +1,45 @@
 #[cfg(target_os = "windows")]
+struct ComGuard {
+    need_uninitialize: bool,
+}
+
+#[cfg(target_os = "windows")]
+impl ComGuard {
+    unsafe fn enter() -> Self {
+        use windows::Win32::System::Com::CoInitialize;
+        // CoInitialize returns Ok(()) on S_OK (0) or S_FALSE (1).
+        // If it was already initialized with a different concurrency model (RPC_E_CHANGED_MODE),
+        // it returns an Err, in which case we do not uninitialize.
+        let hr = unsafe { CoInitialize(None) };
+        Self {
+            need_uninitialize: hr.is_ok(),
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
+impl Drop for ComGuard {
+    fn drop(&mut self) {
+        if self.need_uninitialize {
+            use windows::Win32::System::Com::CoUninitialize;
+            unsafe {
+                CoUninitialize();
+            }
+        }
+    }
+}
+
+#[cfg(target_os = "windows")]
 fn set_mute_windows(mute: bool) -> Result<(), String> {
     use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
     use windows::Win32::Media::Audio::{
         IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender,
     };
-    use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance, CoInitialize};
+    use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
+
+    let _com_guard = unsafe { ComGuard::enter() };
 
     unsafe {
-        // CoInitialize may already be called by Tauri on this thread.
-        let _ = CoInitialize(None);
-
         let enumerator: IMMDeviceEnumerator =
             CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL).map_err(|e| e.to_string())?;
 

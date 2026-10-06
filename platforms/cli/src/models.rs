@@ -1,5 +1,4 @@
 use clap::{Args, Subcommand};
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use crate::{CliError, CliOutput, CliResult};
@@ -972,34 +971,47 @@ async fn download_one_model(
         ));
     }
 
+    let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
     let stderr_is_terminal = io.stderr_is_terminal();
-    let has_printed = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let has_printed_clone = has_printed.clone();
     let display_id = resolved.model.id.clone();
-    let mut last_percentage: Option<i32> = None;
 
-    let install_path =
+    let download_fut =
         download_model_with_mirror_choice(resolved, mirror, move |downloaded, total| {
-            if quiet || total == 0 {
-                return;
-            }
-            let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
-            if stderr_is_terminal {
-                eprint!("\rDownloading {display_id}: {percentage}%");
-                let _ = io::stderr().flush();
-                has_printed_clone.store(true, std::sync::atomic::Ordering::Relaxed);
-            } else if (percentage == 100 || percentage % 10 == 0)
-                && last_percentage != Some(percentage)
-            {
-                eprintln!("Downloading {display_id}: {percentage}%");
-                last_percentage = Some(percentage);
-            }
-        })
-        .await
-        .map_err(map_download_error)?;
+            let _ = tx.send((downloaded, total));
+        });
+    tokio::pin!(download_fut);
 
-    if has_printed.load(std::sync::atomic::Ordering::Relaxed) {
-        eprintln!();
+    let mut last_percentage: Option<i32> = None;
+    let mut has_printed = false;
+
+    let install_path = loop {
+        tokio::select! {
+            res = &mut download_fut => {
+                break res.map_err(map_download_error)?;
+            }
+            Some((downloaded, total)) = rx.recv() => {
+                if quiet || total == 0 {
+                    continue;
+                }
+                let percentage = ((downloaded as f64 / total as f64) * 100.0).round() as i32;
+                if stderr_is_terminal {
+                    write!(io.stderr(), "\rDownloading {display_id}: {percentage}%")
+                        .map_err(|e| CliError::Io(e.to_string()))?;
+                    let _ = io.stderr().flush();
+                    has_printed = true;
+                } else if (percentage == 100 || percentage % 10 == 0)
+                    && last_percentage != Some(percentage)
+                {
+                    writeln!(io.stderr(), "Downloading {display_id}: {percentage}%")
+                        .map_err(|e| CliError::Io(e.to_string()))?;
+                    last_percentage = Some(percentage);
+                }
+            }
+        }
+    };
+
+    if has_printed {
+        writeln!(io.stderr()).map_err(|e| CliError::Io(e.to_string()))?;
     }
     stderr_lines.push(format!(
         "Installed {} at {}",

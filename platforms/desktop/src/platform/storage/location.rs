@@ -197,6 +197,15 @@ pub async fn check_active_tasks_idle(app: &AppHandle) -> Result<(), String> {
                 .to_string(),
         );
     }
+    if let Some(history_state) =
+        app.try_state::<crate::platform::history_repository::HistoryRepositoryState>()
+        && history_state.is_file_task_active()
+    {
+        return Err(
+            "Cannot migrate storage while history operations or backup archives are being processed. Please wait for them to finish."
+                .to_string(),
+        );
+    }
     Ok(())
 }
 

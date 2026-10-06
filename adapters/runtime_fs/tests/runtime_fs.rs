@@ -829,3 +829,25 @@ fn select_desktop_models_dir_honors_storage_location_custom_data_dir() {
     let selected = select_desktop_models_dir_from_app_roots(vec![root.clone()]);
     assert_eq!(selected, Some(custom_data_models));
 }
+
+#[test]
+fn select_desktop_models_dir_honors_custom_models_dir_even_when_not_yet_created() {
+    let dir = tempfile::tempdir().unwrap();
+    let root1 = dir.path().join("app_root_configured");
+    std::fs::create_dir_all(&root1).unwrap();
+    let custom_models = dir.path().join("not_yet_created_custom_models");
+
+    let config = StorageBootstrapConfig {
+        custom_data_dir: None,
+        custom_models_dir: Some(custom_models.clone()),
+        pending_cleanup_dirs: Vec::new(),
+    };
+    save_bootstrap_config(&root1, &config).unwrap();
+
+    let root2 = dir.path().join("app_root_fallback");
+    let fallback_models = root2.join("models");
+    std::fs::create_dir_all(&fallback_models).unwrap();
+
+    let selected = select_desktop_models_dir_from_app_roots(vec![root1, root2]);
+    assert_eq!(selected, Some(custom_models));
+}

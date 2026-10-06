@@ -89,23 +89,16 @@ export const {
   clearSegments,
 } = sessionActions;
 
-let lastActiveSessionRef: SessionData | null = null;
-let lastSessionId: string | null = null;
-let cachedSessionStoreState: SessionStoreState | null = null;
+const sessionStateCache = new WeakMap<SessionData, SessionStoreState>();
 
 export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
   const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  if (
-    cachedSessionStoreState &&
-    lastActiveSessionRef === activeSession &&
-    lastSessionId === state.activeSessionId
-  ) {
-    return cachedSessionStoreState;
+  const cached = sessionStateCache.get(activeSession);
+  if (cached) {
+    return cached;
   }
-  lastActiveSessionRef = activeSession;
-  lastSessionId = state.activeSessionId;
   const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);
-  cachedSessionStoreState = nextState;
+  sessionStateCache.set(activeSession, nextState);
   return nextState;
 }
 

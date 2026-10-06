@@ -9,6 +9,12 @@ pub struct HistoryRepositoryState {
     pub(crate) file_lock: Arc<Mutex<()>>,
 }
 
+impl HistoryRepositoryState {
+    pub(crate) fn is_file_task_active(&self) -> bool {
+        self.file_lock.try_lock().is_err()
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct PreparedBackupImportState {
     archive: Arc<FsBackupArchiveRepository>,

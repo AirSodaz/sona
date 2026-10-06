@@ -512,13 +512,16 @@ where
 {
     let app_roots = app_roots.into_iter().collect::<Vec<_>>();
 
-    // 1. Check if any app root has a valid storage_location.json pointing to an existing models dir
+    // 1. Check if any app root has a valid storage_location.json with an explicit custom directory or existing models dir
     for root in &app_roots {
         let bootstrap_path = root.join(STORAGE_BOOTSTRAP_FILE_NAME);
         if bootstrap_path.exists() {
+            let config = load_bootstrap_config(root);
+            let has_explicit_custom =
+                config.custom_models_dir.is_some() || config.custom_data_dir.is_some();
             let active_data = resolve_active_data_dir(root);
             let active_models = resolve_active_models_dir(root, &active_data);
-            if active_models.exists() {
+            if has_explicit_custom || active_models.exists() {
                 return Some(active_models);
             }
         }

@@ -377,16 +377,34 @@ impl BatchTranscriptionJob {
         if observer.is_cancelled() {
             return Err(AsrPortError::runtime("Task cancelled."));
         }
-        let segments = transcribe_samples(
-            &samples,
-            &recognizer,
-            punctuation.as_deref(),
-            &self.vad_engines,
-            self.vad_model.as_deref(),
-            self.vad_buffer,
-            self.batch_segmentation_mode,
-            observer.as_ref(),
-        )?;
+        let samples = Arc::new(samples);
+        let samples_clone = Arc::clone(&samples);
+        let recognizer_clone = recognizer.clone();
+        let punctuation_clone = punctuation.clone();
+        let vad_engines_clone = self.vad_engines.clone();
+        let vad_model_clone = self.vad_model.clone();
+        let vad_buffer = self.vad_buffer;
+        let batch_segmentation_mode = self.batch_segmentation_mode;
+        let observer_clone = Arc::clone(&observer);
+
+        let segments = tokio::task::spawn_blocking(move || {
+            transcribe_samples(
+                &samples_clone,
+                &recognizer_clone,
+                punctuation_clone.as_deref(),
+                &vad_engines_clone,
+                vad_model_clone.as_deref(),
+                vad_buffer,
+                batch_segmentation_mode,
+                observer_clone.as_ref(),
+            )
+        })
+        .await
+        .map_err(|join_err| {
+            AsrPortError::runtime(format!(
+                "Sherpa-ONNX batch worker task panicked: {join_err}"
+            ))
+        })??;
         if observer.is_cancelled() {
             return Err(AsrPortError::runtime("Task cancelled."));
         }

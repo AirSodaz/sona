@@ -406,27 +406,33 @@ async fn run_batch_transcribe(
         let request =
             resolved_online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
 
+        let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
         for (index, plan_item) in plans.iter().enumerate() {
-            let res: Result<(), CliError> = async {
-                let segments = crate::asr_adapter::online_batch_transcribe(
-                    plan_item.input_path.clone(),
-                    request.clone(),
-                )
-                .await
-                .map_err(crate::online_asr::map_asr_error)?;
+            let res: Result<(), CliError> = tokio::select! {
+                biased;
+                _ = &mut ctrl_c => {
+                    return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
+                }
+                item_res = async {
+                    let segments = crate::asr_adapter::online_batch_transcribe(
+                        plan_item.input_path.clone(),
+                        request.clone(),
+                    )
+                    .await
+                    .map_err(crate::online_asr::map_asr_error)?;
 
-                let content = sona_core::export::export_segments_with_mode(
-                    &segments,
-                    export_format,
-                    export_mode,
-                )
-                .map_err(|error| CliError::Serialize(error.to_string()))?;
+                    let content = sona_core::export::export_segments_with_mode(
+                        &segments,
+                        export_format,
+                        export_mode,
+                    )
+                    .map_err(|error| CliError::Serialize(error.to_string()))?;
 
-                sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
-                    .map_err(|error| CliError::Io(error.to_string()))?;
-                Ok(())
-            }
-            .await;
+                    sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    Ok(())
+                } => item_res,
+            };
 
             match res {
                 Ok(()) => {
@@ -465,51 +471,56 @@ async fn run_batch_transcribe(
             sona_core::export::ExportFormat::Vtt => "vtt",
             sona_core::export::ExportFormat::Md => "md",
         };
+        let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
         for (index, plan_item) in plans.iter().enumerate() {
-            let res: Result<(), CliError> = async {
-                let single_options = BatchTranscribeOptions {
-                    input: plan_item.input_path.clone(),
-                    output: Some(plan_item.output_path.clone()),
-                    format: Some(format_name.to_string()),
-                    language: args.language.clone(),
-                    model_id: resolved_model_id.clone(),
-                    models_dir: args.models_dir.clone(),
-                    default_models_dir: crate::desktop_paths::default_models_dir(),
-                    vad_model_id: args.vad_model_id.clone(),
-                    punctuation_model_id: args.punctuation_model_id.clone(),
-                    threads: args.threads,
-                    enable_itn: if args.enable_itn { Some(true) } else { None },
-                    hotwords: args.hotwords.clone(),
-                    gpu_acceleration: args.gpu_acceleration.clone(),
-                    vad_buffer: args.vad_buffer,
-                    save_wav: None,
-                    quiet: args.quiet,
-                    force: args.force,
-                    ffmpeg_path: args.ffmpeg_path.clone(),
-                };
+            let res: Result<(), CliError> = tokio::select! {
+                biased;
+                _ = &mut ctrl_c => {
+                    return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
+                }
+                item_res = async {
+                    let single_options = BatchTranscribeOptions {
+                        input: plan_item.input_path.clone(),
+                        output: Some(plan_item.output_path.clone()),
+                        format: Some(format_name.to_string()),
+                        language: args.language.clone(),
+                        model_id: resolved_model_id.clone(),
+                        models_dir: args.models_dir.clone(),
+                        default_models_dir: crate::desktop_paths::default_models_dir(),
+                        vad_model_id: args.vad_model_id.clone(),
+                        punctuation_model_id: args.punctuation_model_id.clone(),
+                        threads: args.threads,
+                        enable_itn: if args.enable_itn { Some(true) } else { None },
+                        hotwords: args.hotwords.clone(),
+                        gpu_acceleration: args.gpu_acceleration.clone(),
+                        vad_buffer: args.vad_buffer,
+                        save_wav: None,
+                        quiet: args.quiet,
+                        force: args.force,
+                        ffmpeg_path: args.ffmpeg_path.clone(),
+                    };
 
-                let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
-                    single_options,
-                    config.cloned(),
-                    crate::desktop_paths::models_dir_status,
-                )
-                .map_err(crate::map_runtime_fs_error)?;
+                    let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+                        single_options,
+                        config.cloned(),
+                        crate::desktop_paths::models_dir_status,
+                    )
+                    .map_err(crate::map_runtime_fs_error)?;
 
-                let segments = transcriber
-                    .transcribe(file_plan)
-                    .await
-                    .map_err(crate::online_asr::map_asr_error)?;
+                    let segments = transcriber
+                        .transcribe(file_plan)
+                        .await
+                        .map_err(crate::online_asr::map_asr_error)?;
 
-                let content =
-                    sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
-                        .map_err(|error| CliError::Serialize(error.to_string()))?;
+                    let content =
+                        sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
+                            .map_err(|error| CliError::Serialize(error.to_string()))?;
 
-                sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
-                    .map_err(|error| CliError::Io(error.to_string()))?;
-                Ok(())
-            }
-            .await;
-
+                    sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
+                        .map_err(|error| CliError::Io(error.to_string()))?;
+                    Ok(())
+                } => item_res,
+            };
             match res {
                 Ok(()) => {
                     succeeded += 1;
