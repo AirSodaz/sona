@@ -1086,19 +1086,20 @@ async fn stop_shared_capture(
     let mut saved_path = String::new();
     if was_recording {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        let sent = detach_result
-            .recorder_tx
-            .as_ref()
-            .map(|recorder_tx| {
-                recorder_tx
-                    .try_send(RecorderCommand::Stop {
+        let sent = match detach_result.recorder_tx.as_ref() {
+            Some(recorder_tx) => matches!(
+                tokio::time::timeout(
+                    std::time::Duration::from_millis(1000),
+                    recorder_tx.send(RecorderCommand::Stop {
                         owner: instance_id.clone(),
                         completed: tx,
-                    })
-                    .is_ok()
-            })
-            .unwrap_or(false);
-
+                    }),
+                )
+                .await,
+                Ok(Ok(()))
+            ),
+            None => false,
+        };
         if sent {
             match rx.await {
                 Ok(path) => saved_path = path,

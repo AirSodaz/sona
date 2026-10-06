@@ -1,10 +1,10 @@
-import { flushConfigPersistence } from '../hooks/useConfigPersistence';
 import i18n from '../i18n';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import { logger } from '../utils/logger';
+import { flushConfigPersistence } from './configPersistenceService';
 import { forceExit, hasActiveApiServerJobs, hasActiveDownloads } from './tauri/app';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 

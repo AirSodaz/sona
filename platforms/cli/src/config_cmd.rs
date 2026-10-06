@@ -316,128 +316,19 @@ fn find_unknown_config_keys(content: &str, path: &std::path::Path) -> Vec<String
         return Vec::new();
     };
 
-    const ROOT_KEYS: &[&str] = &[
-        "models_dir",
-        "gpu_acceleration",
-        "vad_model_id",
-        "punctuation_model_id",
-        "online_provider",
-        "api_key_env",
-        "online_config",
-        "ffmpeg_path",
-        "model_id",
-        "language",
-        "threads",
-        "enable_itn",
-        "hotwords",
-        "quiet",
-        "jobs",
-        "vad_buffer_size",
-        "vad_buffer",
-        "format",
-        "save_wav",
-        "save_audio",
-        "mode",
-        "continue_on_error",
-        "host",
-        "port",
-        "api_key",
-        "ip_whitelist",
-        "max_streaming",
-        "max_concurrent",
-        "max_queue_size",
-        "max_upload_size_mb",
-        "job_ttl_minutes",
-        "transcribe",
-        "live",
-        "transcribe_live",
-        "serve",
-    ];
-
-    const TRANSCRIBE_KEYS: &[&str] = &[
-        "models_dir",
-        "model_id",
-        "vad_model_id",
-        "punctuation_model_id",
-        "language",
-        "online_provider",
-        "api_key_env",
-        "online_config",
-        "threads",
-        "enable_itn",
-        "hotwords",
-        "quiet",
-        "jobs",
-        "vad_buffer_size",
-        "vad_buffer",
-        "format",
-        "gpu_acceleration",
-        "ffmpeg_path",
-        "save_wav",
-        "save_audio",
-        "mode",
-        "continue_on_error",
-    ];
-
-    const LIVE_KEYS: &[&str] = &[
-        "models_dir",
-        "model_id",
-        "vad_model_id",
-        "punctuation_model_id",
-        "language",
-        "threads",
-        "enable_itn",
-        "hotwords",
-        "vad_buffer_size",
-        "vad_buffer",
-        "online_provider",
-        "api_key_env",
-        "online_config",
-        "gpu_acceleration",
-        "input",
-        "device",
-        "duration_seconds",
-        "duration",
-        "stream_format",
-        "stream",
-        "output_format",
-        "format",
-        "save_wav",
-        "save_audio",
-        "sentence_only",
-        "mode",
-    ];
-
-    const SERVE_KEYS: &[&str] = &[
-        "host",
-        "port",
-        "api_key",
-        "models_dir",
-        "ip_whitelist",
-        "max_streaming",
-        "max_concurrent",
-        "max_queue_size",
-        "max_upload_size_mb",
-        "job_ttl_minutes",
-        "gpu_acceleration",
-        "vad_model_id",
-        "punctuation_model_id",
-        "ffmpeg_path",
-    ];
-
     let mut warnings = Vec::new();
     let path_display = path.display();
 
     for (k, v) in &value {
-        if !ROOT_KEYS.contains(&k.as_str()) {
+        if !sona_core::runtime::config::ROOT_CONFIG_KEYS.contains(&k.as_str()) {
             warnings.push(format!(
                 "Warning: Unrecognized key '{k}' in {path_display}; this key will have no effect."
             ));
         } else if let toml::Value::Table(table) = v {
             let allowed = match k.as_str() {
-                "transcribe" => Some(TRANSCRIBE_KEYS),
-                "live" | "transcribe_live" => Some(LIVE_KEYS),
-                "serve" => Some(SERVE_KEYS),
+                "transcribe" => Some(sona_core::runtime::config::TRANSCRIBE_CONFIG_KEYS),
+                "live" | "transcribe_live" => Some(sona_core::runtime::config::LIVE_CONFIG_KEYS),
+                "serve" => Some(sona_core::runtime::config::SERVE_CONFIG_KEYS),
                 _ => None,
             };
             if let Some(keys) = allowed {

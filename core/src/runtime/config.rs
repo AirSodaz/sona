@@ -232,6 +232,118 @@ pub fn parse_serve_config_file(
     Ok(unified.into_serve_config())
 }
 
+pub const ROOT_CONFIG_KEYS: &[&str] = &[
+    "models_dir",
+    "gpu_acceleration",
+    "vad_model_id",
+    "punctuation_model_id",
+    "online_provider",
+    "api_key_env",
+    "online_config",
+    "ffmpeg_path",
+    "model_id",
+    "language",
+    "threads",
+    "enable_itn",
+    "hotwords",
+    "quiet",
+    "jobs",
+    "vad_buffer",
+    "vad_buffer_size",
+    "format",
+    "save_audio",
+    "save_wav",
+    "mode",
+    "continue_on_error",
+    "host",
+    "port",
+    "api_key",
+    "ip_whitelist",
+    "max_streaming",
+    "max_concurrent",
+    "max_queue_size",
+    "max_upload_size_mb",
+    "job_ttl_minutes",
+    "transcribe",
+    "live",
+    "transcribe_live",
+    "serve",
+];
+
+pub const TRANSCRIBE_CONFIG_KEYS: &[&str] = &[
+    "models_dir",
+    "model_id",
+    "vad_model_id",
+    "punctuation_model_id",
+    "language",
+    "online_provider",
+    "api_key_env",
+    "online_config",
+    "threads",
+    "enable_itn",
+    "hotwords",
+    "quiet",
+    "jobs",
+    "vad_buffer",
+    "vad_buffer_size",
+    "format",
+    "gpu_acceleration",
+    "ffmpeg_path",
+    "save_audio",
+    "save_wav",
+    "mode",
+    "continue_on_error",
+];
+
+pub const LIVE_CONFIG_KEYS: &[&str] = &[
+    "models_dir",
+    "model_id",
+    "vad_model_id",
+    "punctuation_model_id",
+    "language",
+    "online_provider",
+    "api_key_env",
+    "online_config",
+    "threads",
+    "enable_itn",
+    "hotwords",
+    "quiet",
+    "duration",
+    "duration_seconds",
+    "vad_buffer",
+    "vad_buffer_size",
+    "gpu_acceleration",
+    "ffmpeg_path",
+    "save_audio",
+    "save_wav",
+    "device",
+    "input",
+    "stream",
+    "stream_format",
+    "output_format",
+    "format",
+    "sentence_only",
+    "mode",
+    "continue_on_error",
+];
+
+pub const SERVE_CONFIG_KEYS: &[&str] = &[
+    "host",
+    "port",
+    "api_key",
+    "ip_whitelist",
+    "max_streaming",
+    "max_concurrent",
+    "max_queue_size",
+    "max_upload_size_mb",
+    "job_ttl_minutes",
+    "models_dir",
+    "gpu_acceleration",
+    "vad_model_id",
+    "punctuation_model_id",
+    "ffmpeg_path",
+];
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,5 +421,26 @@ sentence_only = true
         assert_eq!(live.sentence_only, Some(true));
         assert_eq!(live.save_wav, Some(PathBuf::from("./recordings/all.wav")));
         assert_eq!(live.mode.as_deref(), Some("bilingual"));
+    }
+
+    #[test]
+    fn config_key_slices_have_no_duplicates() {
+        use std::collections::HashSet;
+        for (name, slice) in [
+            ("ROOT_CONFIG_KEYS", ROOT_CONFIG_KEYS),
+            ("TRANSCRIBE_CONFIG_KEYS", TRANSCRIBE_CONFIG_KEYS),
+            ("LIVE_CONFIG_KEYS", LIVE_CONFIG_KEYS),
+            ("SERVE_CONFIG_KEYS", SERVE_CONFIG_KEYS),
+        ] {
+            let mut seen = HashSet::new();
+            for key in slice {
+                assert!(
+                    seen.insert(key),
+                    "Duplicate key '{}' found in {}",
+                    key,
+                    name
+                );
+            }
+        }
     }
 }

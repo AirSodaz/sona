@@ -89,17 +89,7 @@ pub async fn feed_external_live_source(
     source_token: String,
     samples: Vec<u8>,
 ) -> Result<(), AsrPortError> {
-    if !samples.len().is_multiple_of(2) {
-        return Err(AsrPortError::invalid_request(
-            "External PCM payload must contain complete i16 samples",
-        ));
-    }
-    let samples = samples
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|sample| i16::from_le_bytes(*sample) as f32 / 32768.0)
-        .collect::<Vec<_>>();
+    let samples = sona_core::ports::asr::pcm_i16_le_to_f32_samples(&samples)?;
     let (source, frame) = state
         .next_external_frame(&source_token, samples)
         .await

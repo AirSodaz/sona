@@ -1,9 +1,9 @@
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import * as configPersistence from '../../hooks/useConfigPersistence';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import * as configPersistence from '../configPersistenceService';
 import { hasActiveFrontendQuitTasks, runGuardedQuit } from '../quitGuard';
 import { transcriptAutoSaveRuntime } from '../transcriptAutoSaveRuntime';
 

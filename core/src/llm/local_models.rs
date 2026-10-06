@@ -316,6 +316,170 @@ pub fn is_non_llm_model_file(name_or_path: &str) -> bool {
     false
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum LocalLlmImportError {
+    #[error("File does not exist: {0}")]
+    NotFound(String),
+    #[error("Only .gguf files can be imported as local LLM models")]
+    NotGguf,
+    #[error("Invalid source filename")]
+    InvalidFilename,
+    #[error("Failed to copy model file: {0}")]
+    CopyFailed(String),
+    #[error("Failed to finalize imported model: {0}")]
+    FinalizeFailed(String),
+    #[error("IO error: {0}")]
+    Io(#[from] std::io::Error),
+}
+
+pub fn extract_quantization_from_filename(filename: &str) -> Option<String> {
+    let lower = filename.to_lowercase();
+    let quants = [
+        "q4_k_m", "q4_k_s", "q4_k_l", "q4_0", "q4_1", "q5_k_m", "q5_k_s", "q5_k_l", "q5_0", "q5_1",
+        "q8_0", "q2_k", "q3_k_m", "q3_k_s", "q3_k_l", "q6_k", "iq4_nl", "iq4_xs", "iq3_xxs",
+        "iq2_xxs", "iq1_s", "f16", "f32", "bf16",
+    ];
+    for q in quants {
+        if lower.contains(q) {
+            return Some(q.to_uppercase());
+        }
+    }
+    None
+}
+
+pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
+    let mut cards = Vec::new();
+    let mut seen_filenames = HashSet::new();
+
+    // 1. Process known presets
+    for preset in local_llm_models() {
+        seen_filenames.insert(preset.filename.to_lowercase());
+
+        let found_path_buf = preset.find_installed_path(models_dir);
+        let found_size = found_path_buf
+            .as_ref()
+            .and_then(|p| std::fs::metadata(p).ok())
+            .map(|m| m.len());
+        let is_installed = found_path_buf.is_some();
+        let found_path = found_path_buf.map(|p| p.to_string_lossy().into_owned());
+        cards.push(preset.to_model_card(is_installed, found_path, found_size));
+    }
+
+    // 2. Discover custom GGUF models in models_dir
+    if let Ok(entries) = std::fs::read_dir(models_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if path.is_file()
+                && let Some(ext) = path.extension().and_then(|e| e.to_str())
+                && ext.eq_ignore_ascii_case("gguf")
+                && let Some(file_name) = path.file_name().and_then(|f| f.to_str())
+                && !seen_filenames.contains(&file_name.to_lowercase())
+                && !is_non_llm_model_file(file_name)
+            {
+                let stem = path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .unwrap_or(file_name);
+                if is_non_llm_model_file(stem) {
+                    continue;
+                }
+                let file_size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
+                let formatted_size =
+                    format!("{:.1} GB", file_size as f64 / (1024.0 * 1024.0 * 1024.0));
+                let quant = extract_quantization_from_filename(file_name);
+                cards.push(LocalLlmModelCard {
+                    id: format!("custom-{}", stem),
+                    name: stem.to_string(),
+                    model: stem.to_string(),
+                    filename: file_name.to_string(),
+                    description: "settings.descriptions.custom_local_model".to_string(),
+                    backend: "llama.cpp".to_string(),
+                    context_window: 131072,
+                    max_output_tokens: 4096,
+                    size: formatted_size,
+                    parameters: None,
+                    quantization: quant,
+                    modalities: vec!["text".to_string()],
+                    languages: vec!["auto".to_string()],
+                    capabilities: {
+                        let mut caps = vec![
+                            "chat".to_string(),
+                            "polish".to_string(),
+                            "summary".to_string(),
+                            "translate".to_string(),
+                        ];
+                        if crate::llm::capabilities::LlmModelCapabilities::infer(
+                            crate::llm::tasks::LlmProviderStrategy::Local,
+                            stem,
+                            "",
+                        )
+                        .reasoning
+                        {
+                            caps.push("reasoning".to_string());
+                        }
+                        caps
+                    },
+                    is_recommended: false,
+                    is_installed: true,
+                    installed_path: Some(path.to_string_lossy().into_owned()),
+                    installed_size_bytes: Some(file_size),
+                    download_url: None,
+                    download_size_bytes: None,
+                });
+            }
+        }
+    }
+
+    LocalLlmCardsResponse {
+        models_dir: models_dir.to_string_lossy().into_owned(),
+        cards,
+    }
+}
+
+pub fn import_local_llm_file(
+    models_dir: &Path,
+    source_path: &Path,
+) -> Result<PathBuf, LocalLlmImportError> {
+    if !source_path.is_file() {
+        return Err(LocalLlmImportError::NotFound(
+            source_path.to_string_lossy().into_owned(),
+        ));
+    }
+
+    let ext = source_path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("");
+    if !ext.eq_ignore_ascii_case("gguf") {
+        return Err(LocalLlmImportError::NotGguf);
+    }
+
+    let file_name = source_path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .ok_or(LocalLlmImportError::InvalidFilename)?;
+
+    std::fs::create_dir_all(models_dir)?;
+
+    let target_path = models_dir.join(file_name);
+    if let (Ok(can_source), Ok(can_target)) =
+        (source_path.canonicalize(), target_path.canonicalize())
+        && can_source == can_target
+    {
+        return Ok(target_path);
+    }
+
+    let temp_target = models_dir.join(format!("{file_name}.importing"));
+    std::fs::copy(source_path, &temp_target)
+        .map_err(|e| LocalLlmImportError::CopyFailed(e.to_string()))?;
+    std::fs::rename(&temp_target, &target_path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_target);
+        LocalLlmImportError::FinalizeFailed(e.to_string())
+    })?;
+
+    Ok(target_path)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -426,5 +590,87 @@ mod tests {
         ));
         assert_eq!(summary.supported_thinking_levels.len(), 6);
         assert_eq!(summary.supports_temperature, Some(true));
+    }
+
+    #[test]
+    fn test_extract_quantization_from_filename() {
+        assert_eq!(
+            extract_quantization_from_filename("model-q4_k_m.gguf"),
+            Some("Q4_K_M".to_string())
+        );
+        assert_eq!(
+            extract_quantization_from_filename("model-f16.gguf"),
+            Some("F16".to_string())
+        );
+        assert_eq!(
+            extract_quantization_from_filename("model-custom.gguf"),
+            None
+        );
+    }
+
+    #[test]
+    fn test_discover_local_llm_cards() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path();
+
+        // Write a custom GGUF model and a non-LLM model
+        let custom_model = path.join("custom-test-q4_k_m.gguf");
+        std::fs::write(&custom_model, b"custom content").unwrap();
+        let whisper_model = path.join("whisper-large-v3.gguf");
+        std::fs::write(&whisper_model, b"speech model").unwrap();
+
+        let response = discover_local_llm_cards(path);
+        assert_eq!(response.models_dir, path.to_string_lossy());
+
+        // Should contain the custom model card, but NOT the whisper model
+        let custom_card = response
+            .cards
+            .iter()
+            .find(|c| c.filename == "custom-test-q4_k_m.gguf");
+        assert!(custom_card.is_some());
+        let card = custom_card.unwrap();
+        assert_eq!(card.quantization, Some("Q4_K_M".to_string()));
+        assert!(card.is_installed);
+
+        let whisper_card = response
+            .cards
+            .iter()
+            .find(|c| c.filename == "whisper-large-v3.gguf");
+        assert!(whisper_card.is_none());
+    }
+
+    #[test]
+    fn test_import_local_llm_file() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let models_dir = temp_dir.path().join("models");
+        let staging_dir = temp_dir.path().join("staging");
+        std::fs::create_dir_all(&staging_dir).unwrap();
+
+        // 1. Not found
+        let non_existent = staging_dir.join("non_existent.gguf");
+        assert!(matches!(
+            import_local_llm_file(&models_dir, &non_existent),
+            Err(LocalLlmImportError::NotFound(_))
+        ));
+
+        // 2. Not GGUF
+        let txt_file = staging_dir.join("test.txt");
+        std::fs::write(&txt_file, b"text").unwrap();
+        assert!(matches!(
+            import_local_llm_file(&models_dir, &txt_file),
+            Err(LocalLlmImportError::NotGguf)
+        ));
+
+        // 3. Successful import
+        let gguf_file = staging_dir.join("my-model-q4_0.gguf");
+        std::fs::write(&gguf_file, b"gguf-data").unwrap();
+        let imported_path = import_local_llm_file(&models_dir, &gguf_file).unwrap();
+        assert_eq!(imported_path, models_dir.join("my-model-q4_0.gguf"));
+        assert!(imported_path.is_file());
+        assert_eq!(std::fs::read(&imported_path).unwrap(), b"gguf-data");
+
+        // 4. Same file import (idempotent canonical match)
+        let reimport = import_local_llm_file(&models_dir, &imported_path).unwrap();
+        assert_eq!(reimport, imported_path);
     }
 }

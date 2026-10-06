@@ -1147,6 +1147,20 @@ pub fn pcm_s16le_bytes_to_f32(bytes: &[u8]) -> Vec<f32> {
         .collect()
 }
 
+pub fn pcm_i16_le_to_f32_samples(bytes: &[u8]) -> Result<Vec<f32>, AsrPortError> {
+    if !bytes.len().is_multiple_of(2) {
+        return Err(AsrPortError::invalid_request(
+            "External PCM payload must contain complete i16 samples",
+        ));
+    }
+    Ok(bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|sample| i16::from_le_bytes(*sample) as f32 / 32768.0)
+        .collect())
+}
+
 pub fn find_ffmpeg_in_path() -> Option<PathBuf> {
     let path_var = std::env::var_os("PATH")?;
     #[cfg(windows)]
@@ -1329,5 +1343,32 @@ mod tests {
         assert!(resolved.ends_with("ffmpeg.exe"));
         #[cfg(not(windows))]
         assert!(resolved.ends_with("ffmpeg"));
+    }
+
+    #[test]
+    fn test_pcm_i16_le_to_f32_samples() {
+        // Odd number of bytes
+        let err = pcm_i16_le_to_f32_samples(&[0x00, 0x01, 0x02]).unwrap_err();
+        assert_eq!(err.kind, AsrPortErrorKind::InvalidRequest);
+        assert_eq!(
+            err.message,
+            "External PCM payload must contain complete i16 samples"
+        );
+
+        // Empty
+        let empty = pcm_i16_le_to_f32_samples(&[]).unwrap();
+        assert!(empty.is_empty());
+
+        // Valid samples: 0, -32768, 32767
+        let bytes = vec![
+            0x00, 0x00, // 0
+            0x00, 0x80, // -32768
+            0xff, 0x7f, // 32767
+        ];
+        let samples = pcm_i16_le_to_f32_samples(&bytes).unwrap();
+        assert_eq!(samples.len(), 3);
+        assert_eq!(samples[0], 0.0);
+        assert_eq!(samples[1], -1.0);
+        assert!((samples[2] - (32767.0 / 32768.0)).abs() < 1e-6);
     }
 }
