@@ -200,7 +200,7 @@ pub(crate) fn start_microphone_input(
     let (device, resolved_name) =
         sona_audio_capture::find_input_device(requested_device).map_err(|e| e.to_string())?;
 
-    let (message_sender, receiver) = tokio::sync::mpsc::channel(128);
+    let (message_sender, receiver) = tokio::sync::mpsc::channel(1024);
     let sender = message_sender.clone();
     let pipeline = LiveAudioCapturePipeline::start(
         &device,

@@ -32,7 +32,7 @@ import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { createAudioRecorderCapture, getSupportedMimeType } from './audioRecorder/capture';
 import { createRecordingPersistence } from './audioRecorder/persistence';
-import { createRecordController } from './audioRecorder/recordController';
+import { createRecordController, type RecordController } from './audioRecorder/recordController';
 import { createRecordSessionController } from './audioRecorder/session';
 import { createRecordTimingController } from './audioRecorder/timing';
 import type {
@@ -80,6 +80,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   const segmentTimeOffsetSecondsRef = useRef(0);
   const recordTimelineCursorSecondsRef = useRef(0);
   const liveDraftRef = useRef<LiveRecordingDraftHandle | null>(null);
+  const recordControllerRef = useRef<RecordController | null>(null);
   const recordingAutomationSnapshotRef = useRef<{
     config: ReturnType<typeof getEffectiveConfigSnapshot>;
   } | null>(null);
@@ -289,6 +290,19 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     },
     [session, timing]
   );
+  const handleCaptureError = useCallback(
+    (error: string) => {
+      void showError({
+        code: 'audio.capture_error',
+        messageKey: 'errors.audio.capture_failed',
+        cause: error,
+      });
+      setIsRecording(false);
+      setIsPaused(false);
+      void recordControllerRef.current?.stopRecording();
+    },
+    [showError, setIsRecording, setIsPaused]
+  );
 
   const capture = useMemo(
     () =>
@@ -307,6 +321,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         },
         logger,
         onSegment: forwardRecordSegment,
+        onCaptureError: handleCaptureError,
         activateRecordSession: session.activateRecordSession,
         canMutateActiveRecordResources: session.canMutateActiveRecordResources,
         rollbackRecognizer: session.softStopRecordSessionIfActive,
@@ -322,42 +337,43 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
       setIsPaused,
       setIsRecording,
       setPeakFromInt16,
+      handleCaptureError,
     ]
   );
 
-  const recordController = useMemo(
-    () =>
-      createRecordController({
-        logger,
-        config,
-        inputSource,
-        activeInputSourceRef,
-        usingNativeCaptureRef,
-        liveDraftRef,
-        setAudioUrl,
-        setAudioFile,
-        setIsInitializing,
-        setIsTransitioning,
-        setIsPaused,
-        showError,
-        capture,
-        session,
-        timing,
-        persistence,
-      }),
-    [
-      capture,
+  const recordController = useMemo(() => {
+    const controller = createRecordController({
+      logger,
       config,
       inputSource,
-      persistence,
-      session,
-      setAudioFile,
+      activeInputSourceRef,
+      usingNativeCaptureRef,
+      liveDraftRef,
       setAudioUrl,
+      setAudioFile,
+      setIsInitializing,
+      setIsTransitioning,
       setIsPaused,
       showError,
+      capture,
+      session,
       timing,
-    ]
-  );
+      persistence,
+    });
+    recordControllerRef.current = controller;
+    return controller;
+  }, [
+    capture,
+    config,
+    inputSource,
+    persistence,
+    session,
+    setAudioFile,
+    setAudioUrl,
+    setIsPaused,
+    showError,
+    timing,
+  ]);
 
   useEffect(() => {
     if (!isRecording || isPaused) {

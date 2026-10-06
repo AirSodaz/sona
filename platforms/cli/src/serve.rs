@@ -363,15 +363,12 @@ mod tests {
             hotwords: None,
         };
         let result = platform.transcribe_online_batch(request).await;
-        match result {
-            Err(err) => {
-                assert!(
-                    !err.to_string()
-                        .contains(sona_api_server::ONLINE_ASR_BATCH_UNAVAILABLE),
-                    "CliApiServerPlatform should route online batch instead of returning unavailable"
-                );
-            }
-            Ok(_) => {}
+        if let Err(err) = result {
+            assert!(
+                !err.to_string()
+                    .contains(sona_api_server::ONLINE_ASR_BATCH_UNAVAILABLE),
+                "CliApiServerPlatform should route online batch instead of returning unavailable"
+            );
         }
     }
 }

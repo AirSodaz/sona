@@ -56,7 +56,7 @@ use std::fs::File;
 use std::io::Read;
 use std::ops::{Deref, DerefMut};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -200,6 +200,7 @@ struct ConnectionPoolInner {
     available: Mutex<Vec<Connection>>,
     available_changed: Condvar,
     capacity: usize,
+    closed: AtomicBool,
 }
 
 struct PooledConnection {
@@ -214,6 +215,7 @@ impl ConnectionPool {
                 capacity: connections.len(),
                 available: Mutex::new(connections),
                 available_changed: Condvar::new(),
+                closed: AtomicBool::new(false),
             }),
         }
     }
@@ -223,7 +225,7 @@ impl ConnectionPool {
     }
 
     fn acquire(&self) -> Result<PooledConnection, DatabaseError> {
-        if self.inner.capacity == 0 {
+        if self.inner.capacity == 0 || self.inner.closed.load(Ordering::SeqCst) {
             return Err(DatabaseError::PoolBusyError);
         }
 
@@ -232,6 +234,9 @@ impl ConnectionPool {
         let mut available = self.lock_available();
 
         loop {
+            if self.inner.closed.load(Ordering::SeqCst) {
+                return Err(DatabaseError::PoolBusyError);
+            }
             if let Some(conn) = available.pop() {
                 return Ok(PooledConnection {
                     conn: Some(conn),
@@ -251,6 +256,9 @@ impl ConnectionPool {
             {
                 Ok((guard, wait_result)) => {
                     available = guard;
+                    if self.inner.closed.load(Ordering::SeqCst) {
+                        return Err(DatabaseError::PoolBusyError);
+                    }
                     if wait_result.timed_out() && available.is_empty() {
                         return Err(DatabaseError::PoolBusyError);
                     }
@@ -258,12 +266,22 @@ impl ConnectionPool {
                 Err(poisoned) => {
                     let (guard, wait_result) = poisoned.into_inner();
                     available = guard;
+                    if self.inner.closed.load(Ordering::SeqCst) {
+                        return Err(DatabaseError::PoolBusyError);
+                    }
                     if wait_result.timed_out() && available.is_empty() {
                         return Err(DatabaseError::PoolBusyError);
                     }
                 }
             }
         }
+    }
+
+    fn close(&self) {
+        self.inner.closed.store(true, Ordering::SeqCst);
+        let mut available = self.lock_available();
+        available.clear();
+        self.inner.available_changed.notify_all();
     }
 
     fn lock_available(&self) -> MutexGuard<'_, Vec<Connection>> {
@@ -277,15 +295,15 @@ impl ConnectionPool {
 impl Drop for PooledConnection {
     fn drop(&mut self) {
         if let Some(conn) = self.conn.take() {
-            {
-                let mut available = self
-                    .pool
-                    .available
-                    .lock()
-                    .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut available = self
+                .pool
+                .available
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !self.pool.closed.load(Ordering::SeqCst) {
                 available.push(conn);
+                self.pool.available_changed.notify_one();
             }
-            self.pool.available_changed.notify_one();
         }
     }
 }
@@ -635,6 +653,12 @@ impl Database {
             log::warn!("slow with_write_connection ({elapsed:?})");
         }
         result
+    }
+
+    /// Closes all idle pooled connections, releasing SQLite file descriptors.
+    pub fn close(&self) {
+        self.read_pool.close();
+        self.write_pool.close();
     }
 
     /// Sets a threshold for slow query logging.
@@ -1488,5 +1512,27 @@ mod tests {
             .join()
             .expect("second writer panicked")
             .expect("concurrent writer should wait and then commit");
+    }
+
+    #[test]
+    fn test_database_close_releases_connections() {
+        let temp = tempfile::tempdir().unwrap();
+        let db = Database::open(temp.path()).unwrap();
+        assert_eq!(db.read_pool.capacity(), POOL_SIZE);
+
+        db.with_read_connection(|conn| {
+            let count: i64 = conn
+                .query_row("SELECT count(*) FROM app_settings", [], |r| r.get(0))
+                .unwrap();
+            assert!(count >= 1);
+            Ok(())
+        })
+        .unwrap();
+
+        db.close();
+
+        // After close, attempting to acquire should fail immediately because pool is closed
+        assert!(db.with_read_connection(|_| Ok(())).is_err());
+        assert!(db.with_write_connection(|_| Ok(())).is_err());
     }
 }

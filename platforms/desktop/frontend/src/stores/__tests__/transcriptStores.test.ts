@@ -325,4 +325,32 @@ describe('Transcript Stores', () => {
     const afterSessionUpdate = getSessionStoreState(useTranscriptStore.getState());
     expect(afterSessionUpdate).not.toBe(firstCall);
   });
+
+  it('maintains referential stability during audio playback setCurrentTime ticks', () => {
+    const initialSessionState = useTranscriptSessionStore.getState();
+    const playbackStore = useTranscriptPlaybackStore.getState();
+
+    playbackStore.setCurrentTime(1.5);
+    const afterFirstTick = useTranscriptSessionStore.getState();
+    expect(afterFirstTick).toBe(initialSessionState);
+    expect(afterFirstTick.currentTime).toBe(1.5);
+
+    playbackStore.setCurrentTime(3.0);
+    const afterSecondTick = useTranscriptSessionStore.getState();
+    expect(afterSecondTick).toBe(initialSessionState);
+    expect(afterSecondTick.currentTime).toBe(3.0);
+  });
+
+  it('does not trigger transcriptSessionStore.subscribe on playback currentTime updates', () => {
+    const listener = vi.fn();
+    const unsubscribe = useTranscriptSessionStore.subscribe(listener);
+
+    useTranscriptPlaybackStore.getState().setCurrentTime(5.0);
+    expect(listener).not.toHaveBeenCalled();
+
+    useTranscriptSessionStore.getState().setTitle('New Title');
+    expect(listener).toHaveBeenCalledTimes(1);
+
+    unsubscribe();
+  });
 });

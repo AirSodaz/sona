@@ -35,6 +35,7 @@ interface CreateAudioRecorderCaptureArgs {
   refs: AudioRecorderCaptureRefs;
   logger: AudioRecorderLogger;
   onSegment: (update: TranscriptUpdate) => void;
+  onCaptureError: (error: string) => void;
   activateRecordSession: (sessionId: string) => boolean;
   canMutateActiveRecordResources: (sessionId: string) => boolean;
   rollbackRecognizer: (sessionId: string, reason: string) => Promise<void>;
@@ -43,11 +44,11 @@ interface CreateAudioRecorderCaptureArgs {
   setIsRecording: (value: boolean) => void;
   setIsPaused: (value: boolean) => void;
 }
-
 export function createAudioRecorderCapture({
   refs,
   logger,
   onSegment,
+  onCaptureError,
   activateRecordSession,
   canMutateActiveRecordResources,
   rollbackRecognizer,
@@ -61,6 +62,18 @@ export function createAudioRecorderCapture({
     | typeof TauriEvent.audio.microphonePeak;
   let pendingWebRecordingStop: Promise<void> | null = null;
   let resolvePendingWebRecordingStop: (() => void) | null = null;
+  let webCleanup: (() => void) | null = null;
+
+  function registerNativeUnlisten(unlisten: () => void) {
+    const prev = refs.nativeAudioUnlistenRef.current;
+    refs.nativeAudioUnlistenRef.current = () => {
+      try {
+        prev?.();
+      } finally {
+        unlisten();
+      }
+    };
+  }
 
   function isDesktopCaptureActive(): boolean {
     return refs.activeInputSourceRef.current === 'desktop';
@@ -81,14 +94,19 @@ export function createAudioRecorderCapture({
       );
       return;
     }
+    if (refs.nativeAudioUnlistenRef.current) {
+      refs.nativeAudioUnlistenRef.current();
+      refs.nativeAudioUnlistenRef.current = null;
+    }
+
+    if (webCleanup) {
+      webCleanup();
+      webCleanup = null;
+    }
 
     // Roll back whichever capture resources were acquired before the start
     // path failed so fallback/retry attempts begin from a clean baseline.
     if (refs.usingNativeCaptureRef.current) {
-      if (refs.nativeAudioUnlistenRef.current) {
-        refs.nativeAudioUnlistenRef.current();
-        refs.nativeAudioUnlistenRef.current = null;
-      }
       try {
         await transcriptionService.stopNativeCapture();
         logger.info(
@@ -142,13 +160,29 @@ export function createAudioRecorderCapture({
           refs.peakLevelRef.current = sample / 32767;
         }
       });
-
-      refs.nativeAudioUnlistenRef.current = unlisten;
+      registerNativeUnlisten(unlisten);
       return true;
     } catch (error) {
-      refs.nativeAudioUnlistenRef.current = null;
       logger.warn(
         `[useAudioRecorder] Failed to attach native peak listener. session=${sessionId} event=${eventName}. Continuing without live meter.`,
+        error
+      );
+      return false;
+    }
+  }
+
+  async function attachNativeErrorListener(sessionId: string): Promise<boolean> {
+    try {
+      const unlisten = await listen<string>(TauriEvent.audio.captureError, (event) => {
+        logger.error(`[useAudioRecorder] Audio capture stream error: ${event.payload}`);
+        onCaptureError(event.payload);
+      });
+
+      registerNativeUnlisten(unlisten);
+      return true;
+    } catch (error) {
+      logger.warn(
+        `[useAudioRecorder] Failed to attach native capture error listener. session=${sessionId}.`,
         error
       );
       return false;
@@ -241,6 +275,7 @@ export function createAudioRecorderCapture({
       );
       refs.usingNativeCaptureRef.current = true;
 
+      await attachNativeErrorListener(sessionId);
       const peakListenerAttached = await attachNativePeakListener(
         TauriEvent.audio.systemPeak,
         sessionId
@@ -298,7 +333,7 @@ export function createAudioRecorderCapture({
         }
       );
       refs.usingNativeCaptureRef.current = true;
-
+      await attachNativeErrorListener(sessionId);
       const peakListenerAttached = await attachNativePeakListener(
         TauriEvent.audio.microphonePeak,
         sessionId
@@ -387,6 +422,49 @@ export function createAudioRecorderCapture({
     gain: number
   ): Promise<void> {
     refs.activeStreamRef.current = stream;
+
+    if (webCleanup) {
+      webCleanup();
+      webCleanup = null;
+    }
+
+    const audioTracks = stream.getAudioTracks();
+    let hasReportedDisconnect = false;
+    const reportDisconnect = (reason: string) => {
+      if (hasReportedDisconnect) {
+        return;
+      }
+      hasReportedDisconnect = true;
+      if (webCleanup) {
+        webCleanup();
+        webCleanup = null;
+      }
+      logger.warn(`[useAudioRecorder] ${reason}`);
+      onCaptureError('Microphone stream disconnected unexpectedly');
+    };
+
+    const handleTrackEnded = () => {
+      reportDisconnect('Audio track ended unexpectedly');
+    };
+    if (typeof audioTracks[0]?.addEventListener === 'function') {
+      audioTracks[0].addEventListener('ended', handleTrackEnded);
+    }
+
+    const handleDeviceChange = () => {
+      const tracks = stream.getAudioTracks();
+      if (tracks.some((t) => t.readyState === 'ended' || !t.enabled)) {
+        reportDisconnect('Audio device changed and track ended');
+      }
+    };
+    navigator.mediaDevices?.addEventListener?.('devicechange', handleDeviceChange);
+
+    webCleanup = () => {
+      if (typeof audioTracks[0]?.removeEventListener === 'function') {
+        audioTracks[0].removeEventListener('ended', handleTrackEnded);
+      }
+      navigator.mediaDevices?.removeEventListener?.('devicechange', handleDeviceChange);
+    };
+
     await initializeAudioSession(stream, sessionId, gain);
     logger.info(
       `[useAudioRecorder] Record session capture attached. session=${sessionId} source=${inputSource} transport=web-audio`
@@ -520,6 +598,10 @@ export function createAudioRecorderCapture({
   }
 
   async function teardownWebCaptureResources(): Promise<void> {
+    if (webCleanup) {
+      webCleanup();
+      webCleanup = null;
+    }
     if (refs.activeStreamRef.current) {
       refs.activeStreamRef.current.getTracks().forEach((track) => {
         track.stop();

@@ -606,6 +606,7 @@ pub async fn migrate_data_directory(
             let _ = conn.execute_batch("PRAGMA analytics.wal_checkpoint(TRUNCATE);");
             Ok(())
         });
+        current_db.close();
     }
 
     let mut unremoved = Vec::new();

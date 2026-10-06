@@ -271,17 +271,29 @@ pub async fn drain_stopped_input(
     frame_cursor: &mut sona_core::ports::asr::StreamingAudioFrameCursor,
     wav_writer: &mut Option<hound::WavWriter<std::io::BufWriter<std::fs::File>>>,
 ) -> CliResult<()> {
-    while let Some(message) = input.receiver.recv().await {
-        match message {
-            LiveAudioMessage::Chunk(chunk) => {
-                record_chunk(wav_writer, &chunk)?;
-                feed_audio(session, frame_cursor, chunk).await?;
+    let drain_future = async {
+        while let Some(message) = input.receiver.recv().await {
+            match message {
+                LiveAudioMessage::Chunk(chunk) => {
+                    record_chunk(wav_writer, &chunk)?;
+                    feed_audio(session, frame_cursor, chunk).await?;
+                }
+                LiveAudioMessage::Eof => return Ok(()),
+                LiveAudioMessage::Error(error) => return Err(CliError::Io(error)),
             }
-            LiveAudioMessage::Eof => return Ok(()),
-            LiveAudioMessage::Error(error) => return Err(CliError::Io(error)),
+        }
+        Ok(())
+    };
+
+    match tokio::time::timeout(std::time::Duration::from_secs(3), drain_future).await {
+        Ok(result) => result,
+        Err(_) => {
+            log::warn!(
+                "[CLI Audio] Drain stopped input timed out after 3s; proceeding to finalize"
+            );
+            Ok(())
         }
     }
-    Ok(())
 }
 pub async fn feed_audio(
     session: &dyn AsrStreamingSession,

@@ -89,16 +89,44 @@ export const {
   clearSegments,
 } = sessionActions;
 
-const sessionStateCache = new WeakMap<SessionData, SessionStoreState>();
+export function hasSessionContentChanged(a: SessionData, b: SessionData): boolean {
+  return (
+    a.segments !== b.segments ||
+    a.sourceHistoryId !== b.sourceHistoryId ||
+    a.title !== b.title ||
+    a.icon !== b.icon ||
+    a.editingSegmentId !== b.editingSegmentId ||
+    a.aligningSegmentIds !== b.aligningSegmentIds
+  );
+}
+
+let cachedSession: {
+  sessionId: string;
+  session: SessionData;
+  state: SessionStoreState;
+} | null = null;
+
+export function resetSessionStoreCache(): void {
+  cachedSession = null;
+}
 
 export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
   const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
-  const cached = sessionStateCache.get(activeSession);
-  if (cached) {
-    return cached;
+  if (
+    cachedSession &&
+    cachedSession.sessionId === state.activeSessionId &&
+    !hasSessionContentChanged(cachedSession.session, activeSession)
+  ) {
+    Object.assign(cachedSession.state, activeSession);
+    cachedSession.session = activeSession;
+    return cachedSession.state;
   }
   const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);
-  sessionStateCache.set(activeSession, nextState);
+  cachedSession = {
+    sessionId: state.activeSessionId,
+    session: activeSession,
+    state: nextState,
+  };
   return nextState;
 }
 
@@ -122,14 +150,18 @@ export const transcriptSessionStore = {
   },
   subscribe: (listener: (state: SessionStoreState, prevState: SessionStoreState) => void) => {
     let lastSessionId = useTranscriptStore.getState().activeSessionId;
-    let lastActiveSession = useTranscriptStore.getState().sessions[lastSessionId];
+    let lastActiveSession =
+      useTranscriptStore.getState().sessions[lastSessionId] || DEFAULT_SESSION_DATA;
     let lastFullState = transcriptSessionStore.getState();
 
     return useTranscriptStore.subscribe((state) => {
       const nextSessionId = state.activeSessionId;
-      const nextActiveSession = state.sessions[nextSessionId];
+      const nextActiveSession = state.sessions[nextSessionId] || DEFAULT_SESSION_DATA;
 
-      if (nextActiveSession !== lastActiveSession || nextSessionId !== lastSessionId) {
+      if (
+        nextSessionId !== lastSessionId ||
+        hasSessionContentChanged(lastActiveSession, nextActiveSession)
+      ) {
         const nextFullState = getSessionStoreState(state);
         const prevFullState = lastFullState;
         lastActiveSession = nextActiveSession;

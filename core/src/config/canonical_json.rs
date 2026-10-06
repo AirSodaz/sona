@@ -49,10 +49,10 @@ pub fn strip_config_credentials(config: &mut Value) {
                     || lower_key == "secretkey"
                     || lower_key == "secret_key"
                 {
-                    if let Value::String(s) = value {
-                        if !s.is_empty() {
-                            *s = String::new();
-                        }
+                    if let Value::String(s) = value
+                        && !s.is_empty()
+                    {
+                        *s = String::new();
                     }
                 } else {
                     strip_config_credentials(value);

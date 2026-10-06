@@ -103,6 +103,12 @@ interface CreateRecordControllerArgs {
   timing: RecordControllerTiming;
   persistence: RecordControllerPersistence;
 }
+export interface RecordController {
+  startRecording: () => Promise<boolean>;
+  stopRecording: () => Promise<void>;
+  pauseRecording: () => Promise<void>;
+  resumeRecording: () => Promise<void>;
+}
 
 export function createRecordController({
   logger,
@@ -121,7 +127,7 @@ export function createRecordController({
   session,
   timing,
   persistence,
-}: CreateRecordControllerArgs) {
+}: CreateRecordControllerArgs): RecordController {
   async function startRecording(): Promise<boolean> {
     const sessionId = session.openRecordSession();
     setRecordingSessionId(sessionId);

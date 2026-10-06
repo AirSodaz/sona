@@ -13,6 +13,7 @@ export const TauriEvent = {
   audio: {
     microphonePeak: 'microphone-audio',
     systemPeak: 'system-audio',
+    captureError: 'audio-capture-error',
   },
   tray: {
     openSettings: 'open-settings',

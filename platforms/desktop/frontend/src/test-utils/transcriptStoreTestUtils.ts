@@ -18,7 +18,10 @@ import {
   INITIAL_TRANSCRIPT_PLAYBACK_STATE,
   INITIAL_TRANSCRIPT_SESSION_STATE,
 } from '../stores/transcriptSessionState';
-import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import {
+  resetSessionStoreCache,
+  useTranscriptSessionStore,
+} from '../stores/transcriptSessionStore';
 import {
   DEFAULT_LLM_STATE,
   INITIAL_TRANSCRIPT_HISTORY_SIDECAR_STATE,
@@ -252,7 +255,7 @@ export function resetTranscriptStores(): void {
   });
 
   setActiveEditor(null);
-
+  resetSessionStoreCache();
   syncEffectiveConfig();
 }
 

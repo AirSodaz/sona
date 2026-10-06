@@ -14,6 +14,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 const MICROPHONE_PEAK_EVENT: &str = "microphone-audio";
 const SYSTEM_PEAK_EVENT: &str = "system-audio";
+const AUDIO_CAPTURE_ERROR_EVENT: &str = "audio-capture-error";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum CaptureKind {
@@ -626,6 +627,10 @@ fn spawn_capture_worker_task(
                             error!(
                                 "[Audio] {} capture stream error occurred: {err}",
                                 key.kind.label()
+                            );
+                            let _ = app.emit(
+                                AUDIO_CAPTURE_ERROR_EVENT,
+                                format!("{}: {err}", key.kind.label()),
                             );
                             break;
                         }
