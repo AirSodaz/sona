@@ -10,6 +10,7 @@
     "delete_item": "{{item}} を削除",
     "deleting": "削除中...",
     "download": "ダウンロード",
+    "retry": "再試行",
     "loading": "読み込み中...",
     "listening": "聞いています...",
     "preparing": "準備中...",
@@ -83,7 +84,7 @@
       "batch_model_missing": "最初に設定でローカル モデルを構成してください。"
     },
     "batch": {
-      "unsupported_format": "サポートされていないファイル形式です。 {{formats}} を使用してください。",
+      "unsupported_format": "サポートされていないファイル形式です。{{formats}} を使用してください (ffmpeg の使用を推奨)",
       "file_picker_failed": "ファイルピッカーを開けませんでした。"
     },
     "automation": {
@@ -245,7 +246,10 @@
     "language_hint": "音声言語を選択してください",
     "language_hint_auto_detect": "このモデルは言語を自動判別します",
     "language_hint_fixed": "このモデルは組み込み言語のみ認識します",
-    "unsupported_format": "サポートされていないファイル形式です。 {{formats}} を使用してください。",
+    "unsupported_format": "サポートされていないファイル形式です。{{formats}} を使用してください (ffmpeg の使用を推奨)",
+    "suggest_ffmpeg": "ffmpeg の使用を推奨",
+    "suggest_ffmpeg_tooltip": "組み込みトランスコードが失敗したか未対応の形式です。ffmpeg で変換するか設定で FFmpeg 拡張を有効にすることをお勧めします。",
+    "transcode_failed": "変換失敗",
     "no_model_error": "最初に設定でモデルを設定してください。",
     "transcription_failed": "転写に失敗しました: {{error}}",
     "queue_title": "キュー ({{count}})",

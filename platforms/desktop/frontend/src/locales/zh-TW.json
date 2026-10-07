@@ -10,6 +10,7 @@
     "delete_item": "刪除 {{item}}",
     "deleting": "正在刪除...",
     "download": "下載",
+    "retry": "重試",
     "loading": "載入中...",
     "listening": "正在聆聽...",
     "preparing": "正在準備...",
@@ -83,7 +84,7 @@
       "local_model_missing": "請先在設定中設定本機模型。"
     },
     "batch": {
-      "unsupported_format": "不支援的檔案格式。請使用：{{formats}}",
+      "unsupported_format": "不支援的檔案格式。請使用：{{formats}}（建議使用 ffmpeg）",
       "file_picker_failed": "無法開啟檔案選擇器。"
     },
     "automation": {
@@ -245,7 +246,10 @@
     "language_hint": "選擇音訊語言",
     "language_hint_auto_detect": "此模型會自動辨識語言，無需指定",
     "language_hint_fixed": "此模型僅支援其內建語言，不可變更",
-    "unsupported_format": "不支援的檔案格式。請使用：{{formats}}",
+    "unsupported_format": "不支援的檔案格式。請使用：{{formats}}（建議使用 ffmpeg）",
+    "suggest_ffmpeg": "建議使用 ffmpeg",
+    "suggest_ffmpeg_tooltip": "內建轉碼失敗或遇到不支援的格式，建議使用 ffmpeg 轉碼或在設定中啟用 FFmpeg 擴充",
+    "transcode_failed": "轉碼失敗",
     "no_model_error": "請先在設定中設定模型。",
     "transcription_failed": "轉錄失敗：{{error}}",
     "queue_title": "佇列 ({{count}})",

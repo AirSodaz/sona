@@ -10,6 +10,7 @@
     "delete_item": "Delete {{item}}",
     "deleting": "Deleting...",
     "download": "Download",
+    "retry": "Retry",
     "loading": "Loading...",
     "listening": "Listening...",
     "preparing": "Preparing...",
@@ -83,7 +84,7 @@
       "batch_model_missing": "Please configure a local model in Settings first."
     },
     "batch": {
-      "unsupported_format": "Unsupported file format. Please use: {{formats}}",
+      "unsupported_format": "Unsupported file format. Please use: {{formats}} (suggest using ffmpeg)",
       "file_picker_failed": "Failed to open the file picker."
     },
     "automation": {
@@ -245,7 +246,10 @@
     "language_hint": "Select audio language",
     "language_hint_auto_detect": "This model detects the language automatically",
     "language_hint_fixed": "This model only recognizes its built-in language",
-    "unsupported_format": "Unsupported file format. Please use: {{formats}}",
+    "unsupported_format": "Unsupported file format. Please use: {{formats}} (suggest using ffmpeg)",
+    "suggest_ffmpeg": "Suggest using ffmpeg",
+    "suggest_ffmpeg_tooltip": "Built-in transcoding failed or format unsupported. Suggest using ffmpeg to transcode or enabling the FFmpeg extension in settings.",
+    "transcode_failed": "Transcoding failed",
     "no_model_error": "Please configure a model in Settings first.",
     "transcription_failed": "Transcription failed: {{error}}",
     "queue_title": "Queue ({{count}})",
