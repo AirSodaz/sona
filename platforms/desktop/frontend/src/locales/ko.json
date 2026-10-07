@@ -1911,6 +1911,8 @@
     "mute_during_recording_hint": "자동으로 mute the system 화자 during recording. This 중지s the microphone from recording system sounds.",
     "ffmpeg_title": "오디오 디코딩 도구 (FFmpeg)",
     "ffmpeg_description": "배치 파일 가져오기 시 미디어 디코딩/리샘플링 및 화자 샘플 추출에 사용됩니다. 기본적으로 내장 디코더를 사용하며 FFmpeg는 확장 형식용 선택 사항입니다.",
+    "enable_ffmpeg": "FFmpeg 확장 활성화",
+    "enable_ffmpeg_hint": "활성화하면 내장 디코더가 지원하지 않는 형식일 때 FFmpeg를 폴백으로 사용합니다. 비활성화하면 순수 Rust 내장 디코더만 사용합니다.",
     "ffmpeg_path_title": "FFmpeg 실행 파일 경로",
     "ffmpeg_path_hint": "시스템의 로컬 FFmpeg 실행 파일을 지정합니다. 비워두면 시스템 PATH 또는 내장 디코더를 사용합니다.",
     "ffmpeg_hint_ready": "유효한 FFmpeg 실행 파일이 감지되었습니다.",

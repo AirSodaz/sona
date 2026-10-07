@@ -129,6 +129,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_enabled: request.ffmpeg_enabled,
             ffmpeg_path: request.ffmpeg_path,
         };
         let transcriber =

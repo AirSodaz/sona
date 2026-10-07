@@ -81,6 +81,7 @@ pub struct BatchTranscribePlan {
     pub export_format: ExportFormat,
     pub output_target: OutputTarget,
     pub quiet: bool,
+    pub ffmpeg_enabled: bool,
     pub ffmpeg_path: Option<String>,
 }
 
@@ -183,6 +184,7 @@ impl LiveTranscribePlan {
                 )
                 .and_then(|m| m.resolved_rules().initial_refresh_rate_ms),
                 enable_partial_decoding: self.enable_partial_decoding,
+                ffmpeg_enabled: None,
                 ffmpeg_path: None,
             },
         };
@@ -520,6 +522,7 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
+        ffmpeg_enabled: options.ffmpeg_path.is_some() || config.ffmpeg_path.is_some(),
         ffmpeg_path: options.ffmpeg_path.or(config.ffmpeg_path),
     })
 }

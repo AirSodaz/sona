@@ -143,6 +143,16 @@ pub async fn extract_and_resample_audio_with_ffmpeg(
     target_sample_rate: u32,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
+    extract_and_resample_audio_with_options(filepath, target_sample_rate, true, custom_ffmpeg_path)
+        .await
+}
+
+pub async fn extract_and_resample_audio_with_options(
+    filepath: &Path,
+    target_sample_rate: u32,
+    ffmpeg_enabled: bool,
+    custom_ffmpeg_path: Option<&Path>,
+) -> Result<Vec<f32>, AsrPortError> {
     // 1. Prioritize built-in pure Rust decoder (Symphonia + Rubato) on blocking task
     let path_buf = filepath.to_path_buf();
     let builtin_result = tokio::task::spawn_blocking(move || {
@@ -170,7 +180,17 @@ pub async fn extract_and_resample_audio_with_ffmpeg(
         }
     };
 
-    // 2. Fall back to FFmpeg if available
+    // 2. Fall back to FFmpeg only if enabled
+    if !ffmpeg_enabled {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!(
+                "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is disabled in settings. Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                filepath.display()
+            ),
+        ));
+    }
+
     let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
         Ok(path) if path.is_file() => path,
         _ => {
@@ -258,6 +278,25 @@ pub async fn extract_audio_slice_with_ffmpeg(
     target_sample_rate: u32,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
+    extract_audio_slice_with_options(
+        filepath,
+        start_seconds,
+        duration_seconds,
+        target_sample_rate,
+        true,
+        custom_ffmpeg_path,
+    )
+    .await
+}
+
+pub async fn extract_audio_slice_with_options(
+    filepath: &Path,
+    start_seconds: f64,
+    duration_seconds: f64,
+    target_sample_rate: u32,
+    ffmpeg_enabled: bool,
+    custom_ffmpeg_path: Option<&Path>,
+) -> Result<Vec<f32>, AsrPortError> {
     // 1. Prioritize built-in in-memory slice on blocking task
     let path_buf = filepath.to_path_buf();
     let builtin_result = tokio::task::spawn_blocking(move || {
@@ -290,7 +329,17 @@ pub async fn extract_audio_slice_with_ffmpeg(
         }
     };
 
-    // 2. Fall back to FFmpeg if available
+    // 2. Fall back to FFmpeg only if enabled
+    if !ffmpeg_enabled {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!(
+                "Failed to extract audio slice from {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is disabled in settings. Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                filepath.display()
+            ),
+        ));
+    }
+
     let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
         Ok(path) if path.is_file() => path,
         _ => {

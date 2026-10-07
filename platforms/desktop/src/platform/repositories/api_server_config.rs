@@ -119,6 +119,13 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
 
 pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
     load_app_config_for_server(provider).and_then(|config| {
+        let enabled = config
+            .get("ffmpegEnabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !enabled {
+            return None;
+        }
         config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())
@@ -132,6 +139,13 @@ pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) ->
     let provider = TauriPathProvider::from_app(app);
     let database = crate::platform::database::try_sqlite_database(app).ok();
     load_app_config_for_server_with_database(&provider, database).and_then(|config| {
+        let enabled = config
+            .get("ffmpegEnabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if !enabled {
+            return None;
+        }
         config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())

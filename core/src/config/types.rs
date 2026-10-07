@@ -213,8 +213,9 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub keep_microphone_active: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub ffmpeg_path: Option<String>,
+    pub ffmpeg_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ffmpeg_path: Option<String>,
     pub asr: Option<AppAsrConfig>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub streaming_model_path: Option<String>,

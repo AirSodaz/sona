@@ -388,6 +388,7 @@ pub struct BatchTranscriptionRequest {
     pub postprocessor: TranscriptPostprocessor,
     pub gpu_acceleration: Option<String>,
     pub engine: LocalAsrEngine,
+    pub ffmpeg_enabled: bool,
     pub ffmpeg_path: Option<String>,
 }
 
@@ -422,6 +423,7 @@ impl BatchTranscriptionRequest {
                 model_type,
                 file_config,
                 gpu_acceleration,
+                ffmpeg_enabled,
                 ffmpeg_path,
                 ..
             } => Ok(Self {
@@ -446,6 +448,8 @@ impl BatchTranscriptionRequest {
                     .map_err(|error| AsrPortError::invalid_request(error.to_string()))?,
                 gpu_acceleration,
                 engine: local_engine,
+                ffmpeg_enabled: ffmpeg_enabled
+                    .unwrap_or_else(|| ffmpeg_path.as_ref().is_some_and(|p| !p.trim().is_empty())),
                 ffmpeg_path,
             }),
             _ => Err(AsrPortError::invalid_request(
@@ -625,6 +629,8 @@ pub enum AsrEngineConfig {
         #[serde(default)]
         enable_partial_decoding: Option<bool>,
         #[serde(default)]
+        ffmpeg_enabled: Option<bool>,
+        #[serde(default)]
         ffmpeg_path: Option<String>,
     },
     #[serde(rename = "online", rename_all = "camelCase")]
@@ -686,10 +692,12 @@ impl AsrTranscriptionRequest {
                 gpu_acceleration,
                 initial_refresh_rate_ms: None,
                 enable_partial_decoding: None,
+                ffmpeg_enabled: None,
                 ffmpeg_path: None,
             },
         }
     }
+
     pub fn with_alignment_model(mut self, alignment_model: Option<String>) -> Self {
         if let AsrEngineConfig::Local {
             alignment_model: ref mut model,

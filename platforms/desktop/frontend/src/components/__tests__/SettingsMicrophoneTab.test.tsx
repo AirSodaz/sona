@@ -430,6 +430,12 @@ describe('SettingsMicrophoneTab', () => {
   });
 
   it('renders the FFmpeg section with default sidecar path and allows browsing a custom path', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        ffmpegEnabled: true,
+      },
+    });
     mockOpen.mockResolvedValue('D:\\tools\\ffmpeg.exe');
 
     render(<SettingsMicrophoneTab isActiveTab isOpen />);
@@ -462,6 +468,7 @@ describe('SettingsMicrophoneTab', () => {
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
+        ffmpegEnabled: true,
         ffmpegPath: 'D:\\custom\\ffmpeg.exe',
       },
     });
@@ -481,8 +488,13 @@ describe('SettingsMicrophoneTab', () => {
   });
 
   it('opens the FFmpeg folder when clicking open folder button', async () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        ffmpegEnabled: true,
+      },
+    });
     render(<SettingsMicrophoneTab isActiveTab isOpen />);
-
     await waitFor(() => {
       expect(screen.getByText('common.open_folder')).toBeDefined();
     });
@@ -495,5 +507,17 @@ describe('SettingsMicrophoneTab', () => {
         path: 'C:\\app\\ffmpeg.exe',
       });
     });
+  });
+
+  it('toggles the FFmpeg extension switch and reveals the location card', async () => {
+    render(<SettingsMicrophoneTab isActiveTab isOpen />);
+
+    const ffmpegSwitch = screen.getByRole('switch', { name: 'settings.enable_ffmpeg' });
+    expect(ffmpegSwitch).toBeDefined();
+    expect(ffmpegSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(screen.queryByTestId('settings-microphone-ffmpeg-card')).toBeNull();
+
+    fireEvent.click(ffmpegSwitch);
+    expect(useConfigStore.getState().config.ffmpegEnabled).toBe(true);
   });
 });

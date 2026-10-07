@@ -117,6 +117,7 @@ struct LlamaBatchTranscriptionJob {
     punctuation_model: Option<PathBuf>,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    ffmpeg_enabled: bool,
     ffmpeg_path: Option<PathBuf>,
 }
 
@@ -181,6 +182,7 @@ impl LlamaBatchTranscriptionJob {
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            ffmpeg_enabled: plan.ffmpeg_enabled,
             ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
@@ -226,8 +228,12 @@ impl LlamaBatchTranscriptionJob {
         }
 
         let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
-        let samples =
-            decode_audio_input(&self.input_path, sample_rate, self.ffmpeg_path.as_deref())?;
+        let samples = decode_audio_input(
+            &self.input_path,
+            sample_rate,
+            self.ffmpeg_enabled,
+            self.ffmpeg_path.as_deref(),
+        )?;
         observer.on_progress(10.0);
 
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
@@ -322,6 +328,7 @@ impl LlamaBatchTranscriptionJob {
         let detection_samples = decode_audio_input(
             &self.input_path,
             BATCH_SEGMENTATION_SAMPLE_RATE,
+            self.ffmpeg_enabled,
             self.ffmpeg_path.as_deref(),
         )?;
         Ok(segment_batch_audio(
@@ -582,6 +589,7 @@ fn segment_completed_progress(segment_index: usize, segment_total: usize) -> f32
 fn decode_audio_input(
     path: &Path,
     sample_rate: u32,
+    ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
     // 1. Prioritize built-in pure Rust decoder
@@ -609,6 +617,16 @@ fn decode_audio_input(
     };
 
     // 2. Fall back to FFmpeg if available
+    if !ffmpeg_enabled {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            format!(
+                "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is disabled in settings. Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                path.display()
+            ),
+        ));
+    }
+
     let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
         Ok(p) if p.is_file() => p,
         _ => {

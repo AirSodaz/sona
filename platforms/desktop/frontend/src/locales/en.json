@@ -1911,6 +1911,8 @@
     "mute_during_recording_hint": "Automatically mute the system speaker during recording. This stops the microphone from recording system sounds.",
     "ffmpeg_title": "Audio Decoding Tool (FFmpeg)",
     "ffmpeg_description": "Used for decoding media files during batch imports and extracting speaker samples. Built-in decoder is used by default; FFmpeg is optional for extended formats.",
+    "enable_ffmpeg": "Enable FFmpeg Extension",
+    "enable_ffmpeg_hint": "When enabled, FFmpeg is used as a fallback for unsupported formats and video containers. When disabled, only the pure Rust built-in decoder is used.",
     "ffmpeg_path_title": "FFmpeg Executable Path",
     "ffmpeg_path_hint": "Specify a local FFmpeg executable on your system. Leave empty to use system PATH or built-in decoder.",
     "ffmpeg_hint_ready": "A valid FFmpeg executable is detected and ready.",

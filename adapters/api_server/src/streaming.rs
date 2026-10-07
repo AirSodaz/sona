@@ -293,6 +293,7 @@ async fn handle_streaming_socket(
                 vad_model: Some(vad_model_path.to_string_lossy().to_string()),
                 vad_buffer: 0.0,
                 batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::default(),
+                ffmpeg_enabled: None,
                 ffmpeg_path: None,
                 model_type: preset.model_type.clone(),
                 file_config: Box::new(preset.file_config.clone()),

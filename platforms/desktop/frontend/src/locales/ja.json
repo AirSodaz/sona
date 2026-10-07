@@ -1911,6 +1911,8 @@
     "mute_during_recording_hint": "録音中にシステムスピーカーを自動的にミュートします。これにより、マイクによるシステムサウンドの録音が停止されます。",
     "ffmpeg_title": "音声デコードツール (FFmpeg)",
     "ffmpeg_description": "バッチインポート時のメディアファイル変換および話者サンプル抽出に使用されます。デフォルトで組み込みデコーダーを使用し、FFmpeg は拡張形式用のオプションです。",
+    "enable_ffmpeg": "FFmpeg 拡張を有効にする",
+    "enable_ffmpeg_hint": "有効にすると、組み込みデコーダーがサポートしていない形式の場合に FFmpeg をフォールバックとして使用します。無効時は純粋な Rust 組み込みデコーダーのみを使用します。",
     "ffmpeg_path_title": "FFmpeg 実行ファイルパス",
     "ffmpeg_path_hint": "ローカルにインストールされた FFmpeg 実行ファイルを指定します。空欄の場合はシステム PATH または組み込みデコーダーを使用します。",
     "ffmpeg_hint_ready": "有効な FFmpeg 実行ファイルが検出されました。",

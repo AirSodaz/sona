@@ -88,6 +88,8 @@ export interface AudioConfig {
   muteDuringRecording?: boolean;
   /** Whether to keep microphone capture warm when voice typing is idle. Default: false. */
   keepMicrophoneActive?: boolean;
+  /** Whether FFmpeg extension is enabled for fallback and extended formats. Default: false. */
+  ffmpegEnabled?: boolean;
   /** Custom FFmpeg executable path. Default: '' (bundled sidecar). */
   ffmpegPath?: string;
 }

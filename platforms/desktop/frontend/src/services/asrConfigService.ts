@@ -266,7 +266,8 @@ export class AsrConfigService {
       modelType: modelInfo?.type || 'sensevoice',
       fileConfig: modelInfo?.fileConfig,
       gpuAcceleration: config.gpuAcceleration ?? 'auto',
-      ffmpegPath: config.ffmpegPath || undefined,
+      ffmpegEnabled: config.ffmpegEnabled ?? false,
+      ffmpegPath: config.ffmpegEnabled ? config.ffmpegPath || undefined : undefined,
       ...(overrides.enablePartialDecoding !== undefined
         ? { enablePartialDecoding: overrides.enablePartialDecoding }
         : scenario !== 'batch' && config.liveSentenceOnly

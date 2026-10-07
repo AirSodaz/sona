@@ -1911,6 +1911,8 @@
     "mute_during_recording_hint": "录音时自动静音系统扬声器，防止麦克风录入系统声音。",
     "ffmpeg_title": "音频解码工具 (FFmpeg)",
     "ffmpeg_description": "用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置轻量解码器，FFmpeg 为可选扩展。",
+    "enable_ffmpeg": "启用 FFmpeg 扩展",
+    "enable_ffmpeg_hint": "启用后可在内置解码器不支持特定格式时自动调用 FFmpeg，支持更多音视频格式。关闭时仅使用纯 Rust 内置解码器。",
     "ffmpeg_path_title": "FFmpeg 可执行文件路径",
     "ffmpeg_path_hint": "指定本地已安装的 FFmpeg 可执行文件。留空则使用系统 PATH 或内置解码器。",
     "ffmpeg_hint_ready": "已检测到可用的 FFmpeg 可执行文件。",
