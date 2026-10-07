@@ -24,6 +24,7 @@ fn missing_input_plan() -> BatchTranscribePlan {
         export_format: sona_core::export::ExportFormat::Json,
         output_target: OutputTarget::Stdout,
         quiet: false,
+        ffmpeg_enabled: false,
         ffmpeg_path: None,
     }
 }

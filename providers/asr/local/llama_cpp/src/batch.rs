@@ -1215,6 +1215,7 @@ mod tests {
             gpu_acceleration: Some("auto".to_string()),
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
+            ffmpeg_enabled: false,
             ffmpeg_path: None,
             quiet: true,
         }

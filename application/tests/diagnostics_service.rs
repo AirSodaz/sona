@@ -428,7 +428,8 @@ fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
             "runtimeEnvironment": {
                 "ffmpegPath": "C:\\app\\ffmpeg.exe",
                 "ffmpegExists": true,
-                "logDirPath": "C:\\app\\logs"
+                "logDirPath": "C:\\app\\logs",
+                "builtinAudioDecoderReady": true
             },
             "asrRuntimeMetrics": {
                 "modelLoad": null,

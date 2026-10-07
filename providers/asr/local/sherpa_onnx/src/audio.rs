@@ -580,7 +580,7 @@ mod tests {
     async fn test_extract_and_resample_audio_uses_builtin_decoder() {
         use super::{extract_and_resample_audio, save_wav_file};
         let wav_path = std::env::temp_dir().join(format!("sona-test-{}.wav", uuid::Uuid::new_v4()));
-        let samples: Vec<f32> = (0..16000).map(|i| (i as f32 / 16000.0 * 0.5)).collect();
+        let samples: Vec<f32> = (0..16000).map(|i| i as f32 / 16000.0 * 0.5).collect();
         save_wav_file(&samples, 16000, &wav_path).unwrap();
 
         let extracted = extract_and_resample_audio(&wav_path, 16000).await.unwrap();
@@ -595,7 +595,7 @@ mod tests {
         let wav_path =
             std::env::temp_dir().join(format!("sona-test-slice-{}.wav", uuid::Uuid::new_v4()));
         // 2 seconds of 16kHz
-        let samples: Vec<f32> = (0..32000).map(|i| (i as f32 / 16000.0 * 0.5)).collect();
+        let samples: Vec<f32> = (0..32000).map(|i| i as f32 / 16000.0 * 0.5).collect();
         save_wav_file(&samples, 16000, &wav_path).unwrap();
 
         // Extract 0.5s to 1.5s (1.0s duration = 16000 samples)

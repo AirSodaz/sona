@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { dashboardService } from '../../services/dashboardService';
 import { modelService } from '../../services/modelService';
 import { useDialogStore } from '../../stores/dialogStore';
+import { buildTestConfig } from '../../test-utils/configTestUtils';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import { Settings } from '../Settings';
@@ -315,7 +316,7 @@ describe('Settings', () => {
     }));
     // Reset store state
     useTranscriptStore.setState({
-      config: {
+      config: buildTestConfig({
         streamingModelPath: '/path/to/model',
         batchModelPath: '/test/batch',
         enableITN: true,
@@ -327,7 +328,8 @@ describe('Settings', () => {
         font: 'system',
         liveVadBufferSize: 5,
         batchVadBufferSize: 5,
-      },
+        modelDownloadMirror: undefined,
+      }),
     });
   });
 

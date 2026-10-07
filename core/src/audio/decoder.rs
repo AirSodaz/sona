@@ -88,11 +88,7 @@ impl BuiltinAudioDecoder {
             .ok_or(AudioDecodeError::NoAudioTrack)?;
 
         let track_id = track.id;
-        let track_rate = track
-            .codec_params
-            .sample_rate
-            .ok_or_else(|| AudioDecodeError::Decode("Track sample rate is unknown".into()))?;
-
+        let mut actual_sample_rate = track.codec_params.sample_rate;
         let decoder_opts = DecoderOptions::default();
         let mut decoder = symphonia::default::get_codecs()
             .make(&track.codec_params, &decoder_opts)
@@ -127,15 +123,23 @@ impl BuiltinAudioDecoder {
             if packet.track_id() != track_id {
                 continue;
             }
-
             match decoder.decode(&packet) {
                 Ok(decoded) => {
                     let spec = *decoded.spec();
+                    if let Some(rate) = actual_sample_rate {
+                        if rate != spec.rate {
+                            return Err(AudioDecodeError::Decode(format!(
+                                "Audio stream sample rate changed mid-stream from {} to {}, which is unsupported",
+                                rate, spec.rate
+                            )));
+                        }
+                    } else {
+                        actual_sample_rate = Some(spec.rate);
+                    }
                     let channels = spec.channels.count();
                     if channels == 0 {
                         continue;
                     }
-
                     let required_samples = decoded.capacity() * channels;
                     if sample_buf
                         .as_ref()
@@ -173,16 +177,18 @@ impl BuiltinAudioDecoder {
             return Err(AudioDecodeError::EmptyAudio);
         }
 
+        let input_rate = actual_sample_rate.ok_or_else(|| {
+            AudioDecodeError::Decode("Decoded audio sample rate is unknown".into())
+        })?;
+
         // Resample to target_sample_rate if needed
-        if track_rate == target_sample_rate {
+        if input_rate == target_sample_rate {
             Ok(mono_samples)
         } else {
-            resample_mono_to_target(&mono_samples, track_rate, target_sample_rate)
+            resample_mono_to_target(&mono_samples, input_rate, target_sample_rate)
                 .map_err(AudioDecodeError::Resample)
         }
     }
-
-    /// Decodes a time-slice of the audio file into mono PCM f32 samples.
     pub fn decode_slice(
         path: &Path,
         start_seconds: f64,
@@ -291,5 +297,15 @@ mod tests {
             decode_audio_file(invalid_path, 16000),
             Err(AudioDecodeError::Io(_))
         ));
+    }
+
+    #[test]
+    fn test_decode_22k05_wav_resampled_to_16k() {
+        // 1 second of 22050Hz mono = 22050 samples
+        let pcm_samples: Vec<i16> = (0..22050).map(|i| (i % 500) as i16).collect();
+        let temp_file = create_test_wav_file(22050, 1, &pcm_samples);
+
+        let decoded = decode_audio_file(temp_file.path(), 16000).unwrap();
+        assert_eq!(decoded.len(), 16000);
     }
 }
