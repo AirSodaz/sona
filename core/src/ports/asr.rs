@@ -1211,7 +1211,7 @@ pub fn resolve_ffmpeg_path_from_exe(
         let trimmed = path.to_string_lossy().trim().to_string();
         if !trimmed.is_empty() {
             let candidate = PathBuf::from(trimmed);
-            if candidate.exists() {
+            if candidate.is_file() {
                 return Ok(candidate);
             }
             return Err(AsrPortError::new(
@@ -1241,6 +1241,10 @@ pub fn resolve_ffmpeg_path_from_exe(
         let res_bin = exe_dir.join("resources").join("bin").join(sidecar_name);
         if res_bin.is_file() {
             return Ok(res_bin);
+        }
+        let tools_path = exe_dir.join("tools").join("bin").join(sidecar_name);
+        if tools_path.is_file() {
+            return Ok(tools_path);
         }
     }
 

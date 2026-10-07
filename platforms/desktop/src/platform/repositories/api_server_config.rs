@@ -126,12 +126,16 @@ pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
         if !enabled {
             return None;
         }
-        config
+        let custom_path = config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(String::from)
+            .map(String::from);
+        if custom_path.is_some() {
+            return custom_path;
+        }
+        sona_core::ports::asr::find_available_ffmpeg(None).map(|p| p.to_string_lossy().into_owned())
     })
 }
 
@@ -146,12 +150,16 @@ pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) ->
         if !enabled {
             return None;
         }
-        config
+        let custom_path = config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(String::from)
+            .map(String::from);
+        if custom_path.is_some() {
+            return custom_path;
+        }
+        sona_core::ports::asr::find_available_ffmpeg(None).map(|p| p.to_string_lossy().into_owned())
     })
 }
 

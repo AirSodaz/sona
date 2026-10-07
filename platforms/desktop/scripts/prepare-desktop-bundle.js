@@ -37,7 +37,7 @@ export async function prepareDesktopBundle({
   sherpaLibDir = process.env.SHERPA_ONNX_LIB_DIR,
   runCommand = runRequired,
   readMacDylibDependencies = listMacDylibDependencies,
-  includeFfmpeg = true,
+  includeFfmpeg = false,
 } = {}) {
   if (!repoRoot) {
     throw new Error('prepareDesktopBundle requires repoRoot.');

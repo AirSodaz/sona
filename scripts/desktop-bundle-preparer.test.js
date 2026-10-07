@@ -74,6 +74,7 @@ test('desktop bundle preparer rejects targets absent from its production source 
       configPath,
       ffmpegLockPath: sourceLockPath,
       sherpaLibDir: runtimeLibDir,
+      includeFfmpeg: true,
       runCommand() {},
       readMacDylibDependencies() { return []; },
     }),
@@ -112,6 +113,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
     configPath,
     ffmpegLockPath: writeTestFfmpegLock(root, target),
     sherpaLibDir: runtimeLibDir,
+    includeFfmpeg: true,
     runCommand(executable, commandArgs) {
       cargoCalls.push([executable, commandArgs]);
     },

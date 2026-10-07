@@ -162,8 +162,9 @@ fn normalize_current_config(existing: Value) -> Value {
     let http_server_host = string_or_default(&config, "httpServerHost", "127.0.0.1");
     let http_server_api_key = string_or_default(&config, "httpServerApiKey", "");
     let keep_microphone_active = bool_at(&config, "keepMicrophoneActive").unwrap_or(false);
-    let ffmpeg_enabled = bool_at(&config, "ffmpegEnabled").unwrap_or(false);
     let ffmpeg_path = string_or_default(&config, "ffmpegPath", "");
+    let ffmpeg_enabled =
+        bool_at(&original, "ffmpegEnabled").unwrap_or_else(|| !ffmpeg_path.trim().is_empty());
 
     set(&mut config, "speakerProfiles", speaker_profiles);
     set(&mut config, "asr", asr_config);
@@ -411,7 +412,11 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         (
             "ffmpegEnabled",
-            json!(bool_at(&parsed, "ffmpegEnabled").unwrap_or(false)),
+            json!(bool_at(&parsed, "ffmpegEnabled").unwrap_or_else(|| {
+                !string_or_default(&parsed, "ffmpegPath", "")
+                    .trim()
+                    .is_empty()
+            })),
         ),
         (
             "ffmpegPath",

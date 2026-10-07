@@ -20,10 +20,15 @@ function main() {
 
   verifyInstallerArtifacts(bundleRoots, target);
   const config = verifyTauriBundleConfig(configPath, target);
-  verifyStagedSidecar(config, configPath, target, 'ffmpeg');
+  const hasFfmpeg = config.bundle?.externalBin?.some(
+    (entry) => path.basename(normalizeConfigPath(entry)) === 'ffmpeg',
+  );
+  if (hasFfmpeg) {
+    verifyStagedSidecar(config, configPath, target, 'ffmpeg');
+  }
   verifyStagedSidecar(config, configPath, target, 'sona-cli');
   verifyStagedRuntimeLibraries(config, configPath, target);
-  verifyCanonicalAppBundle(bundleRoots, target);
+  verifyCanonicalAppBundle(bundleRoots, target, hasFfmpeg);
 
   console.log(`[bundle] Verified packaged artifacts for ${target}`);
 }
@@ -81,10 +86,8 @@ function verifyTauriBundleConfig(configPath, target) {
   if (!Array.isArray(externalBins)) {
     throw new Error('Generated Tauri configuration must declare bundle.externalBin.');
   }
-  for (const name of ['sona-cli', 'ffmpeg']) {
-    if (!externalBins.some((entry) => path.basename(normalizeConfigPath(entry)) === name)) {
-      throw new Error(`Generated Tauri configuration must declare ${name} through bundle.externalBin.`);
-    }
+  if (!externalBins.some((entry) => path.basename(normalizeConfigPath(entry)) === 'sona-cli')) {
+    throw new Error('Generated Tauri configuration must declare sona-cli through bundle.externalBin.');
   }
   if (hasLegacyResourcePath(JSON.stringify(config.bundle))) {
     throw new Error('Generated Tauri configuration must reject legacy resources/cli and resources/shared_libs directories.');
@@ -163,12 +166,12 @@ function configuredRuntimeFiles(config, configPath, target) {
   return Object.values(config.bundle.linux.deb.files).map((source) => resolveConfigPath(configPath, source));
 }
 
-function verifyCanonicalAppBundle(bundleRoots, target) {
+function verifyCanonicalAppBundle(bundleRoots, target, hasFfmpeg = false) {
   const appRoot = findCanonicalAppRoot(bundleRoots, target);
   if (!appRoot) {
     throw new Error(`No canonical application bundle was found for ${target}.`);
   }
-  const layout = nativeAppLayout(appRoot, target);
+  const layout = nativeAppLayout(appRoot, target, hasFfmpeg);
   const missingSidecars = layout.sidecars.filter((filePath) => !fs.existsSync(filePath));
   if (missingSidecars.length > 0) {
     throw new Error(`Canonical application bundle is missing sidecars for ${target}: ${missingSidecars.join(', ')}`);
@@ -198,23 +201,35 @@ function findCanonicalAppRoot(bundleRoots, target) {
   return executable ? path.dirname(path.dirname(path.dirname(executable))) : null;
 }
 
-function nativeAppLayout(appRoot, target) {
+function nativeAppLayout(appRoot, target, hasFfmpeg = false) {
   if (target.includes('windows')) {
+    const sidecars = [path.join(appRoot, 'sona-cli.exe')];
+    if (hasFfmpeg) {
+      sidecars.push(path.join(appRoot, 'ffmpeg.exe'));
+    }
     return {
-      sidecars: [path.join(appRoot, 'sona-cli.exe'), path.join(appRoot, 'ffmpeg.exe')],
+      sidecars,
       runtimeDir: appRoot,
     };
   }
   if (target.includes('apple')) {
     const contents = path.join(appRoot, 'Contents');
+    const sidecars = [path.join(contents, 'MacOS', 'sona-cli')];
+    if (hasFfmpeg) {
+      sidecars.push(path.join(contents, 'MacOS', 'ffmpeg'));
+    }
     return {
-      sidecars: [path.join(contents, 'MacOS', 'sona-cli'), path.join(contents, 'MacOS', 'ffmpeg')],
+      sidecars,
       runtimeDir: path.join(contents, 'Frameworks'),
     };
   }
   const root = path.join(appRoot, 'usr');
+  const sidecars = [path.join(root, 'bin', 'sona-cli')];
+  if (hasFfmpeg) {
+    sidecars.push(path.join(root, 'bin', 'ffmpeg'));
+  }
   return {
-    sidecars: [path.join(root, 'bin', 'sona-cli'), path.join(root, 'bin', 'ffmpeg')],
+    sidecars,
     runtimeDir: path.join(root, 'lib', 'sona'),
   };
 }
