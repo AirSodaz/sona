@@ -650,8 +650,8 @@ function buildRuntimeChecks(
             'info',
             tr(
               t,
-              'settings.diagnostics.ffmpeg_optional',
-              'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
+              'settings.diagnostics.ffmpeg_missing',
+              'FFmpeg is not installed (optional). Built-in decoder is active.'
             ),
             undefined,
             snapshot.runtimeEnvironment.ffmpegPath || undefined

@@ -247,8 +247,6 @@
     "language_hint_auto_detect": "该模型会自动识别语言，无需指定",
     "language_hint_fixed": "该模型仅支持其内置语言，不可更改",
     "unsupported_format": "不支持的文件格式。请使用：{{formats}}（建议使用 ffmpeg）",
-    "suggest_ffmpeg": "建议使用 ffmpeg",
-    "suggest_ffmpeg_tooltip": "内置转码失败或遇到不支持的格式，建议使用 ffmpeg 转码或在设置中启用 FFmpeg 扩展",
     "transcode_failed": "转码失败",
     "no_model_error": "请先在设置中配置模型。",
     "transcription_failed": "转录失败：{{error}}",

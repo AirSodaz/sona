@@ -347,4 +347,31 @@ describe('diagnosticsService', () => {
     const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
     expect(ffmpegCheck?.status).toBe('ready');
   });
+
+  it('reports FFmpeg missing message when ffmpegEnabled is true but FFmpeg is not installed on disk', async () => {
+    const customRuntime = {
+      ffmpegPath: '',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+      config: {
+        ...makeCoreSnapshot().config,
+        ffmpegEnabled: true,
+        ffmpegPath: '',
+      },
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
+    const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
+    expect(ffmpegCheck?.status).toBe('info');
+    expect(ffmpegCheck?.description).toBe(
+      'FFmpeg is not installed (optional). Built-in decoder is active.'
+    );
+  });
 });

@@ -247,8 +247,6 @@
     "language_hint_auto_detect": "This model detects the language automatically",
     "language_hint_fixed": "This model only recognizes its built-in language",
     "unsupported_format": "Unsupported file format. Please use: {{formats}} (suggest using ffmpeg)",
-    "suggest_ffmpeg": "Suggest using ffmpeg",
-    "suggest_ffmpeg_tooltip": "Built-in transcoding failed or format unsupported. Suggest using ffmpeg to transcode or enabling the FFmpeg extension in settings.",
     "transcode_failed": "Transcoding failed",
     "no_model_error": "Please configure a model in Settings first.",
     "transcription_failed": "Transcription failed: {{error}}",

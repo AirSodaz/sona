@@ -135,9 +135,13 @@ impl BuiltinAudioDecoder {
                     decoder.reset();
                     continue;
                 }
+                Err(SymphoniaError::IoError(err)) => {
+                    return Err(AudioDecodeError::Io(err));
+                }
                 Err(err) => {
-                    log::debug!("End of packets or stream error: {err}");
-                    break;
+                    return Err(AudioDecodeError::Decode(format!(
+                        "Fatal stream read error: {err}"
+                    )));
                 }
             };
 
@@ -146,6 +150,9 @@ impl BuiltinAudioDecoder {
             }
             match decoder.decode(&packet) {
                 Ok(decoded) => {
+                    if decoded.frames() == 0 {
+                        continue;
+                    }
                     let spec = *decoded.spec();
                     if let Some(rate) = actual_sample_rate {
                         if rate != spec.rate {
@@ -175,6 +182,25 @@ impl BuiltinAudioDecoder {
                         let interleaved = buf.samples();
                         if channels == 1 {
                             mono_samples.extend_from_slice(interleaved);
+                        } else if channels == 2 {
+                            mono_samples.reserve(interleaved.len() / 2);
+                            for frame in interleaved.as_chunks::<2>().0 {
+                                mono_samples.push((frame[0] + frame[1]) * 0.5);
+                            }
+                        } else if channels == 6 {
+                            // Standard 5.1 surround layout (ITU-R BS.775):
+                            // 0: FL, 1: FR, 2: FC (Center dialogue), 3: LFE (Subwoofer), 4: BL, 5: BR
+                            // Omit LFE to avoid sub-bass noise; prioritize dialogue in FC.
+                            mono_samples.reserve(interleaved.len() / 6);
+                            for frame in interleaved.as_chunks::<6>().0 {
+                                mono_samples.push(
+                                    frame[0] * 0.2071
+                                        + frame[1] * 0.2071
+                                        + frame[2] * 0.2929
+                                        + frame[4] * 0.1464
+                                        + frame[5] * 0.1464,
+                                );
+                            }
                         } else {
                             mono_samples.reserve(interleaved.len() / channels);
                             for frame in interleaved.chunks_exact(channels) {
@@ -358,10 +384,28 @@ mod tests {
     #[test]
     fn test_decode_corrupted_wav_returns_decode_error() {
         let mut file = tempfile::Builder::new().suffix(".wav").tempfile().unwrap();
-        file.write_all(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x04\x00\x00\x00\x00\x00\x00\x00corrupted").unwrap();
+        file.write_all(b"RIFF\x24\x00\x00\x00WAVEfmt \xff\xff\xff\xff\x01\x00\x01\x00")
+            .unwrap();
         file.flush().unwrap();
 
         let result = decode_audio_file(file.path(), 16000);
-        assert!(result.is_ok());
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_5_1_surround_downmix_suppresses_lfe_and_preserves_dialogue() {
+        // Frame 1: Only LFE channel (index 3) is active, other 5 channels are 0
+        // Frame 2: Only Center channel (index 2) is active, other 5 channels are 0
+        let mut pcm_samples = vec![0_i16; 12];
+        pcm_samples[3] = 10000;
+        pcm_samples[6 + 2] = 10000;
+
+        let temp_file = create_test_wav_file(16000, 6, &pcm_samples);
+        let decoded = decode_audio_file(temp_file.path(), 16000).unwrap();
+        assert_eq!(decoded.len(), 2);
+        // LFE should be completely suppressed (0.0)
+        assert_eq!(decoded[0], 0.0);
+        // Center channel should be preserved with dialogue weighting (> 0.0)
+        assert!(decoded[1] > 0.0);
     }
 }
