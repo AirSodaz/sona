@@ -1446,7 +1446,7 @@
       "system_audio_warning": "Sona could not enumerate system audio capture devices right now.",
       "voice_typing_title": "Voice Typing Runtime",
       "voice_typing_off": "Voice Typing is currently turned off.",
-      "ffmpeg_title": "FFmpeg Sidecar",
+      "ffmpeg_title": "FFmpeg Tool",
       "ffmpeg_ready": "FFmpeg is available for extended media formats and video audio extraction.",
       "ffmpeg_missing": "FFmpeg is not installed (optional). Built-in decoder is active.",
       "ffmpeg_optional": "Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.",

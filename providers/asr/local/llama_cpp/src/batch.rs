@@ -629,11 +629,30 @@ fn decode_audio_input(
 
     let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
         Ok(p) if p.is_file() => p,
-        _ => {
+        Ok(p) => {
+            let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                format!("resolved FFmpeg path does not exist ({})", p.display())
+            } else {
+                "FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).".to_string()
+            };
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and {detail}",
+                    path.display()
+                ),
+            ));
+        }
+        Err(err) => {
+            let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                format!("custom FFmpeg path is invalid: {err}")
+            } else {
+                "FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).".to_string()
+            };
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and {detail}",
                     path.display()
                 ),
             ));

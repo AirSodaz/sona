@@ -1446,7 +1446,7 @@
       "system_audio_warning": "Sona 当前无法枚举系统音频采集设备。",
       "voice_typing_title": "语音输入运行时",
       "voice_typing_off": "语音输入当前已关闭。",
-      "ffmpeg_title": "FFmpeg Sidecar",
+      "ffmpeg_title": "FFmpeg 工具",
       "ffmpeg_ready": "已检测到可用的 FFmpeg 工具，支持扩展音视频格式。",
       "ffmpeg_missing": "未安装 FFmpeg（可选扩展）。内置解码器正常工作。",
       "ffmpeg_optional": "内置轻量解码器已就绪 (MP3, WAV, M4A, FLAC, OGG)。FFmpeg 为可选组件，用于视频音轨提取。",

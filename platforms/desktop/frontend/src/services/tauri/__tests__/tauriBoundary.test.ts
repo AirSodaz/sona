@@ -827,6 +827,7 @@ describe('tauri boundary wrappers', () => {
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
+        ffmpegEnabled: false,
         ffmpegPath: '',
       },
       selectedModels: {
@@ -876,6 +877,7 @@ describe('tauri boundary wrappers', () => {
         vadModelPath: '',
         punctuationModelPath: '',
         microphoneId: 'default',
+        ffmpegEnabled: false,
         ffmpegPath: '',
       },
       permissionState: 'prompt',

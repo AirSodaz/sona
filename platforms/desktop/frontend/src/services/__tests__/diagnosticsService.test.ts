@@ -54,6 +54,8 @@ function makeCoreSnapshot() {
       vadModelPath: VAD_PATH,
       punctuationModelPath: '',
       microphoneId: 'default',
+      ffmpegEnabled: false,
+      ffmpegPath: '',
     },
     selectedModels: {
       live: { id: 'sensevoice-live', name: 'SenseVoice Live' },
@@ -232,5 +234,69 @@ describe('diagnosticsService', () => {
         label: '请求权限',
       })
     );
+  });
+
+  it('keeps batch-import overview ready when FFmpeg is optional and not installed', async () => {
+    const customRuntime = {
+      ffmpegPath: '',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const batchOverview = snapshot.overview.find((card) => card.id === 'batch-import');
+    expect(batchOverview?.status).toBe('ready');
+  });
+
+  it('ignores missing custom FFmpeg path when ffmpegEnabled is false', async () => {
+    const customRuntime = {
+      ffmpegPath: '',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+      config: {
+        ...makeCoreSnapshot().config,
+        ffmpegEnabled: false,
+        ffmpegPath: 'C:\\missing\\ffmpeg.exe',
+      },
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
+    const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
+    expect(ffmpegCheck?.status).toBe('info');
+  });
+
+  it('triggers warning when ffmpegEnabled is true and custom FFmpeg path is missing', async () => {
+    const customRuntime = {
+      ffmpegPath: '',
+      ffmpegExists: false,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+      config: {
+        ...makeCoreSnapshot().config,
+        ffmpegEnabled: true,
+        ffmpegPath: 'C:\\missing\\ffmpeg.exe',
+      },
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
+    const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
+    expect(ffmpegCheck?.status).toBe('warning');
   });
 });

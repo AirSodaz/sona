@@ -1446,7 +1446,7 @@
       "system_audio_warning": "Sona가 현재 시스템 오디오 캡처 장치를 열거하지 못했습니다.",
       "voice_typing_title": "Voice Typing 런타임",
       "voice_typing_off": "Voice Typing이 꺼져 있습니다.",
-      "ffmpeg_title": "FFmpeg Sidecar",
+      "ffmpeg_title": "FFmpeg 도구",
       "ffmpeg_ready": "사용 가능한 FFmpeg가 감지되었습니다. 확장 미디어 형식을 지원합니다.",
       "ffmpeg_missing": "FFmpeg가 설치되지 않았습니다 (선택 사항). 내장 디코더가 정상 작동합니다.",
       "ffmpeg_optional": "내장 경량 디코더가 준비되었습니다 (MP3, WAV, M4A, FLAC, OGG). FFmpeg는 비디오 추출용 선택 사항입니다.",

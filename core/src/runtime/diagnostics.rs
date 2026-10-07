@@ -63,9 +63,10 @@ pub struct DiagnosticsConfigInput {
     #[serde(default = "default_microphone_id")]
     pub microphone_id: String,
     #[serde(default)]
+    pub ffmpeg_enabled: bool,
+    #[serde(default)]
     pub ffmpeg_path: String,
 }
-
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]

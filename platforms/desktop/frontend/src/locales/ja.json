@@ -1446,7 +1446,7 @@
       "system_audio_warning": "Sona は現在、システム オーディオ キャプチャ デバイスを列挙できません。",
       "voice_typing_title": "Voice Typing Runtime",
       "voice_typing_off": "現在、Voice Typing はオフです。",
-      "ffmpeg_title": "FFmpeg サイドカー",
+      "ffmpeg_title": "FFmpeg ツール",
       "ffmpeg_ready": "利用可能な FFmpeg が検出されました。拡張メディア形式に対応しています。",
       "ffmpeg_missing": "FFmpeg はインストールされていません (オプション)。組み込みデコーダーが動作しています。",
       "ffmpeg_optional": "組み込みの軽量デコーダーの準備が完了しました (MP3, WAV, M4A, FLAC, OGG)。FFmpeg は動画の音声抽出用のオプションです。",

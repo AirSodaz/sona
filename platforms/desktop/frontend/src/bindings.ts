@@ -938,6 +938,7 @@ export type DiagnosticsConfigInput = {
 	vadModelPath?: string,
 	punctuationModelPath?: string,
 	microphoneId?: string,
+	ffmpegEnabled?: boolean,
 	ffmpegPath?: string,
 };
 

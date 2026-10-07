@@ -1446,7 +1446,7 @@
       "system_audio_warning": "Sona 目前無法列舉系統音訊擷取裝置。",
       "voice_typing_title": "語音輸入運作時",
       "voice_typing_off": "語音輸入目前已關閉。",
-      "ffmpeg_title": "FFmpeg Sidecar",
+      "ffmpeg_title": "FFmpeg 工具",
       "ffmpeg_ready": "已檢測到可用的 FFmpeg 工具，支援擴充影音格式。",
       "ffmpeg_missing": "未安裝 FFmpeg（可選擴充）。內建解碼器正常運作。",
       "ffmpeg_optional": "內建輕量解碼器已就緒 (MP3, WAV, M4A, FLAC, OGG)。FFmpeg 為可選元件，用於影片音訊擷取。",

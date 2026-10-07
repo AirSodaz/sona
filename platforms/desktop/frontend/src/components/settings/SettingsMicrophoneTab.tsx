@@ -646,7 +646,7 @@ export function SettingsMicrophoneTab({
             title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
             hint={t('settings.ffmpeg_path_hint', {
               defaultValue:
-                'Specify a local FFmpeg executable on your system. Leave empty to use the bundled version.',
+                'Specify a local FFmpeg executable on your system. Leave empty to use system PATH or auto-detected version.',
             })}
             path={displayFfmpegPath}
             isCustom={isCustomFfmpeg}

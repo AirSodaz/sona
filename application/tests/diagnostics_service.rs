@@ -81,6 +81,7 @@ fn base_input() -> DiagnosticsCoreInput {
             vad_model_path: "C:\\models\\vad.onnx".to_string(),
             punctuation_model_path: "".to_string(),
             microphone_id: "default".to_string(),
+            ffmpeg_enabled: false,
             ffmpeg_path: "".to_string(),
         },
         selected_models: SelectedModelsInput {
@@ -401,6 +402,7 @@ fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
                 "vadModelPath": "C:\\models\\vad.onnx",
                 "punctuationModelPath": "",
                 "microphoneId": "default",
+                "ffmpegEnabled": false,
                 "ffmpegPath": "",
             },
             "selectedModels": {

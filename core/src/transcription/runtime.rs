@@ -522,8 +522,21 @@ pub fn resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         export_format,
         output_target,
         quiet: options.quiet || config.quiet.unwrap_or(false),
-        ffmpeg_enabled: options.ffmpeg_path.is_some() || config.ffmpeg_path.is_some(),
-        ffmpeg_path: options.ffmpeg_path.or(config.ffmpeg_path),
+        ffmpeg_enabled: options
+            .ffmpeg_path
+            .as_ref()
+            .is_some_and(|p| !p.trim().is_empty())
+            || config.ffmpeg_enabled.unwrap_or_else(|| {
+                config
+                    .ffmpeg_path
+                    .as_ref()
+                    .is_some_and(|p| !p.trim().is_empty())
+            }),
+        ffmpeg_path: options
+            .ffmpeg_path
+            .or(config.ffmpeg_path)
+            .map(|p| p.trim().to_string())
+            .filter(|p| !p.is_empty()),
     })
 }
 

@@ -9,7 +9,7 @@ use symphonia::core::meta::MetadataOptions;
 use symphonia::core::probe::Hint;
 use thiserror::Error;
 
-use super::resampler::resample_mono_to_target;
+use super::resampler::{AudioResampleError, resample_mono_to_target};
 
 #[derive(Debug, Error)]
 pub enum AudioDecodeError {
@@ -20,7 +20,7 @@ pub enum AudioDecodeError {
     #[error("Audio decode error: {0}")]
     Decode(String),
     #[error("Resampling error: {0}")]
-    Resample(String),
+    Resample(#[from] AudioResampleError),
     #[error("Audio file contains no audio tracks")]
     NoAudioTrack,
     #[error("Decoded audio contains no samples")]
@@ -50,7 +50,7 @@ impl BuiltinAudioDecoder {
     pub fn decode_file(path: &Path, target_sample_rate: u32) -> Result<Vec<f32>, AudioDecodeError> {
         if target_sample_rate == 0 {
             return Err(AudioDecodeError::Resample(
-                "Target sample rate cannot be zero".into(),
+                AudioResampleError::ZeroSampleRate,
             ));
         }
 
@@ -80,24 +80,45 @@ impl BuiltinAudioDecoder {
 
         let mut format = probed.format;
 
-        // Find the first audio track
-        let track = format
+        // Find the first supported decodable audio track
+        let decoder_opts = DecoderOptions::default();
+        let mut chosen = None;
+        let mut last_unsupported_err = None;
+
+        for candidate_track in format
             .tracks()
             .iter()
-            .find(|t| t.codec_params.codec != CODEC_TYPE_NULL)
-            .ok_or(AudioDecodeError::NoAudioTrack)?;
-
-        let track_id = track.id;
-        let mut actual_sample_rate = track.codec_params.sample_rate;
-        let decoder_opts = DecoderOptions::default();
-        let mut decoder = symphonia::default::get_codecs()
-            .make(&track.codec_params, &decoder_opts)
-            .map_err(|e| match e {
-                SymphoniaError::Unsupported(_) => {
-                    AudioDecodeError::UnsupportedFormat(format!("Unsupported audio codec: {e}"))
+            .filter(|t| t.codec_params.codec != CODEC_TYPE_NULL)
+        {
+            match symphonia::default::get_codecs()
+                .make(&candidate_track.codec_params, &decoder_opts)
+            {
+                Ok(dec) => {
+                    chosen = Some((
+                        candidate_track.id,
+                        candidate_track.codec_params.sample_rate,
+                        dec,
+                    ));
+                    break;
                 }
-                other => AudioDecodeError::Decode(other.to_string()),
-            })?;
+                Err(SymphoniaError::Unsupported(e)) => {
+                    last_unsupported_err = Some(e);
+                }
+                Err(err) => return Err(AudioDecodeError::Decode(err.to_string())),
+            }
+        }
+
+        let (track_id, mut actual_sample_rate, mut decoder) = match chosen {
+            Some(selected) => selected,
+            None => {
+                if let Some(err) = last_unsupported_err {
+                    return Err(AudioDecodeError::UnsupportedFormat(format!(
+                        "Unsupported audio codec: {err}"
+                    )));
+                }
+                return Err(AudioDecodeError::NoAudioTrack);
+            }
+        };
 
         let mut sample_buf: Option<SampleBuffer<f32>> = None;
         let mut mono_samples: Vec<f32> = Vec::new();
@@ -152,9 +173,14 @@ impl BuiltinAudioDecoder {
                     if let Some(buf) = sample_buf.as_mut() {
                         buf.copy_interleaved_ref(decoded);
                         let interleaved = buf.samples();
-                        for frame in interleaved.chunks_exact(channels) {
-                            let sum: f32 = frame.iter().sum();
-                            mono_samples.push(sum / (channels as f32));
+                        if channels == 1 {
+                            mono_samples.extend_from_slice(interleaved);
+                        } else {
+                            mono_samples.reserve(interleaved.len() / channels);
+                            for frame in interleaved.chunks_exact(channels) {
+                                let sum: f32 = frame.iter().sum();
+                                mono_samples.push(sum / (channels as f32));
+                            }
                         }
                     }
                 }
@@ -185,8 +211,11 @@ impl BuiltinAudioDecoder {
         if input_rate == target_sample_rate {
             Ok(mono_samples)
         } else {
-            resample_mono_to_target(&mono_samples, input_rate, target_sample_rate)
-                .map_err(AudioDecodeError::Resample)
+            Ok(resample_mono_to_target(
+                &mono_samples,
+                input_rate,
+                target_sample_rate,
+            )?)
         }
     }
     pub fn decode_slice(

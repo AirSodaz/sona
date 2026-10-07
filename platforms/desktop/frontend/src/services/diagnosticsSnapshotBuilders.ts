@@ -601,10 +601,10 @@ function buildRuntimeChecks(
   snapshot: DiagnosticsCoreFactsSnapshot
 ): BuiltChecks['runtime'] {
   const voiceTypingCheck = buildVoiceTypingCheck(t, snapshot);
+  const ffmpegEnabled = snapshot.config.ffmpegEnabled ?? false;
   const customFfmpegPath = (snapshot.config.ffmpegPath || '').trim();
   const ffmpegCustomMissing =
-    customFfmpegPath.length > 0 && !snapshot.runtimeEnvironment.ffmpegExists;
-
+    ffmpegEnabled && customFfmpegPath.length > 0 && !snapshot.runtimeEnvironment.ffmpegExists;
   const ffmpegCheck = snapshot.runtimeEnvironment.ffmpegExists
     ? check(
         'ffmpeg',
@@ -931,7 +931,7 @@ function buildOverviewCards(
       [
         checks.model.batchModelCheck.status,
         checks.model.punctuationCheck.status,
-        checks.runtime.ffmpegCheck.status,
+        checks.runtime.ffmpegCheck.status === 'info' ? 'ready' : checks.runtime.ffmpegCheck.status,
       ],
       batchImportOverviewAction(t, snapshot, checks)
     ),

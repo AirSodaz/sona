@@ -1,5 +1,22 @@
 use rubato::audioadapter_buffers::direct::InterleavedSlice;
 use rubato::{Fft, FixedSync, Resampler};
+use thiserror::Error;
+
+#[derive(Debug, Error, PartialEq, Eq)]
+pub enum AudioResampleError {
+    #[error("Sample rate cannot be zero")]
+    ZeroSampleRate,
+    #[error("Failed to create resampler: {0}")]
+    CreateResampler(String),
+    #[error("Input adapter error: {0}")]
+    InputAdapter(String),
+    #[error("Output adapter error: {0}")]
+    OutputAdapter(String),
+    #[error("Resampling process error: {0}")]
+    Process(String),
+    #[error("Resampling flush error: {0}")]
+    Flush(String),
+}
 
 /// Resample mono audio samples from `input_sample_rate` to `target_sample_rate`.
 ///
@@ -8,9 +25,9 @@ pub fn resample_mono_to_target(
     samples: &[f32],
     input_sample_rate: u32,
     target_sample_rate: u32,
-) -> Result<Vec<f32>, String> {
+) -> Result<Vec<f32>, AudioResampleError> {
     if input_sample_rate == 0 || target_sample_rate == 0 {
-        return Err("Sample rate cannot be zero".to_string());
+        return Err(AudioResampleError::ZeroSampleRate);
     }
     if input_sample_rate == target_sample_rate || samples.is_empty() {
         return Ok(samples.to_vec());
@@ -24,12 +41,18 @@ pub fn resample_mono_to_target(
         1,
         FixedSync::Input,
     )
-    .map_err(|e| format!("Failed to create resampler: {e}"))?;
-
+    .map_err(|e| AudioResampleError::CreateResampler(e.to_string()))?;
     let delay = resampler.output_delay();
-    let expected_target_len = ((samples.len() as f64)
-        * (target_sample_rate as f64 / input_sample_rate as f64))
-        .round() as usize;
+    let expected_target_len = {
+        let calculated = ((samples.len() as f64)
+            * (target_sample_rate as f64 / input_sample_rate as f64))
+            .round() as usize;
+        if !samples.is_empty() && calculated == 0 {
+            1
+        } else {
+            calculated
+        }
+    };
 
     let mut input_buffer = vec![0.0_f32; resampler.input_frames_max()];
     let mut output_buffer = vec![0.0_f32; resampler.output_frames_max()];
@@ -49,14 +72,14 @@ pub fn resample_mono_to_target(
 
         let indexing = (frames < needed).then(|| rubato::Indexing::new().partial_len(frames));
         let in_adapter = InterleavedSlice::new(&input_buffer[..needed], 1, needed)
-            .map_err(|e| format!("Input adapter error: {e}"))?;
+            .map_err(|e| AudioResampleError::InputAdapter(e.to_string()))?;
         let out_capacity = output_buffer.len();
         let mut out_adapter = InterleavedSlice::new_mut(&mut output_buffer, 1, out_capacity)
-            .map_err(|e| format!("Output adapter error: {e}"))?;
+            .map_err(|e| AudioResampleError::OutputAdapter(e.to_string()))?;
 
         let (_consumed, written) = resampler
             .process_into_buffer(&in_adapter, &mut out_adapter, indexing.as_ref())
-            .map_err(|e| format!("Resampling process error: {e}"))?;
+            .map_err(|e| AudioResampleError::Process(e.to_string()))?;
 
         if written > 0 {
             output.extend_from_slice(&output_buffer[..written]);
@@ -74,14 +97,14 @@ pub fn resample_mono_to_target(
 
         let indexing = (frames < needed).then(|| rubato::Indexing::new().partial_len(frames));
         let in_adapter = InterleavedSlice::new(&input_buffer[..needed], 1, needed)
-            .map_err(|e| format!("Input adapter error: {e}"))?;
+            .map_err(|e| AudioResampleError::InputAdapter(e.to_string()))?;
         let out_capacity = output_buffer.len();
         let mut out_adapter = InterleavedSlice::new_mut(&mut output_buffer, 1, out_capacity)
-            .map_err(|e| format!("Output adapter error: {e}"))?;
+            .map_err(|e| AudioResampleError::OutputAdapter(e.to_string()))?;
 
         let (_consumed, written) = resampler
             .process_into_buffer(&in_adapter, &mut out_adapter, indexing.as_ref())
-            .map_err(|e| format!("Resampling flush error: {e}"))?;
+            .map_err(|e| AudioResampleError::Flush(e.to_string()))?;
 
         if written > 0 {
             output.extend_from_slice(&output_buffer[..written]);
@@ -93,7 +116,7 @@ pub fn resample_mono_to_target(
     let aligned = if output.len() > delay {
         &output[delay..]
     } else {
-        &output[..]
+        &[][..]
     };
 
     // Trim to the exact expected length (removing tail silence padding)
@@ -140,5 +163,12 @@ mod tests {
         let input = vec![0.2_f32; 44100];
         let resampled = resample_mono_to_target(&input, 44100, 16000).unwrap();
         assert_eq!(resampled.len(), 16000);
+    }
+
+    #[test]
+    fn test_resample_short_input_non_empty() {
+        let input = vec![0.5_f32];
+        let resampled = resample_mono_to_target(&input, 48000, 16000).unwrap();
+        assert_eq!(resampled.len(), 1);
     }
 }

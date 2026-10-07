@@ -69,6 +69,7 @@ pub struct TranscribeConfigSection {
     pub vad_buffer_size: Option<f32>,
     pub format: Option<String>,
     pub gpu_acceleration: Option<String>,
+    pub ffmpeg_enabled: Option<bool>,
     pub ffmpeg_path: Option<String>,
     #[serde(alias = "save_audio")]
     pub save_wav: Option<PathBuf>,
