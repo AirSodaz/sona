@@ -623,7 +623,7 @@ export function SettingsMicrophoneTab({
         icon={<FileAudio size={20} />}
         description={t(
           'settings.ffmpeg_description',
-          '用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置 FFmpeg。'
+          '用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置轻量解码器，FFmpeg 为可选扩展。'
         )}
       >
         <SettingsItem

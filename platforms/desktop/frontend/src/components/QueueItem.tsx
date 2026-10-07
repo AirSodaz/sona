@@ -206,6 +206,9 @@ export const QueueItem = memo(function QueueItem({
           {item.status === 'error' && (
             <span
               className="queue-item-error"
+              tabIndex={0}
+              role="note"
+              aria-label={rawErrorMessage}
               data-tooltip={rawErrorMessage}
               data-tooltip-pos="bottom"
               data-tooltip-multiline

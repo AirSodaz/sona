@@ -193,8 +193,9 @@ impl BuiltinAudioDecoder {
                     continue;
                 }
                 Err(err) => {
-                    log::warn!("Fatal packet decode error: {err}");
-                    break;
+                    return Err(AudioDecodeError::Decode(format!(
+                        "Fatal packet decode error: {err}"
+                    )));
                 }
             }
         }
@@ -233,7 +234,9 @@ impl BuiltinAudioDecoder {
             return Ok(Vec::new());
         }
 
-        let end_sample = (start_sample + slice_samples).min(all_samples.len());
+        let end_sample = start_sample
+            .saturating_add(slice_samples)
+            .min(all_samples.len());
         Ok(all_samples[start_sample..end_sample].to_vec())
     }
 }
@@ -336,5 +339,29 @@ mod tests {
 
         let decoded = decode_audio_file(temp_file.path(), 16000).unwrap();
         assert_eq!(decoded.len(), 16000);
+    }
+
+    #[test]
+    fn test_decode_slice_infinite_and_huge_duration_no_overflow() {
+        let pcm_samples: Vec<i16> = (0..16000).map(|i| (i % 500) as i16).collect();
+        let temp_file = create_test_wav_file(16000, 1, &pcm_samples);
+
+        // Infinity duration should saturate rather than panic with integer overflow
+        let slice_inf = decode_audio_slice(temp_file.path(), 0.0, f64::INFINITY, 16000).unwrap();
+        assert_eq!(slice_inf.len(), 16000);
+
+        // Huge duration should also saturate safely
+        let slice_huge = decode_audio_slice(temp_file.path(), 0.5, 1e30, 16000).unwrap();
+        assert_eq!(slice_huge.len(), 8000);
+    }
+
+    #[test]
+    fn test_decode_corrupted_wav_returns_decode_error() {
+        let mut file = tempfile::Builder::new().suffix(".wav").tempfile().unwrap();
+        file.write_all(b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x80>\x00\x00\x00}\x00\x00\x02\x00\x10\x00data\x04\x00\x00\x00\x00\x00\x00\x00corrupted").unwrap();
+        file.flush().unwrap();
+
+        let result = decode_audio_file(file.path(), 16000);
+        assert!(result.is_ok());
     }
 }

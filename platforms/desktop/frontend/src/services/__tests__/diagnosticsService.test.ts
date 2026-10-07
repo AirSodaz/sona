@@ -299,4 +299,52 @@ describe('diagnosticsService', () => {
     const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
     expect(ffmpegCheck?.status).toBe('warning');
   });
+
+  it('reports FFmpeg info when ffmpegEnabled is false even if FFmpeg exists on disk', async () => {
+    const customRuntime = {
+      ffmpegPath: 'C:\\app\\ffmpeg.exe',
+      ffmpegExists: true,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+      config: {
+        ...makeCoreSnapshot().config,
+        ffmpegEnabled: false,
+        ffmpegPath: '',
+      },
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
+    const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
+    expect(ffmpegCheck?.status).toBe('info');
+  });
+
+  it('reports FFmpeg ready when ffmpegEnabled is true and FFmpeg exists on disk', async () => {
+    const customRuntime = {
+      ffmpegPath: 'C:\\app\\ffmpeg.exe',
+      ffmpegExists: true,
+      logDirPath: 'C:\\app\\logs',
+    };
+    mocks.invoke.mockResolvedValueOnce({
+      ...makeCoreSnapshot(),
+      runtimeEnvironment: customRuntime,
+      config: {
+        ...makeCoreSnapshot().config,
+        ffmpegEnabled: true,
+        ffmpegPath: '',
+      },
+    });
+
+    const snapshot = await diagnosticsService.collectSnapshot(t);
+    const runtimeSection = snapshot.sections.find(
+      (section) => section.id === 'runtime-environment'
+    );
+    const ffmpegCheck = runtimeSection?.checks.find((check) => check.id === 'ffmpeg');
+    expect(ffmpegCheck?.status).toBe('ready');
+  });
 });

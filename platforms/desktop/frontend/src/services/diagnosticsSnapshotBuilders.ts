@@ -605,44 +605,57 @@ function buildRuntimeChecks(
   const customFfmpegPath = (snapshot.config.ffmpegPath || '').trim();
   const ffmpegCustomMissing =
     ffmpegEnabled && customFfmpegPath.length > 0 && !snapshot.runtimeEnvironment.ffmpegExists;
-  const ffmpegCheck = snapshot.runtimeEnvironment.ffmpegExists
+  const ffmpegCheck = !ffmpegEnabled
     ? check(
         'ffmpeg',
         tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
-        'ready',
+        'info',
         tr(
           t,
-          'settings.diagnostics.ffmpeg_ready',
-          'FFmpeg is available for extended media formats.'
+          'settings.diagnostics.ffmpeg_optional',
+          'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
         ),
         undefined,
-        snapshot.runtimeEnvironment.ffmpegPath
+        snapshot.runtimeEnvironment.ffmpegPath || undefined
       )
-    : ffmpegCustomMissing
+    : snapshot.runtimeEnvironment.ffmpegExists
       ? check(
           'ffmpeg',
           tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
-          'warning',
+          'ready',
           tr(
             t,
-            'settings.ffmpeg_hint_custom_missing',
-            'The specified custom FFmpeg executable was not found. Please verify the file path.'
-          ),
-          openInputDeviceAction(t),
-          customFfmpegPath
-        )
-      : check(
-          'ffmpeg',
-          tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
-          'info',
-          tr(
-            t,
-            'settings.diagnostics.ffmpeg_optional',
-            'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
+            'settings.diagnostics.ffmpeg_ready',
+            'FFmpeg is available for extended media formats.'
           ),
           undefined,
-          snapshot.runtimeEnvironment.ffmpegPath || undefined
-        );
+          snapshot.runtimeEnvironment.ffmpegPath
+        )
+      : ffmpegCustomMissing
+        ? check(
+            'ffmpeg',
+            tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+            'warning',
+            tr(
+              t,
+              'settings.ffmpeg_hint_custom_missing',
+              'The specified custom FFmpeg executable was not found. Please verify the file path.'
+            ),
+            openInputDeviceAction(t),
+            customFfmpegPath
+          )
+        : check(
+            'ffmpeg',
+            tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+            'info',
+            tr(
+              t,
+              'settings.diagnostics.ffmpeg_optional',
+              'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
+            ),
+            undefined,
+            snapshot.runtimeEnvironment.ffmpegPath || undefined
+          );
   const logDirCheck =
     snapshot.runtimeEnvironment.logDirPath.trim().length === 0
       ? check(

@@ -180,6 +180,10 @@ describe('QueueItem', () => {
     const errorEl = screen.getByText('batch.transcode_failed').closest('.queue-item-error');
     expect(errorEl?.getAttribute('data-tooltip')).toBe(rawError);
     expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
+    expect(errorEl?.getAttribute('tabindex')).toBe('0');
+    expect(errorEl?.getAttribute('role')).toBe('note');
+    expect(errorEl?.getAttribute('aria-label')).toBe(rawError);
+    expect(errorEl?.getAttribute('title')).toBeNull();
     expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
   });
