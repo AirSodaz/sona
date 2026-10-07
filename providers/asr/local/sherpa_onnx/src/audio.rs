@@ -135,7 +135,7 @@ pub async fn extract_and_resample_audio(
     filepath: &Path,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, AsrPortError> {
-    extract_and_resample_audio_with_ffmpeg(filepath, target_sample_rate, None).await
+    extract_and_resample_audio_with_options(filepath, target_sample_rate, false, None).await
 }
 
 pub async fn extract_and_resample_audio_with_ffmpeg(
@@ -153,77 +153,65 @@ pub async fn extract_and_resample_audio_with_options(
     ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    // 1. Prioritize built-in pure Rust decoder (Symphonia + Rubato) on blocking task
-    let path_buf = filepath.to_path_buf();
-    let builtin_result = tokio::task::spawn_blocking(move || {
-        sona_core::audio::decode_audio_file(&path_buf, target_sample_rate)
-    })
-    .await
-    .map_err(|join_err| {
-        AsrPortError::runtime(format!("Audio decode task join error: {join_err}"))
-    })?;
+    if ffmpeg_enabled {
+        let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+            Ok(path) if path.is_file() => path,
+            Ok(path) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path does not exist ({})", path.display())
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        filepath.display()
+                    ),
+                ));
+            }
+            Err(err) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path is invalid: {err}")
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        filepath.display()
+                    ),
+                ));
+            }
+        };
 
-    let builtin_failure_cause = match builtin_result {
-        Ok(samples) => return Ok(samples),
-        Err(sona_core::audio::AudioDecodeError::Io(io_err)) => {
-            return Err(AsrPortError::new(
+        run_ffmpeg_extract_and_resample(filepath, target_sample_rate, &ffmpeg_path).await
+    } else {
+        let path_buf = filepath.to_path_buf();
+        let builtin_result = tokio::task::spawn_blocking(move || {
+            sona_core::audio::decode_audio_file(&path_buf, target_sample_rate)
+        })
+        .await
+        .map_err(|join_err| {
+            AsrPortError::runtime(format!("Audio decode task join error: {join_err}"))
+        })?;
+
+        match builtin_result {
+            Ok(samples) => Ok(samples),
+            Err(sona_core::audio::AudioDecodeError::Io(io_err)) => Err(AsrPortError::new(
                 AsrPortErrorKind::FileSystem,
                 format!("Failed to read audio file {}: {io_err}", filepath.display()),
-            ));
+            )),
+            Err(builtin_err) => Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Failed to decode audio file {}: built-in decoder cannot process this file ({builtin_err}). Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    filepath.display()
+                ),
+            )),
         }
-        Err(builtin_err) => {
-            log::info!(
-                "Built-in audio decoder skipped {}: {builtin_err}. Attempting FFmpeg fallback...",
-                filepath.display()
-            );
-            builtin_err.to_string()
-        }
-    };
-
-    // 2. Fall back to FFmpeg only if enabled
-    if !ffmpeg_enabled {
-        return Err(AsrPortError::new(
-            AsrPortErrorKind::InvalidRequest,
-            format!(
-                "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is disabled in settings. Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
-                filepath.display()
-            ),
-        ));
     }
-
-    let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
-        Ok(path) if path.is_file() => path,
-        Ok(path) => {
-            let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
-                format!("resolved FFmpeg path does not exist ({})", path.display())
-            } else {
-                "FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).".to_string()
-            };
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!(
-                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and {detail}",
-                    filepath.display()
-                ),
-            ));
-        }
-        Err(err) => {
-            let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
-                format!("custom FFmpeg path is invalid: {err}")
-            } else {
-                "FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).".to_string()
-            };
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!(
-                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and {detail}",
-                    filepath.display()
-                ),
-            ));
-        }
-    };
-
-    run_ffmpeg_extract_and_resample(filepath, target_sample_rate, &ffmpeg_path).await
 }
 
 async fn run_ffmpeg_extract_and_resample(
@@ -280,11 +268,12 @@ pub async fn extract_audio_slice(
     duration_seconds: f64,
     target_sample_rate: u32,
 ) -> Result<Vec<f32>, AsrPortError> {
-    extract_audio_slice_with_ffmpeg(
+    extract_audio_slice_with_options(
         filepath,
         start_seconds,
         duration_seconds,
         target_sample_rate,
+        false,
         None,
     )
     .await
@@ -316,70 +305,77 @@ pub async fn extract_audio_slice_with_options(
     ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    // 1. Prioritize built-in in-memory slice on blocking task
-    let path_buf = filepath.to_path_buf();
-    let builtin_result = tokio::task::spawn_blocking(move || {
-        sona_core::audio::decode_audio_slice(
-            &path_buf,
+    if ffmpeg_enabled {
+        let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+            Ok(path) if path.is_file() => path,
+            Ok(path) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path does not exist ({})", path.display())
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to extract audio slice from {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        filepath.display()
+                    ),
+                ));
+            }
+            Err(err) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path is invalid: {err}")
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to extract audio slice from {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        filepath.display()
+                    ),
+                ));
+            }
+        };
+
+        run_ffmpeg_extract_slice(
+            filepath,
             start_seconds,
             duration_seconds,
             target_sample_rate,
+            &ffmpeg_path,
         )
-    })
-    .await
-    .map_err(|join_err| {
-        AsrPortError::runtime(format!("Audio slice task join error: {join_err}"))
-    })?;
+        .await
+    } else {
+        let path_buf = filepath.to_path_buf();
+        let builtin_result = tokio::task::spawn_blocking(move || {
+            sona_core::audio::decode_audio_slice(
+                &path_buf,
+                start_seconds,
+                duration_seconds,
+                target_sample_rate,
+            )
+        })
+        .await
+        .map_err(|join_err| {
+            AsrPortError::runtime(format!("Audio slice task join error: {join_err}"))
+        })?;
 
-    let builtin_failure_cause = match builtin_result {
-        Ok(samples) => return Ok(samples),
-        Err(sona_core::audio::AudioDecodeError::Io(io_err)) => {
-            return Err(AsrPortError::new(
+        match builtin_result {
+            Ok(samples) => Ok(samples),
+            Err(sona_core::audio::AudioDecodeError::Io(io_err)) => Err(AsrPortError::new(
                 AsrPortErrorKind::FileSystem,
                 format!("Failed to read audio file {}: {io_err}", filepath.display()),
-            ));
-        }
-        Err(builtin_err) => {
-            log::info!(
-                "Built-in slice decoder skipped {}: {builtin_err}. Attempting FFmpeg fallback...",
-                filepath.display()
-            );
-            builtin_err.to_string()
-        }
-    };
-
-    // 2. Fall back to FFmpeg only if enabled
-    if !ffmpeg_enabled {
-        return Err(AsrPortError::new(
-            AsrPortErrorKind::InvalidRequest,
-            format!(
-                "Failed to extract audio slice from {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is disabled in settings. Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
-                filepath.display()
-            ),
-        ));
-    }
-
-    let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
-        Ok(path) if path.is_file() => path,
-        _ => {
-            return Err(AsrPortError::new(
+            )),
+            Err(builtin_err) => Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Failed to extract audio slice from {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    "Failed to extract audio slice from {}: built-in decoder cannot process this file ({builtin_err}). Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
                     filepath.display()
                 ),
-            ));
+            )),
         }
-    };
-
-    run_ffmpeg_extract_slice(
-        filepath,
-        start_seconds,
-        duration_seconds,
-        target_sample_rate,
-        &ffmpeg_path,
-    )
-    .await
+    }
 }
 
 async fn run_ffmpeg_extract_slice(
@@ -622,6 +618,71 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(slice.len(), 16000);
+
+        let _ = fs::remove_file(wav_path);
+    }
+
+    #[tokio::test]
+    async fn test_extract_and_resample_audio_switch_mode_ffmpeg_missing_fails_directly() {
+        use super::extract_and_resample_audio_with_options;
+        let wav_path =
+            std::env::temp_dir().join(format!("sona-test-switch-{}.wav", uuid::Uuid::new_v4()));
+        let samples: Vec<f32> = (0..16000).map(|i| i as f32 / 16000.0 * 0.5).collect();
+        super::save_wav_file(&samples, 16000, &wav_path).unwrap();
+
+        let missing_path = std::path::Path::new("C:/nonexistent/ffmpeg.exe");
+        let result =
+            extract_and_resample_audio_with_options(&wav_path, 16000, true, Some(missing_path))
+                .await;
+        let error = result.unwrap_err();
+        assert!(
+            error.message.contains("FFmpeg decoder is enabled but"),
+            "Expected 'FFmpeg decoder is enabled but', got: {}",
+            error.message
+        );
+
+        let _ = fs::remove_file(wav_path);
+    }
+
+    #[tokio::test]
+    async fn test_extract_and_resample_audio_switch_mode_builtin_unsupported_suggests_ffmpeg() {
+        use super::extract_and_resample_audio_with_options;
+        let invalid_path =
+            std::env::temp_dir().join(format!("sona-test-invalid-{}.xyz", uuid::Uuid::new_v4()));
+        fs::write(&invalid_path, b"not a valid audio file").unwrap();
+
+        let result =
+            extract_and_resample_audio_with_options(&invalid_path, 16000, false, None).await;
+        let error = result.unwrap_err();
+        assert!(
+            error.message.contains("Enable FFmpeg in settings"),
+            "Expected 'Enable FFmpeg in settings', got: {}",
+            error.message
+        );
+
+        let _ = fs::remove_file(invalid_path);
+    }
+
+    #[tokio::test]
+    async fn test_extract_audio_slice_switch_mode_ffmpeg_missing_fails_directly() {
+        use super::extract_audio_slice_with_options;
+        let wav_path = std::env::temp_dir().join(format!(
+            "sona-test-slice-switch-{}.wav",
+            uuid::Uuid::new_v4()
+        ));
+        let samples: Vec<f32> = (0..16000).map(|i| i as f32 / 16000.0 * 0.5).collect();
+        super::save_wav_file(&samples, 16000, &wav_path).unwrap();
+
+        let missing_path = std::path::Path::new("C:/nonexistent/ffmpeg.exe");
+        let result =
+            extract_audio_slice_with_options(&wav_path, 0.0, 1.0, 16000, true, Some(missing_path))
+                .await;
+        let error = result.unwrap_err();
+        assert!(
+            error.message.contains("FFmpeg decoder is enabled but"),
+            "Expected 'FFmpeg decoder is enabled but', got: {}",
+            error.message
+        );
 
         let _ = fs::remove_file(wav_path);
     }

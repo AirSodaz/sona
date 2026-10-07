@@ -623,19 +623,19 @@ export function SettingsMicrophoneTab({
         icon={<FileAudio size={20} />}
         description={t(
           'settings.ffmpeg_description',
-          '用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置轻量解码器，FFmpeg 为可选扩展。'
+          '用于批量导入音视频文件时进行格式解封装与音频重采样。开启时使用系统/自定义 FFmpeg 解码，关闭时使用纯 Rust 内置解码器。'
         )}
       >
         <SettingsItem
-          title={t('settings.enable_ffmpeg', '启用 FFmpeg 扩展')}
+          title={t('settings.enable_ffmpeg', '启用 FFmpeg 解码器')}
           hint={t(
             'settings.enable_ffmpeg_hint',
-            '启用后可在内置解码器不支持特定格式时自动调用 FFmpeg，支持更多音视频格式。关闭时仅使用纯 Rust 内置解码器。'
+            '开启后统一使用 FFmpeg 进行音频解码与重采样，支持更丰富的音视频格式；关闭后使用纯 Rust 内置解码器。'
           )}
         >
           <Switch
             checked={ffmpegEnabled}
-            aria-label={t('settings.enable_ffmpeg', '启用 FFmpeg 扩展')}
+            aria-label={t('settings.enable_ffmpeg', '启用 FFmpeg 解码器')}
             onChange={(enabled) => updateConfig({ ffmpegEnabled: enabled })}
           />
         </SettingsItem>
@@ -674,7 +674,7 @@ export function SettingsMicrophoneTab({
                     })
                   : t('settings.ffmpeg_hint_missing', {
                       defaultValue:
-                        'FFmpeg is not installed (optional). Built-in decoder is active and standard audio imports work normally.',
+                        'FFmpeg is not installed. Please install FFmpeg or specify a valid executable path, or disable FFmpeg to use the built-in decoder.',
                     })
             }
             bottomHintColor={
