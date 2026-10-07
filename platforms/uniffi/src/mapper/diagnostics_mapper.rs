@@ -243,6 +243,7 @@ impl From<FfiRuntimeEnvironmentStatusV1> for RuntimeEnvironmentStatus {
             ffmpeg_path: value.ffmpeg_path,
             ffmpeg_exists: value.ffmpeg_exists,
             log_dir_path: value.log_dir_path,
+            builtin_audio_decoder_ready: true,
         }
     }
 }

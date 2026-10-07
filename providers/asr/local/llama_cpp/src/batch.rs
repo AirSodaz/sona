@@ -584,7 +584,44 @@ fn decode_audio_input(
     sample_rate: u32,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
+    // 1. Prioritize built-in pure Rust decoder
+    let builtin_failure_cause = match sona_core::audio::decode_audio_file(path, sample_rate) {
+        Ok(samples) if !samples.is_empty() => return Ok(samples),
+        Ok(_) => {
+            return Err(AsrPortError::invalid_request(format!(
+                "Decoded audio input contains no samples: {}",
+                path.display()
+            )));
+        }
+        Err(sona_core::audio::AudioDecodeError::Io(io_err)) => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file {}: {io_err}", path.display()),
+            ));
+        }
+        Err(builtin_err) => {
+            log::info!(
+                "Built-in audio decoder skipped {}: {builtin_err}. Attempting FFmpeg fallback...",
+                path.display()
+            );
+            builtin_err.to_string()
+        }
+    };
+
+    // 2. Fall back to FFmpeg if available
+    let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+        Ok(p) if p.is_file() => p,
+        _ => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    path.display()
+                ),
+            ));
+        }
+    };
+
     let mut command = Command::new(&ffmpeg_path);
 
     #[cfg(target_os = "windows")]

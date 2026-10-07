@@ -644,16 +644,27 @@ export function SettingsMicrophoneTab({
           restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
           onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
           bottomHint={
-            isFfmpegValid
-              ? t('settings.ffmpeg_hint_ready', {
-                  defaultValue: 'A valid FFmpeg executable is detected and ready.',
-                })
-              : t('settings.ffmpeg_hint_missing', {
-                  defaultValue:
-                    'No valid FFmpeg executable found. Media decoding and batch imports may fail.',
-                })
+            isCustomFfmpeg
+              ? isFfmpegValid
+                ? t('settings.ffmpeg_hint_ready', {
+                    defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                  })
+                : t('settings.ffmpeg_hint_custom_missing', {
+                    defaultValue:
+                      'The specified custom FFmpeg executable was not found. Please verify the file path.',
+                  })
+              : isFfmpegValid
+                ? t('settings.ffmpeg_hint_ready', {
+                    defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                  })
+                : t('settings.ffmpeg_hint_missing', {
+                    defaultValue:
+                      'FFmpeg is not installed (optional). Built-in decoder is active and standard audio imports work normally.',
+                  })
           }
-          bottomHintColor={isFfmpegValid ? undefined : 'var(--color-danger, #ef4444)'}
+          bottomHintColor={
+            isCustomFfmpeg && !isFfmpegValid ? 'var(--color-danger, #ef4444)' : undefined
+          }
         />
       </SettingsSection>
     </SettingsTabContainer>

@@ -1245,6 +1245,64 @@ pub fn resolve_ffmpeg_path_from_exe(
     Ok(sidecar)
 }
 
+pub fn find_available_ffmpeg_from_exe(
+    custom_path: Option<&Path>,
+    exe_path: &Path,
+) -> Option<PathBuf> {
+    if let Some(path) = custom_path {
+        let trimmed = path.to_string_lossy().trim().to_string();
+        if !trimmed.is_empty() {
+            let candidate = PathBuf::from(trimmed);
+            return if candidate.is_file() {
+                Some(candidate)
+            } else {
+                None
+            };
+        }
+    }
+
+    // 1. Check sidecar next to exe
+    if let Some(sidecar) = resolve_ffmpeg_sidecar_path_from_exe(exe_path)
+        .ok()
+        .filter(|p| p.is_file())
+    {
+        return Some(sidecar);
+    }
+
+    // 2. Check resources/ directory next to exe
+    if let Some(exe_dir) = exe_path.parent() {
+        #[cfg(windows)]
+        let sidecar_name = "ffmpeg.exe";
+        #[cfg(not(windows))]
+        let sidecar_name = "ffmpeg";
+
+        let res_path = exe_dir.join("resources").join(sidecar_name);
+        if res_path.is_file() {
+            return Some(res_path);
+        }
+        let res_bin = exe_dir.join("resources").join("bin").join(sidecar_name);
+        if res_bin.is_file() {
+            return Some(res_bin);
+        }
+        let tools_path = exe_dir.join("tools").join("bin").join(sidecar_name);
+        if tools_path.is_file() {
+            return Some(tools_path);
+        }
+    }
+
+    // 3. Check system PATH
+    if let Some(path) = find_ffmpeg_in_path() {
+        return Some(path);
+    }
+
+    None
+}
+
+pub fn find_available_ffmpeg(custom_path: Option<&Path>) -> Option<PathBuf> {
+    let exe_path = std::env::current_exe().ok()?;
+    find_available_ffmpeg_from_exe(custom_path, &exe_path)
+}
+
 pub fn resolve_ffmpeg_path(custom_path: Option<&Path>) -> Result<PathBuf, AsrPortError> {
     let exe_path = std::env::current_exe().map_err(|error| {
         AsrPortError::new(
@@ -1343,6 +1401,21 @@ mod tests {
         assert!(resolved.ends_with("ffmpeg.exe"));
         #[cfg(not(windows))]
         assert!(resolved.ends_with("ffmpeg"));
+    }
+    #[test]
+    fn find_available_ffmpeg_returns_none_for_invalid_custom_path() {
+        let invalid_path = Path::new("/path/that/definitely/does/not/exist/ffmpeg");
+        let exe = Path::new("/tmp/sona-cli");
+        let found = find_available_ffmpeg_from_exe(Some(invalid_path), exe);
+        assert!(found.is_none());
+    }
+
+    #[test]
+    fn find_available_ffmpeg_returns_custom_path_when_file_exists() {
+        let current_exe = std::env::current_exe().unwrap();
+        let exe = Path::new("/tmp/sona-cli");
+        let found = find_available_ffmpeg_from_exe(Some(&current_exe), exe);
+        assert_eq!(found.as_deref(), Some(current_exe.as_path()));
     }
 
     #[test]

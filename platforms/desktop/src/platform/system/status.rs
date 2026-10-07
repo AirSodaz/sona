@@ -50,6 +50,7 @@ pub fn resolve_runtime_environment_status_for_log_dir_and_custom_ffmpeg(
         ffmpeg_path: ffmpeg_path_buf.to_string_lossy().into_owned(),
         ffmpeg_exists: exists,
         log_dir_path: log_dir.to_string_lossy().into_owned(),
+        builtin_audio_decoder_ready: true,
     })
 }
 

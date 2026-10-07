@@ -2365,6 +2365,7 @@ export type RuntimeEnvironmentStatus = {
 	ffmpegPath: string,
 	ffmpegExists: boolean,
 	logDirPath: string,
+	builtinAudioDecoderReady?: boolean,
 };
 
 export type RuntimePathKind = "file" | "directory" | "missing" | "unknown";

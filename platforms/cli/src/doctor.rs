@@ -100,7 +100,9 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
     lines.push("Sona CLI System Health Check:".to_string());
     lines.push("--------------------------------------------------".to_string());
 
-    // 1. FFmpeg
+    // 1. Built-in decoder and FFmpeg
+    lines
+        .push("  [OK]   Built-in Audio Decoder: Ready (MP3, WAV, M4A, AAC, FLAC, OGG)".to_string());
     if report.ffmpeg.found {
         let ver = report
             .ffmpeg
@@ -108,12 +110,11 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
             .as_deref()
             .unwrap_or("unknown version");
         let path = report.ffmpeg.path.as_deref().unwrap_or("-");
-        lines.push(format!("  [OK]   FFmpeg: {path} ({ver})"));
+        lines.push(format!("  [OK]   FFmpeg (Optional): {path} ({ver})"));
     } else {
-        lines.push(format!("  [WARN] FFmpeg: {}", report.ffmpeg.message));
+        lines.push("  [INFO] FFmpeg (Optional): Not installed (video extraction and extended formats disabled)".to_string());
         lines.push(format!("         Hint: {}", ffmpeg_install_suggestion()));
     }
-
     // 2. Audio input
     if report.audio_input.available {
         let def = report
@@ -193,9 +194,7 @@ async fn inspect_system(args: &DoctorArgs) -> DoctorReport {
     let hw_status = inspect_hardware().await;
     // 5. Config
     let config_status = inspect_config(args.config.as_deref());
-
-    let all_ok = ffmpeg_status.found
-        && audio_status.available
+    let all_ok = audio_status.available
         && models_status.exists
         && (!config_status.found || config_status.valid);
 
@@ -317,7 +316,7 @@ fn inspect_ffmpeg(custom_path: Option<&str>) -> DoctorFfmpegStatus {
             found: false,
             path: None,
             version: None,
-            message: "FFmpeg was not found in PATH or sidecar directory. Audio files other than 16kHz mono WAV, and video files, require FFmpeg.".to_string(),
+            message: "FFmpeg is not installed (optional). Built-in decoder handles standard audio (MP3, WAV, M4A, FLAC, OGG).".to_string(),
         },
     }
 }

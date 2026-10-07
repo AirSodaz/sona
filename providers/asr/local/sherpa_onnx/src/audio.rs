@@ -2,8 +2,9 @@ use hound::{SampleFormat, WavSpec, WavWriter};
 use sherpa_onnx::{SileroVadModelConfig, VadModelConfig, VoiceActivityDetector};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 pub use sona_core::ports::asr::{
-    pcm_i16_to_f32, pcm_s16le_bytes_to_f32, resolve_ffmpeg_path, resolve_ffmpeg_path_from_exe,
-    resolve_ffmpeg_sidecar_path, resolve_ffmpeg_sidecar_path_from_exe,
+    find_available_ffmpeg, find_available_ffmpeg_from_exe, pcm_i16_to_f32, pcm_s16le_bytes_to_f32,
+    resolve_ffmpeg_path, resolve_ffmpeg_path_from_exe, resolve_ffmpeg_sidecar_path,
+    resolve_ffmpeg_sidecar_path_from_exe,
 };
 use std::path::{Path, PathBuf};
 
@@ -142,7 +143,55 @@ pub async fn extract_and_resample_audio_with_ffmpeg(
     target_sample_rate: u32,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
+    // 1. Prioritize built-in pure Rust decoder (Symphonia + Rubato) on blocking task
+    let path_buf = filepath.to_path_buf();
+    let builtin_result = tokio::task::spawn_blocking(move || {
+        sona_core::audio::decode_audio_file(&path_buf, target_sample_rate)
+    })
+    .await
+    .map_err(|join_err| {
+        AsrPortError::runtime(format!("Audio decode task join error: {join_err}"))
+    })?;
+
+    let builtin_failure_cause = match builtin_result {
+        Ok(samples) => return Ok(samples),
+        Err(sona_core::audio::AudioDecodeError::Io(io_err)) => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file {}: {io_err}", filepath.display()),
+            ));
+        }
+        Err(builtin_err) => {
+            log::info!(
+                "Built-in audio decoder skipped {}: {builtin_err}. Attempting FFmpeg fallback...",
+                filepath.display()
+            );
+            builtin_err.to_string()
+        }
+    };
+
+    // 2. Fall back to FFmpeg if available
+    let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+        Ok(path) if path.is_file() => path,
+        _ => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Failed to decode audio file {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    filepath.display()
+                ),
+            ));
+        }
+    };
+
+    run_ffmpeg_extract_and_resample(filepath, target_sample_rate, &ffmpeg_path).await
+}
+
+async fn run_ffmpeg_extract_and_resample(
+    filepath: &Path,
+    target_sample_rate: u32,
+    ffmpeg_path: &Path,
+) -> Result<Vec<f32>, AsrPortError> {
     let mut command = tokio::process::Command::new(ffmpeg_path);
 
     #[cfg(target_os = "windows")]
@@ -209,7 +258,69 @@ pub async fn extract_audio_slice_with_ffmpeg(
     target_sample_rate: u32,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
+    // 1. Prioritize built-in in-memory slice on blocking task
+    let path_buf = filepath.to_path_buf();
+    let builtin_result = tokio::task::spawn_blocking(move || {
+        sona_core::audio::decode_audio_slice(
+            &path_buf,
+            start_seconds,
+            duration_seconds,
+            target_sample_rate,
+        )
+    })
+    .await
+    .map_err(|join_err| {
+        AsrPortError::runtime(format!("Audio slice task join error: {join_err}"))
+    })?;
+
+    let builtin_failure_cause = match builtin_result {
+        Ok(samples) => return Ok(samples),
+        Err(sona_core::audio::AudioDecodeError::Io(io_err)) => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file {}: {io_err}", filepath.display()),
+            ));
+        }
+        Err(builtin_err) => {
+            log::info!(
+                "Built-in slice decoder skipped {}: {builtin_err}. Attempting FFmpeg fallback...",
+                filepath.display()
+            );
+            builtin_err.to_string()
+        }
+    };
+
+    // 2. Fall back to FFmpeg if available
+    let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+        Ok(path) if path.is_file() => path,
+        _ => {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Failed to extract audio slice from {}: built-in decoder cannot process this file (built-in decoder error: {builtin_failure_cause}) and FFmpeg is not installed. Please install FFmpeg or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    filepath.display()
+                ),
+            ));
+        }
+    };
+
+    run_ffmpeg_extract_slice(
+        filepath,
+        start_seconds,
+        duration_seconds,
+        target_sample_rate,
+        &ffmpeg_path,
+    )
+    .await
+}
+
+async fn run_ffmpeg_extract_slice(
+    filepath: &Path,
+    start_seconds: f64,
+    duration_seconds: f64,
+    target_sample_rate: u32,
+    ffmpeg_path: &Path,
+) -> Result<Vec<f32>, AsrPortError> {
     let mut command = tokio::process::Command::new(ffmpeg_path);
 
     #[cfg(target_os = "windows")]
@@ -414,5 +525,36 @@ mod tests {
         assert_eq!(config.silero_vad.max_speech_duration, 25.0);
 
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_extract_and_resample_audio_uses_builtin_decoder() {
+        use super::{extract_and_resample_audio, save_wav_file};
+        let wav_path = std::env::temp_dir().join(format!("sona-test-{}.wav", uuid::Uuid::new_v4()));
+        let samples: Vec<f32> = (0..16000).map(|i| (i as f32 / 16000.0 * 0.5)).collect();
+        save_wav_file(&samples, 16000, &wav_path).unwrap();
+
+        let extracted = extract_and_resample_audio(&wav_path, 16000).await.unwrap();
+        assert_eq!(extracted.len(), 16000);
+
+        let _ = fs::remove_file(wav_path);
+    }
+
+    #[tokio::test]
+    async fn test_extract_audio_slice_uses_builtin_decoder() {
+        use super::{extract_audio_slice, save_wav_file};
+        let wav_path =
+            std::env::temp_dir().join(format!("sona-test-slice-{}.wav", uuid::Uuid::new_v4()));
+        // 2 seconds of 16kHz
+        let samples: Vec<f32> = (0..32000).map(|i| (i as f32 / 16000.0 * 0.5)).collect();
+        save_wav_file(&samples, 16000, &wav_path).unwrap();
+
+        // Extract 0.5s to 1.5s (1.0s duration = 16000 samples)
+        let slice = extract_audio_slice(&wav_path, 0.5, 1.0, 16000)
+            .await
+            .unwrap();
+        assert_eq!(slice.len(), 16000);
+
+        let _ = fs::remove_file(wav_path);
     }
 }

@@ -1,3 +1,4 @@
+pub mod audio;
 pub mod automation;
 pub mod backup;
 pub mod config;

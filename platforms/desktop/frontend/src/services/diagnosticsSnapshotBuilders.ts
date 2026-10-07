@@ -604,23 +604,27 @@ function buildRuntimeChecks(
   const ffmpegCheck = snapshot.runtimeEnvironment.ffmpegExists
     ? check(
         'ffmpeg',
-        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Sidecar'),
+        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
         'ready',
-        tr(t, 'settings.diagnostics.ffmpeg_ready', 'The bundled FFmpeg sidecar is present.'),
+        tr(
+          t,
+          'settings.diagnostics.ffmpeg_ready',
+          'FFmpeg is available for extended media formats.'
+        ),
         undefined,
         snapshot.runtimeEnvironment.ffmpegPath
       )
     : check(
         'ffmpeg',
-        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Sidecar'),
-        'failed',
+        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+        'ready',
         tr(
           t,
-          'settings.diagnostics.ffmpeg_missing',
-          'The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.'
+          'settings.diagnostics.ffmpeg_optional',
+          'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
         ),
-        openLogFolderAction(t),
-        snapshot.runtimeEnvironment.ffmpegPath
+        undefined,
+        snapshot.runtimeEnvironment.ffmpegPath || undefined
       );
   const logDirCheck =
     snapshot.runtimeEnvironment.logDirPath.trim().length === 0
@@ -847,7 +851,7 @@ function liveRecordOverviewAction(t: Translate, checks: BuiltChecks): Diagnostic
 
 function batchImportOverviewAction(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  _snapshot: DiagnosticsCoreFactsSnapshot,
   checks: BuiltChecks
 ): DiagnosticAction | undefined {
   if (
@@ -855,9 +859,6 @@ function batchImportOverviewAction(
     checks.model.punctuationCheck.status === 'warning'
   ) {
     return openModelSettingsAction(t);
-  }
-  if (!snapshot.runtimeEnvironment.ffmpegExists) {
-    return openLogFolderAction(t);
   }
   return undefined;
 }

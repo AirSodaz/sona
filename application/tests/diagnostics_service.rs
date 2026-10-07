@@ -131,6 +131,7 @@ fn base_input() -> DiagnosticsCoreInput {
             ffmpeg_path: "C:\\app\\ffmpeg.exe".to_string(),
             ffmpeg_exists: true,
             log_dir_path: "C:\\app\\logs".to_string(),
+            builtin_audio_decoder_ready: true,
         },
         asr_runtime_metrics: AsrRuntimeMetricsSnapshot::default(),
         live_transcription: Default::default(),

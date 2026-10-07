@@ -109,6 +109,7 @@ specta = { version = "=2.0.0-rc.25" }
 specta-serde = "0.0.12"
 specta-typescript = "0.0.12"
 strum = { version = "0.28", features = ["derive"] }
+symphonia = { version = "0.5.4", default-features = false, features = ["mp3", "aac", "isomp4", "flac", "wav", "vorbis", "ogg", "pcm", "mkv"] }
 sysinfo = { version = "0.38.4", default-features = false, features = ["system"] }
 tar = "0.4"
 tempfile = "3"

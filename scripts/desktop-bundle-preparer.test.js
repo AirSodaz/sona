@@ -133,6 +133,45 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   });
 });
 
+test('desktop bundle preparer excludes FFmpeg when includeFfmpeg is false', async () => {
+  const { prepareDesktopBundle } = await loadDesktopBundlePreparer();
+  const root = makeTempRepo();
+  const target = 'x86_64-pc-windows-msvc';
+  const releaseDir = path.join(root, 'target', target, 'release');
+  const runtimeLibDir = path.join(root, 'native-libs');
+  const configPath = path.join(root, 'base-tauri.conf.json');
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.mkdirSync(runtimeLibDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  writeLlamaCppRuntimeLibraries(releaseDir, target);
+  fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
+  fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');
+  fs.writeFileSync(
+    configPath,
+    JSON.stringify({
+      bundle: {},
+    }),
+  );
+
+  const prepared = await prepareDesktopBundle({
+    repoRoot: root,
+    target,
+    configPath,
+    ffmpegLockPath: writeTestFfmpegLock(root, target),
+    sherpaLibDir: runtimeLibDir,
+    includeFfmpeg: false,
+    runCommand() {},
+  });
+
+  assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-cli-${target}.exe`)), true);
+  assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), false);
+
+  const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
+  assert.deepEqual(generatedConfig.bundle.externalBin, [
+    path.join(prepared.sidecarsDir, 'sona-cli'),
+  ]);
+});
+
 test('desktop bundle preparer maps macOS and Linux runtime libraries through native bundle files', async () => {
   const macos = await prepareBundleFixture('aarch64-apple-darwin');
   const macosConfig = JSON.parse(fs.readFileSync(macos.configPath, 'utf8'));
