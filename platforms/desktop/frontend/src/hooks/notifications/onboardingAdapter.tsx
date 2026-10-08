@@ -97,15 +97,16 @@ export function adaptModelDownloadEntry(
       variant: 'primary',
       run: callbacks.reopenOnboarding,
     });
-  } else if (isSuccess) {
-    actions.push({
-      id: 'dismiss',
-      label: t('first_run.download_notification.dismiss', { defaultValue: 'Dismiss' }),
-      variant: 'soft',
-      run: callbacks.setModelDownloadIdle,
-    });
   }
 
+  const closeAction: NotificationAction | undefined = !isActive
+    ? {
+        id: 'close',
+        label: t('common.close', { defaultValue: 'Close' }),
+        variant: 'soft',
+        run: callbacks.setModelDownloadIdle,
+      }
+    : undefined;
   return {
     id: 'onboarding-download',
     source: 'download',
@@ -117,6 +118,7 @@ export function adaptModelDownloadEntry(
     timestamp: Number.MAX_SAFE_INTEGER,
     progress: isActive ? download.progress : undefined,
     actions,
+    closeAction,
     itemClassName: `notification-center-item-download${isError ? ' notification-center-item-error' : ''}`,
   };
 }

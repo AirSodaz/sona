@@ -159,8 +159,8 @@
     "clear_all": "Clear all",
     "clear_all_hint": "Clear all completed records ({{count}})",
     "clear_options": "Clear options",
-    "dismiss": "Dismiss",
-    "discard": "Discard",
+    "dismiss": "Close",
+    "discard": "Close",
     "retry": "Retry",
     "resume": "Resume",
     "stopping": "Stopping",
@@ -2482,7 +2482,7 @@
       "failed_title": "Model download failed",
       "failed_body": "Could not finish downloading the recommended models.",
       "retry": "Retry",
-      "dismiss": "Dismiss"
+      "dismiss": "Close"
     }
   },
   "tray": {

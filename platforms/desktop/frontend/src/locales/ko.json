@@ -160,7 +160,7 @@
     "clear_all_hint": "완료된 모든 기록 지우기 ({{count}})",
     "clear_options": "지우기 옵션",
     "dismiss": "닫기",
-    "discard": "버리기",
+    "discard": "닫기",
     "retry": "다시 시도",
     "resume": "재개",
     "stopping": "중지 중",

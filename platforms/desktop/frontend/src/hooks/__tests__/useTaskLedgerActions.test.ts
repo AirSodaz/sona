@@ -34,6 +34,8 @@ function makeDeps(
     removeTask: vi.fn().mockResolvedValue(undefined),
     resumeRecoveryItem: vi.fn().mockResolvedValue(undefined),
     discardRecoveryItem: vi.fn().mockResolvedValue(undefined),
+    removeBatchQueueItem: vi.fn(),
+    dismissAutomationNotification: vi.fn(),
     retryAutomationTask: vi.fn().mockResolvedValue(undefined),
     addBatchFiles: vi.fn(),
     retryLlmTask: vi.fn().mockResolvedValue(undefined),
@@ -82,9 +84,10 @@ describe('createTaskCenterActionRegistry', () => {
 
     const actions = registry.getLedgerTaskActions(makeTask());
 
-    expect(actions.map((action) => action.id)).toEqual(['retry', 'dismiss']);
+    expect(actions.row.map((action) => action.id)).toEqual(['retry']);
+    expect(actions.close?.id).toBe('close');
 
-    await getAction(actions, 'retry').run();
+    await getAction(actions.row, 'retry').run();
 
     expect(deps.addBatchFiles).toHaveBeenCalledWith(['C:\\audio\\meeting.wav'], {
       tagIds: ['project-1'],
@@ -92,13 +95,99 @@ describe('createTaskCenterActionRegistry', () => {
     expect(deps.removeTask).toHaveBeenCalledWith('task-1');
   });
 
+  it('closes failed batch tasks by removing batch queue item and ledger record', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getLedgerTaskActions(makeTask({ id: 'batch-queue-1' }));
+    expect(actions.close?.id).toBe('close');
+    await actions.close?.run();
+
+    expect(deps.removeBatchQueueItem).toHaveBeenCalledWith('queue-1');
+    expect(deps.removeTask).toHaveBeenCalledWith('batch-queue-1');
+  });
+
+  it('closes recoverable recovery tasks by discarding recovery item', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getLedgerTaskActions(
+      makeTask({
+        id: 'recovery-item-1',
+        kind: 'recovery',
+        status: 'recoverable',
+        recoverable: true,
+      })
+    );
+    expect(actions.row.map((action) => action.id)).toEqual(['resume', 'openTarget']);
+    expect(actions.close?.id).toBe('close');
+    await actions.close?.run();
+
+    expect(deps.discardRecoveryItem).toHaveBeenCalledWith('item-1');
+  });
+
+  it('closes completed tasks with empty row actions', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getLedgerTaskActions(
+      makeTask({
+        id: 'task-done',
+        status: 'succeeded',
+      })
+    );
+    expect(actions.row).toEqual([]);
+    expect(actions.close?.id).toBe('close');
+    await actions.close?.run();
+
+    expect(deps.removeTask).toHaveBeenCalledWith('task-done');
+  });
+  it('closes failed automation batch tasks by removing queue item, dismissing notification, and removing task', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getLedgerTaskActions(
+      makeTask({
+        id: 'batch-auto-1',
+        kind: 'automation',
+        status: 'failed',
+        automationRuleId: 'rule-42',
+      })
+    );
+    expect(actions.close?.id).toBe('close');
+    await actions.close?.run();
+
+    expect(deps.removeBatchQueueItem).toHaveBeenCalledWith('auto-1');
+    expect(deps.dismissAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-42');
+    expect(deps.removeTask).toHaveBeenCalledWith('batch-auto-1');
+  });
+
+  it('closes rule-level automation tasks without removing nonexistent batch queue items', async () => {
+    const deps = makeDeps();
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const actions = registry.getLedgerTaskActions(
+      makeTask({
+        id: 'automation-rule-failed',
+        kind: 'automation',
+        status: 'failed',
+        automationRuleId: 'rule-99',
+      })
+    );
+    expect(actions.close?.id).toBe('close');
+    await actions.close?.run();
+
+    expect(deps.removeBatchQueueItem).not.toHaveBeenCalled();
+    expect(deps.dismissAutomationNotification).toHaveBeenCalledWith('automation-failure-rule-99');
+    expect(deps.removeTask).toHaveBeenCalledWith('automation-rule-failed');
+  });
   it('maps update states to install, busy, relaunch, and dismiss actions', async () => {
     const deps = makeDeps();
     const registry = createTaskCenterActionRegistry(deps);
 
     const available = registry.getUpdateTaskActions({ status: 'available', isBusy: false });
     expect(available.row.map((action) => action.id)).toEqual(['installUpdate']);
-    expect(available.close?.id).toBe('dismiss');
+    expect(available.close?.id).toBe('close');
     await getAction(available.row, 'installUpdate').run();
     available.close?.run();
     expect(deps.installUpdate).toHaveBeenCalled();
@@ -108,7 +197,7 @@ describe('createTaskCenterActionRegistry', () => {
     expect(busy.row).toMatchObject([
       { id: 'installUpdate', label: 'Downloading update...', disabled: true },
     ]);
-    expect(busy.close).toMatchObject({ id: 'dismiss', disabled: true });
+    expect(busy.close).toMatchObject({ id: 'close', disabled: true });
 
     const downloaded = registry.getUpdateTaskActions({ status: 'downloaded', isBusy: false });
     expect(downloaded.row.map((action) => action.id)).toEqual(['relaunchUpdate']);
@@ -130,9 +219,10 @@ describe('createTaskCenterActionRegistry', () => {
 
     const actions = registry.getLedgerTaskActions(task);
 
-    expect(actions.map((action) => action.id)).toEqual(['retry', 'dismiss']);
+    expect(actions.row.map((action) => action.id)).toEqual(['retry']);
+    expect(actions.close?.id).toBe('close');
 
-    await getAction(actions, 'retry').run();
+    await getAction(actions.row, 'retry').run();
 
     expect(deps.retryAutomationTask).toHaveBeenCalledWith(task);
     expect(deps.removeTask).toHaveBeenCalledWith('automation-failed-file');
@@ -156,11 +246,10 @@ describe('createTaskCenterActionRegistry', () => {
             automationRuleId: 'rule-1',
             filePath: 'C:\\watch\\failed.wav',
           })
-        ),
+        ).row,
         'retry'
       ).run()
     ).rejects.toThrow('Source file is no longer available for retry.');
-
     expect(deps.removeTask).not.toHaveBeenCalled();
   });
 
@@ -179,9 +268,10 @@ describe('createTaskCenterActionRegistry', () => {
       })
     );
 
-    expect(actions.map((action) => action.id)).toEqual(['openTarget', 'dismiss']);
+    expect(actions.row.map((action) => action.id)).toEqual(['openTarget']);
+    expect(actions.close?.id).toBe('close');
 
-    await getAction(actions, 'openTarget').run();
+    await getAction(actions.row, 'openTarget').run();
 
     expect(deps.closePanel).toHaveBeenCalled();
     expect(deps.onOpenAutomationSettings).toHaveBeenCalled();
@@ -200,9 +290,10 @@ describe('createTaskCenterActionRegistry', () => {
 
     const actions = registry.getLedgerTaskActions(task);
 
-    expect(actions.map((action) => action.id)).toEqual(['retry', 'dismiss']);
+    expect(actions.row.map((action) => action.id)).toEqual(['retry']);
+    expect(actions.close?.id).toBe('close');
 
-    await getAction(actions, 'retry').run();
+    await getAction(actions.row, 'retry').run();
 
     expect(deps.retryLlmTask).toHaveBeenCalledWith(task);
     expect(deps.removeTask).toHaveBeenCalledWith('llm-failed');
@@ -225,7 +316,7 @@ describe('createTaskCenterActionRegistry', () => {
             status: 'failed',
             filePath: undefined,
           })
-        ),
+        ).row,
         'retry'
       ).run()
     ).rejects.toThrow('Transcript is no longer available for retry.');
@@ -259,9 +350,10 @@ describe('createTaskCenterActionRegistry', () => {
     });
 
     const actions = registry.getLedgerTaskActions(task);
-    expect(actions.map((a) => a.id)).toEqual(['cancel']);
+    expect(actions.row.map((a) => a.id)).toEqual(['cancel']);
+    expect(actions.close).toBeUndefined();
 
-    await getAction(actions, 'cancel').run();
+    await getAction(actions.row, 'cancel').run();
 
     expect(cancelBatchTask).toHaveBeenCalledWith('inst-abc');
     expect(deps.requestTaskCancel).toHaveBeenCalledWith('batch-item-123');
@@ -283,7 +375,7 @@ describe('createTaskCenterActionRegistry', () => {
     });
 
     const actions = registry.getLedgerTaskActions(task);
-    await getAction(actions, 'cancel').run();
+    await getAction(actions.row, 'cancel').run();
 
     expect(cancelBatchTask).not.toHaveBeenCalled();
     expect(deps.requestTaskCancel).toHaveBeenCalledWith('batch-pending-item');
@@ -304,7 +396,7 @@ describe('createTaskCenterActionRegistry', () => {
     });
 
     const actions = registry.getLedgerTaskActions(task);
-    await getAction(actions, 'cancel').run();
+    await getAction(actions.row, 'cancel').run();
 
     expect(cancelBatchTask).not.toHaveBeenCalled();
     expect(deps.requestTaskCancel).toHaveBeenCalledWith('llm-running');
@@ -316,7 +408,7 @@ describe('createTaskCenterActionRegistry', () => {
 
     const actions = registry.getOnboardingReminderActions();
     expect(actions.row.map((action) => action.id)).toEqual(['onboard']);
-    expect(actions.close?.id).toBe('dismiss');
+    expect(actions.close?.id).toBe('close');
 
     getAction(actions.row, 'onboard').run();
     expect(deps.closePanel).toHaveBeenCalled();

@@ -233,7 +233,8 @@ export function adaptTaskLedgerEntries(
         body: getTaskBody(task, t),
         timestamp: task.updatedAt,
         progress: isTaskLedgerActiveStatus(task.status) ? task.progress : undefined,
-        actions: ledgerActions.map(toNotificationAction),
+        actions: ledgerActions.row.map(toNotificationAction),
+        closeAction: ledgerActions.close ? toNotificationAction(ledgerActions.close) : undefined,
         detail: buildDetail(task, t),
         itemClassName: 'notification-center-item-task',
       };

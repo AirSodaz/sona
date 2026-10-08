@@ -4,6 +4,7 @@ import { retryLlmTaskFromLedger } from '../services/llmTaskRetryService';
 import { createBatchTaskLedgerId } from '../services/taskLedgerBuilders';
 import { cancelBatchTask } from '../services/tauri/recognizer';
 import type { UpdateStatus } from '../stores/appUpdaterStore';
+import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
@@ -19,6 +20,7 @@ export type TaskCenterActionId =
   | 'openTarget'
   | 'dismiss'
   | 'clear'
+  | 'close'
   | 'installUpdate'
   | 'relaunchUpdate'
   | 'onboard';
@@ -60,6 +62,8 @@ export interface TaskCenterActionDependencies {
   removeTask: (id: string) => Promise<void>;
   resumeRecoveryItem: (id: string) => Promise<void>;
   discardRecoveryItem: (id: string) => Promise<void>;
+  removeBatchQueueItem?: (id: string) => void;
+  dismissAutomationNotification?: (id: string) => void;
   retryAutomationTask: (task: TaskLedgerRecord) => Promise<void>;
   addBatchFiles: (filePaths: string[], options?: BatchAddOptions) => void;
   retryLlmTask: (task: TaskLedgerRecord) => Promise<void>;
@@ -76,7 +80,7 @@ export interface TaskCenterActionDependencies {
 }
 
 export interface TaskCenterActionRegistry {
-  getLedgerTaskActions: (task: TaskLedgerRecord) => TaskCenterAction[];
+  getLedgerTaskActions: (task: TaskLedgerRecord) => TaskCenterResolvedActions;
   getUpdateTaskActions: (entry: TaskCenterUpdateActionInput) => TaskCenterResolvedActions;
   getOnboardingReminderActions: () => TaskCenterResolvedActions;
 }
@@ -99,6 +103,46 @@ export interface UseTaskLedgerActionsInput {
 
 function getRecoveryIdFromTask(taskId: string): string {
   return taskId.startsWith('recovery-') ? taskId.slice('recovery-'.length) : taskId;
+}
+async function closeLedgerTask(
+  deps: TaskCenterActionDependencies,
+  task: TaskLedgerRecord
+): Promise<void> {
+  if (task.kind === 'recovery' || task.id.startsWith('recovery-')) {
+    const recoveryId = getRecoveryIdFromTask(task.id);
+    await deps.discardRecoveryItem(recoveryId);
+    return;
+  }
+  if (task.kind === 'automation' || task.id.startsWith('automation-')) {
+    if (task.id.startsWith('batch-')) {
+      deps.removeBatchQueueItem?.(task.id.slice(6));
+    }
+    if (task.automationRuleId) {
+      deps.dismissAutomationNotification?.(`automation-failure-${task.automationRuleId}`);
+    }
+    await deps.removeTask(task.id);
+    return;
+  }
+
+  if (task.kind === 'batchImport' || task.id.startsWith('batch-')) {
+    const queueId = task.id.startsWith('batch-') ? task.id.slice(6) : task.id;
+    deps.removeBatchQueueItem?.(queueId);
+    await deps.removeTask(task.id);
+    return;
+  }
+  await deps.removeTask(task.id);
+}
+
+function createCloseTaskAction(
+  deps: TaskCenterActionDependencies,
+  task: TaskLedgerRecord
+): TaskCenterAction {
+  return {
+    id: 'close',
+    label: deps.t('common.close', { defaultValue: 'Close' }),
+    variant: 'secondarySoft',
+    run: () => closeLedgerTask(deps, task),
+  };
 }
 
 function createOpenRecoveryAction(deps: TaskCenterActionDependencies): TaskCenterAction {
@@ -125,30 +169,6 @@ function createOpenAutomationAction(deps: TaskCenterActionDependencies): TaskCen
   };
 }
 
-function createDismissTaskAction(
-  deps: TaskCenterActionDependencies,
-  task: TaskLedgerRecord
-): TaskCenterAction {
-  return {
-    id: 'dismiss',
-    label: deps.t('task_center.dismiss', { defaultValue: 'Dismiss' }),
-    variant: 'secondarySoft',
-    run: () => deps.removeTask(task.id),
-  };
-}
-
-function createClearTaskAction(
-  deps: TaskCenterActionDependencies,
-  task: TaskLedgerRecord
-): TaskCenterAction {
-  return {
-    id: 'clear',
-    label: deps.t('task_center.clear', { defaultValue: 'Clear' }),
-    variant: 'secondarySoft',
-    run: () => deps.removeTask(task.id),
-  };
-}
-
 function isLlmTask(task: TaskLedgerRecord): boolean {
   return task.kind === 'llmPolish' || task.kind === 'llmTranslate' || task.kind === 'llmSummary';
 }
@@ -160,48 +180,48 @@ export function createTaskCenterActionRegistry(
     getLedgerTaskActions: (task) => {
       if (task.kind === 'recovery' && task.status === 'recoverable') {
         const recoveryId = getRecoveryIdFromTask(task.id);
-        return [
-          {
-            id: 'resume',
-            label: deps.t('common.resume', { defaultValue: 'Resume' }),
-            variant: 'primary',
-            disabled: !task.recoverable,
-            run: () => deps.resumeRecoveryItem(recoveryId),
-          },
-          {
-            id: 'discard',
-            label: deps.t('task_center.discard', { defaultValue: 'Discard' }),
-            variant: 'secondarySoft',
-            run: () => deps.discardRecoveryItem(recoveryId),
-          },
-          createOpenRecoveryAction(deps),
-        ];
+        return {
+          row: [
+            {
+              id: 'resume',
+              label: deps.t('common.resume', { defaultValue: 'Resume' }),
+              variant: 'primary',
+              disabled: !task.recoverable,
+              run: () => deps.resumeRecoveryItem(recoveryId),
+            },
+            createOpenRecoveryAction(deps),
+          ],
+          close: createCloseTaskAction(deps, task),
+        };
       }
 
       if (isTaskLedgerActiveStatus(task.status)) {
-        return [
-          {
-            id: 'cancel',
-            label:
-              task.status === 'cancelRequested'
-                ? deps.t('task_center.stopping', { defaultValue: 'Stopping' })
-                : deps.t('common.cancel'),
-            variant: 'secondarySoft',
-            disabled: !task.cancelable || task.status === 'cancelRequested',
-            run: async () => {
-              if (task.kind === 'batchImport' || task.kind === 'automation') {
-                const items = deps.getBatchQueueItems?.() ?? [];
-                const queueItem = items.find(
-                  (item) => createBatchTaskLedgerId(item.id) === task.id || item.id === task.id
-                );
-                if (queueItem?.activeInstanceId) {
-                  void (deps.cancelBatchTask ?? cancelBatchTask)(queueItem.activeInstanceId);
+        return {
+          row: [
+            {
+              id: 'cancel',
+              label:
+                task.status === 'cancelRequested'
+                  ? deps.t('task_center.stopping', { defaultValue: 'Stopping' })
+                  : deps.t('common.cancel'),
+              variant: 'secondarySoft',
+              disabled: !task.cancelable || task.status === 'cancelRequested',
+              run: async () => {
+                if (task.kind === 'batchImport' || task.kind === 'automation') {
+                  const items = deps.getBatchQueueItems?.() ?? [];
+                  const queueItem = items.find(
+                    (item) => createBatchTaskLedgerId(item.id) === task.id || item.id === task.id
+                  );
+                  if (queueItem?.activeInstanceId) {
+                    void (deps.cancelBatchTask ?? cancelBatchTask)(queueItem.activeInstanceId);
+                  }
                 }
-              }
-              await deps.requestTaskCancel(task.id);
+                await deps.requestTaskCancel(task.id);
+              },
             },
-          },
-        ];
+          ],
+          close: undefined,
+        };
       }
 
       if (isTaskLedgerActionableStatus(task.status)) {
@@ -248,11 +268,16 @@ export function createTaskCenterActionRegistry(
           actions.push(createOpenAutomationAction(deps));
         }
 
-        actions.push(createDismissTaskAction(deps, task));
-        return actions;
+        return {
+          row: actions,
+          close: createCloseTaskAction(deps, task),
+        };
       }
 
-      return [createClearTaskAction(deps, task)];
+      return {
+        row: [],
+        close: createCloseTaskAction(deps, task),
+      };
     },
 
     getUpdateTaskActions: ({ status, isBusy }) => {
@@ -285,7 +310,7 @@ export function createTaskCenterActionRegistry(
       return {
         row: [rowAction],
         close: {
-          id: 'dismiss',
+          id: 'close',
           label: deps.t('common.close'),
           variant: 'secondarySoft',
           disabled: isBusy,
@@ -308,8 +333,8 @@ export function createTaskCenterActionRegistry(
           },
         ],
         close: {
-          id: 'dismiss',
-          label: deps.t('first_run.banner.dismiss_aria_label'),
+          id: 'close',
+          label: deps.t('common.close'),
           variant: 'secondarySoft',
           run: deps.onboard.dismiss,
         },
@@ -332,7 +357,8 @@ export function useTaskLedgerActions({
   const discardRecoveryItem = useRecoveryStore((state) => state.discardItem);
   const addBatchFiles = useBatchQueueStore((state) => state.addFiles);
   const queueItems = useBatchQueueStore((state) => state.queueItems);
-
+  const removeBatchQueueItem = useBatchQueueStore((state) => state.removeItem);
+  const dismissAutomationNotification = useAutomationStore((state) => state.dismissNotification);
   return useMemo(
     () =>
       createTaskCenterActionRegistry({
@@ -341,6 +367,8 @@ export function useTaskLedgerActions({
         removeTask,
         resumeRecoveryItem,
         discardRecoveryItem,
+        removeBatchQueueItem,
+        dismissAutomationNotification,
         retryAutomationTask: retryAutomationTaskFromLedger,
         addBatchFiles,
         retryLlmTask: retryLlmTaskFromLedger,
@@ -361,9 +389,11 @@ export function useTaskLedgerActions({
       addBatchFiles,
       closePanel,
       discardRecoveryItem,
+      dismissAutomationNotification,
       onOpenAutomationSettings,
       onOpenRecoveryCenter,
       queueItems,
+      removeBatchQueueItem,
       removeTask,
       requestTaskCancel,
       resumeRecoveryItem,

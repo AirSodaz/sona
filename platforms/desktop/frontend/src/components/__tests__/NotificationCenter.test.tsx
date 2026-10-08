@@ -30,6 +30,8 @@ const automationState = {
 
 const batchQueueState = {
   addFiles: vi.fn(),
+  removeItem: vi.fn(),
+  clearCompleted: vi.fn(),
 };
 
 const onboardingState = {
@@ -98,23 +100,39 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('../../stores/taskLedgerStore', () => ({
-  useTaskLedgerStore: (selector: any) => selector(taskLedgerState),
+  useTaskLedgerStore: (selector: (state: typeof taskLedgerState) => unknown) =>
+    selector(taskLedgerState),
 }));
 
 vi.mock('../../stores/recoveryStore', () => ({
-  useRecoveryStore: (selector: any) => selector(recoveryState),
+  useRecoveryStore: Object.assign(
+    (selector: (state: typeof recoveryState) => unknown) => selector(recoveryState),
+    {
+      getState: () => recoveryState,
+    }
+  ),
 }));
 
 vi.mock('../../stores/automationStore', () => ({
-  useAutomationStore: (selector: any) => selector(automationState),
+  useAutomationStore: Object.assign(
+    (selector: (state: typeof automationState) => unknown) => selector(automationState),
+    {
+      getState: () => automationState,
+    }
+  ),
 }));
 
 vi.mock('../../stores/batchQueueStore', () => ({
-  useBatchQueueStore: (selector: any) => selector(batchQueueState),
+  useBatchQueueStore: Object.assign(
+    (selector: (state: typeof batchQueueState) => unknown) => selector(batchQueueState),
+    {
+      getState: () => batchQueueState,
+    }
+  ),
 }));
-
 vi.mock('../../stores/onboardingStore', () => ({
-  useOnboardingStore: (selector: any) => selector(onboardingState),
+  useOnboardingStore: (selector: (state: typeof onboardingState) => unknown) =>
+    selector(onboardingState),
 }));
 
 vi.mock('../../stores/configStore', () => ({
@@ -338,7 +356,7 @@ describe('NotificationCenter task center', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
     fireEvent.click(screen.getByRole('button', { name: 'Resume' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
 
     expect(recoveryState.resumeItem).toHaveBeenCalledWith('recovery-1');
     expect(recoveryState.discardItem).toHaveBeenCalledWith('recovery-1');
@@ -650,7 +668,7 @@ describe('NotificationCenter task center', () => {
     screen.getByText('Complete Setup');
     screen.getByText('Recommended local models are missing.');
     screen.getByRole('button', { name: 'Continue Setup' });
-    screen.getByRole('button', { name: 'Dismiss' });
+    screen.getByRole('button', { name: 'Close' });
   });
 
   it('renders the clear menu when clearable tasks exist and allows clearing succeeded or all', () => {
@@ -766,7 +784,7 @@ describe('NotificationCenter task center', () => {
 
     screen.getByText('Models ready');
     screen.getByText('Local transcription models are installed and ready to use.');
-    screen.getByRole('button', { name: 'Dismiss' });
+    screen.getByRole('button', { name: 'Close' });
   });
 
   it('renders a model download failed notification with retry button', () => {
@@ -785,5 +803,31 @@ describe('NotificationCenter task center', () => {
     const retryBtn = screen.getByRole('button', { name: 'Retry' });
     fireEvent.click(retryBtn);
     expect(onboardingState.reopen).toHaveBeenCalled();
+  });
+  it('closes a failed batch task via the card close button and removes queue item', () => {
+    taskLedgerState.tasks = [
+      makeTask({
+        id: 'batch-item-42',
+        kind: 'batchImport',
+        status: 'failed',
+        title: 'failed-meeting.wav',
+        filePath: 'C:\\audio\\failed-meeting.wav',
+        retryable: true,
+      }),
+    ];
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    screen.getByText('failed-meeting.wav');
+    screen.getByRole('button', { name: 'Retry' });
+    const closeBtn = screen.getByRole('button', { name: 'Close' });
+    fireEvent.click(closeBtn);
+
+    expect(batchQueueState.removeItem).toHaveBeenCalledWith('item-42');
+    expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-item-42');
   });
 });

@@ -51,6 +51,7 @@ function renderCloseButton(action?: NotificationAction): React.ReactNode {
         }
       }}
       aria-label={action.label}
+      title={action.label}
       disabled={action.disabled}
     >
       <CloseIcon />

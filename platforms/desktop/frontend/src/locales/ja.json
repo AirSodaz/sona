@@ -160,7 +160,7 @@
     "clear_all_hint": "完了したすべての記録をクリア ({{count}})",
     "clear_options": "クリアオプション",
     "dismiss": "閉じる",
-    "discard": "廃棄する",
+    "discard": "閉じる",
     "retry": "再試行",
     "resume": "再開",
     "stopping": "停止中",

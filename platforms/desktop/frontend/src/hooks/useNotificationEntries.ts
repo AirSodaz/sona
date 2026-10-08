@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
+import { useAutomationStore } from '../stores/automationStore';
+import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -132,8 +134,41 @@ export function useNotificationEntries({
 
   const handleClear = (scope: 'succeeded' | 'all') => {
     if (scope === 'succeeded') {
+      if (typeof useBatchQueueStore.getState === 'function') {
+        useBatchQueueStore.getState().clearCompleted();
+      }
       void clearSucceededTasks();
     } else {
+      const activeStatuses: Record<string, true> = {
+        pending: true,
+        running: true,
+        cancelRequested: true,
+      };
+      const clearableTasks = tasks.filter((task) => !activeStatuses[task.status]);
+      for (const task of clearableTasks) {
+        if (task.kind === 'recovery' || task.id.startsWith('recovery-')) {
+          const recoveryId = task.id.startsWith('recovery-')
+            ? task.id.slice('recovery-'.length)
+            : task.id;
+          if (typeof useRecoveryStore.getState === 'function') {
+            void useRecoveryStore.getState().discardItem(recoveryId);
+          }
+        } else if (task.kind === 'automation' || task.id.startsWith('automation-')) {
+          if (task.id.startsWith('batch-') && typeof useBatchQueueStore.getState === 'function') {
+            useBatchQueueStore.getState().removeItem(task.id.slice(6));
+          }
+          if (task.automationRuleId && typeof useAutomationStore.getState === 'function') {
+            useAutomationStore
+              .getState()
+              .dismissNotification(`automation-failure-${task.automationRuleId}`);
+          }
+        } else if (task.kind === 'batchImport' || task.id.startsWith('batch-')) {
+          const queueId = task.id.startsWith('batch-') ? task.id.slice(6) : task.id;
+          if (typeof useBatchQueueStore.getState === 'function') {
+            useBatchQueueStore.getState().removeItem(queueId);
+          }
+        }
+      }
       void clearAllNonActiveTasks();
     }
   };
