@@ -169,6 +169,12 @@
     "task_body": "{{kind}} · {{status}}",
     "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
     "task_body_file": "{{base}} · {{fileName}}",
+    "expand": "展开",
+    "collapse": "收起",
+    "expand_detail": "展开详情",
+    "collapse_detail": "收起详情",
+    "copy_detail": "复制详情",
+    "copied": "已复制",
     "kind": {
       "batchImport": "批量转录",
       "automation": "自动化",

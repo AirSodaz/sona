@@ -51,6 +51,8 @@ export interface NotificationEntry {
   itemClassName?: string;
   /** When set, the main content area is clickable. */
   onOpen?: () => void;
+  /** Optional initial expanded state for collapsible content. */
+  defaultExpanded?: boolean;
 }
 
 export interface NotificationGroup {

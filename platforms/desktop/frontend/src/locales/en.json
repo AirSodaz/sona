@@ -169,6 +169,12 @@
     "task_body": "{{kind}} · {{status}}",
     "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
     "task_body_file": "{{base}} · {{fileName}}",
+    "expand": "Show more",
+    "collapse": "Show less",
+    "expand_detail": "Show details",
+    "collapse_detail": "Hide details",
+    "copy_detail": "Copy details",
+    "copied": "Copied",
     "kind": {
       "batchImport": "Batch import",
       "automation": "Automation",

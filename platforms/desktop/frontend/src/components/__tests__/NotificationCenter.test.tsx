@@ -799,6 +799,7 @@ describe('NotificationCenter task center', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
 
     screen.getByText('Model download failed');
+    screen.getByText('Could not finish downloading the recommended models.');
     screen.getByText('Network timeout');
     const retryBtn = screen.getByRole('button', { name: 'Retry' });
     fireEvent.click(retryBtn);

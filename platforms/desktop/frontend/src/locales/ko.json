@@ -169,6 +169,12 @@
     "task_body": "{{kind}} · {{status}}",
     "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
     "task_body_file": "{{base}} · {{fileName}}",
+    "expand": "더 보기",
+    "collapse": "접기",
+    "expand_detail": "상세 내용 보기",
+    "collapse_detail": "상세 내용 숨기기",
+    "copy_detail": "상세 내용 복사",
+    "copied": "복사됨",
     "kind": {
       "batchImport": "일괄 가져오기",
       "automation": "자동화",

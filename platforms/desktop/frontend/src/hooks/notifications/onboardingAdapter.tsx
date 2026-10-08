@@ -83,10 +83,11 @@ export function adaptModelDownloadEntry(
       ? t('first_run.download_notification.completed_body', {
           defaultValue: 'Local transcription models are installed and ready to use.',
         })
-      : download.error ||
-        t('first_run.download_notification.failed_body', {
+      : t('first_run.download_notification.failed_body', {
           defaultValue: 'Could not finish downloading the recommended models.',
         });
+
+  const detail = isError && download.error?.trim() ? download.error.trim() : undefined;
 
   const actions: NotificationAction[] = [];
 
@@ -115,6 +116,7 @@ export function adaptModelDownloadEntry(
     icon: isSuccess ? <CheckIcon /> : <DownloadIcon />,
     title,
     body,
+    detail,
     timestamp: Number.MAX_SAFE_INTEGER,
     progress: isActive ? download.progress : undefined,
     actions,

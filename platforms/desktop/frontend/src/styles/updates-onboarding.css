@@ -530,11 +530,6 @@
     width: min(360px, calc(100vw - 24px));
   }
 
-  .notification-center-item-support,
-  .notification-center-item-actions {
-    padding-left: 0;
-  }
-
   .notification-center-item-action {
     width: 100%;
     justify-content: center;

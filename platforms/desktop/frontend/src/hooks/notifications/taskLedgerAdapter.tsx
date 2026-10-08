@@ -197,8 +197,8 @@ function buildDetail(task: TaskLedgerRecord, t: TFunction): string | null {
     parts.push(t('automation.notifications.stage_detail', { stage: stageLabel }));
   }
 
-  if (task.errorMessage) {
-    parts.push(task.errorMessage);
+  if (task.errorMessage?.trim()) {
+    parts.push(task.errorMessage.trim());
   }
 
   return parts.length > 0 ? parts.join('\n') : null;

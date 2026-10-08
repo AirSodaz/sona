@@ -169,6 +169,12 @@
     "task_body": "{{kind}} · {{status}}",
     "task_body_stage": "{{kind}} · {{status}} · {{stage}}",
     "task_body_file": "{{base}} · {{fileName}}",
+    "expand": "詳細を表示",
+    "collapse": "折りたたむ",
+    "expand_detail": "詳細を展開",
+    "collapse_detail": "詳細を隠す",
+    "copy_detail": "詳細をコピー",
+    "copied": "コピーしました",
     "kind": {
       "batchImport": "Batch Import",
       "automation": "自動化",
