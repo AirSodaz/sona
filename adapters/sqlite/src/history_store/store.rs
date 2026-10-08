@@ -1,4 +1,4 @@
-﻿use crate::DatabaseError;
+use crate::DatabaseError;
 use crate::history_fs_utils::{
     ensure_safe_file_name, optional_history_child_path, remove_path_if_exists,
 };
@@ -1192,11 +1192,8 @@ where
             let mut existing_ids = Vec::new();
             let mut snapshot_entity_ids = Vec::new();
             {
-                let mut stmt = tx.prepare_cached(
-                    "SELECT audio_path FROM history_items
-                     WHERE id = ?1
-                       AND (deleted_at IS NOT NULL OR (status = 'draft' AND draft_source = 'live_record'))",
-                )?;
+                let mut stmt =
+                    tx.prepare_cached("SELECT audio_path FROM history_items WHERE id = ?1")?;
                 for id in ids {
                     let mut rows = stmt.query([id])?;
                     if let Some(row) = rows.next()? {

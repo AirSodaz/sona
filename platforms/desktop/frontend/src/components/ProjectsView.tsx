@@ -578,6 +578,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     if (isTrashItem || isDirectDelete) {
       await historyService.purgeRecordings([id]);
+      if (sourceHistoryId === id) {
+        clearOpenedItem();
+      }
     } else {
       await useHistoryStore.getState().deleteItem(id);
     }
@@ -765,6 +768,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     if (isTrashScope || isDirectDelete) {
       await historyService.purgeRecordings(targetIds);
+      if (sourceHistoryId && targetIds.includes(sourceHistoryId)) {
+        clearOpenedItem();
+      }
     } else {
       await deleteHistoryItems(targetIds);
     }

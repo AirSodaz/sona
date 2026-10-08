@@ -251,7 +251,7 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
 }
 
 #[test]
-fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
+fn purging_items_removes_both_live_drafts_and_active_history_and_audio() {
     let root = tempfile::tempdir().unwrap();
     let db = Arc::new(Database::open(root.path()).unwrap());
     let store = history_store(root.path(), db);
@@ -280,6 +280,8 @@ fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
         },
     )
     .unwrap();
+    let active_audio_path = root.path().join("history").join(&active.audio_path);
+    assert!(active_audio_path.is_file());
 
     HistoryMutationRepository::purge_items(
         &store,
@@ -290,9 +292,45 @@ fn purging_a_live_draft_removes_its_audio_without_purging_active_history() {
     .unwrap();
 
     assert!(!std::path::Path::new(&draft.audio_absolute_path).exists());
+    assert!(!active_audio_path.exists());
     let all = query(&store, HistoryWorkspaceScope::All);
-    assert_eq!(all.filtered_item_count, 1);
-    assert_eq!(all.filtered_items[0].id, active.id);
+    assert_eq!(all.filtered_item_count, 0);
+}
+
+#[test]
+fn direct_purge_of_active_item_without_trashing_deletes_record_and_audio() {
+    let root = tempfile::tempdir().unwrap();
+    let db = Arc::new(Database::open(root.path()).unwrap());
+    let store = history_store(root.path(), db);
+    let active = HistoryMutationRepository::save_recording(
+        &store,
+        HistorySaveRecordingRequest {
+            segments: vec![segment("active direct delete")],
+            duration: 2.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            audio_bytes: Some(vec![1, 2, 3, 4]),
+            native_audio_path: None,
+            audio_extension: Some("wav".to_string()),
+        },
+    )
+    .unwrap();
+    let active_audio_path = root.path().join("history").join(&active.audio_path);
+    assert!(active_audio_path.is_file());
+    assert_eq!(active.deleted_at, None);
+
+    // Directly purge without moving to trash first
+    HistoryMutationRepository::purge_items(
+        &store,
+        HistoryDeleteItemsRequest {
+            ids: vec![active.id.clone()],
+        },
+    )
+    .unwrap();
+
+    assert!(!active_audio_path.exists());
+    let all = query(&store, HistoryWorkspaceScope::All);
+    assert_eq!(all.filtered_item_count, 0);
 }
 
 #[test]
