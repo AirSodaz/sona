@@ -81,6 +81,7 @@ fn base_input() -> DiagnosticsCoreInput {
             vad_model_path: "C:\\models\\vad.onnx".to_string(),
             punctuation_model_path: "".to_string(),
             microphone_id: "default".to_string(),
+            ffmpeg_enabled: false,
             ffmpeg_path: "".to_string(),
         },
         selected_models: SelectedModelsInput {
@@ -131,6 +132,7 @@ fn base_input() -> DiagnosticsCoreInput {
             ffmpeg_path: "C:\\app\\ffmpeg.exe".to_string(),
             ffmpeg_exists: true,
             log_dir_path: "C:\\app\\logs".to_string(),
+            builtin_audio_decoder_ready: true,
         },
         asr_runtime_metrics: AsrRuntimeMetricsSnapshot::default(),
         live_transcription: Default::default(),
@@ -400,6 +402,7 @@ fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
                 "vadModelPath": "C:\\models\\vad.onnx",
                 "punctuationModelPath": "",
                 "microphoneId": "default",
+                "ffmpegEnabled": false,
                 "ffmpegPath": "",
             },
             "selectedModels": {
@@ -427,7 +430,8 @@ fn service_snapshot_preserves_the_existing_camel_case_json_contract() {
             "runtimeEnvironment": {
                 "ffmpegPath": "C:\\app\\ffmpeg.exe",
                 "ffmpegExists": true,
-                "logDirPath": "C:\\app\\logs"
+                "logDirPath": "C:\\app\\logs",
+                "builtinAudioDecoderReady": true
             },
             "asrRuntimeMetrics": {
                 "modelLoad": null,

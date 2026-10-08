@@ -601,27 +601,61 @@ function buildRuntimeChecks(
   snapshot: DiagnosticsCoreFactsSnapshot
 ): BuiltChecks['runtime'] {
   const voiceTypingCheck = buildVoiceTypingCheck(t, snapshot);
-  const ffmpegCheck = snapshot.runtimeEnvironment.ffmpegExists
+  const ffmpegEnabled = snapshot.config.ffmpegEnabled ?? false;
+  const customFfmpegPath = (snapshot.config.ffmpegPath || '').trim();
+  const ffmpegCustomMissing =
+    ffmpegEnabled && customFfmpegPath.length > 0 && !snapshot.runtimeEnvironment.ffmpegExists;
+  const ffmpegCheck = !ffmpegEnabled
     ? check(
         'ffmpeg',
-        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Sidecar'),
-        'ready',
-        tr(t, 'settings.diagnostics.ffmpeg_ready', 'The bundled FFmpeg sidecar is present.'),
-        undefined,
-        snapshot.runtimeEnvironment.ffmpegPath
-      )
-    : check(
-        'ffmpeg',
-        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Sidecar'),
-        'failed',
+        tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+        'info',
         tr(
           t,
-          'settings.diagnostics.ffmpeg_missing',
-          'The bundled FFmpeg sidecar could not be found. Batch imports and media decoding may fail until the app is reinstalled.'
+          'settings.diagnostics.ffmpeg_optional',
+          'Built-in audio decoder is ready (MP3, WAV, M4A, FLAC, OGG). FFmpeg is optional for video extraction.'
         ),
-        openLogFolderAction(t),
-        snapshot.runtimeEnvironment.ffmpegPath
-      );
+        undefined,
+        snapshot.runtimeEnvironment.ffmpegPath || undefined
+      )
+    : snapshot.runtimeEnvironment.ffmpegExists
+      ? check(
+          'ffmpeg',
+          tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+          'ready',
+          tr(
+            t,
+            'settings.diagnostics.ffmpeg_ready',
+            'FFmpeg is available for extended media formats.'
+          ),
+          undefined,
+          snapshot.runtimeEnvironment.ffmpegPath
+        )
+      : ffmpegCustomMissing
+        ? check(
+            'ffmpeg',
+            tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+            'warning',
+            tr(
+              t,
+              'settings.ffmpeg_hint_custom_missing',
+              'The specified custom FFmpeg executable was not found. Please verify the file path.'
+            ),
+            openInputDeviceAction(t),
+            customFfmpegPath
+          )
+        : check(
+            'ffmpeg',
+            tr(t, 'settings.diagnostics.ffmpeg_title', 'FFmpeg Tool'),
+            'info',
+            tr(
+              t,
+              'settings.diagnostics.ffmpeg_missing',
+              'FFmpeg is not installed (optional). Built-in decoder is active.'
+            ),
+            undefined,
+            snapshot.runtimeEnvironment.ffmpegPath || undefined
+          );
   const logDirCheck =
     snapshot.runtimeEnvironment.logDirPath.trim().length === 0
       ? check(
@@ -847,7 +881,7 @@ function liveRecordOverviewAction(t: Translate, checks: BuiltChecks): Diagnostic
 
 function batchImportOverviewAction(
   t: Translate,
-  snapshot: DiagnosticsCoreFactsSnapshot,
+  _snapshot: DiagnosticsCoreFactsSnapshot,
   checks: BuiltChecks
 ): DiagnosticAction | undefined {
   if (
@@ -855,9 +889,6 @@ function batchImportOverviewAction(
     checks.model.punctuationCheck.status === 'warning'
   ) {
     return openModelSettingsAction(t);
-  }
-  if (!snapshot.runtimeEnvironment.ffmpegExists) {
-    return openLogFolderAction(t);
   }
   return undefined;
 }
@@ -913,7 +944,7 @@ function buildOverviewCards(
       [
         checks.model.batchModelCheck.status,
         checks.model.punctuationCheck.status,
-        checks.runtime.ffmpegCheck.status,
+        checks.runtime.ffmpegCheck.status === 'info' ? 'ready' : checks.runtime.ffmpegCheck.status,
       ],
       batchImportOverviewAction(t, snapshot, checks)
     ),

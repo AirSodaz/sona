@@ -188,6 +188,7 @@ pub(crate) fn build_local_batch_plan(
         export_format: ExportFormat::Json,
         output_target: OutputTarget::Stdout,
         quiet: true,
+        ffmpeg_enabled: false,
         ffmpeg_path: None,
     })
 }

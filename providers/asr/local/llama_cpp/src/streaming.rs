@@ -509,6 +509,7 @@ mod tests {
                 gpu_acceleration: Some("auto".to_string()),
                 initial_refresh_rate_ms: None,
                 enable_partial_decoding: None,
+                ffmpeg_enabled: None,
                 ffmpeg_path: None,
             },
         }

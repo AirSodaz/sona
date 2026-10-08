@@ -155,3 +155,24 @@ fn migration_preserves_added_models_for_online_asr_providers() {
         json!(["whisper-large-v3-turbo", "whisper-large-v3"])
     );
 }
+
+#[test]
+fn migration_enables_ffmpeg_when_legacy_config_has_custom_ffmpeg_path() {
+    let mut config = default_config();
+    config.as_object_mut().unwrap().remove("ffmpegEnabled");
+    config["ffmpegPath"] = json!("C:\\custom\\ffmpeg.exe");
+
+    let result = migrate_app_config(Some(config), "Default Rules".to_string());
+    assert_eq!(result.config["ffmpegEnabled"], true);
+    assert_eq!(result.config["ffmpegPath"], "C:\\custom\\ffmpeg.exe");
+
+    let mut empty_ffmpeg_config = default_config();
+    empty_ffmpeg_config
+        .as_object_mut()
+        .unwrap()
+        .remove("ffmpegEnabled");
+    empty_ffmpeg_config["ffmpegPath"] = json!("");
+
+    let empty_result = migrate_app_config(Some(empty_ffmpeg_config), "Default Rules".to_string());
+    assert_eq!(empty_result.config["ffmpegEnabled"], false);
+}

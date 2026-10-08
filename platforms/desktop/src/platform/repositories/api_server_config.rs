@@ -119,12 +119,23 @@ pub fn load_api_server_startup_settings_for_app<R: tauri::Runtime>(
 
 pub fn load_ffmpeg_path(provider: &dyn PathPort) -> Option<String> {
     load_app_config_for_server(provider).and_then(|config| {
-        config
+        let custom_path = config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(String::from)
+            .map(String::from);
+        let enabled = config
+            .get("ffmpegEnabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| custom_path.is_some());
+        if !enabled {
+            return None;
+        }
+        if custom_path.is_some() {
+            return custom_path;
+        }
+        sona_core::ports::asr::find_available_ffmpeg(None).map(|p| p.to_string_lossy().into_owned())
     })
 }
 
@@ -132,12 +143,23 @@ pub fn load_ffmpeg_path_for_app<R: tauri::Runtime>(app: &tauri::AppHandle<R>) ->
     let provider = TauriPathProvider::from_app(app);
     let database = crate::platform::database::try_sqlite_database(app).ok();
     load_app_config_for_server_with_database(&provider, database).and_then(|config| {
-        config
+        let custom_path = config
             .get("ffmpegPath")
             .and_then(|v| v.as_str())
             .map(str::trim)
             .filter(|s| !s.is_empty())
-            .map(String::from)
+            .map(String::from);
+        let enabled = config
+            .get("ffmpegEnabled")
+            .and_then(|v| v.as_bool())
+            .unwrap_or_else(|| custom_path.is_some());
+        if !enabled {
+            return None;
+        }
+        if custom_path.is_some() {
+            return custom_path;
+        }
+        sona_core::ports::asr::find_available_ffmpeg(None).map(|p| p.to_string_lossy().into_owned())
     })
 }
 
@@ -465,5 +487,40 @@ mod tests {
         assert_eq!(settings.config.max_streaming, Some(7));
         assert_eq!(settings.config.ip_whitelist.as_deref(), Some("10.0.0.0/8"));
         assert_eq!(settings.config.gpu_acceleration.as_deref(), Some("cuda"));
+    }
+
+    #[test]
+    fn load_ffmpeg_path_falls_back_to_custom_path_when_ffmpeg_enabled_omitted() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data = tempfile::tempdir().unwrap();
+        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
+        let db = Database::open(app_local_data.path()).unwrap();
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
+                "ffmpegPath": "C:/custom/ffmpeg.exe"
+            }),
+        );
+
+        let ffmpeg_path = load_ffmpeg_path(&provider);
+        assert_eq!(ffmpeg_path.as_deref(), Some("C:/custom/ffmpeg.exe"));
+    }
+
+    #[test]
+    fn load_ffmpeg_path_returns_none_when_explicitly_disabled() {
+        let app_data = tempfile::tempdir().unwrap();
+        let app_local_data = tempfile::tempdir().unwrap();
+        let provider = provider_for_config_test(app_data.path(), app_local_data.path());
+        let db = Database::open(app_local_data.path()).unwrap();
+        save_config(
+            Arc::new(db),
+            &serde_json::json!({
+                "ffmpegEnabled": false,
+                "ffmpegPath": "C:/custom/ffmpeg.exe"
+            }),
+        );
+
+        let ffmpeg_path = load_ffmpeg_path(&provider);
+        assert_eq!(ffmpeg_path, None);
     }
 }

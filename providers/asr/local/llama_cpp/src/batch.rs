@@ -117,6 +117,7 @@ struct LlamaBatchTranscriptionJob {
     punctuation_model: Option<PathBuf>,
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
+    ffmpeg_enabled: bool,
     ffmpeg_path: Option<PathBuf>,
 }
 
@@ -181,6 +182,7 @@ impl LlamaBatchTranscriptionJob {
             punctuation_model: plan.punctuation_model.map(PathBuf::from),
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
+            ffmpeg_enabled: plan.ffmpeg_enabled,
             ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
@@ -226,8 +228,12 @@ impl LlamaBatchTranscriptionJob {
         }
 
         let sample_rate = mtmd.get_audio_sample_rate().unwrap_or(16_000).max(1);
-        let samples =
-            decode_audio_input(&self.input_path, sample_rate, self.ffmpeg_path.as_deref())?;
+        let samples = decode_audio_input(
+            &self.input_path,
+            sample_rate,
+            self.ffmpeg_enabled,
+            self.ffmpeg_path.as_deref(),
+        )?;
         observer.on_progress(10.0);
 
         let audio_segments = self.plan_audio_segments(&samples, sample_rate)?;
@@ -322,6 +328,7 @@ impl LlamaBatchTranscriptionJob {
         let detection_samples = decode_audio_input(
             &self.input_path,
             BATCH_SEGMENTATION_SAMPLE_RATE,
+            self.ffmpeg_enabled,
             self.ffmpeg_path.as_deref(),
         )?;
         Ok(segment_batch_audio(
@@ -582,58 +589,111 @@ fn segment_completed_progress(segment_index: usize, segment_total: usize) -> f32
 fn decode_audio_input(
     path: &Path,
     sample_rate: u32,
+    ffmpeg_enabled: bool,
     custom_ffmpeg_path: Option<&Path>,
 ) -> Result<Vec<f32>, AsrPortError> {
-    let ffmpeg_path = resolve_ffmpeg_path(custom_ffmpeg_path)?;
-    let mut command = Command::new(&ffmpeg_path);
+    if ffmpeg_enabled {
+        let ffmpeg_path = match resolve_ffmpeg_path(custom_ffmpeg_path) {
+            Ok(p) if p.is_file() => p,
+            Ok(p) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path does not exist ({})", p.display())
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        path.display()
+                    ),
+                ));
+            }
+            Err(err) => {
+                let detail = if custom_ffmpeg_path.is_some_and(|p| !p.as_os_str().is_empty()) {
+                    format!("custom FFmpeg path is invalid: {err}")
+                } else {
+                    "system FFmpeg was not found".to_string()
+                };
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Failed to decode audio file {}: FFmpeg decoder is enabled but {detail}. Please install FFmpeg or specify a valid executable path in settings, or disable FFmpeg to use the built-in decoder.",
+                        path.display()
+                    ),
+                ));
+            }
+        };
 
-    #[cfg(target_os = "windows")]
-    {
-        use std::os::windows::process::CommandExt;
-        command.creation_flags(0x0800_0000);
-    }
+        let mut command = Command::new(&ffmpeg_path);
 
-    let output = command
-        .arg("-loglevel")
-        .arg("error")
-        .arg("-i")
-        .arg(path)
-        .arg("-f")
-        .arg("s16le")
-        .arg("-acodec")
-        .arg("pcm_s16le")
-        .arg("-ar")
-        .arg(sample_rate.to_string())
-        .arg("-ac")
-        .arg("1")
-        .arg("-")
-        .output()
-        .map_err(|error| {
-            AsrPortError::new(
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(0x0800_0000);
+        }
+
+        let output = command
+            .arg("-loglevel")
+            .arg("error")
+            .arg("-i")
+            .arg(path)
+            .arg("-f")
+            .arg("s16le")
+            .arg("-acodec")
+            .arg("pcm_s16le")
+            .arg("-ar")
+            .arg(sample_rate.to_string())
+            .arg("-ac")
+            .arg("1")
+            .arg("-")
+            .output()
+            .map_err(|error| {
+                AsrPortError::new(
+                    AsrPortErrorKind::FileSystem,
+                    format!(
+                        "Failed to run FFmpeg audio decoder {}: {error}",
+                        ffmpeg_path.display()
+                    ),
+                )
+            })?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!("Failed to decode audio input {}: {stderr}", path.display()),
+            ));
+        }
+
+        let samples = pcm_s16le_bytes_to_f32(&output.stdout);
+        if samples.is_empty() {
+            return Err(AsrPortError::invalid_request(format!(
+                "Decoded audio input contains no samples: {}",
+                path.display()
+            )));
+        }
+        Ok(samples)
+    } else {
+        match sona_core::audio::decode_audio_file(path, sample_rate) {
+            Ok(samples) if !samples.is_empty() => Ok(samples),
+            Ok(_) => Err(AsrPortError::invalid_request(format!(
+                "Decoded audio input contains no samples: {}",
+                path.display()
+            ))),
+            Err(sona_core::audio::AudioDecodeError::Io(io_err)) => Err(AsrPortError::new(
                 AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file {}: {io_err}", path.display()),
+            )),
+            Err(builtin_err) => Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Failed to run FFmpeg audio decoder {}: {error}",
-                    ffmpeg_path.display()
+                    "Failed to decode audio file {}: built-in decoder cannot process this file ({builtin_err}). Enable FFmpeg in settings to support extended formats or use a supported format (MP3, WAV, M4A, AAC, FLAC, OGG).",
+                    path.display()
                 ),
-            )
-        })?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr).trim().to_string();
-        return Err(AsrPortError::new(
-            AsrPortErrorKind::InvalidRequest,
-            format!("Failed to decode audio input {}: {stderr}", path.display()),
-        ));
+            )),
+        }
     }
-
-    let samples = pcm_s16le_bytes_to_f32(&output.stdout);
-    if samples.is_empty() {
-        return Err(AsrPortError::invalid_request(format!(
-            "Decoded audio input contains no samples: {}",
-            path.display()
-        )));
-    }
-    Ok(samples)
 }
 
 /// Engine-ready forms derived from a [`BatchTranscribePlan`] after option
@@ -1160,6 +1220,7 @@ mod tests {
             gpu_acceleration: Some("auto".to_string()),
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
+            ffmpeg_enabled: false,
             ffmpeg_path: None,
             quiet: true,
         }
@@ -1498,5 +1559,84 @@ mod tests {
         plan.gpu_acceleration = Some("vulkan".to_string());
         let options = validate_supported_options(&plan).unwrap();
         assert_eq!(options.gpu_offload, GpuOffload::Enabled);
+    }
+
+    fn write_minimal_test_wav(path: &std::path::Path, sample_rate: u32, num_samples: usize) {
+        let mut bytes = Vec::with_capacity(44 + num_samples * 2);
+        let data_size = (num_samples * 2) as u32;
+        let file_size = 36 + data_size;
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&file_size.to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(b"fmt ");
+        bytes.extend_from_slice(&16u32.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&1u16.to_le_bytes());
+        bytes.extend_from_slice(&sample_rate.to_le_bytes());
+        bytes.extend_from_slice(&(sample_rate * 2).to_le_bytes());
+        bytes.extend_from_slice(&2u16.to_le_bytes());
+        bytes.extend_from_slice(&16u16.to_le_bytes());
+        bytes.extend_from_slice(b"data");
+        bytes.extend_from_slice(&data_size.to_le_bytes());
+        for i in 0..num_samples {
+            let sample = ((i as f32 / sample_rate as f32 * 440.0 * std::f32::consts::TAU).sin()
+                * 16384.0) as i16;
+            bytes.extend_from_slice(&sample.to_le_bytes());
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    #[test]
+    fn test_decode_audio_input_switch_mode_ffmpeg_missing_fails_directly() {
+        use super::decode_audio_input;
+        let wav_path =
+            std::env::temp_dir().join(format!("llama-test-switch-{}.wav", uuid::Uuid::new_v4()));
+        write_minimal_test_wav(&wav_path, 16000, 1600);
+
+        let missing_path = std::path::Path::new("C:/nonexistent/ffmpeg.exe");
+        let result = decode_audio_input(&wav_path, 16000, true, Some(missing_path));
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+        assert!(
+            error.message.contains("FFmpeg decoder is enabled but"),
+            "Expected 'FFmpeg decoder is enabled but', got: {}",
+            error.message
+        );
+
+        let _ = std::fs::remove_file(wav_path);
+    }
+
+    #[test]
+    fn test_decode_audio_input_switch_mode_builtin_unsupported_suggests_ffmpeg() {
+        use super::decode_audio_input;
+        let invalid_path =
+            std::env::temp_dir().join(format!("llama-test-invalid-{}.xyz", uuid::Uuid::new_v4()));
+        std::fs::write(&invalid_path, b"not a valid audio file").unwrap();
+
+        let result = decode_audio_input(&invalid_path, 16000, false, None);
+        let error = result.unwrap_err();
+        assert_eq!(error.kind, AsrPortErrorKind::InvalidRequest);
+        assert!(
+            error.message.contains("Enable FFmpeg in settings"),
+            "Expected 'Enable FFmpeg in settings', got: {}",
+            error.message
+        );
+
+        let _ = std::fs::remove_file(invalid_path);
+    }
+
+    #[test]
+    fn test_decode_audio_input_switch_mode_builtin_decodes_wav() {
+        use super::decode_audio_input;
+        let wav_path =
+            std::env::temp_dir().join(format!("llama-test-builtin-{}.wav", uuid::Uuid::new_v4()));
+        write_minimal_test_wav(&wav_path, 16000, 1600);
+
+        let result = decode_audio_input(&wav_path, 16000, false, None);
+        assert!(result.is_ok());
+        let samples = result.unwrap();
+        assert_eq!(samples.len(), 1600);
+
+        let _ = std::fs::remove_file(wav_path);
     }
 }

@@ -646,8 +646,16 @@ mod tests {
             #[command(flatten)]
             args: TranscribeLiveArgs,
         }
-        let parsed =
-            TestCli::try_parse_from(["live", "--device", "Test Mic", "-m", "sensevoice"]).unwrap();
+        let parsed = TestCli::try_parse_from([
+            "live",
+            "--device",
+            "Test Mic",
+            "--online-provider",
+            "volcengine-doubao",
+            "--api-key",
+            "test-key",
+        ])
+        .unwrap();
         let config = TranscribeLiveConfigSection {
             input: Some("stdin".to_string()),
             ..Default::default()

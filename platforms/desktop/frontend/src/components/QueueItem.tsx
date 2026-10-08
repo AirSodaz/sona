@@ -33,6 +33,45 @@ export const getQueueStatusIcon = (status: BatchQueueItemStatus): React.JSX.Elem
   }
 };
 
+const VIDEO_MEDIA_EXTENSIONS = [
+  '.mp4',
+  '.webm',
+  '.mov',
+  '.mkv',
+  '.avi',
+  '.wmv',
+  '.flv',
+  '.3gp',
+  '.m4v',
+  '.ts',
+  '.mts',
+  '.m2ts',
+];
+
+export function isTranscodeOrFormatFailure(item: {
+  filename?: string;
+  filePath?: string;
+  errorMessage?: string;
+}): boolean {
+  const target = (item.filename || item.filePath || '').toLowerCase();
+  if (VIDEO_MEDIA_EXTENSIONS.some((ext) => target.endsWith(ext))) {
+    return true;
+  }
+  const errorMsg = (item.errorMessage || '').toLowerCase();
+  return (
+    errorMsg.includes('decode') ||
+    errorMsg.includes('transcode') ||
+    errorMsg.includes('ffmpeg') ||
+    errorMsg.includes('format') ||
+    errorMsg.includes('container') ||
+    errorMsg.includes('codec') ||
+    errorMsg.includes('unsupported') ||
+    errorMsg.includes('转码') ||
+    errorMsg.includes('解码') ||
+    errorMsg.includes('symphonia')
+  );
+}
+
 export interface QueueItemProps {
   item: BatchQueueItem;
   isActive: boolean;
@@ -53,6 +92,18 @@ export const QueueItem = memo(function QueueItem({
   onRetry,
   t,
 }: QueueItemProps): React.JSX.Element {
+  const isTranscodeError = item.status === 'error' && isTranscodeOrFormatFailure(item);
+  const rawErrorMessage = item.errorMessage || t('batch.file_failed');
+  const displayErrorMessage =
+    isTranscodeError &&
+    (rawErrorMessage.startsWith('Failed to decode audio file') ||
+      rawErrorMessage.startsWith('Failed to extract audio slice'))
+      ? t('batch.transcode_failed', { defaultValue: '转码失败' })
+      : rawErrorMessage;
+  const retryLabel = t('batch.retry', {
+    defaultValue: t('common.retry', { defaultValue: 'Retry' }),
+  });
+
   const handleClick = () => {
     onActivate(item.id);
   };
@@ -153,8 +204,16 @@ export const QueueItem = memo(function QueueItem({
           )}
 
           {item.status === 'error' && (
-            <span className="queue-item-error" title={item.errorMessage || t('batch.file_failed')}>
-              {item.errorMessage || t('batch.file_failed')}
+            <span
+              className="queue-item-error"
+              tabIndex={0}
+              role="note"
+              aria-label={rawErrorMessage}
+              data-tooltip={rawErrorMessage}
+              data-tooltip-pos="bottom"
+              data-tooltip-multiline
+            >
+              <span className="queue-item-error-msg">{displayErrorMessage}</span>
             </span>
           )}
 
@@ -167,17 +226,16 @@ export const QueueItem = memo(function QueueItem({
       <div className="queue-item-actions">
         {(item.status === 'error' || item.status === 'cancelled') && (
           <button
-            className="btn btn-secondary-soft btn-xs queue-item-retry"
+            className="btn btn-icon queue-item-retry"
             onClick={(e) => {
               e.stopPropagation();
               onRetry?.(item.id);
             }}
-            aria-label={t('common.retry')}
-            data-tooltip={t('common.retry')}
+            aria-label={retryLabel}
+            data-tooltip={retryLabel}
             data-tooltip-pos="left"
           >
-            <RestoreIcon width={12} height={12} />
-            <span className="queue-item-retry-text">{t('common.retry')}</span>
+            <RestoreIcon width={13} height={13} />
           </button>
         )}
 

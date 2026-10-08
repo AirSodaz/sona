@@ -61,7 +61,7 @@ export function SettingsMicrophoneTab({
   const keepMicrophoneActive = config.keepMicrophoneActive ?? false;
   const voiceTypingEnabled = voiceTypingConfig.voiceTypingEnabled ?? false;
   const voiceTypingRuntime = useVoiceTypingRuntimeStatus();
-
+  const ffmpegEnabled = config.ffmpegEnabled ?? false;
   const ffmpegPath = config.ffmpegPath || '';
   const isCustomFfmpeg = Boolean(ffmpegPath.trim());
   const [runtimeEnv, setRuntimeEnv] = useState<RuntimeEnvironmentStatus | null>(null);
@@ -623,38 +623,65 @@ export function SettingsMicrophoneTab({
         icon={<FileAudio size={20} />}
         description={t(
           'settings.ffmpeg_description',
-          '用于批量导入音视频文件时进行格式解封装与音频重采样，以及提取说话人音色样本。默认使用内置 FFmpeg。'
+          '用于批量导入音视频文件时进行格式解封装与音频重采样。开启时使用系统/自定义 FFmpeg 解码，关闭时使用纯 Rust 内置解码器。'
         )}
       >
-        <SettingsLocationCard
-          testId="settings-microphone-ffmpeg-card"
-          title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
-          hint={t('settings.ffmpeg_path_hint', {
-            defaultValue:
-              'Specify a local FFmpeg executable on your system. Leave empty to use the bundled version.',
-          })}
-          path={displayFfmpegPath}
-          isCustom={isCustomFfmpeg}
-          isValid={isFfmpegValid}
-          isBusy={isFfmpegBusy}
-          changeLabel={t('common.change_path', { defaultValue: 'Change Path...' })}
-          onChangePath={handleBrowseFfmpeg}
-          openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
-          onOpenFolder={handleOpenFfmpegFolder}
-          restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
-          onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
-          bottomHint={
-            isFfmpegValid
-              ? t('settings.ffmpeg_hint_ready', {
-                  defaultValue: 'A valid FFmpeg executable is detected and ready.',
-                })
-              : t('settings.ffmpeg_hint_missing', {
-                  defaultValue:
-                    'No valid FFmpeg executable found. Media decoding and batch imports may fail.',
-                })
-          }
-          bottomHintColor={isFfmpegValid ? undefined : 'var(--color-danger, #ef4444)'}
-        />
+        <SettingsItem
+          title={t('settings.enable_ffmpeg', '启用 FFmpeg 解码器')}
+          hint={t(
+            'settings.enable_ffmpeg_hint',
+            '开启后统一使用 FFmpeg 进行音频解码与重采样，支持更丰富的音视频格式；关闭后使用纯 Rust 内置解码器。'
+          )}
+        >
+          <Switch
+            checked={ffmpegEnabled}
+            aria-label={t('settings.enable_ffmpeg', '启用 FFmpeg 解码器')}
+            onChange={(enabled) => updateConfig({ ffmpegEnabled: enabled })}
+          />
+        </SettingsItem>
+
+        {ffmpegEnabled && (
+          <SettingsLocationCard
+            testId="settings-microphone-ffmpeg-card"
+            title={t('settings.ffmpeg_path_title', { defaultValue: 'FFmpeg Executable Path' })}
+            hint={t('settings.ffmpeg_path_hint', {
+              defaultValue:
+                'Specify a local FFmpeg executable on your system. Leave empty to use system PATH or auto-detected version.',
+            })}
+            path={displayFfmpegPath}
+            isCustom={isCustomFfmpeg}
+            isValid={isFfmpegValid}
+            isBusy={isFfmpegBusy}
+            changeLabel={t('common.change_path', { defaultValue: 'Change Path...' })}
+            onChangePath={handleBrowseFfmpeg}
+            openFolderLabel={t('common.open_folder', { defaultValue: 'Open Folder' })}
+            onOpenFolder={handleOpenFfmpegFolder}
+            restoreDefaultLabel={t('common.restore_default', { defaultValue: 'Restore Default' })}
+            onRestoreDefault={isCustomFfmpeg ? handleResetFfmpeg : undefined}
+            bottomHint={
+              isCustomFfmpeg
+                ? isFfmpegValid
+                  ? t('settings.ffmpeg_hint_ready', {
+                      defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                    })
+                  : t('settings.ffmpeg_hint_custom_missing', {
+                      defaultValue:
+                        'The specified custom FFmpeg executable was not found. Please verify the file path.',
+                    })
+                : isFfmpegValid
+                  ? t('settings.ffmpeg_hint_ready', {
+                      defaultValue: 'A valid FFmpeg executable is detected and ready.',
+                    })
+                  : t('settings.ffmpeg_hint_missing', {
+                      defaultValue:
+                        'FFmpeg is not installed. Please install FFmpeg or specify a valid executable path, or disable FFmpeg to use the built-in decoder.',
+                    })
+            }
+            bottomHintColor={
+              isCustomFfmpeg && !isFfmpegValid ? 'var(--color-danger, #ef4444)' : undefined
+            }
+          />
+        )}
       </SettingsSection>
     </SettingsTabContainer>
   );

@@ -1,4 +1,4 @@
-use crate::audio::{extract_and_resample_audio_with_ffmpeg, save_wav_file};
+use crate::audio::{extract_and_resample_audio_with_options, save_wav_file};
 use crate::gpu::{GpuFallbackNotice, is_int8_model, resolve_gpu_acceleration_plan};
 use crate::recognizer::{
     SafeOfflineRecognizer, build_offline_model_config, create_offline_recognizer,
@@ -230,6 +230,7 @@ struct BatchTranscriptionJob {
     vad_engines: VadEngineSet,
     punct_engines: PunctuationEngineSet,
     aligner_engines: AlignerEngineSet,
+    ffmpeg_enabled: bool,
     ffmpeg_path: Option<PathBuf>,
 }
 
@@ -276,6 +277,7 @@ impl BatchTranscriptionJob {
             vad_engines: vad_engines.clone(),
             punct_engines: punct_engines.clone(),
             aligner_engines: aligner_engines.clone(),
+            ffmpeg_enabled: plan.ffmpeg_enabled,
             ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
         })
     }
@@ -359,9 +361,10 @@ impl BatchTranscriptionJob {
         };
 
         let recognizer = get_or_create_offline_recognizer(cache_key)?;
-        let samples = extract_and_resample_audio_with_ffmpeg(
+        let samples = extract_and_resample_audio_with_options(
             &self.input_path,
             16000,
+            self.ffmpeg_enabled,
             self.ffmpeg_path.as_deref(),
         )
         .await?;
@@ -621,6 +624,7 @@ mod tests {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_enabled: false,
             ffmpeg_path: None,
         };
 
@@ -653,8 +657,9 @@ mod tests {
             model_type: "whisper".to_string(),
             file_config: None,
             hotwords: None,
-            ffmpeg_path: None,
             speaker_processing: None,
+            ffmpeg_enabled: false,
+            ffmpeg_path: None,
             gpu_acceleration: Some("cpu".to_string()),
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,

@@ -27,6 +27,7 @@ pub fn default_config() -> Value {
         ("systemAudioDeviceId", json!("default")),
         ("muteDuringRecording", json!(false)),
         ("keepMicrophoneActive", json!(false)),
+        ("ffmpegEnabled", json!(false)),
         ("ffmpegPath", json!("")),
         ("asr", default_asr_config()),
         ("streamingModelPath", json!("")),

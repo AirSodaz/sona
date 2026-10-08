@@ -37,6 +37,7 @@ export async function prepareDesktopBundle({
   sherpaLibDir = process.env.SHERPA_ONNX_LIB_DIR,
   runCommand = runRequired,
   readMacDylibDependencies = listMacDylibDependencies,
+  includeFfmpeg = false,
 } = {}) {
   if (!repoRoot) {
     throw new Error('prepareDesktopBundle requires repoRoot.');
@@ -58,11 +59,12 @@ export async function prepareDesktopBundle({
     rebaseMacDylibs(runtimeLibDir, runCommand, readMacDylibDependencies);
   }
   stageCliSidecar(repoRoot, target, sidecarsDir);
-  await stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand);
+  if (includeFfmpeg) {
+    await stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand);
+  }
 
   const generatedConfigPath = path.join(stagingRoot, 'tauri.bundle.conf.json');
-  writeBundleConfig(configPath, generatedConfigPath, sidecarsDir, runtimeLibDir, target);
-
+  writeBundleConfig(configPath, generatedConfigPath, sidecarsDir, runtimeLibDir, target, includeFfmpeg);
   return {
     target,
     stagingRoot,
@@ -443,7 +445,7 @@ function listMacDylibDependencies(libraryPath) {
     .filter(Boolean);
 }
 
-function writeBundleConfig(baseConfigPath, generatedConfigPath, sidecarsDir, runtimeLibDir, target) {
+function writeBundleConfig(baseConfigPath, generatedConfigPath, sidecarsDir, runtimeLibDir, target, includeFfmpeg = true) {
   const config = JSON.parse(fs.readFileSync(baseConfigPath, 'utf8'));
   config.bundle ??= {};
   clearGeneratedRuntimeMappings(config.bundle);
@@ -462,10 +464,11 @@ function writeBundleConfig(baseConfigPath, generatedConfigPath, sidecarsDir, run
   } else {
     throw new Error(`Unsupported desktop bundle target: ${target}`);
   }
-  config.bundle.externalBin = [
-    path.join(sidecarsDir, 'sona-cli'),
-    path.join(sidecarsDir, 'ffmpeg'),
-  ];
+  const externalBin = [path.join(sidecarsDir, 'sona-cli')];
+  if (includeFfmpeg) {
+    externalBin.push(path.join(sidecarsDir, 'ffmpeg'));
+  }
+  config.bundle.externalBin = externalBin;
   fs.writeFileSync(generatedConfigPath, `${JSON.stringify(config, null, 2)}\n`);
 }
 
@@ -535,8 +538,17 @@ async function main() {
     repoRoot,
     readFlagValue(commandArgs, '--ffmpeg-lock') ?? 'platforms/desktop/packaging/ffmpeg-sources.json',
   );
-  const prepared = await prepareDesktopBundle({ repoRoot, target, configPath, ffmpegLockPath });
-  console.log(`[bundle] Prepared ${prepared.target}: ${prepared.configPath}`);
+  const includeFfmpeg =
+    commandArgs.includes('--with-ffmpeg') ||
+    process.env.SONA_BUNDLE_FFMPEG === '1';
+  const prepared = await prepareDesktopBundle({
+    repoRoot,
+    target,
+    configPath,
+    ffmpegLockPath,
+    includeFfmpeg,
+  });
+  console.log(`[bundle] Prepared ${prepared.target} (ffmpeg: ${includeFfmpeg ? 'bundled' : 'excluded'}): ${prepared.configPath}`);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === __filename) {

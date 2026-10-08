@@ -467,7 +467,8 @@ async fn test_funasr_nano_decode_not_empty_with_auto_language() {
         export_format: sona_core::export::ExportFormat::Json,
         output_target: OutputTarget::Stdout,
         quiet: false,
-        ffmpeg_path: Some(r"C:\Users\asoda\scoop\shims\ffmpeg.exe".to_string()),
+        ffmpeg_enabled: false,
+        ffmpeg_path: None,
     };
 
     let segments = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()
@@ -542,7 +543,8 @@ async fn test_funasr_nano_user_history_audio() {
         export_format: sona_core::export::ExportFormat::Json,
         output_target: OutputTarget::Stdout,
         quiet: false,
-        ffmpeg_path: Some(r"C:\Users\asoda\scoop\shims\ffmpeg.exe".to_string()),
+        ffmpeg_enabled: false,
+        ffmpeg_path: None,
     };
 
     let segments = sona_sherpa_onnx::batch::LocalBatchAsrAdapter::default()

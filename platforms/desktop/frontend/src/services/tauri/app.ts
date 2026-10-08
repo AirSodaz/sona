@@ -106,6 +106,7 @@ function normalizeDiagnosticsSnapshot(
       vadModelPath: snapshot.config.vadModelPath ?? '',
       punctuationModelPath: snapshot.config.punctuationModelPath ?? '',
       microphoneId: snapshot.config.microphoneId ?? 'default',
+      ffmpegEnabled: snapshot.config.ffmpegEnabled ?? false,
       ffmpegPath: snapshot.config.ffmpegPath ?? '',
     },
     permissionState: normalizePermissionState(snapshot.permissionState),

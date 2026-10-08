@@ -136,6 +136,7 @@ impl From<FfiDiagnosticsConfigV1> for DiagnosticsConfigInput {
             vad_model_path: value.vad_model_path,
             punctuation_model_path: value.punctuation_model_path,
             microphone_id: value.microphone_id,
+            ffmpeg_enabled: false,
             ffmpeg_path: "".to_string(),
         }
     }
@@ -243,6 +244,7 @@ impl From<FfiRuntimeEnvironmentStatusV1> for RuntimeEnvironmentStatus {
             ffmpeg_path: value.ffmpeg_path,
             ffmpeg_exists: value.ffmpeg_exists,
             log_dir_path: value.log_dir_path,
+            builtin_audio_decoder_ready: true,
         }
     }
 }

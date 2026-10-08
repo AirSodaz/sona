@@ -100,7 +100,9 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
     lines.push("Sona CLI System Health Check:".to_string());
     lines.push("--------------------------------------------------".to_string());
 
-    // 1. FFmpeg
+    // 1. Built-in decoder and FFmpeg
+    lines
+        .push("  [OK]   Built-in Audio Decoder: Ready (MP3, WAV, M4A, AAC, FLAC, OGG)".to_string());
     if report.ffmpeg.found {
         let ver = report
             .ffmpeg
@@ -109,11 +111,12 @@ pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
             .unwrap_or("unknown version");
         let path = report.ffmpeg.path.as_deref().unwrap_or("-");
         lines.push(format!("  [OK]   FFmpeg: {path} ({ver})"));
-    } else {
+    } else if args.ffmpeg_path.is_some() {
         lines.push(format!("  [WARN] FFmpeg: {}", report.ffmpeg.message));
+    } else {
+        lines.push("  [INFO] FFmpeg: Not installed (optional; video extraction and extended formats disabled)".to_string());
         lines.push(format!("         Hint: {}", ffmpeg_install_suggestion()));
     }
-
     // 2. Audio input
     if report.audio_input.available {
         let def = report
@@ -193,12 +196,11 @@ async fn inspect_system(args: &DoctorArgs) -> DoctorReport {
     let hw_status = inspect_hardware().await;
     // 5. Config
     let config_status = inspect_config(args.config.as_deref());
-
-    let all_ok = ffmpeg_status.found
+    let ffmpeg_ok = ffmpeg_status.found || args.ffmpeg_path.is_none();
+    let all_ok = ffmpeg_ok
         && audio_status.available
         && models_status.exists
         && (!config_status.found || config_status.valid);
-
     DoctorReport {
         all_ok,
         ffmpeg: ffmpeg_status,
@@ -313,12 +315,19 @@ fn inspect_ffmpeg(custom_path: Option<&str>) -> DoctorFfmpegStatus {
                 message: "FFmpeg executable found and responsive.".to_string(),
             }
         }
-        _ => DoctorFfmpegStatus {
-            found: false,
-            path: None,
-            version: None,
-            message: "FFmpeg was not found in PATH or sidecar directory. Audio files other than 16kHz mono WAV, and video files, require FFmpeg.".to_string(),
-        },
+        _ => {
+            let message = if let Some(custom) = custom_path {
+                format!("Custom FFmpeg executable not found at '{custom}'.")
+            } else {
+                "FFmpeg is not installed (optional). Built-in decoder handles standard audio (MP3, WAV, M4A, FLAC, OGG).".to_string()
+            };
+            DoctorFfmpegStatus {
+                found: false,
+                path: None,
+                version: None,
+                message,
+            }
+        }
     }
 }
 

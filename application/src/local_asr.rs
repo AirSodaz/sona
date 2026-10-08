@@ -423,6 +423,7 @@ mod tests {
             export_format: ExportFormat::Json,
             output_target: OutputTarget::Stdout,
             quiet: true,
+            ffmpeg_enabled: false,
             ffmpeg_path: None,
         }
     }
@@ -518,6 +519,7 @@ mod tests {
                 gpu_acceleration: None,
                 initial_refresh_rate_ms: None,
                 enable_partial_decoding: None,
+                ffmpeg_enabled: None,
                 ffmpeg_path: None,
             },
         };
