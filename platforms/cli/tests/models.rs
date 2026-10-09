@@ -862,3 +862,75 @@ fn models_list_online_flag_includes_cloud_providers_in_table_and_json() {
     let providers = parsed.get("online_providers").unwrap().as_array().unwrap();
     assert!(providers.iter().any(|p| p["id"] == "openai-whisper"));
 }
+
+#[test]
+fn models_search_subcommand_filters_by_query_in_table_and_json() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "models", "search", "turbo"]).unwrap();
+    assert_eq!(output.stderr, "");
+    assert!(output.stdout.contains("sherpa-onnx-whisper-turbo"));
+    assert!(!output.stdout.contains("sensevoice"));
+
+    let json_output =
+        sona_cli::run_cli_from_args(["sona-cli", "models", "search", "sensevoice", "-j"]).unwrap();
+    assert_eq!(json_output.stderr, "");
+    let parsed: serde_json::Value = serde_json::from_str(&json_output.stdout).unwrap();
+    let models = parsed.as_array().unwrap();
+    assert!(
+        models
+            .iter()
+            .any(|m| m["id"] == "sherpa-onnx-sense-voice-zh-en-ja-ko-yue-int8-2024-07-17")
+    );
+}
+
+#[test]
+fn models_show_and_inspect_aliases_display_model_info() {
+    let show_output =
+        sona_cli::run_cli_from_args(["sona-cli", "models", "show", "whisper-turbo"]).unwrap();
+    assert_eq!(show_output.stderr, "");
+    assert!(show_output.stdout.contains("sherpa-onnx-whisper-turbo"));
+
+    let inspect_output =
+        sona_cli::run_cli_from_args(["sona-cli", "models", "inspect", "whisper-turbo"]).unwrap();
+    assert_eq!(inspect_output.stderr, "");
+    assert!(inspect_output.stdout.contains("sherpa-onnx-whisper-turbo"));
+}
+
+#[test]
+fn models_rm_alias_and_force_flag_delete_installed_model() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let whisper_path = models_dir.join("sherpa-onnx-whisper-turbo");
+    std::fs::create_dir_all(&whisper_path).unwrap();
+    std::fs::write(whisper_path.join("turbo-tokens.txt"), b"fake").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "rm",
+        "whisper-turbo",
+        "-F",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stderr.contains("Deleted whisper-turbo"));
+    assert!(!whisper_path.exists());
+}
+
+#[test]
+fn models_help_shows_visible_aliases_for_rm_and_show() {
+    let help = sona_cli::run_cli_from_args(["sona-cli", "models", "--help"])
+        .unwrap()
+        .stdout;
+    assert!(help.contains("search"));
+    assert!(help.contains("[alias: rm]"));
+    assert!(help.contains("[alias: show]"));
+}
+
+#[test]
+fn models_list_shows_auxiliary_models_hidden_note() {
+    let output = sona_cli::run_cli_from_args(["sona-cli", "models", "list"]).unwrap();
+    assert!(output.stdout.contains("auxiliary companion models"));
+    assert!(output.stdout.contains("'-a/--all'"));
+}

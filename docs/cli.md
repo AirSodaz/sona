@@ -130,7 +130,7 @@ Open the configuration file in $EDITOR and validate syntax upon exit
 
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
-| `--config` | `-c` | - | Optional config file to edit |
+| `--config` | `-c` | - | Optional configuration file path override |
 | `--global` | `-g` | - | Target user standard configuration path instead of local directory |
 
 **Usage & Examples:**
@@ -150,7 +150,7 @@ Read a specific configuration key (e.g. transcribe.model_id)
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
 | `<KEY>` | - | - | Dot-separated key path, e.g. transcribe.model_id or serve.port |
-| `--config` | `-c` | - | Optional config file to inspect |
+| `--config` | `-c` | - | Optional configuration file path override |
 | `--global` | `-g` | - | Target user standard configuration path instead of local directory |
 
 **Usage & Examples:**
@@ -211,7 +211,7 @@ Set a specific configuration key (e.g. transcribe.model_id whisper-turbo)
 | --- | --- | --- | --- |
 | `<KEY>` | - | - | Dot-separated key path, e.g. transcribe.model_id or serve.port |
 | `<VALUE>` | - | - | Value to set (automatically parses numbers, booleans, and strings) |
-| `--config` | `-c` | - | Optional config file to modify |
+| `--config` | `-c` | - | Optional configuration file path override |
 | `--global` | `-g` | - | Target user standard configuration path instead of local directory |
 
 **Usage & Examples:**
@@ -254,7 +254,7 @@ Remove a specific configuration key (e.g. transcribe.model_id)
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
 | `<KEY>` | - | - | Dot-separated key path, e.g. transcribe.model_id or serve.port |
-| `--config` | `-c` | - | Optional config file to modify |
+| `--config` | `-c` | - | Optional configuration file path override |
 | `--global` | `-g` | - | Target user standard configuration path instead of local directory |
 
 **Usage & Examples:**
@@ -421,13 +421,15 @@ Examples:
 
 Deletes an installed preset model from the models directory
 
+**Aliases:** `rm`
+
 **Options & Arguments:**
 
 | Option / Argument | Short | Default | Description |
 | --- | --- | --- | --- |
 | `<MODEL_ID>` | - | - | Preset model id(s) or alias(es) to delete, for example sherpa-onnx-whisper-turbo or silero-vad |
 | `--models-dir` | - | - | Override the models directory |
-| `--yes` | `-y` | - | Delete without prompting for confirmation |
+| `--yes` | `-y` | - | Delete without prompting for confirmation (alias: -F, --force) |
 | `--all` | - | - | Delete all installed preset models in the models directory |
 
 **Usage & Examples:**
@@ -435,7 +437,7 @@ Deletes an installed preset model from the models directory
 ```text
 Examples:
   sona-cli models delete sherpa-onnx-whisper-turbo --models-dir ./models --yes
-  sona-cli models delete silero-vad --models-dir ./models --yes
+  sona-cli models rm whisper-turbo -y
 ```
 
 ##### `sona-cli models download`
@@ -464,6 +466,8 @@ Examples:
 
 Displays detailed metadata and configuration for a preset model
 
+**Aliases:** `show`
+
 **Options & Arguments:**
 
 | Option / Argument | Short | Default | Description |
@@ -477,6 +481,7 @@ Displays detailed metadata and configuration for a preset model
 ```text
 Examples:
   sona-cli models info whisper-turbo
+  sona-cli models show whisper-turbo
   sona-cli models info sensevoice -j
   sona-cli models info silero-vad --models-dir ./models
 ```
@@ -525,6 +530,30 @@ Prints the resolved models directory path
 Examples:
   sona-cli models path
   sona-cli models path --models-dir ./models
+```
+
+##### `sona-cli models search`
+
+Searches preset models by keyword matching ID, alias, name, or type
+
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `<QUERY>` | - | - | Search keyword matching ID, alias, name, or type |
+| `--models-dir` | - | - | Override the models directory used to detect installed models |
+| `--recommended` | `-r` | - | Only include recommended preset models |
+| `--installed` | `-i` | - | Only include models already present in the models directory |
+| `--all` | `-a` | - | Include auxiliary companion models (VAD, punctuation, speaker embedding) |
+| `--json` | `-j` | - | Print machine-readable JSON |
+
+**Usage & Examples:**
+
+```text
+Examples:
+  sona-cli models search whisper
+  sona-cli models search sensevoice
+  sona-cli models search vad -a
 ```
 
 ##### `sona-cli models verify`

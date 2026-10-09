@@ -26,6 +26,11 @@ pub enum ModelCommands {
         after_help = "Examples:\n  sona-cli models list\n  sona-cli models list --mode batch --type whisper\n  sona-cli models list --language zh --installed"
     )]
     List(ModelListArgs),
+    /// Searches preset models by keyword matching ID, alias, name, or type.
+    #[command(
+        after_help = "Examples:\n  sona-cli models search whisper\n  sona-cli models search sensevoice\n  sona-cli models search vad -a"
+    )]
+    Search(ModelSearchArgs),
     /// Downloads a preset model into the models directory.
     #[command(
         after_help = "Examples:\n  sona-cli models download sherpa-onnx-whisper-turbo\n  sona-cli models download silero-vad --models-dir ./models"
@@ -33,7 +38,9 @@ pub enum ModelCommands {
     Download(ModelDownloadArgs),
     /// Deletes an installed preset model from the models directory.
     #[command(
-        after_help = "Examples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --models-dir ./models --yes\n  sona-cli models delete silero-vad --models-dir ./models --yes"
+        visible_alias = "rm",
+        alias = "remove",
+        after_help = "Examples:\n  sona-cli models delete sherpa-onnx-whisper-turbo --models-dir ./models --yes\n  sona-cli models rm whisper-turbo -y"
     )]
     Delete(ModelDeleteArgs),
     /// Verifies the integrity of an installed preset model.
@@ -48,8 +55,9 @@ pub enum ModelCommands {
     Path(ModelPathArgs),
     /// Displays detailed metadata and configuration for a preset model.
     #[command(
+        visible_alias = "show",
         alias = "inspect",
-        after_help = "Examples:\n  sona-cli models info whisper-turbo\n  sona-cli models info sensevoice -j\n  sona-cli models info silero-vad --models-dir ./models"
+        after_help = "Examples:\n  sona-cli models info whisper-turbo\n  sona-cli models show whisper-turbo\n  sona-cli models info sensevoice -j\n  sona-cli models info silero-vad --models-dir ./models"
     )]
     Info(ModelInfoArgs),
 }
@@ -163,6 +171,64 @@ pub struct ModelListArgs {
 
 #[derive(Debug, Args)]
 #[command(
+    about = "Search preset models by keyword matching ID, alias, name, or type",
+    after_help = "Examples:\n  sona-cli models search whisper\n  sona-cli models search sensevoice\n  sona-cli models search vad -a"
+)]
+pub struct ModelSearchArgs {
+    /// Search term to match against model ID, alias, name, or type.
+    #[arg(
+        value_name = "QUERY",
+        help = "Search keyword matching ID, alias, name, or type"
+    )]
+    pub query: String,
+    /// Models directory containing installed presets.
+    #[arg(
+        long,
+        help = "Override the models directory used to detect installed models"
+    )]
+    pub models_dir: Option<PathBuf>,
+    /// Show only recommended preset models.
+    #[arg(short = 'r', long, help = "Only include recommended preset models")]
+    pub recommended: bool,
+    /// Show only installed models.
+    #[arg(
+        short = 'i',
+        long,
+        help = "Only include models already present in the models directory"
+    )]
+    pub installed: bool,
+    /// Include auxiliary companion models (VAD, punctuation, speaker embedding).
+    #[arg(
+        short = 'a',
+        long = "all",
+        alias = "all-types",
+        help = "Include auxiliary companion models (VAD, punctuation, speaker embedding)"
+    )]
+    pub all: bool,
+    /// Prints JSON instead of the default table output.
+    #[arg(short = 'j', long, help = "Print machine-readable JSON")]
+    pub json: bool,
+}
+
+impl From<ModelSearchArgs> for ModelListArgs {
+    fn from(args: ModelSearchArgs) -> Self {
+        Self {
+            models_dir: args.models_dir,
+            mode: None,
+            model_type: None,
+            language: None,
+            recommended: args.recommended,
+            installed: args.installed,
+            all: args.all,
+            json: args.json,
+            query: Some(args.query),
+            online: false,
+        }
+    }
+}
+
+#[derive(Debug, Args)]
+#[command(
     about = "Download a preset model and any required companion models",
     after_help = "Required companion models are downloaded automatically when the preset needs VAD or punctuation.\n\nExamples:\n  sona-cli models download whisper-turbo\n  sona-cli models download sensevoice\n  sona-cli models download silero-vad --models-dir ./models"
 )]
@@ -218,7 +284,13 @@ pub struct ModelDeleteArgs {
     #[arg(long, help = "Override the models directory")]
     models_dir: Option<PathBuf>,
     /// Confirms deletion without an interactive prompt.
-    #[arg(short = 'y', long, help = "Delete without prompting for confirmation")]
+    #[arg(
+        short = 'y',
+        long,
+        visible_alias = "force",
+        short_alias = 'F',
+        help = "Delete without prompting for confirmation (alias: -F, --force)"
+    )]
     yes: bool,
     /// Delete all installed preset models.
     #[arg(
@@ -235,6 +307,7 @@ pub async fn run_models(
 ) -> CliResult<CliOutput> {
     match args.command {
         ModelCommands::List(args) => run_model_list(args),
+        ModelCommands::Search(args) => run_model_list(args.into()),
         ModelCommands::Download(args) => run_model_download(args, io).await,
         ModelCommands::Delete(args) => run_model_delete(args, io),
         ModelCommands::Verify(args) => run_model_verify(args).await,
@@ -356,12 +429,15 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         });
     }
     let has_explicit_query = args.query.as_ref().is_some_and(|q| !q.trim().is_empty());
+    let mut hidden_auxiliary_count = 0;
     if !args.all && args.model_type.is_none() && !has_explicit_query {
+        let before_count = models.len();
         models.retain(|m| {
             m.model_type != "vad"
                 && m.model_type != "punctuation"
                 && !m.model_type.starts_with("speaker-")
         });
+        hidden_auxiliary_count = before_count.saturating_sub(models.len());
     }
     let output = if args.json {
         if args.online {
@@ -404,6 +480,11 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         }
     } else if args.online {
         let mut table = render_model_table(&models);
+        if hidden_auxiliary_count > 0 {
+            table.push_str(&format!(
+                "\n(Note: {hidden_auxiliary_count} auxiliary companion models for VAD and punctuation are hidden. Use '-a/--all' to show all)\n"
+            ));
+        }
         table.push_str("\n\n");
         table.push_str(&crate::transcribe::render_online_providers_with_models());
         table.push_str(
@@ -411,7 +492,13 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
         );
         table
     } else {
-        render_model_table(&models)
+        let mut table = render_model_table(&models);
+        if hidden_auxiliary_count > 0 {
+            table.push_str(&format!(
+                "\n(Note: {hidden_auxiliary_count} auxiliary companion models for VAD and punctuation are hidden. Use '-a/--all' to show all)\n"
+            ));
+        }
+        table
     };
     Ok(CliOutput::stdout(output))
 }
@@ -1139,17 +1226,11 @@ fn render_model_table(models: &[ModelSummary]) -> String {
         "Installed",
         "Modes",
     ];
-    let mut widths = headers.map(str::len);
-
-    for row in &rows {
-        for (index, value) in row.iter().enumerate() {
-            widths[index] = widths[index].max(value.len());
-        }
-    }
+    let widths = crate::table::column_widths(&headers, &rows);
 
     let mut output = String::new();
-    append_table_row(&mut output, &headers, &widths);
-    append_table_separator(&mut output, &widths);
+    crate::table::append_table_row(&mut output, &headers, &widths);
+    crate::table::append_table_separator(&mut output, &widths);
     for row in rows {
         let refs = [
             row[0].as_str(),
@@ -1160,29 +1241,9 @@ fn render_model_table(models: &[ModelSummary]) -> String {
             row[5].as_str(),
             row[6].as_str(),
         ];
-        append_table_row(&mut output, &refs, &widths);
+        crate::table::append_table_row(&mut output, &refs, &widths);
     }
     output
-}
-
-fn append_table_row(output: &mut String, values: &[&str; 7], widths: &[usize; 7]) {
-    for (index, value) in values.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&format!("{value:<width$}", width = widths[index]));
-    }
-    output.push('\n');
-}
-
-fn append_table_separator(output: &mut String, widths: &[usize; 7]) {
-    for (index, width) in widths.iter().enumerate() {
-        if index > 0 {
-            output.push_str("  ");
-        }
-        output.push_str(&"-".repeat(*width));
-    }
-    output.push('\n');
 }
 
 #[cfg(test)]

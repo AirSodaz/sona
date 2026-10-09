@@ -72,8 +72,8 @@ pub enum ConfigCommands {
     Edit(ConfigEditArgs),
 }
 
-#[derive(Debug, Args)]
-pub struct ConfigPathArgs {
+#[derive(Clone, Debug, Default, Args)]
+pub struct ConfigTargetArgs {
     /// Optional configuration file path override.
     #[arg(
         short = 'c',
@@ -90,46 +90,24 @@ pub struct ConfigPathArgs {
         conflicts_with = "config"
     )]
     pub global: bool,
+}
+
+#[derive(Debug, Args)]
+pub struct ConfigPathArgs {
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 
 #[derive(Debug, Args)]
 pub struct ConfigCheckArgs {
-    /// Optional configuration file path override.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 
 #[derive(Debug, Args)]
 pub struct ConfigShowArgs {
-    /// Optional configuration file path override.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 
 #[derive(Debug, Args)]
@@ -137,22 +115,8 @@ pub struct ConfigGetArgs {
     /// Dot-separated key path, e.g. transcribe.model_id or serve.port.
     #[arg(value_name = "KEY")]
     pub key: String,
-    /// Optional config file to inspect.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 
 #[derive(Debug, Args)]
@@ -163,22 +127,8 @@ pub struct ConfigSetArgs {
     /// Value to set (automatically parses numbers, booleans, and strings).
     #[arg(value_name = "VALUE")]
     pub value: String,
-    /// Optional config file to modify.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 
 #[derive(Debug, Args)]
@@ -186,41 +136,14 @@ pub struct ConfigUnsetArgs {
     /// Dot-separated key path, e.g. transcribe.model_id or serve.port.
     #[arg(value_name = "KEY")]
     pub key: String,
-    /// Optional config file to modify.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
+
 #[derive(Debug, Args)]
 pub struct ConfigEditArgs {
-    /// Optional config file to edit.
-    #[arg(
-        short = 'c',
-        long = "config",
-        value_name = "FILE",
-        conflicts_with = "global"
-    )]
-    pub config: Option<PathBuf>,
-    /// Target user standard configuration path instead of local directory.
-    #[arg(
-        short = 'g',
-        long = "global",
-        alias = "user",
-        conflicts_with = "config"
-    )]
-    pub global: bool,
+    #[command(flatten)]
+    pub target: ConfigTargetArgs,
 }
 pub fn run_config(args: ConfigArgs) -> CliResult<CliOutput> {
     match args.command {
@@ -345,17 +268,17 @@ fn find_unknown_config_keys(content: &str, path: &std::path::Path) -> Vec<String
 }
 
 fn run_config_path(args: ConfigPathArgs) -> CliResult<CliOutput> {
-    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_existing_file_path(args.target.config.as_ref(), args.target.global)?;
     Ok(CliOutput::stdout(path.display().to_string()))
 }
 
 fn run_config_check(args: ConfigCheckArgs) -> CliResult<CliOutput> {
-    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_existing_file_path(args.target.config.as_ref(), args.target.global)?;
     check_config_file(&path)
 }
 
 fn run_config_show(args: ConfigShowArgs) -> CliResult<CliOutput> {
-    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_existing_file_path(args.target.config.as_ref(), args.target.global)?;
     let content = std::fs::read_to_string(&path)
         .map_err(|e| CliError::Io(format!("Failed to read {}: {e}", path.display())))?;
     Ok(CliOutput::stdout(content))
@@ -393,7 +316,7 @@ fn get_toml_value<'a>(toml_val: &'a toml::Value, key: &str) -> Option<&'a toml::
 }
 
 fn run_config_get(args: ConfigGetArgs) -> CliResult<CliOutput> {
-    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_existing_file_path(args.target.config.as_ref(), args.target.global)?;
     let content = std::fs::read_to_string(&path)
         .map_err(|e| CliError::Io(format!("Failed to read {}: {e}", path.display())))?;
     let toml_val: toml::Value = toml::from_str(&content).map_err(|e| {
@@ -506,7 +429,7 @@ fn set_in_document(
 }
 
 fn run_config_set(args: ConfigSetArgs) -> CliResult<CliOutput> {
-    let path = resolve_target_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_target_file_path(args.target.config.as_ref(), args.target.global)?;
     let file_existed = path.is_file();
 
     let parent = path
@@ -620,7 +543,7 @@ fn unset_in_document(doc: &mut toml_edit::DocumentMut, key_path: &str) -> CliRes
 }
 
 fn run_config_unset(args: ConfigUnsetArgs) -> CliResult<CliOutput> {
-    let path = resolve_existing_file_path(args.config.as_ref(), args.global)?;
+    let path = resolve_existing_file_path(args.target.config.as_ref(), args.target.global)?;
 
     let parent = path
         .parent()
@@ -672,7 +595,7 @@ fn run_config_unset(args: ConfigUnsetArgs) -> CliResult<CliOutput> {
 }
 
 fn run_config_edit(args: ConfigEditArgs) -> CliResult<CliOutput> {
-    let path = if args.global {
+    let path = if args.target.global {
         let global_path =
             crate::init_config::canonical_user_config_path(&|name| std::env::var_os(name))
                 .ok_or_else(|| {
@@ -689,10 +612,11 @@ fn run_config_edit(args: ConfigEditArgs) -> CliResult<CliOutput> {
         }
         global_path
     } else {
-        match crate::init_config::resolve_config_path(args.config.as_ref()) {
+        match crate::init_config::resolve_config_path(args.target.config.as_ref()) {
             Some(path) => path,
             None => {
                 let default_path = args
+                    .target
                     .config
                     .unwrap_or_else(|| PathBuf::from(crate::init_config::DEFAULT_CONFIG_PATH));
                 let _ = crate::init_config::run_init_config(crate::init_config::InitConfigArgs {
