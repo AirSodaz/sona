@@ -1,5 +1,5 @@
 use std::collections::BTreeMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
 use async_trait::async_trait;
@@ -21,11 +21,16 @@ struct MemoryStore {
     objects: MemoryObjects,
     fail_after_create_once: Arc<Mutex<bool>>,
     omit_etags: Arc<AtomicBool>,
+    list_call_count: Arc<AtomicUsize>,
 }
 
 impl MemoryStore {
     fn object_count(&self) -> usize {
         self.objects.lock().unwrap().len()
+    }
+
+    fn list_call_count(&self) -> usize {
+        self.list_call_count.load(Ordering::SeqCst)
     }
 
     fn fail_next_put_after_create(&self) {
@@ -74,6 +79,7 @@ impl SyncObjectStore for MemoryStore {
         prefix: &SyncObjectPrefix,
         _continuation: Option<&str>,
     ) -> Result<SyncListPage, SyncError> {
+        self.list_call_count.fetch_add(1, Ordering::SeqCst);
         let objects = self
             .objects
             .lock()
@@ -612,5 +618,27 @@ async fn garbage_collection_skips_objects_without_etags() {
     assert_eq!(
         keys.iter().filter(|key| key.contains("/segments/")).count(),
         3
+    );
+}
+
+#[tokio::test]
+async fn runtime_sync_cycle_issues_a_single_remote_list_call() {
+    let created = test_created_vault();
+    let store = MemoryStore::default();
+    let device = FakeLocalRepository::new(
+        "device-a",
+        vec![operation_with("op-1", "device-a", 0, "first")],
+    );
+
+    let result = SyncRuntime::new(&device, &store, created.vault_key.as_slice())
+        .run_at(100)
+        .await
+        .unwrap();
+
+    assert_eq!(result.pushed_segment_count, 1);
+    assert_eq!(
+        store.list_call_count(),
+        1,
+        "A single sync run must consolidate remote list calls to 1"
     );
 }

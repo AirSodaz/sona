@@ -31,6 +31,7 @@ struct ServerData {
     redirect_location: Option<String>,
     omit_get_etag: bool,
     omit_put_etag: bool,
+    fail_with_503_count: usize,
 }
 
 #[derive(Clone, Default)]
@@ -129,6 +130,9 @@ impl TestServer {
             client,
             server_url,
             root_url,
+            known_collections: std::sync::Arc::new(parking_lot::RwLock::new(
+                std::collections::HashSet::new(),
+            )),
         }
     }
 }
@@ -144,7 +148,7 @@ async fn webdav_handler(
         .await
         .unwrap()
         .to_vec();
-    let redirect_location = {
+    let (redirect_location, return_503) = {
         let mut data = state.0.lock().unwrap();
         data.requests.push(LoggedRequest {
             method: method.clone(),
@@ -152,9 +156,21 @@ async fn webdav_handler(
             if_match: header(&headers, "if-match"),
             if_none_match: header(&headers, "if-none-match"),
         });
-        path.ends_with("redirect.sync")
-            .then(|| data.redirect_location.clone().unwrap())
+        let should_503 = if data.fail_with_503_count > 0 {
+            data.fail_with_503_count -= 1;
+            true
+        } else {
+            false
+        };
+        let redir = path
+            .ends_with("redirect.sync")
+            .then(|| data.redirect_location.clone().unwrap());
+        (redir, should_503)
     };
+
+    if return_503 {
+        return response(StatusCode::SERVICE_UNAVAILABLE, &[], Body::empty(), None);
+    }
 
     if let Some(location) = redirect_location {
         return response(
@@ -476,4 +492,75 @@ async fn local_http_webdav_store_executes_probe_and_operations() {
 
     let retrieved = store.get(&key).await.unwrap().unwrap();
     assert_eq!(retrieved.bytes, b"local-http-data");
+}
+
+#[tokio::test]
+async fn transient_503_service_unavailable_retries_and_succeeds() {
+    let server = TestServer::start().await;
+    {
+        let mut data = server.state.0.lock().unwrap();
+        data.fail_with_503_count = 1;
+    }
+    let store = server.store(Duration::from_secs(3));
+
+    let capabilities = store.probe().await.unwrap();
+    assert!(capabilities.conditional_create);
+    assert!(capabilities.compare_and_swap);
+    assert!(capabilities.delete);
+}
+
+#[tokio::test]
+async fn known_collections_cache_avoids_repeated_probing_on_puts() {
+    let server = TestServer::start().await;
+    let store = server.store(Duration::from_secs(2));
+
+    let key1 = SyncObjectKey::parse("sona-sync/v1/vault-a/file1.sync").unwrap();
+    let key2 = SyncObjectKey::parse("sona-sync/v1/vault-a/file2.sync").unwrap();
+
+    store.put_if_absent(&key1, b"first".to_vec()).await.unwrap();
+    let propfinds_after_first = server
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .requests
+        .iter()
+        .filter(|req| req.method == "PROPFIND" && req.path.contains("vault-a"))
+        .count();
+
+    store
+        .put_if_absent(&key2, b"second".to_vec())
+        .await
+        .unwrap();
+    let propfinds_after_second = server
+        .state
+        .0
+        .lock()
+        .unwrap()
+        .requests
+        .iter()
+        .filter(|req| req.method == "PROPFIND" && req.path.contains("vault-a"))
+        .count();
+
+    assert_eq!(
+        propfinds_after_second, propfinds_after_first,
+        "Subsequent put_if_absent must not re-probe the parent collection"
+    );
+}
+
+#[tokio::test]
+async fn listing_nonexistent_collection_does_not_poison_known_cache() {
+    let server = TestServer::start().await;
+    let store = server.store(Duration::from_secs(2));
+
+    let prefix = sona_core::sync::SyncObjectPrefix::parse("sona-sync/v1/vault-ghost").unwrap();
+    let listed = store.list(&prefix, None).await.unwrap();
+    assert!(listed.objects.is_empty());
+
+    let key = SyncObjectKey::parse("sona-sync/v1/vault-ghost/file.sync").unwrap();
+    let res = store.put_if_absent(&key, b"data".to_vec()).await.unwrap();
+    assert!(matches!(res, SyncPutResult::Created { .. }));
+
+    let retrieved = store.get(&key).await.unwrap().unwrap();
+    assert_eq!(retrieved.bytes, b"data");
 }

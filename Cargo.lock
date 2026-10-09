@@ -6692,6 +6692,7 @@ dependencies = [
  "axum",
  "axum-server",
  "chrono",
+ "parking_lot",
  "rcgen",
  "reqwest 0.13.5",
  "roxmltree",

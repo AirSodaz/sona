@@ -176,14 +176,14 @@ describe('syncRuntimeService', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(testContext.runNow).not.toHaveBeenCalled();
 
-    // Focus after 15 seconds (< 30s) -> still throttled
-    await vi.advanceTimersByTimeAsync(15_000);
+    // Focus after 30 seconds (< 60s) -> still throttled
+    await vi.advanceTimersByTimeAsync(30_000);
     window.dispatchEvent(new Event('focus'));
     await vi.advanceTimersByTimeAsync(0);
     expect(testContext.runNow).not.toHaveBeenCalled();
 
-    // Focus after 31 seconds (> 30s) -> triggers immediate sync
-    await vi.advanceTimersByTimeAsync(16_000);
+    // Focus after 61 seconds (> 60s) -> triggers immediate sync
+    await vi.advanceTimersByTimeAsync(31_000);
     window.dispatchEvent(new Event('focus'));
     await vi.advanceTimersByTimeAsync(0);
     expect(testContext.runNow).toHaveBeenCalledTimes(1);

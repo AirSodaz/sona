@@ -9,7 +9,7 @@ import { subscribeToSyncLocalChanges } from './tauri/syncLocalChangeBus';
 export const LOCAL_CHANGE_DEBOUNCE_MS = 5_000;
 export const PERIODIC_SYNC_INTERVAL_ACTIVE_MS = 5 * 60 * 1_000;
 export const PERIODIC_SYNC_INTERVAL_BACKGROUND_MS = 15 * 60 * 1_000;
-export const MIN_FOREGROUND_SYNC_INTERVAL_MS = 30_000;
+export const MIN_FOREGROUND_SYNC_INTERVAL_MS = 60_000;
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 
 class SyncRuntimeService {

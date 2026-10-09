@@ -3,8 +3,9 @@ use std::collections::{BTreeMap, BTreeSet};
 use sha2::{Digest, Sha256};
 use sona_core::sync::{
     SYNC_PROTOCOL_VERSION, SyncCausalContext, SyncDeleteResult, SyncDeviceCursor, SyncError,
-    SyncLocalRepository, SyncLocalRuntimeState, SyncObjectKey, SyncObjectPrefix, SyncObjectStore,
-    SyncPublishedCheckpoint, SyncPublishedSegment, SyncPutResult, SyncRemoteSegment, SyncRunResult,
+    SyncLocalRepository, SyncLocalRuntimeState, SyncObjectKey, SyncObjectMetadata,
+    SyncObjectPrefix, SyncObjectStore, SyncPublishedCheckpoint, SyncPublishedSegment,
+    SyncPutResult, SyncRemoteSegment, SyncRunResult,
 };
 
 use crate::{
@@ -183,14 +184,30 @@ impl<'a> SyncRuntime<'a> {
         validate_runtime_state(&state)?;
         let mut result = SyncRunResult::default();
 
-        self.pull_remote_checkpoints(&mut state, &mut result)
+        let prefix =
+            SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(&state.vault_id)))?;
+        let mut continuation = None;
+        let mut device_objects = Vec::new();
+        loop {
+            let page = self.remote.list(&prefix, continuation.as_deref()).await?;
+            device_objects.extend(page.objects);
+            match page.continuation {
+                Some(next) if !next.is_empty() => continuation = Some(next),
+                _ => break,
+            }
+        }
+
+        self.pull_remote_checkpoints(&mut state, &device_objects, &mut result)
             .await?;
-        self.pull_remote_segments(&mut state, &mut result).await?;
-        self.push_pending_segment(&mut state, now_ms, &mut result)
+        self.pull_remote_segments(&mut state, &device_objects, &mut result)
             .await?;
-        self.publish_checkpoint_if_due(&state, now_ms, &mut result)
+        self.push_pending_segment(&mut state, &device_objects, now_ms, &mut result)
             .await?;
-        self.collect_garbage(&state, now_ms).await?;
+        self.publish_checkpoint_if_due(&state, &device_objects, now_ms, &mut result)
+            .await?;
+        if result.checkpoint_published {
+            self.collect_garbage(&state, now_ms).await?;
+        }
 
         Ok(result)
     }
@@ -198,41 +215,33 @@ impl<'a> SyncRuntime<'a> {
     async fn pull_remote_checkpoints(
         &self,
         state: &mut SyncLocalRuntimeState,
+        device_objects: &[SyncObjectMetadata],
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
-        let prefix =
-            SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(&state.vault_id)))?;
-        let mut continuation = None;
         let mut latest_by_device = BTreeMap::<String, (ParsedCheckpointKey, SyncObjectKey)>::new();
-        loop {
-            let page = self.remote.list(&prefix, continuation.as_deref()).await?;
-            for metadata in page.objects {
-                let Some(parsed) = parse_checkpoint_key(&metadata.key, &state.vault_id)? else {
-                    continue;
-                };
-                if parsed.device_id == state.device_id {
-                    continue;
-                }
-                let cursor_sequence = state
-                    .remote_cursors
-                    .get(&parsed.device_id)
-                    .map_or(0, |cursor| cursor.sequence);
-                if parsed.sequence <= cursor_sequence {
-                    continue;
-                }
-                match latest_by_device.get(&parsed.device_id) {
-                    Some((current, _)) if current.sequence > parsed.sequence => {}
-                    Some((current, _))
-                        if current.sequence == parsed.sequence
-                            && current.cipher_hash <= parsed.cipher_hash => {}
-                    _ => {
-                        latest_by_device.insert(parsed.device_id.clone(), (parsed, metadata.key));
-                    }
-                }
+        for metadata in device_objects {
+            let Some(parsed) = parse_checkpoint_key(&metadata.key, &state.vault_id)? else {
+                continue;
+            };
+            if parsed.device_id == state.device_id {
+                continue;
             }
-            match page.continuation {
-                Some(next) if !next.is_empty() => continuation = Some(next),
-                _ => break,
+            let cursor_sequence = state
+                .remote_cursors
+                .get(&parsed.device_id)
+                .map_or(0, |cursor| cursor.sequence);
+            if parsed.sequence <= cursor_sequence {
+                continue;
+            }
+            match latest_by_device.get(&parsed.device_id) {
+                Some((current, _)) if current.sequence > parsed.sequence => {}
+                Some((current, _))
+                    if current.sequence == parsed.sequence
+                        && current.cipher_hash <= parsed.cipher_hash => {}
+                _ => {
+                    latest_by_device
+                        .insert(parsed.device_id.clone(), (parsed, metadata.key.clone()));
+                }
             }
         }
 
@@ -278,24 +287,15 @@ impl<'a> SyncRuntime<'a> {
     async fn pull_remote_segments(
         &self,
         state: &mut SyncLocalRuntimeState,
+        device_objects: &[SyncObjectMetadata],
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
-        let prefix =
-            SyncObjectPrefix::parse(format!("{}/devices", runtime_vault_prefix(&state.vault_id)))?;
-        let mut continuation = None;
         let mut remote_segments = Vec::new();
-        loop {
-            let page = self.remote.list(&prefix, continuation.as_deref()).await?;
-            for metadata in page.objects {
-                if let Some(parsed) = parse_segment_key(&metadata.key, &state.vault_id)?
-                    && parsed.device_id != state.device_id
-                {
-                    remote_segments.push((parsed, metadata.key));
-                }
-            }
-            match page.continuation {
-                Some(next) if !next.is_empty() => continuation = Some(next),
-                _ => break,
+        for metadata in device_objects {
+            if let Some(parsed) = parse_segment_key(&metadata.key, &state.vault_id)?
+                && parsed.device_id != state.device_id
+            {
+                remote_segments.push((parsed, metadata.key.clone()));
             }
         }
         remote_segments.sort_by(|(left, _), (right, _)| {
@@ -363,6 +363,7 @@ impl<'a> SyncRuntime<'a> {
     async fn push_pending_segment(
         &self,
         state: &mut SyncLocalRuntimeState,
+        device_objects: &[SyncObjectMetadata],
         now_ms: u64,
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
@@ -395,7 +396,9 @@ impl<'a> SyncRuntime<'a> {
         };
         segment.validate()?;
 
-        if let Some((hash, encrypted_bytes)) = self.find_existing_segment(&segment).await? {
+        if let Some((hash, encrypted_bytes)) =
+            self.find_existing_segment(&segment, device_objects).await?
+        {
             self.finish_segment_publish(segment, hash, encrypted_bytes, state, result)?;
             return Ok(());
         }
@@ -437,27 +440,15 @@ impl<'a> SyncRuntime<'a> {
     async fn find_existing_segment(
         &self,
         intended: &SyncSegmentV1,
+        device_objects: &[SyncObjectMetadata],
     ) -> Result<Option<(String, u64)>, SyncError> {
-        let prefix = SyncObjectPrefix::parse(format!(
-            "{}/devices/{}/segments",
-            runtime_vault_prefix(&intended.vault_id),
-            intended.device_id
-        ))?;
-        let mut continuation = None;
         let mut candidates = Vec::new();
-        loop {
-            let page = self.remote.list(&prefix, continuation.as_deref()).await?;
-            for metadata in page.objects {
-                let Some(parsed) = parse_segment_key(&metadata.key, &intended.vault_id)? else {
-                    continue;
-                };
-                if parsed.device_id == intended.device_id && parsed.sequence == intended.sequence {
-                    candidates.push((parsed, metadata.key));
-                }
-            }
-            match page.continuation {
-                Some(next) if !next.is_empty() => continuation = Some(next),
-                _ => break,
+        for metadata in device_objects {
+            let Some(parsed) = parse_segment_key(&metadata.key, &intended.vault_id)? else {
+                continue;
+            };
+            if parsed.device_id == intended.device_id && parsed.sequence == intended.sequence {
+                candidates.push((parsed, metadata.key.clone()));
             }
         }
         candidates.sort_by(|(left, _), (right, _)| left.cipher_hash.cmp(&right.cipher_hash));
@@ -515,6 +506,7 @@ impl<'a> SyncRuntime<'a> {
     async fn publish_checkpoint_if_due(
         &self,
         state: &SyncLocalRuntimeState,
+        device_objects: &[SyncObjectMetadata],
         now_ms: u64,
         result: &mut SyncRunResult,
     ) -> Result<(), SyncError> {
@@ -553,8 +545,9 @@ impl<'a> SyncRuntime<'a> {
             operations,
         };
         checkpoint.validate()?;
-        if let Some((hash, encrypted_bytes, created_at_ms)) =
-            self.find_existing_checkpoint(&checkpoint).await?
+        if let Some((hash, encrypted_bytes, created_at_ms)) = self
+            .find_existing_checkpoint(&checkpoint, device_objects)
+            .await?
         {
             self.local
                 .mark_checkpoint_published(&SyncPublishedCheckpoint {
@@ -609,27 +602,15 @@ impl<'a> SyncRuntime<'a> {
     async fn find_existing_checkpoint(
         &self,
         intended: &SyncCheckpointV1,
+        device_objects: &[SyncObjectMetadata],
     ) -> Result<Option<(String, u64, u64)>, SyncError> {
-        let prefix = SyncObjectPrefix::parse(format!(
-            "{}/devices/{}/checkpoints",
-            runtime_vault_prefix(&intended.vault_id),
-            intended.device_id
-        ))?;
-        let mut continuation = None;
         let mut candidates = Vec::new();
-        loop {
-            let page = self.remote.list(&prefix, continuation.as_deref()).await?;
-            for metadata in page.objects {
-                let Some(parsed) = parse_checkpoint_key(&metadata.key, &intended.vault_id)? else {
-                    continue;
-                };
-                if parsed.device_id == intended.device_id && parsed.sequence == intended.sequence {
-                    candidates.push((parsed, metadata.key));
-                }
-            }
-            match page.continuation {
-                Some(next) if !next.is_empty() => continuation = Some(next),
-                _ => break,
+        for metadata in device_objects {
+            let Some(parsed) = parse_checkpoint_key(&metadata.key, &intended.vault_id)? else {
+                continue;
+            };
+            if parsed.device_id == intended.device_id && parsed.sequence == intended.sequence {
+                candidates.push((parsed, metadata.key.clone()));
             }
         }
         candidates.sort_by(|(left, _), (right, _)| left.cipher_hash.cmp(&right.cipher_hash));

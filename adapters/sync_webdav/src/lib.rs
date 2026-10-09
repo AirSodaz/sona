@@ -1,7 +1,5 @@
-use std::collections::{BTreeSet, VecDeque};
-use std::sync::Arc;
-
 use async_trait::async_trait;
+use parking_lot::RwLock;
 use reqwest::header::{ETAG, IF_MATCH, IF_NONE_MATCH};
 use reqwest::{Client, Method, StatusCode};
 use roxmltree::{Document, Node};
@@ -13,6 +11,9 @@ use sona_core::sync::{
     SyncPutResult,
 };
 use sona_sync::{SyncProvider, SyncProviderFactory};
+use std::collections::{BTreeSet, HashSet, VecDeque};
+use std::sync::Arc;
+use std::time::Duration;
 use url::Url;
 
 const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
@@ -26,6 +27,21 @@ const PROPFIND_BODY: &str = r#"<?xml version="1.0" encoding="utf-8"?>
 </propfind>"#;
 const LIST_PAGE_SIZE: usize = 1_000;
 const MAX_OBJECT_BYTES: usize = 72 * 1024 * 1024;
+const MAX_RATE_LIMIT_RETRIES: usize = 2;
+
+fn retry_delay(response: &reqwest::Response, attempt: usize) -> Duration {
+    if let Some(header_value) = response.headers().get("Retry-After")
+        && let Ok(header_str) = header_value.to_str()
+        && let Ok(seconds) = header_str.trim().parse::<u64>()
+    {
+        Duration::from_secs(seconds.clamp(1, 5))
+    } else {
+        match attempt {
+            0 => Duration::from_millis(500),
+            _ => Duration::from_millis(1500),
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WebDavSyncProviderFactory;
@@ -148,6 +164,7 @@ pub struct WebDavObjectStore {
     client: Client,
     server_url: Url,
     root_url: Url,
+    known_collections: Arc<RwLock<HashSet<String>>>,
 }
 
 impl WebDavObjectStore {
@@ -171,22 +188,60 @@ impl WebDavObjectStore {
             client,
             server_url,
             root_url,
+            known_collections: Arc::new(RwLock::new(HashSet::new())),
         })
     }
 
+    fn is_known_collection(&self, url: &Url) -> bool {
+        self.known_collections.read().contains(url.as_str())
+    }
+
+    fn mark_known_collection(&self, url: &Url) {
+        self.known_collections.write().insert(url.to_string());
+    }
+
+    fn evict_known_collection_and_ancestors(&self, url: &Url) {
+        let mut current = url.clone();
+        let mut lock = self.known_collections.write();
+        loop {
+            lock.remove(current.as_str());
+            if current == self.server_url {
+                break;
+            }
+            let Ok(mut segments) = current.path_segments_mut() else {
+                break;
+            };
+            segments.pop();
+            segments.push("");
+            drop(segments);
+        }
+    }
+
     async fn propfind(&self, url: Url, depth: &str) -> Result<reqwest::Response, SyncError> {
-        let response = self
-            .client
-            .request(webdav_method(b"PROPFIND")?, url)
-            .basic_auth(&self.config.username, Some(&self.config.password))
-            .header("Depth", depth)
-            .header("Content-Type", "application/xml; charset=utf-8")
-            .body(PROPFIND_BODY)
-            .send()
-            .await
-            .map_err(|error| store_error(format!("WebDAV PROPFIND failed: {error}")))?;
-        self.validate_response_url(response.url())?;
-        Ok(response)
+        let mut attempts = 0;
+        loop {
+            let response = self
+                .client
+                .request(webdav_method(b"PROPFIND")?, url.clone())
+                .basic_auth(&self.config.username, Some(&self.config.password))
+                .header("Depth", depth)
+                .header("Content-Type", "application/xml; charset=utf-8")
+                .body(PROPFIND_BODY)
+                .send()
+                .await
+                .map_err(|error| store_error(format!("WebDAV PROPFIND failed: {error}")))?;
+            self.validate_response_url(response.url())?;
+            if (response.status() == StatusCode::TOO_MANY_REQUESTS
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE)
+                && attempts < MAX_RATE_LIMIT_RETRIES
+            {
+                let delay = retry_delay(&response, attempts);
+                attempts += 1;
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            return Ok(response);
+        }
     }
 
     async fn probe_collection(&self, url: Url) -> Result<bool, SyncError> {
@@ -206,7 +261,11 @@ impl WebDavObjectStore {
 
     async fn ensure_collection(&self, collection_url: &Url) -> Result<(), SyncError> {
         ensure_url_within_root_or_server(collection_url, &self.server_url, &self.root_url)?;
+        if self.is_known_collection(collection_url) {
+            return Ok(());
+        }
         if self.probe_collection(collection_url.clone()).await? {
+            self.mark_known_collection(collection_url);
             return Ok(());
         }
 
@@ -222,29 +281,50 @@ impl WebDavObjectStore {
         let mut current = self.server_url.clone();
         for segment in &target_segments[server_segments.len()..] {
             append_segment(&mut current, segment, true)?;
-            if self.probe_collection(current.clone()).await? {
+            if self.is_known_collection(&current) {
                 continue;
             }
-            let response = self
-                .client
-                .request(webdav_method(b"MKCOL")?, current.clone())
-                .basic_auth(&self.config.username, Some(&self.config.password))
-                .send()
-                .await
-                .map_err(|error| store_error(format!("WebDAV MKCOL failed: {error}")))?;
-            self.validate_response_url(response.url())?;
+            if self.probe_collection(current.clone()).await? {
+                self.mark_known_collection(&current);
+                continue;
+            }
+            let mut attempts = 0;
+            let response = loop {
+                let response = self
+                    .client
+                    .request(webdav_method(b"MKCOL")?, current.clone())
+                    .basic_auth(&self.config.username, Some(&self.config.password))
+                    .send()
+                    .await
+                    .map_err(|error| store_error(format!("WebDAV MKCOL failed: {error}")))?;
+                self.validate_response_url(response.url())?;
+                if (response.status() == StatusCode::TOO_MANY_REQUESTS
+                    || response.status() == StatusCode::SERVICE_UNAVAILABLE)
+                    && attempts < MAX_RATE_LIMIT_RETRIES
+                {
+                    let delay = retry_delay(&response, attempts);
+                    attempts += 1;
+                    tokio::time::sleep(delay).await;
+                    continue;
+                }
+                break response;
+            };
             match response.status() {
                 StatusCode::CREATED
                 | StatusCode::OK
                 | StatusCode::NO_CONTENT
-                | StatusCode::METHOD_NOT_ALLOWED => {}
+                | StatusCode::METHOD_NOT_ALLOWED => {
+                    self.mark_known_collection(&current);
+                }
                 status => {
+                    self.evict_known_collection_and_ancestors(&current);
                     return Err(store_error(format!(
                         "WebDAV MKCOL failed with status {status}."
                     )));
                 }
             }
         }
+        self.mark_known_collection(collection_url);
         Ok(())
     }
 
@@ -316,24 +396,27 @@ impl WebDavObjectStore {
             build_object_url(&self.root_url, &key)?
         };
         ensure_trailing_slash(&mut start_url);
-        if !self.probe_collection(start_url.clone()).await? {
-            return Ok(Vec::new());
-        }
-
-        let mut queue = VecDeque::from([start_url]);
+        let mut queue = VecDeque::from([start_url.clone()]);
         let mut visited = BTreeSet::new();
         let mut objects = Vec::new();
         while let Some(collection_url) = queue.pop_front() {
             if !visited.insert(collection_url.to_string()) {
                 continue;
             }
-            let response = self.propfind(collection_url, "1").await?;
+            let response = self.propfind(collection_url.clone(), "1").await?;
+            if response.status() == StatusCode::NOT_FOUND {
+                if collection_url == start_url {
+                    return Ok(Vec::new());
+                }
+                continue;
+            }
             if !matches!(response.status(), StatusCode::OK | StatusCode::MULTI_STATUS) {
                 return Err(store_error(format!(
                     "WebDAV listing failed with status {}.",
                     response.status()
                 )));
             }
+            self.mark_known_collection(&collection_url);
             let body = response.text().await.map_err(|error| {
                 store_error(format!("Failed to read WebDAV listing response: {error}"))
             })?;
@@ -345,6 +428,7 @@ impl WebDavObjectStore {
                     let key = SyncObjectKey::parse(entry.relative_path)?;
                     let mut url = build_object_url(&self.root_url, &key)?;
                     ensure_trailing_slash(&mut url);
+                    self.mark_known_collection(&url);
                     queue.push_back(url);
                 } else {
                     objects.push(SyncObjectMetadata {
@@ -435,14 +519,27 @@ impl SyncObjectStore for WebDavObjectStore {
 
     async fn get(&self, key: &SyncObjectKey) -> Result<Option<SyncObject>, SyncError> {
         let url = build_object_url(&self.root_url, key)?;
-        let response = self
-            .client
-            .get(url)
-            .basic_auth(&self.config.username, Some(&self.config.password))
-            .send()
-            .await
-            .map_err(|error| store_error(format!("WebDAV GET failed: {error}")))?;
-        self.validate_response_url(response.url())?;
+        let mut attempts = 0;
+        let response = loop {
+            let response = self
+                .client
+                .get(url.clone())
+                .basic_auth(&self.config.username, Some(&self.config.password))
+                .send()
+                .await
+                .map_err(|error| store_error(format!("WebDAV GET failed: {error}")))?;
+            self.validate_response_url(response.url())?;
+            if (response.status() == StatusCode::TOO_MANY_REQUESTS
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE)
+                && attempts < MAX_RATE_LIMIT_RETRIES
+            {
+                let delay = retry_delay(&response, attempts);
+                attempts += 1;
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            break response;
+        };
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(None);
         }
@@ -516,18 +613,31 @@ impl SyncObjectStore for WebDavObjectStore {
         expected_etag: Option<&str>,
     ) -> Result<SyncDeleteResult, SyncError> {
         let url = build_object_url(&self.root_url, key)?;
-        let mut request = self
-            .client
-            .delete(url)
-            .basic_auth(&self.config.username, Some(&self.config.password));
-        if let Some(etag) = expected_etag {
-            request = request.header(IF_MATCH, etag);
-        }
-        let response = request
-            .send()
-            .await
-            .map_err(|error| store_error(format!("WebDAV DELETE failed: {error}")))?;
-        self.validate_response_url(response.url())?;
+        let mut attempts = 0;
+        let response = loop {
+            let mut request = self
+                .client
+                .delete(url.clone())
+                .basic_auth(&self.config.username, Some(&self.config.password));
+            if let Some(etag) = expected_etag {
+                request = request.header(IF_MATCH, etag);
+            }
+            let response = request
+                .send()
+                .await
+                .map_err(|error| store_error(format!("WebDAV DELETE failed: {error}")))?;
+            self.validate_response_url(response.url())?;
+            if (response.status() == StatusCode::TOO_MANY_REQUESTS
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE)
+                && attempts < MAX_RATE_LIMIT_RETRIES
+            {
+                let delay = retry_delay(&response, attempts);
+                attempts += 1;
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            break response;
+        };
         match response.status() {
             status if status.is_success() => Ok(SyncDeleteResult::Deleted),
             StatusCode::NOT_FOUND => Ok(SyncDeleteResult::NotFound),
@@ -557,24 +667,37 @@ impl WebDavObjectStore {
         let is_conditional_create = condition
             .as_ref()
             .is_some_and(|(name, _)| *name == IF_NONE_MATCH);
-        let mut request = self
-            .client
-            .put(url)
-            .basic_auth(&self.config.username, Some(&self.config.password))
-            .header("Content-Type", "application/octet-stream")
-            .body(bytes.clone());
-        if let Some((name, value)) = condition {
-            request = request.header(name, value);
-        }
-        let response = match request.send().await {
-            Ok(response) => response,
-            Err(error) => {
-                return self
-                    .recover_ambiguous_put(key, &bytes, is_conditional_create, error)
-                    .await;
+        let mut attempts = 0;
+        let response = loop {
+            let mut request = self
+                .client
+                .put(url.clone())
+                .basic_auth(&self.config.username, Some(&self.config.password))
+                .header("Content-Type", "application/octet-stream")
+                .body(bytes.clone());
+            if let Some((name, value)) = condition.as_ref() {
+                request = request.header(name, *value);
             }
+            let response = match request.send().await {
+                Ok(response) => response,
+                Err(error) => {
+                    return self
+                        .recover_ambiguous_put(key, &bytes, is_conditional_create, error)
+                        .await;
+                }
+            };
+            self.validate_response_url(response.url())?;
+            if (response.status() == StatusCode::TOO_MANY_REQUESTS
+                || response.status() == StatusCode::SERVICE_UNAVAILABLE)
+                && attempts < MAX_RATE_LIMIT_RETRIES
+            {
+                let delay = retry_delay(&response, attempts);
+                attempts += 1;
+                tokio::time::sleep(delay).await;
+                continue;
+            }
+            break response;
         };
-        self.validate_response_url(response.url())?;
         match response.status() {
             status if status.is_success() => {
                 let etag = response_header(&response, ETAG);
@@ -601,6 +724,14 @@ impl WebDavObjectStore {
                 } else {
                     Ok(SyncPutResult::Conflict { current_etag: etag })
                 }
+            }
+            status @ (StatusCode::NOT_FOUND | StatusCode::CONFLICT) => {
+                if let Ok(parent) = self.parent_collection_url(key) {
+                    self.evict_known_collection_and_ancestors(&parent);
+                }
+                Err(store_error(format!(
+                    "WebDAV PUT failed with status {status}."
+                )))
             }
             status => Err(store_error(format!(
                 "WebDAV PUT failed with status {status}."
