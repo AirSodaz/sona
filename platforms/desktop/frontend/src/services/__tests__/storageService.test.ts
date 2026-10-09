@@ -38,7 +38,6 @@ describe('settingsStore SQLite adapter', () => {
 
     await expect(settingsStore.get(STORE_KEY_CONFIG)).resolves.toEqual(config);
     await settingsStore.set(STORE_KEY_CONFIG, config);
-    await settingsStore.save();
 
     expect(loadAppConfigMock).toHaveBeenCalledTimes(1);
     expect(saveAppConfigMock).toHaveBeenCalledWith(config);

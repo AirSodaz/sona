@@ -5,7 +5,6 @@ import { useOnboardingStore } from '../onboardingStore';
 vi.mock('../../services/storageService', () => ({
   settingsStore: {
     set: vi.fn().mockResolvedValue(undefined),
-    save: vi.fn().mockResolvedValue(undefined),
     get: vi.fn().mockResolvedValue(null),
   },
   STORE_KEY_ONBOARDING: 'sona-onboarding',

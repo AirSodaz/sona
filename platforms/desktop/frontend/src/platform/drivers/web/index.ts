@@ -1,4 +1,4 @@
-import type { PlatformContext } from '../../context';
+import type { PlatformContext } from '../../types';
 import { createBrowserPlatformPorts } from './BrowserPlatformPorts';
 import { WebSocketApiTransport, type WebSocketApiTransportOptions } from './WebSocketApiTransport';
 

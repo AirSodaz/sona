@@ -158,7 +158,6 @@ export class HealthCheckService {
       setConfig(patch);
       const updatedConfig = { ...this.ports.useConfigStore.getState().config, ...patch };
       await this.ports.settingsStore.set(STORE_KEY_CONFIG, updatedConfig);
-      await this.ports.settingsStore.save();
     }
   };
 

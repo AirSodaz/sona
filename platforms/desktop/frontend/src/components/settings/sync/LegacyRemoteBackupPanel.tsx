@@ -87,7 +87,6 @@ export function LegacyRemoteBackupPanel({
       legacy.username.trim() === config.username.trim()
     ) {
       await settingsStore.set(STORE_KEY_BACKUP_WEBDAV, { ...legacy, password: '' });
-      await settingsStore.save();
     }
   };
 

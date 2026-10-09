@@ -1,5 +1,4 @@
-import type { PlatformContext } from '../../context';
-import type { IPlatformPorts } from '../../types';
+import type { IPlatformPorts, PlatformContext } from '../../types';
 import { createMockPlatformPorts } from './MockPlatformPorts';
 import { MockTransport } from './MockTransport';
 

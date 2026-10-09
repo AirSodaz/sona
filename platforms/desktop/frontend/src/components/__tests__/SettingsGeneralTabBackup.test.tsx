@@ -69,7 +69,6 @@ vi.mock('../../services/storageService', () => ({
   settingsStore: {
     get: (...args: unknown[]) => testContext.getSetting(...args),
     set: (...args: unknown[]) => testContext.setSetting(...args),
-    save: vi.fn().mockResolvedValue(undefined),
   },
 }));
 

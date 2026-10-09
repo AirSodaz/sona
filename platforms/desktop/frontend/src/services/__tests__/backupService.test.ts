@@ -51,7 +51,6 @@ const testContext = vi.hoisted(() => {
     saveAutomationProcessedEntriesMock: vi.fn().mockResolvedValue(undefined),
     saveAutomationRulesMock: vi.fn().mockResolvedValue(undefined),
     saveMock: vi.fn(),
-    settingsStoreSaveMock: vi.fn().mockResolvedValue(undefined),
     settingsStoreGetMock: vi.fn(),
     settingsStoreNotifyExternalUpdateMock: vi.fn().mockResolvedValue(undefined),
     settingsStoreSetMock: vi.fn().mockResolvedValue(undefined),
@@ -119,7 +118,6 @@ vi.mock('../storageService', () => ({
   settingsStore: {
     get: testContext.settingsStoreGetMock,
     notifyExternalUpdate: testContext.settingsStoreNotifyExternalUpdateMock,
-    save: testContext.settingsStoreSaveMock,
     set: testContext.settingsStoreSetMock,
   },
 }));
@@ -471,7 +469,6 @@ describe('backupService', () => {
 
     expect(testContext.automationStoreState.stopAll).toHaveBeenCalledTimes(1);
     expect(testContext.settingsStoreSetMock).not.toHaveBeenCalled();
-    expect(testContext.settingsStoreSaveMock).not.toHaveBeenCalled();
     expect(testContext.settingsStoreNotifyExternalUpdateMock).toHaveBeenCalledWith(
       'sona-config',
       migratedConfig

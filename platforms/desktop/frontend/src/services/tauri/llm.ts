@@ -22,6 +22,8 @@ import type {
   PolishedSegment,
   PolishSegmentsRequest,
   SummarizeTranscriptRequest,
+  TranscriptLlmJobRequest,
+  TranscriptLlmJobResult,
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
@@ -34,6 +36,7 @@ import type {
   LlmJsonValue,
   LlmResponseFormat,
 } from '../../types/transcript';
+import { normalizeTranscriptJobRequest } from './llmTransportUtils';
 
 export type { LocalLlmCardsResponse, LocalLlmModelCard };
 
@@ -379,7 +382,13 @@ export async function polishTranscriptSegments(
   });
 }
 
-export { runTranscriptLlmJob } from '../llmOperations';
+export async function runTranscriptLlmJob(
+  request: TranscriptLlmJobRequest
+): Promise<TranscriptLlmJobResult> {
+  return invokeTauri(TauriCommand.llm.runTranscriptJob, {
+    request: normalizeTranscriptJobRequest(request),
+  });
+}
 
 export async function summarizeTranscript(
   request: SummarizeTranscriptRequest

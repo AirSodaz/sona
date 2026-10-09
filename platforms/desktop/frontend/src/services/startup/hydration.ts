@@ -79,21 +79,13 @@ async function hydrateOnboardingState(
 }
 
 async function persistHydratedState(plan: StartupPersistencePlan): Promise<void> {
-  let didPersistStoreWrites = false;
-
   try {
     if (plan.configToPersist) {
       await settingsStore.set(STORE_KEY_CONFIG, plan.configToPersist);
-      didPersistStoreWrites = true;
     }
 
     if (plan.onboardingToPersist) {
       await settingsStore.set(STORE_KEY_ONBOARDING, plan.onboardingToPersist);
-      didPersistStoreWrites = true;
-    }
-
-    if (didPersistStoreWrites) {
-      await settingsStore.save();
     }
   } catch (error) {
     logger.error('[Startup] Failed to persist hydrated startup state:', error);

@@ -1,3 +1,14 @@
+/**
+ * @file transcriptCoordinator.ts
+ *
+ * Store boundary architecture:
+ * - `transcriptStore.ts`: Canonical multi-session Zustand store and state mutations.
+ * - `transcriptSessionStore.ts`: Active-session selector projection facade for standard UI components.
+ * - `transcriptCoordinator.ts`: Action forwarding bridge for callers requiring flat imports.
+ *   - For active-session state or actions, prefer `useTranscriptSessionStore` or `sessionActions`.
+ *   - For direct multi-session coordination outside React, prefer `useTranscriptStore.getState()`.
+ */
+
 import type { TranscriptUpdate } from '../types/transcript';
 import {
   clearActiveTranscriptSession,
@@ -16,7 +27,6 @@ import {
 } from './transcriptSessionStore';
 import { useTranscriptStore } from './transcriptStore';
 
-export { useTranscriptStore } from './transcriptStore';
 export {
   clearActiveTranscriptSession,
   clearSegments,

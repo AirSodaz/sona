@@ -21,15 +21,15 @@ import type {
   TranscriptSnapshotRecord,
 } from '../../types/transcriptSnapshot';
 import type { WorkspaceItemSearchMatch } from '../../utils/workspaceSearch';
+import { TauriCommand } from './commands';
+import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import {
   normalizeTranscriptDiffRow,
   normalizeTranscriptSegment,
   toHistorySummaryPayloadTransport,
   toTranscriptDiffRowTransport,
   toTranscriptSegmentTransport,
-} from '../historyTransportUtils';
-import { TauriCommand } from './commands';
-import type { TauriCommandArgs, TauriCommandResult } from './contracts';
+} from './historyTransportUtils';
 import { invokeTauri } from './invoke';
 
 type HistoryDraftTransportHandle = TauriCommandResult<typeof TauriCommand.history.createLiveDraft>;

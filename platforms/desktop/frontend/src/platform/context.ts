@@ -1,10 +1,7 @@
 import { createTauriPlatform } from './drivers/tauri';
-import type { IPlatformPorts, ITransport } from './types';
+import type { PlatformContext } from './types';
 
-export interface PlatformContext {
-  transport: ITransport;
-  ports: IPlatformPorts;
-}
+export type { PlatformContext };
 
 let currentPlatform: PlatformContext | null = null;
 let defaultPlatformFactory: (() => PlatformContext) | null = createTauriPlatform;

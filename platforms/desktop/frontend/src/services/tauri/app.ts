@@ -1,4 +1,5 @@
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
+import type { DiagnosticsCoreFactsSnapshot, DiagnosticsCoreInput } from '../../types/diagnostics';
 import { flattenAppConfig } from '../../types/llm';
 import type {
   ModelCatalogSelectedIds as UiModelCatalogSelectedIds,
@@ -10,13 +11,17 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
+import { TauriCommand } from './commands';
+import type { TauriCommandArgs, TauriCommandResult } from './contracts';
+import {
+  buildDiagnosticsTransportInput,
+  normalizeDiagnosticsSnapshot,
+} from './diagnosticsOperations';
+import { invokeTauri } from './invoke';
 import {
   normalizeModelCatalogSelectedIds,
   normalizeModelCatalogSnapshot,
-} from '../modelCatalogNormalizers';
-import { TauriCommand } from './commands';
-import type { TauriCommandArgs, TauriCommandResult } from './contracts';
-import { invokeTauri } from './invoke';
+} from './modelCatalogNormalizers';
 
 export type DownloadFileRequest = TauriCommandArgs<typeof TauriCommand.app.downloadFile>;
 
@@ -74,7 +79,14 @@ export async function resolveModelCatalogSelectedIds(
   return normalizeModelCatalogSelectedIds(selectedIds);
 }
 
-export { getDiagnosticsCoreSnapshot } from '../diagnosticsOperations';
+export async function getDiagnosticsCoreSnapshot(
+  input: DiagnosticsCoreInput
+): Promise<DiagnosticsCoreFactsSnapshot> {
+  const snapshot = await invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, {
+    input: buildDiagnosticsTransportInput(input),
+  });
+  return normalizeDiagnosticsSnapshot(snapshot);
+}
 
 export async function loadAppConfig(): Promise<AppConfig | null> {
   const config = await invokeTauri(TauriCommand.app.loadAppConfig);

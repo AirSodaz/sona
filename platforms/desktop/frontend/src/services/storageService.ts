@@ -38,10 +38,6 @@ export const settingsStore = {
     await emitSettingUpdated(key, value);
   },
 
-  async save(): Promise<void> {
-    // SQLite writes are committed by set(); retained for existing callers.
-  },
-
   async notifyExternalUpdate(key: string, value: unknown): Promise<void> {
     await emitSettingUpdated(key, value);
   },

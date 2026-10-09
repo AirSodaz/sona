@@ -34,7 +34,6 @@ vi.mock('../storageService', () => ({
   STORE_KEY_ACTIVE_PROJECT: 'sona-active-project-id',
   settingsStore: {
     get: vi.fn().mockResolvedValue(null),
-    save: vi.fn().mockResolvedValue(undefined),
     set: vi.fn().mockResolvedValue(undefined),
   },
 }));

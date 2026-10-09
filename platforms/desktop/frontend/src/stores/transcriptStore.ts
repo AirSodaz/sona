@@ -1,3 +1,12 @@
+/**
+ * @file transcriptStore.ts
+ * Canonical multi-session Zustand store and state mutations.
+ *
+ * Store boundary architecture:
+ * - `transcriptStore.ts` owns the canonical multi-session state, active session routing, and mutations.
+ * - Standard UI components should consume active session state via `useTranscriptSessionStore`.
+ * - Direct mutation or multi-session access should use `useTranscriptStore.getState()`.
+ */
 import { v4 as uuidv4 } from 'uuid';
 import { create, type StateCreator } from 'zustand';
 import { areSpeakerTagsEqual } from '../types/speakerNormalization';

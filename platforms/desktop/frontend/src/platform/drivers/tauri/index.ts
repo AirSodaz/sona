@@ -1,4 +1,4 @@
-import type { PlatformContext } from '../../context';
+import type { PlatformContext } from '../../types';
 import { createTauriPlatformPorts } from './TauriPlatformPorts';
 import { TauriTransport } from './TauriTransport';
 

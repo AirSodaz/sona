@@ -84,7 +84,6 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     });
 
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
-    await settingsStore.save();
   },
 
   complete: async () => {
@@ -107,7 +106,6 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     }));
 
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
-    await settingsStore.save();
   },
 
   dismissReminder: async () => {
@@ -122,7 +120,6 @@ export const useOnboardingStore = create<OnboardingStoreState>((set, get) => ({
     });
 
     await settingsStore.set(STORE_KEY_ONBOARDING, nextState);
-    await settingsStore.save();
   },
 
   reopen: (step = get().currentStep, context = 'startup') => {

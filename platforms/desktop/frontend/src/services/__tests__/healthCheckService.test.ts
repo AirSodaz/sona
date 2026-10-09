@@ -28,7 +28,6 @@ vi.mock('../projectService', () => ({
 vi.mock('../storageService', () => ({
   settingsStore: {
     set: vi.fn(),
-    save: vi.fn(),
   },
   STORE_KEY_CONFIG: 'sona-config',
 }));
@@ -118,7 +117,6 @@ describe('healthCheckService', () => {
       expect(useConfigStore.getState().config.streamingModelPath).toBe('');
       expect(useConfigStore.getState().config.batchModelPath).toBe('/valid/path');
       expect(settingsStore.set).toHaveBeenCalled();
-      expect(settingsStore.save).toHaveBeenCalled();
     });
 
     it('should keep configured model paths when runtime validation is unknown', async () => {
@@ -134,7 +132,6 @@ describe('healthCheckService', () => {
 
       expect(useConfigStore.getState().config.batchModelPath).toBe('/unknown/path');
       expect(settingsStore.set).not.toHaveBeenCalled();
-      expect(settingsStore.save).not.toHaveBeenCalled();
     });
   });
 

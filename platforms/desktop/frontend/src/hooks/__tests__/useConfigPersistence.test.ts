@@ -8,7 +8,6 @@ vi.mock('../../services/storageService', () => ({
   STORE_KEY_CONFIG: 'config',
   settingsStore: {
     set: vi.fn().mockResolvedValue(undefined),
-    save: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -28,12 +27,11 @@ describe('useConfigPersistence', () => {
     await flushConfigPersistence();
 
     expect(settingsStore.set).toHaveBeenCalledWith('config', updatedConfig);
-    expect(settingsStore.save).toHaveBeenCalledTimes(1);
     expect(emit).toHaveBeenCalledWith('asr-config-updated');
   });
 
   it('no-ops when there is no pending config to flush', async () => {
     await flushConfigPersistence();
-    expect(settingsStore.save).not.toHaveBeenCalled();
+    expect(settingsStore.set).not.toHaveBeenCalled();
   });
 });

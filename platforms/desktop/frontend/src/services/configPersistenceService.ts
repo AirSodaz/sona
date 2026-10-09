@@ -25,7 +25,6 @@ export async function flushConfigPersistence(): Promise<void> {
   activeFlushPromise = (async () => {
     try {
       await settingsStore.set(STORE_KEY_CONFIG, configToSave);
-      await settingsStore.save();
       await emit('asr-config-updated');
       if (committedGeneration < targetGeneration) {
         committedGeneration = targetGeneration;

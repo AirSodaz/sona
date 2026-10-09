@@ -1,3 +1,12 @@
+/**
+ * @file transcriptSessionStore.ts
+ * Active-session selector projection facade for standard UI components.
+ *
+ * Store boundary architecture:
+ * - Projects the active session slice from `useTranscriptStore` with stable selectors.
+ * - Exposes active session actions (`sessionActions`) bound to the active session.
+ * - UI components should prefer this store over subscribing to multi-session state directly.
+ */
 import {
   DEFAULT_SESSION_DATA,
   type SessionData,

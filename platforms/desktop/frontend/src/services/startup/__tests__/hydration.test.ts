@@ -7,7 +7,6 @@ const mockMigrateConfig = vi.fn();
 const mockI18nChangeLanguage = vi.fn();
 const mockSettingsGet = vi.fn();
 const mockSettingsSet = vi.fn();
-const mockSettingsSave = vi.fn();
 const mockSetConfig = vi.fn();
 const mockSetCaptionMode = vi.fn();
 const mockSetPersistedState = vi.fn();
@@ -33,7 +32,6 @@ vi.mock('../../storageService', () => ({
   settingsStore: {
     get: (...args: unknown[]) => mockSettingsGet(...args),
     set: (...args: unknown[]) => mockSettingsSet(...args),
-    save: (...args: unknown[]) => mockSettingsSave(...args),
   },
   STORE_KEY_CONFIG: 'sona-config',
   STORE_KEY_ONBOARDING: 'sona-onboarding',
@@ -66,7 +64,6 @@ describe('hydrateAppStartupState', () => {
     localStorage.setItem('sona-first-run-completed', 'true');
     mockSettingsGet.mockResolvedValue(null);
     mockSettingsSet.mockResolvedValue(undefined);
-    mockSettingsSave.mockResolvedValue(undefined);
     mockLoadProjects.mockResolvedValue(undefined);
     mockMigrateConfig.mockResolvedValue({
       config: {
@@ -92,6 +89,5 @@ describe('hydrateAppStartupState', () => {
       'sona-config',
       expect.objectContaining({ appLanguage: 'zh-CN' })
     );
-    expect(mockSettingsSave).toHaveBeenCalledTimes(1);
   });
 });
