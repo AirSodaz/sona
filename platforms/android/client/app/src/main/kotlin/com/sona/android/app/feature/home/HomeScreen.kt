@@ -20,13 +20,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowForward
 import androidx.compose.material.icons.rounded.AudioFile
+import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Mic
+import androidx.compose.material.icons.rounded.Schedule
 import androidx.compose.material.icons.rounded.WarningAmber
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
@@ -34,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,9 +45,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.BuildConfig
 import com.sona.android.app.R
-import com.sona.android.app.ui.component.SonaTopAppBar
-import com.sona.android.app.feature.library.LibraryItemRow
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaCollapsibleTopAppBar
+import com.sona.android.app.ui.component.SonaElevatedCard
+import com.sona.android.app.ui.component.TwoLineItemDivider
+import com.sona.android.app.ui.component.TwoLineItemRow
+import com.sona.android.app.ui.component.springOverscroll
 import com.sona.android.app.feature.library.LibraryUiState
+import com.sona.android.app.feature.recording.formatRecordingTimer
+import com.sona.android.application.library.HistoryItemStatus
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import com.sona.android.app.feature.settings.RecognitionSettingsUiState
 import com.sona.android.application.recording.AsrModelSelection
 import com.sona.android.application.recording.AudioImportJobState
@@ -76,16 +85,17 @@ internal fun HomeScreen(
         configuredProviders,
     )
 
-    Column(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        SonaTopAppBar(
-            title = {
-                Text(
-                    text = BuildConfig.APP_NAME,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-            },
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+    ) {
+        SonaCollapsibleTopAppBar(
+            title = BuildConfig.APP_NAME,
+            scrollBehavior = scrollBehavior,
         )
         Box(
             modifier = Modifier
@@ -93,20 +103,21 @@ internal fun HomeScreen(
                 .weight(1f),
             contentAlignment = Alignment.TopCenter,
         ) {
-        Column(
-            modifier = Modifier
-                .widthIn(max = 960.dp)
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 24.dp, vertical = 20.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            Text(
-                text = stringResource(R.string.home_heading),
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-            )
+            Column(
+                modifier = Modifier
+                    .widthIn(max = 840.dp)
+                    .fillMaxWidth()
+                    .springOverscroll(scrollBehavior = scrollBehavior)
+                    .verticalScroll(rememberScrollState())
+                    .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 100.dp),
+                verticalArrangement = Arrangement.spacedBy(20.dp),
+            ) {
+                Text(
+                    text = stringResource(R.string.home_heading),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
 
             if (recoveryPendingCount > 0) {
                 FilledTonalButton(
@@ -196,15 +207,54 @@ internal fun HomeScreen(
             }
 
             if (libraryState.items.isEmpty()) {
-                Text(
-                    text = stringResource(R.string.library_empty),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(vertical = 24.dp),
-                )
+                InsetGroupedCard {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 28.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = stringResource(R.string.library_empty),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                        )
+                    }
+                }
             } else {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    libraryState.items.take(3).forEach { item ->
-                        LibraryItemRow(item, onClick = { onOpenItem(item.historyId) })
+                val recentItems = libraryState.items.take(3)
+                InsetGroupedCard {
+                    recentItems.forEachIndexed { index, item ->
+                        val statusText = if (item.status == HistoryItemStatus.DRAFT) {
+                            stringResource(R.string.library_status_draft)
+                        } else {
+                            stringResource(R.string.library_status_complete)
+                        }
+                        val metaText = "${formatRecordingTimer(item.durationMillis)} • $statusText"
+                        TwoLineItemRow(
+                            headline = item.title.ifBlank { stringResource(R.string.library_detail_heading) },
+                            supportingText = metaText,
+                            leadingContent = {
+                                Icon(
+                                    imageVector = if (item.status == HistoryItemStatus.DRAFT) {
+                                        Icons.Rounded.Schedule
+                                    } else {
+                                        Icons.Rounded.CheckCircle
+                                    },
+                                    contentDescription = null,
+                                    tint = if (item.status == HistoryItemStatus.DRAFT) {
+                                        MaterialTheme.colorScheme.tertiary
+                                    } else {
+                                        MaterialTheme.colorScheme.primary
+                                    },
+                                    modifier = Modifier.size(24.dp),
+                                )
+                            },
+                            onClick = { onOpenItem(item.historyId) },
+                        )
+                        if (index < recentItems.lastIndex) {
+                            TwoLineItemDivider()
+                        }
                     }
                 }
             }
@@ -222,13 +272,11 @@ private fun HomeActionCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    Card(
+    SonaElevatedCard(
+        onClick = onClick,
         modifier = modifier
             .fillMaxWidth()
-            .heightIn(min = 164.dp)
-            .clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-        shape = MaterialTheme.shapes.medium,
+            .heightIn(min = 164.dp),
     ) {
         Column(
             modifier = Modifier.padding(20.dp),
@@ -237,7 +285,7 @@ private fun HomeActionCard(
             Surface(
                 color = MaterialTheme.colorScheme.primaryContainer,
                 contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = MaterialTheme.shapes.small,
+                shape = RoundedCornerShape(14.dp),
             ) {
                 Box(
                     Modifier

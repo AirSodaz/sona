@@ -34,6 +34,8 @@ import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Surface
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -115,17 +117,14 @@ internal fun RecognitionSettingsPane(
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxWidth()
+                .springOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 20.dp)
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
+            InsetGroupedCard(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 LocalRecognitionSettings(
                     state = recognitionSettingsState,
@@ -139,12 +138,8 @@ internal fun RecognitionSettingsPane(
                 )
             }
 
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
+            InsetGroupedCard(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
@@ -162,12 +157,8 @@ internal fun RecognitionSettingsPane(
             }
 
             if (shouldShowRuntimeStatus(bootstrapState)) {
-                Card(
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                InsetGroupedCard(
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),

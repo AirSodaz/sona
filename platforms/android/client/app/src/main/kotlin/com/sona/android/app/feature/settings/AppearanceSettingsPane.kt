@@ -17,8 +17,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaSwitch
+import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -26,7 +27,6 @@ import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -40,6 +40,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.sona.android.app.R
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AppearanceSettingsPane(
     state: AppearanceSettingsUiState,
@@ -53,27 +54,24 @@ internal fun AppearanceSettingsPane(
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxWidth()
+                .springOverscroll()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 20.dp)
                 .align(Alignment.TopCenter),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Card(
-                shape = MaterialTheme.shapes.medium,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                modifier = Modifier.fillMaxWidth()
+            InsetGroupedCard(
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
                     modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     Text(
                         text = stringResource(R.string.language_label),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     LanguageSelector(
                         selectedLanguage = appLanguage,
@@ -81,33 +79,28 @@ internal fun AppearanceSettingsPane(
                     )
                 }
             }
-
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                Card(
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainer
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                val enabled = state.isLoaded && !state.operationInProgress
+                InsetGroupedCard(
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
                             text = stringResource(R.string.appearance_color_heading),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.primary
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                        val enabled = state.isLoaded && !state.operationInProgress
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clickable(enabled = enabled) {
                                     onDynamicColorChanged(!state.dynamicColorEnabled)
                                 }
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.SpaceBetween,
                         ) {
@@ -115,16 +108,16 @@ internal fun AppearanceSettingsPane(
                                 Text(
                                     text = stringResource(R.string.dynamic_color),
                                     style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    color = MaterialTheme.colorScheme.onSurface,
                                 )
                                 Text(
                                     text = stringResource(R.string.appearance_dynamic_color_description),
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
                             Spacer(Modifier.width(16.dp))
-                            Switch(
+                            SonaSwitch(
                                 checked = state.dynamicColorEnabled,
                                 onCheckedChange = onDynamicColorChanged,
                                 enabled = enabled,

@@ -11,19 +11,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.SonaCardDefaults
+import com.sona.android.app.ui.component.SonaCollapsibleTopAppBar
+import com.sona.android.app.ui.component.TwoLineItemDivider
+import com.sona.android.app.ui.component.TwoLineItemRow
+import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
@@ -298,100 +304,66 @@ private fun SettingsSectionList(
     showSelection: Boolean,
     onSectionSelected: (SettingsSection) -> Unit,
 ) {
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        SonaTopAppBar(
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+    ) {
+        SonaCollapsibleTopAppBar(
             title = stringResource(R.string.destination_settings),
+            scrollBehavior = scrollBehavior,
         )
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .springOverscroll(scrollBehavior = scrollBehavior),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         ) {
-            items(SettingsSection.entries, key = { it.route }) { section ->
-                val selected = showSelection && section == selectedSection
-                val containerColor = if (selected) {
-                    MaterialTheme.colorScheme.secondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainer
-                }
-
-                val contentColor = if (selected) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                }
-
-                Card(
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = containerColor,
-                        contentColor = contentColor
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSectionSelected(section) }
+            item {
+                InsetGroupedCard(
+                    shape = SonaCardDefaults.CardShape,
                 ) {
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                text = stringResource(section.labelRes),
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        },
-                        supportingContent = {
-                            Text(
-                                text = stringResource(section.summaryRes),
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                }
-                            )
-                        },
-                        leadingContent = {
-                            Card(
-                                shape = MaterialTheme.shapes.small,
-                                colors = CardDefaults.cardColors(
-                                    containerColor = if (selected) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.12f)
+                    SettingsSection.entries.forEachIndexed { index, section ->
+                        val selected = showSelection && section == selectedSection
+                        TwoLineItemRow(
+                            headline = stringResource(section.labelRes),
+                            supportingText = stringResource(section.summaryRes),
+                            leadingContent = {
+                                Surface(
+                                    shape = RoundedCornerShape(12.dp),
+                                    color = if (selected) {
+                                        MaterialTheme.colorScheme.primary
                                     } else {
-                                        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                                    }
-                                )
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(8.dp),
-                                    contentAlignment = Alignment.Center
+                                        MaterialTheme.colorScheme.primaryContainer
+                                    },
+                                    contentColor = if (selected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
+                                    modifier = Modifier.size(40.dp),
                                 ) {
-                                    Icon(
-                                        imageVector = section.icon,
-                                        contentDescription = null,
-                                        tint = if (selected) {
-                                            MaterialTheme.colorScheme.onSecondaryContainer
-                                        } else {
-                                            MaterialTheme.colorScheme.onPrimaryContainer
-                                        },
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = section.icon,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(20.dp),
+                                        )
+                                    }
                                 }
-                            }
-                        },
-                        trailingContent = {
-                            if (!showSelection) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Rounded.KeyboardArrowRight,
-                                    contentDescription = null,
-                                    tint = contentColor.copy(alpha = 0.6f)
-                                )
-                            }
-                        },
-                        colors = ListItemDefaults.colors(
-                            containerColor = Color.Transparent,
-                            headlineColor = contentColor,
-                            supportingColor = contentColor
+                            },
+                            showDefaultTrailingChevron = !showSelection,
+                            onClick = { onSectionSelected(section) },
                         )
-                    )
+                        if (index < SettingsSection.entries.lastIndex) {
+                            TwoLineItemDivider(startIndent = 72.dp)
+                        }
+                    }
                 }
+                Spacer(modifier = Modifier.size(100.dp))
             }
         }
     }

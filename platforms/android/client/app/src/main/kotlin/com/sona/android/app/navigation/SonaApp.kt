@@ -1,5 +1,6 @@
 package com.sona.android.app.navigation
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,7 +17,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,6 +24,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalLayoutDirection
@@ -239,50 +240,11 @@ internal fun SonaApp(
         }
 
 
-        NavigationSuiteScaffold(
-            navigationSuiteItems = {
-                SonaDestination.entries.forEach { destination ->
-                    item(
-                        selected = destination.matches(currentRoute),
-                        onClick = {
-                            if (isLibraryDetail && libraryState.editor.dirty) {
-                                pendingDetailDestination = destination.route
-                                detailExitRequestToken += 1
-                            } else {
-                                navController.navigate(destination.route) {
-                                    popUpTo(SonaDestination.HOME.route) { saveState = true }
-                                    launchSingleTop = true
-                                    restoreState = true
-                                }
-                            }
-                        },
-                        icon = {
-                            Icon(
-                                imageVector = destination.icon,
-                                contentDescription = stringResource(destination.labelRes),
-                            )
-                        },
-                        label = { Text(stringResource(destination.labelRes)) },
-                    )
-                }
-            },
-        ) {
-            Scaffold(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(
                 modifier = Modifier.fillMaxSize(),
-            ) { contentPadding ->
-                val layoutDirection = LocalLayoutDirection.current
-                val navHostPadding = PaddingValues(
-                    start = contentPadding.calculateStartPadding(layoutDirection),
-                    top = 0.dp,
-                    end = contentPadding.calculateEndPadding(layoutDirection),
-                    bottom = contentPadding.calculateBottomPadding(),
-                )
-                Surface(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(navHostPadding),
-                    color = MaterialTheme.colorScheme.background,
-                ) {
+                color = MaterialTheme.colorScheme.background,
+            ) {
                     NavHost(
                         navController = navController,
                         startDestination = SonaDestination.HOME.route,
@@ -529,9 +491,26 @@ internal fun SonaApp(
                     }
                 }
             }
+
+            SonaFloatingDock(
+                currentRoute = currentRoute,
+                currentSectionArg = backStackEntry?.arguments?.getString(SETTINGS_SECTION_ARGUMENT),
+                onDestinationSelected = { destination ->
+                    if (isLibraryDetail && libraryState.editor.dirty) {
+                        pendingDetailDestination = destination.route
+                        detailExitRequestToken += 1
+                    } else {
+                        navController.navigate(destination.route) {
+                            popUpTo(SonaDestination.HOME.route) { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                },
+                modifier = Modifier.align(Alignment.BottomCenter),
+            )
         }
     }
-}
 }
 
 internal fun settingsRoute(section: SettingsSection): String =

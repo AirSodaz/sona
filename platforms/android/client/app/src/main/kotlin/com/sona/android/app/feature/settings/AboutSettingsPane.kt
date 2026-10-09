@@ -17,16 +17,18 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.automirrored.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.ErrorOutline
-import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.SystemUpdate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
-import androidx.compose.material3.ListItemDefaults
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.TwoLineItemRow
+import com.sona.android.app.ui.component.springOverscroll
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -45,6 +47,7 @@ import com.sona.android.application.settings.AppUpdateChannel
 
 private const val PROJECT_URL = "https://github.com/AirSodaz/sona"
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AboutSettingsPane(
     state: AboutSettingsUiState,
@@ -58,6 +61,7 @@ internal fun AboutSettingsPane(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .springOverscroll()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -66,84 +70,91 @@ internal fun AboutSettingsPane(
             modifier = Modifier
                 .widthIn(max = 720.dp)
                 .fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Surface(
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(72.dp),
+            InsetGroupedCard {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Image(
-                        painter = painterResource(R.drawable.ic_launcher_foreground),
-                        contentDescription = null,
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(4.dp),
-                    )
+                    Surface(
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(72.dp),
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.ic_launcher_foreground),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                        )
+                    }
+                    Spacer(Modifier.width(16.dp))
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(
+                            text = state.build.appName,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                        Text(
+                            text = stringResource(
+                                R.string.about_version_value,
+                                state.build.versionName,
+                                state.build.versionCode,
+                            ),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Text(
+                            text = stringResource(
+                                when (state.build.channel) {
+                                    AppUpdateChannel.STABLE -> R.string.about_channel_stable
+                                    AppUpdateChannel.NIGHTLY -> R.string.about_channel_nightly
+                                },
+                            ),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
                 }
-                Spacer(Modifier.width(16.dp))
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            }
+
+            InsetGroupedCard {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
                     Text(
-                        text = state.build.appName,
-                        style = MaterialTheme.typography.headlineSmall,
+                        text = stringResource(R.string.about_update_heading),
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(
-                        text = stringResource(
-                            R.string.about_version_value,
-                            state.build.versionName,
-                            state.build.versionCode,
-                        ),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Text(
-                        text = stringResource(
-                            when (state.build.channel) {
-                                AppUpdateChannel.STABLE -> R.string.about_channel_stable
-                                AppUpdateChannel.NIGHTLY -> R.string.about_channel_nightly
-                            },
-                        ),
-                        style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.primary,
+                    )
+                    UpdateStatus(
+                        status = state.updateStatus,
+                        onCheckForUpdates = onCheckForUpdates,
+                        onOpenRelease = { url -> uriHandler.openUri(url) },
                     )
                 }
             }
 
-            HorizontalDivider()
-            Text(
-                text = stringResource(R.string.about_update_heading),
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-            )
-            UpdateStatus(
-                status = state.updateStatus,
-                onCheckForUpdates = onCheckForUpdates,
-                onOpenRelease = { url -> uriHandler.openUri(url) },
-            )
-
-            HorizontalDivider()
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.about_project_page)) },
-                supportingContent = { Text(PROJECT_URL) },
-                leadingContent = {
-                    Icon(Icons.Rounded.OpenInNew, contentDescription = null)
-                },
-                trailingContent = {
-                    Icon(
-                        Icons.Rounded.OpenInNew,
-                        contentDescription = stringResource(R.string.about_open_external),
-                    )
-                },
-                colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { uriHandler.openUri(PROJECT_URL) },
-            )
+            InsetGroupedCard {
+                TwoLineItemRow(
+                    headline = stringResource(R.string.about_project_page),
+                    supportingText = PROJECT_URL,
+                    leadingContent = {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.OpenInNew,
+                            contentDescription = stringResource(R.string.about_open_external),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                    },
+                    onClick = { uriHandler.openUri(PROJECT_URL) },
+                )
+            }
         }
     }
 }
@@ -210,7 +221,7 @@ private fun UpdateStatus(
                 TextButton(onClick = { onOpenRelease(status.release.releasePageUrl) }) {
                     Text(stringResource(R.string.about_view_update))
                     Spacer(Modifier.width(8.dp))
-                    Icon(Icons.Rounded.OpenInNew, contentDescription = null)
+                    Icon(Icons.AutoMirrored.Rounded.OpenInNew, contentDescription = null)
                 }
             }
             Spacer(Modifier.width(8.dp))

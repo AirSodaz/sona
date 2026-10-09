@@ -54,7 +54,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
+import com.sona.android.app.ui.component.SonaSwitch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -459,7 +459,7 @@ internal fun SyncSettingsPane(
                                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     )
                                 }
-                                Switch(
+                                SonaSwitch(
                                     checked = createRecoveryKey,
                                     onCheckedChange = { createRecoveryKey = it },
                                     enabled = !state.busy,

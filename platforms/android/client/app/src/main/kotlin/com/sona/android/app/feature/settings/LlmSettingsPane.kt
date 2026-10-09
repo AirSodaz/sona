@@ -19,6 +19,8 @@ import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import com.sona.android.app.ui.component.InsetGroupedCard
+import com.sona.android.app.ui.component.springOverscroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -67,16 +69,13 @@ internal fun LlmSettingsPane(
 
     Column(
         modifier = modifier
+            .springOverscroll()
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 20.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         // Provider & Model Section Card
-        Card(
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
+        InsetGroupedCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(
@@ -161,11 +160,7 @@ internal fun LlmSettingsPane(
         }
 
         // Credentials Section Card
-        Card(
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            ),
+        InsetGroupedCard(
             modifier = Modifier.fillMaxWidth(),
         ) {
             Column(

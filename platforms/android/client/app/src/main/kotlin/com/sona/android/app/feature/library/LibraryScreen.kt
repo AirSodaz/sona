@@ -31,7 +31,14 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.automirrored.rounded.Label
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Restore
-import com.sona.android.app.ui.component.SonaTopAppBar
+import com.sona.android.app.ui.component.SonaCardDefaults
+import com.sona.android.app.ui.component.SonaCollapsibleTopAppBar
+import com.sona.android.app.ui.component.springOverscroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.ripple
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -142,9 +149,17 @@ internal fun LibraryScreen(
             }
     }
 
-    Column(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        SonaTopAppBar(
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+            .nestedScroll(scrollBehavior.nestedScrollConnection),
+    ) {
+        SonaCollapsibleTopAppBar(
             title = stringResource(R.string.library_heading),
+            scrollBehavior = scrollBehavior,
             actions = {
                 if (state.isRefreshing) {
                     CircularProgressIndicator(
@@ -313,9 +328,10 @@ internal fun LibraryScreen(
                         state = listState,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .weight(1f),
+                            .weight(1f)
+                            .springOverscroll(scrollBehavior = scrollBehavior),
                         verticalArrangement = Arrangement.spacedBy(10.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
+                        contentPadding = PaddingValues(top = 8.dp, bottom = 100.dp),
                     ) {
                         items(state.items, key = HistoryItem::historyId) { item ->
                             LibraryItemRow(
@@ -377,15 +393,22 @@ internal fun LibraryItemRow(
         status
     )
 
+    val interactionSource = remember { MutableInteractionSource() }
     Card(
-        shape = MaterialTheme.shapes.medium,
+        shape = SonaCardDefaults.CardShape,
         colors = CardDefaults.cardColors(containerColor = containerColor),
         modifier = Modifier
             .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+            .clip(SonaCardDefaults.CardShape)
+            .combinedClickable(
+                interactionSource = interactionSource,
+                indication = ripple(bounded = true),
+                onClick = onClick,
+                onLongClick = onLongClick,
+            )
             .semantics {
                 contentDescription = accessibilityDescription
-            }
+            },
     ) {
         Row(
             modifier = Modifier
