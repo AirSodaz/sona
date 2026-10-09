@@ -274,8 +274,9 @@ async fn run_summary_job(
 pub(crate) async fn run_transcript_llm_job_command(
     app: AppHandle,
     _state: State<'_, HistoryRepositoryState>,
-    request: TranscriptLlmJobRequest,
+    mut request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
+    request.sanitize_for_task();
     match request.task_type {
         LlmTaskType::Translate => run_translate_job(app.clone(), request).await,
         LlmTaskType::Polish => run_polish_job(app.clone(), request).await,

@@ -503,8 +503,13 @@ pub fn model_catalog_model_to_ffi(model: ModelCatalogModel) -> FfiModelCatalogMo
         id: model.id,
         name: model.name,
         description: model.description,
-        model_type: model.model_type,
-        modes: model.modes.unwrap_or_default(),
+        model_type: model.model_type.as_str().to_string(),
+        modes: model
+            .modes
+            .unwrap_or_default()
+            .into_iter()
+            .map(|m| m.as_str().to_string())
+            .collect(),
         languages: model.languages,
         language_mode: language_mode_to_ffi(model.language_mode),
         size: model.size,
@@ -512,7 +517,7 @@ pub fn model_catalog_model_to_ffi(model: ModelCatalogModel) -> FfiModelCatalogMo
         is_recommended: model.is_recommended.unwrap_or(false),
         is_archive: model.is_archive,
         filename: model.filename,
-        engine: model.engine,
+        engine: model.engine.as_str().to_string(),
         rules: model_rules_to_ffi(model.rules),
         group_id: model.group_id,
         version_label: model.version_label,

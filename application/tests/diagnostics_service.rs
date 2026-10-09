@@ -6,9 +6,9 @@ use sona_core::models::preset_models::{
 use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsEnrichmentMeasurements, DiagnosticsEnrichmentRepository, DiagnosticsError,
-    ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
+    ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput, PermissionState,
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus, SelectedModelsInput,
-    VoiceTypingReadinessInput, build_diagnostics_core_snapshot_at,
+    VoiceTypingReadinessInput, VoiceTypingState, build_diagnostics_core_snapshot_at,
 };
 use sona_core::transcription::asr_metrics::{
     AsrInferenceMetric, AsrModelLoadMetric, AsrRuntimeMetricsSnapshot,
@@ -110,7 +110,7 @@ fn base_input() -> DiagnosticsCoreInput {
             vad: Some(path_status("C:\\models\\vad.onnx", RuntimePathKind::File)),
             punctuation: None,
         },
-        permission_state: "granted".to_string(),
+        permission_state: PermissionState::Granted,
         microphone_probe: DeviceProbeInput {
             options: vec![DeviceOptionInput {
                 label: "Auto".to_string(),
@@ -125,7 +125,7 @@ fn base_input() -> DiagnosticsCoreInput {
             error_message: None,
         },
         voice_typing_readiness: VoiceTypingReadinessInput {
-            state: "ready".to_string(),
+            state: VoiceTypingState::Ready,
             last_error_message: None,
         },
         runtime_environment: RuntimeEnvironmentStatus {
@@ -176,7 +176,7 @@ fn core_snapshot_serializes_fact_fields_without_ui_spec() {
 #[test]
 fn core_snapshot_preserves_fact_fields_for_frontend_ui_builder() {
     let mut input = base_input();
-    input.permission_state = "prompt".to_string();
+    input.permission_state = PermissionState::Prompt;
     input.runtime_environment.ffmpeg_exists = false;
     input.path_statuses.live_model =
         Some(path_status("C:\\models\\live", RuntimePathKind::Unknown));
@@ -189,7 +189,7 @@ fn core_snapshot_preserves_fact_fields_for_frontend_ui_builder() {
 
     let snapshot = build_snapshot(input);
 
-    assert_eq!(snapshot.permission_state, "prompt");
+    assert_eq!(snapshot.permission_state, PermissionState::Prompt);
     assert!(!snapshot.runtime_environment.ffmpeg_exists);
     assert!(snapshot.punctuation_required);
     assert_eq!(

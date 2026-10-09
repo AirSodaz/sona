@@ -78,3 +78,33 @@ export function toHistorySummaryPayloadTransport(
     record: payload.record ?? null,
   };
 }
+
+export function inferAudioExtensionFromMime(mimeType: string): string | null {
+  const normalized = mimeType.toLowerCase().trim();
+  if (normalized.includes('wav') || normalized.includes('wave')) return 'wav';
+  if (normalized.includes('webm')) return 'webm';
+  if (normalized.includes('mp4') || normalized.includes('m4a')) return 'm4a';
+  if (normalized.includes('aac')) return 'aac';
+  if (normalized.includes('ogg')) return 'ogg';
+  if (normalized.includes('flac')) return 'flac';
+  if (normalized.includes('mp3') || normalized.includes('mpeg')) return 'mp3';
+  if (normalized.includes('opus')) return 'opus';
+  return null;
+}
+
+export function inferAudioExtensionFromBlob(blob: Blob, fallback = 'webm'): string {
+  return inferAudioExtensionFromMime(blob.type) ?? fallback;
+}
+
+export function inferAudioExtensionFromPath(filePath: string, fallback = 'wav'): string {
+  const fileName = filePath.split(/[/\\]/).pop() || '';
+  const extensionIndex = fileName.lastIndexOf('.');
+  const extension =
+    extensionIndex >= 0
+      ? fileName
+          .slice(extensionIndex + 1)
+          .trim()
+          .toLowerCase()
+      : '';
+  return extension || fallback;
+}

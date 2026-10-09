@@ -40,12 +40,6 @@ export type { LocalLlmCardsResponse, LocalLlmModelCard };
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
-const STRATEGY_ALIASES: Readonly<Record<string, CoreLlmProviderStrategy>> = {
-  openai_compatible: 'open_ai_compatible',
-  openai_compatible_custom_path: 'open_ai_compatible_custom_path',
-  openai_responses: 'open_ai_responses',
-};
-
 const PROVIDER_ALIASES: Readonly<Record<string, CoreBuiltinLlmProvider>> = {
   github_copilot: 'copilot',
   openai_compatible: 'custom-openai-compatible',
@@ -138,7 +132,7 @@ function defaultStrategy(provider: CoreLlmProvider): CoreLlmProviderStrategy {
 }
 
 function normalizeStrategy(strategy: string): CoreLlmProviderStrategy {
-  return STRATEGY_ALIASES[strategy] ?? (strategy as CoreLlmProviderStrategy);
+  return strategy as CoreLlmProviderStrategy;
 }
 
 function normalizeConfig(config: LlmConfig, path: string): CoreLlmConfig {

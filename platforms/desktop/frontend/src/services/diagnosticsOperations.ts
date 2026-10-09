@@ -23,36 +23,6 @@ function buildDiagnosticsTransportInput(input: DiagnosticsCoreInput): CoreDiagno
     },
   };
 }
-
-function normalizePermissionState(value: string): DiagnosticsCoreFactsSnapshot['permissionState'] {
-  switch (value) {
-    case 'denied':
-    case 'granted':
-    case 'prompt':
-    case 'unsupported':
-      return value;
-    default:
-      throw new Error(`Unexpected diagnostics permission state: ${value}`);
-  }
-}
-
-function normalizeVoiceTypingState(
-  value: string
-): DiagnosticsCoreFactsSnapshot['voiceTypingReadiness']['state'] {
-  switch (value) {
-    case 'off':
-    case 'needs_shortcut':
-    case 'needs_live_model':
-    case 'needs_vad':
-    case 'failed':
-    case 'preparing':
-    case 'ready':
-      return value;
-    default:
-      throw new Error(`Unexpected diagnostics voice typing state: ${value}`);
-  }
-}
-
 export function normalizeDiagnosticsSnapshot(
   snapshot: CoreDiagnosticsSnapshot
 ): DiagnosticsCoreFactsSnapshot {
@@ -67,9 +37,9 @@ export function normalizeDiagnosticsSnapshot(
       ffmpegEnabled: snapshot.config.ffmpegEnabled ?? false,
       ffmpegPath: snapshot.config.ffmpegPath ?? '',
     },
-    permissionState: normalizePermissionState(snapshot.permissionState),
+    permissionState: snapshot.permissionState,
     voiceTypingReadiness: {
-      state: normalizeVoiceTypingState(snapshot.voiceTypingReadiness.state),
+      state: snapshot.voiceTypingReadiness.state,
       lastErrorMessage: snapshot.voiceTypingReadiness.lastErrorMessage,
     },
   };

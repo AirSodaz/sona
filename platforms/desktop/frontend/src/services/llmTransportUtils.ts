@@ -9,12 +9,6 @@ import type {
 import type { TranscriptLlmJobRequest } from '../types/llmTask';
 import type { LlmConfig, LlmJsonValue } from '../types/transcript';
 
-export const STRATEGY_ALIASES: Readonly<Record<string, CoreLlmProviderStrategy>> = {
-  openai_compatible: 'open_ai_compatible',
-  openai_compatible_custom_path: 'open_ai_compatible_custom_path',
-  openai_responses: 'open_ai_responses',
-};
-
 export const PROVIDER_ALIASES: Readonly<Record<string, CoreBuiltinLlmProvider>> = {
   github_copilot: 'copilot',
   openai_compatible: 'custom-openai-compatible',
@@ -110,7 +104,7 @@ export function defaultStrategy(provider: CoreLlmProvider): CoreLlmProviderStrat
 }
 
 export function normalizeStrategy(strategy: string): CoreLlmProviderStrategy {
-  return STRATEGY_ALIASES[strategy] ?? (strategy as CoreLlmProviderStrategy);
+  return strategy as CoreLlmProviderStrategy;
 }
 
 export function normalizeConfig(config: LlmConfig, path: string): CoreLlmConfig {
@@ -192,53 +186,6 @@ export function normalizeTranscriptSegment(
   };
 }
 
-type CoreTranscriptJobFields = Pick<
-  CoreTranscriptLlmJobRequest,
-  | 'targetLanguage'
-  | 'targetLanguageName'
-  | 'context'
-  | 'keywords'
-  | 'mode'
-  | 'template'
-  | 'chunkSize'
-  | 'chunkCharBudget'
->;
-
-export function normalizeTranscriptJobFields(
-  request: TranscriptLlmJobRequest
-): CoreTranscriptJobFields {
-  const emptyFields: CoreTranscriptJobFields = {
-    targetLanguage: null,
-    targetLanguageName: null,
-    context: null,
-    keywords: null,
-    mode: null,
-    template: null,
-    chunkSize: null,
-    chunkCharBudget: null,
-  };
-  switch (request.taskType) {
-    case 'translate':
-      return {
-        ...emptyFields,
-        targetLanguage: request.targetLanguage,
-        targetLanguageName: request.targetLanguageName ?? null,
-      };
-    case 'polish':
-      return {
-        ...emptyFields,
-        context: request.context ?? null,
-        keywords: request.keywords ?? null,
-        mode: request.mode ?? null,
-      };
-    case 'summary':
-      return {
-        ...emptyFields,
-        template: normalizeSummaryTemplate(request.template),
-      };
-  }
-}
-
 export function normalizeTranscriptJobRequest(
   request: TranscriptLlmJobRequest
 ): CoreTranscriptLlmJobRequest {
@@ -250,6 +197,15 @@ export function normalizeTranscriptJobRequest(
     segments: request.segments.map((segment, index) =>
       normalizeTranscriptSegment(segment, `request.segments[${index}]`)
     ),
-    ...normalizeTranscriptJobFields(request),
+    targetLanguage: 'targetLanguage' in request ? request.targetLanguage : null,
+    targetLanguageName:
+      'targetLanguageName' in request ? (request.targetLanguageName ?? null) : null,
+    context: 'context' in request ? (request.context ?? null) : null,
+    keywords: 'keywords' in request ? (request.keywords ?? null) : null,
+    mode: 'mode' in request ? (request.mode ?? null) : null,
+    template:
+      'template' in request && request.template ? normalizeSummaryTemplate(request.template) : null,
+    chunkSize: null,
+    chunkCharBudget: null,
   };
 }

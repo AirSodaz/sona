@@ -7,7 +7,6 @@ import type {
 import type {
   ModelCatalogModel,
   ModelCatalogRestoreDefaults,
-  ModelCatalogSectionType,
   ModelInfo,
   ModelRules,
   TimestampSupportHint,
@@ -26,85 +25,18 @@ function requireFiniteNumber(value: number | null, fieldName: string): number {
   return value;
 }
 
-function normalizeModelType(value: string): ModelInfo['type'] {
-  switch (value) {
-    case 'zipformer':
-    case 'sensevoice':
-    case 'paraformer':
-    case 'punctuation':
-    case 'vad':
-    case 'itn':
-    case 'whisper':
-    case 'funasr-nano':
-    case 'fire-red-asr':
-    case 'dolphin':
-    case 'qwen3-asr':
-    case 'parakeet-tdt':
-    case 'moonshine':
-    case 'speaker-segmentation':
-    case 'speaker-embedding':
-    case 'omnilingual':
-    case 'alignment':
-      return value;
-    default:
-      throw new Error(`Unexpected model catalog type: ${value}`);
-  }
-}
-
-function normalizeModelModes(modes: string[] | null | undefined): ModelInfo['modes'] {
-  if (!modes) {
-    return undefined;
-  }
-
-  return modes.map((mode) => {
-    switch (mode) {
-      case 'live':
-      case 'streaming':
-      case 'batch':
-        return mode;
-      default:
-        throw new Error(`Unexpected model catalog mode: ${mode}`);
-    }
-  });
-}
-
-function normalizeTimestampSupportHint(
-  value: string | null | undefined
-): TimestampSupportHint | undefined {
-  switch (value) {
-    case 'token':
-    case 'segment':
-    case 'unknown':
-      return value;
-    case null:
-    case undefined:
-      return undefined;
-    default:
-      throw new Error(`Unexpected model timestamp support hint: ${value}`);
-  }
-}
-
-function normalizeCatalogSectionType(value: string): ModelCatalogSectionType {
-  switch (value) {
-    case 'asr':
-    case 'punctuation':
-    case 'vad':
-    case 'speaker-segmentation':
-    case 'speaker-embedding':
-    case 'alignment':
-      return value;
-    default:
-      throw new Error(`Unexpected model catalog section type: ${value}`);
-  }
-}
-
 function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelRules {
-  const timestampSupportHint = normalizeTimestampSupportHint(modelRules.timestampSupportHint);
+  const timestampSupportHint = (modelRules.timestampSupportHint ?? undefined) as
+    | TimestampSupportHint
+    | undefined;
 
   return {
     requiresVad: modelRules.requiresVad,
     requiresPunctuation: modelRules.requiresPunctuation,
     ...(timestampSupportHint === undefined ? {} : { timestampSupportHint }),
+    ...(modelRules.initialRefreshRateMs != null
+      ? { initialRefreshRateMs: modelRules.initialRefreshRateMs }
+      : {}),
   };
 }
 
@@ -132,23 +64,18 @@ function normalizeModelArtifacts(
 }
 
 function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel {
-  const modes = normalizeModelModes(model.modes);
   const artifacts = normalizeModelArtifacts(model.artifacts);
   const isRecommended = model.isRecommended ?? undefined;
   const filename = optionalString(model.filename);
   const groupId = optionalString(model.groupId);
   const versionLabel = optionalString(model.versionLabel);
 
-  if (model.engine !== 'sherpa-onnx' && model.engine !== 'llama-cpp') {
-    throw new Error(`Unexpected model catalog engine: ${model.engine}`);
-  }
-
   return {
     id: model.id,
     name: model.name,
     description: model.description,
-    type: normalizeModelType(model.type),
-    ...(modes === undefined ? {} : { modes }),
+    type: model.type,
+    ...(model.modes ? { modes: model.modes } : {}),
     languages: Array.isArray(model.languages) ? model.languages : [],
     languageMode: normalizeLanguageMode(model.languageMode),
     size: model.size,
@@ -199,7 +126,7 @@ export function normalizeModelCatalogSnapshot(
     modelsDir: snapshot.modelsDir,
     models: snapshot.models.map(normalizeCatalogModel),
     sections: snapshot.sections.map((section) => ({
-      type: normalizeCatalogSectionType(section.type),
+      type: section.type,
       groups: section.groups.map((group) => ({
         key: group.key,
         models: group.models.map(normalizeCatalogModel),

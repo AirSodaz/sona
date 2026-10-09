@@ -1035,3 +1035,49 @@ fn resolves_canonical_aliases_and_suggestions() {
     assert!(error_msg.contains("Did you mean"));
     assert!(error_msg.contains("whisper-turbo"));
 }
+
+#[test]
+fn all_preset_models_have_valid_catalog_enums() {
+    use sona_core::models::preset_models::{ModelCatalogMode, ModelCatalogModelType, ModelEngine};
+
+    let presets = preset_models();
+    assert!(!presets.is_empty(), "presets should not be empty");
+
+    for model in presets {
+        let model_type: Result<ModelCatalogModelType, _> = model.model_type.parse();
+        assert!(
+            model_type.is_ok(),
+            "Model '{}' type '{}' failed to parse into ModelCatalogModelType: {:?}",
+            model.id,
+            model.model_type,
+            model_type.err()
+        );
+
+        if let Some(modes) = &model.modes {
+            for mode in modes {
+                let parsed_mode: Result<ModelCatalogMode, _> = mode.parse();
+                assert!(
+                    parsed_mode.is_ok(),
+                    "Model '{}' mode '{}' failed to parse into ModelCatalogMode: {:?}",
+                    model.id,
+                    mode,
+                    parsed_mode.err()
+                );
+            }
+        }
+
+        let engine_str = model.engine.as_deref().unwrap_or("sherpa-onnx");
+        let parsed_engine: Result<ModelEngine, _> = engine_str.parse();
+        assert!(
+            parsed_engine.is_ok(),
+            "Model '{}' engine '{}' failed to parse into ModelEngine: {:?}",
+            model.id,
+            engine_str,
+            parsed_engine.err()
+        );
+    }
+
+    let snapshot =
+        build_model_catalog_snapshot_with_installed_ids(Path::new("/dummy"), &HashSet::new());
+    assert_eq!(snapshot.models.len(), presets.len());
+}

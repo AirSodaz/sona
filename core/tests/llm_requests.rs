@@ -81,6 +81,111 @@ fn llm_config_accepts_custom_provider_with_explicit_strategy() {
     assert_eq!(config.strategy, LlmProviderStrategy::OpenAiResponses);
     assert_eq!(config.api_path.as_deref(), Some("/v1/responses"));
 }
+#[test]
+fn llm_config_volcengine_strategy_resolution() {
+    let config_default: LlmConfig = serde_json::from_value(json!({
+        "provider": "volcengine",
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "apiKey": "test-key",
+        "model": "doubao-pro"
+    }))
+    .expect("volcengine default config should deserialize");
+    assert_eq!(
+        config_default.provider,
+        LlmProvider::Builtin(BuiltinLlmProvider::Volcengine)
+    );
+    assert_eq!(config_default.strategy, LlmProviderStrategy::Volcengine);
+
+    let config_custom_path: LlmConfig = serde_json::from_value(json!({
+        "provider": "volcengine",
+        "strategy": "open_ai_compatible_custom_path",
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "apiKey": "test-key",
+        "model": "doubao-pro"
+    }))
+    .expect("volcengine with explicit open_ai_compatible_custom_path should deserialize");
+    assert_eq!(
+        config_custom_path.strategy,
+        LlmProviderStrategy::OpenAiCompatibleCustomPath
+    );
+
+    let config_custom_path_alias: LlmConfig = serde_json::from_value(json!({
+        "provider": "volcengine",
+        "strategy": "openai_compatible_custom_path",
+        "baseUrl": "https://ark.cn-beijing.volces.com/api/v3",
+        "apiKey": "test-key",
+        "model": "doubao-pro"
+    }))
+    .expect("volcengine with explicit openai_compatible_custom_path should deserialize");
+    assert_eq!(
+        config_custom_path_alias.strategy,
+        LlmProviderStrategy::OpenAiCompatibleCustomPath
+    );
+}
+
+#[test]
+fn llm_config_custom_openai_compatible_and_aliases() {
+    for provider_name in [
+        "custom-openai-compatible",
+        "openai_compatible",
+        "open_ai_compatible",
+    ] {
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": provider_name,
+            "baseUrl": "https://custom.example.com/v1",
+            "apiKey": "test-key",
+            "model": "my-model"
+        }))
+        .unwrap_or_else(|e| panic!("provider {provider_name} should deserialize: {e}"));
+        assert_eq!(
+            config.provider,
+            LlmProvider::Builtin(BuiltinLlmProvider::CustomOpenAiCompatible)
+        );
+        assert_eq!(config.strategy, LlmProviderStrategy::OpenAiCompatible);
+    }
+
+    for strategy_name in ["open_ai_compatible", "openai_compatible"] {
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "open_ai",
+            "strategy": strategy_name,
+            "baseUrl": "https://api.openai.com/v1",
+            "apiKey": "test-key",
+            "model": "gpt-4o"
+        }))
+        .unwrap_or_else(|e| panic!("strategy {strategy_name} should deserialize: {e}"));
+        assert_eq!(config.strategy, LlmProviderStrategy::OpenAiCompatible);
+    }
+}
+
+#[test]
+fn llm_config_local_provider_and_aliases() {
+    for provider_name in ["local", "llama_cpp", "local_model"] {
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": provider_name,
+            "baseUrl": "http://127.0.0.1:8080",
+            "apiKey": "",
+            "model": "qwen2.5"
+        }))
+        .unwrap_or_else(|e| panic!("provider {provider_name} should deserialize: {e}"));
+        assert_eq!(
+            config.provider,
+            LlmProvider::Builtin(BuiltinLlmProvider::Local)
+        );
+        assert_eq!(config.strategy, LlmProviderStrategy::Local);
+    }
+
+    for strategy_name in ["local", "llama_cpp", "local_model"] {
+        let config: LlmConfig = serde_json::from_value(json!({
+            "provider": "open_ai",
+            "strategy": strategy_name,
+            "baseUrl": "http://127.0.0.1:8080",
+            "apiKey": "",
+            "model": "qwen2.5"
+        }))
+        .unwrap_or_else(|e| panic!("strategy {strategy_name} should deserialize: {e}"));
+        assert_eq!(config.strategy, LlmProviderStrategy::Local);
+    }
+}
 
 #[test]
 fn llm_config_validation_rejects_empty_model_names() {
@@ -342,4 +447,72 @@ fn summary_segment_input_stays_available_for_request_construction() {
     };
 
     assert_eq!(segment.id, "segment-1");
+}
+
+#[test]
+fn transcript_job_request_sanitize_for_task() {
+    let make_request = |task_type| TranscriptLlmJobRequest {
+        task_id: "job-sanitize".to_string(),
+        task_type,
+        job_history_id: Some("hist-1".to_string()),
+        config: sample_config(),
+        segments: vec![sample_transcript_segment()],
+        target_language: Some("es".to_string()),
+        target_language_name: Some("Spanish".to_string()),
+        context: Some("Meeting notes".to_string()),
+        keywords: Some("AI, Rust".to_string()),
+        mode: Some(sona_core::llm::tasks::PolishMode::Clean),
+        template: Some(SummaryTemplateConfig {
+            id: "meeting".to_string(),
+            name: "Meeting".to_string(),
+            instructions: "Summarize".to_string(),
+        }),
+        chunk_size: Some(10),
+        chunk_char_budget: Some(2000),
+    };
+
+    // Translate sanitization
+    let mut translate_req = make_request(LlmTaskType::Translate);
+    translate_req.sanitize_for_task();
+    assert_eq!(translate_req.target_language.as_deref(), Some("es"));
+    assert_eq!(
+        translate_req.target_language_name.as_deref(),
+        Some("Spanish")
+    );
+    assert!(translate_req.context.is_none());
+    assert!(translate_req.keywords.is_none());
+    assert!(translate_req.mode.is_none());
+    assert!(translate_req.template.is_none());
+    assert!(translate_req.chunk_size.is_none());
+    assert!(translate_req.chunk_char_budget.is_none());
+
+    // Polish sanitization
+    let mut polish_req = make_request(LlmTaskType::Polish);
+    polish_req.sanitize_for_task();
+    assert!(polish_req.target_language.is_none());
+    assert!(polish_req.target_language_name.is_none());
+    assert_eq!(polish_req.context.as_deref(), Some("Meeting notes"));
+    assert_eq!(polish_req.keywords.as_deref(), Some("AI, Rust"));
+    assert_eq!(
+        polish_req.mode,
+        Some(sona_core::llm::tasks::PolishMode::Clean)
+    );
+    assert!(polish_req.template.is_none());
+    assert!(polish_req.chunk_size.is_none());
+    assert!(polish_req.chunk_char_budget.is_none());
+
+    // Summary sanitization
+    let mut summary_req = make_request(LlmTaskType::Summary);
+    summary_req.sanitize_for_task();
+    assert!(summary_req.target_language.is_none());
+    assert!(summary_req.target_language_name.is_none());
+    assert!(summary_req.context.is_none());
+    assert!(summary_req.keywords.is_none());
+    assert!(summary_req.mode.is_none());
+    assert_eq!(
+        summary_req.template.as_ref().map(|t| t.id.as_str()),
+        Some("meeting")
+    );
+    assert_eq!(summary_req.chunk_size, Some(10));
+    assert_eq!(summary_req.chunk_char_budget, Some(2000));
 }

@@ -86,11 +86,11 @@ pub use sona_core::llm::usage::{LlmGenerateSource, LlmUsageCategory, TokenUsage}
 pub use sona_core::llm::{LocalLlmCardsResponse, LocalLlmModelCard};
 pub use sona_core::models::config::ModelFileConfig;
 pub use sona_core::models::preset_models::{
-    ModelCatalogGroup, ModelCatalogModel, ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults,
-    ModelCatalogSection, ModelCatalogSectionType, ModelCatalogSelectedIds,
-    ModelCatalogSelectionOptions, ModelCatalogSnapshot, ModelDependencyConfigKey,
-    ModelDependencyRequest, ModelRules, ModelSelectionOption, ModelSelectionPaths,
-    TimestampSupportHint,
+    ModelCatalogGroup, ModelCatalogMode, ModelCatalogModel, ModelCatalogModelType,
+    ModelCatalogPathMatchToken, ModelCatalogRestoreDefaults, ModelCatalogSection,
+    ModelCatalogSectionType, ModelCatalogSelectedIds, ModelCatalogSelectionOptions,
+    ModelCatalogSnapshot, ModelDependencyConfigKey, ModelDependencyRequest, ModelEngine,
+    ModelRules, ModelSelectionOption, ModelSelectionPaths, TimestampSupportHint,
 };
 pub use sona_core::ports::asr::{
     AsrEngine, AsrEngineConfig, AsrMode, AsrTranscriptionRequest, BatchSegmentationMode,
@@ -111,7 +111,8 @@ pub use sona_core::runtime::cuda_addon::CudaAddonInspection;
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, LiveTranscriptionDiagnosticsSnapshot, ModelRuleInput, ModelRulesInput,
-    ModelSummaryInput, PathStatusesInput, SelectedModelsInput, VoiceTypingReadinessInput,
+    ModelSummaryInput, PathStatusesInput, PermissionState, SelectedModelsInput,
+    VoiceTypingReadinessInput, VoiceTypingState,
 };
 pub use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
@@ -601,6 +602,9 @@ pub fn desktop_types() -> specta::Types {
         .register::<ModelRules>()
         .register::<ModelCatalogSnapshot>()
         .register::<ModelCatalogModel>()
+        .register::<ModelCatalogModelType>()
+        .register::<ModelCatalogMode>()
+        .register::<ModelEngine>()
         .register::<ModelCatalogSection>()
         .register::<ModelCatalogGroup>()
         .register::<ModelCatalogSectionType>()
@@ -621,6 +625,8 @@ pub fn desktop_types() -> specta::Types {
         .register::<PathStatusesInput>()
         .register::<DeviceProbeInput>()
         .register::<DeviceOptionInput>()
+        .register::<PermissionState>()
+        .register::<VoiceTypingState>()
         .register::<VoiceTypingReadinessInput>()
         .register::<DiagnosticsCoreSnapshot>()
         .register::<LiveTranscriptionDiagnosticsSnapshot>()
@@ -856,6 +862,9 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "ModelRules",
     "ModelCatalogSnapshot",
     "ModelCatalogModel",
+    "ModelCatalogModelType",
+    "ModelCatalogMode",
+    "ModelEngine",
     "ModelCatalogSection",
     "ModelCatalogGroup",
     "ModelCatalogSectionType",
@@ -876,6 +885,8 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "PathStatusesInput",
     "DeviceProbeInput",
     "DeviceOptionInput",
+    "PermissionState",
+    "VoiceTypingState",
     "VoiceTypingReadinessInput",
     "DiagnosticsCoreSnapshot",
     "LiveTranscriptionDiagnosticsSnapshot",
@@ -1131,6 +1142,9 @@ mod tests {
             "ModelRules",
             "ModelCatalogSnapshot",
             "ModelCatalogModel",
+            "ModelCatalogModelType",
+            "ModelCatalogMode",
+            "ModelEngine",
             "ModelCatalogSection",
             "ModelCatalogGroup",
             "ModelCatalogSectionType",
@@ -1151,6 +1165,8 @@ mod tests {
             "PathStatusesInput",
             "DeviceProbeInput",
             "DeviceOptionInput",
+            "PermissionState",
+            "VoiceTypingState",
             "VoiceTypingReadinessInput",
             "DiagnosticsCoreSnapshot",
             "AsrRuntimeMetricsSnapshot",
@@ -1280,7 +1296,7 @@ mod tests {
         for expected in [
             "export type AppConfig =",
             "appLanguage?: AppLanguagePreference | null",
-            "asr?: AppAsrConfig_Deserialize | null",
+            "asr: AppAsrConfig_Deserialize | null",
             "llmSettings?: unknown | null",
             "export type AppAsrSelections =",
             "voiceTyping: AppAsrModelSelection_Deserialize",
@@ -1636,6 +1652,9 @@ mod tests {
         assert_specta_type::<sona_core::models::preset_models::ModelRules>();
         assert_specta_type::<sona_core::models::preset_models::ModelCatalogSnapshot>();
         assert_specta_type::<sona_core::models::preset_models::ModelCatalogModel>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogModelType>();
+        assert_specta_type::<sona_core::models::preset_models::ModelCatalogMode>();
+        assert_specta_type::<sona_core::models::preset_models::ModelEngine>();
         assert_specta_type::<sona_core::models::preset_models::ModelCatalogSection>();
         assert_specta_type::<sona_core::models::preset_models::ModelCatalogGroup>();
         assert_specta_type::<sona_core::models::preset_models::ModelCatalogSectionType>();
@@ -1657,6 +1676,8 @@ mod tests {
         assert_specta_type::<sona_core::runtime::environment::RuntimePathKind>();
         assert_specta_type::<sona_core::runtime::environment::RuntimePathStatus>();
         assert_specta_type::<sona_core::runtime::diagnostics::DiagnosticsCoreInput>();
+        assert_specta_type::<sona_core::runtime::diagnostics::PermissionState>();
+        assert_specta_type::<sona_core::runtime::diagnostics::VoiceTypingState>();
         assert_specta_type::<sona_core::runtime::diagnostics::DiagnosticsConfigInput>();
         assert_specta_type::<sona_core::runtime::diagnostics::SelectedModelsInput>();
         assert_specta_type::<sona_core::runtime::diagnostics::ModelSummaryInput>();

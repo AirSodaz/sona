@@ -286,3 +286,32 @@ pub struct TranscriptLlmJobRequest {
     )]
     pub chunk_char_budget: Option<usize>,
 }
+
+impl TranscriptLlmJobRequest {
+    pub fn sanitize_for_task(&mut self) {
+        match self.task_type {
+            LlmTaskType::Translate => {
+                self.context = None;
+                self.keywords = None;
+                self.mode = None;
+                self.template = None;
+                self.chunk_size = None;
+                self.chunk_char_budget = None;
+            }
+            LlmTaskType::Polish => {
+                self.target_language = None;
+                self.target_language_name = None;
+                self.template = None;
+                self.chunk_size = None;
+                self.chunk_char_budget = None;
+            }
+            LlmTaskType::Summary => {
+                self.target_language = None;
+                self.target_language_name = None;
+                self.context = None;
+                self.keywords = None;
+                self.mode = None;
+            }
+        }
+    }
+}

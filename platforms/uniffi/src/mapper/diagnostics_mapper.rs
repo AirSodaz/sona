@@ -4,7 +4,7 @@ use crate::{
 use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
     DiagnosticsCoreSnapshot, ModelRuleInput, ModelRulesInput, ModelSummaryInput, PathStatusesInput,
-    SelectedModelsInput, VoiceTypingReadinessInput,
+    PermissionState, SelectedModelsInput, VoiceTypingReadinessInput, VoiceTypingState,
 };
 use sona_core::runtime::environment::{
     RuntimeEnvironmentStatus, RuntimePathKind, RuntimePathStatus,
@@ -232,7 +232,7 @@ impl From<FfiDiagnosticsDeviceProbeV1> for DeviceProbeInput {
 impl From<FfiVoiceTypingReadinessV1> for VoiceTypingReadinessInput {
     fn from(value: FfiVoiceTypingReadinessV1) -> Self {
         Self {
-            state: value.state,
+            state: value.state.parse().unwrap_or(VoiceTypingState::Off),
             last_error_message: value.last_error_message,
         }
     }
@@ -306,7 +306,10 @@ impl From<FfiDiagnosticsInputV1> for DiagnosticsCoreInput {
             selected_models: value.selected_models.into(),
             model_rules: value.model_rules.into(),
             path_statuses: value.path_statuses.into(),
-            permission_state: value.permission_state,
+            permission_state: value
+                .permission_state
+                .parse()
+                .unwrap_or(PermissionState::Unsupported),
             microphone_probe: value.microphone_probe.into(),
             system_audio_probe: value.system_audio_probe.into(),
             voice_typing_readiness: value.voice_typing_readiness.into(),
@@ -410,7 +413,7 @@ impl From<DeviceProbeInput> for FfiDiagnosticsDeviceProbeV1 {
 impl From<VoiceTypingReadinessInput> for FfiVoiceTypingReadinessV1 {
     fn from(value: VoiceTypingReadinessInput) -> Self {
         Self {
-            state: value.state,
+            state: value.state.as_str().to_string(),
             last_error_message: value.last_error_message,
         }
     }
@@ -453,7 +456,7 @@ impl From<DiagnosticsCoreSnapshot> for FfiDiagnosticsSnapshotV1 {
             selected_models: value.selected_models.into(),
             model_rules: value.model_rules.into(),
             path_statuses: value.path_statuses.into(),
-            permission_state: value.permission_state,
+            permission_state: value.permission_state.as_str().to_string(),
             microphone_probe: value.microphone_probe.into(),
             system_audio_probe: value.system_audio_probe.into(),
             voice_typing_readiness: value.voice_typing_readiness.into(),

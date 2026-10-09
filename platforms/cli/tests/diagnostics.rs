@@ -33,7 +33,7 @@ fn write_input_with_permission(path: &Path, models_dir: &Path, permission_state:
             "permissionState": permission_state,
             "microphoneProbe": {"options": [], "available": true, "errorMessage": null},
             "systemAudioProbe": {"options": [], "available": false, "errorMessage": "unsupported"},
-            "voiceTypingReadiness": {"state": "cli-ready", "lastErrorMessage": null},
+            "voiceTypingReadiness": {"state": "ready", "lastErrorMessage": null},
             "runtimeEnvironment": {
                 "ffmpegPath": "cli://ffmpeg",
                 "ffmpegExists": false,
@@ -214,25 +214,28 @@ fn diagnostics_snapshot_renders_exact_table_columns() {
 }
 
 #[test]
-fn diagnostics_snapshot_sanitizes_permission_state_for_terminal_table() {
+fn diagnostics_snapshot_rejects_invalid_permission_state() {
     let root = tempfile::tempdir().unwrap();
     let app_data_dir = root.path().join("app-data");
     let models_dir = app_data_dir.join("models");
     fs::create_dir_all(&models_dir).unwrap();
     let input = root.path().join("input.json");
-    write_input_with_permission(&input, &models_dir, "granted\n\u{1b}[31m");
+    write_input_with_permission(&input, &models_dir, "invalid-permission");
 
-    let output = run_snapshot(
-        app_data_dir.to_string_lossy().as_ref(),
-        input.to_string_lossy().as_ref(),
-        false,
-    );
+    let err = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "diagnostics",
+        "snapshot",
+        "--app-data-dir",
+        app_data_dir.to_str().unwrap(),
+        "--input",
+        input.to_str().unwrap(),
+    ])
+    .unwrap_err();
 
-    assert_eq!(output.stdout.lines().count(), 3);
-    assert!(output.stdout.contains(r"granted\n\u{1b}[31m"));
-    assert!(!output.stdout.contains('\u{1b}'));
+    let err_str = err.to_string();
+    assert!(err_str.contains("unknown variant") || err_str.contains("invalid-permission"));
 }
-
 #[test]
 fn diagnostics_snapshot_outputs_complete_pretty_json() {
     let root = tempfile::tempdir().unwrap();
@@ -255,7 +258,7 @@ fn diagnostics_snapshot_outputs_complete_pretty_json() {
     assert_eq!(snapshot["selectedModels"]["live"]["id"], LIVE_MODEL_ID);
     assert_eq!(snapshot["modelRules"]["live"]["requiresPunctuation"], true);
     assert_eq!(snapshot["runtimeEnvironment"]["ffmpegPath"], "cli://ffmpeg");
-    assert_eq!(snapshot["voiceTypingReadiness"]["state"], "cli-ready");
+    assert_eq!(snapshot["voiceTypingReadiness"]["state"], "ready");
 }
 
 #[test]

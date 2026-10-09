@@ -26,6 +26,8 @@ import type {
 } from '../types/transcriptSnapshot';
 import { logger } from '../utils/logger';
 import {
+  inferAudioExtensionFromBlob,
+  inferAudioExtensionFromPath,
   normalizeTranscriptDiffRow,
   normalizeTranscriptSegment,
   toHistorySummaryPayloadTransport,
@@ -42,22 +44,6 @@ export type TranscriptEditCommitResult =
   | { status: 'unchanged' }
   | { status: 'committed'; item: HistoryItem; snapshot: TranscriptSnapshotMetadata }
   | { status: 'conflict'; currentSegments: TranscriptSegment[] };
-
-function inferAudioExtensionFromPath(filePath: string, fallback: string): string {
-  const fileName = filePath.split(/[/\\]/).pop() || '';
-  const extensionIndex = fileName.lastIndexOf('.');
-  const extension = extensionIndex >= 0 ? fileName.slice(extensionIndex + 1).trim() : '';
-  return extension || fallback;
-}
-
-function inferAudioExtensionFromBlob(blob: Blob): string {
-  const mimeType = blob.type.toLowerCase();
-  if (mimeType.includes('mp4')) return 'm4a';
-  if (mimeType.includes('aac')) return 'aac';
-  if (mimeType.includes('ogg')) return 'ogg';
-  if (mimeType.includes('wav')) return 'wav';
-  return 'webm';
-}
 
 interface SaveRecordingInternalRequest {
   segments: TranscriptSegment[];

@@ -7,6 +7,112 @@ use serde::{Deserialize, Serialize};
 #[cfg(feature = "specta")]
 use specta::Type;
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "lowercase")]
+pub enum PermissionState {
+    Denied,
+    Granted,
+    Prompt,
+    Unsupported,
+}
+
+impl PermissionState {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Denied => "denied",
+            Self::Granted => "granted",
+            Self::Prompt => "prompt",
+            Self::Unsupported => "unsupported",
+        }
+    }
+}
+
+impl std::fmt::Display for PermissionState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for PermissionState {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "denied" => Ok(Self::Denied),
+            "granted" => Ok(Self::Granted),
+            "prompt" => Ok(Self::Prompt),
+            "unsupported" => Ok(Self::Unsupported),
+            _ => Err(format!("Unknown PermissionState: {s}")),
+        }
+    }
+}
+
+impl TryFrom<&str> for PermissionState {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "snake_case")]
+pub enum VoiceTypingState {
+    Off,
+    NeedsShortcut,
+    NeedsLiveModel,
+    NeedsVad,
+    Failed,
+    Preparing,
+    Ready,
+}
+
+impl VoiceTypingState {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::NeedsShortcut => "needs_shortcut",
+            Self::NeedsLiveModel => "needs_live_model",
+            Self::NeedsVad => "needs_vad",
+            Self::Failed => "failed",
+            Self::Preparing => "preparing",
+            Self::Ready => "ready",
+        }
+    }
+}
+
+impl std::fmt::Display for VoiceTypingState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for VoiceTypingState {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "off" => Ok(Self::Off),
+            "needs_shortcut" => Ok(Self::NeedsShortcut),
+            "needs_live_model" => Ok(Self::NeedsLiveModel),
+            "needs_vad" => Ok(Self::NeedsVad),
+            "failed" => Ok(Self::Failed),
+            "preparing" => Ok(Self::Preparing),
+            "ready" => Ok(Self::Ready),
+            _ => Err(format!("Unknown VoiceTypingState: {s}")),
+        }
+    }
+}
+
+impl TryFrom<&str> for VoiceTypingState {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -18,7 +124,7 @@ pub struct DiagnosticsCoreInput {
     pub model_rules: ModelRulesInput,
     #[serde(default)]
     pub path_statuses: PathStatusesInput,
-    pub permission_state: String,
+    pub permission_state: PermissionState,
     pub microphone_probe: DeviceProbeInput,
     pub system_audio_probe: DeviceProbeInput,
     pub voice_typing_readiness: VoiceTypingReadinessInput,
@@ -129,7 +235,7 @@ pub struct DeviceOptionInput {
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
 pub struct VoiceTypingReadinessInput {
-    pub state: String,
+    pub state: VoiceTypingState,
     pub last_error_message: Option<String>,
 }
 
@@ -142,7 +248,7 @@ pub struct DiagnosticsCoreSnapshot {
     pub selected_models: SelectedModelsInput,
     pub model_rules: ModelRulesInput,
     pub path_statuses: PathStatusesInput,
-    pub permission_state: String,
+    pub permission_state: PermissionState,
     pub microphone_probe: DeviceProbeInput,
     pub system_audio_probe: DeviceProbeInput,
     pub voice_typing_readiness: VoiceTypingReadinessInput,

@@ -350,6 +350,185 @@ pub struct ModelCatalogSnapshot {
     pub restore_defaults: ModelCatalogRestoreDefaults,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelCatalogModelType {
+    Zipformer,
+    Sensevoice,
+    Paraformer,
+    Punctuation,
+    Vad,
+    Itn,
+    Whisper,
+    FunasrNano,
+    FireRedAsr,
+    Dolphin,
+    Qwen3Asr,
+    ParakeetTdt,
+    Moonshine,
+    SpeakerSegmentation,
+    SpeakerEmbedding,
+    Omnilingual,
+    Alignment,
+}
+
+impl ModelCatalogModelType {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Zipformer => "zipformer",
+            Self::Sensevoice => "sensevoice",
+            Self::Paraformer => "paraformer",
+            Self::Punctuation => "punctuation",
+            Self::Vad => "vad",
+            Self::Itn => "itn",
+            Self::Whisper => "whisper",
+            Self::FunasrNano => "funasr-nano",
+            Self::FireRedAsr => "fire-red-asr",
+            Self::Dolphin => "dolphin",
+            Self::Qwen3Asr => "qwen3-asr",
+            Self::ParakeetTdt => "parakeet-tdt",
+            Self::Moonshine => "moonshine",
+            Self::SpeakerSegmentation => "speaker-segmentation",
+            Self::SpeakerEmbedding => "speaker-embedding",
+            Self::Omnilingual => "omnilingual",
+            Self::Alignment => "alignment",
+        }
+    }
+}
+
+impl std::fmt::Display for ModelCatalogModelType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ModelCatalogModelType {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "zipformer" => Ok(Self::Zipformer),
+            "sensevoice" => Ok(Self::Sensevoice),
+            "paraformer" => Ok(Self::Paraformer),
+            "punctuation" => Ok(Self::Punctuation),
+            "vad" => Ok(Self::Vad),
+            "itn" => Ok(Self::Itn),
+            "whisper" => Ok(Self::Whisper),
+            "funasr-nano" => Ok(Self::FunasrNano),
+            "fire-red-asr" => Ok(Self::FireRedAsr),
+            "dolphin" => Ok(Self::Dolphin),
+            "qwen3-asr" => Ok(Self::Qwen3Asr),
+            "parakeet-tdt" => Ok(Self::ParakeetTdt),
+            "moonshine" => Ok(Self::Moonshine),
+            "speaker-segmentation" => Ok(Self::SpeakerSegmentation),
+            "speaker-embedding" => Ok(Self::SpeakerEmbedding),
+            "omnilingual" => Ok(Self::Omnilingual),
+            "alignment" => Ok(Self::Alignment),
+            _ => Err(format!("Unknown ModelCatalogModelType: {s}")),
+        }
+    }
+}
+
+impl TryFrom<&str> for ModelCatalogModelType {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelCatalogMode {
+    Live,
+    Streaming,
+    Batch,
+}
+
+impl ModelCatalogMode {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Live => "live",
+            Self::Streaming => "streaming",
+            Self::Batch => "batch",
+        }
+    }
+}
+
+impl std::fmt::Display for ModelCatalogMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ModelCatalogMode {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "live" => Ok(Self::Live),
+            "streaming" => Ok(Self::Streaming),
+            "batch" => Ok(Self::Batch),
+            _ => Err(format!("Unknown ModelCatalogMode: {s}")),
+        }
+    }
+}
+
+impl TryFrom<&str> for ModelCatalogMode {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "kebab-case")]
+pub enum ModelEngine {
+    #[serde(rename = "sherpa-onnx")]
+    SherpaOnnx,
+    #[serde(rename = "llama-cpp")]
+    LlamaCpp,
+}
+
+impl ModelEngine {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::SherpaOnnx => "sherpa-onnx",
+            Self::LlamaCpp => "llama-cpp",
+        }
+    }
+}
+
+impl std::fmt::Display for ModelEngine {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for ModelEngine {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "sherpa-onnx" => Ok(Self::SherpaOnnx),
+            "llama-cpp" => Ok(Self::LlamaCpp),
+            _ => Err(format!("Unknown ModelEngine: {s}")),
+        }
+    }
+}
+
+impl TryFrom<&str> for ModelEngine {
+    type Error = String;
+
+    fn try_from(s: &str) -> Result<Self, Self::Error> {
+        s.parse()
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -358,9 +537,9 @@ pub struct ModelCatalogModel {
     pub name: String,
     pub description: String,
     #[serde(rename = "type")]
-    pub model_type: String,
+    pub model_type: ModelCatalogModelType,
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub modes: Option<Vec<String>>,
+    pub modes: Option<Vec<ModelCatalogMode>>,
     /// All languages the model can recognize, sorted ascending ISO 639 codes
     /// (`yue` covers Cantonese). Empty for non-ASR models.
     pub languages: Vec<String>,
@@ -373,7 +552,7 @@ pub struct ModelCatalogModel {
     pub is_archive: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
-    pub engine: String,
+    pub engine: ModelEngine,
     pub rules: ModelRules,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub group_id: Option<String>,
@@ -724,20 +903,28 @@ fn build_catalog_sections(models: &[ModelCatalogModel]) -> Vec<ModelCatalogSecti
 
 fn model_matches_section(model: &ModelCatalogModel, section_type: ModelCatalogSectionType) -> bool {
     match section_type {
-        ModelCatalogSectionType::Punctuation => model.model_type == "punctuation",
-        ModelCatalogSectionType::Vad => model.model_type == "vad",
-        ModelCatalogSectionType::SpeakerSegmentation => model.model_type == "speaker-segmentation",
-        ModelCatalogSectionType::SpeakerEmbedding => model.model_type == "speaker-embedding",
+        ModelCatalogSectionType::Punctuation => {
+            model.model_type == ModelCatalogModelType::Punctuation
+        }
+        ModelCatalogSectionType::Vad => model.model_type == ModelCatalogModelType::Vad,
+        ModelCatalogSectionType::SpeakerSegmentation => {
+            model.model_type == ModelCatalogModelType::SpeakerSegmentation
+        }
+        ModelCatalogSectionType::SpeakerEmbedding => {
+            model.model_type == ModelCatalogModelType::SpeakerEmbedding
+        }
         ModelCatalogSectionType::Alignment => {
-            model.model_type == "alignment" || model.model_type == "omnilingual"
+            model.model_type == ModelCatalogModelType::Alignment
+                || model.model_type == ModelCatalogModelType::Omnilingual
         }
-        ModelCatalogSectionType::Asr => {
-            model.model_type != "punctuation"
-                && model.model_type != "vad"
-                && model.model_type != "speaker-segmentation"
-                && model.model_type != "speaker-embedding"
-                && model.model_type != "alignment"
-        }
+        ModelCatalogSectionType::Asr => !matches!(
+            model.model_type,
+            ModelCatalogModelType::Punctuation
+                | ModelCatalogModelType::Vad
+                | ModelCatalogModelType::SpeakerSegmentation
+                | ModelCatalogModelType::SpeakerEmbedding
+                | ModelCatalogModelType::Alignment
+        ),
     }
 }
 
@@ -759,17 +946,20 @@ fn build_selection_options(models: &[ModelCatalogModel]) -> ModelCatalogSelectio
             .collect(),
         speaker_segmentation: models
             .iter()
-            .filter(|model| model.model_type == "speaker-segmentation")
+            .filter(|model| model.model_type == ModelCatalogModelType::SpeakerSegmentation)
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
         speaker_embedding: models
             .iter()
-            .filter(|model| model.model_type == "speaker-embedding")
+            .filter(|model| model.model_type == ModelCatalogModelType::SpeakerEmbedding)
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
         alignment: models
             .iter()
-            .filter(|model| model.model_type == "alignment" || model.model_type == "omnilingual")
+            .filter(|model| {
+                model.model_type == ModelCatalogModelType::Alignment
+                    || model.model_type == ModelCatalogModelType::Omnilingual
+            })
             .map(ModelSelectionOption::from_catalog_model)
             .collect(),
     }
@@ -930,13 +1120,41 @@ impl ModelCatalogModel {
     fn from_preset(model: &PresetModel, models_dir: &Path, is_installed: bool) -> Self {
         let install_path = model.resolve_install_path(models_dir);
         let download_path = model.resolve_download_path(models_dir);
+        let model_type = model
+            .model_type
+            .parse::<ModelCatalogModelType>()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "Unknown model type '{}' in preset model '{}'",
+                    model.model_type, model.id
+                )
+            });
+        let modes = model.modes.as_ref().map(|modes| {
+            modes
+                .iter()
+                .map(|mode| {
+                    mode.parse::<ModelCatalogMode>().unwrap_or_else(|_| {
+                        panic!(
+                            "Unknown model mode '{}' in preset model '{}'",
+                            mode, model.id
+                        )
+                    })
+                })
+                .collect()
+        });
+        let engine = model
+            .engine
+            .as_deref()
+            .unwrap_or("sherpa-onnx")
+            .parse::<ModelEngine>()
+            .unwrap_or_else(|_| panic!("Unknown model engine in preset model '{}'", model.id));
 
         Self {
             id: model.id.clone(),
             name: model.name.clone(),
             description: model.description.clone(),
-            model_type: model.model_type.clone(),
-            modes: model.modes.clone(),
+            model_type,
+            modes,
             languages: model.languages.clone(),
             language_mode: model.language_mode,
             size: model.size.clone(),
@@ -944,10 +1162,7 @@ impl ModelCatalogModel {
             is_archive: model.is_archive(),
             artifacts: model.artifacts.clone(),
             filename: model.filename.clone(),
-            engine: model
-                .engine
-                .clone()
-                .unwrap_or_else(|| "sherpa-onnx".to_string()),
+            engine,
             rules: model.resolved_rules(),
             group_id: model.group_id.clone(),
             version_label: model.version_label.clone(),
@@ -962,9 +1177,9 @@ impl ModelCatalogModel {
             .as_ref()
             .map(|modes| {
                 modes.iter().any(|item| {
-                    item == mode
-                        || (mode == "live" && item == "streaming")
-                        || (mode == "streaming" && item == "live")
+                    item.as_str() == mode
+                        || (mode == "live" && item == &ModelCatalogMode::Streaming)
+                        || (mode == "streaming" && item == &ModelCatalogMode::Live)
                 })
             })
             .unwrap_or(false)
@@ -980,11 +1195,14 @@ impl ModelCatalogModel {
     /// Returns true when this catalog model is an ASR model.
     pub fn is_asr(&self) -> bool {
         self.modes.as_ref().map(|m| !m.is_empty()).unwrap_or(false)
-            && self.model_type != "punctuation"
-            && self.model_type != "vad"
-            && self.model_type != "speaker-segmentation"
-            && self.model_type != "speaker-embedding"
-            && self.model_type != "alignment"
+            && !matches!(
+                self.model_type,
+                ModelCatalogModelType::Punctuation
+                    | ModelCatalogModelType::Vad
+                    | ModelCatalogModelType::SpeakerSegmentation
+                    | ModelCatalogModelType::SpeakerEmbedding
+                    | ModelCatalogModelType::Alignment
+            )
     }
 
     /// Returns the human-readable selection label for this catalog model.

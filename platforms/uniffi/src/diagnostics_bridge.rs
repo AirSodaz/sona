@@ -86,7 +86,7 @@ mod tests {
             "permissionState": "granted",
             "microphoneProbe": {"options": [], "available": true, "errorMessage": null},
             "systemAudioProbe": {"options": [], "available": false, "errorMessage": "unsupported"},
-            "voiceTypingReadiness": {"state": "mobile-ready", "lastErrorMessage": null},
+            "voiceTypingReadiness": {"state": "ready", "lastErrorMessage": null},
             "runtimeEnvironment": {
                 "ffmpegPath": "mobile://ffmpeg",
                 "ffmpegExists": false,
@@ -138,7 +138,7 @@ mod tests {
                 error_message: Some("unsupported".to_string()),
             },
             voice_typing_readiness: FfiVoiceTypingReadinessV1 {
-                state: "mobile-ready".to_string(),
+                state: "ready".to_string(),
                 last_error_message: None,
             },
             runtime_environment: FfiRuntimeEnvironmentStatusV1 {
@@ -223,7 +223,7 @@ mod tests {
             snapshot["runtimeEnvironment"]["ffmpegPath"],
             "mobile://ffmpeg"
         );
-        assert_eq!(snapshot["voiceTypingReadiness"]["state"], "mobile-ready");
+        assert_eq!(snapshot["voiceTypingReadiness"]["state"], "ready");
         assert!(snapshot["scannedAt"].as_str().unwrap().ends_with('Z'));
         assert_eq!(file_hashes(&app_data_dir), before);
     }
@@ -283,7 +283,7 @@ mod tests {
         );
         // Host-reported facts must survive the round trip untouched.
         assert_eq!(typed.runtime_environment.ffmpeg_path, "mobile://ffmpeg");
-        assert_eq!(typed.voice_typing_readiness.state, "mobile-ready");
+        assert_eq!(typed.voice_typing_readiness.state, "ready");
         assert_eq!(
             typed.system_audio_probe.error_message.as_deref(),
             Some("unsupported")

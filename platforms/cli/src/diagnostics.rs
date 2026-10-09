@@ -115,7 +115,7 @@ fn render_diagnostics_table(snapshot: &DiagnosticsCoreSnapshot) -> String {
         selected_model_id(snapshot.selected_models.batch.as_ref()),
         snapshot.onboarding_ready.to_string(),
         snapshot.punctuation_required.to_string(),
-        sanitize_table_cell(&snapshot.permission_state),
+        sanitize_table_cell(snapshot.permission_state.as_str()),
         snapshot.microphone_probe.available.to_string(),
         snapshot.system_audio_probe.available.to_string(),
     ];

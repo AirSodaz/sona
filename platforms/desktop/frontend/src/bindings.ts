@@ -947,7 +947,7 @@ export type DiagnosticsCoreInput = {
 	selectedModels?: SelectedModelsInput,
 	modelRules?: ModelRulesInput,
 	pathStatuses?: PathStatusesInput,
-	permissionState: string,
+	permissionState: PermissionState,
 	microphoneProbe: DeviceProbeInput,
 	systemAudioProbe: DeviceProbeInput,
 	voiceTypingReadiness: VoiceTypingReadinessInput,
@@ -964,7 +964,7 @@ export type DiagnosticsCoreSnapshot = {
 	selectedModels: SelectedModelsInput,
 	modelRules: ModelRulesInput,
 	pathStatuses: PathStatusesInput,
-	permissionState: string,
+	permissionState: PermissionState,
 	microphoneProbe: DeviceProbeInput,
 	systemAudioProbe: DeviceProbeInput,
 	voiceTypingReadiness: VoiceTypingReadinessInput,
@@ -1684,14 +1684,18 @@ export type ModelCatalogGroup_Serialize = {
 	models: ModelCatalogModel_Serialize[],
 };
 
+export type ModelCatalogMode = "live" | "streaming" | "batch";
+
 export type ModelCatalogModel = ModelCatalogModel_Serialize | ModelCatalogModel_Deserialize;
+
+export type ModelCatalogModelType = "zipformer" | "sensevoice" | "paraformer" | "punctuation" | "vad" | "itn" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr" | "parakeet-tdt" | "moonshine" | "speaker-segmentation" | "speaker-embedding" | "omnilingual" | "alignment";
 
 export type ModelCatalogModel_Deserialize = {
 	id: string,
 	name: string,
 	description: string,
-	type: string,
-	modes: string[] | null,
+	type: ModelCatalogModelType,
+	modes: ModelCatalogMode[] | null,
 	/**
 	 *  All languages the model can recognize, sorted ascending ISO 639 codes
 	 *  (`yue` covers Cantonese). Empty for non-ASR models.
@@ -1703,7 +1707,7 @@ export type ModelCatalogModel_Deserialize = {
 	isRecommended: boolean | null,
 	isArchive: boolean,
 	filename: string | null,
-	engine: string,
+	engine: ModelEngine,
 	rules: ModelRules,
 	groupId: string | null,
 	versionLabel: string | null,
@@ -1716,8 +1720,8 @@ export type ModelCatalogModel_Serialize = {
 	id: string,
 	name: string,
 	description: string,
-	type: string,
-	modes?: string[] | null,
+	type: ModelCatalogModelType,
+	modes?: ModelCatalogMode[] | null,
 	/**
 	 *  All languages the model can recognize, sorted ascending ISO 639 codes
 	 *  (`yue` covers Cantonese). Empty for non-ASR models.
@@ -1729,7 +1733,7 @@ export type ModelCatalogModel_Serialize = {
 	isRecommended?: boolean | null,
 	isArchive: boolean,
 	filename?: string | null,
-	engine: string,
+	engine: ModelEngine,
 	rules: ModelRules,
 	groupId?: string | null,
 	versionLabel?: string | null,
@@ -1847,6 +1851,8 @@ export type ModelDependencyRequest = {
 	installPath: string,
 	isInstalled: boolean,
 };
+
+export type ModelEngine = "sherpa-onnx" | "llama-cpp";
 
 export type ModelFileConfig = {
 	encoder: string | null,
@@ -2008,6 +2014,8 @@ export type PathStatusesInput = {
 	vad: RuntimePathStatus | null,
 	punctuation: RuntimePathStatus | null,
 };
+
+export type PermissionState = "denied" | "granted" | "prompt" | "unsupported";
 
 export type PolishKeywordSetRecord = {
 	id: string,
@@ -3128,9 +3136,11 @@ export type VoiceTypingPlatformAppsRecord = {
 export type VoiceTypingProcessingMode = "raw" | "polish";
 
 export type VoiceTypingReadinessInput = {
-	state: string,
+	state: VoiceTypingState,
 	lastErrorMessage: string | null,
 };
+
+export type VoiceTypingState = "off" | "needs_shortcut" | "needs_live_model" | "needs_vad" | "failed" | "preparing" | "ready";
 
 export type VolcengineDoubaoAsrConfig = {
 	apiKey?: string,

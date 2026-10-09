@@ -126,7 +126,7 @@ const uiLlmConfig = {
 
 const coreLlmConfig = {
   provider: { Builtin: 'open_ai' },
-  strategy: 'open_ai_compatible',
+  strategy: 'openai_compatible',
   baseUrl: 'https://api.openai.com',
   apiKey: 'test-key',
   model: 'gpt-4.1',
@@ -754,24 +754,6 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenCalledWith(TauriCommand.app.getModelCatalogSnapshot);
   });
 
-  it('rejects model catalog values outside the UI contract', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce({
-      modelsDir: 'C:/models',
-      models: [
-        {
-          type: 'future-asr-engine',
-          modes: null,
-          engine: 'sherpa-onnx',
-        },
-      ],
-      sections: [],
-    });
-
-    await expect(getModelCatalogSnapshot()).rejects.toThrow(
-      'Unexpected model catalog type: future-asr-engine'
-    );
-  });
-
   it('rejects an invalid model catalog VAD buffer size', async () => {
     vi.mocked(invoke).mockResolvedValueOnce({
       modelsDir: 'C:/models',
@@ -938,14 +920,6 @@ describe('tauri boundary wrappers', () => {
         },
       },
     });
-
-    vi.mocked(invoke).mockResolvedValueOnce({
-      ...coreSnapshot,
-      permissionState: 'unexpected',
-    });
-    await expect(getDiagnosticsCoreSnapshot(input)).rejects.toThrow(
-      'Unexpected diagnostics permission state: unexpected'
-    );
   });
 
   it('app wrappers delegate config migration and effective config resolution to Rust', async () => {
@@ -1501,7 +1475,7 @@ describe('tauri boundary wrappers', () => {
     expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.listModels, {
       request: {
         provider: { Builtin: 'open_ai' },
-        strategy: 'open_ai_compatible',
+        strategy: 'openai_compatible',
         baseUrl: 'https://api.openai.com',
         apiKey: 'test-key',
       },
@@ -1765,49 +1739,6 @@ describe('tauri boundary wrappers', () => {
         },
         input: 'hello',
         source: null,
-      },
-    });
-  });
-
-  it('drops stale fields outside the selected transcript LLM job variant', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce({
-      taskId: 'translate-task-id',
-      taskType: 'translate',
-      segments: [],
-    });
-
-    await runTranscriptLlmJob({
-      taskId: 'translate-task-id',
-      taskType: 'translate',
-      config: uiLlmConfig,
-      segments: [],
-      targetLanguage: 'zh',
-      context: 'stale polish context',
-      keywords: 'stale polish keywords',
-      template: {
-        id: 'stale-summary-template',
-        name: 'Stale',
-        instructions: 'Do not forward.',
-        builtIn: false,
-      },
-      chunkCharBudget: 2048,
-    } as unknown as Parameters<typeof runTranscriptLlmJob>[0]);
-
-    expect(invoke).toHaveBeenCalledWith(TauriCommand.llm.runTranscriptJob, {
-      request: {
-        taskId: 'translate-task-id',
-        taskType: 'translate',
-        jobHistoryId: null,
-        config: coreLlmConfig,
-        segments: [],
-        targetLanguage: 'zh',
-        targetLanguageName: null,
-        context: null,
-        keywords: null,
-        mode: null,
-        template: null,
-        chunkSize: null,
-        chunkCharBudget: null,
       },
     });
   });
