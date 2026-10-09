@@ -1,7 +1,23 @@
 /// <reference types="vitest" />
 
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { buildTokens } from './scripts/build-tokens.mjs';
+
+function tokensPlugin(): Plugin {
+  return {
+    name: 'vite-plugin-design-tokens',
+    buildStart() {
+      buildTokens();
+    },
+    handleHotUpdate({ file, server }: { file: string; server: ViteDevServer }) {
+      if (file.endsWith('tokens.json')) {
+        buildTokens();
+        server.ws.send({ type: 'full-reload' });
+      }
+    },
+  };
+}
 
 const host = process.env.TAURI_DEV_HOST;
 
@@ -12,6 +28,7 @@ const ReactCompilerConfig = {
 // https://vite.dev/config/
 export default defineConfig(async () => ({
   plugins: [
+    tokensPlugin(),
     react({
       babel: {
         plugins: [['babel-plugin-react-compiler', ReactCompilerConfig]],
@@ -31,6 +48,7 @@ export default defineConfig(async () => ({
             'src/locales/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/types/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/constants/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/styles/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/utils/**/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/stores/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/platform/**/__tests__/**/*.{test,spec}.ts',

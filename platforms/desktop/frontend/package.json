@@ -5,8 +5,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsc && vite build",
+    "dev": "node scripts/build-tokens.mjs && vite",
+    "build": "node scripts/build-tokens.mjs && tsc && vite build",
+    "build:tokens": "node scripts/build-tokens.mjs",
     "format": "biome format --write .",
     "lint": "biome check .",
     "lint:ci": "biome ci .",
