@@ -1,0 +1,16 @@
+[package]
+name = "sona-mcp"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Model Context Protocol (MCP) host for Sona desktop client"
+
+[package.metadata.sona]
+role = "host"
+[dependencies]
+sona-core = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util", "io-std", "sync", "time", "net"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }

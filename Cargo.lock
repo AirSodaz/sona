@@ -6490,6 +6490,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sona-mcp"
+version = "0.9.5"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
+ "sona-core",
+ "tokio",
+]
+
+[[package]]
 name = "sona-media-detector"
 version = "0.9.5"
 dependencies = [

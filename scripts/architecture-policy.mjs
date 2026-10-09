@@ -37,6 +37,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona', 'host'],
   ['sona-cli', 'host'],
   ['sona-uniffi-bind', 'host'],
+  ['sona-mcp', 'host'],
   ['sona-uniffi-bindgen', 'tool'],
 ]);
 

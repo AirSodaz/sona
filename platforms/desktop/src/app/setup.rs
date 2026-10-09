@@ -84,6 +84,11 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         .build()
         .map_err(|e| format!("Failed to build DesktopServices: {e}"))?;
 
+    let agent_facade = crate::platform::agent_control::AgentControlFacade::new(
+        desktop_services.clone(),
+        Some(app.handle().clone()),
+    );
+    crate::platform::agent_control::start_agent_control_ipc_server(agent_facade);
     app.manage(desktop_services);
     app.manage((*audio_state).clone());
     app.manage((*asr_state).clone());

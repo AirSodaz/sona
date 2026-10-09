@@ -1,0 +1,549 @@
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+
+use super::facade::{
+    AgentControlFacade, EditTranscriptRequest, QueryHistoryRequest, StartRecordingRequest,
+    StopRecordingRequest,
+};
+
+pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
+
+pub fn get_unix_socket_path() -> PathBuf {
+    if let Some(runtime_dir) = std::env::var("XDG_RUNTIME_DIR")
+        .ok()
+        .filter(|d| !d.trim().is_empty())
+    {
+        return PathBuf::from(runtime_dir).join("sona-agent.sock");
+    }
+    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+    PathBuf::from(home)
+        .join(".local")
+        .join("share")
+        .join("sona")
+        .join("agent.sock")
+}
+
+#[derive(Debug, Deserialize)]
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,
+    pub id: Option<serde_json::Value>,
+    pub method: String,
+    #[serde(default)]
+    pub params: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcSuccessResponse<'a> {
+    pub jsonrpc: &'a str,
+    pub id: serde_json::Value,
+    pub result: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcErrorObject<'a> {
+    pub code: i32,
+    pub message: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct JsonRpcErrorResponse<'a> {
+    pub jsonrpc: &'a str,
+    pub id: serde_json::Value,
+    pub error: JsonRpcErrorObject<'a>,
+}
+
+fn parse_params<T: serde::de::DeserializeOwned>(
+    params: Option<serde_json::Value>,
+) -> Result<T, (i32, String)> {
+    let value = params.unwrap_or_else(|| serde_json::json!({}));
+    serde_json::from_value(value).map_err(|e| (-32602, format!("Invalid params: {e}")))
+}
+
+fn extract_history_id(params: &Option<serde_json::Value>) -> Result<String, (i32, String)> {
+    match params {
+        Some(serde_json::Value::String(s)) => Ok(s.clone()),
+        Some(serde_json::Value::Object(map)) => {
+            if let Some(serde_json::Value::String(s)) =
+                map.get("history_id").or_else(|| map.get("historyId"))
+            {
+                Ok(s.clone())
+            } else {
+                Err((-32602, "Missing 'history_id' parameter".to_string()))
+            }
+        }
+        _ => Err((
+            -32602,
+            "Invalid or missing parameters for history_id".to_string(),
+        )),
+    }
+}
+
+fn parse_delete_history(
+    params: &Option<serde_json::Value>,
+) -> Result<(String, bool), (i32, String)> {
+    match params {
+        Some(serde_json::Value::String(s)) => Ok((s.clone(), false)),
+        Some(serde_json::Value::Object(map)) => {
+            let id = if let Some(serde_json::Value::String(s)) =
+                map.get("history_id").or_else(|| map.get("historyId"))
+            {
+                s.clone()
+            } else {
+                return Err((-32602, "Missing 'history_id' parameter".to_string()));
+            };
+            let permanent = map
+                .get("permanent")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            Ok((id, permanent))
+        }
+        _ => Err((-32602, "Invalid parameters for delete_history".to_string())),
+    }
+}
+
+fn parse_optional_project_id(params: &Option<serde_json::Value>) -> Option<String> {
+    match params {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(serde_json::Value::Object(map)) => map
+            .get("project_id")
+            .or_else(|| map.get("projectId"))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        _ => None,
+    }
+}
+
+fn parse_optional_key(params: &Option<serde_json::Value>) -> Option<String> {
+    match params {
+        Some(serde_json::Value::String(s)) => Some(s.clone()),
+        Some(serde_json::Value::Object(map)) => map
+            .get("key")
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        _ => None,
+    }
+}
+
+fn parse_update_setting(
+    params: &Option<serde_json::Value>,
+) -> Result<(String, serde_json::Value), (i32, String)> {
+    match params {
+        Some(serde_json::Value::Object(map)) => {
+            let key = if let Some(serde_json::Value::String(s)) = map.get("key") {
+                s.clone()
+            } else {
+                return Err((-32602, "Missing 'key' parameter".to_string()));
+            };
+            let value = map.get("value").cloned().unwrap_or(serde_json::Value::Null);
+            Ok((key, value))
+        }
+        _ => Err((-32602, "Invalid parameters for update_setting".to_string())),
+    }
+}
+
+pub async fn dispatch_rpc_call(
+    method: &str,
+    params: Option<serde_json::Value>,
+    facade: &AgentControlFacade,
+) -> Result<serde_json::Value, (i32, String)> {
+    let clean_method = method
+        .strip_prefix("sona_")
+        .or_else(|| method.strip_prefix("agent_"))
+        .unwrap_or(method);
+
+    match clean_method {
+        "get_client_state" => {
+            let res = facade.get_client_state().await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "focus_window" => {
+            let res = facade.focus_window().map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "start_recording" => {
+            let req: StartRecordingRequest = parse_params(params)?;
+            let res = facade.start_recording(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "stop_recording" => {
+            let req: StopRecordingRequest = parse_params(params)?;
+            let res = facade.stop_recording(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "query_history" => {
+            let req: QueryHistoryRequest = parse_params(params)?;
+            let res = facade.query_history(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "read_transcript" => {
+            let history_id = extract_history_id(&params)?;
+            let res = facade
+                .read_transcript(history_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "edit_transcript" => {
+            let req: EditTranscriptRequest = parse_params(params)?;
+            let res = facade.edit_transcript(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "delete_history" => {
+            let (history_id, permanent) = parse_delete_history(&params)?;
+            let res = facade
+                .delete_history(history_id, permanent)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "list_projects" => {
+            let res = facade.list_projects().await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "set_active_project" => {
+            let project_id = parse_optional_project_id(&params);
+            let res = facade
+                .set_active_project(project_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "get_settings" => {
+            let key = parse_optional_key(&params);
+            let res = facade.get_settings(key).map_err(|e| (-32000, e))?;
+            Ok(res)
+        }
+        "update_setting" => {
+            let (key, value) = parse_update_setting(&params)?;
+            let res = facade.update_setting(key, value).map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        _ => Err((-32601, format!("Method '{method}' not found"))),
+    }
+}
+
+pub async fn handle_connection<S>(
+    stream: S,
+    facade: AgentControlFacade,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    let (reader, mut writer) = tokio::io::split(stream);
+    let mut buf_reader = tokio::io::BufReader::new(reader);
+    let mut line = String::new();
+
+    while buf_reader.read_line(&mut line).await? > 0 {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            line.clear();
+            continue;
+        }
+
+        let resp_json: Option<String> = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
+            Ok(rpc_req) => {
+                if rpc_req.jsonrpc != "2.0" {
+                    let resp = JsonRpcErrorResponse {
+                        jsonrpc: "2.0",
+                        id: rpc_req.id.unwrap_or(serde_json::Value::Null),
+                        error: JsonRpcErrorObject {
+                            code: -32600,
+                            message: "Invalid Request: jsonrpc must be '2.0'",
+                            data: None,
+                        },
+                    };
+                    Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
+                } else if rpc_req.id.is_none() {
+                    // JSON-RPC 2.0 Notification: process without response
+                    let _ = dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade).await;
+                    None
+                } else {
+                    let id = rpc_req.id.unwrap();
+                    match dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade).await {
+                        Ok(result) => {
+                            let resp = JsonRpcSuccessResponse {
+                                jsonrpc: "2.0",
+                                id,
+                                result,
+                            };
+                            Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
+                        }
+                        Err((code, message)) => {
+                            let resp = JsonRpcErrorResponse {
+                                jsonrpc: "2.0",
+                                id,
+                                error: JsonRpcErrorObject {
+                                    code,
+                                    message: &message,
+                                    data: None,
+                                },
+                            };
+                            Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
+                        }
+                    }
+                }
+            }
+            Err(e) => {
+                let resp = JsonRpcErrorResponse {
+                    jsonrpc: "2.0",
+                    id: serde_json::Value::Null,
+                    error: JsonRpcErrorObject {
+                        code: -32700,
+                        message: &format!("Parse error: {e}"),
+                        data: None,
+                    },
+                };
+                Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
+            }
+        };
+
+        if let Some(resp_str) = resp_json {
+            writer.write_all(resp_str.as_bytes()).await?;
+            writer.write_all(b"\n").await?;
+            writer.flush().await?;
+        }
+        line.clear();
+    }
+
+    Ok(())
+}
+
+#[cfg(windows)]
+pub async fn run_ipc_server(
+    facade: AgentControlFacade,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    use tokio::net::windows::named_pipe::ServerOptions;
+
+    let mut server = ServerOptions::new()
+        .first_pipe_instance(true)
+        .create(WINDOWS_PIPE_NAME)?;
+
+    log::info!("[AgentControlIPC] Named pipe server listening on {WINDOWS_PIPE_NAME}");
+
+    loop {
+        if let Err(e) = server.connect().await {
+            log::warn!("[AgentControlIPC] Named pipe connect error: {e}");
+            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            continue;
+        }
+
+        let connected_client = server;
+        server = ServerOptions::new().create(WINDOWS_PIPE_NAME)?;
+
+        let facade_clone = facade.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = handle_connection(connected_client, facade_clone).await {
+                log::debug!("[AgentControlIPC] Client connection ended: {e}");
+            }
+        });
+    }
+}
+
+#[cfg(unix)]
+pub async fn run_ipc_server(
+    facade: AgentControlFacade,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    let socket_path = get_unix_socket_path();
+    if let Some(parent) = socket_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let _ = std::fs::remove_file(&socket_path);
+
+    let listener = tokio::net::UnixListener::bind(&socket_path)?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600));
+    }
+    log::info!(
+        "[AgentControlIPC] Unix domain socket server listening on {}",
+        socket_path.display()
+    );
+
+    loop {
+        let (stream, _) = listener.accept().await?;
+        let facade_clone = facade.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(e) = handle_connection(stream, facade_clone).await {
+                log::debug!("[AgentControlIPC] Client connection ended: {e}");
+            }
+        });
+    }
+}
+
+#[cfg(not(any(windows, unix)))]
+pub async fn run_ipc_server(
+    _facade: AgentControlFacade,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    log::warn!("[AgentControlIPC] IPC server is not supported on this platform");
+    Ok(())
+}
+
+pub fn start_agent_control_ipc_server(facade: AgentControlFacade) {
+    tauri::async_runtime::spawn(async move {
+        if let Err(e) = run_ipc_server(facade).await {
+            log::error!("[AgentControlIPC] Server terminated with error: {e}");
+        }
+    });
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::platform::database::DesktopSqliteState;
+    use crate::platform::event::MockEventEmitter;
+    use crate::services::DesktopServices;
+    use std::sync::Arc;
+
+    async fn create_test_facade() -> (AgentControlFacade, tempfile::TempDir) {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
+        let sqlite = DesktopSqliteState::new(ctx);
+        let emitter = Arc::new(MockEventEmitter::new());
+
+        let services = DesktopServices::builder()
+            .sqlite(sqlite)
+            .event_emitter(emitter)
+            .sync_config_path(temp.path().join("sync.json"))
+            .build()
+            .unwrap();
+
+        let facade = AgentControlFacade::new(services, None);
+        (facade, temp)
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_rpc_variants() {
+        let (facade, _dir) = create_test_facade().await;
+
+        let res1 = dispatch_rpc_call("sona_get_client_state", None, &facade)
+            .await
+            .unwrap();
+        assert_eq!(res1.get("online").and_then(|v| v.as_bool()), Some(true));
+
+        let res2 = dispatch_rpc_call("get_client_state", None, &facade)
+            .await
+            .unwrap();
+        assert_eq!(res2.get("online").and_then(|v| v.as_bool()), Some(true));
+
+        let res3 = dispatch_rpc_call("agent_get_client_state", None, &facade)
+            .await
+            .unwrap();
+        assert_eq!(res3.get("online").and_then(|v| v.as_bool()), Some(true));
+
+        let unknown = dispatch_rpc_call("unknown_method", None, &facade).await;
+        assert!(unknown.is_err());
+        assert_eq!(unknown.unwrap_err().0, -32601);
+    }
+
+    #[tokio::test]
+    async fn test_handle_connection_duplex() {
+        let (facade, _dir) = create_test_facade().await;
+        let (client, server) = tokio::io::duplex(4096);
+
+        tokio::spawn(async move {
+            let _ = handle_connection(server, facade).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut reader = tokio::io::BufReader::new(client_read);
+
+        let req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "sona_get_client_state",
+            "params": {}
+        });
+        let req_str = format!("{}\n", serde_json::to_string(&req).unwrap());
+        client_write.write_all(req_str.as_bytes()).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut resp_line = String::new();
+        reader.read_line(&mut resp_line).await.unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_str(&resp_line).unwrap();
+        assert_eq!(parsed.get("id").and_then(|v| v.as_i64()), Some(42));
+        assert_eq!(
+            parsed
+                .get("result")
+                .and_then(|r| r.get("online"))
+                .and_then(|v| v.as_bool()),
+            Some(true)
+        );
+    }
+    #[tokio::test]
+    async fn test_handle_connection_invalid_version() {
+        let (facade, _dir) = create_test_facade().await;
+        let (client, server) = tokio::io::duplex(4096);
+
+        tokio::spawn(async move {
+            let _ = handle_connection(server, facade).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut reader = tokio::io::BufReader::new(client_read);
+
+        let req = serde_json::json!({
+            "jsonrpc": "1.0",
+            "id": 99,
+            "method": "sona_get_client_state",
+            "params": {}
+        });
+        let req_str = format!("{}\n", serde_json::to_string(&req).unwrap());
+        client_write.write_all(req_str.as_bytes()).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut resp_line = String::new();
+        reader.read_line(&mut resp_line).await.unwrap();
+
+        let parsed: serde_json::Value = serde_json::from_str(&resp_line).unwrap();
+        assert_eq!(parsed.get("id").and_then(|v| v.as_i64()), Some(99));
+        assert_eq!(
+            parsed
+                .get("error")
+                .and_then(|e| e.get("code"))
+                .and_then(|c| c.as_i64()),
+            Some(-32600)
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_connection_notification_silent() {
+        let (facade, _dir) = create_test_facade().await;
+        let (client, server) = tokio::io::duplex(4096);
+
+        tokio::spawn(async move {
+            let _ = handle_connection(server, facade).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut reader = tokio::io::BufReader::new(client_read);
+
+        // Send a notification (no id)
+        let notification = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "sona_focus_window"
+        });
+        let req_str = format!("{}\n", serde_json::to_string(&notification).unwrap());
+        client_write.write_all(req_str.as_bytes()).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        // Follow up with a request with id
+        let ping_req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 100,
+            "method": "sona_get_client_state"
+        });
+        let ping_str = format!("{}\n", serde_json::to_string(&ping_req).unwrap());
+        client_write.write_all(ping_str.as_bytes()).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        // The first response received must be for id: 100, NOT the notification
+        let mut resp_line = String::new();
+        reader.read_line(&mut resp_line).await.unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&resp_line).unwrap();
+        assert_eq!(parsed.get("id").and_then(|v| v.as_i64()), Some(100));
+    }
+}

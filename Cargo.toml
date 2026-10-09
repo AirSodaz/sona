@@ -25,6 +25,7 @@ members = [
     "platforms/cli",
     "platforms/desktop",
     "platforms/uniffi",
+    "platforms/mcp",
     "tools/uniffi_bindgen",
 ]
 
@@ -50,6 +51,7 @@ sona-core = { path = "core" }
 sona-export = { path = "adapters/export" }
 sona-llama-cpp = { path = "providers/asr/local/llama_cpp" }
 sona-media-detector = { path = "adapters/media_detector" }
+sona-mcp = { path = "platforms/mcp" }
 sona-model-downloads = { path = "adapters/model_downloads" }
 sona-online-asr = { path = "providers/asr/online" }
 sona-online-llm = { path = "adapters/online_llm" }

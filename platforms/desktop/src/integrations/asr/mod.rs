@@ -16,7 +16,7 @@ mod types;
 
 const BATCH_PROGRESS_EVENT: &str = "batch-progress";
 
-fn recognizer_output_event(instance_id: &str) -> String {
+pub(crate) fn recognizer_output_event(instance_id: &str) -> String {
     format!("recognizer-output-{instance_id}")
 }
 

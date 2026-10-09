@@ -55,7 +55,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-http = "2"
 async-trait = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
 cpal = { workspace = true }
 ringbuf = { workspace = true }
 tauri-plugin-process = "2"
