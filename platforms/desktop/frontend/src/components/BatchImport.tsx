@@ -2,13 +2,12 @@ import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SUPPORTED_MEDIA_EXTENSIONS } from '../constants/mediaExtensions';
+import { usePlatform } from '../platform';
 import {
   isAsrRequestConfigured,
   resolveAsrTranscriptionRequest,
 } from '../services/asrConfigService';
 import { resolveItemPipeline } from '../services/projectPipeline';
-import { invokeTauri } from '../services/tauri/invoke';
-import { openDialog } from '../services/tauri/platform/dialog';
 import type { Event } from '../services/tauri/platform/events';
 import { getCurrentWindow } from '../services/tauri/platform/windows';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
@@ -40,6 +39,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
   const showError = useDialogStore((state) => state.showError);
   const [isDragOver, setIsDragOver] = useState(false);
   const { t } = useTranslation();
+  const platform = usePlatform();
 
   // Queue store
   // Optimization: Only subscribe to queue length to avoid re-renders on progress updates
@@ -104,10 +104,9 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
       if (files.length > 0) {
         try {
-          const validResults: boolean[] = await invokeTauri('check_media_formats', {
+          const validResults = await platform.transport.invoke<boolean[]>('check_media_formats', {
             paths: files,
           });
-
           const validFiles: string[] = [];
           const invalidFiles: string[] = [];
 
@@ -146,12 +145,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
       setIsDragOver(false);
     },
-    [queueFiles, showError]
+    [queueFiles, showError, platform.transport.invoke]
   );
 
   const handleClick = useCallback(async (): Promise<void> => {
     try {
-      const selected = await openDialog({
+      const selected = await platform.ports.dialog.openFile({
         multiple: true,
         filters: [
           {
@@ -171,8 +170,9 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
 
       const files = Array.isArray(selected) ? selected : [selected];
       if (files.length > 0) {
-        const validResults: boolean[] = await invokeTauri('check_media_formats', { paths: files });
-
+        const validResults = await platform.transport.invoke<boolean[]>('check_media_formats', {
+          paths: files,
+        });
         const validFiles: string[] = [];
         const invalidFiles: string[] = [];
 
@@ -204,7 +204,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         cause: err,
       });
     }
-  }, [queueFiles, showError]);
+  }, [queueFiles, showError, platform.ports.dialog.openFile, platform.transport.invoke]);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();

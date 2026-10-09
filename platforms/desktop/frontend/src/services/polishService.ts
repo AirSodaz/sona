@@ -9,6 +9,7 @@ import type { TranscriptSegment } from '../types/transcript';
 import { resolvePolishPreset } from '../utils/polishPresets';
 import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
+import { runTranscriptLlmJob } from './llmOperations';
 import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
 import type {
   PolishedSegment,
@@ -17,7 +18,6 @@ import type {
 } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
-import { runTranscriptLlmJob } from './tauri/llm';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryPolishTranscriptJobOptions {

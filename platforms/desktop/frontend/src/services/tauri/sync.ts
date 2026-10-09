@@ -28,9 +28,7 @@ import type {
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
-export const getSyncStatus = (): Promise<SyncStatusSnapshot> =>
-  invokeTauri(TauriCommand.sync.getStatus);
-
+export { getSyncStatus } from '../syncOperations';
 export const webDavProviderInput = (
   configuration: WebDavObjectStoreConfig
 ): SyncProviderTransportInput => ({
@@ -149,7 +147,7 @@ export const setSyncPaused = (paused: boolean): Promise<SyncStatusSnapshot> =>
 export const disconnectSyncVault = (): Promise<SyncStatusSnapshot> =>
   invokeTauri(TauriCommand.sync.disconnect);
 
-export const runSyncNow = (): Promise<SyncRunResult> => invokeTauri(TauriCommand.sync.runNow);
+export { runSyncNow } from '../syncOperations';
 
 export const changeSyncPreset = (
   preset: SyncPresetV1,

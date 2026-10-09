@@ -1,4 +1,13 @@
-import { BaseDirectory, exists, mkdir, remove, writeFile } from '@tauri-apps/plugin-fs';
+import {
+  BaseDirectory,
+  exists,
+  mkdir,
+  readFile,
+  readTextFile,
+  remove,
+  writeFile,
+  writeTextFile,
+} from '@tauri-apps/plugin-fs';
 
 export type {
   ExistsOptions,
@@ -7,4 +16,4 @@ export type {
   WriteFileOptions,
 } from '@tauri-apps/plugin-fs';
 
-export { BaseDirectory, exists, mkdir, remove, writeFile };
+export { BaseDirectory, exists, mkdir, readFile, readTextFile, remove, writeFile, writeTextFile };

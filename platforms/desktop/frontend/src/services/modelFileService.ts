@@ -41,6 +41,10 @@ export class ModelFileService {
     return modelsDir;
   }
 
+  async exists(path: string): Promise<boolean> {
+    return this.ports.exists(path);
+  }
+
   async removeIfExists(path: string): Promise<void> {
     try {
       if (await this.ports.exists(path)) {

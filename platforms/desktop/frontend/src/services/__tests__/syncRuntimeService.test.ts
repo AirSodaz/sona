@@ -59,7 +59,7 @@ vi.mock('../../stores/batchQueueStore', () => {
   return { useBatchQueueStore };
 });
 
-vi.mock('../tauri/sync', () => ({
+vi.mock('../syncOperations', () => ({
   getSyncStatus: (...args: unknown[]) => testContext.getStatus(...args),
   runSyncNow: (...args: unknown[]) => testContext.runNow(...args),
 }));

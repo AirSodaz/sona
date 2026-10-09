@@ -85,7 +85,7 @@ function isCatalogModel(model: ModelInfo | ModelCatalogModel): model is ModelCat
   return 'installPath' in model && 'downloadPath' in model;
 }
 
-class ModelDownloadService {
+export class ModelDownloadService {
   constructor(private readonly ports: ModelDownloadServicePorts) {}
 
   async downloadModel({

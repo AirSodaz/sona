@@ -13,7 +13,6 @@ import type {
   PolishSegmentsRequest_Serialize as CorePolishSegmentsRequest,
   SummarizeTranscriptRequest_Serialize as CoreSummarizeTranscriptRequest,
   TranscriptLlmJobRequest_Serialize as CoreTranscriptLlmJobRequest,
-  TranscriptSegment_Serialize as CoreTranscriptSegment,
   TranslateSegmentsRequest_Serialize as CoreTranslateSegmentsRequest,
   LocalLlmCardsResponse,
   LocalLlmModelCard,
@@ -23,8 +22,6 @@ import type {
   PolishedSegment,
   PolishSegmentsRequest,
   SummarizeTranscriptRequest,
-  TranscriptLlmJobRequest,
-  TranscriptLlmJobResult,
   TranscriptSummaryResult,
   TranslatedSegment,
   TranslateSegmentsRequest,
@@ -346,129 +343,6 @@ function normalizeSummarizeRequest(
   };
 }
 
-function normalizeTranscriptSegment(
-  segment: TranscriptLlmJobRequest['segments'][number],
-  path: string
-): CoreTranscriptSegment {
-  return {
-    ...segment,
-    start: finiteNumber(segment.start, `${path}.start`),
-    end: finiteNumber(segment.end, `${path}.end`),
-    ...(segment.timing
-      ? {
-          timing: {
-            ...segment.timing,
-            units: segment.timing.units.map((unit, index) => ({
-              ...unit,
-              start: finiteNumber(unit.start, `${path}.timing.units[${index}].start`),
-              end: finiteNumber(unit.end, `${path}.timing.units[${index}].end`),
-            })),
-          },
-        }
-      : {}),
-    ...(segment.timestamps
-      ? {
-          timestamps: segment.timestamps.map((value, index) =>
-            finiteNumber(value, `${path}.timestamps[${index}]`)
-          ),
-        }
-      : {}),
-    ...(segment.durations
-      ? {
-          durations: segment.durations.map((value, index) =>
-            finiteNumber(value, `${path}.durations[${index}]`)
-          ),
-        }
-      : {}),
-    ...(segment.speaker?.score === undefined
-      ? {}
-      : {
-          speaker: {
-            ...segment.speaker,
-            score: finiteNumber(segment.speaker.score, `${path}.speaker.score`),
-          },
-        }),
-    ...(segment.speakerAttribution
-      ? {
-          speakerAttribution: {
-            ...segment.speakerAttribution,
-            candidates: segment.speakerAttribution.candidates.map((candidate, index) => ({
-              ...candidate,
-              score: finiteNumber(
-                candidate.score,
-                `${path}.speakerAttribution.candidates[${index}].score`
-              ),
-              rank: nonNegativeSafeInteger(
-                candidate.rank,
-                `${path}.speakerAttribution.candidates[${index}].rank`
-              ),
-            })),
-          },
-        }
-      : {}),
-  };
-}
-
-type CoreTranscriptJobFields = Pick<
-  CoreTranscriptLlmJobRequest,
-  | 'targetLanguage'
-  | 'targetLanguageName'
-  | 'context'
-  | 'keywords'
-  | 'mode'
-  | 'template'
-  | 'chunkSize'
-  | 'chunkCharBudget'
->;
-
-function normalizeTranscriptJobFields(request: TranscriptLlmJobRequest): CoreTranscriptJobFields {
-  const emptyFields: CoreTranscriptJobFields = {
-    targetLanguage: null,
-    targetLanguageName: null,
-    context: null,
-    keywords: null,
-    mode: null,
-    template: null,
-    chunkSize: null,
-    chunkCharBudget: null,
-  };
-  switch (request.taskType) {
-    case 'translate':
-      return {
-        ...emptyFields,
-        targetLanguage: request.targetLanguage,
-        targetLanguageName: request.targetLanguageName ?? null,
-      };
-    case 'polish':
-      return {
-        ...emptyFields,
-        context: request.context ?? null,
-        keywords: request.keywords ?? null,
-        mode: request.mode ?? null,
-      };
-    case 'summary':
-      return {
-        ...emptyFields,
-        template: normalizeSummaryTemplate(request.template),
-      };
-  }
-}
-
-function normalizeTranscriptJobRequest(
-  request: TranscriptLlmJobRequest
-): CoreTranscriptLlmJobRequest {
-  return {
-    taskId: request.taskId,
-    taskType: request.taskType,
-    jobHistoryId: request.jobHistoryId ?? null,
-    config: normalizeConfig(request.config, 'request.config'),
-    segments: request.segments.map((segment, index) =>
-      normalizeTranscriptSegment(segment, `request.segments[${index}]`)
-    ),
-    ...normalizeTranscriptJobFields(request),
-  };
-}
-
 export async function generateLlmText(request: LlmGenerateCommandRequest): Promise<string> {
   return invokeTauri(TauriCommand.llm.generateText, {
     request: normalizeGenerateRequest(request),
@@ -511,13 +385,7 @@ export async function polishTranscriptSegments(
   });
 }
 
-export async function runTranscriptLlmJob(
-  request: TranscriptLlmJobRequest
-): Promise<TranscriptLlmJobResult> {
-  return invokeTauri(TauriCommand.llm.runTranscriptJob, {
-    request: normalizeTranscriptJobRequest(request),
-  });
-}
+export { runTranscriptLlmJob } from '../llmOperations';
 
 export async function summarizeTranscript(
   request: SummarizeTranscriptRequest

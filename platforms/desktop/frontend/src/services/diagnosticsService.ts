@@ -9,8 +9,8 @@ import {
   probeMicrophoneDeviceOptions,
   probeSystemAudioDeviceOptions,
 } from './audioDeviceService';
+import { getDiagnosticsCoreSnapshot } from './diagnosticsOperations';
 import { buildDiagnosticsSnapshot, type Translate } from './diagnosticsSnapshotBuilders';
-import { getDiagnosticsCoreSnapshot } from './tauri/app';
 import { resolveVoiceTypingReadinessSnapshot } from './voiceTypingReadiness';
 
 export interface DiagnosticsServicePorts {

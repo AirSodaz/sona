@@ -2,11 +2,15 @@ import { Activity, Clock, Copy, HardDrive, List, RefreshCw, Server, Zap } from '
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { TauriCommand } from '../../services/tauri/commands';
-import { invokeTauri } from '../../services/tauri/invoke';
+import { TauriCommand, useTransport } from '../../platform';
 import { useApiServerConfig, useSetConfig } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import type { ApiServerHealth, ApiServerInfo, ApiServerJobStatus } from '../../types/apiServer';
+import type {
+  ApiServerDashboardSnapshot,
+  ApiServerHealth,
+  ApiServerInfo,
+  ApiServerJobStatus,
+} from '../../types/apiServer';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
 import { Switch } from '../Switch';
@@ -21,6 +25,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useApiServerConfig();
   const setConfig = useSetConfig();
+  const transport = useTransport();
 
   const [copied, setCopied] = useState(false);
   const [health, setHealth] = useState<ApiServerHealth | null>(null);
@@ -41,7 +46,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
     if (!config.httpServerEnabled) return;
 
     try {
-      const snapshot = await invokeTauri(TauriCommand.apiServer.dashboardSnapshot);
+      const snapshot = await transport.invoke<ApiServerDashboardSnapshot>(
+        TauriCommand.apiServer.dashboardSnapshot
+      );
       setHealth(snapshot.health);
       setInfo(snapshot.info);
       setJobs(snapshot.jobs);
@@ -52,7 +59,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
       setJobs({});
       setLastError(extractErrorMessage(err));
     }
-  }, [config.httpServerEnabled]);
+  }, [config.httpServerEnabled, transport.invoke]);
 
   useEffect(() => {
     if (config.httpServerEnabled) {
@@ -139,18 +146,19 @@ export function SettingsApiServerTab(): React.JSX.Element {
   useEffect(() => {
     const timer = setTimeout(() => {
       if (config.httpServerEnabled) {
-        invokeTauri(TauriCommand.apiServer.start, {
-          host: config.httpServerHost ?? '127.0.0.1',
-          port: config.httpServerPort ?? 14200,
-          apiKey: config.httpServerApiKey ?? '',
-          maxConcurrent: config.httpServerMaxConcurrent ?? 2,
-          maxQueueSize: config.httpServerMaxQueueSize ?? 100,
-          maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
-          jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
-          maxStreaming: 2,
-          ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
-          gpuAcceleration: config.gpuAcceleration ?? 'auto',
-        })
+        transport
+          .invoke<string>(TauriCommand.apiServer.start, {
+            host: config.httpServerHost ?? '127.0.0.1',
+            port: config.httpServerPort ?? 14200,
+            apiKey: config.httpServerApiKey ?? '',
+            maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+            maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+            maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
+            jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+            maxStreaming: 2,
+            ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+            gpuAcceleration: config.gpuAcceleration ?? 'auto',
+          })
           .then((normalizedWhitelist) => {
             if (
               typeof normalizedWhitelist === 'string' &&
@@ -174,7 +182,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
             });
           });
       } else {
-        invokeTauri(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
+        transport.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
           logger.error('[ApiServer] Failed to stop server:', e);
         });
       }
@@ -193,11 +201,16 @@ export function SettingsApiServerTab(): React.JSX.Element {
     config.gpuAcceleration,
     setConfig,
     t,
+    transport.invoke,
   ]);
   const handleToggleEnabled = async (checked: boolean) => {
     if (!checked) {
       try {
-        const activeInfo = await invokeTauri(TauriCommand.apiServer.hasActiveJobs);
+        const activeInfo = await transport.invoke<{
+          hasActive: boolean;
+          processing?: number;
+          pending?: number;
+        }>(TauriCommand.apiServer.hasActiveJobs);
         if (activeInfo?.hasActive) {
           const count = (activeInfo.processing ?? 0) + (activeInfo.pending ?? 0);
           const confirmed = await useDialogStore.getState().confirm(

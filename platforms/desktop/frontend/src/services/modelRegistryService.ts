@@ -20,7 +20,7 @@ interface ModelRegistryServicePorts {
   defaultModelRules: ModelRules;
 }
 
-class ModelRegistryService {
+export class ModelRegistryService {
   private latestCatalogSnapshot: ModelCatalogSnapshot | null = null;
 
   constructor(private readonly ports: ModelRegistryServicePorts) {}

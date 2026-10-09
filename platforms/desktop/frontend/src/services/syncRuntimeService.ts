@@ -1,10 +1,18 @@
+import { type ITransport, TauriCommand } from '../platform';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useSyncStatusStore } from '../stores/syncStatusStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
-import type { SyncStatusSnapshot } from '../types/sync';
+import type { SyncRunResult, SyncStatusSnapshot } from '../types/sync';
 import { logger } from '../utils/logger';
-import { getSyncStatus, runSyncNow } from './tauri/sync';
-import { subscribeToSyncLocalChanges } from './tauri/syncLocalChangeBus';
+import { subscribeToSyncLocalChanges } from './syncLocalChangeBus';
+import { getSyncStatus, runSyncNow } from './syncOperations';
+
+export interface SyncRuntimeServicePorts {
+  getSyncStatus?: () => Promise<SyncStatusSnapshot>;
+  runSyncNow?: () => Promise<SyncRunResult>;
+  subscribeToSyncLocalChanges?: (callback: () => void) => () => void;
+  transport?: ITransport;
+}
 
 export const LOCAL_CHANGE_DEBOUNCE_MS = 5_000;
 export const PERIODIC_SYNC_INTERVAL_ACTIVE_MS = 5 * 60 * 1_000;
@@ -12,7 +20,8 @@ export const PERIODIC_SYNC_INTERVAL_BACKGROUND_MS = 15 * 60 * 1_000;
 export const MIN_FOREGROUND_SYNC_INTERVAL_MS = 60_000;
 export const HEARTBEAT_INTERVAL_MS = 10_000;
 
-class SyncRuntimeService {
+export class SyncRuntimeService {
+  constructor(private readonly ports?: SyncRuntimeServicePorts) {}
   private started = false;
   private running = false;
   private queued = false;
@@ -27,7 +36,9 @@ class SyncRuntimeService {
     }
     this.started = true;
     this.unsubscribers.push(
-      subscribeToSyncLocalChanges(() => this.requestSync(LOCAL_CHANGE_DEBOUNCE_MS)),
+      (this.ports?.subscribeToSyncLocalChanges ?? subscribeToSyncLocalChanges)(() =>
+        this.requestSync(LOCAL_CHANGE_DEBOUNCE_MS)
+      ),
       useTranscriptRuntimeStore.subscribe((state, previous) => {
         if (previous.isRecording && !state.isRecording) {
           this.flushQueuedSync();
@@ -92,7 +103,11 @@ class SyncRuntimeService {
 
   async refreshStatus(): Promise<SyncStatusSnapshot | null> {
     try {
-      const snapshot = await getSyncStatus();
+      const snapshot = this.ports?.getSyncStatus
+        ? await this.ports.getSyncStatus()
+        : this.ports?.transport
+          ? await this.ports.transport.invoke<SyncStatusSnapshot>(TauriCommand.sync.getStatus)
+          : await getSyncStatus();
       useSyncStatusStore.getState().setSnapshot(snapshot);
       if (snapshot.lastSuccessAtMs && this.lastSyncAtMs === 0) {
         this.lastSyncAtMs = snapshot.lastSuccessAtMs;
@@ -153,7 +168,11 @@ class SyncRuntimeService {
     this.queued = false;
     useSyncStatusStore.getState().setSnapshot({ ...snapshot, state: 'syncing' });
     try {
-      const result = await runSyncNow();
+      const result = this.ports?.runSyncNow
+        ? await this.ports.runSyncNow()
+        : this.ports?.transport
+          ? await this.ports.transport.invoke<SyncRunResult>(TauriCommand.sync.runNow)
+          : await runSyncNow();
       this.lastSyncAtMs = Date.now();
       useSyncStatusStore.getState().setLastRunResult(result);
     } catch (error) {

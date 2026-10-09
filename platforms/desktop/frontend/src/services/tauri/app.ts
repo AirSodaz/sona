@@ -1,21 +1,6 @@
-import type {
-  DiagnosticsCoreInput as CoreDiagnosticsInput,
-  DiagnosticsCoreSnapshot as CoreDiagnosticsSnapshot,
-  ModelCatalogModel as CoreModelCatalogModel,
-  ModelCatalogRestoreDefaults as CoreModelCatalogRestoreDefaults,
-  ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
-  ModelCatalogSnapshot as CoreModelCatalogSnapshot,
-} from '../../bindings';
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
-import type { DiagnosticsCoreFactsSnapshot, DiagnosticsCoreInput } from '../../types/diagnostics';
 import { flattenAppConfig } from '../../types/llm';
 import type {
-  ModelCatalogModel,
-  ModelCatalogRestoreDefaults,
-  ModelCatalogSectionType,
-  ModelInfo,
-  ModelRules,
-  TimestampSupportHint,
   ModelCatalogSelectedIds as UiModelCatalogSelectedIds,
   ModelCatalogSnapshot as UiModelCatalogSnapshot,
 } from '../../types/modelCatalog';
@@ -25,6 +10,10 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
+import {
+  normalizeModelCatalogSelectedIds,
+  normalizeModelCatalogSnapshot,
+} from '../modelCatalogNormalizers';
 import { TauriCommand } from './commands';
 import type { TauriCommandArgs, TauriCommandResult } from './contracts';
 import { invokeTauri } from './invoke';
@@ -47,284 +36,7 @@ export type ModelCatalogSelectedIds = UiModelCatalogSelectedIds;
 
 export type AppConfigMigrationResult = TauriCommandResult<typeof TauriCommand.app.migrateAppConfig>;
 
-function buildDiagnosticsTransportInput(input: DiagnosticsCoreInput): CoreDiagnosticsInput {
-  const normalizeProbe = (probe: DiagnosticsCoreInput['microphoneProbe']) => ({
-    options: probe.options.map(({ label, value }) => ({ label, value })),
-    available: probe.available,
-    errorMessage: probe.errorMessage ?? null,
-  });
-
-  return {
-    config: input.config,
-    permissionState: input.permissionState,
-    microphoneProbe: normalizeProbe(input.microphoneProbe),
-    systemAudioProbe: normalizeProbe(input.systemAudioProbe),
-    voiceTypingReadiness: {
-      state: input.voiceTypingReadiness.state,
-      lastErrorMessage: input.voiceTypingReadiness.lastErrorMessage,
-    },
-  };
-}
-
-function normalizePermissionState(value: string): DiagnosticsCoreFactsSnapshot['permissionState'] {
-  switch (value) {
-    case 'denied':
-    case 'granted':
-    case 'prompt':
-    case 'unsupported':
-      return value;
-    default:
-      throw new Error(`Unexpected diagnostics permission state: ${value}`);
-  }
-}
-
-function normalizeVoiceTypingState(
-  value: string
-): DiagnosticsCoreFactsSnapshot['voiceTypingReadiness']['state'] {
-  switch (value) {
-    case 'off':
-    case 'needs_shortcut':
-    case 'needs_live_model':
-    case 'needs_vad':
-    case 'failed':
-    case 'preparing':
-    case 'ready':
-      return value;
-    default:
-      throw new Error(`Unexpected diagnostics voice typing state: ${value}`);
-  }
-}
-
-function normalizeDiagnosticsSnapshot(
-  snapshot: CoreDiagnosticsSnapshot
-): DiagnosticsCoreFactsSnapshot {
-  return {
-    ...snapshot,
-    config: {
-      streamingModelPath: snapshot.config.streamingModelPath,
-      batchModelPath: snapshot.config.batchModelPath,
-      vadModelPath: snapshot.config.vadModelPath ?? '',
-      punctuationModelPath: snapshot.config.punctuationModelPath ?? '',
-      microphoneId: snapshot.config.microphoneId ?? 'default',
-      ffmpegEnabled: snapshot.config.ffmpegEnabled ?? false,
-      ffmpegPath: snapshot.config.ffmpegPath ?? '',
-    },
-    permissionState: normalizePermissionState(snapshot.permissionState),
-    voiceTypingReadiness: {
-      state: normalizeVoiceTypingState(snapshot.voiceTypingReadiness.state),
-      lastErrorMessage: snapshot.voiceTypingReadiness.lastErrorMessage,
-    },
-  };
-}
-
-function optionalString(value: string | null | undefined): string | undefined {
-  return value ?? undefined;
-}
-
-function requireFiniteNumber(value: number | null, fieldName: string): number {
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new Error(`Expected a finite number for model catalog ${fieldName}`);
-  }
-  return value;
-}
-
-function normalizeModelType(value: string): ModelInfo['type'] {
-  switch (value) {
-    case 'zipformer':
-    case 'sensevoice':
-    case 'paraformer':
-    case 'punctuation':
-    case 'vad':
-    case 'itn':
-    case 'whisper':
-    case 'funasr-nano':
-    case 'fire-red-asr':
-    case 'dolphin':
-    case 'qwen3-asr':
-    case 'parakeet-tdt':
-    case 'moonshine':
-    case 'speaker-segmentation':
-    case 'speaker-embedding':
-    case 'omnilingual':
-    case 'alignment':
-      return value;
-    default:
-      throw new Error(`Unexpected model catalog type: ${value}`);
-  }
-}
-
-function normalizeModelModes(modes: string[] | null | undefined): ModelInfo['modes'] {
-  if (!modes) {
-    return undefined;
-  }
-
-  return modes.map((mode) => {
-    switch (mode) {
-      case 'live':
-      case 'streaming':
-      case 'batch':
-        return mode;
-      default:
-        throw new Error(`Unexpected model catalog mode: ${mode}`);
-    }
-  });
-}
-
-function normalizeTimestampSupportHint(
-  value: string | null | undefined
-): TimestampSupportHint | undefined {
-  switch (value) {
-    case 'token':
-    case 'segment':
-    case 'unknown':
-      return value;
-    case null:
-    case undefined:
-      return undefined;
-    default:
-      throw new Error(`Unexpected model timestamp support hint: ${value}`);
-  }
-}
-
-function normalizeCatalogSectionType(value: string): ModelCatalogSectionType {
-  switch (value) {
-    case 'asr':
-    case 'punctuation':
-    case 'vad':
-    case 'speaker-segmentation':
-    case 'speaker-embedding':
-    case 'alignment':
-      return value;
-    default:
-      throw new Error(`Unexpected model catalog section type: ${value}`);
-  }
-}
-
-function normalizeModelRules(modelRules: CoreModelCatalogModel['rules']): ModelRules {
-  const timestampSupportHint = normalizeTimestampSupportHint(modelRules.timestampSupportHint);
-
-  return {
-    requiresVad: modelRules.requiresVad,
-    requiresPunctuation: modelRules.requiresPunctuation,
-    ...(timestampSupportHint === undefined ? {} : { timestampSupportHint }),
-  };
-}
-
-const LANGUAGE_MODES = ['selectable', 'auto', 'fixed', 'none'] as const;
-
-function normalizeLanguageMode(value: string): (typeof LANGUAGE_MODES)[number] {
-  return (LANGUAGE_MODES as readonly string[]).includes(value)
-    ? (value as (typeof LANGUAGE_MODES)[number])
-    : 'none';
-}
-
-function normalizeModelArtifacts(
-  artifacts: CoreModelCatalogModel['artifacts']
-): NonNullable<ModelInfo['artifacts']> {
-  return (artifacts ?? []).map((artifact) => ({
-    url: artifact.url,
-    filename: artifact.filename,
-    ...(artifact.sha256 === null || artifact.sha256 === undefined
-      ? {}
-      : { sha256: artifact.sha256 }),
-    ...(artifact.sizeBytes === null || artifact.sizeBytes === undefined
-      ? {}
-      : { sizeBytes: artifact.sizeBytes }),
-  }));
-}
-
-function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel {
-  const modes = normalizeModelModes(model.modes);
-  const artifacts = normalizeModelArtifacts(model.artifacts);
-  const isRecommended = model.isRecommended ?? undefined;
-  const filename = optionalString(model.filename);
-  const groupId = optionalString(model.groupId);
-  const versionLabel = optionalString(model.versionLabel);
-
-  if (model.engine !== 'sherpa-onnx' && model.engine !== 'llama-cpp') {
-    throw new Error(`Unexpected model catalog engine: ${model.engine}`);
-  }
-
-  return {
-    id: model.id,
-    name: model.name,
-    description: model.description,
-    type: normalizeModelType(model.type),
-    ...(modes === undefined ? {} : { modes }),
-    languages: Array.isArray(model.languages) ? model.languages : [],
-    languageMode: normalizeLanguageMode(model.languageMode),
-    size: model.size,
-    ...(artifacts.length === 0 ? {} : { artifacts }),
-    ...(isRecommended === undefined ? {} : { isRecommended }),
-    isArchive: model.isArchive,
-    ...(filename === undefined ? {} : { filename }),
-    engine: model.engine,
-    rules: normalizeModelRules(model.rules),
-    ...(groupId === undefined ? {} : { groupId }),
-    ...(versionLabel === undefined ? {} : { versionLabel }),
-    installPath: model.installPath,
-    downloadPath: model.downloadPath,
-    isInstalled: model.isInstalled,
-  };
-}
-
-function normalizeRestoreDefaults(
-  restoreDefaults: CoreModelCatalogRestoreDefaults
-): ModelCatalogRestoreDefaults {
-  const streamingModelPath = optionalString(restoreDefaults.streamingModelPath);
-  const batchModelPath = optionalString(restoreDefaults.batchModelPath);
-  const vadModelPath = optionalString(restoreDefaults.vadModelPath);
-  const punctuationModelPath = optionalString(restoreDefaults.punctuationModelPath);
-  const speakerSegmentationModelPath = optionalString(restoreDefaults.speakerSegmentationModelPath);
-  const speakerEmbeddingModelPath = optionalString(restoreDefaults.speakerEmbeddingModelPath);
-  const alignmentModelPath = optionalString(restoreDefaults.alignmentModelPath);
-
-  return {
-    ...(streamingModelPath === undefined ? {} : { streamingModelPath }),
-    ...(batchModelPath === undefined ? {} : { batchModelPath }),
-    ...(vadModelPath === undefined ? {} : { vadModelPath }),
-    ...(punctuationModelPath === undefined ? {} : { punctuationModelPath }),
-    ...(speakerSegmentationModelPath === undefined ? {} : { speakerSegmentationModelPath }),
-    ...(speakerEmbeddingModelPath === undefined ? {} : { speakerEmbeddingModelPath }),
-    ...(alignmentModelPath === undefined ? {} : { alignmentModelPath }),
-    enableITN: restoreDefaults.enableItn,
-    batchVadEnabled: restoreDefaults.batchVadEnabled,
-    vadBufferSize: requireFiniteNumber(restoreDefaults.vadBufferSize, 'vadBufferSize'),
-    maxConcurrent: restoreDefaults.maxConcurrent,
-  };
-}
-
-function normalizeModelCatalogSnapshot(snapshot: CoreModelCatalogSnapshot): UiModelCatalogSnapshot {
-  return {
-    modelsDir: snapshot.modelsDir,
-    models: snapshot.models.map(normalizeCatalogModel),
-    sections: snapshot.sections.map((section) => ({
-      type: normalizeCatalogSectionType(section.type),
-      groups: section.groups.map((group) => ({
-        key: group.key,
-        models: group.models.map(normalizeCatalogModel),
-      })),
-    })),
-    selectionOptions: snapshot.selectionOptions,
-    modelPathById: snapshot.modelPathById,
-    modelIdByNormalizedPath: snapshot.modelIdByNormalizedPath,
-    pathMatchTokens: snapshot.pathMatchTokens,
-    dependencyRequestsByModelId: snapshot.dependencyRequestsByModelId,
-    restoreDefaults: normalizeRestoreDefaults(snapshot.restoreDefaults),
-  };
-}
-
-function normalizeModelCatalogSelectedIds(
-  selectedIds: CoreModelCatalogSelectedIds
-): UiModelCatalogSelectedIds {
-  return {
-    streaming: selectedIds.streaming ?? null,
-    batch: selectedIds.batch ?? null,
-    speakerSegmentation: selectedIds.speakerSegmentation ?? null,
-    speakerEmbedding: selectedIds.speakerEmbedding ?? null,
-    alignment: selectedIds.alignment ?? null,
-  };
-}
+export { normalizeModelCatalogSelectedIds, normalizeModelCatalogSnapshot };
 
 export async function extractTarBz2(request: ExtractTarBz2Request): Promise<void> {
   await invokeTauri(TauriCommand.app.extractTarBz2, request);
@@ -362,14 +74,7 @@ export async function resolveModelCatalogSelectedIds(
   return normalizeModelCatalogSelectedIds(selectedIds);
 }
 
-export async function getDiagnosticsCoreSnapshot(
-  input: DiagnosticsCoreInput
-): Promise<DiagnosticsCoreFactsSnapshot> {
-  const snapshot = await invokeTauri(TauriCommand.app.getDiagnosticsCoreSnapshot, {
-    input: buildDiagnosticsTransportInput(input),
-  });
-  return normalizeDiagnosticsSnapshot(snapshot);
-}
+export { getDiagnosticsCoreSnapshot } from '../diagnosticsOperations';
 
 export async function loadAppConfig(): Promise<AppConfig | null> {
   const config = await invokeTauri(TauriCommand.app.loadAppConfig);

@@ -151,7 +151,10 @@ describe('tauri boundary wrappers', () => {
       invokeBoundaryFile,
       resolve(platformBoundaryRoot, 'assets.ts'),
     ]);
-    const allowedInvokeFiles = new Set([resolve(srcRoot, 'services/tauri/invoke.ts')]);
+    const allowedInvokeFiles = new Set([
+      resolve(srcRoot, 'services/tauri/invoke.ts'),
+      resolve(srcRoot, 'platform/types/transport.ts'),
+    ]);
     const violations: string[] = [];
 
     function isInsidePlatformBoundary(path: string): boolean {
@@ -196,7 +199,10 @@ describe('tauri boundary wrappers', () => {
         }
       }
 
-      if (!allowedInvokeFiles.has(path) && /\binvoke\s*(?:<[^>]+>)?\s*\(/.test(source)) {
+      if (
+        !allowedInvokeFiles.has(path) &&
+        /(?<!(?:\.|\basync\s+))\binvoke\s*(?:<[^>]+>)?\s*\(/.test(source)
+      ) {
         violations.push(`${relative(srcRoot, path)} calls invoke() directly`);
       }
     }

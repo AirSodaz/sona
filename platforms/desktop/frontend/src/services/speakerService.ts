@@ -1,3 +1,4 @@
+import { getPlatform, type ITransport, type PlatformContext, TauriCommand } from '../platform';
 import type { AppConfig, AsrScenario } from '../types/config';
 import type {
   SpeakerProcessingConfig,
@@ -11,19 +12,28 @@ import {
   getScenarioSpeakerSegmentationModelPath,
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
-import {
-  annotateSpeakerSegmentsFromFile,
-  enrollSpeakerProfileSampleFromAudio,
-  importSpeakerProfileSample,
-} from './tauri/speaker';
 
 type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles' | 'speakerDiarizationSensitivity'> &
   Partial<ScenarioModelPathConfig>;
 
 export interface SpeakerServicePorts {
-  annotateSpeakerSegmentsFromFile: typeof annotateSpeakerSegmentsFromFile;
-  importSpeakerProfileSample: typeof importSpeakerProfileSample;
-  enrollSpeakerProfileSampleFromAudio: typeof enrollSpeakerProfileSampleFromAudio;
+  annotateSpeakerSegmentsFromFile: (
+    filePath: string,
+    segments: TranscriptSegment[],
+    speakerProcessing: SpeakerProcessingConfig
+  ) => Promise<TranscriptSegment[]>;
+  importSpeakerProfileSample: (
+    profileId: string,
+    sourcePath: string,
+    sourceName?: string
+  ) => Promise<SpeakerProfileSample>;
+  enrollSpeakerProfileSampleFromAudio: (
+    profileId: string,
+    sourceAudioPath: string,
+    startSeconds: number,
+    endSeconds: number,
+    sampleName?: string
+  ) => Promise<SpeakerProfileSample>;
 }
 
 export class SpeakerService {
@@ -129,12 +139,47 @@ export class SpeakerService {
   }
 }
 
-export function createSpeakerService(ports: SpeakerServicePorts): SpeakerService {
-  return new SpeakerService(ports);
+export function buildSpeakerServicePortsFromTransport(transport: ITransport): SpeakerServicePorts {
+  return {
+    annotateSpeakerSegmentsFromFile: (filePath, segments, speakerProcessing) =>
+      transport.invoke(TauriCommand.speaker.annotateSegmentsFromFile, {
+        filePath,
+        segments,
+        speakerProcessing,
+      }),
+    importSpeakerProfileSample: (profileId, sourcePath, sourceName) =>
+      transport.invoke(TauriCommand.speaker.importProfileSample, {
+        profileId,
+        sourcePath,
+        sourceName: sourceName || null,
+      }),
+    enrollSpeakerProfileSampleFromAudio: (
+      profileId,
+      sourceAudioPath,
+      startSeconds,
+      endSeconds,
+      sampleName
+    ) =>
+      transport.invoke(TauriCommand.speaker.enrollProfileSampleFromAudio, {
+        profileId,
+        sourceAudioPath,
+        startSeconds,
+        endSeconds,
+        sampleName: sampleName || null,
+      }),
+  };
 }
 
-export const speakerService = createSpeakerService({
-  annotateSpeakerSegmentsFromFile,
-  importSpeakerProfileSample,
-  enrollSpeakerProfileSampleFromAudio,
-});
+export type SpeakerServiceInput = SpeakerServicePorts | PlatformContext | { transport: ITransport };
+
+export function createSpeakerService(input?: SpeakerServiceInput): SpeakerService {
+  if (!input) {
+    return new SpeakerService(buildSpeakerServicePortsFromTransport(getPlatform().transport));
+  }
+  if ('transport' in input) {
+    return new SpeakerService(buildSpeakerServicePortsFromTransport(input.transport));
+  }
+  return new SpeakerService(input as SpeakerServicePorts);
+}
+
+export const speakerService = createSpeakerService();

@@ -1,3 +1,14 @@
+import type {
+  ModelCatalogSelectedIds as CoreModelCatalogSelectedIds,
+  ModelCatalogSnapshot as CoreModelCatalogSnapshot,
+} from '../bindings';
+import {
+  getPlatform,
+  type IPlatformPorts,
+  type ITransport,
+  type PlatformContext,
+  TauriCommand,
+} from '../platform';
 import {
   DEFAULT_MODEL_RULES,
   type ModelCatalogSelectedIds,
@@ -8,22 +19,13 @@ import {
   type ProgressCallback,
 } from '../types/modelCatalog';
 import type { ScenarioModelPathConfig } from '../utils/scenarioModels';
-import { createModelDownloadService } from './modelDownloadService';
-import { createModelFileService } from './modelFileService';
-import { createModelRegistryService } from './modelRegistryService';
 import {
-  cancelDownload,
-  deletePresetModel as deletePresetModelFromRust,
-  downloadFile,
-  downloadPresetModel,
-  extractTarBz2,
-  getModelCatalogSnapshot as getModelCatalogSnapshotFromRust,
-  resolveModelCatalogSelectedIds as resolveModelCatalogSelectedIdsFromRust,
-} from './tauri/app';
-import { listen } from './tauri/platform/events';
-import { exists, mkdir, remove } from './tauri/platform/fs';
-import { appLocalDataDir, join } from './tauri/platform/path';
-import { storageGetDirectories } from './tauri/storage';
+  normalizeModelCatalogSelectedIds,
+  normalizeModelCatalogSnapshot,
+} from './modelCatalogNormalizers';
+import { createModelDownloadService, type ModelDownloadService } from './modelDownloadService';
+import { createModelFileService, type ModelFileService } from './modelFileService';
+import { createModelRegistryService, type ModelRegistryService } from './modelRegistryService';
 
 export type { ModelFileConfig } from '../types/model';
 export type {
@@ -44,10 +46,11 @@ export {
 } from '../types/modelCatalog';
 
 export interface ModelServicePorts {
-  fileService: ReturnType<typeof createModelFileService>;
-  registryService: ReturnType<typeof createModelRegistryService>;
-  downloadService: ReturnType<typeof createModelDownloadService>;
+  fileService: ModelFileService;
+  registryService: ModelRegistryService;
+  downloadService: ModelDownloadService;
   deletePresetModel?: (modelId: string) => Promise<void>;
+  fs?: IPlatformPorts['fs'];
 }
 
 /**
@@ -174,11 +177,15 @@ export class ModelService {
 
     const modelPath = await this.getModelPath(modelId);
     try {
-      return await exists(modelPath);
+      if (this.ports.fs) {
+        return await this.ports.fs.exists(modelPath);
+      }
+      return await this.ports.fileService.exists(modelPath);
     } catch {
       return false;
     }
   }
+
   /**
    * Deletes an installed model.
    *
@@ -207,46 +214,84 @@ export class ModelService {
   }
 }
 
-export function createModelService(ports: ModelServicePorts): ModelService {
-  return new ModelService(ports);
+export function buildModelServicePortsFromPlatform(platform: {
+  transport: ITransport;
+  ports: IPlatformPorts;
+}): ModelServicePorts {
+  const fileService = createModelFileService({
+    appLocalDataDir: () => platform.ports.path.appLocalDataDir(),
+    join: (...paths) => Promise.resolve(platform.ports.path.join(...paths)),
+    exists: (path) => platform.ports.fs.exists(path),
+    mkdir: (path, options) => platform.ports.fs.mkdir(path, options),
+    remove: (path, options) => platform.ports.fs.remove(path, options),
+    getStorageDirectories: () => platform.transport.invoke(TauriCommand.storage.getDirectories),
+  });
+
+  const registryService = createModelRegistryService({
+    getModelCatalogSnapshot: async () => {
+      const raw = await platform.transport.invoke<CoreModelCatalogSnapshot>(
+        TauriCommand.app.getModelCatalogSnapshot
+      );
+      return normalizeModelCatalogSnapshot(raw);
+    },
+    resolveModelCatalogSelectedIds: async (paths) => {
+      const raw = await platform.transport.invoke<CoreModelCatalogSelectedIds>(
+        TauriCommand.app.resolveModelCatalogSelectedIds,
+        { paths }
+      );
+      return normalizeModelCatalogSelectedIds(raw);
+    },
+    getModelsDir: () => fileService.getModelsDir(),
+    join: (...paths) => Promise.resolve(platform.ports.path.join(...paths)),
+    presetModelsMap: PRESET_MODELS_MAP,
+    defaultModelRules: DEFAULT_MODEL_RULES,
+  });
+
+  const downloadService = createModelDownloadService({
+    downloadFile: (req) => platform.transport.invoke(TauriCommand.app.downloadFile, req),
+    downloadPresetModel: (req) =>
+      platform.transport.invoke(TauriCommand.app.downloadPresetModel, req),
+    extractTarBz2: (req) => platform.transport.invoke(TauriCommand.app.extractTarBz2, req),
+    cancelDownload: async (id) => {
+      await platform.transport.invoke(TauriCommand.app.cancelDownload, { id });
+    },
+    remove: async (path) => {
+      await platform.ports.fs.remove(path);
+    },
+    listen: <T>(event: string, handler: (event: { payload: T }) => void) => {
+      const unlisten = platform.transport.listen<T>(event, (payload) => handler({ payload }));
+      return Promise.resolve(unlisten);
+    },
+    join: (...paths) => Promise.resolve(platform.ports.path.join(...paths)),
+    getModelsDir: () => fileService.getModelsDir(),
+  });
+
+  return {
+    fileService,
+    registryService,
+    downloadService,
+    deletePresetModel: (modelId) =>
+      platform.transport.invoke(TauriCommand.app.deletePresetModel, { modelId }),
+    fs: platform.ports.fs,
+  };
 }
 
-const fileService = createModelFileService({
-  appLocalDataDir,
-  join,
-  exists,
-  mkdir,
-  remove,
-  getStorageDirectories: storageGetDirectories,
-});
+export type ModelServiceInput =
+  | ModelServicePorts
+  | PlatformContext
+  | {
+      transport: ITransport;
+      ports: IPlatformPorts;
+    };
 
-const registryService = createModelRegistryService({
-  getModelCatalogSnapshot: getModelCatalogSnapshotFromRust,
-  resolveModelCatalogSelectedIds: resolveModelCatalogSelectedIdsFromRust,
-  getModelsDir: () => fileService.getModelsDir(),
-  join,
-  presetModelsMap: PRESET_MODELS_MAP,
-  defaultModelRules: DEFAULT_MODEL_RULES,
-});
+export function createModelService(input?: ModelServiceInput): ModelService {
+  if (!input) {
+    return new ModelService(buildModelServicePortsFromPlatform(getPlatform()));
+  }
+  if ('transport' in input) {
+    return new ModelService(buildModelServicePortsFromPlatform(input));
+  }
+  return new ModelService(input);
+}
 
-const downloadService = createModelDownloadService({
-  downloadFile,
-  downloadPresetModel,
-  extractTarBz2,
-  cancelDownload: async (id: string) => {
-    await cancelDownload(id);
-  },
-  remove: async (path: string) => {
-    await remove(path);
-  },
-  listen,
-  join,
-  getModelsDir: () => fileService.getModelsDir(),
-});
-
-export const modelService = createModelService({
-  fileService,
-  registryService,
-  downloadService,
-  deletePresetModel: deletePresetModelFromRust,
-});
+export const modelService = createModelService();

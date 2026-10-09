@@ -1,27 +1,33 @@
+import {
+  getPlatform,
+  type IPlatformPorts,
+  type ITransport,
+  type PlatformContext,
+  TauriCommand,
+} from '../platform';
 import type { StorageDirectoriesInfo } from '../types/storage';
 import { runGuardedQuit } from './quitGuard';
-import { openDialog } from './tauri/platform/dialog';
-import { relaunch } from './tauri/platform/process';
-import {
-  storageCheckCanMigrate,
-  storageGetDirectories,
-  storageMigrateDataDirectory,
-  storageOpenPath,
-  storageResetDataDirectory,
-  storageResetModelsDirectory,
-  storageSetModelsDirectory,
-} from './tauri/storage';
 
 export interface StorageLocationServicePorts {
-  storageGetDirectories: typeof storageGetDirectories;
-  storageCheckCanMigrate: typeof storageCheckCanMigrate;
-  storageMigrateDataDirectory: typeof storageMigrateDataDirectory;
-  storageResetDataDirectory: typeof storageResetDataDirectory;
-  storageSetModelsDirectory: typeof storageSetModelsDirectory;
-  storageResetModelsDirectory: typeof storageResetModelsDirectory;
-  storageOpenPath: typeof storageOpenPath;
-  openDialog: typeof openDialog;
-  relaunch: typeof relaunch;
+  storageGetDirectories: () => Promise<StorageDirectoriesInfo>;
+  storageCheckCanMigrate: () => Promise<void>;
+  storageMigrateDataDirectory: (
+    targetDir: string,
+    copyExisting: boolean
+  ) => Promise<StorageDirectoriesInfo>;
+  storageResetDataDirectory: () => Promise<StorageDirectoriesInfo>;
+  storageSetModelsDirectory: (
+    targetDir: string,
+    moveExisting: boolean
+  ) => Promise<StorageDirectoriesInfo>;
+  storageResetModelsDirectory: () => Promise<StorageDirectoriesInfo>;
+  storageOpenPath: (path: string) => Promise<void>;
+  openDialog: (options?: {
+    directory?: boolean;
+    multiple?: boolean;
+    defaultPath?: string;
+  }) => Promise<string[] | string | null>;
+  relaunch: () => Promise<void>;
   runGuardedQuit: typeof runGuardedQuit;
 }
 
@@ -35,6 +41,7 @@ export class StorageLocationService {
   async checkCanMigrate(): Promise<void> {
     await this.ports.storageCheckCanMigrate();
   }
+
   async selectDirectory(defaultPath?: string): Promise<string | null> {
     const selected = await this.ports.openDialog({
       directory: true,
@@ -80,21 +87,52 @@ export class StorageLocationService {
   }
 }
 
-export function createStorageLocationService(
-  ports: StorageLocationServicePorts
-): StorageLocationService {
-  return new StorageLocationService(ports);
+export function buildStorageLocationPortsFromPlatform(
+  platform: PlatformContext | { transport: ITransport; ports: IPlatformPorts },
+  guardedQuit: typeof runGuardedQuit = runGuardedQuit
+): StorageLocationServicePorts {
+  return {
+    storageGetDirectories: () =>
+      platform.transport.invoke<StorageDirectoriesInfo>(TauriCommand.storage.getDirectories),
+    storageCheckCanMigrate: () =>
+      platform.transport.invoke<void>(TauriCommand.storage.checkCanMigrate),
+    storageMigrateDataDirectory: (targetDir, copyExisting) =>
+      platform.transport.invoke<StorageDirectoriesInfo>(TauriCommand.storage.migrateDataDirectory, {
+        targetDir,
+        copyExisting,
+      }),
+    storageResetDataDirectory: () =>
+      platform.transport.invoke<StorageDirectoriesInfo>(TauriCommand.storage.resetDataDirectory),
+    storageSetModelsDirectory: (targetDir, moveExisting) =>
+      platform.transport.invoke<StorageDirectoriesInfo>(TauriCommand.storage.setModelsDirectory, {
+        targetDir,
+        moveExisting,
+      }),
+    storageResetModelsDirectory: () =>
+      platform.transport.invoke<StorageDirectoriesInfo>(TauriCommand.storage.resetModelsDirectory),
+    storageOpenPath: (path) =>
+      platform.transport.invoke<void>(TauriCommand.storage.openPath, { path }),
+    openDialog: (options) => platform.ports.dialog.openFile(options),
+    relaunch: () => platform.ports.lifecycle.relaunch(),
+    runGuardedQuit: guardedQuit,
+  };
 }
 
-export const storageLocationService = createStorageLocationService({
-  storageGetDirectories,
-  storageMigrateDataDirectory,
-  storageResetDataDirectory,
-  storageSetModelsDirectory,
-  storageCheckCanMigrate,
-  storageResetModelsDirectory,
-  storageOpenPath,
-  openDialog,
-  relaunch,
-  runGuardedQuit,
-});
+export type StorageLocationServiceInput =
+  | StorageLocationServicePorts
+  | PlatformContext
+  | { transport: ITransport; ports: IPlatformPorts };
+
+export function createStorageLocationService(
+  input?: StorageLocationServiceInput
+): StorageLocationService {
+  if (!input) {
+    return new StorageLocationService(buildStorageLocationPortsFromPlatform(getPlatform()));
+  }
+  if ('transport' in input && 'ports' in input) {
+    return new StorageLocationService(buildStorageLocationPortsFromPlatform(input));
+  }
+  return new StorageLocationService(input as StorageLocationServicePorts);
+}
+
+export const storageLocationService = createStorageLocationService();
