@@ -4,7 +4,7 @@ use sona_sherpa_onnx::recognizer::{
     ModelType, OfflineDecodeResult, build_model_config, build_offline_model_config,
     create_offline_recognizer,
 };
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 #[test]
 fn build_model_config_supports_qwen3_asr_without_tokens() {
@@ -366,16 +366,59 @@ fn build_model_config_normalizes_language_for_whisper_and_sensevoice() {
     }
 }
 
+fn resolve_sample_wav_path() -> Option<PathBuf> {
+    std::env::var_os("SONA_TEST_SAMPLE_WAV")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../../../platforms/desktop/sample.wav");
+            path.exists().then_some(path)
+        })
+}
+
+fn resolve_model_dir(env_var: &str, model_folder: &str) -> Option<PathBuf> {
+    std::env::var_os(env_var)
+        .map(PathBuf::from)
+        .or_else(|| {
+            std::env::var_os("SONA_TEST_MODELS_DIR")
+                .map(|dir| PathBuf::from(dir).join(model_folder))
+        })
+        .filter(|p| p.exists())
+}
+
+fn resolve_user_history_wav(env_var: &str, history_filename: &str) -> Option<PathBuf> {
+    if let Some(path) = std::env::var_os(env_var)
+        .map(PathBuf::from)
+        .filter(|p| p.exists())
+    {
+        return Some(path);
+    }
+    let local_app_data = std::env::var_os("LOCALAPPDATA")
+        .or_else(|| std::env::var_os("XDG_DATA_HOME"))
+        .or_else(|| {
+            std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".local/share").into_os_string())
+        })?;
+    let path = PathBuf::from(local_app_data)
+        .join("com.asoda.sona")
+        .join("history")
+        .join(history_filename);
+    path.exists().then_some(path)
+}
+
 #[tokio::test]
 async fn test_funasr_nano_decode_not_empty_with_auto_language() {
     use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 
-    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
-    let wav_path = Path::new(r"D:\projects\sona\platforms\desktop\sample.wav");
-    if !model_dir.exists() || !wav_path.exists() {
+    let Some(model_dir) = resolve_model_dir(
+        "SONA_TEST_FUNASR_NANO_MODEL_DIR",
+        "sherpa-onnx-funasr-nano-int8-2025-12-30",
+    ) else {
         return;
-    }
+    };
+    let Some(wav_path) = resolve_sample_wav_path() else {
+        return;
+    };
     let file_config = Some(ModelFileConfig {
         encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
         llm: Some("llm.int8.onnx".to_string()),
@@ -386,10 +429,10 @@ async fn test_funasr_nano_decode_not_empty_with_auto_language() {
 
     for lang in ["auto", "zh", ""] {
         let model_type =
-            build_offline_model_config(model_dir, "funasr-nano", &file_config, false, lang, None)
+            build_offline_model_config(&model_dir, "funasr-nano", &file_config, false, lang, None)
                 .unwrap();
         let recognizer = create_offline_recognizer(model_type, 4, None).unwrap();
-        let mut reader = hound::WavReader::open(wav_path).unwrap();
+        let mut reader = hound::WavReader::open(&wav_path).unwrap();
         let samples: Vec<f32> = reader
             .samples::<i16>()
             .map(|s| s.unwrap() as f32 / 32768.0)
@@ -425,21 +468,14 @@ async fn test_funasr_nano_decode_not_empty_with_auto_language() {
     }
 
     // Test with VAD enabled (as in real app)
-    let vad_path = Path::new(r"D:\projects\models\silero_vad.onnx");
-    let punct_path = Path::new(
-        r"D:\projects\models\sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12\model.onnx",
+    let vad_path = resolve_model_dir("SONA_TEST_VAD_MODEL", "silero_vad.onnx");
+    let punct_path = resolve_model_dir(
+        "SONA_TEST_PUNCT_MODEL",
+        "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/model.onnx",
     );
 
-    let vad_model = if vad_path.exists() {
-        Some(vad_path.to_string_lossy().to_string())
-    } else {
-        None
-    };
-    let punctuation_model = if punct_path.exists() {
-        Some(punct_path.to_string_lossy().to_string())
-    } else {
-        None
-    };
+    let vad_model = vad_path.map(|p| p.to_string_lossy().to_string());
+    let punctuation_model = punct_path.map(|p| p.to_string_lossy().to_string());
 
     println!(
         "Testing batch with vad_model={:?}, punctuation_model={:?}",
@@ -447,7 +483,7 @@ async fn test_funasr_nano_decode_not_empty_with_auto_language() {
     );
 
     let plan = BatchTranscribePlan {
-        input_path: wav_path.to_path_buf(),
+        input_path: wav_path.clone(),
         save_to_path: None,
         engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
         model_path: model_dir.to_string_lossy().to_string(),
@@ -490,14 +526,20 @@ async fn test_funasr_nano_user_history_audio() {
     use sona_core::ports::asr::BatchTranscriberPort;
     use sona_core::transcription::runtime::{BatchTranscribePlan, OutputTarget};
 
-    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
-    let wav_path = Path::new(
-        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
-    );
-    if !model_dir.exists() || !wav_path.exists() {
-        println!("Skipping test: model or user history audio not found");
+    let Some(model_dir) = resolve_model_dir(
+        "SONA_TEST_FUNASR_NANO_MODEL_DIR",
+        "sherpa-onnx-funasr-nano-int8-2025-12-30",
+    ) else {
         return;
-    }
+    };
+    let wav_path = resolve_user_history_wav(
+        "SONA_TEST_USER_HISTORY_AUDIO_WAV",
+        "97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
+    );
+    let Some(wav_path) = wav_path else {
+        println!("Skipping test: user history audio not found");
+        return;
+    };
     let file_config = Some(ModelFileConfig {
         encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
         llm: Some("llm.int8.onnx".to_string()),
@@ -506,21 +548,14 @@ async fn test_funasr_nano_user_history_audio() {
         ..Default::default()
     });
 
-    let vad_path = Path::new(r"D:\projects\models\silero_vad.onnx");
-    let punct_path = Path::new(
-        r"D:\projects\models\sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12\model.onnx",
+    let vad_path = resolve_model_dir("SONA_TEST_VAD_MODEL", "silero_vad.onnx");
+    let punct_path = resolve_model_dir(
+        "SONA_TEST_PUNCT_MODEL",
+        "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12/model.onnx",
     );
 
-    let vad_model = if vad_path.exists() {
-        Some(vad_path.to_string_lossy().to_string())
-    } else {
-        None
-    };
-    let punctuation_model = if punct_path.exists() {
-        Some(punct_path.to_string_lossy().to_string())
-    } else {
-        None
-    };
+    let vad_model = vad_path.map(|p| p.to_string_lossy().to_string());
+    let punctuation_model = punct_path.map(|p| p.to_string_lossy().to_string());
 
     let plan = BatchTranscribePlan {
         input_path: wav_path.to_path_buf(),
@@ -569,13 +604,19 @@ async fn test_funasr_nano_user_history_audio() {
 
 #[tokio::test]
 async fn test_funasr_nano_durations() {
-    let model_dir = Path::new(r"D:\projects\models\sherpa-onnx-funasr-nano-int8-2025-12-30");
-    let wav_path = Path::new(
-        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
-    );
-    if !model_dir.exists() || !wav_path.exists() {
+    let Some(model_dir) = resolve_model_dir(
+        "SONA_TEST_FUNASR_NANO_MODEL_DIR",
+        "sherpa-onnx-funasr-nano-int8-2025-12-30",
+    ) else {
         return;
-    }
+    };
+    let wav_path = resolve_user_history_wav(
+        "SONA_TEST_USER_HISTORY_AUDIO_WAV",
+        "97f391f9-1baf-4b1e-abe3-2918939c1580.wav",
+    );
+    let Some(wav_path) = wav_path else {
+        return;
+    };
     let file_config = Some(ModelFileConfig {
         encoder_adaptor: Some("encoder_adaptor.int8.onnx".to_string()),
         llm: Some("llm.int8.onnx".to_string()),
@@ -585,11 +626,11 @@ async fn test_funasr_nano_durations() {
     });
 
     let model_type =
-        build_offline_model_config(model_dir, "funasr-nano", &file_config, false, "auto", None)
+        build_offline_model_config(&model_dir, "funasr-nano", &file_config, false, "auto", None)
             .unwrap();
     let recognizer = create_offline_recognizer(model_type, 4, None).unwrap();
 
-    let mut reader = hound::WavReader::open(wav_path).unwrap();
+    let mut reader = hound::WavReader::open(&wav_path).unwrap();
     let all_samples: Vec<f32> = reader
         .samples::<i16>()
         .map(|s| s.unwrap() as f32 / 32768.0)
@@ -615,15 +656,19 @@ async fn test_funasr_nano_durations() {
 
 #[tokio::test]
 async fn test_x_asr_streaming_segment_isolation_no_duplication() {
-    let model_dir = Path::new(
-        r"D:\projects\models\sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
-    );
-    let wav_path = Path::new(
-        r"C:\Users\asoda\AppData\Local\com.asoda.sona\history\a3fa6f44-66cb-4a6d-a05b-8c7b53e99aa9.wav",
-    );
-    if !model_dir.exists() || !wav_path.exists() {
+    let Some(model_dir) = resolve_model_dir(
+        "SONA_TEST_X_ASR_MODEL_DIR",
+        "sherpa-onnx-x-asr-160ms-streaming-zipformer-transducer-zh-en-punct-int8-2026-06-05",
+    ) else {
         return;
-    }
+    };
+    let wav_path = resolve_user_history_wav(
+        "SONA_TEST_STREAMING_AUDIO_WAV",
+        "a3fa6f44-66cb-4a6d-a05b-8c7b53e99aa9.wav",
+    );
+    let Some(wav_path) = wav_path else {
+        return;
+    };
     let file_config = Some(ModelFileConfig {
         encoder: Some("encoder.int8.onnx".to_string()),
         decoder: Some("decoder.onnx".to_string()),
@@ -633,7 +678,7 @@ async fn test_x_asr_streaming_segment_isolation_no_duplication() {
     });
 
     let config_type = sona_sherpa_onnx::recognizer::build_model_config(
-        model_dir,
+        &model_dir,
         "x-asr",
         &file_config,
         false,
@@ -644,7 +689,7 @@ async fn test_x_asr_streaming_segment_isolation_no_duplication() {
     let recognizer = sona_sherpa_onnx::recognizer::Recognizer::new(config_type, 4, None).unwrap();
     let r = recognizer.online().expect("must be online");
 
-    let mut reader = hound::WavReader::open(wav_path).unwrap();
+    let mut reader = hound::WavReader::open(&wav_path).unwrap();
     let all_samples: Vec<f32> = reader
         .samples::<i16>()
         .map(|s| s.unwrap() as f32 / 32768.0)

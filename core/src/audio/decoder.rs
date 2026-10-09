@@ -94,11 +94,7 @@ impl BuiltinAudioDecoder {
                 .make(&candidate_track.codec_params, &decoder_opts)
             {
                 Ok(dec) => {
-                    chosen = Some((
-                        candidate_track.id,
-                        candidate_track.codec_params.sample_rate,
-                        dec,
-                    ));
+                    chosen = Some((candidate_track.id, dec));
                     break;
                 }
                 Err(SymphoniaError::Unsupported(e)) => {
@@ -108,7 +104,7 @@ impl BuiltinAudioDecoder {
             }
         }
 
-        let (track_id, mut actual_sample_rate, mut decoder) = match chosen {
+        let (track_id, mut decoder) = match chosen {
             Some(selected) => selected,
             None => {
                 if let Some(err) = last_unsupported_err {
@@ -119,6 +115,8 @@ impl BuiltinAudioDecoder {
                 return Err(AudioDecodeError::NoAudioTrack);
             }
         };
+        let mut actual_sample_rate = None;
+        let mut actual_channels = None;
 
         let mut sample_buf: Option<SampleBuffer<f32>> = None;
         let mut mono_samples: Vec<f32> = Vec::new();
@@ -167,6 +165,16 @@ impl BuiltinAudioDecoder {
                     let channels = spec.channels.count();
                     if channels == 0 {
                         continue;
+                    }
+                    if let Some(prev_channels) = actual_channels {
+                        if prev_channels != channels {
+                            return Err(AudioDecodeError::Decode(format!(
+                                "Audio stream channel count changed mid-stream from {} to {}, which is unsupported",
+                                prev_channels, channels
+                            )));
+                        }
+                    } else {
+                        actual_channels = Some(channels);
                     }
                     let required_samples = decoded.capacity() * channels;
                     if sample_buf
@@ -271,6 +279,7 @@ impl BuiltinAudioDecoder {
 mod tests {
     use super::*;
     use std::io::Write;
+    use std::path::PathBuf;
     use tempfile::NamedTempFile;
 
     fn create_test_wav_file(sample_rate: u32, channels: u16, samples: &[i16]) -> NamedTempFile {
@@ -407,5 +416,35 @@ mod tests {
         assert_eq!(decoded[0], 0.0);
         // Center channel should be preserved with dialogue weighting (> 0.0)
         assert!(decoded[1] > 0.0);
+    }
+
+    #[test]
+    fn test_decode_m4a_differing_container_sample_rate() {
+        let test_path = std::env::var_os("SONA_TEST_AUDIO_M4A")
+            .map(PathBuf::from)
+            .or_else(|| {
+                let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("tests")
+                    .join("fixtures")
+                    .join("test_audio.m4a");
+                fixture.exists().then_some(fixture)
+            })
+            .or_else(|| {
+                let home = std::env::var_os("USERPROFILE").or_else(|| std::env::var_os("HOME"))?;
+                let download = PathBuf::from(home).join("Downloads").join("test_audio.m4a");
+                download.exists().then_some(download)
+            });
+
+        let Some(path) = test_path else {
+            return;
+        };
+        let samples = decode_audio_file(&path, 16000).expect("decode_audio_file should succeed");
+        assert!(!samples.is_empty());
+        let duration_secs = samples.len() as f64 / 16000.0;
+        assert!((duration_secs - 192.0).abs() < 1.0);
+
+        let slice =
+            decode_audio_slice(&path, 1.0, 2.0, 16000).expect("decode_audio_slice should succeed");
+        assert_eq!(slice.len(), 32000);
     }
 }
