@@ -26,7 +26,7 @@ if (sonaAndroidChannel == "nightly") {
     }
 }
 
-val sonaAndroidVersionName = suppliedAndroidVersionName.ifEmpty { "0.9.4" }
+val sonaAndroidVersionName = suppliedAndroidVersionName.ifEmpty { "0.9.5" }
 val sonaAndroidVersionCodeValue = suppliedAndroidVersionCode.ifEmpty { "1" }
 val parsedAndroidVersionCode = sonaAndroidVersionCodeValue.toLongOrNull()
 require(
