@@ -16,12 +16,12 @@ use sona_sync::{
 };
 use sona_sync_s3::S3SyncProviderFactory;
 use sona_sync_webdav::{WebDavObjectStore, WebDavObjectStoreConfig, WebDavSyncProviderFactory};
-use tauri::{AppHandle, Manager, Runtime};
 use tokio::sync::Mutex;
 
 use super::sync_secret_store::SystemSyncSecretStore;
+use crate::platform::database::DesktopSqliteState;
 
-const SYNC_CONFIG_FILE: &str = "sync.json";
+pub const SYNC_CONFIG_FILE: &str = "sync.json";
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,26 +32,6 @@ pub struct SyncCreateRequest {
     pub preset: SyncPresetV1,
     pub master_password: String,
     pub create_recovery_key: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SyncCreateResult {
-    pub vault_id: String,
-    pub device_id: String,
-    pub recovery_key: Option<String>,
-    pub status: SyncStatusSnapshot,
-}
-
-impl From<ApplicationCreateResult> for SyncCreateResult {
-    fn from(value: ApplicationCreateResult) -> Self {
-        Self {
-            vault_id: value.vault_id,
-            device_id: value.device_id,
-            recovery_key: value.recovery_key,
-            status: value.status,
-        }
-    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -86,6 +66,26 @@ pub struct SyncUnlockRecoveryRequest {
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct SyncCreateResult {
+    pub vault_id: String,
+    pub device_id: String,
+    pub recovery_key: Option<String>,
+    pub status: SyncStatusSnapshot,
+}
+
+impl From<ApplicationCreateResult> for SyncCreateResult {
+    fn from(value: ApplicationCreateResult) -> Self {
+        Self {
+            vault_id: value.vault_id,
+            device_id: value.device_id,
+            recovery_key: value.recovery_key,
+            status: value.status,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SyncChangePasswordRequest {
     pub current_master_password: String,
     pub next_master_password: String,
@@ -98,30 +98,76 @@ pub struct LegacyRemoteBackupListResult {
     pub credentials_migrated: bool,
 }
 
-#[derive(Default)]
+/// Desktop synchronization manager completely decoupled from Tauri runtime.
+#[derive(Clone)]
 pub struct DesktopSyncManager {
+    inner: Arc<DesktopSyncManagerInner>,
+}
+
+struct DesktopSyncManagerInner {
+    config_path: std::sync::RwLock<PathBuf>,
+    sqlite: std::sync::RwLock<Option<DesktopSqliteState>>,
     application: Mutex<Option<Arc<SyncApplication>>>,
 }
 
+impl Default for DesktopSyncManager {
+    fn default() -> Self {
+        Self {
+            inner: Arc::new(DesktopSyncManagerInner {
+                config_path: std::sync::RwLock::new(PathBuf::new()),
+                sqlite: std::sync::RwLock::new(None),
+                application: Mutex::new(None),
+            }),
+        }
+    }
+}
+
 impl DesktopSyncManager {
-    pub async fn reset(&self) {
-        *self.application.lock().await = None;
+    pub fn new(config_path: PathBuf, sqlite: DesktopSqliteState) -> Self {
+        Self {
+            inner: Arc::new(DesktopSyncManagerInner {
+                config_path: std::sync::RwLock::new(config_path),
+                sqlite: std::sync::RwLock::new(Some(sqlite)),
+                application: Mutex::new(None),
+            }),
+        }
     }
 
-    async fn application<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<Arc<SyncApplication>, String> {
-        let mut shared = self.application.lock().await;
+    pub fn configure(&self, config_path: PathBuf, sqlite: DesktopSqliteState) {
+        if let Ok(mut path_guard) = self.inner.config_path.write() {
+            *path_guard = config_path;
+        }
+        if let Ok(mut sqlite_guard) = self.inner.sqlite.write() {
+            *sqlite_guard = Some(sqlite);
+        }
+    }
+
+    pub async fn reset(&self) {
+        *self.inner.application.lock().await = None;
+    }
+
+    async fn application(&self) -> Result<Arc<SyncApplication>, String> {
+        let mut shared = self.inner.application.lock().await;
         if let Some(application) = shared.as_ref() {
             return Ok(Arc::clone(application));
         }
+        let sqlite = self
+            .inner
+            .sqlite
+            .read()
+            .map_err(|e| e.to_string())?
+            .clone()
+            .ok_or_else(|| "SQLite context not configured for DesktopSyncManager".to_string())?;
+        let config_path = self
+            .inner
+            .config_path
+            .read()
+            .map_err(|e| e.to_string())?
+            .clone();
+        let context = sqlite.current_context()?;
         let application = Arc::new(SyncApplication::new(
-            Arc::new(JsonFileSyncConfigStore::new(config_path(app)?)),
-            Arc::new(
-                crate::platform::database::try_sqlite_application_context(app)?
-                    .sync_repository_factory(Arc::new(SystemClock)),
-            ),
+            Arc::new(JsonFileSyncConfigStore::new(config_path)),
+            Arc::new(context.sync_repository_factory(Arc::new(SystemClock))),
             SyncProviderRegistry::new([
                 Arc::new(WebDavSyncProviderFactory) as Arc<dyn SyncProviderFactory>,
                 Arc::new(S3SyncProviderFactory) as Arc<dyn SyncProviderFactory>,
@@ -133,35 +179,26 @@ impl DesktopSyncManager {
         Ok(application)
     }
 
-    pub async fn get_status<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
-            .await?
-            .status()
-            .await
-            .map_err(sync_error)
+    pub async fn get_status(&self) -> Result<SyncStatusSnapshot, String> {
+        self.application().await?.status().await.map_err(sync_error)
     }
 
-    pub async fn test_provider<R: Runtime>(
+    pub async fn test_provider(
         &self,
-        app: &AppHandle<R>,
         provider: SyncProviderInput,
     ) -> Result<SyncProviderDescriptor, String> {
-        self.application(app)
+        self.application()
             .await?
             .test_provider(provider)
             .await
             .map_err(sync_error)
     }
 
-    pub async fn create_vault<R: Runtime>(
+    pub async fn create_vault(
         &self,
-        app: &AppHandle<R>,
         request: SyncCreateRequest,
     ) -> Result<SyncCreateResult, String> {
-        self.application(app)
+        self.application()
             .await?
             .create_with_vault_id(
                 request.provider,
@@ -175,34 +212,29 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn discover_vaults<R: Runtime>(
+    pub async fn discover_vaults(
         &self,
-        app: &AppHandle<R>,
         provider: SyncProviderInput,
     ) -> Result<Vec<DiscoveredVaultSummary>, String> {
-        self.application(app)
+        self.application()
             .await?
             .discover_vaults(provider)
             .await
             .map_err(sync_error)
     }
 
-    pub async fn get_pairing_info<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<Option<SyncPairingInfo>, String> {
-        self.application(app)
+    pub async fn get_pairing_info(&self) -> Result<Option<SyncPairingInfo>, String> {
+        self.application()
             .await?
             .get_pairing_info()
             .map_err(sync_error)
     }
 
-    pub async fn preview_join<R: Runtime>(
+    pub async fn preview_join(
         &self,
-        app: &AppHandle<R>,
         request: SyncPreviewJoinRequest,
     ) -> Result<SyncJoinPreview, String> {
-        self.application(app)
+        self.application()
             .await?
             .preview_join(
                 request.provider,
@@ -213,12 +245,8 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn join_vault<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-        request: SyncJoinRequest,
-    ) -> Result<SyncRunResult, String> {
-        self.application(app)
+    pub async fn join_vault(&self, request: SyncJoinRequest) -> Result<SyncRunResult, String> {
+        self.application()
             .await?
             .join(
                 request.provider,
@@ -229,12 +257,8 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn unlock<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-        request: SyncUnlockRequest,
-    ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
+    pub async fn unlock(&self, request: SyncUnlockRequest) -> Result<SyncStatusSnapshot, String> {
+        self.application()
             .await?
             .unlock_with_password(
                 request.provider_password.into_bytes(),
@@ -244,12 +268,11 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn unlock_with_recovery<R: Runtime>(
+    pub async fn unlock_with_recovery(
         &self,
-        app: &AppHandle<R>,
         request: SyncUnlockRecoveryRequest,
     ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
+        self.application()
             .await?
             .unlock_with_recovery_key(
                 request.provider_password.into_bytes(),
@@ -259,60 +282,47 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn lock<R: Runtime>(&self, app: &AppHandle<R>) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
-            .await?
-            .lock()
-            .await
-            .map_err(sync_error)
+    pub async fn lock(&self) -> Result<SyncStatusSnapshot, String> {
+        self.application().await?.lock().await.map_err(sync_error)
     }
 
-    pub async fn set_paused<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-        paused: bool,
-    ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
+    pub async fn set_paused(&self, paused: bool) -> Result<SyncStatusSnapshot, String> {
+        self.application()
             .await?
             .set_paused(paused)
             .await
             .map_err(sync_error)
     }
 
-    pub async fn disconnect<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
+    pub async fn disconnect(&self) -> Result<SyncStatusSnapshot, String> {
+        self.application()
             .await?
             .disconnect()
             .await
             .map_err(sync_error)
     }
 
-    pub async fn run_now<R: Runtime>(&self, app: &AppHandle<R>) -> Result<SyncRunResult, String> {
-        self.application(app).await?.run().await.map_err(sync_error)
+    pub async fn run_now(&self) -> Result<SyncRunResult, String> {
+        self.application().await?.run().await.map_err(sync_error)
     }
 
-    pub async fn change_preset<R: Runtime>(
+    pub async fn change_preset(
         &self,
-        app: &AppHandle<R>,
         preset: SyncPresetV1,
         confirm_shrink: bool,
     ) -> Result<SyncStatusSnapshot, String> {
-        self.application(app)
+        self.application()
             .await?
             .change_preset(preset, confirm_shrink)
             .await
             .map_err(sync_error)
     }
 
-    pub async fn change_master_password<R: Runtime>(
+    pub async fn change_master_password(
         &self,
-        app: &AppHandle<R>,
         request: SyncChangePasswordRequest,
     ) -> Result<(), String> {
-        self.application(app)
+        self.application()
             .await?
             .change_master_password(
                 &request.current_master_password,
@@ -322,45 +332,37 @@ impl DesktopSyncManager {
             .map_err(sync_error)
     }
 
-    pub async fn generate_recovery_key<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<String, String> {
-        self.application(app)
+    pub async fn generate_recovery_key(&self) -> Result<String, String> {
+        self.application()
             .await?
             .generate_recovery_key()
             .await
             .map_err(sync_error)
     }
 
-    pub async fn list_conflicts<R: Runtime>(
-        &self,
-        app: &AppHandle<R>,
-    ) -> Result<Vec<SyncConflictSummary>, String> {
-        self.application(app)
+    pub async fn list_conflicts(&self) -> Result<Vec<SyncConflictSummary>, String> {
+        self.application()
             .await?
             .list_conflicts()
             .map_err(sync_error)
     }
 
-    pub async fn get_conflict<R: Runtime>(
+    pub async fn get_conflict(
         &self,
-        app: &AppHandle<R>,
         conflict_id: &str,
     ) -> Result<Option<SyncConflictDetail>, String> {
-        self.application(app)
+        self.application()
             .await?
             .get_conflict(conflict_id)
             .map_err(sync_error)
     }
 
-    pub async fn resolve_conflict<R: Runtime>(
+    pub async fn resolve_conflict(
         &self,
-        app: &AppHandle<R>,
         conflict_id: &str,
         resolution: SyncConflictResolution,
     ) -> Result<(), String> {
-        self.application(app)
+        self.application()
             .await?
             .resolve_conflict(conflict_id, resolution)
             .map_err(sync_error)
@@ -455,13 +457,6 @@ async fn persist_legacy_provider_password(
         .await
 }
 
-fn config_path<R: Runtime>(app: &AppHandle<R>) -> Result<PathBuf, String> {
-    app.path()
-        .app_local_data_dir()
-        .map(|path| path.join(SYNC_CONFIG_FILE))
-        .map_err(sync_error)
-}
-
 fn sync_error(error: impl ToString) -> String {
     let message = error.to_string();
     match message.as_str() {
@@ -509,5 +504,17 @@ mod tests {
             )),
             "invalid sync.json"
         );
+    }
+
+    #[tokio::test]
+    async fn test_desktop_sync_manager_without_tauri() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
+        let sqlite = DesktopSqliteState::new(ctx);
+        let config_path = temp.path().join("sync.json");
+        let manager = DesktopSyncManager::new(config_path, sqlite);
+
+        let status = manager.get_status().await.unwrap();
+        assert_eq!(status.state, sona_core::sync::SyncLifecycleState::Disabled);
     }
 }

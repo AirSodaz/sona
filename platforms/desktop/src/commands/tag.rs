@@ -1,75 +1,81 @@
-use tauri::{AppHandle, Runtime};
+use tauri::State;
 
-use crate::platform::tag_repository::{
-    create_tag, delete_tag, get_active_tag_id, list_tags, reorder_tags, replace_tags,
-    set_active_tag_id, update_tag,
-};
+use crate::services::DesktopServices;
 use sona_core::tag::{TagRecord, TagUpdateInput};
 
 #[tauri::command]
-pub async fn tag_list<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_list(
+    services: State<'_, DesktopServices>,
     fallback_enabled_polish_keyword_set_ids: Option<Vec<String>>,
     fallback_enabled_speaker_profile_ids: Option<Vec<String>>,
 ) -> Result<Vec<TagRecord>, String> {
-    list_tags(
-        &app,
-        fallback_enabled_polish_keyword_set_ids,
-        fallback_enabled_speaker_profile_ids,
-    )
-    .await
+    services
+        .projects
+        .list_tags(
+            fallback_enabled_polish_keyword_set_ids,
+            fallback_enabled_speaker_profile_ids,
+        )
+        .await
 }
 
 #[tauri::command]
-pub async fn tag_save_all<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_save_all(
+    services: State<'_, DesktopServices>,
     tags: Vec<TagRecord>,
 ) -> Result<(), String> {
-    replace_tags(&app, tags).await
+    services.projects.replace_tags(tags).await
 }
 
 #[tauri::command]
-pub async fn tag_create<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_create(
+    services: State<'_, DesktopServices>,
     name: String,
     description: Option<String>,
     icon: Option<String>,
     color: Option<String>,
 ) -> Result<TagRecord, String> {
-    create_tag(&app, name, description, icon, color).await
+    services
+        .projects
+        .create_tag(name, description, icon, color)
+        .await
 }
 
 #[tauri::command]
-pub async fn tag_update<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_update(
+    services: State<'_, DesktopServices>,
     tag_id: String,
     updates: TagUpdateInput,
 ) -> Result<Option<TagRecord>, String> {
-    update_tag(&app, tag_id, updates).await
+    services.projects.update_tag(tag_id, updates).await
 }
 
 #[tauri::command]
-pub async fn tag_delete<R: Runtime>(app: AppHandle<R>, tag_id: String) -> Result<(), String> {
-    delete_tag(&app, tag_id).await
+pub async fn tag_delete(
+    services: State<'_, DesktopServices>,
+    tag_id: String,
+) -> Result<(), String> {
+    services.projects.delete_tag(tag_id).await
 }
 
 #[tauri::command]
-pub async fn tag_reorder<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_reorder(
+    services: State<'_, DesktopServices>,
     tag_ids: Vec<String>,
 ) -> Result<Vec<TagRecord>, String> {
-    reorder_tags(&app, tag_ids).await
+    services.projects.reorder_tags(tag_ids).await
 }
 
 #[tauri::command]
-pub async fn tag_get_active_id<R: Runtime>(app: AppHandle<R>) -> Result<Option<String>, String> {
-    get_active_tag_id(&app).await
+pub async fn tag_get_active_id(
+    services: State<'_, DesktopServices>,
+) -> Result<Option<String>, String> {
+    services.projects.get_active_tag_id().await
 }
 
 #[tauri::command]
-pub async fn tag_set_active_id<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn tag_set_active_id(
+    services: State<'_, DesktopServices>,
     tag_id: Option<String>,
 ) -> Result<(), String> {
-    set_active_tag_id(&app, tag_id).await
+    services.projects.set_active_tag_id(tag_id).await
 }

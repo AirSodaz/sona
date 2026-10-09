@@ -2,6 +2,7 @@ pub mod app;
 pub mod commands;
 pub mod integrations;
 pub mod platform;
+pub mod services;
 
 use tauri::{Emitter, Manager};
 
@@ -144,16 +145,10 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 let _ = window.set_focus();
             }
         }))
-        .manage(crate::platform::model_downloads::DownloadState::new())
         .manage(crate::app::server::ApiServerController::default())
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())
         .manage(crate::platform::automation_runtime::AutomationRuntimeState::default())
-        .manage(crate::platform::history_repository::HistoryRepositoryState::default())
-        .manage(crate::platform::history_repository::PreparedBackupImportState::default())
-        .manage(crate::platform::sync::DesktopSyncManager::default())
-        .manage(crate::integrations::audio::AudioState::new())
-        .manage(crate::integrations::asr::AsrState::new())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())

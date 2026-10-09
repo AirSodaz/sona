@@ -1,4 +1,4 @@
-use tauri::{AppHandle, Runtime, State};
+use tauri::State;
 
 use sona_core::sync::{
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncJoinPreview, SyncPresetV1,
@@ -7,67 +7,64 @@ use sona_core::sync::{
 use sona_sync::{DiscoveredVaultSummary, SyncPairingInfo, SyncProviderInput};
 use sona_sync_webdav::WebDavObjectStoreConfig;
 
-use crate::platform::history_repository::{PreparedBackupImport, PreparedBackupImportState};
+use crate::platform::history_repository::PreparedBackupImport;
 use crate::platform::sync::{
     DesktopSyncManager, LegacyRemoteBackupListResult, SyncChangePasswordRequest, SyncCreateRequest,
     SyncCreateResult, SyncJoinRequest, SyncPreviewJoinRequest, SyncUnlockRecoveryRequest,
     SyncUnlockRequest, webdav_provider_input,
 };
+use crate::services::DesktopServices;
 
 #[tauri::command]
-pub async fn sync_get_status<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_get_status(
+    services: State<'_, DesktopServices>,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.get_status(&app).await
+    services.sync.get_status().await
 }
 
 #[tauri::command]
-pub async fn sync_test_provider<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_test_provider(
+    services: State<'_, DesktopServices>,
     provider: SyncProviderInput,
 ) -> Result<SyncProviderDescriptor, String> {
-    manager.test_provider(&app, provider).await
+    services.sync.test_provider(provider).await
 }
 
 #[tauri::command]
-pub async fn sync_test_webdav_provider<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_test_webdav_provider(
+    services: State<'_, DesktopServices>,
     config: WebDavObjectStoreConfig,
 ) -> Result<SyncProviderDescriptor, String> {
-    manager
-        .test_provider(&app, webdav_provider_input(config)?)
+    services
+        .sync
+        .test_provider(webdav_provider_input(config)?)
         .await
 }
 
 #[tauri::command]
-pub async fn sync_discover_vaults<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_discover_vaults(
+    services: State<'_, DesktopServices>,
     provider: SyncProviderInput,
 ) -> Result<Vec<DiscoveredVaultSummary>, String> {
-    manager.discover_vaults(&app, provider).await
+    services.sync.discover_vaults(provider).await
 }
 
 #[tauri::command]
-pub async fn sync_discover_webdav_vaults<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_discover_webdav_vaults(
+    services: State<'_, DesktopServices>,
     config: WebDavObjectStoreConfig,
 ) -> Result<Vec<DiscoveredVaultSummary>, String> {
-    manager
-        .discover_vaults(&app, webdav_provider_input(config)?)
+    services
+        .sync
+        .discover_vaults(webdav_provider_input(config)?)
         .await
 }
 
 #[tauri::command]
-pub async fn sync_get_pairing_info<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_get_pairing_info(
+    services: State<'_, DesktopServices>,
 ) -> Result<Option<SyncPairingInfo>, String> {
-    manager.get_pairing_info(&app).await
+    services.sync.get_pairing_info().await
 }
 
 #[tauri::command]
@@ -78,9 +75,8 @@ pub async fn sync_list_legacy_backups(
 }
 
 #[tauri::command]
-pub async fn sync_prepare_legacy_backup_import<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, PreparedBackupImportState>,
+pub async fn sync_prepare_legacy_backup_import(
+    services: State<'_, DesktopServices>,
     config: WebDavObjectStoreConfig,
     key: String,
 ) -> Result<PreparedBackupImport, String> {
@@ -93,146 +89,126 @@ pub async fn sync_prepare_legacy_backup_import<R: Runtime>(
         let _ = std::fs::remove_dir_all(&temporary_dir);
         return Err(error.to_string());
     }
-    let result = crate::platform::history_repository::prepare_backup_import(
-        &app,
-        state.inner(),
-        archive_path.to_string_lossy().into_owned(),
-    )
-    .await;
+    let result = services
+        .history
+        .prepare_backup_import(archive_path.to_string_lossy().into_owned())
+        .await;
     let _ = std::fs::remove_dir_all(&temporary_dir);
     result
 }
 
 #[tauri::command]
-pub async fn sync_create_vault<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_create_vault(
+    services: State<'_, DesktopServices>,
     request: SyncCreateRequest,
 ) -> Result<SyncCreateResult, String> {
-    manager.create_vault(&app, request).await
+    services.sync.create_vault(request).await
 }
 
 #[tauri::command]
-pub async fn sync_preview_join<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_preview_join(
+    services: State<'_, DesktopServices>,
     request: SyncPreviewJoinRequest,
 ) -> Result<SyncJoinPreview, String> {
-    manager.preview_join(&app, request).await
+    services.sync.preview_join(request).await
 }
 
 #[tauri::command]
-pub async fn sync_join_vault<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_join_vault(
+    services: State<'_, DesktopServices>,
     request: SyncJoinRequest,
 ) -> Result<SyncRunResult, String> {
-    manager.join_vault(&app, request).await
+    services.sync.join_vault(request).await
 }
 
 #[tauri::command]
-pub async fn sync_unlock<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_unlock(
+    services: State<'_, DesktopServices>,
     request: SyncUnlockRequest,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.unlock(&app, request).await
+    services.sync.unlock(request).await
 }
 
 #[tauri::command]
-pub async fn sync_unlock_with_recovery<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_unlock_with_recovery(
+    services: State<'_, DesktopServices>,
     request: SyncUnlockRecoveryRequest,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.unlock_with_recovery(&app, request).await
+    services.sync.unlock_with_recovery(request).await
 }
 
 #[tauri::command]
-pub async fn sync_lock<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
-) -> Result<SyncStatusSnapshot, String> {
-    manager.lock(&app).await
+pub async fn sync_lock(services: State<'_, DesktopServices>) -> Result<SyncStatusSnapshot, String> {
+    services.sync.lock().await
 }
 
 #[tauri::command]
-pub async fn sync_set_paused<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_set_paused(
+    services: State<'_, DesktopServices>,
     paused: bool,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.set_paused(&app, paused).await
+    services.sync.set_paused(paused).await
 }
 
 #[tauri::command]
-pub async fn sync_disconnect<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_disconnect(
+    services: State<'_, DesktopServices>,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.disconnect(&app).await
+    services.sync.disconnect().await
 }
 
 #[tauri::command]
-pub async fn sync_run_now<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
-) -> Result<SyncRunResult, String> {
-    manager.run_now(&app).await
+pub async fn sync_run_now(services: State<'_, DesktopServices>) -> Result<SyncRunResult, String> {
+    services.sync.run_now().await
 }
 
 #[tauri::command]
-pub async fn sync_change_preset<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_change_preset(
+    services: State<'_, DesktopServices>,
     preset: SyncPresetV1,
     confirm_shrink: bool,
 ) -> Result<SyncStatusSnapshot, String> {
-    manager.change_preset(&app, preset, confirm_shrink).await
+    services.sync.change_preset(preset, confirm_shrink).await
 }
 
 #[tauri::command]
-pub async fn sync_change_master_password<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_change_master_password(
+    services: State<'_, DesktopServices>,
     request: SyncChangePasswordRequest,
 ) -> Result<(), String> {
-    manager.change_master_password(&app, request).await
+    services.sync.change_master_password(request).await
 }
 
 #[tauri::command]
-pub async fn sync_generate_recovery_key<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_generate_recovery_key(
+    services: State<'_, DesktopServices>,
 ) -> Result<String, String> {
-    manager.generate_recovery_key(&app).await
+    services.sync.generate_recovery_key().await
 }
 
 #[tauri::command]
-pub async fn sync_list_conflicts<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_list_conflicts(
+    services: State<'_, DesktopServices>,
 ) -> Result<Vec<SyncConflictSummary>, String> {
-    manager.list_conflicts(&app).await
+    services.sync.list_conflicts().await
 }
 
 #[tauri::command]
-pub async fn sync_get_conflict<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_get_conflict(
+    services: State<'_, DesktopServices>,
     conflict_id: String,
 ) -> Result<Option<SyncConflictDetail>, String> {
-    manager.get_conflict(&app, &conflict_id).await
+    services.sync.get_conflict(&conflict_id).await
 }
 
 #[tauri::command]
-pub async fn sync_resolve_conflict<R: Runtime>(
-    app: AppHandle<R>,
-    manager: State<'_, DesktopSyncManager>,
+pub async fn sync_resolve_conflict(
+    services: State<'_, DesktopServices>,
     conflict_id: String,
     resolution: SyncConflictResolution,
 ) -> Result<(), String> {
-    manager
-        .resolve_conflict(&app, &conflict_id, resolution)
+    services
+        .sync
+        .resolve_conflict(&conflict_id, resolution)
         .await
 }

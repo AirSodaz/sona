@@ -1,11 +1,10 @@
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime};
 
 use super::{
     HistoryItemRecord, HistoryItemStatus, SqliteHistoryStore, TranscriptSnapshotMetadata,
     TranscriptSnapshotReason, history_store,
 };
 use crate::integrations::asr::TranscriptSegment;
-use crate::platform::blocking::with_sqlite_context;
 use sona_application::history::HistoryMutationService;
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
@@ -13,6 +12,21 @@ use sona_core::history::mutation_repository::{
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history_store::{HistoryStore, HistoryStoreError};
+
+pub(crate) async fn run_llm_db_task<T, F, E>(
+    sqlite: &crate::platform::database::DesktopSqliteState,
+    task: F,
+) -> Result<T, String>
+where
+    T: Send + 'static,
+    F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
+    E: ToString + Send + 'static,
+{
+    crate::services::db_runner::run_sqlite_task(sqlite, move |context| {
+        task(history_store(&context))
+    })
+    .await
+}
 
 pub(crate) async fn run_llm_db_task_with_app<R, T, F, E>(
     app: &AppHandle<R>,
@@ -24,7 +38,8 @@ where
     F: FnOnce(SqliteHistoryStore) -> Result<T, E> + Send + 'static,
     E: ToString + Send + 'static,
 {
-    with_sqlite_context(app, move |context| task(history_store(&context))).await
+    let sqlite = app.state::<crate::platform::database::DesktopSqliteState>();
+    run_llm_db_task(sqlite.inner(), task).await
 }
 
 pub(crate) fn create_llm_transcript_snapshot_record(

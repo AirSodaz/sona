@@ -165,29 +165,31 @@ pub fn is_migration_in_progress() -> bool {
 }
 
 pub async fn check_active_tasks_idle(app: &AppHandle) -> Result<(), String> {
-    if let Some(audio_state) = app.try_state::<crate::integrations::audio::AudioState>()
-        && audio_state.has_active_captures()
-    {
-        return Err(
-            "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
-                .to_string(),
-        );
-    }
-    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>()
-        && asr_state.is_busy().await
-    {
-        return Err(
-            "Cannot migrate storage while speech recognition or batch transcription is in progress. Please wait or stop active tasks."
-                .to_string(),
-        );
-    }
-    if let Some(download_state) = app.try_state::<crate::platform::model_downloads::DownloadState>()
-        && download_state.has_active_downloads().await
-    {
-        return Err(
-            "Cannot migrate storage while model downloads are in progress. Please wait for downloads to finish or cancel them."
-                .to_string(),
-        );
+    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        if services.audio.has_active_captures() {
+            return Err(
+                "Cannot migrate storage while audio recording or live capture is active. Please stop recording first."
+                    .to_string(),
+            );
+        }
+        if services.asr.is_busy().await {
+            return Err(
+                "Cannot migrate storage while speech recognition or batch transcription is in progress. Please wait or stop active tasks."
+                    .to_string(),
+            );
+        }
+        if services.downloads.has_active_downloads().await {
+            return Err(
+                "Cannot migrate storage while model downloads are in progress. Please wait for downloads to finish or cancel them."
+                    .to_string(),
+            );
+        }
+        if services.history.is_file_task_active() {
+            return Err(
+                "Cannot migrate storage while history operations or backup archives are being processed. Please wait for them to finish."
+                    .to_string(),
+            );
+        }
     }
     if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>()
         && server_controller.has_active_jobs().await
@@ -617,9 +619,9 @@ pub async fn migrate_data_directory(
         let bootstrap = load_bootstrap_config(&default_data_dir);
         let should_copy_models = bootstrap.custom_models_dir.is_none();
         if should_copy_models
-            && let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>()
+            && let Some(services) = app.try_state::<crate::services::DesktopServices>()
         {
-            asr_state.clear_model_caches().await;
+            services.asr.clear_model_caches().await;
         }
 
         let mut total_bytes = 0u64;
@@ -829,8 +831,8 @@ pub async fn set_models_directory(
     check_path_overlap(&active_models_dir, &target_path)?;
 
     // Evict all loaded models before moving files so file locks are released!
-    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
-        asr_state.clear_model_caches().await;
+    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.asr.clear_model_caches().await;
     }
     let server_was_running = stop_api_server_for_migration(app).await?;
     let restart_guard = ServerRestartGuard::new(app, server_was_running);
@@ -879,8 +881,8 @@ pub async fn reset_models_directory(app: &AppHandle) -> Result<StorageDirectorie
     let _guard = MigrationGuard::acquire()?;
     check_active_tasks_idle(app).await?;
     // Evict all loaded models before resetting path
-    if let Some(asr_state) = app.try_state::<crate::integrations::asr::AsrState>() {
-        asr_state.clear_model_caches().await;
+    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.asr.clear_model_caches().await;
     }
     let server_was_running = stop_api_server_for_migration(app).await?;
     let restart_guard = ServerRestartGuard::new(app, server_was_running);

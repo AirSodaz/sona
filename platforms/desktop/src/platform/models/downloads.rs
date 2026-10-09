@@ -30,6 +30,7 @@ impl Drop for DownloadRegistrationGuard {
     }
 }
 
+#[derive(Clone)]
 pub struct DownloadState {
     downloads: Arc<std::sync::Mutex<HashMap<String, Arc<Notify>>>>,
     client: DownloadClient,
@@ -110,16 +111,15 @@ pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Res
     Ok(state.has_active_downloads().await)
 }
 
-pub async fn download_file<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+pub async fn download_file(
+    emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
+    state: &DownloadState,
     url: String,
     output_path: String,
     id: String,
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
     use sona_model_downloads::{complete_download_file, temporary_download_path};
-    use tauri::Emitter;
 
     let final_path = std::path::PathBuf::from(&output_path);
     let temp_path = temporary_download_path(&final_path);
@@ -127,12 +127,14 @@ pub async fn download_file<R: tauri::Runtime>(
     let notify = Arc::new(Notify::new());
     let _download_guard = state.register_download(id.clone(), notify.clone());
 
-    let app_clone = app.clone();
     let id_clone = id.clone();
     let mut last_emit = std::time::Instant::now();
     let progress_cb = Box::new(move |downloaded: u64, total: u64| {
         if downloaded == total || last_emit.elapsed().as_millis() >= 100 {
-            let _ = app_clone.emit(DOWNLOAD_PROGRESS_EVENT, (downloaded, total, &id_clone));
+            let _ = emitter.emit(
+                DOWNLOAD_PROGRESS_EVENT,
+                serde_json::json!([downloaded, total, &id_clone]),
+            );
             last_emit = std::time::Instant::now();
         }
     });
@@ -154,7 +156,7 @@ pub async fn download_file<R: tauri::Runtime>(
 
 pub async fn download_preset_model<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+    state: &DownloadState,
     model_id: String,
     download_id: String,
     mirror: Option<String>,
@@ -261,7 +263,7 @@ pub async fn activate_cuda_addon<R: tauri::Runtime>(
 
 pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+    state: &DownloadState,
     download_id: String,
     mirror: Option<String>,
     version: Option<String>,

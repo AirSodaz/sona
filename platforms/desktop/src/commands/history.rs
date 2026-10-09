@@ -4,13 +4,13 @@ use crate::integrations::asr::TranscriptSegment;
 use crate::platform::history_repository::{
     BackupManifest, ExportBackupArchiveRequest, HistoryAudioCleanupReport,
     HistoryAudioCleanupRequest, HistoryCreateLiveDraftRequest, HistoryItemRecord,
-    HistoryListOptions, HistoryRepositoryState, HistorySaveImportedFileRequest,
-    HistorySaveRecordingRequest, HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType,
-    HistoryWorkspaceQueryRequest, HistoryWorkspaceQueryResult, HistoryWorkspaceScope,
-    HistoryWorkspaceSortOrder, LiveRecordingDraftResult, PreparedBackupImport,
-    PreparedBackupImportState, TranscriptDiffResult, TranscriptDiffRow, TranscriptSnapshotMetadata,
-    TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryListOptions, HistorySaveImportedFileRequest, HistorySaveRecordingRequest,
+    HistoryWorkspaceDateFilter, HistoryWorkspaceFilterType, HistoryWorkspaceQueryRequest,
+    HistoryWorkspaceQueryResult, HistoryWorkspaceScope, HistoryWorkspaceSortOrder,
+    LiveRecordingDraftResult, PreparedBackupImport, TranscriptDiffResult, TranscriptDiffRow,
+    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
 };
+use crate::services::DesktopServices;
 use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
@@ -26,23 +26,23 @@ fn validate_history_input<T: serde::Serialize + ?Sized>(value: &T) -> Result<(),
 }
 
 #[tauri::command]
-pub async fn history_list_items<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_list_items(
+    services: State<'_, DesktopServices>,
     limit: Option<usize>,
     offset: Option<usize>,
 ) -> Result<Vec<HistoryItemRecord>, String> {
     validate_history_input(&(limit, offset))?;
     let opts = HistoryListOptions { limit, offset };
-    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
-        service.list_items(opts)
-    })
-    .await
+    services
+        .history
+        .query_db(move |service| service.list_items(opts))
+        .await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn history_query_workspace<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_query_workspace(
+    services: State<'_, DesktopServices>,
     scope: HistoryWorkspaceScope,
     query: String,
     filter_type: HistoryWorkspaceFilterType,
@@ -61,16 +61,15 @@ pub async fn history_query_workspace<R: Runtime>(
         offset,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
-        service.query_workspace(request)
-    })
-    .await
+    services
+        .history
+        .query_db(move |service| service.query_workspace(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_create_live_draft<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_create_live_draft(
+    services: State<'_, DesktopServices>,
     id: Option<String>,
     audio_extension: String,
     project_id: Option<String>,
@@ -84,17 +83,15 @@ pub async fn history_create_live_draft<R: Runtime>(
         icon,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.create_live_draft(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.create_live_draft(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_complete_live_draft<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_complete_live_draft(
+    services: State<'_, DesktopServices>,
     history_id: String,
     segments: Vec<TranscriptSegment>,
     duration: f64,
@@ -105,17 +102,16 @@ pub async fn history_complete_live_draft<R: Runtime>(
         duration,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.complete_live_draft(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.complete_live_draft(request))
+        .await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn history_save_recording<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_save_recording(
+    services: State<'_, DesktopServices>,
     segments: Vec<TranscriptSegment>,
     duration: f64,
     project_id: Option<String>,
@@ -133,19 +129,16 @@ pub async fn history_save_recording<R: Runtime>(
         audio_extension,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.save_recording(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.save_recording(request))
+        .await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn history_save_recording_to_project<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_save_recording_to_project(
+    services: State<'_, DesktopServices>,
     segments: Vec<TranscriptSegment>,
     duration: f64,
     project_id: Option<String>,
@@ -163,19 +156,16 @@ pub async fn history_save_recording_to_project<R: Runtime>(
         audio_extension,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.save_recording(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.save_recording(request))
+        .await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn history_save_imported_file<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_save_imported_file(
+    services: State<'_, DesktopServices>,
     id: Option<String>,
     source_path: String,
     segments: Vec<TranscriptSegment>,
@@ -193,18 +183,15 @@ pub async fn history_save_imported_file<R: Runtime>(
         converted_source_path,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.save_imported_file(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.save_imported_file(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_delete_items<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_delete_items(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
 ) -> Result<(), String> {
     let deleted_at = u64::try_from(
@@ -215,75 +202,66 @@ pub async fn history_delete_items<R: Runtime>(
     )
     .map_err(|error| error.to_string())?;
     let request = HistoryTrashItemsRequest { ids, deleted_at };
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.trash_items(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.trash_items(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_trash_items<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_trash_items(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
     deleted_at: u64,
 ) -> Result<(), String> {
     let request = HistoryTrashItemsRequest { ids, deleted_at };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.trash_items(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.trash_items(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_restore_items<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_restore_items(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
 ) -> Result<(), String> {
+    validate_history_input(&ids)?;
     let request = HistoryDeleteItemsRequest { ids };
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.restore_items(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.restore_items(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_purge_items<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_purge_items(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
 ) -> Result<(), String> {
+    validate_history_input(&ids)?;
     let request = HistoryDeleteItemsRequest { ids };
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.purge_items(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.purge_items(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_load_transcript<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_load_transcript(
+    services: State<'_, DesktopServices>,
     history_id: String,
 ) -> Result<Option<Vec<TranscriptSegment>>, String> {
-    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
-        service.load_transcript(&history_id)
-    })
-    .await
+    services
+        .history
+        .query_db(move |service| service.load_transcript(&history_id))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_update_transcript<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_update_transcript(
+    services: State<'_, DesktopServices>,
     history_id: String,
     segments: Vec<TranscriptSegment>,
 ) -> Result<HistoryItemRecord, String> {
@@ -292,17 +270,16 @@ pub async fn history_update_transcript<R: Runtime>(
         segments,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.update_transcript(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.update_transcript(request))
+        .await
 }
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)]
-pub async fn history_save_imported_file_to_project<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_save_imported_file_to_project(
+    services: State<'_, DesktopServices>,
     id: Option<String>,
     source_path: String,
     segments: Vec<TranscriptSegment>,
@@ -320,17 +297,15 @@ pub async fn history_save_imported_file_to_project<R: Runtime>(
         converted_source_path,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_file_task(
-        &app,
-        state.inner(),
-        move |service| service.save_imported_file(request),
-    )
-    .await
+    services
+        .history
+        .mutation_file(move |service| service.save_imported_file(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_commit_transcript_edit<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_commit_transcript_edit(
+    services: State<'_, DesktopServices>,
     history_id: String,
     edit_session_id: String,
     base_segments: Vec<TranscriptSegment>,
@@ -343,15 +318,15 @@ pub async fn history_commit_transcript_edit<R: Runtime>(
         edited_segments,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.commit_transcript_edit(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.commit_transcript_edit(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_create_transcript_snapshot<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_create_transcript_snapshot(
+    services: State<'_, DesktopServices>,
     history_id: String,
     reason: TranscriptSnapshotReason,
     segments: Vec<TranscriptSegment>,
@@ -362,33 +337,33 @@ pub async fn history_create_transcript_snapshot<R: Runtime>(
         segments,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.create_transcript_snapshot(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.create_transcript_snapshot(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_list_transcript_snapshots<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_list_transcript_snapshots(
+    services: State<'_, DesktopServices>,
     history_id: String,
 ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
-    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
-        service.list_transcript_snapshots(&history_id)
-    })
-    .await
+    services
+        .history
+        .query_db(move |service| service.list_transcript_snapshots(&history_id))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_load_transcript_snapshot<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_load_transcript_snapshot(
+    services: State<'_, DesktopServices>,
     history_id: String,
     snapshot_id: String,
 ) -> Result<Option<TranscriptSnapshotRecord>, String> {
-    crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
-        service.load_transcript_snapshot(&history_id, &snapshot_id)
-    })
-    .await
+    services
+        .history
+        .query_db(move |service| service.load_transcript_snapshot(&history_id, &snapshot_id))
+        .await
 }
 
 #[tauri::command]
@@ -419,8 +394,8 @@ pub fn history_restore_transcript_diff_rows(
 }
 
 #[tauri::command]
-pub async fn history_update_item_meta<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_update_item_meta(
+    services: State<'_, DesktopServices>,
     history_id: String,
     updates: HistoryItemMetaPatch,
 ) -> Result<(), String> {
@@ -429,15 +404,15 @@ pub async fn history_update_item_meta<R: Runtime>(
         updates,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.update_item_meta(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.update_item_meta(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_update_tag_assignments<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_update_tag_assignments(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
     add_tag_ids: Vec<String>,
     remove_tag_ids: Vec<String>,
@@ -447,42 +422,43 @@ pub async fn history_update_tag_assignments<R: Runtime>(
         add_tag_ids,
         remove_tag_ids,
     };
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.update_tag_assignments(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.update_tag_assignments(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_replace_tag_assignments<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_replace_tag_assignments(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
     tag_ids: Vec<String>,
 ) -> Result<(), String> {
     let request = HistoryReplaceTagAssignmentsRequest { ids, tag_ids };
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.replace_tag_assignments(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.replace_tag_assignments(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_update_project_assignments<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_update_project_assignments(
+    services: State<'_, DesktopServices>,
     ids: Vec<String>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    history_replace_tag_assignments(app, ids, project_id.into_iter().collect()).await
+    history_replace_tag_assignments(services, ids, project_id.into_iter().collect()).await
 }
 
 #[tauri::command]
-pub async fn history_reassign_project<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_reassign_project(
+    services: State<'_, DesktopServices>,
     current_project_id: String,
     next_project_id: Option<String>,
 ) -> Result<(), String> {
-    let items =
-        crate::platform::history_repository::run_history_query_db_task(&app, move |service| {
+    let items = services
+        .history
+        .query_db(move |service| {
             service.list_items(HistoryListOptions {
                 limit: None,
                 offset: None,
@@ -499,64 +475,60 @@ pub async fn history_reassign_project<R: Runtime>(
         add_tag_ids: next_project_id.into_iter().collect(),
         remove_tag_ids: vec![current_project_id],
     };
-    crate::platform::history_repository::run_history_mutation_db_task(&app, move |service| {
-        service.update_tag_assignments(request)
-    })
-    .await
+    services
+        .history
+        .mutation_db(move |service| service.update_tag_assignments(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_load_summary<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_load_summary(
+    services: State<'_, DesktopServices>,
     history_id: String,
 ) -> Result<Option<HistorySummaryPayload>, String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.load_summary(&history_id)
-    })
-    .await
+    services
+        .history
+        .db_task(move |repository| repository.load_summary(&history_id))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_save_summary<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_save_summary(
+    services: State<'_, DesktopServices>,
     history_id: String,
     summary_payload: HistorySummaryPayload,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.save_summary(&history_id, summary_payload)
-    })
-    .await
+    services
+        .history
+        .db_task(move |repository| repository.save_summary(&history_id, summary_payload))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_delete_summary<R: Runtime>(
-    app: AppHandle<R>,
+pub async fn history_delete_summary(
+    services: State<'_, DesktopServices>,
     history_id: String,
 ) -> Result<(), String> {
-    crate::platform::history_repository::run_history_db_task(&app, move |repository| {
-        repository.delete_summary(&history_id)
-    })
-    .await
+    services
+        .history
+        .db_task(move |repository| repository.delete_summary(&history_id))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_resolve_audio_path<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_resolve_audio_path(
+    services: State<'_, DesktopServices>,
     history_id: String,
 ) -> Result<Option<String>, String> {
-    crate::platform::history_repository::run_history_file_task(
-        &app,
-        state.inner(),
-        move |repository| repository.resolve_audio_path(&history_id),
-    )
-    .await
+    services
+        .history
+        .file_task(move |repository| repository.resolve_audio_path(&history_id))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_preview_audio_cleanup<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_preview_audio_cleanup(
+    services: State<'_, DesktopServices>,
     retention_days: Option<u64>,
     exclude_history_id: Option<String>,
 ) -> Result<HistoryAudioCleanupReport, String> {
@@ -565,18 +537,15 @@ pub async fn history_preview_audio_cleanup<R: Runtime>(
         exclude_history_id,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_file_task(
-        &app,
-        state.inner(),
-        move |repository| repository.preview_audio_cleanup(request),
-    )
-    .await
+    services
+        .history
+        .file_task(move |repository| repository.preview_audio_cleanup(request))
+        .await
 }
 
 #[tauri::command]
-pub async fn history_cleanup_audio<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+pub async fn history_cleanup_audio(
+    services: State<'_, DesktopServices>,
     retention_days: Option<u64>,
     exclude_history_id: Option<String>,
 ) -> Result<HistoryAudioCleanupReport, String> {
@@ -585,65 +554,58 @@ pub async fn history_cleanup_audio<R: Runtime>(
         exclude_history_id,
     };
     validate_history_input(&request)?;
-    crate::platform::history_repository::run_history_file_task(
-        &app,
-        state.inner(),
-        move |repository| repository.cleanup_audio(request),
-    )
-    .await
+    services
+        .history
+        .file_task(move |repository| repository.cleanup_audio(request))
+        .await
 }
 
 #[tauri::command]
 pub async fn history_open_folder<R: Runtime>(
     app: AppHandle<R>,
-    state: State<'_, HistoryRepositoryState>,
+    services: State<'_, DesktopServices>,
 ) -> Result<(), String> {
-    crate::platform::history_repository::open_history_folder(&app, state.inner()).await
+    let folder_path = services.history.ensure_history_folder()?;
+    use tauri_plugin_opener::OpenerExt;
+    app.opener()
+        .open_path(folder_path.to_string_lossy(), None::<&str>)
+        .map_err(|error| error.to_string())
 }
 
 #[tauri::command]
-pub async fn export_backup_archive<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, PreparedBackupImportState>,
+pub async fn export_backup_archive(
+    services: State<'_, DesktopServices>,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    crate::platform::history_repository::export_backup_archive(&app, state.inner(), request).await
+    services.history.export_backup_archive(request).await
 }
 
 #[tauri::command]
-pub async fn prepare_backup_import<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, PreparedBackupImportState>,
+pub async fn prepare_backup_import(
+    services: State<'_, DesktopServices>,
     archive_path: String,
 ) -> Result<PreparedBackupImport, String> {
-    crate::platform::history_repository::prepare_backup_import(&app, state.inner(), archive_path)
+    services.history.prepare_backup_import(archive_path).await
+}
+
+#[tauri::command]
+pub async fn apply_prepared_history_import(
+    services: State<'_, DesktopServices>,
+    import_id: String,
+) -> Result<(), String> {
+    services
+        .history
+        .apply_prepared_history_import(import_id)
         .await
 }
 
 #[tauri::command]
-pub async fn apply_prepared_history_import<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, PreparedBackupImportState>,
+pub async fn dispose_prepared_backup_import(
+    services: State<'_, DesktopServices>,
     import_id: String,
 ) -> Result<(), String> {
-    crate::platform::history_repository::apply_prepared_history_import(
-        &app,
-        state.inner(),
-        import_id,
-    )
-    .await
-}
-
-#[tauri::command]
-pub async fn dispose_prepared_backup_import<R: Runtime>(
-    app: AppHandle<R>,
-    state: State<'_, PreparedBackupImportState>,
-    import_id: String,
-) -> Result<(), String> {
-    crate::platform::history_repository::dispose_prepared_backup_import(
-        &app,
-        state.inner(),
-        import_id,
-    )
-    .await
+    services
+        .history
+        .dispose_prepared_backup_import(import_id)
+        .await
 }

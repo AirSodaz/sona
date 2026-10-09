@@ -105,14 +105,15 @@ impl BatchCancelRegistry {
     }
 }
 
+#[derive(Clone)]
 pub struct AsrState {
     pub(crate) recognizer_pool: RecognizerPool,
     pub(crate) registry: LocalAsrRegistry,
     pub(crate) metrics: AsrMetricsStore,
-    pub(crate) live_coordinator: LiveTranscriptionCoordinator,
+    pub(crate) live_coordinator: Arc<LiveTranscriptionCoordinator>,
     pub(crate) batch_cancel: Arc<BatchCancelRegistry>,
-    external_sources: Mutex<HashMap<String, ExternalSourceState>>,
-    next_external_generation: AtomicU64,
+    external_sources: Arc<Mutex<HashMap<String, ExternalSourceState>>>,
+    next_external_generation: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Debug, serde::Serialize)]
@@ -146,10 +147,10 @@ impl AsrState {
             recognizer_pool,
             registry,
             metrics: new_metrics_store(),
-            live_coordinator: factory.coordinator(),
+            live_coordinator: Arc::new(factory.coordinator()),
             batch_cancel: Arc::new(BatchCancelRegistry::default()),
-            external_sources: Mutex::new(HashMap::new()),
-            next_external_generation: AtomicU64::new(1),
+            external_sources: Arc::new(Mutex::new(HashMap::new())),
+            next_external_generation: Arc::new(AtomicU64::new(1)),
         }
     }
 

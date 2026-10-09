@@ -32,7 +32,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let sqlite_context = Arc::new(sona_sqlite::SqliteApplicationContext::from_database(
-        app_local_data_dir,
+        app_local_data_dir.clone(),
         db.clone(),
     )?);
 
@@ -59,10 +59,38 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let dashboard_state = crate::platform::dashboard::DesktopDashboardState::new(dashboard_service);
     let sqlite_state = crate::platform::database::DesktopSqliteState::new(sqlite_context);
     app.manage(dashboard_state);
+    let sqlite_for_services = sqlite_state.clone();
     app.manage(sqlite_state);
-    crate::app::window::create_main_window(app.handle(), start_silently)?;
-    crate::platform::model_downloads::try_auto_activate_cuda_addon(app.handle());
+    let sync_config_path = app_local_data_dir.join(crate::platform::sync::SYNC_CONFIG_FILE);
 
+    let audio_state = Arc::new(crate::integrations::audio::AudioState::new());
+    let asr_state = Arc::new(crate::integrations::asr::AsrState::new());
+    let download_state = Arc::new(crate::platform::model_downloads::DownloadState::new());
+    let history_state = crate::platform::history_repository::HistoryRepositoryState::default();
+    let backup_state = crate::platform::history_repository::PreparedBackupImportState::default();
+    let event_emitter = Arc::new(crate::platform::event::TauriEventEmitter(
+        app_handle_for_listener.clone(),
+    )) as Arc<dyn crate::platform::event::EventEmitterPort>;
+
+    let desktop_services = crate::services::DesktopServices::builder()
+        .sqlite(sqlite_for_services)
+        .event_emitter(event_emitter)
+        .sync_config_path(sync_config_path)
+        .history_state(history_state.clone())
+        .backup_state(backup_state.clone())
+        .audio(Arc::clone(&audio_state))
+        .asr(Arc::clone(&asr_state))
+        .downloads(Arc::clone(&download_state))
+        .build()
+        .map_err(|e| format!("Failed to build DesktopServices: {e}"))?;
+
+    app.manage(desktop_services);
+    app.manage((*audio_state).clone());
+    app.manage((*asr_state).clone());
+    app.manage((*download_state).clone());
+    app.manage(history_state);
+    app.manage(backup_state);
+    crate::app::window::create_main_window(app.handle(), start_silently)?;
     let listener_app_handle = app_handle_for_listener.clone();
     app.listen_any("asr-config-updated", move |_event| {
         let app_handle = listener_app_handle.clone();

@@ -1,30 +1,32 @@
-use crate::platform::model_downloads::DownloadState;
+use tauri::State;
+
+use crate::services::DesktopServices;
 
 #[tauri::command]
 pub async fn cancel_download(
-    state: tauri::State<'_, DownloadState>,
+    services: State<'_, DesktopServices>,
     id: String,
 ) -> Result<(), String> {
-    crate::platform::model_downloads::cancel_download(state, id).await
+    services.downloads.notify_download(&id).await;
+    Ok(())
 }
 
 #[tauri::command]
-pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {
-    crate::platform::model_downloads::has_active_downloads(state).await
+pub async fn has_active_downloads(services: State<'_, DesktopServices>) -> Result<bool, String> {
+    Ok(services.downloads.has_active_downloads().await)
 }
 
 #[tauri::command]
-pub async fn download_file<R: tauri::Runtime>(
-    app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+pub async fn download_file(
+    services: State<'_, DesktopServices>,
     url: String,
     output_path: String,
     id: String,
     expected_sha256: Option<String>,
 ) -> Result<(), String> {
     crate::platform::model_downloads::download_file(
-        app,
-        state,
+        services.emitter.clone(),
+        &services.downloads,
         url,
         output_path,
         id,
@@ -36,14 +38,14 @@ pub async fn download_file<R: tauri::Runtime>(
 #[tauri::command]
 pub async fn download_preset_model<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+    services: State<'_, DesktopServices>,
     model_id: String,
     download_id: String,
     mirror: Option<String>,
 ) -> Result<String, String> {
     crate::platform::model_downloads::download_preset_model(
         app,
-        state,
+        &services.downloads,
         model_id,
         download_id,
         mirror,
@@ -76,7 +78,7 @@ pub async fn activate_cuda_addon<R: tauri::Runtime>(
 #[tauri::command]
 pub async fn download_cuda_addon<R: tauri::Runtime>(
     app: tauri::AppHandle<R>,
-    state: tauri::State<'_, DownloadState>,
+    services: State<'_, DesktopServices>,
     download_id: String,
     mirror: Option<String>,
     version: Option<String>,
@@ -85,7 +87,7 @@ pub async fn download_cuda_addon<R: tauri::Runtime>(
 ) -> Result<sona_core::runtime::cuda_addon::CudaAddonInspection, String> {
     crate::platform::model_downloads::download_and_install_cuda_addon(
         app,
-        state,
+        &services.downloads,
         download_id,
         mirror,
         version,

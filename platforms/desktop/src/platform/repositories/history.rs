@@ -14,11 +14,10 @@ pub use sona_sqlite::history_store as sqlite_store;
 use sona_sqlite::{SqliteApplicationContext, SqliteBackupStateRepository};
 pub use sqlite_store::SqliteHistoryStore;
 use std::sync::Arc;
-use tauri::{AppHandle, Runtime};
 
-use crate::platform::blocking::{
-    map_err_string, spawn_blocking_map, with_sqlite_context_locked_transport,
-    with_sqlite_context_transport,
+use crate::platform::database::DesktopSqliteState;
+use crate::services::db_runner::{
+    map_err_string, run_sqlite_task_locked_transport, run_sqlite_task_transport, spawn_blocking_map,
 };
 
 // Re-exports from history platform adapter modules
@@ -47,87 +46,191 @@ pub(crate) fn history_store(context: &SqliteApplicationContext) -> SqliteHistory
     context.history_store(Arc::new(SystemClock), Arc::new(UuidGenerator))
 }
 
-pub async fn run_history_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+/// Pure Rust History domain service without any Tauri dependency.
+#[derive(Clone)]
+pub struct HistoryService {
+    sqlite: DesktopSqliteState,
+    state: HistoryRepositoryState,
+    backup_state: PreparedBackupImportState,
+}
+
+impl HistoryService {
+    pub fn new(
+        sqlite: DesktopSqliteState,
+        state: HistoryRepositoryState,
+        backup_state: PreparedBackupImportState,
+    ) -> Self {
+        Self {
+            sqlite,
+            state,
+            backup_state,
+        }
+    }
+
+    pub fn sqlite(&self) -> &DesktopSqliteState {
+        &self.sqlite
+    }
+
+    pub fn state(&self) -> &HistoryRepositoryState {
+        &self.state
+    }
+
+    pub fn backup_state(&self) -> &PreparedBackupImportState {
+        &self.backup_state
+    }
+
+    pub fn is_file_task_active(&self) -> bool {
+        self.state.is_file_task_active()
+    }
+
+    pub async fn query_db<T, F>(&self, task: F) -> Result<T, String>
+    where
+        T: Send + Serialize + 'static,
+        F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
+    {
+        run_history_query_db_task(&self.sqlite, task).await
+    }
+
+    pub async fn mutation_db<T, F>(&self, task: F) -> Result<T, String>
+    where
+        T: Send + Serialize + 'static,
+        F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
+    {
+        run_history_mutation_db_task(&self.sqlite, task).await
+    }
+
+    pub async fn mutation_file<T, F>(&self, task: F) -> Result<T, String>
+    where
+        T: Send + Serialize + 'static,
+        F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
+    {
+        run_history_mutation_file_task(&self.sqlite, &self.state, task).await
+    }
+
+    pub async fn file_task<T, F>(&self, task: F) -> Result<T, String>
+    where
+        T: Send + Serialize + 'static,
+        F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
+    {
+        run_history_file_task(&self.sqlite, &self.state, task).await
+    }
+
+    pub async fn db_task<T, F>(&self, task: F) -> Result<T, String>
+    where
+        T: Send + Serialize + 'static,
+        F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
+    {
+        run_history_db_task(&self.sqlite, task).await
+    }
+
+    pub async fn export_backup_archive(
+        &self,
+        request: ExportBackupArchiveRequest,
+    ) -> Result<BackupManifest, String> {
+        export_backup_archive(&self.sqlite, &self.backup_state, request).await
+    }
+
+    pub async fn prepare_backup_import(
+        &self,
+        archive_path: String,
+    ) -> Result<PreparedBackupImport, String> {
+        prepare_backup_import(&self.sqlite, &self.backup_state, archive_path).await
+    }
+
+    pub async fn apply_prepared_history_import(&self, import_id: String) -> Result<(), String> {
+        apply_prepared_history_import(&self.sqlite, &self.backup_state, import_id).await
+    }
+
+    pub async fn dispose_prepared_backup_import(&self, import_id: String) -> Result<(), String> {
+        dispose_prepared_backup_import(&self.sqlite, &self.backup_state, import_id).await
+    }
+
+    pub fn ensure_history_folder(&self) -> Result<std::path::PathBuf, String> {
+        ensure_history_folder(&self.sqlite, &self.state)
+    }
+}
+
+pub async fn run_history_db_task<T, F>(sqlite: &DesktopSqliteState, task: F) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    with_sqlite_context_transport(app, move |context| task(history_store(&context))).await
+    run_sqlite_task_transport(sqlite, move |context| task(history_store(&context))).await
 }
 
-pub async fn run_history_file_task<R, T, F>(
-    app: &AppHandle<R>,
+pub async fn run_history_file_task<T, F>(
+    sqlite: &DesktopSqliteState,
     state: &HistoryRepositoryState,
     task: F,
 ) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(SqliteHistoryStore) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
+    run_sqlite_task_locked_transport(sqlite, state.file_lock.clone(), move |context| {
         task(history_store(&context))
     })
     .await
 }
 
-pub async fn run_history_query_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+pub async fn run_history_query_db_task<T, F>(
+    sqlite: &DesktopSqliteState,
+    task: F,
+) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryQueryService) -> Result<T, HistoryStoreError> + Send + 'static,
 {
-    with_sqlite_context_transport(app, move |context| {
+    run_sqlite_task_transport(sqlite, move |context| {
         let repository = Arc::new(history_store(&context));
         task(HistoryQueryService::new(repository))
     })
     .await
 }
 
-pub async fn run_history_mutation_file_task<R, T, F>(
-    app: &AppHandle<R>,
+pub async fn run_history_mutation_file_task<T, F>(
+    sqlite: &DesktopSqliteState,
     state: &HistoryRepositoryState,
     task: F,
 ) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    with_sqlite_context_locked_transport(app, state.file_lock.clone(), move |context| {
+    run_sqlite_task_locked_transport(sqlite, state.file_lock.clone(), move |context| {
         let repository = Arc::new(history_store(&context));
         task(HistoryMutationService::new(repository))
     })
     .await
 }
 
-pub async fn run_history_mutation_db_task<R, T, F>(app: &AppHandle<R>, task: F) -> Result<T, String>
+pub async fn run_history_mutation_db_task<T, F>(
+    sqlite: &DesktopSqliteState,
+    task: F,
+) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + Serialize + 'static,
     F: FnOnce(HistoryMutationService) -> Result<T, HistoryMutationError> + Send + 'static,
 {
-    with_sqlite_context_transport(app, move |context| {
+    run_sqlite_task_transport(sqlite, move |context| {
         let repository = Arc::new(history_store(&context));
         task(HistoryMutationService::new(repository))
     })
     .await
 }
 
-async fn run_backup_adapter_task<R, T, F>(
-    app: &AppHandle<R>,
+async fn run_backup_adapter_task<T, F>(
+    sqlite: &DesktopSqliteState,
     state: &PreparedBackupImportState,
     task: F,
 ) -> Result<T, String>
 where
-    R: Runtime,
     T: Send + 'static,
     F: FnOnce(&FsBackupAdapter<SqliteBackupStateRepository, SystemClock>) -> Result<T, BackupError>
         + Send
         + 'static,
 {
-    let context = crate::platform::blocking::sqlite_context(app);
+    let context = sqlite.current_context()?;
     let archive = state.archive();
     spawn_blocking_map(move || {
         let repository = context.backup_state_repository();
@@ -137,12 +240,12 @@ where
     .await
 }
 
-pub async fn export_backup_archive<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn export_backup_archive(
+    sqlite: &DesktopSqliteState,
     state: &PreparedBackupImportState,
     request: ExportBackupArchiveRequest,
 ) -> Result<BackupManifest, String> {
-    run_backup_adapter_task(app, state, move |adapter| {
+    run_backup_adapter_task(sqlite, state, move |adapter| {
         adapter.export_archive(BackupExportRequest {
             archive_path: request.archive_path,
             app_version: request.app_version,
@@ -151,23 +254,23 @@ pub async fn export_backup_archive<R: Runtime>(
     .await
 }
 
-pub async fn prepare_backup_import<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn prepare_backup_import(
+    sqlite: &DesktopSqliteState,
     state: &PreparedBackupImportState,
     archive_path: String,
 ) -> Result<PreparedBackupImport, String> {
-    run_backup_adapter_task(app, state, move |adapter| {
+    run_backup_adapter_task(sqlite, state, move |adapter| {
         adapter.prepare_import(BackupPrepareImportRequest { archive_path })
     })
     .await
 }
 
-pub async fn apply_prepared_history_import<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn apply_prepared_history_import(
+    sqlite: &DesktopSqliteState,
     state: &PreparedBackupImportState,
     import_id: String,
 ) -> Result<(), String> {
-    run_backup_adapter_task(app, state, move |adapter| {
+    run_backup_adapter_task(sqlite, state, move |adapter| {
         adapter
             .apply_prepared_import(BackupApplyPreparedImportRequest {
                 import_id,
@@ -178,22 +281,23 @@ pub async fn apply_prepared_history_import<R: Runtime>(
     .await
 }
 
-pub async fn dispose_prepared_backup_import<R: Runtime>(
-    app: &AppHandle<R>,
+pub async fn dispose_prepared_backup_import(
+    sqlite: &DesktopSqliteState,
     state: &PreparedBackupImportState,
     import_id: String,
 ) -> Result<(), String> {
-    run_backup_adapter_task(app, state, move |adapter| {
+    run_backup_adapter_task(sqlite, state, move |adapter| {
         adapter.dispose_prepared_import(&import_id)
     })
     .await
 }
 
-pub async fn open_history_folder<R: Runtime>(
-    app: &AppHandle<R>,
+/// Prepares and returns the history directory path without invoking OS opener.
+pub fn ensure_history_folder(
+    sqlite: &DesktopSqliteState,
     state: &HistoryRepositoryState,
-) -> Result<(), String> {
-    let context = crate::platform::blocking::sqlite_context(app);
+) -> Result<std::path::PathBuf, String> {
+    let context = sqlite.current_context()?;
     let app_local_data_dir = context.app_data_dir().to_path_buf();
     {
         let _guard = state.file_lock.lock().map_err(map_err_string)?;
@@ -201,12 +305,29 @@ pub async fn open_history_folder<R: Runtime>(
             .ensure_ready()
             .map_err(map_err_string)?;
     }
+    Ok(app_local_data_dir.join(HISTORY_DIR_NAME))
+}
 
-    use tauri_plugin_opener::OpenerExt;
-    app.opener()
-        .open_path(
-            app_local_data_dir.join(HISTORY_DIR_NAME).to_string_lossy(),
-            None::<&str>,
-        )
-        .map_err(map_err_string)
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn test_history_service_without_tauri() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
+        let sqlite = DesktopSqliteState::new(ctx);
+        let repo_state = HistoryRepositoryState::default();
+        let backup_state = PreparedBackupImportState::default();
+        let history_service = HistoryService::new(sqlite, repo_state, backup_state);
+
+        let items = history_service
+            .query_db(|service| service.list_items(HistoryListOptions::default()))
+            .await
+            .unwrap();
+        assert_eq!(items.len(), 0);
+
+        let folder = history_service.ensure_history_folder().unwrap();
+        assert!(folder.ends_with(HISTORY_DIR_NAME));
+    }
 }

@@ -650,7 +650,7 @@ test('Desktop Sync lifecycle requests are provider-neutral behind WebDAV compati
   }
   assert.match(
     desktopSync,
-    /pub async fn test_provider<[^>]+>\([^)]*provider:\s*SyncProviderInput/su,
+    /pub async fn test_provider(?:<[^>]+>)?\([^)]*provider:\s*SyncProviderInput/su,
   );
   assert.doesNotMatch(desktopSync, /pub async fn test_webdav_provider\b/u);
 

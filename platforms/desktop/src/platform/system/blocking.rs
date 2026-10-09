@@ -13,6 +13,10 @@ use serde::Serialize;
 use sona_sqlite::SqliteApplicationContext;
 use tauri::{AppHandle, Runtime};
 
+pub use crate::services::db_runner::{
+    run_sqlite_task, run_sqlite_task_locked, run_sqlite_task_locked_transport,
+    run_sqlite_task_transport,
+};
 /// Map any displayable failure to the Desktop host string boundary.
 #[inline]
 pub fn map_err_string(error: impl ToString) -> String {

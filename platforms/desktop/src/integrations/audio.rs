@@ -10,7 +10,6 @@ use std::hash::Hash;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{Sender, channel};
-use tauri::{AppHandle, Emitter, Manager};
 
 const MICROPHONE_PEAK_EVENT: &str = "microphone-audio";
 const SYSTEM_PEAK_EVENT: &str = "system-audio";
@@ -351,11 +350,12 @@ impl SharedCaptureState {
     }
 }
 
+#[derive(Clone)]
 pub struct AudioState {
-    start_guard: Mutex<()>,
-    registry: Mutex<CaptureRegistry>,
-    stopping_condvar: std::sync::Condvar,
-    next_source_generation: AtomicU64,
+    start_guard: std::sync::Arc<Mutex<()>>,
+    registry: std::sync::Arc<Mutex<CaptureRegistry>>,
+    stopping_condvar: std::sync::Arc<std::sync::Condvar>,
+    next_source_generation: std::sync::Arc<AtomicU64>,
 }
 
 impl Default for AudioState {
@@ -367,10 +367,10 @@ impl Default for AudioState {
 impl AudioState {
     pub fn new() -> Self {
         Self {
-            start_guard: Mutex::new(()),
-            registry: Mutex::new(CaptureRegistry::default()),
-            stopping_condvar: std::sync::Condvar::new(),
-            next_source_generation: AtomicU64::new(1),
+            start_guard: std::sync::Arc::new(Mutex::new(())),
+            registry: std::sync::Arc::new(Mutex::new(CaptureRegistry::default())),
+            stopping_condvar: std::sync::Arc::new(std::sync::Condvar::new()),
+            next_source_generation: std::sync::Arc::new(AtomicU64::new(1)),
         }
     }
 
@@ -520,10 +520,8 @@ fn rollback_capture_attachment(
     }
 }
 
-fn evict_defunct_capture(app: &AppHandle, key: &CaptureKey, source: &LiveSourceEpoch) {
-    if let Some(audio_state) = app.try_state::<AudioState>()
-        && let Ok(mut registry) = audio_state.registry.lock()
-    {
+fn evict_defunct_capture(audio_state: &AudioState, key: &CaptureKey, source: &LiveSourceEpoch) {
+    if let Ok(mut registry) = audio_state.registry.lock() {
         let evicted = registry
             .captures
             .get(key)
@@ -546,8 +544,11 @@ fn evict_defunct_capture(app: &AppHandle, key: &CaptureKey, source: &LiveSourceE
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn spawn_capture_worker_task(
-    app: AppHandle,
+    asr_state: std::sync::Arc<crate::integrations::asr::AsrState>,
+    audio_state: std::sync::Arc<AudioState>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
     key: CaptureKey,
     source: LiveSourceEpoch,
     sample_cursor: std::sync::Arc<AtomicU64>,
@@ -555,16 +556,17 @@ fn spawn_capture_worker_task(
     mut event_rx: tokio::sync::mpsc::Receiver<CaptureEvent>,
     mut recorder_rx: tokio::sync::mpsc::Receiver<RecorderCommand>,
 ) {
-    tauri::async_runtime::spawn(async move {
+    tokio::spawn(async move {
         let mut writers = HashMap::<String, CaptureWriterState>::new();
         let mut sequence = 0_u64;
         let mut last_peak_emit = std::time::Instant::now();
         let worker_source = CaptureWorkerSource {
-            app: &app,
+            emitter: emitter.as_ref(),
+            audio_state: audio_state.as_ref(),
+            asr_state: asr_state.as_ref(),
             key: &key,
             source: &source,
         };
-
         loop {
             tokio::select! {
                 biased;
@@ -628,9 +630,9 @@ fn spawn_capture_worker_task(
                                 "[Audio] {} capture stream error occurred: {err}",
                                 key.kind.label()
                             );
-                            let _ = app.emit(
+                            let _ = emitter.emit(
                                 AUDIO_CAPTURE_ERROR_EVENT,
-                                format!("{}: {err}", key.kind.label()),
+                                serde_json::json!(format!("{}: {err}", key.kind.label())),
                             );
                             break;
                         }
@@ -644,12 +646,14 @@ fn spawn_capture_worker_task(
             let _ = writer.writer.finalize();
         }
         stop_signal.stop();
-        evict_defunct_capture(&app, &key, &source);
+        evict_defunct_capture(&audio_state, &key, &source);
     });
 }
 
 struct CaptureWorkerSource<'a> {
-    app: &'a AppHandle,
+    emitter: &'a dyn crate::platform::event::EventEmitterPort,
+    audio_state: &'a AudioState,
+    asr_state: &'a crate::integrations::asr::AsrState,
     key: &'a CaptureKey,
     source: &'a LiveSourceEpoch,
 }
@@ -674,9 +678,10 @@ async fn drain_capture_worker_chunk(
     }
     if last_peak_emit.elapsed() >= std::time::Duration::from_millis(50) {
         let peak_i16 = (max_abs.clamp(0.0, 1.0) * 32767.0) as i16;
-        let _ = worker_source
-            .app
-            .emit(worker_source.key.kind.peak_event(), peak_i16);
+        let _ = worker_source.emitter.emit(
+            worker_source.key.kind.peak_event(),
+            serde_json::json!(peak_i16),
+        );
         *last_peak_emit = std::time::Instant::now();
     }
 
@@ -692,7 +697,8 @@ async fn drain_capture_worker_chunk(
     let start_sample = sample_cursor.fetch_add(chunk.len() as u64, Ordering::AcqRel);
     let frame = AsrAudioFrame::new(*sequence, start_sample, chunk.to_vec());
     feed_capture_audio(
-        worker_source.app,
+        worker_source.audio_state,
+        worker_source.asr_state,
         worker_source.key,
         worker_source.source,
         frame,
@@ -714,31 +720,41 @@ fn resolve_capture_device(
 }
 
 pub fn start_system_audio_capture(
-    app: AppHandle,
-    state: &AudioState,
+    audio_state: std::sync::Arc<AudioState>,
+    asr_state: std::sync::Arc<crate::integrations::asr::AsrState>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
+    app_data_dir: std::path::PathBuf,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
     start_shared_capture(
-        app,
-        state,
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
         CaptureKind::System,
         device_name,
         instance_id,
         output_path,
+        true,
     )
     .map(|_| ())
 }
 
+#[allow(clippy::too_many_arguments)]
 fn start_shared_capture(
-    app: AppHandle,
-    state: &AudioState,
+    audio_state: std::sync::Arc<AudioState>,
+    asr_state: std::sync::Arc<crate::integrations::asr::AsrState>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
+    app_data_dir: std::path::PathBuf,
     kind: CaptureKind,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
+    should_record: bool,
 ) -> Result<LiveCaptureLease, String> {
+    let state = audio_state.as_ref();
     let _start_guard = state.start_guard.lock().map_err(|e| e.to_string())?;
     let existing_key = state
         .registry
@@ -779,7 +795,6 @@ fn start_shared_capture(
         }
     }
 
-    let should_record = output_path.is_some();
     let existing_attachment = {
         let mut registry = state.registry.lock().map_err(|e| e.to_string())?;
         registry.attach_running(&key, kind, &instance_id, should_record)?
@@ -796,7 +811,11 @@ fn start_shared_capture(
             kind.label(),
             &instance_id,
             output_path.clone(),
-            || crate::platform::audio_storage::create_history_recording_path_for_app(&app),
+            || {
+                crate::platform::audio_storage::create_history_recording_path_from_dir(
+                    &app_data_dir,
+                )
+            },
         ) {
             rollback_capture_attachment(state, kind, &instance_id, &key);
             return Err(error);
@@ -858,7 +877,9 @@ fn start_shared_capture(
     let sample_cursor = std::sync::Arc::new(AtomicU64::new(0));
 
     spawn_capture_worker_task(
-        app.clone(),
+        asr_state,
+        audio_state.clone(),
+        emitter,
         key.clone(),
         source.clone(),
         sample_cursor.clone(),
@@ -894,7 +915,9 @@ fn start_shared_capture(
         kind.label(),
         &instance_id,
         output_path,
-        || crate::platform::audio_storage::create_history_recording_path_for_app(&app),
+        move || {
+            crate::platform::audio_storage::create_history_recording_path_from_dir(&app_data_dir)
+        },
     ) {
         rollback_capture_attachment(state, kind, &instance_id, &key);
         return Err(error);
@@ -910,27 +933,34 @@ pub fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 }
 
 pub fn start_microphone_capture(
-    app: AppHandle,
-    state: &AudioState,
+    audio_state: std::sync::Arc<AudioState>,
+    asr_state: std::sync::Arc<crate::integrations::asr::AsrState>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
+    app_data_dir: std::path::PathBuf,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
     start_shared_capture(
-        app,
-        state,
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
         CaptureKind::Microphone,
         device_name,
         instance_id,
         output_path,
+        true,
     )
     .map(|_| ())
 }
 
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn start_native_live_capture(
-    app: AppHandle,
-    state: &AudioState,
+    audio_state: std::sync::Arc<AudioState>,
+    asr_state: std::sync::Arc<crate::integrations::asr::AsrState>,
+    emitter: std::sync::Arc<dyn crate::platform::event::EventEmitterPort>,
+    app_data_dir: std::path::PathBuf,
     source_kind: &str,
     device_name: Option<String>,
     consumer_id: String,
@@ -941,11 +971,22 @@ pub(crate) fn start_native_live_capture(
         "microphone" => CaptureKind::Microphone,
         _ => return Err(format!("Unsupported native capture source: {source_kind}")),
     };
-    start_shared_capture(app, state, kind, device_name, consumer_id, output_path)
+    let should_record = output_path.is_some();
+    start_shared_capture(
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
+        kind,
+        device_name,
+        consumer_id,
+        output_path,
+        should_record,
+    )
 }
 
 pub(crate) async fn stop_native_live_capture(
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     source_kind: &str,
     consumer_id: String,
 ) -> Result<String, String> {
@@ -992,13 +1033,13 @@ pub(crate) fn set_native_live_capture_paused(
 }
 
 async fn feed_capture_audio(
-    app: &AppHandle,
+    audio_state: &AudioState,
+    asr_state: &crate::integrations::asr::AsrState,
     key: &CaptureKey,
     source: &LiveSourceEpoch,
     frame: AsrAudioFrame,
 ) {
     let instance_ids = {
-        let audio_state = app.state::<AudioState>();
         let registry = match audio_state.registry.lock() {
             Ok(registry) => registry,
             Err(_) => return,
@@ -1016,7 +1057,6 @@ async fn feed_capture_audio(
         return;
     }
 
-    let asr_state = app.state::<crate::integrations::asr::AsrState>();
     if let Err(error) = asr_state
         .live_coordinator()
         .feed_source(source, frame.clone())
@@ -1031,21 +1071,21 @@ async fn feed_capture_audio(
 }
 
 pub async fn stop_microphone_capture(
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     instance_id: String,
 ) -> Result<String, String> {
-    stop_shared_capture(&state, CaptureKind::Microphone, instance_id).await
+    stop_shared_capture(state, CaptureKind::Microphone, instance_id).await
 }
 
 pub async fn stop_system_audio_capture(
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     instance_id: String,
 ) -> Result<String, String> {
-    stop_shared_capture(&state, CaptureKind::System, instance_id).await
+    stop_shared_capture(state, CaptureKind::System, instance_id).await
 }
 
 async fn stop_shared_capture(
-    state: &tauri::State<'_, AudioState>,
+    state: &AudioState,
     kind: CaptureKind,
     instance_id: String,
 ) -> Result<String, String> {
@@ -1133,7 +1173,7 @@ async fn stop_shared_capture(
 }
 
 pub fn set_system_audio_capture_paused(
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     instance_id: String,
     paused: bool,
 ) -> Result<(), String> {
@@ -1153,7 +1193,7 @@ pub fn set_system_audio_capture_paused(
 }
 
 pub fn set_microphone_capture_paused(
-    state: tauri::State<'_, AudioState>,
+    state: &AudioState,
     instance_id: String,
     paused: bool,
 ) -> Result<(), String> {

@@ -134,8 +134,12 @@ pub(crate) fn local_asr_registry_default() -> LocalAsrRegistry {
 }
 
 pub(crate) fn recognizer_pool_for_app(app: Option<&AppHandle>) -> RecognizerPool {
-    app.map(|app| app.state::<AsrState>().recognizer_pool())
-        .unwrap_or_else(RecognizerPool::new)
+    app.and_then(|app| {
+        app.try_state::<crate::services::DesktopServices>()
+            .map(|services| services.asr.recognizer_pool())
+            .or_else(|| app.try_state::<AsrState>().map(|s| s.recognizer_pool()))
+    })
+    .unwrap_or_else(RecognizerPool::new)
 }
 
 #[cfg(test)]

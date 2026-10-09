@@ -1,37 +1,43 @@
 use sona_core::task_ledger::types::{TaskLedgerPatch, TaskLedgerRecord, TaskLedgerSnapshot};
-use tauri::AppHandle;
+use tauri::State;
+
+use crate::services::DesktopServices;
 
 #[tauri::command]
-pub async fn task_ledger_load_snapshot(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    crate::platform::task_ledger_repository::load_snapshot(&app).await
+pub async fn task_ledger_load_snapshot(
+    services: State<'_, DesktopServices>,
+) -> Result<TaskLedgerSnapshot, String> {
+    services.task_ledger.load_snapshot().await
 }
 
 #[tauri::command]
 pub async fn task_ledger_upsert_task(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     record: TaskLedgerRecord,
 ) -> Result<TaskLedgerSnapshot, String> {
-    crate::platform::task_ledger_repository::upsert_task(&app, record).await
+    services.task_ledger.upsert_task(record).await
 }
 
 #[tauri::command]
 pub async fn task_ledger_patch_task(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     id: String,
     patch: TaskLedgerPatch,
 ) -> Result<TaskLedgerSnapshot, String> {
-    crate::platform::task_ledger_repository::patch_task(&app, id, patch).await
+    services.task_ledger.patch_task(id, patch).await
 }
 
 #[tauri::command]
 pub async fn task_ledger_remove_task(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     id: String,
 ) -> Result<TaskLedgerSnapshot, String> {
-    crate::platform::task_ledger_repository::remove_task(&app, id).await
+    services.task_ledger.remove_task(id).await
 }
 
 #[tauri::command]
-pub async fn task_ledger_clear_resolved(app: AppHandle) -> Result<TaskLedgerSnapshot, String> {
-    crate::platform::task_ledger_repository::clear_resolved(&app).await
+pub async fn task_ledger_clear_resolved(
+    services: State<'_, DesktopServices>,
+) -> Result<TaskLedgerSnapshot, String> {
+    services.task_ledger.clear_resolved().await
 }

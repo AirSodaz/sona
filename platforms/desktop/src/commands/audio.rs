@@ -1,5 +1,7 @@
-use crate::integrations::audio::{AudioDevice, AudioState};
-use tauri::{AppHandle, Manager, State};
+use tauri::State;
+
+use crate::integrations::audio::AudioDevice;
+use crate::services::DesktopServices;
 
 #[tauri::command]
 pub async fn get_system_audio_devices() -> Result<Vec<AudioDevice>, String> {
@@ -19,17 +21,25 @@ pub async fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub async fn start_system_audio_capture(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
-    let capture_app = app.clone();
+    let audio_state = services.audio.clone();
+    let asr_state = services.asr.clone();
+    let emitter = services.emitter.clone();
+    let app_data_dir = services
+        .sqlite
+        .current_context()?
+        .app_data_dir()
+        .to_path_buf();
     crate::platform::blocking::spawn_blocking_map(move || {
-        let state = capture_app.state::<AudioState>();
         crate::integrations::audio::start_system_audio_capture(
-            capture_app.clone(),
-            &state,
+            audio_state,
+            asr_state,
+            emitter,
+            app_data_dir,
             device_name,
             instance_id,
             output_path,
@@ -40,17 +50,25 @@ pub async fn start_system_audio_capture(
 
 #[tauri::command]
 pub async fn start_microphone_capture(
-    app: AppHandle,
+    services: State<'_, DesktopServices>,
     device_name: Option<String>,
     instance_id: String,
     output_path: Option<String>,
 ) -> Result<(), String> {
-    let capture_app = app.clone();
+    let audio_state = services.audio.clone();
+    let asr_state = services.asr.clone();
+    let emitter = services.emitter.clone();
+    let app_data_dir = services
+        .sqlite
+        .current_context()?
+        .app_data_dir()
+        .to_path_buf();
     crate::platform::blocking::spawn_blocking_map(move || {
-        let state = capture_app.state::<AudioState>();
         crate::integrations::audio::start_microphone_capture(
-            capture_app.clone(),
-            &state,
+            audio_state,
+            asr_state,
+            emitter,
+            app_data_dir,
             device_name,
             instance_id,
             output_path,
@@ -58,38 +76,43 @@ pub async fn start_microphone_capture(
     })
     .await
 }
+
 #[tauri::command]
 pub async fn stop_system_audio_capture(
-    state: State<'_, AudioState>,
+    services: State<'_, DesktopServices>,
     instance_id: String,
 ) -> Result<String, String> {
-    crate::integrations::audio::stop_system_audio_capture(state, instance_id).await
+    crate::integrations::audio::stop_system_audio_capture(&services.audio, instance_id).await
 }
 
 #[tauri::command]
 pub async fn stop_microphone_capture(
-    state: State<'_, AudioState>,
+    services: State<'_, DesktopServices>,
     instance_id: String,
 ) -> Result<String, String> {
-    crate::integrations::audio::stop_microphone_capture(state, instance_id).await
+    crate::integrations::audio::stop_microphone_capture(&services.audio, instance_id).await
 }
 
 #[tauri::command]
 pub fn set_system_audio_capture_paused(
-    state: State<'_, AudioState>,
+    services: State<'_, DesktopServices>,
     instance_id: String,
     paused: bool,
 ) -> Result<(), String> {
-    crate::integrations::audio::set_system_audio_capture_paused(state, instance_id, paused)
+    crate::integrations::audio::set_system_audio_capture_paused(
+        &services.audio,
+        instance_id,
+        paused,
+    )
 }
 
 #[tauri::command]
 pub fn set_microphone_capture_paused(
-    state: State<'_, AudioState>,
+    services: State<'_, DesktopServices>,
     instance_id: String,
     paused: bool,
 ) -> Result<(), String> {
-    crate::integrations::audio::set_microphone_capture_paused(state, instance_id, paused)
+    crate::integrations::audio::set_microphone_capture_paused(&services.audio, instance_id, paused)
 }
 
 #[tauri::command]

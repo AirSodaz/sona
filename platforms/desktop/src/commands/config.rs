@@ -1,33 +1,35 @@
 use serde_json::Value;
-use tauri::{AppHandle, Runtime};
+use tauri::State;
+
+use crate::services::DesktopServices;
 
 #[tauri::command]
-pub fn load_app_config<R: Runtime>(app: AppHandle<R>) -> Result<Option<Value>, String> {
-    crate::platform::app_config::load_config(&app)
+pub fn load_app_config(services: State<'_, DesktopServices>) -> Result<Option<Value>, String> {
+    services.config.load()
 }
 
 #[tauri::command]
-pub fn save_app_config<R: Runtime>(app: AppHandle<R>, config: Value) -> Result<(), String> {
+pub fn save_app_config(services: State<'_, DesktopServices>, config: Value) -> Result<(), String> {
     sona_core::config::validate_app_config(&config)
         .map_err(|error| format!("Invalid app config: {error}"))?;
-    crate::platform::app_config::save_config(&app, config)
+    services.config.save(&config)
 }
 
 #[tauri::command]
-pub fn get_app_setting<R: Runtime>(
-    app: AppHandle<R>,
+pub fn get_app_setting(
+    services: State<'_, DesktopServices>,
     key: String,
 ) -> Result<Option<Value>, String> {
-    crate::platform::app_config::get_setting(&app, key)
+    services.config.get_setting(&key)
 }
 
 #[tauri::command]
-pub fn set_app_setting<R: Runtime>(
-    app: AppHandle<R>,
+pub fn set_app_setting(
+    services: State<'_, DesktopServices>,
     key: String,
     value: Value,
 ) -> Result<(), String> {
-    crate::platform::app_config::set_setting(&app, key, value)
+    services.config.set_setting(&key, &value)
 }
 
 #[tauri::command(rename_all = "camelCase")]

@@ -5,12 +5,12 @@ use sona_runtime_fs::SystemClock;
 use sona_sqlite::Database;
 use sona_sqlite::SqliteAppConfigAdapter;
 use std::sync::Arc;
-use tauri::{AppHandle, Runtime};
 
-use crate::platform::blocking::{map_err_string, sqlite_context};
+use crate::platform::database::DesktopSqliteState;
+use crate::services::db_runner::map_err_string;
 
 /// Test-only runner over a bare `Database`. Production paths go through
-/// `run_app_config_context`; these tests need direct connection access to
+/// `AppConfigService`; these tests need direct connection access to
 /// corrupt rows and drop tables, which an `SqliteApplicationContext` hides.
 #[cfg(test)]
 fn run_app_config_adapter<T>(
@@ -21,36 +21,61 @@ fn run_app_config_adapter<T>(
     operation(&adapter).map_err(map_err_string)
 }
 
-fn run_app_config_context<T>(
-    context: Arc<sona_sqlite::SqliteApplicationContext>,
-    operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
-) -> Result<T, String> {
-    let adapter = context.app_config_adapter(Arc::new(SystemClock));
-    operation(&adapter).map_err(map_err_string)
+/// Pure Rust application configuration service without any Tauri dependency.
+#[derive(Clone)]
+pub struct AppConfigService {
+    sqlite: DesktopSqliteState,
 }
 
-pub fn load_config<R: Runtime>(app: &AppHandle<R>) -> Result<Option<Value>, String> {
-    let context = sqlite_context(app);
-    run_app_config_context(context, |adapter| adapter.load_config())
+impl AppConfigService {
+    pub fn new(sqlite: DesktopSqliteState) -> Self {
+        Self { sqlite }
+    }
+
+    pub fn sqlite(&self) -> &DesktopSqliteState {
+        &self.sqlite
+    }
+
+    fn run_context<T>(
+        &self,
+        operation: impl FnOnce(&SqliteAppConfigAdapter) -> Result<T, ConfigError>,
+    ) -> Result<T, String> {
+        let context = self.sqlite.current_context()?;
+        let adapter = context.app_config_adapter(Arc::new(SystemClock));
+        operation(&adapter).map_err(map_err_string)
+    }
+
+    pub fn load(&self) -> Result<Option<Value>, String> {
+        self.run_context(|adapter| adapter.load_config())
+    }
+
+    pub fn save(&self, config: &Value) -> Result<(), String> {
+        self.run_context(|adapter| adapter.save_config(config))
+    }
+
+    pub fn get_setting(&self, key: &str) -> Result<Option<Value>, String> {
+        self.run_context(|adapter| adapter.get_setting(key))
+    }
+
+    pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), String> {
+        self.run_context(|adapter| adapter.set_setting(key, value))
+    }
 }
 
-pub fn save_config<R: Runtime>(app: &AppHandle<R>, config: Value) -> Result<(), String> {
-    let context = sqlite_context(app);
-    run_app_config_context(context, |adapter| adapter.save_config(&config))
+pub fn load_config(sqlite: &DesktopSqliteState) -> Result<Option<Value>, String> {
+    AppConfigService::new(sqlite.clone()).load()
 }
 
-pub fn get_setting<R: Runtime>(app: &AppHandle<R>, key: String) -> Result<Option<Value>, String> {
-    let context = sqlite_context(app);
-    run_app_config_context(context, |adapter| adapter.get_setting(&key))
+pub fn save_config(sqlite: &DesktopSqliteState, config: Value) -> Result<(), String> {
+    AppConfigService::new(sqlite.clone()).save(&config)
 }
 
-pub fn set_setting<R: Runtime>(
-    app: &AppHandle<R>,
-    key: String,
-    value: Value,
-) -> Result<(), String> {
-    let context = sqlite_context(app);
-    run_app_config_context(context, |adapter| adapter.set_setting(&key, &value))
+pub fn get_setting(sqlite: &DesktopSqliteState, key: String) -> Result<Option<Value>, String> {
+    AppConfigService::new(sqlite.clone()).get_setting(&key)
+}
+
+pub fn set_setting(sqlite: &DesktopSqliteState, key: String, value: Value) -> Result<(), String> {
+    AppConfigService::new(sqlite.clone()).set_setting(&key, &value)
 }
 
 #[cfg(test)]
@@ -61,6 +86,27 @@ mod tests {
 
     fn in_memory_database() -> Arc<Database> {
         Arc::new(Database::open_in_memory().unwrap())
+    }
+
+    #[test]
+    fn test_app_config_service_without_tauri() {
+        let temp = tempfile::tempdir().unwrap();
+        let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
+        let state = DesktopSqliteState::new(ctx);
+        let config_service = AppConfigService::new(state);
+
+        assert_eq!(config_service.load().unwrap(), None);
+
+        let config = serde_json::json!({"theme": "dark", "configVersion": 7});
+        config_service.save(&config).unwrap();
+        let loaded = config_service.load().unwrap().unwrap();
+        assert_eq!(loaded.get("theme"), Some(&serde_json::json!("dark")));
+
+        config_service
+            .set_setting("locale", &serde_json::json!({"language": "zh-CN"}))
+            .unwrap();
+        let setting = config_service.get_setting("locale").unwrap();
+        assert_eq!(setting, Some(serde_json::json!({"language": "zh-CN"})));
     }
 
     #[test]
