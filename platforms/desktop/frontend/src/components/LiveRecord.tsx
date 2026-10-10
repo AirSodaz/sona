@@ -58,6 +58,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
   // State from store
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
+  const isAgentRecording = useTranscriptRuntimeStore((state) => state.isAgentRecording);
   const focusStartRecordingToken = useOnboardingStore((state) => state.focusStartRecordingToken);
 
   // Local State
@@ -160,13 +161,24 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     peakLevelRef,
     isPaused,
   });
-
+  // Automatically stop visualizer and clear session when recording stops (e.g. from tray or shortcut)
+  const prevIsRecordingRef = useRef(isRecording);
+  useEffect(() => {
+    if (prevIsRecordingRef.current && !isRecording) {
+      stopVisualizer();
+      setRecordingSessionId(null);
+    }
+    prevIsRecordingRef.current = isRecording;
+  }, [isRecording, stopVisualizer]);
   const handleToggleRecording = useCallback(async () => {
     if (isRecording) {
       await stopRecording();
       stopVisualizer();
       setRecordingSessionId(null);
     } else {
+      if (isAgentRecording) {
+        return;
+      }
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],
@@ -183,6 +195,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       }
     }
   }, [
+    isAgentRecording,
     isRecording,
     startRecording,
     stopRecording,
@@ -207,6 +220,11 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
   );
 
   function getRecordingStatusText(): string {
+    if (isAgentRecording) {
+      return t('live.agent_recording_active', {
+        defaultValue: 'AI Agent 录音进行中，麦克风已占用',
+      });
+    }
     if (isRecording) {
       return isPaused ? t('live.recording_paused') : t('live.recording_active');
     }
@@ -285,11 +303,27 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
               ref={startButtonRef}
               className="control-button start"
               onClick={handleToggleRecording}
-              disabled={isInitializing || isTransitioning}
-              aria-label={t('live.start_recording')}
-              data-tooltip={isInitializing ? 'Initializing...' : t('live.start_recording')}
+              disabled={isInitializing || isTransitioning || isAgentRecording}
+              aria-label={
+                isAgentRecording
+                  ? t('live.agent_recording_locked', { defaultValue: 'AI Agent 录音进行中' })
+                  : t('live.start_recording')
+              }
+              data-tooltip={
+                isAgentRecording
+                  ? t('live.agent_recording_locked', { defaultValue: 'AI Agent 录音进行中' })
+                  : isInitializing
+                    ? 'Initializing...'
+                    : t('live.start_recording')
+              }
               data-tooltip-pos="bottom"
-              style={isInitializing || isTransitioning ? { opacity: 0.7, cursor: 'wait' } : {}}
+              style={
+                isAgentRecording
+                  ? { opacity: 0.5, cursor: 'not-allowed' }
+                  : isInitializing || isTransitioning
+                    ? { opacity: 0.7, cursor: 'wait' }
+                    : {}
+              }
             >
               <div className="control-button-inner" />
             </button>

@@ -6,6 +6,7 @@ import {
   resetLiveRecordHistoryMocks,
 } from '../../__tests__/testUtils/liveRecord';
 import { useOnboardingStore } from '../../stores/onboardingStore';
+import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { LiveRecord } from '../LiveRecord';
 
 // Mock Tauri invoke
@@ -896,5 +897,27 @@ describe('LiveRecord', () => {
 
     expect(mockSoftStop).toHaveBeenCalled();
     expect(lastSegment.text).toBe('Final segment text');
+  });
+
+  it('cleans up recording session and returns to start state when isRecording transitions to false externally', async () => {
+    render(<LiveRecord />);
+    const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
+
+    await act(async () => {
+      fireEvent.click(startBtn);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(useTranscriptStore.getState().isRecording).toBe(true);
+    expect(screen.getByRole('button', { name: /live.stop/i })).toBeTruthy();
+
+    // External stop (such as from system tray)
+    await act(async () => {
+      useTranscriptStore.setState({ isRecording: false, isPaused: false });
+      await vi.advanceTimersByTimeAsync(50);
+    });
+
+    expect(screen.getByRole('button', { name: /live.start_recording/i })).toBeTruthy();
+    expect(useTranscriptStore.getState().recordingSessionId).toBeNull();
   });
 });

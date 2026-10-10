@@ -1647,17 +1647,88 @@ impl AgentControlFacade {
         let instance_id = req
             .instance_id
             .unwrap_or_else(|| format!("mcp-transcribe-{}", uuid::Uuid::new_v4()));
-        let segments = crate::integrations::asr::process_batch_file(
+
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|e| e.to_string())?
+            .as_millis() as u64;
+        let title = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("batch-file")
+            .to_string();
+
+        let initial_record = sona_core::task_ledger::types::TaskLedgerRecord {
+            id: instance_id.clone(),
+            kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+            status: sona_core::task_ledger::types::TaskLedgerStatus::Running,
+            title,
+            progress: 0.0,
+            created_at: now_ms,
+            updated_at: now_ms,
+            retryable: false,
+            cancelable: true,
+            recoverable: false,
+            stage: Some("transcribing".to_string()),
+            history_id: None,
+            tag_ids: req.project_id.clone().into_iter().collect(),
+            file_path: Some(req.file_path.clone()),
+            automation_rule_id: None,
+            tag_automation_rule_id: None,
+            automation_profile_id: None,
+            automation_profile_source: None,
+            source_fingerprint: None,
+            error_message: None,
+            template_id: None,
+            target_language: None,
+        };
+        let _ = self.services.task_ledger.upsert_task(initial_record).await;
+
+        let segments = match crate::integrations::asr::process_batch_file(
             self.services.emitter.clone(),
             &self.services.asr,
             path,
             save_to,
             asr_req,
             None,
-            Some(instance_id),
+            Some(instance_id.clone()),
         )
         .await
-        .map_err(|e| e.to_string())?;
+        {
+            Ok(s) => s,
+            Err(e) => {
+                let err_str = e.to_string();
+                let is_cancelled = err_str.contains("Task cancelled");
+                let status = if is_cancelled {
+                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                } else {
+                    sona_core::task_ledger::types::TaskLedgerStatus::Failed
+                };
+                let stage = if is_cancelled {
+                    "cancelled".to_string()
+                } else {
+                    "failed".to_string()
+                };
+                let _ = self
+                    .services
+                    .task_ledger
+                    .patch_task(
+                        instance_id,
+                        sona_core::task_ledger::types::TaskLedgerPatch {
+                            status: Some(status),
+                            error_message: if is_cancelled {
+                                None
+                            } else {
+                                Some(Some(err_str.clone()))
+                            },
+                            stage: Some(Some(stage)),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+                return Err(err_str);
+            }
+        };
 
         let duration_seconds = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
         let segment_count = segments.len();
@@ -1677,19 +1748,52 @@ impl AgentControlFacade {
             project_id: req.project_id,
             converted_source_path: None,
         };
-        let history_item = self
+        let history_item = match self
             .services
             .history
             .mutation_file(move |s| s.save_imported_file(save_req))
             .await
-            .map_err(|e| e.to_string())?;
+        {
+            Ok(item) => item,
+            Err(e) => {
+                let err_str = e.to_string();
+                let _ = self
+                    .services
+                    .task_ledger
+                    .patch_task(
+                        instance_id,
+                        sona_core::task_ledger::types::TaskLedgerPatch {
+                            status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Failed),
+                            error_message: Some(Some(err_str.clone())),
+                            stage: Some(Some("failed".to_string())),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+                return Err(err_str);
+            }
+        };
         let history_id = history_item.id;
+
+        let _ = self
+            .services
+            .task_ledger
+            .patch_task(
+                instance_id,
+                sona_core::task_ledger::types::TaskLedgerPatch {
+                    status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Succeeded),
+                    progress: Some(100.0),
+                    history_id: Some(Some(history_id.clone())),
+                    stage: Some(Some("completed".to_string())),
+                    ..Default::default()
+                },
+            )
+            .await;
 
         let _ = self.services.emitter.emit(
             "transcript-updated",
             serde_json::json!({ "historyId": &history_id }),
         );
-
         Ok(TranscribeFileResult {
             history_id,
             duration_seconds,
@@ -1700,6 +1804,20 @@ impl AgentControlFacade {
 
     pub async fn cancel_batch_task(&self, instance_id: String) -> Result<bool, String> {
         let cancelled = self.services.asr.batch_cancel.cancel(&instance_id).await;
+        if cancelled {
+            let _ = self
+                .services
+                .task_ledger
+                .patch_task(
+                    instance_id,
+                    sona_core::task_ledger::types::TaskLedgerPatch {
+                        status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Cancelled),
+                        stage: Some(Some("cancelled".to_string())),
+                        ..Default::default()
+                    },
+                )
+                .await;
+        }
         Ok(cancelled)
     }
 

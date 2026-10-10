@@ -44,7 +44,20 @@ export const TauriEvent = {
     voiceTypingCancel: 'voice-typing:cancel',
     voiceTypingReinject: 'voice-typing:reinject',
   },
+  agent: {
+    recordingStatus: 'agent-control-recording-status',
+    transcriptUpdated: 'transcript-updated',
+  },
 } as const;
+
+export interface AgentRecordingStatusPayload {
+  active: boolean;
+  historyId?: string;
+}
+
+export interface TranscriptUpdatedPayload {
+  historyId: string;
+}
 
 export function buildRecognizerOutputEvent(instanceId: string): `recognizer-output-${string}` {
   return `recognizer-output-${instanceId}`;

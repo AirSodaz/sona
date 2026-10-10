@@ -125,6 +125,7 @@ pub async fn retire_external_live_source(
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn start_native_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
@@ -185,10 +186,13 @@ pub async fn start_native_live_transcription(
         )
         .await
     {
-        Ok(subscription) => Ok(LiveNativeTranscriptionStart {
-            lease,
-            subscription,
-        }),
+        Ok(subscription) => {
+            crate::app::tray::set_recording_active(&app, true);
+            Ok(LiveNativeTranscriptionStart {
+                lease,
+                subscription,
+            })
+        }
         Err(error) => {
             let _ = crate::integrations::audio::stop_native_live_capture(
                 &services.audio,
@@ -204,6 +208,9 @@ pub async fn start_native_live_transcription(
             {
                 let _ = services.asr.live_coordinator().release(&consumer_id).await;
             }
+            if !services.audio.has_active_captures() {
+                crate::app::tray::set_recording_active(&app, false);
+            }
             Err(error)
         }
     }
@@ -218,10 +225,11 @@ pub struct LiveNativeTranscriptionStart {
 
 #[tauri::command(async)]
 pub async fn stop_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
 ) -> Result<(), AsrPortError> {
-    if services
+    let res = if services
         .asr
         .live_coordinator()
         .has_consumer(&consumer_id)
@@ -230,7 +238,11 @@ pub async fn stop_live_transcription(
         services.asr.live_coordinator().release(&consumer_id).await
     } else {
         Ok(())
+    };
+    if !services.audio.has_active_captures() {
+        crate::app::tray::set_recording_active(&app, false);
     }
+    res
 }
 
 #[tauri::command(async)]
@@ -323,6 +335,7 @@ pub async fn resume_native_live_transcription(
 
 #[tauri::command(async)]
 pub async fn stop_native_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
@@ -344,6 +357,9 @@ pub async fn stop_native_live_transcription(
     } else {
         Ok(())
     };
+    if !services.audio.has_active_captures() {
+        crate::app::tray::set_recording_active(&app, false);
+    }
     release_result.and(capture_result)
 }
 

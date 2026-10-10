@@ -212,8 +212,12 @@ export function createTaskCenterActionRegistry(
                   const queueItem = items.find(
                     (item) => createBatchTaskLedgerId(item.id) === task.id || item.id === task.id
                   );
-                  if (queueItem?.activeInstanceId) {
-                    void (deps.cancelBatchTask ?? cancelBatchTask)(queueItem.activeInstanceId);
+                  if (queueItem) {
+                    if (queueItem.activeInstanceId) {
+                      void (deps.cancelBatchTask ?? cancelBatchTask)(queueItem.activeInstanceId);
+                    }
+                  } else if (!task.id.startsWith('batch-')) {
+                    void (deps.cancelBatchTask ?? cancelBatchTask)(task.id);
                   }
                 }
                 await deps.requestTaskCancel(task.id);

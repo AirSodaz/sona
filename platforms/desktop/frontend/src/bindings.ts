@@ -1061,6 +1061,7 @@ export type HistoryCommitTranscriptEditRequest_Deserialize = {
 	editSessionId: string,
 	baseSegments: TranscriptSegment_Deserialize[],
 	editedSegments: TranscriptSegment_Deserialize[],
+	reason?: TranscriptSnapshotReason | null,
 };
 
 export type HistoryCommitTranscriptEditRequest_Serialize = {
@@ -1068,6 +1069,7 @@ export type HistoryCommitTranscriptEditRequest_Serialize = {
 	editSessionId: string,
 	baseSegments: TranscriptSegment_Serialize[],
 	editedSegments: TranscriptSegment_Serialize[],
+	reason: TranscriptSnapshotReason | null,
 };
 
 export type HistoryCommitTranscriptEditResult = HistoryCommitTranscriptEditResult_Serialize | HistoryCommitTranscriptEditResult_Deserialize;

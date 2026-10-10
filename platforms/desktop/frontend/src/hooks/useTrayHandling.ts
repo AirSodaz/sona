@@ -5,6 +5,7 @@ import { updateTrayMenu } from '../services/tauri/app';
 import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
+import { stopActiveRecording } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { SettingsTab } from '../types/settings';
@@ -85,11 +86,14 @@ export function useTrayHandling(
         });
         if (isMounted) unlistenFunctions.push(unlistenRequestQuit);
         else unlistenRequestQuit();
-        const unlistenStopRecording = await listen(TauriEvent.tray.stopRecording, () => {
+        const unlistenStopRecording = await listen(TauriEvent.tray.stopRecording, async () => {
           if (!isMounted) return;
-          logger.info('[Tray] Received tray-stop-recording event, stopping UI recording state');
-          useTranscriptStore.getState().setIsRecording(false);
-          useTranscriptStore.getState().setIsPaused(false);
+          logger.info('[Tray] Received tray-stop-recording event, cleanly stopping UI recording');
+          const stopped = await stopActiveRecording();
+          if (!stopped) {
+            useTranscriptStore.getState().setIsRecording(false);
+            useTranscriptStore.getState().setIsPaused(false);
+          }
         });
         if (isMounted) unlistenFunctions.push(unlistenStopRecording);
         else unlistenStopRecording();

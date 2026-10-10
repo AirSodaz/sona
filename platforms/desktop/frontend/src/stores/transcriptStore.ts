@@ -89,7 +89,8 @@ export interface TranscriptStore {
   isRecording: boolean;
   isCaptionMode: boolean;
   isPaused: boolean;
-
+  isAgentRecording: boolean;
+  agentRecordingHistoryId: string | null;
   // --- Sidecar (Keyed by historyId or 'current') ---
   summaryStates: Record<string, TranscriptSummaryState>;
   llmStates: Record<string, LlmState>;
@@ -132,7 +133,7 @@ export interface TranscriptStore {
   setIsRecording: (isRecording: boolean) => void;
   setIsCaptionMode: (isCaptionMode: boolean) => void;
   setIsPaused: (isPaused: boolean) => void;
-
+  setIsAgentRecording: (isAgentRecording: boolean, historyId?: string | null) => void;
   // Session Data Mutations (Applies to activeSessionId)
   setSourceHistoryId: (id: string | null) => void;
   setTitle: (title: string | null) => void;
@@ -248,7 +249,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   isRecording: false,
   isCaptionMode: false,
   isPaused: false,
-
+  isAgentRecording: false,
+  agentRecordingHistoryId: null,
   summaryStates: { current: createDefaultSummaryState() },
   llmStates: { current: { ...DEFAULT_LLM_STATE } },
   autoSaveStates: {},
@@ -260,7 +262,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIsRecording: (isRecording) => set({ isRecording }),
   setIsCaptionMode: (isCaptionMode) => set({ isCaptionMode }),
   setIsPaused: (isPaused) => set({ isPaused }),
-
+  setIsAgentRecording: (isAgentRecording, agentRecordingHistoryId = null) =>
+    set({ isAgentRecording, agentRecordingHistoryId }),
   // --- Coordinator / Pointers ---
   setRecordingSessionId: (id) => set({ recordingSessionId: id }),
   openSession: (args) => {

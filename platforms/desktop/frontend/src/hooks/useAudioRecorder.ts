@@ -20,6 +20,7 @@ import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
 import {
   clearTranscriptSegments,
+  registerActiveRecorderStopHandler,
   setTranscriptSegments,
   syncSavedRecordingMeta as syncTranscriptSavedRecordingMeta,
 } from '../stores/transcriptCoordinator';
@@ -438,7 +439,18 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
   }, [recordController]);
 
   useEffect(() => {
+    if (isRecording) {
+      registerActiveRecorderStopHandler(stopRecording);
+      return () => {
+        registerActiveRecorderStopHandler(null);
+      };
+    }
+    registerActiveRecorderStopHandler(null);
+  }, [isRecording, stopRecording]);
+
+  useEffect(() => {
     return () => {
+      registerActiveRecorderStopHandler(null);
       void capture.teardownWebCaptureResources().catch((error) => {
         logger.error('Error closing audio recorder web capture resources:', error);
       });
@@ -447,7 +459,6 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         .catch((error) => logger.error('Error stopping transcription service:', error));
     };
   }, [capture]);
-
   return {
     startRecording,
     stopRecording,

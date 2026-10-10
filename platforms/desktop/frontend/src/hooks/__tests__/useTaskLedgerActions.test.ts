@@ -381,6 +381,28 @@ describe('createTaskCenterActionRegistry', () => {
     expect(deps.requestTaskCancel).toHaveBeenCalledWith('batch-pending-item');
   });
 
+  it('cancels external/MCP batch task with custom instance ID by calling cancelBatchTask with task.id', async () => {
+    const cancelBatchTask = vi.fn().mockResolvedValue(undefined);
+    const deps = makeDeps({
+      cancelBatchTask,
+      getBatchQueueItems: () => [],
+    });
+    const registry = createTaskCenterActionRegistry(deps);
+
+    const task = makeTask({
+      id: 'custom-mcp-instance-99',
+      kind: 'batchImport',
+      status: 'running',
+      cancelable: true,
+    });
+
+    const actions = registry.getLedgerTaskActions(task);
+    await getAction(actions.row, 'cancel').run();
+
+    expect(cancelBatchTask).toHaveBeenCalledWith('custom-mcp-instance-99');
+    expect(deps.requestTaskCancel).toHaveBeenCalledWith('custom-mcp-instance-99');
+  });
+
   it('cancels active LLM task without calling cancelBatchTask', async () => {
     const cancelBatchTask = vi.fn().mockResolvedValue(undefined);
     const deps = makeDeps({

@@ -20,6 +20,10 @@ vi.mock('../../services/quitGuard', () => ({
   forceExitWithGuard: (...args: unknown[]) => forceExitWithGuardMock(...args),
 }));
 
+const stopActiveRecordingMock = vi.fn().mockResolvedValue(true);
+vi.mock('../../stores/transcriptCoordinator', () => ({
+  stopActiveRecording: () => stopActiveRecordingMock(),
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
@@ -62,5 +66,19 @@ describe('useTrayHandling', () => {
     });
 
     expect(forceExitWithGuardMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('calls stopActiveRecording when tray-stop-recording event is received', async () => {
+    renderHook(() => useTrayHandling(vi.fn(), vi.fn()));
+
+    await waitFor(() => {
+      expect(listeners.has('tray-stop-recording')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('tray-stop-recording')?.();
+    });
+
+    expect(stopActiveRecordingMock).toHaveBeenCalledTimes(1);
   });
 });

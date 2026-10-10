@@ -16,6 +16,7 @@ import { preloadAllSettingsTabs, preloadSettingsTab } from './components/setting
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptionOptions } from './components/TranscriptionOptions';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
+import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
@@ -147,6 +148,8 @@ function App(): React.JSX.Element | null {
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setPreloadedSettingsInitialTab);
 
+  // Synchronize background Agent / MCP lifecycle events
+  useAgentControlSync();
   useEffect(() => {
     if (!isLoaded) return;
 
