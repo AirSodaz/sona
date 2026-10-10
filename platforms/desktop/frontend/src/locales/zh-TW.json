@@ -2497,6 +2497,8 @@
     "settings": "設定",
     "check_updates": "檢查更新",
     "quit": "退出",
+    "disconnect_agent": "中斷 Agent 連線",
+    "stop_recording": "停止錄音",
     "quit_warning_title": "仍有活動任務",
     "quit_warning_message": "仍有活動任務正在運作。退出將終止這些任務。\n\n確定要退出嗎？",
     "quit_confirm": "仍要退出"

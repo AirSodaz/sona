@@ -28,6 +28,7 @@ test('tauri bundle verification inspects canonical native app locations', () => 
     fs.mkdirSync(runtimeLibDir, { recursive: true });
     fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}${target.includes('windows') ? '.exe' : ''}`), 'ffmpeg');
     fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}${target.includes('windows') ? '.exe' : ''}`), 'cli');
+    fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}${target.includes('windows') ? '.exe' : ''}`), 'mcp');
     writeRuntimeLibraries(runtimeLibDir, target);
     writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
     writeCanonicalAppBundle(root, target);
@@ -63,6 +64,7 @@ test('tauri bundle verification accepts an explicit native Windows bundle root',
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}.exe`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
   writeCanonicalAppBundle(root, target, releaseDir);
@@ -98,6 +100,7 @@ test('tauri bundle verification omits llama.cpp libraries for static Linux build
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   for (const name of runtimeLibraryNames(target).filter((value) => /^(?:lib)?(?:ggml|llama)/u.test(value))) {
     fs.rmSync(path.join(runtimeLibDir, name));
@@ -154,6 +157,7 @@ test('tauri bundle verification does not mix native and target-qualified Windows
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}.exe`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
   writeCanonicalAppBundle(root, target, path.join(root, 'target', 'release'));
@@ -189,6 +193,7 @@ test('tauri bundle verification requires ggml-vulkan only for Vulkan-enabled Win
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}.exe`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}.exe`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}.exe`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
   writeCanonicalAppBundle(root, target);
@@ -230,6 +235,7 @@ test('tauri bundle verification requires ggml-vulkan for Vulkan-enabled Linux bu
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
   writeCanonicalAppBundle(root, target);
@@ -282,6 +288,7 @@ test('tauri bundle verification requires ggml-metal for Metal-enabled macOS buil
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(sidecarsDir, `ffmpeg-${target}`), 'ffmpeg');
   fs.writeFileSync(path.join(sidecarsDir, `sona-cli-${target}`), 'cli');
+  fs.writeFileSync(path.join(sidecarsDir, `sona-mcp-${target}`), 'mcp');
   writeRuntimeLibraries(runtimeLibDir, target);
   writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir);
   writeCanonicalAppBundle(root, target);

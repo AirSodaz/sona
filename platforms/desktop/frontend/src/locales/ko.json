@@ -2497,6 +2497,8 @@
     "settings": "설정",
     "check_updates": "업데이트 확인",
     "quit": "종료",
+    "disconnect_agent": "Agent 연결 해제",
+    "stop_recording": "녹음 중지",
     "quit_warning_title": "실행 중인 작업이 있습니다",
     "quit_warning_message": "실행 중인 작업이 있습니다. 지금 종료하면 해당 작업이 중단됩니다.\n\n그래도 종료할까요?",
     "quit_confirm": "그래도 종료"

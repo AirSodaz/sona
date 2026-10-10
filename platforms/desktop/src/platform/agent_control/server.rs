@@ -1,13 +1,16 @@
-use serde::{Deserialize, Serialize};
-use std::path::PathBuf;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-
 use super::facade::{
     AgentControlFacade, CreateProjectRequest, DownloadPresetModelRequest, EditTranscriptRequest,
     ExportTranscriptRequest, PatchSegmentsRequest, QueryHistoryRequest, QueryTrashRequest,
     SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest,
     UpdateProjectRequest, UpdateTranslationsRequest,
 };
+use serde::{Deserialize, Serialize};
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use tauri::{Emitter, Manager};
+use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
+use tokio::sync::watch;
 pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
 
 pub fn get_unix_socket_path() -> PathBuf {
@@ -406,6 +409,109 @@ pub async fn dispatch_rpc_call(
     }
 }
 
+#[derive(Clone)]
+pub struct ActiveConnectionTracker {
+    count: Arc<AtomicUsize>,
+    disconnect_tx: Arc<watch::Sender<u64>>,
+    disconnect_rx: watch::Receiver<u64>,
+}
+
+impl Default for ActiveConnectionTracker {
+    fn default() -> Self {
+        let (disconnect_tx, disconnect_rx) = watch::channel(0);
+        Self {
+            count: Arc::new(AtomicUsize::new(0)),
+            disconnect_tx: Arc::new(disconnect_tx),
+            disconnect_rx,
+        }
+    }
+}
+
+impl ActiveConnectionTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn on_connected(&self, app_handle: Option<&tauri::AppHandle>) {
+        self.count.fetch_add(1, Ordering::SeqCst);
+        if let Some(app) = app_handle {
+            crate::app::tray::set_agent_connected(app, true);
+        }
+    }
+
+    pub fn on_disconnected(&self, app_handle: Option<&tauri::AppHandle>) {
+        let mut current = self.count.load(Ordering::SeqCst);
+        let prev = loop {
+            if current == 0 {
+                break 0;
+            }
+            match self.count.compare_exchange_weak(
+                current,
+                current - 1,
+                Ordering::SeqCst,
+                Ordering::SeqCst,
+            ) {
+                Ok(prev) => break prev,
+                Err(actual) => current = actual,
+            }
+        };
+        if prev == 1
+            && let Some(app) = app_handle
+        {
+            crate::app::tray::set_agent_connected(app, false);
+        }
+    }
+
+    pub fn active_count(&self) -> usize {
+        self.count.load(Ordering::SeqCst)
+    }
+
+    pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
+        self.disconnect_tx.send_modify(|v| *v += 1);
+        if let Some(app) = app_handle {
+            crate::app::tray::set_agent_connected(app, false);
+        }
+    }
+}
+
+pub fn disconnect_all_agents(app_handle: &tauri::AppHandle) {
+    if let Some(tracker) = app_handle.try_state::<ActiveConnectionTracker>() {
+        tracker.disconnect_all(Some(app_handle));
+    }
+    if let Some(facade) = app_handle.try_state::<AgentControlFacade>() {
+        let facade_clone = facade.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = facade_clone
+                .stop_recording(
+                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
+                )
+                .await;
+        });
+    }
+    crate::app::tray::set_agent_connected(app_handle, false);
+}
+
+pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
+    if let Some(facade) = app_handle.try_state::<AgentControlFacade>() {
+        let facade_clone = facade.inner().clone();
+        tauri::async_runtime::spawn(async move {
+            let _ = facade_clone
+                .stop_recording(
+                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
+                )
+                .await;
+        });
+    }
+    if let Some(services) = app_handle.try_state::<crate::services::DesktopServices>() {
+        let audio = services.audio.clone();
+        tauri::async_runtime::spawn(async move {
+            crate::integrations::audio::stop_all_captures(&audio).await;
+        });
+    }
+    let _ = app_handle.emit("tray-stop-recording", ());
+    crate::app::tray::set_recording_active(app_handle, false);
+}
+
 pub async fn handle_connection<S>(
     stream: S,
     facade: AgentControlFacade,
@@ -413,16 +519,65 @@ pub async fn handle_connection<S>(
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
+    handle_connection_tracked(stream, facade, ActiveConnectionTracker::default(), None).await
+}
+
+pub async fn handle_connection_tracked<S>(
+    stream: S,
+    facade: AgentControlFacade,
+    tracker: ActiveConnectionTracker,
+    app_handle: Option<tauri::AppHandle>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+where
+    S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
+{
+    tracker.on_connected(app_handle.as_ref());
+    struct ConnectionGuard {
+        tracker: ActiveConnectionTracker,
+        app_handle: Option<tauri::AppHandle>,
+    }
+    impl Drop for ConnectionGuard {
+        fn drop(&mut self) {
+            self.tracker.on_disconnected(self.app_handle.as_ref());
+        }
+    }
+    let _guard = ConnectionGuard {
+        tracker: tracker.clone(),
+        app_handle,
+    };
+
     let (reader, mut writer) = tokio::io::split(stream);
     let mut buf_reader = tokio::io::BufReader::new(reader);
     let mut line = String::new();
+    let mut disconnect_rx = tracker.disconnect_rx.clone();
+    let initial_version = *disconnect_rx.borrow();
 
-    while buf_reader.read_line(&mut line).await? > 0 {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
-            line.clear();
-            continue;
-        }
+    loop {
+        tokio::select! {
+            changed = disconnect_rx.changed() => {
+                match changed {
+                    Ok(()) => {
+                        if *disconnect_rx.borrow() != initial_version {
+                            log::info!("[AgentControlIPC] Client connection terminated by disconnect request");
+                            break;
+                        }
+                    }
+                    Err(_) => {
+                        log::info!("[AgentControlIPC] Disconnect channel closed, terminating connection");
+                        break;
+                    }
+                }
+            }
+            read_res = buf_reader.read_line(&mut line) => {
+                let bytes_read = read_res?;
+                if bytes_read == 0 {
+                    break;
+                }
+                let trimmed = line.trim();
+                if trimmed.is_empty() {
+                    line.clear();
+                    continue;
+                }
 
         let resp_json: Option<String> = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
             Ok(rpc_req) => {
@@ -481,12 +636,14 @@ where
             }
         };
 
-        if let Some(resp_str) = resp_json {
-            writer.write_all(resp_str.as_bytes()).await?;
-            writer.write_all(b"\n").await?;
-            writer.flush().await?;
+                if let Some(resp_str) = resp_json {
+                    writer.write_all(resp_str.as_bytes()).await?;
+                    writer.write_all(b"\n").await?;
+                    writer.flush().await?;
+                }
+                line.clear();
+            }
         }
-        line.clear();
     }
 
     Ok(())
@@ -495,6 +652,8 @@ where
 #[cfg(windows)]
 pub async fn run_ipc_server(
     facade: AgentControlFacade,
+    tracker: ActiveConnectionTracker,
+    app_handle: Option<tauri::AppHandle>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::net::windows::named_pipe::ServerOptions;
 
@@ -515,8 +674,17 @@ pub async fn run_ipc_server(
         server = ServerOptions::new().create(WINDOWS_PIPE_NAME)?;
 
         let facade_clone = facade.clone();
+        let tracker_clone = tracker.clone();
+        let app_handle_clone = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = handle_connection(connected_client, facade_clone).await {
+            if let Err(e) = handle_connection_tracked(
+                connected_client,
+                facade_clone,
+                tracker_clone,
+                app_handle_clone,
+            )
+            .await
+            {
                 log::debug!("[AgentControlIPC] Client connection ended: {e}");
             }
         });
@@ -526,6 +694,8 @@ pub async fn run_ipc_server(
 #[cfg(unix)]
 pub async fn run_ipc_server(
     facade: AgentControlFacade,
+    tracker: ActiveConnectionTracker,
+    app_handle: Option<tauri::AppHandle>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let socket_path = get_unix_socket_path();
     if let Some(parent) = socket_path.parent() {
@@ -547,8 +717,13 @@ pub async fn run_ipc_server(
     loop {
         let (stream, _) = listener.accept().await?;
         let facade_clone = facade.clone();
+        let tracker_clone = tracker.clone();
+        let app_handle_clone = app_handle.clone();
         tauri::async_runtime::spawn(async move {
-            if let Err(e) = handle_connection(stream, facade_clone).await {
+            if let Err(e) =
+                handle_connection_tracked(stream, facade_clone, tracker_clone, app_handle_clone)
+                    .await
+            {
                 log::debug!("[AgentControlIPC] Client connection ended: {e}");
             }
         });
@@ -558,14 +733,20 @@ pub async fn run_ipc_server(
 #[cfg(not(any(windows, unix)))]
 pub async fn run_ipc_server(
     _facade: AgentControlFacade,
+    _tracker: ActiveConnectionTracker,
+    _app_handle: Option<tauri::AppHandle>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     log::warn!("[AgentControlIPC] IPC server is not supported on this platform");
     Ok(())
 }
 
-pub fn start_agent_control_ipc_server(facade: AgentControlFacade) {
+pub fn start_agent_control_ipc_server(
+    facade: AgentControlFacade,
+    tracker: ActiveConnectionTracker,
+    app_handle: Option<tauri::AppHandle>,
+) {
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_ipc_server(facade).await {
+        if let Err(e) = run_ipc_server(facade, tracker, app_handle).await {
             log::error!("[AgentControlIPC] Server terminated with error: {e}");
         }
     });
@@ -831,5 +1012,30 @@ mod tests {
             cancel_dl.get("success").and_then(|v| v.as_bool()),
             Some(true)
         );
+    }
+
+    #[tokio::test]
+    async fn test_active_connection_tracker() {
+        let tracker = ActiveConnectionTracker::new();
+        assert_eq!(tracker.active_count(), 0);
+
+        tracker.on_connected(None);
+        assert_eq!(tracker.active_count(), 1);
+
+        tracker.on_connected(None);
+        assert_eq!(tracker.active_count(), 2);
+
+        tracker.on_disconnected(None);
+        assert_eq!(tracker.active_count(), 1);
+
+        tracker.on_disconnected(None);
+        assert_eq!(tracker.active_count(), 0);
+
+        // Defensive check: redundant disconnects do not underflow
+        tracker.on_disconnected(None);
+        assert_eq!(tracker.active_count(), 0);
+
+        tracker.disconnect_all(None);
+        assert_eq!(tracker.active_count(), 0);
     }
 }

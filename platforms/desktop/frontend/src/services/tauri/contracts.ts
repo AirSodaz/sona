@@ -137,6 +137,8 @@ type UpdateTrayMenuArgs = {
   quitText: string;
   captionText: string;
   captionChecked: boolean;
+  disconnectAgentText?: string;
+  stopRecordingText?: string;
 };
 
 type StartAudioCaptureArgs = {

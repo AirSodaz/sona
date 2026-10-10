@@ -27,6 +27,7 @@ function main() {
     verifyStagedSidecar(config, configPath, target, 'ffmpeg');
   }
   verifyStagedSidecar(config, configPath, target, 'sona-cli');
+  verifyStagedSidecar(config, configPath, target, 'sona-mcp');
   verifyStagedRuntimeLibraries(config, configPath, target);
   verifyCanonicalAppBundle(bundleRoots, target, hasFfmpeg);
 
@@ -88,6 +89,9 @@ function verifyTauriBundleConfig(configPath, target) {
   }
   if (!externalBins.some((entry) => path.basename(normalizeConfigPath(entry)) === 'sona-cli')) {
     throw new Error('Generated Tauri configuration must declare sona-cli through bundle.externalBin.');
+  }
+  if (!externalBins.some((entry) => path.basename(normalizeConfigPath(entry)) === 'sona-mcp')) {
+    throw new Error('Generated Tauri configuration must declare sona-mcp through bundle.externalBin.');
   }
   if (hasLegacyResourcePath(JSON.stringify(config.bundle))) {
     throw new Error('Generated Tauri configuration must reject legacy resources/cli and resources/shared_libs directories.');
@@ -203,7 +207,7 @@ function findCanonicalAppRoot(bundleRoots, target) {
 
 function nativeAppLayout(appRoot, target, hasFfmpeg = false) {
   if (target.includes('windows')) {
-    const sidecars = [path.join(appRoot, 'sona-cli.exe')];
+    const sidecars = [path.join(appRoot, 'sona-cli.exe'), path.join(appRoot, 'sona-mcp.exe')];
     if (hasFfmpeg) {
       sidecars.push(path.join(appRoot, 'ffmpeg.exe'));
     }
@@ -214,7 +218,7 @@ function nativeAppLayout(appRoot, target, hasFfmpeg = false) {
   }
   if (target.includes('apple')) {
     const contents = path.join(appRoot, 'Contents');
-    const sidecars = [path.join(contents, 'MacOS', 'sona-cli')];
+    const sidecars = [path.join(contents, 'MacOS', 'sona-cli'), path.join(contents, 'MacOS', 'sona-mcp')];
     if (hasFfmpeg) {
       sidecars.push(path.join(contents, 'MacOS', 'ffmpeg'));
     }
@@ -224,7 +228,7 @@ function nativeAppLayout(appRoot, target, hasFfmpeg = false) {
     };
   }
   const root = path.join(appRoot, 'usr');
-  const sidecars = [path.join(root, 'bin', 'sona-cli')];
+    const sidecars = [path.join(root, 'bin', 'sona-cli'), path.join(root, 'bin', 'sona-mcp')];
   if (hasFfmpeg) {
     sidecars.push(path.join(root, 'bin', 'ffmpeg'));
   }

@@ -91,8 +91,9 @@ Queries desktop client connectivity, recording status, active project ID, and ac
 Spawns the Sona desktop executable in the background when currently offline and polls the IPC endpoint until ready.
 
 - **Parameters**:
-  - `wait_timeout_seconds` (*number*, optional, default: `15`): Maximum seconds to wait for IPC connection.
-- **Returns**: `{ "launched": true, "online": true }`.
+  - `timeout_seconds` (*integer*, optional, default: `10`): Timeout in seconds to wait for client to start.
+  - `silent` (*boolean*, optional, default: `true`): Whether to launch the client silently in the background without showing the window.
+- **Returns**: `{ "success": true, "message": "..." }`.
 
 #### `sona_focus_window`
 

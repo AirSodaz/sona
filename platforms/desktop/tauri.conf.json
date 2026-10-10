@@ -72,6 +72,11 @@
       "endpoints": [
         "https://github.com/AirSodaz/sona/releases/latest/download/updater.json"
       ]
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["sona"]
+      }
     }
   }
 }

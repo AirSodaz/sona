@@ -13,23 +13,92 @@ pub const MAIN_WINDOW_MIN_HEIGHT: f64 = 600.0;
 pub const DEFAULT_WINDOW_CHROME_THEME: crate::platform::system::ResolvedTheme =
     crate::platform::system::ResolvedTheme::Light;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LaunchVisibility {
+    Silent,
+    Focus,
+}
+
+pub fn parse_launch_visibility_from_args(
+    args: impl IntoIterator<Item = impl AsRef<str>>,
+) -> Option<LaunchVisibility> {
+    let mut silent_flag = false;
+
+    for arg in args {
+        let raw = arg.as_ref().trim();
+        let lower = raw.to_lowercase();
+
+        if lower == "--focus"
+            || lower == "--focus=true"
+            || lower == "--focus=1"
+            || lower == "--silent=false"
+        {
+            return Some(LaunchVisibility::Focus);
+        }
+
+        if lower == "--silent"
+            || lower == "--minimized"
+            || lower == "--hidden"
+            || lower == "--silent=true"
+            || lower == "--silent=1"
+        {
+            silent_flag = true;
+        }
+
+        let is_sona_url = lower.starts_with("sona://")
+            || (lower.contains("://")
+                && lower
+                    .split("://")
+                    .next()
+                    .is_some_and(|scheme| scheme == "sona"));
+
+        if is_sona_url && let Some((_, query_part)) = raw.split_once('?') {
+            let query_str = query_part.split('#').next().unwrap_or(query_part);
+            for param in query_str.split('&') {
+                if param.is_empty() {
+                    continue;
+                }
+                let (k, v) = match param.split_once('=') {
+                    Some((k, v)) => (k.trim().to_lowercase(), v.trim().to_lowercase()),
+                    None => (param.trim().to_lowercase(), String::new()),
+                };
+
+                if (k == "focus" && (v == "true" || v == "1"))
+                    || (k == "silent" && (v == "false" || v == "0"))
+                {
+                    return Some(LaunchVisibility::Focus);
+                }
+                if k == "silent" && (v == "true" || v == "1") {
+                    silent_flag = true;
+                }
+            }
+        }
+    }
+
+    if silent_flag {
+        Some(LaunchVisibility::Silent)
+    } else {
+        None
+    }
+}
+
 pub fn should_start_silently_from_args_and_config(
     args: impl IntoIterator<Item = impl AsRef<str>>,
     config: Option<&serde_json::Value>,
 ) -> bool {
     let args: Vec<String> = args
         .into_iter()
-        .map(|s| s.as_ref().trim().to_lowercase())
+        .map(|s| s.as_ref().trim().to_string())
         .collect();
 
-    if args
-        .iter()
-        .any(|arg| arg == "--silent" || arg == "--minimized" || arg == "--hidden")
-    {
-        return true;
+    if let Some(visibility) = parse_launch_visibility_from_args(&args) {
+        return match visibility {
+            LaunchVisibility::Silent => true,
+            LaunchVisibility::Focus => false,
+        };
     }
 
-    if args.iter().any(|arg| arg == "--autostart") {
+    if args.iter().any(|arg| arg.to_lowercase() == "--autostart") {
         return config.is_some_and(|config| {
             let auto_start = config
                 .get("autoStart")
@@ -193,5 +262,66 @@ mod tests {
             Vec::<String>::new(),
             Some(&config)
         ));
+    }
+
+    #[test]
+    fn parses_launch_visibility_flags() {
+        assert_eq!(
+            parse_launch_visibility_from_args(["--silent"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["--minimized"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["--hidden"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["--focus"]),
+            Some(LaunchVisibility::Focus)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona.exe", "--silent"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona.exe", "--focus"]),
+            Some(LaunchVisibility::Focus)
+        );
+        assert_eq!(parse_launch_visibility_from_args(["sona.exe"]), None);
+        assert_eq!(
+            parse_launch_visibility_from_args(Vec::<String>::new()),
+            None
+        );
+    }
+
+    #[test]
+    fn parses_launch_visibility_deep_links() {
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?silent=true"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?silent=1"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?foo=1&silent=true"]),
+            Some(LaunchVisibility::Silent)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?silent=false"]),
+            Some(LaunchVisibility::Focus)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?focus=true"]),
+            Some(LaunchVisibility::Focus)
+        );
+        assert_eq!(
+            parse_launch_visibility_from_args(["sona://agent/launch?silent=true&focus=true"]),
+            Some(LaunchVisibility::Focus)
+        );
     }
 }

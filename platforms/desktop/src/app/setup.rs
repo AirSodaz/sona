@@ -1,5 +1,6 @@
 use std::sync::Arc;
 use tauri::{Listener, Manager};
+use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     let app_handle_for_listener = app.handle().clone();
@@ -88,7 +89,14 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         desktop_services.clone(),
         Some(app.handle().clone()),
     );
-    crate::platform::agent_control::start_agent_control_ipc_server(agent_facade);
+    let connection_tracker = crate::platform::agent_control::ActiveConnectionTracker::new();
+    app.manage(agent_facade.clone());
+    app.manage(connection_tracker.clone());
+    crate::platform::agent_control::start_agent_control_ipc_server(
+        agent_facade,
+        connection_tracker,
+        Some(app.handle().clone()),
+    );
     app.manage(desktop_services);
     app.manage((*audio_state).clone());
     app.manage((*asr_state).clone());
@@ -108,6 +116,27 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     crate::app::tray::setup_tray(app)?;
+    #[cfg(any(target_os = "windows", target_os = "linux"))]
+    {
+        if let Err(e) = app.deep_link().register_all() {
+            log::warn!("[DeepLink] Failed to register deep link scheme: {e}");
+        }
+    }
+
+    let deep_link_app_handle = app.handle().clone();
+    app.deep_link().on_open_url(move |event| {
+        let urls: Vec<String> = event.urls().into_iter().map(|u| u.to_string()).collect();
+        let should_stay_silent = matches!(
+            crate::app::window::parse_launch_visibility_from_args(&urls),
+            Some(crate::app::window::LaunchVisibility::Silent)
+        );
+        if !should_stay_silent && let Some(window) = deep_link_app_handle.get_webview_window("main")
+        {
+            let _ = window.unminimize();
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
+    });
 
     crate::app::server::start_from_app_handle(&app.handle().clone());
 

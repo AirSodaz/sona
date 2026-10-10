@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
@@ -19,9 +20,40 @@ pub fn get_unix_socket_path() -> PathBuf {
         .join("agent.sock")
 }
 
-#[derive(Clone, Debug, Default)]
+#[cfg(windows)]
+pub type IpcReadHalf = tokio::io::ReadHalf<tokio::net::windows::named_pipe::NamedPipeClient>;
+#[cfg(windows)]
+pub type IpcWriteHalf = tokio::io::WriteHalf<tokio::net::windows::named_pipe::NamedPipeClient>;
+
+#[cfg(unix)]
+pub type IpcReadHalf = tokio::io::ReadHalf<tokio::net::UnixStream>;
+#[cfg(unix)]
+pub type IpcWriteHalf = tokio::io::WriteHalf<tokio::net::UnixStream>;
+
+#[cfg(any(windows, unix))]
+pub struct IpcConnection {
+    reader: tokio::io::BufReader<IpcReadHalf>,
+    writer: IpcWriteHalf,
+}
+#[derive(Debug)]
+enum IpcCallError {
+    Transport(String),
+    Application(String),
+}
+
+#[derive(Clone, Default)]
 pub struct IpcClient {
     custom_endpoint: Option<String>,
+    #[cfg(any(windows, unix))]
+    connection: Arc<tokio::sync::Mutex<Option<IpcConnection>>>,
+}
+
+impl std::fmt::Debug for IpcClient {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("IpcClient")
+            .field("custom_endpoint", &self.custom_endpoint)
+            .finish()
+    }
 }
 
 impl IpcClient {
@@ -34,15 +66,20 @@ impl IpcClient {
                     .ok()
                     .filter(|s| !s.trim().is_empty())
             });
-        Self { custom_endpoint }
+        Self {
+            custom_endpoint,
+            #[cfg(any(windows, unix))]
+            connection: Arc::new(tokio::sync::Mutex::new(None)),
+        }
     }
 
     pub fn with_endpoint(endpoint: String) -> Self {
         Self {
             custom_endpoint: Some(endpoint),
+            #[cfg(any(windows, unix))]
+            connection: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
-
     pub async fn is_online(&self) -> bool {
         self.call("sona_get_client_state", serde_json::json!({}))
             .await
@@ -65,41 +102,34 @@ impl IpcClient {
             serde_json::to_string(&req).map_err(|e| e.to_string())?
         );
 
-        #[cfg(windows)]
+        #[cfg(any(windows, unix))]
         {
-            let pipe_name = self
-                .custom_endpoint
-                .as_deref()
-                .unwrap_or(WINDOWS_PIPE_NAME)
-                .to_string();
+            let mut conn_guard = self.connection.lock().await;
+            if let Some(conn) = conn_guard.as_mut() {
+                match Self::send_receive_on_conn(conn, &req_line).await {
+                    Ok(val) => return Ok(val),
+                    Err(IpcCallError::Application(app_err)) => return Err(app_err),
+                    Err(IpcCallError::Transport(_)) => {
+                        *conn_guard = None;
+                    }
+                }
+            }
 
-            let client = tokio::task::spawn_blocking(move || {
-                tokio::net::windows::named_pipe::ClientOptions::new().open(&pipe_name)
-            })
-            .await
-            .map_err(|e| format!("Join error: {e}"))?
-            .map_err(|_| "DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string())?;
-
-            Self::send_receive(client, req_line).await
-        }
-
-        #[cfg(unix)]
-        {
-            let socket_path = if let Some(endpoint) = &self.custom_endpoint {
-                PathBuf::from(endpoint)
-            } else {
-                get_unix_socket_path()
-            };
-
-            let stream = tokio::time::timeout(
-                Duration::from_secs(2),
-                tokio::net::UnixStream::connect(&socket_path),
-            )
-            .await
-            .map_err(|_| "DESKTOP_OFFLINE: Connection timed out connecting to Sona desktop".to_string())?
-            .map_err(|_| "DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string())?;
-
-            Self::send_receive(stream, req_line).await
+            let mut new_conn = self.connect_ipc().await?;
+            match Self::send_receive_on_conn(&mut new_conn, &req_line).await {
+                Ok(val) => {
+                    *conn_guard = Some(new_conn);
+                    Ok(val)
+                }
+                Err(IpcCallError::Application(app_err)) => {
+                    *conn_guard = Some(new_conn);
+                    Err(app_err)
+                }
+                Err(IpcCallError::Transport(err)) => {
+                    *conn_guard = None;
+                    Err(err)
+                }
+            }
         }
 
         #[cfg(not(any(windows, unix)))]
@@ -153,7 +183,109 @@ impl IpcClient {
             .ok_or_else(|| "Missing 'result' in response from desktop client".to_string())
     }
 
-    pub async fn launch_desktop(&self, timeout_seconds: u64) -> Result<String, String> {
+    #[cfg(any(windows, unix))]
+    async fn send_receive_on_conn(
+        conn: &mut IpcConnection,
+        req_line: &str,
+    ) -> Result<serde_json::Value, IpcCallError> {
+        conn.writer
+            .write_all(req_line.as_bytes())
+            .await
+            .map_err(|e| {
+                IpcCallError::Transport(format!("Failed to send request to desktop: {e}"))
+            })?;
+        conn.writer.flush().await.map_err(|e| {
+            IpcCallError::Transport(format!("Failed to flush request to desktop: {e}"))
+        })?;
+
+        let mut resp_line = String::new();
+        tokio::time::timeout(
+            Duration::from_secs(30),
+            conn.reader.read_line(&mut resp_line),
+        )
+        .await
+        .map_err(|_| {
+            IpcCallError::Transport("Timeout waiting for response from desktop client".to_string())
+        })?
+        .map_err(|e| {
+            IpcCallError::Transport(format!("Failed to read response from desktop: {e}"))
+        })?;
+
+        if resp_line.trim().is_empty() {
+            return Err(IpcCallError::Transport(
+                "Empty response received from desktop client (disconnected)".to_string(),
+            ));
+        }
+
+        let resp: serde_json::Value = serde_json::from_str(resp_line.trim()).map_err(|e| {
+            IpcCallError::Transport(format!("Invalid JSON response from desktop: {e}"))
+        })?;
+
+        if let Some(err_obj) = resp.get("error") {
+            let msg = err_obj
+                .get("message")
+                .and_then(|m| m.as_str())
+                .unwrap_or("Unknown error from desktop client");
+            return Err(IpcCallError::Application(msg.to_string()));
+        }
+
+        resp.get("result").cloned().ok_or_else(|| {
+            IpcCallError::Application(
+                "Missing 'result' in response from desktop client".to_string(),
+            )
+        })
+    }
+
+    #[cfg(windows)]
+    async fn connect_ipc(&self) -> Result<IpcConnection, String> {
+        let pipe_name = self
+            .custom_endpoint
+            .as_deref()
+            .unwrap_or(WINDOWS_PIPE_NAME)
+            .to_string();
+
+        let client = tokio::task::spawn_blocking(move || {
+            tokio::net::windows::named_pipe::ClientOptions::new().open(&pipe_name)
+        })
+        .await
+        .map_err(|e| format!("Join error: {e}"))?
+        .map_err(|_| "DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string())?;
+
+        let (reader, writer) = tokio::io::split(client);
+        Ok(IpcConnection {
+            reader: tokio::io::BufReader::new(reader),
+            writer,
+        })
+    }
+
+    #[cfg(unix)]
+    async fn connect_ipc(&self) -> Result<IpcConnection, String> {
+        let socket_path = if let Some(endpoint) = &self.custom_endpoint {
+            PathBuf::from(endpoint)
+        } else {
+            get_unix_socket_path()
+        };
+
+        let stream = tokio::time::timeout(
+            Duration::from_secs(2),
+            tokio::net::UnixStream::connect(&socket_path),
+        )
+        .await
+        .map_err(|_| "DESKTOP_OFFLINE: Connection timed out connecting to Sona desktop".to_string())?
+        .map_err(|_| "DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string())?;
+
+        let (reader, writer) = tokio::io::split(stream);
+        Ok(IpcConnection {
+            reader: tokio::io::BufReader::new(reader),
+            writer,
+        })
+    }
+
+    pub async fn launch_desktop(
+        &self,
+        timeout_seconds: u64,
+        silent: bool,
+    ) -> Result<String, String> {
         if self.is_online().await {
             return Ok("Desktop client is already running".to_string());
         }
@@ -163,13 +295,16 @@ impl IpcClient {
         })?;
 
         eprintln!(
-            "[sona-mcp] Launching desktop client from: {}",
-            exe_path.display()
+            "[sona-mcp] Launching desktop client from: {}{}",
+            exe_path.display(),
+            if silent { " (--silent)" } else { "" }
         );
         let mut cmd = std::process::Command::new(&exe_path);
+        if silent {
+            cmd.arg("--silent");
+        }
         cmd.spawn()
             .map_err(|e| format!("Failed to spawn Sona desktop executable: {e}"))?;
-
         let deadline = std::time::Instant::now() + Duration::from_secs(timeout_seconds.max(1));
         while std::time::Instant::now() < deadline {
             tokio::time::sleep(Duration::from_millis(300)).await;

@@ -21,6 +21,7 @@ pub async fn get_microphone_devices() -> Result<Vec<AudioDevice>, String> {
 
 #[tauri::command]
 pub async fn start_system_audio_capture(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     device_name: Option<String>,
     instance_id: String,
@@ -34,7 +35,7 @@ pub async fn start_system_audio_capture(
         .current_context()?
         .app_data_dir()
         .to_path_buf();
-    crate::platform::blocking::spawn_blocking_map(move || {
+    let res = crate::platform::blocking::spawn_blocking_map(move || {
         crate::integrations::audio::start_system_audio_capture(
             audio_state,
             asr_state,
@@ -45,11 +46,16 @@ pub async fn start_system_audio_capture(
             output_path,
         )
     })
-    .await
+    .await;
+    if res.is_ok() {
+        crate::app::tray::set_recording_active(&app, true);
+    }
+    res
 }
 
 #[tauri::command]
 pub async fn start_microphone_capture(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     device_name: Option<String>,
     instance_id: String,
@@ -63,7 +69,7 @@ pub async fn start_microphone_capture(
         .current_context()?
         .app_data_dir()
         .to_path_buf();
-    crate::platform::blocking::spawn_blocking_map(move || {
+    let res = crate::platform::blocking::spawn_blocking_map(move || {
         crate::integrations::audio::start_microphone_capture(
             audio_state,
             asr_state,
@@ -74,25 +80,40 @@ pub async fn start_microphone_capture(
             output_path,
         )
     })
-    .await
+    .await;
+    if res.is_ok() {
+        crate::app::tray::set_recording_active(&app, true);
+    }
+    res
 }
 
 #[tauri::command]
 pub async fn stop_system_audio_capture(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     instance_id: String,
 ) -> Result<String, String> {
-    crate::integrations::audio::stop_system_audio_capture(&services.audio, instance_id).await
+    let res =
+        crate::integrations::audio::stop_system_audio_capture(&services.audio, instance_id).await;
+    if !services.audio.has_active_captures() {
+        crate::app::tray::set_recording_active(&app, false);
+    }
+    res
 }
 
 #[tauri::command]
 pub async fn stop_microphone_capture(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     instance_id: String,
 ) -> Result<String, String> {
-    crate::integrations::audio::stop_microphone_capture(&services.audio, instance_id).await
+    let res =
+        crate::integrations::audio::stop_microphone_capture(&services.audio, instance_id).await;
+    if !services.audio.has_active_captures() {
+        crate::app::tray::set_recording_active(&app, false);
+    }
+    res
 }
-
 #[tauri::command]
 pub fn set_system_audio_capture_paused(
     services: State<'_, DesktopServices>,

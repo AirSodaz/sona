@@ -61,6 +61,7 @@ pub async fn check_gpu_availability() -> Result<bool, String> {
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)]
 pub async fn update_tray_menu(
     app: AppHandle,
     show_text: String,
@@ -69,6 +70,8 @@ pub async fn update_tray_menu(
     quit_text: String,
     caption_text: String,
     caption_checked: bool,
+    disconnect_agent_text: Option<String>,
+    stop_recording_text: Option<String>,
 ) -> Result<(), String> {
     crate::app::tray::update_tray_menu(
         app,
@@ -78,6 +81,8 @@ pub async fn update_tray_menu(
         quit_text,
         caption_text,
         caption_checked,
+        disconnect_agent_text,
+        stop_recording_text,
     )
     .await
 }

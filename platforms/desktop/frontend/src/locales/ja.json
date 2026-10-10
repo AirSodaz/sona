@@ -2497,6 +2497,8 @@
     "settings": "設定",
     "check_updates": "アップデートをチェックする",
     "quit": "やめる",
+    "disconnect_agent": "Agent を切断",
+    "stop_recording": "録音を停止",
     "quit_warning_title": "実行中のアクティブなタスク",
     "quit_warning_message": "アクティブなタスクが実行されています。今すぐ終了すると終了します。\n\n本当に辞めてもよろしいですか？",
     "quit_confirm": "とにかくやめてください"

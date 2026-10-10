@@ -70,6 +70,7 @@ pub struct ActiveRecordingSession {
     pub coordinator_released: bool,
     pub audio_stopped: bool,
     pub frozen_duration_seconds: Option<f64>,
+    pub _sleep_guard: Option<Arc<crate::platform::system::power::SleepPreventionGuard>>,
 }
 
 #[derive(Clone)]
@@ -954,6 +955,12 @@ impl AgentControlFacade {
             }
         }
 
+        let sleep_guard = Arc::new(
+            crate::platform::system::power::SleepPreventionGuard::acquire(
+                "Agent Live Audio Recording",
+            ),
+        );
+
         *session_guard = Some(ActiveRecordingSession {
             history_id: draft.item.id.clone(),
             consumer_id,
@@ -964,12 +971,16 @@ impl AgentControlFacade {
             coordinator_released: false,
             audio_stopped: false,
             frozen_duration_seconds: None,
+            _sleep_guard: Some(sleep_guard),
         });
 
         let _ = self.services.emitter.emit(
             "agent-control-recording-status",
             serde_json::json!({ "active": true, "historyId": &draft.item.id }),
         );
+        if let Some(app) = &self.app_handle {
+            crate::app::tray::set_recording_active(app, true);
+        }
 
         Ok(StartRecordingResult {
             history_id: draft.item.id,
@@ -1092,6 +1103,9 @@ impl AgentControlFacade {
             "agent-control-recording-status",
             serde_json::json!({ "active": false }),
         );
+        if let Some(app) = &self.app_handle {
+            crate::app::tray::set_recording_active(app, false);
+        }
 
         Ok(StopRecordingResult {
             history_id: session_snapshot.history_id,
@@ -1613,6 +1627,9 @@ impl AgentControlFacade {
         &self,
         req: TranscribeFileRequest,
     ) -> Result<TranscribeFileResult, String> {
+        let _sleep_guard = crate::platform::system::power::SleepPreventionGuard::acquire(
+            "Agent Audio Batch Transcription",
+        );
         let path = std::path::PathBuf::from(&req.file_path);
         if !path.exists() {
             return Err(format!("File not found: {}", req.file_path));

@@ -20,6 +20,7 @@ export const TauriEvent = {
     toggleCaption: 'toggle-caption',
     checkUpdates: 'check-updates',
     requestQuit: 'request-quit',
+    stopRecording: 'tray-stop-recording',
   },
   storage: {
     migrationProgress: 'storage-migration-progress',

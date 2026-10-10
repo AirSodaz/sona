@@ -138,13 +138,18 @@ pub fn run_app() -> Result<(), tauri::Error> {
                 )
                 .build(),
         )
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            let should_stay_silent = matches!(
+                crate::app::window::parse_launch_visibility_from_args(&args),
+                Some(crate::app::window::LaunchVisibility::Silent)
+            );
+            if !should_stay_silent && let Some(window) = app.get_webview_window("main") {
                 let _ = window.unminimize();
                 let _ = window.show();
                 let _ = window.set_focus();
             }
         }))
+        .plugin(tauri_plugin_deep_link::init())
         .manage(crate::app::server::ApiServerController::default())
         .manage(app_settings)
         .manage(crate::app::window_state::AuxWindowStateStore::default())

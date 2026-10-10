@@ -23,6 +23,11 @@ pub fn list_tools() -> Vec<ToolDefinition> {
                         "type": "integer",
                         "description": "Timeout in seconds to wait for client to start (default 10)",
                         "default": 10
+                    },
+                    "silent": {
+                        "type": "boolean",
+                        "description": "Whether to launch the client silently in the background without showing the window (default true)",
+                        "default": true
                     }
                 }
             }),
@@ -641,7 +646,11 @@ pub async fn call_tool(
                 .get("timeout_seconds")
                 .and_then(|v| v.as_u64())
                 .unwrap_or(10);
-            match client.launch_desktop(timeout).await {
+            let silent = arguments
+                .get("silent")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(true);
+            match client.launch_desktop(timeout, silent).await {
                 Ok(msg) => ToolCallResult::json(&serde_json::json!({
                     "success": true,
                     "message": msg
@@ -779,5 +788,46 @@ pub async fn call_tool(
             Err(err) => ToolCallResult::error(err),
         },
         _ => ToolCallResult::error(format!("Unknown tool: {name}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_launch_desktop_tool_schema() {
+        let tools = list_tools();
+        let launch_tool = tools
+            .iter()
+            .find(|t| t.name == "sona_launch_desktop")
+            .expect("sona_launch_desktop should be listed");
+
+        let properties = launch_tool
+            .input_schema
+            .get("properties")
+            .expect("properties field required");
+
+        let silent_prop = properties.get("silent").expect("silent property required");
+        assert_eq!(
+            silent_prop.get("type").and_then(|v| v.as_str()),
+            Some("boolean")
+        );
+        assert_eq!(
+            silent_prop.get("default").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+
+        let timeout_prop = properties
+            .get("timeout_seconds")
+            .expect("timeout_seconds property required");
+        assert_eq!(
+            timeout_prop.get("type").and_then(|v| v.as_str()),
+            Some("integer")
+        );
+        assert_eq!(
+            timeout_prop.get("default").and_then(|v| v.as_u64()),
+            Some(10)
+        );
     }
 }

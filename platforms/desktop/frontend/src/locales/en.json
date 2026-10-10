@@ -2497,6 +2497,8 @@
     "settings": "Settings",
     "check_updates": "Check for Updates",
     "quit": "Quit",
+    "disconnect_agent": "Disconnect Agent",
+    "stop_recording": "Stop Recording",
     "quit_warning_title": "Active Tasks Running",
     "quit_warning_message": "You have active tasks running. Quitting now will terminate them.\n\nAre you sure you want to quit?",
     "quit_confirm": "Quit Anyway"

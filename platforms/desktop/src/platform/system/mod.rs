@@ -7,9 +7,11 @@ pub mod env;
 pub mod event;
 pub mod host;
 pub mod paths;
+pub mod power;
 pub mod status;
 pub mod time;
 pub mod windows_chrome;
 
 pub use host::*;
+pub use power::SleepPreventionGuard;
 pub use windows_chrome::{ResolvedTheme, apply_window_chrome};

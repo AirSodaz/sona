@@ -1083,6 +1083,18 @@ pub async fn stop_system_audio_capture(
 ) -> Result<String, String> {
     stop_shared_capture(state, CaptureKind::System, instance_id).await
 }
+pub async fn stop_all_captures(state: &AudioState) {
+    let instances: Vec<(CaptureKind, String)> = {
+        if let Ok(registry) = state.registry.lock() {
+            registry.instance_keys.keys().cloned().collect()
+        } else {
+            Vec::new()
+        }
+    };
+    for (kind, instance_id) in instances {
+        let _ = stop_shared_capture(state, kind, instance_id).await;
+    }
+}
 
 async fn stop_shared_capture(
     state: &AudioState,

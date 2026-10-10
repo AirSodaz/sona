@@ -6,6 +6,7 @@ import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { SettingsTab } from '../types/settings';
 import { logger } from '../utils/logger';
 
@@ -33,6 +34,8 @@ export function useTrayHandling(
           quitText: t('tray.quit'),
           captionText: t('tray.live_caption'),
           captionChecked: isCaptionMode,
+          disconnectAgentText: t('tray.disconnect_agent'),
+          stopRecordingText: t('tray.stop_recording'),
         });
       } catch (err) {
         logger.warn('Failed to update tray menu language:', err);
@@ -82,6 +85,14 @@ export function useTrayHandling(
         });
         if (isMounted) unlistenFunctions.push(unlistenRequestQuit);
         else unlistenRequestQuit();
+        const unlistenStopRecording = await listen(TauriEvent.tray.stopRecording, () => {
+          if (!isMounted) return;
+          logger.info('[Tray] Received tray-stop-recording event, stopping UI recording state');
+          useTranscriptStore.getState().setIsRecording(false);
+          useTranscriptStore.getState().setIsPaused(false);
+        });
+        if (isMounted) unlistenFunctions.push(unlistenStopRecording);
+        else unlistenStopRecording();
       } catch (error) {
         logger.error('Failed to setup tray listeners:', error);
       }

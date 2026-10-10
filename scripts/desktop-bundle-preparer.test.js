@@ -63,6 +63,7 @@ test('desktop bundle preparer rejects targets absent from its production source 
 
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(runtimeLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
@@ -92,6 +93,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
   fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');
@@ -119,8 +121,12 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
     },
   });
 
-  assert.deepEqual(cargoCalls, [['cargo', ['build', '-p', 'sona-cli', '--release', '--target', target]]]);
+  assert.deepEqual(cargoCalls, [
+    ['cargo', ['build', '-p', 'sona-cli', '--release', '--target', target]],
+    ['cargo', ['build', '-p', 'sona-mcp', '--release', '--target', target]],
+  ]);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-cli-${target}.exe`)), true);
+  assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-mcp-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'optional-runtime.dll')), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'llama.dll')), true);
@@ -128,6 +134,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
   assert.deepEqual(generatedConfig.bundle.externalBin, [
     path.join(prepared.sidecarsDir, 'sona-cli'),
+    path.join(prepared.sidecarsDir, 'sona-mcp'),
     path.join(prepared.sidecarsDir, 'ffmpeg'),
   ]);
   assert.deepEqual(generatedConfig.bundle.resources, {
@@ -145,6 +152,7 @@ test('desktop bundle preparer excludes FFmpeg when includeFfmpeg is false', asyn
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.mkdirSync(runtimeLibDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(runtimeLibDir, 'sherpa-onnx-c-api.dll'), 'sherpa');
   fs.writeFileSync(path.join(runtimeLibDir, 'onnxruntime.dll'), 'onnxruntime');
@@ -166,11 +174,13 @@ test('desktop bundle preparer excludes FFmpeg when includeFfmpeg is false', asyn
   });
 
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-cli-${target}.exe`)), true);
+  assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-mcp-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), false);
 
   const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
   assert.deepEqual(generatedConfig.bundle.externalBin, [
     path.join(prepared.sidecarsDir, 'sona-cli'),
+    path.join(prepared.sidecarsDir, 'sona-mcp'),
   ]);
 });
 
@@ -225,6 +235,7 @@ test('desktop bundle preparer rebases staged macOS dylibs before linking the CLI
   const commandCalls = [];
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(sourceRuntimeLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
@@ -355,6 +366,7 @@ test('desktop bundle preparer fails when a llama.cpp shared library is missing',
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.rmSync(path.join(releaseDir, 'llama.dll'));
@@ -382,6 +394,7 @@ test('desktop bundle preparer stages and requires ggml-vulkan when the Vulkan bu
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(releaseDir, 'ggml-vulkan.dll'), 'vulkan');
@@ -412,6 +425,7 @@ test('desktop bundle preparer fails when the Vulkan build is enabled but ggml-vu
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
@@ -443,6 +457,7 @@ test('desktop bundle preparer stages and requires ggml-vulkan on Linux when the 
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(releaseDir, 'libggml-vulkan.so'), 'vulkan');
@@ -473,6 +488,7 @@ test('desktop bundle preparer stages and requires ggml-metal on macOS when the M
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(path.join(releaseDir, 'libggml-metal.dylib'), 'metal');
@@ -504,6 +520,7 @@ test('desktop bundle preparer fails when the Metal build is enabled but ggml-met
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(sherpaLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));

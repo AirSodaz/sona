@@ -98,6 +98,7 @@ async function prepareBundleFixture(target) {
   const configPath = path.join(root, 'base-tauri.conf.json');
   fs.mkdirSync(releaseDir, { recursive: true });
   fs.writeFileSync(path.join(releaseDir, target.includes('windows') ? 'sona-cli.exe' : 'sona-cli'), 'cli');
+  fs.writeFileSync(path.join(releaseDir, target.includes('windows') ? 'sona-mcp.exe' : 'sona-mcp'), 'mcp');
   writeSherpaRuntimeLibraries(runtimeLibDir, target);
   writeLlamaCppRuntimeLibraries(releaseDir, target);
   fs.writeFileSync(configPath, JSON.stringify({ bundle: {} }));
@@ -116,7 +117,7 @@ async function prepareBundleFixture(target) {
 function writeGeneratedBundleConfig(configPath, target, sidecarsDir, runtimeLibDir) {
   const config = {
     bundle: {
-      externalBin: [path.join(sidecarsDir, 'sona-cli'), path.join(sidecarsDir, 'ffmpeg')],
+      externalBin: [path.join(sidecarsDir, 'sona-cli'), path.join(sidecarsDir, 'sona-mcp'), path.join(sidecarsDir, 'ffmpeg')],
     },
   };
   if (target.includes('windows')) {
@@ -140,6 +141,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
   if (target.includes('windows')) {
     fs.writeFileSync(path.join(releaseDir, 'sona.exe'), 'app');
     fs.writeFileSync(path.join(releaseDir, 'sona-cli.exe'), 'cli');
+    fs.writeFileSync(path.join(releaseDir, 'sona-mcp.exe'), 'mcp');
     fs.writeFileSync(path.join(releaseDir, 'ffmpeg.exe'), 'ffmpeg');
     for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(releaseDir, libraryName), libraryName);
     const installerPath = path.join(bundleRoot, 'nsis', `Sona_${testVersion}_x64-setup.exe`);
@@ -155,6 +157,7 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
     fs.mkdirSync(frameworksDir, { recursive: true });
     fs.writeFileSync(path.join(macosDir, 'sona'), 'app');
     fs.writeFileSync(path.join(macosDir, 'sona-cli'), 'cli');
+    fs.writeFileSync(path.join(macosDir, 'sona-mcp'), 'mcp');
     fs.writeFileSync(path.join(macosDir, 'ffmpeg'), 'ffmpeg');
     for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(frameworksDir, libraryName), libraryName);
     const dmgPath = path.join(bundleRoot, 'dmg', `Sona_${testVersion}_aarch64.dmg`);
@@ -168,7 +171,8 @@ function writeCanonicalAppBundle(root, target, releaseDir = path.join(root, 'tar
   fs.mkdirSync(binDir, { recursive: true });
   fs.mkdirSync(libDir, { recursive: true });
   fs.writeFileSync(path.join(binDir, 'sona'), 'app');
-  fs.writeFileSync(path.join(binDir, 'sona-cli'), 'cli');
+    fs.writeFileSync(path.join(binDir, 'sona-cli'), 'cli');
+    fs.writeFileSync(path.join(binDir, 'sona-mcp'), 'mcp');
   fs.writeFileSync(path.join(binDir, 'ffmpeg'), 'ffmpeg');
   for (const libraryName of runtimeLibraryNames(target)) fs.writeFileSync(path.join(libDir, libraryName), libraryName);
   fs.writeFileSync(path.join(bundleRoot, 'appimage', `Sona_${testVersion}_amd64.AppImage`), 'installer');

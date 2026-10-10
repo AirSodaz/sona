@@ -1,7 +1,20 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
+import path from "node:path";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const repoRoot = path.resolve(path.dirname(__filename), "..");
+const targetDir = process.env.CARGO_TARGET_DIR
+	? path.resolve(repoRoot, process.env.CARGO_TARGET_DIR)
+	: path.join(repoRoot, "target");
+const mcpBinary =
+	process.platform === "win32"
+		? path.join(targetDir, "debug", "sona-mcp.exe")
+		: path.join(targetDir, "debug", "sona-mcp");
 
 const PIPE_NAME =
 	process.platform === "win32"
@@ -12,7 +25,13 @@ const OFFLINE_DUMMY_PIPE =
 		? `\\\\.\\pipe\\sona-agent-ipc-offline-dummy-${process.pid}`
 		: `/tmp/sona-agent-ipc-offline-dummy-${process.pid}.sock`;
 
-test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
+test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
+	if (!fs.existsSync(mcpBinary)) {
+		t.skip(
+			`sona-mcp binary not found at ${mcpBinary}; build with 'cargo build -p sona-mcp' before running this test`,
+		);
+		return;
+	}
 	let server;
 	let mcp;
 
@@ -153,7 +172,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		});
 	});
 
-	mcp = spawn("target/debug/sona-mcp.exe", ["--endpoint", PIPE_NAME]);
+	mcp = spawn(mcpBinary, ["--endpoint", PIPE_NAME]);
 	let output = "";
 	mcp.stdout.on("data", (d) => {
 		output += d.toString();
@@ -831,8 +850,14 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		server.close();
 	}
 });
-test("sona-mcp offline handling returns offline state and clear offline errors", async () => {
-	const mcp = spawn("target/debug/sona-mcp.exe", [
+test("sona-mcp offline handling returns offline state and clear offline errors", async (t) => {
+	if (!fs.existsSync(mcpBinary)) {
+		t.skip(
+			`sona-mcp binary not found at ${mcpBinary}; build with 'cargo build -p sona-mcp' before running this test`,
+		);
+		return;
+	}
+	const mcp = spawn(mcpBinary, [
 		"--endpoint",
 		OFFLINE_DUMMY_PIPE,
 	]);
