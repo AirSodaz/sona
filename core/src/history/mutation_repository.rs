@@ -87,6 +87,8 @@ pub struct HistoryCommitTranscriptEditRequest {
     pub edit_session_id: String,
     pub base_segments: Vec<TranscriptSegment>,
     pub edited_segments: Vec<TranscriptSegment>,
+    #[serde(default)]
+    pub reason: Option<TranscriptSnapshotReason>,
 }
 
 #[derive(Clone, Debug, Serialize, PartialEq)]

@@ -1450,13 +1450,21 @@ where
         edit_session_id: &str,
         base_segments: Vec<TranscriptSegment>,
         edited_segments: Vec<TranscriptSegment>,
+        reason: Option<TranscriptSnapshotReason>,
     ) -> Result<HistoryCommitTranscriptEditResult, HistoryMutationError> {
         validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
         let base_segments = canonicalize_history_transcript_segments(base_segments).segments;
         let edited_transcript = canonicalize_history_transcript_segments(edited_segments);
         let now_ms = self.mutation_now_ms()?;
-        let snapshot_id = format!("manual-edit-{edit_session_id}");
-
+        let snapshot_reason = reason.unwrap_or(TranscriptSnapshotReason::ManualEdit);
+        let (snapshot_prefix, snapshot_reason_str) = match snapshot_reason {
+            TranscriptSnapshotReason::Polish => ("polish", "polish"),
+            TranscriptSnapshotReason::Translate => ("translate", "translate"),
+            TranscriptSnapshotReason::Retranscribe => ("retranscribe", "retranscribe"),
+            TranscriptSnapshotReason::Restore => ("restore", "restore"),
+            TranscriptSnapshotReason::ManualEdit => ("manual-edit", "manual_edit"),
+        };
+        let snapshot_id = format!("{snapshot_prefix}-{edit_session_id}");
         Ok(self.get_db()?.with_rw_transaction(|tx| {
             let current_segments = {
                 let mut statement = tx.prepare_cached(
@@ -1506,7 +1514,7 @@ where
                     Ok((created_at, segment_count)) => TranscriptSnapshotMetadata {
                         id: snapshot_id.clone(),
                         history_id: history_id.to_string(),
-                        reason: TranscriptSnapshotReason::ManualEdit,
+                        reason: snapshot_reason,
                         created_at: created_at.max(0) as u64,
                         segment_count: segment_count.max(0) as u64,
                     },
@@ -1522,17 +1530,18 @@ where
                         let metadata = TranscriptSnapshotMetadata {
                             id: snapshot_id.clone(),
                             history_id: history_id.to_string(),
-                            reason: TranscriptSnapshotReason::ManualEdit,
+                            reason: snapshot_reason,
                             created_at: now_ms,
                             segment_count: base_segments.len() as u64,
                         };
                         tx.execute(
                             "INSERT INTO transcript_snapshots
                              (id, history_id, reason, created_at, segment_count, segments)
-                             VALUES (?1, ?2, 'manual_edit', ?3, ?4, ?5)",
+                             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
                             rusqlite::params![
                                 metadata.id,
                                 history_id,
+                                snapshot_reason_str,
                                 now_ms as i64,
                                 metadata.segment_count as i64,
                                 serde_json::to_string(&base_segments)?,
@@ -1567,7 +1576,7 @@ where
                         let snapshot_entity_id = format!("{history_id}::{snapshot_id}");
                         for (field, value) in [
                             ("document", serde_json::to_value(&base_segments)?),
-                            ("reason", serde_json::json!("manual_edit")),
+                            ("reason", serde_json::json!(snapshot_reason_str)),
                             ("createdAt", serde_json::json!(now_ms)),
                             ("segmentCount", serde_json::json!(metadata.segment_count)),
                         ] {
@@ -2165,6 +2174,7 @@ where
             &request.edit_session_id,
             request.base_segments,
             request.edited_segments,
+            request.reason,
         )
     }
 

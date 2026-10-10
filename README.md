@@ -38,6 +38,7 @@ Choose the guide that matches what you want to do:
 | --- | --- | --- |
 | User Guide | Installation, first-run setup, transcription, editing, and export | [English](docs/user-guide.md) · [简体中文](docs/user-guide.zh-CN.md) |
 | CLI Guide | Stateless local/online transcription, model management, and configuration | [English](docs/cli.md) |
+| MCP Server Reference | Model Context Protocol server bridge, tools, resources, and Agent setup | [English](docs/mcp.md) |
 | HTTP API Reference | Server configuration, authentication, endpoints, and webhooks | [English](docs/api.md) · [简体中文](docs/api.zh-CN.md) |
 | Development Guide | Local setup, testing, desktop builds, and CLI builds | [English](docs/development.md) · [简体中文](docs/development.zh-CN.md) |
 | Architecture Guide | Package roles, dependency direction, compatibility boundaries, and verification | [English](docs/architecture.md) · [简体中文](docs/architecture.zh-CN.md) |

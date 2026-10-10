@@ -56,12 +56,21 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 						result = {
 							history_id: "hist-123",
 							segments: [
-								{ id: "seg-1", text: "Hello world", start: 0, end: 2 },
+								{ id: "seg-1", text: "Hello world", start: 0, end: 2, translation: "Bonjour le monde" },
 							],
 							text: "Hello world",
+							translation_text: "Bonjour le monde",
 						};
 					} else if (req.method === "sona_edit_transcript") {
 						result = { success: true, snapshot_id: "snap-1" };
+					} else if (req.method === "sona_patch_segments") {
+						result = { success: true, snapshot_id: "snap-patch-1", updated_count: 2, total_segments: 2 };
+					} else if (req.method === "sona_update_translations") {
+						result = { success: true, snapshot_id: "snap-trans-1", updated_count: 1 };
+					} else if (req.method === "sona_edit_summary") {
+						result = { success: true };
+					} else if (req.method === "sona_delete_summary") {
+						result = { success: true };
 					} else if (req.method === "sona_delete_history") {
 						result = { success: true };
 					} else if (req.method === "sona_list_projects") {
@@ -217,7 +226,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		assert.equal(tools.result.resultType, "complete");
 		assert.equal(tools.result.ttlMs, 300000);
 		assert.equal(tools.result.cacheScope, "public");
-		assert.equal(tools.result.tools.length, 28);
+		assert.equal(tools.result.tools.length, 32);
 		assert.equal(tools.result.tools[0].title, "Get Client State");
 
 		// 2b. resources/list
@@ -251,7 +260,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		assert.equal(resTemplates.result.resultType, "complete");
 		assert.equal(resTemplates.result.ttlMs, 300000);
 		assert.equal(resTemplates.result.cacheScope, "public");
-		assert.equal(resTemplates.result.resourceTemplates.length, 2);
+		assert.equal(resTemplates.result.resourceTemplates.length, 3);
 		assert.ok(
 			resTemplates.result.resourceTemplates.some(
 				(r) => r.uriTemplate === "sona://history/{history_id}",
@@ -262,7 +271,11 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 				(r) => r.uriTemplate === "sona://history/{history_id}/summary",
 			),
 		);
-
+		assert.ok(
+			resTemplates.result.resourceTemplates.some(
+				(r) => r.uriTemplate === "sona://history/{history_id}/translation",
+			),
+		);
 		// 2d. prompts/list
 		const promptList = await send({
 			jsonrpc: "2.0",
@@ -329,6 +342,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		});
 		const parsedTrans = JSON.parse(trans.result.content[0].text);
 		assert.equal(parsedTrans.text, "Hello world");
+		assert.equal(parsedTrans.translation_text, "Bonjour le monde");
 
 		// 8. sona_edit_transcript
 		const edit = await send({
@@ -344,6 +358,48 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		assert.equal(parsedEdit.success, true);
 		assert.equal(parsedEdit.snapshot_id, "snap-1");
 
+		// 8b. sona_patch_segments
+		const patch = await send({
+			jsonrpc: "2.0",
+			id: 81,
+			method: "tools/call",
+			params: {
+				name: "sona_patch_segments",
+				arguments: {
+					history_id: "hist-123",
+					segments: [
+						{ id: "seg-1", text: "Hello modified", translation: "Bonjour" },
+						{ id: "seg-2", text: "Appended" },
+					],
+					remove_ids: ["seg-old"],
+					reason: "polish",
+				},
+			},
+		});
+		const parsedPatch = JSON.parse(patch.result.content[0].text);
+		assert.equal(parsedPatch.success, true);
+		assert.equal(parsedPatch.snapshot_id, "snap-patch-1");
+		assert.equal(parsedPatch.updated_count, 2);
+
+		// 8c. sona_update_translations
+		const updateTrans = await send({
+			jsonrpc: "2.0",
+			id: 82,
+			method: "tools/call",
+			params: {
+				name: "sona_update_translations",
+				arguments: {
+					history_id: "hist-123",
+					translations: [
+						{ id: "seg-1", translation: "Bonjour le monde" },
+					],
+				},
+			},
+		});
+		const parsedUpdateTrans = JSON.parse(updateTrans.result.content[0].text);
+		assert.equal(parsedUpdateTrans.success, true);
+		assert.equal(parsedUpdateTrans.snapshot_id, "snap-trans-1");
+		assert.equal(parsedUpdateTrans.updated_count, 1);
 		// 9. sona_delete_history
 		const del = await send({
 			jsonrpc: "2.0",
@@ -523,6 +579,37 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		assert.equal(parsedLoadSum.activeTemplateId, "meeting");
 		assert.equal(parsedLoadSum.record.content, "Summary text content");
 
+		// 16e2. sona_edit_summary
+		const editSum = await send({
+			jsonrpc: "2.0",
+			id: 1651,
+			method: "tools/call",
+			params: {
+				name: "sona_edit_summary",
+				arguments: {
+					history_id: "hist-123",
+					content: "Edited summary content",
+				},
+			},
+		});
+		const parsedEditSum = JSON.parse(editSum.result.content[0].text);
+		assert.equal(parsedEditSum.success, true);
+
+		// 16e3. sona_delete_summary
+		const deleteSum = await send({
+			jsonrpc: "2.0",
+			id: 1652,
+			method: "tools/call",
+			params: {
+				name: "sona_delete_summary",
+				arguments: {
+					history_id: "hist-123",
+				},
+			},
+		});
+		const parsedDeleteSum = JSON.parse(deleteSum.result.content[0].text);
+		assert.equal(parsedDeleteSum.success, true);
+
 		// 16f. sona_get_model_catalog
 		const catalog = await send({
 			jsonrpc: "2.0",
@@ -682,6 +769,16 @@ test("sona-mcp end-to-end integration over IPC pipe", async (_t) => {
 		});
 		assert.equal(resSummary.result.contents[0].text, "Summary text content");
 		assert.equal(resSummary.result.contents[0].mimeType, "text/markdown");
+
+		// 17e. sona://history/hist-123/translation
+		const resTrans = await send({
+			jsonrpc: "2.0",
+			id: 180,
+			method: "resources/read",
+			params: { uri: "sona://history/hist-123/translation" },
+		});
+		assert.equal(resTrans.result.contents[0].text, "Bonjour le monde");
+		assert.equal(resTrans.result.contents[0].mimeType, "text/plain");
 
 		// 15c. Negative tests for MCP 2026-07-28 error codes
 		// Unsupported protocol version -> code -32022

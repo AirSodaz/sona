@@ -316,6 +316,7 @@ pub async fn history_commit_transcript_edit(
         edit_session_id,
         base_segments,
         edited_segments,
+        reason: None,
     };
     validate_history_input(&request)?;
     services

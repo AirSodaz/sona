@@ -138,6 +138,77 @@ pub fn list_tools() -> Vec<ToolDefinition> {
             }),
         },
         ToolDefinition {
+            name: "sona_patch_segments",
+            title: Some("Patch Transcript Segments"),
+            description: "Incrementally patch transcript segments by ID (modify text, timing, or translation; remove specified segment IDs; append new segments), automatically creating a version snapshot and refreshing desktop UI.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "Target history record ID"
+                    },
+                    "segments": {
+                        "type": "array",
+                        "description": "Array of segment patch objects (id required; text, start, end, translation optional)",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "string", "description": "Segment ID to patch or create" },
+                                "text": { "type": "string", "description": "Updated segment text" },
+                                "start": { "type": "number", "description": "Start timestamp in seconds" },
+                                "end": { "type": "number", "description": "End timestamp in seconds" },
+                                "translation": { "type": "string", "description": "Updated translation text for this segment" }
+                            },
+                            "required": ["id"]
+                        }
+                    },
+                    "remove_ids": {
+                        "type": "array",
+                        "description": "Optional list of segment IDs to remove",
+                        "items": { "type": "string" }
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Optional reason for editing (e.g. 'polish' to generate polish snapshot)"
+                    }
+                },
+                "required": ["history_id", "segments"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_update_translations",
+            title: Some("Update Translations"),
+            description: "Batch write, update, or clear segment translations for a history record, generating a translation snapshot and notifying the desktop UI.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "Target history record ID"
+                    },
+                    "translations": {
+                        "type": "array",
+                        "description": "Array of segment translation entries",
+                        "items": {
+                            "type": "object",
+                            "properties": {
+                                "id": { "type": "string", "description": "Target segment ID" },
+                                "translation": { "type": ["string", "null"], "description": "Translated text, or null to clear" }
+                            },
+                            "required": ["id"]
+                        }
+                    },
+                    "clear_all": {
+                        "type": "boolean",
+                        "description": "If true, clear all existing translations before applying new ones",
+                        "default": false
+                    }
+                },
+                "required": ["history_id", "translations"]
+            }),
+        },
+        ToolDefinition {
             name: "sona_delete_history",
             title: Some("Delete History"),
             description: "Delete or permanently purge a history record.",
@@ -322,6 +393,48 @@ pub fn list_tools() -> Vec<ToolDefinition> {
                     "history_id": {
                         "type": "string",
                         "description": "History item ID whose summary is being loaded"
+                    }
+                },
+                "required": ["history_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_edit_summary",
+            title: Some("Edit Summary"),
+            description: "Edit existing AI summary content for a history record while retaining original template and thought attributes if not overridden.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "Target history record ID"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Updated summary text content"
+                    },
+                    "template_id": {
+                        "type": "string",
+                        "description": "Optional summary template identifier (preserves existing template if omitted)"
+                    },
+                    "thought": {
+                        "type": "string",
+                        "description": "Optional reasoning or thinking process text (preserves existing thought if omitted)"
+                    }
+                },
+                "required": ["history_id", "content"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_delete_summary",
+            title: Some("Delete Summary"),
+            description: "Delete persisted AI summary for a specific history record and refresh desktop UI.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item ID whose summary should be deleted"
                     }
                 },
                 "required": ["history_id"]
@@ -563,6 +676,16 @@ pub async fn call_tool(
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),
         },
+        "sona_patch_segments" => match client.call("sona_patch_segments", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_update_translations" => {
+            match client.call("sona_update_translations", arguments).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
         "sona_delete_history" => match client.call("sona_delete_history", arguments).await {
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),
@@ -598,6 +721,14 @@ pub async fn call_tool(
             Err(err) => ToolCallResult::error(err),
         },
         "sona_save_summary" => match client.call("sona_save_summary", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_edit_summary" => match client.call("sona_edit_summary", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_delete_summary" => match client.call("sona_delete_summary", arguments).await {
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),
         },

@@ -66,6 +66,13 @@ pub fn list_resource_templates() -> Vec<ResourceTemplateDefinition> {
             description: Some("Persisted AI summary text for a specific history record by ID"),
             mime_type: Some("text/markdown"),
         },
+        ResourceTemplateDefinition {
+            uri_template: "sona://history/{history_id}/translation",
+            name: "Sona History Translation",
+            title: Some("History Translation"),
+            description: Some("Read-only translation content for a specific history record by ID"),
+            mime_type: Some("text/plain"),
+        },
     ]
 }
 
@@ -137,6 +144,24 @@ pub async fn read_resource(uri: &str, client: &IpcClient) -> Result<ResourceCont
             Ok(ResourceContent {
                 uri: uri.to_string(),
                 mime_type: Some("text/markdown"),
+                text,
+            })
+        } else if let Some(history_id) = rest.strip_suffix("/translation") {
+            let val = client
+                .call(
+                    "sona_read_transcript",
+                    serde_json::json!({ "history_id": history_id }),
+                )
+                .await?;
+            let text = val
+                .get("translation_text")
+                .or_else(|| val.get("translationText"))
+                .and_then(|t| t.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: Some("text/plain"),
                 text,
             })
         } else {

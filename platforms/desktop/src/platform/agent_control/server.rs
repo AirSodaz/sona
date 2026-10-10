@@ -4,10 +4,10 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 use super::facade::{
     AgentControlFacade, CreateProjectRequest, DownloadPresetModelRequest, EditTranscriptRequest,
-    ExportTranscriptRequest, QueryHistoryRequest, QueryTrashRequest, SaveSummaryRequest,
-    StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest, UpdateProjectRequest,
+    ExportTranscriptRequest, PatchSegmentsRequest, QueryHistoryRequest, QueryTrashRequest,
+    SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest,
+    UpdateProjectRequest, UpdateTranslationsRequest,
 };
-
 pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
 
 pub fn get_unix_socket_path() -> PathBuf {
@@ -253,6 +253,19 @@ pub async fn dispatch_rpc_call(
             let res = facade.edit_transcript(req).await.map_err(|e| (-32000, e))?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
+        "patch_segments" => {
+            let req: PatchSegmentsRequest = parse_params(params)?;
+            let res = facade.patch_segments(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "update_translations" | "edit_translations" => {
+            let req: UpdateTranslationsRequest = parse_params(params)?;
+            let res = facade
+                .update_translations(req)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
         "delete_history" => {
             let (history_id, permanent) = parse_delete_history(&params)?;
             let res = facade
@@ -304,9 +317,17 @@ pub async fn dispatch_rpc_call(
                 .map_err(|e| (-32000, e))?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
-        "save_summary" => {
+        "save_summary" | "edit_summary" => {
             let req: SaveSummaryRequest = parse_params(params)?;
             let res = facade.save_summary(req).await.map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "delete_summary" => {
+            let history_id = extract_history_id(&params)?;
+            let res = facade
+                .delete_summary(history_id)
+                .await
+                .map_err(|e| (-32000, e))?;
             Ok(serde_json::json!({ "success": res }))
         }
         "load_summary" => {

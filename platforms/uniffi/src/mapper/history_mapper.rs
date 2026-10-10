@@ -430,6 +430,7 @@ impl TryFrom<FfiHistoryCommitTranscriptEditRequestV1> for HistoryCommitTranscrip
             edit_session_id: value.edit_session_id,
             base_segments: history_transcript_segments_from_ffi(value.base_segments)?,
             edited_segments: history_transcript_segments_from_ffi(value.edited_segments)?,
+            reason: None,
         })
     }
 }

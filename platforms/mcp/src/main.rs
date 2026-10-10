@@ -453,11 +453,36 @@ mod tests {
             Some("public")
         );
         let tools = result.get("tools").and_then(|t| t.as_array()).unwrap();
-        assert_eq!(tools.len(), 28);
+        assert_eq!(tools.len(), 32);
         assert_eq!(
             tools[0].get("title").and_then(|t| t.as_str()),
             Some("Get Client State")
         );
+    }
+
+    #[tokio::test]
+    async fn test_handle_resource_templates_list() {
+        let client = offline_test_client();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(301)),
+            method: "resources/templates/list".to_string(),
+            params: None,
+        };
+
+        let resp = handle_request(req, &client).await.unwrap();
+        assert_eq!(resp.id, serde_json::json!(301));
+        let result = resp.result.unwrap();
+        let templates = result
+            .get("resourceTemplates")
+            .and_then(|r| r.as_array())
+            .unwrap();
+        assert_eq!(templates.len(), 3);
+        let uris: Vec<&str> = templates
+            .iter()
+            .filter_map(|t| t.get("uriTemplate").and_then(|u| u.as_str()))
+            .collect();
+        assert!(uris.contains(&"sona://history/{history_id}/translation"));
     }
 
     #[tokio::test]

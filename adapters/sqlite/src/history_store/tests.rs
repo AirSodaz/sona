@@ -736,7 +736,7 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
     let before_unchanged = outbox_count();
 
     let unchanged = store
-        .commit_transcript_edit(&recording.id, "session-1", base.clone(), base.clone())
+        .commit_transcript_edit(&recording.id, "session-1", base.clone(), base.clone(), None)
         .unwrap();
     assert!(matches!(
         unchanged,
@@ -761,6 +761,7 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
             "session-1",
             base,
             vec![segment_value("seg-1", "Draft", 0.0, 1.0)],
+            None,
         )
         .unwrap();
     assert!(matches!(
@@ -770,7 +771,13 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
     assert_eq!(outbox_count(), before_conflict);
     let stale_base = vec![segment_value("seg-1", "Original", 0.0, 1.0)];
     let matching_current = store
-        .commit_transcript_edit(&recording.id, "session-1", stale_base, external.clone())
+        .commit_transcript_edit(
+            &recording.id,
+            "session-1",
+            stale_base,
+            external.clone(),
+            None,
+        )
         .unwrap();
     assert!(matches!(
         matching_current,
@@ -794,6 +801,7 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
             "session-1",
             current_after_external.clone(),
             edited.clone(),
+            None,
         )
         .unwrap();
     let snapshot = match committed {
@@ -817,7 +825,7 @@ fn commit_transcript_edit_is_atomic_and_detects_stale_baselines() {
 
     let edited_again = vec![segment_value("seg-1", "Manual edit again", 0.0, 1.0)];
     let committed_again = store
-        .commit_transcript_edit(&recording.id, "session-1", edited, edited_again)
+        .commit_transcript_edit(&recording.id, "session-1", edited, edited_again, None)
         .unwrap();
     let repeated_snapshot = match committed_again {
         HistoryCommitTranscriptEditResult::Committed { snapshot, .. } => snapshot,
