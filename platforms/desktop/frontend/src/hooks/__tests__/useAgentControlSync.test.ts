@@ -2,6 +2,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
 import { useAgentControlSync } from '../useAgentControlSync';
 
@@ -35,7 +36,13 @@ describe('useAgentControlSync', () => {
     vi.clearAllMocks();
     listeners.clear();
     unlistenMocks.clear();
+    useTranscriptRuntimeStore.setState({
+      isRecording: false,
+      isPaused: false,
+    });
     useTranscriptStore.setState({
+      isRecording: false,
+      isPaused: false,
       isAgentRecording: false,
       agentRecordingHistoryId: null,
     });
@@ -59,6 +66,8 @@ describe('useAgentControlSync', () => {
 
     expect(useTranscriptStore.getState().isAgentRecording).toBe(true);
     expect(useTranscriptStore.getState().agentRecordingHistoryId).toBe('hist-agent-1');
+    expect(useTranscriptRuntimeStore.getState().isRecording).toBe(true);
+    expect(useTranscriptRuntimeStore.getState().isPaused).toBe(false);
     expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
   });
 
@@ -82,7 +91,27 @@ describe('useAgentControlSync', () => {
 
     expect(useTranscriptStore.getState().isAgentRecording).toBe(false);
     expect(useTranscriptStore.getState().agentRecordingHistoryId).toBeNull();
+    expect(useTranscriptRuntimeStore.getState().isRecording).toBe(false);
+    expect(useTranscriptRuntimeStore.getState().isPaused).toBe(false);
     expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
+  });
+
+  it('updates isPaused in runtime store when recordingStatus reports paused', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('agent-control-recording-status')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('agent-control-recording-status')?.({
+        payload: { active: true, isPaused: true, historyId: 'hist-agent-1' },
+      });
+    });
+
+    expect(useTranscriptRuntimeStore.getState().isRecording).toBe(true);
+    expect(useTranscriptRuntimeStore.getState().isPaused).toBe(true);
+    expect(useTranscriptStore.getState().isPaused).toBe(true);
   });
 
   it('reloads history when transcriptUpdated event is emitted', async () => {

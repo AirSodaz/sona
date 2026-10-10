@@ -7,14 +7,15 @@ use sona_application::live_transcription::{LiveInputTransform, LiveSourceEpoch};
 use sona_core::export::{ExportFormat, ExportMode};
 use sona_core::history::store::HistoryStore;
 use sona_core::history::{
-    HistorySummaryPayload, HistoryWorkspaceQueryResult, TranscriptSnapshotReason,
-    TranscriptSummaryRecordPayload,
+    HistorySummaryPayload, HistoryWorkspaceQueryResult, TranscriptSnapshotMetadata,
+    TranscriptSnapshotReason, TranscriptSummaryRecordPayload,
 };
 use sona_core::ports::asr::{
     AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrTranscriptUpdateEvent,
     AsrTranscriptionRequest, OnlineAsrProviderRequest,
 };
 use sona_core::project::{ProjectCreateInput, ProjectRecord, ProjectUpdateInput};
+use sona_core::sync::{SyncConflictResolution, SyncConflictSummary};
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::transcript::TranscriptSegment;
 
@@ -63,6 +64,12 @@ impl AsrRuntimeObserver for AgentAsrRuntimeObserver {
 pub struct ActiveRecordingSession {
     pub history_id: String,
     pub consumer_id: String,
+    pub source_kind: String,
+    pub is_paused: bool,
+    pub paused_at_instant: Option<std::time::Instant>,
+    pub accumulated_pause_duration: std::time::Duration,
+    pub asr_request: Option<sona_core::ports::asr::AsrTranscriptionRequest>,
+    pub gain: f32,
     pub started_at_epoch: u64,
     pub started_at_instant: std::time::Instant,
     pub segments: Arc<std::sync::Mutex<Vec<TranscriptSegment>>>,
@@ -78,6 +85,7 @@ pub struct AgentControlFacade {
     pub(crate) services: DesktopServices,
     app_handle: Option<tauri::AppHandle>,
     active_session: Arc<Mutex<Option<ActiveRecordingSession>>>,
+    recording_op_lock: Arc<Mutex<()>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -85,6 +93,8 @@ pub struct AgentControlFacade {
 pub struct ClientStateResult {
     pub online: bool,
     pub is_recording: bool,
+    #[serde(default)]
+    pub is_paused: bool,
     pub active_project_id: Option<String>,
 }
 
@@ -94,6 +104,8 @@ pub struct StartRecordingRequest {
     pub project_id: Option<String>,
     #[serde(default, alias = "deviceName", alias = "device_name")]
     pub device_name: Option<String>,
+    #[serde(default)]
+    pub source: Option<String>,
     #[serde(default, alias = "asrRequest", alias = "asr_request")]
     pub asr_request: Option<AsrTranscriptionRequest>,
 }
@@ -117,6 +129,32 @@ pub struct StopRecordingResult {
     pub history_id: String,
     pub duration_seconds: f64,
     pub segment_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AudioDevicesResult {
+    pub microphones: Vec<crate::integrations::audio::AudioDevice>,
+    pub system_devices: Vec<crate::integrations::audio::AudioDevice>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RevertTranscriptResult {
+    pub success: bool,
+    pub snapshot_id: String,
+    pub segment_count: usize,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateHistoryMetaRequest {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default, alias = "projectId", alias = "project_id")]
+    pub project_id: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -757,12 +795,19 @@ impl AgentControlFacade {
             services,
             app_handle,
             active_session: Arc::new(Mutex::new(None)),
+            recording_op_lock: Arc::new(Mutex::new(())),
         }
     }
 
     pub async fn get_client_state(&self) -> Result<ClientStateResult, String> {
-        let is_recording =
-            self.active_session.lock().await.is_some() || self.services.audio.has_active_captures();
+        let (is_recording, is_paused) = {
+            let session_guard = self.active_session.lock().await;
+            if let Some(session) = session_guard.as_ref() {
+                (true, session.is_paused)
+            } else {
+                (self.services.audio.has_active_captures(), false)
+            }
+        };
         let active_project_id = self
             .services
             .projects
@@ -773,6 +818,7 @@ impl AgentControlFacade {
         Ok(ClientStateResult {
             online: true,
             is_recording,
+            is_paused,
             active_project_id,
         })
     }
@@ -794,6 +840,7 @@ impl AgentControlFacade {
         &self,
         req: StartRecordingRequest,
     ) -> Result<StartRecordingResult, String> {
+        let _op_guard = self.recording_op_lock.lock().await;
         if self.services.audio.has_active_captures() || self.services.asr.is_busy().await {
             return Err("DEVICE_BUSY: Audio capture or ASR engine is currently in use".to_string());
         }
@@ -859,13 +906,23 @@ impl AgentControlFacade {
         let device_name = req.device_name.clone();
         let consumer_id_clone = consumer_id.clone();
 
+        let source_kind = match req.source.as_deref().unwrap_or("microphone") {
+            "system" => "system".to_string(),
+            "microphone" => "microphone".to_string(),
+            other => {
+                return Err(format!(
+                    "INVALID_SOURCE: Unsupported audio source '{other}', expected 'microphone' or 'system'"
+                ));
+            }
+        };
+        let source_kind_capture = source_kind.clone();
         let lease = match crate::platform::blocking::spawn_blocking_map(move || {
             crate::integrations::audio::start_native_live_capture(
                 audio_state,
                 asr_state,
                 emitter,
                 app_data_dir,
-                "microphone",
+                &source_kind_capture,
                 device_name,
                 consumer_id_clone,
                 output_path,
@@ -902,7 +959,7 @@ impl AgentControlFacade {
         )) as Arc<dyn AsrRuntimeObserver>;
 
         let mut has_coordinator_consumer = false;
-        if let Some(asr_req) = resolved_asr_req {
+        if let Some(asr_req) = resolved_asr_req.clone() {
             if self
                 .services
                 .asr
@@ -938,7 +995,7 @@ impl AgentControlFacade {
                     // Rollback native live capture and draft on acquire failure
                     let _ = crate::integrations::audio::stop_native_live_capture(
                         &self.services.audio,
-                        "microphone",
+                        &source_kind,
                         consumer_id.clone(),
                     )
                     .await;
@@ -964,6 +1021,12 @@ impl AgentControlFacade {
         *session_guard = Some(ActiveRecordingSession {
             history_id: draft.item.id.clone(),
             consumer_id,
+            source_kind,
+            is_paused: false,
+            paused_at_instant: None,
+            accumulated_pause_duration: std::time::Duration::ZERO,
+            asr_request: resolved_asr_req,
+            gain: 1.0,
             started_at_epoch: now_epoch_secs,
             started_at_instant: std::time::Instant::now(),
             segments,
@@ -976,7 +1039,7 @@ impl AgentControlFacade {
 
         let _ = self.services.emitter.emit(
             "agent-control-recording-status",
-            serde_json::json!({ "active": true, "historyId": &draft.item.id }),
+            serde_json::json!({ "active": true, "isPaused": false, "historyId": &draft.item.id }),
         );
         if let Some(app) = &self.app_handle {
             crate::app::tray::set_recording_active(app, true);
@@ -992,15 +1055,26 @@ impl AgentControlFacade {
         &self,
         req: StopRecordingRequest,
     ) -> Result<StopRecordingResult, String> {
+        let _op_guard = self.recording_op_lock.lock().await;
         let (session_snapshot, duration_seconds) = {
             let mut session_guard = self.active_session.lock().await;
             let session = session_guard.as_mut().ok_or_else(|| {
                 "NO_ACTIVE_RECORDING: No recording is currently in progress".to_string()
             })?;
 
-            let dur = session
-                .frozen_duration_seconds
-                .unwrap_or_else(|| session.started_at_instant.elapsed().as_secs_f64());
+            let dur = session.frozen_duration_seconds.unwrap_or_else(|| {
+                let total_elapsed = session.started_at_instant.elapsed();
+                let pause_duration = session.accumulated_pause_duration
+                    + if session.is_paused {
+                        session
+                            .paused_at_instant
+                            .map(|p| p.elapsed())
+                            .unwrap_or_default()
+                    } else {
+                        std::time::Duration::ZERO
+                    };
+                total_elapsed.saturating_sub(pause_duration).as_secs_f64()
+            });
             session.frozen_duration_seconds = Some(dur);
             (session.clone(), dur)
         };
@@ -1024,7 +1098,7 @@ impl AgentControlFacade {
         if !session_snapshot.audio_stopped {
             crate::integrations::audio::stop_native_live_capture(
                 &self.services.audio,
-                "microphone",
+                &session_snapshot.source_kind,
                 session_snapshot.consumer_id.clone(),
             )
             .await
@@ -1101,7 +1175,7 @@ impl AgentControlFacade {
 
         let _ = self.services.emitter.emit(
             "agent-control-recording-status",
-            serde_json::json!({ "active": false }),
+            serde_json::json!({ "active": false, "isPaused": false }),
         );
         if let Some(app) = &self.app_handle {
             crate::app::tray::set_recording_active(app, false);
@@ -2131,6 +2205,356 @@ impl AgentControlFacade {
 
         Ok(true)
     }
+
+    pub async fn pause_recording(&self) -> Result<bool, String> {
+        let _op_guard = self.recording_op_lock.lock().await;
+        let (source_kind, consumer_id, has_coordinator_consumer, history_id) = {
+            let session_guard = self.active_session.lock().await;
+            let session = session_guard.as_ref().ok_or_else(|| {
+                "NO_ACTIVE_RECORDING: No recording is currently in progress".to_string()
+            })?;
+
+            if session.is_paused {
+                return Err(
+                    "RECORDING_ALREADY_PAUSED: Recording session is already paused".to_string(),
+                );
+            }
+            (
+                session.source_kind.clone(),
+                session.consumer_id.clone(),
+                session.has_coordinator_consumer && !session.coordinator_released,
+                session.history_id.clone(),
+            )
+        };
+
+        match crate::integrations::audio::set_native_live_capture_paused(
+            &self.services.audio,
+            &source_kind,
+            &consumer_id,
+            true,
+        ) {
+            Ok(_) | Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(_)) => {}
+            Err(e) => return Err(format!("AUDIO_PAUSE_FAILED: {e}")),
+        }
+
+        if has_coordinator_consumer {
+            let release_res = self
+                .services
+                .asr
+                .live_coordinator()
+                .release(&consumer_id)
+                .await;
+            if let Err(e) = release_res {
+                let _ = crate::integrations::audio::set_native_live_capture_paused(
+                    &self.services.audio,
+                    &source_kind,
+                    &consumer_id,
+                    false,
+                );
+                return Err(format!(
+                    "ASR_RELEASE_FAILED: Failed to release ASR coordinator: {e}"
+                ));
+            }
+        }
+
+        {
+            let mut session_guard = self.active_session.lock().await;
+            if let Some(session) = session_guard.as_mut() {
+                if has_coordinator_consumer {
+                    session.coordinator_released = true;
+                }
+                session.is_paused = true;
+                session.paused_at_instant = Some(std::time::Instant::now());
+            }
+        }
+
+        let _ = self.services.emitter.emit(
+            "agent-control-recording-status",
+            serde_json::json!({
+                "active": true,
+                "isPaused": true,
+                "historyId": &history_id
+            }),
+        );
+
+        Ok(true)
+    }
+
+    pub async fn resume_recording(&self) -> Result<bool, String> {
+        let _op_guard = self.recording_op_lock.lock().await;
+        let (source_kind, consumer_id, asr_request, gain, segments, history_id) = {
+            let session_guard = self.active_session.lock().await;
+            let session = session_guard.as_ref().ok_or_else(|| {
+                "NO_ACTIVE_RECORDING: No recording is currently in progress".to_string()
+            })?;
+
+            if !session.is_paused {
+                return Err("RECORDING_NOT_PAUSED: Recording session is not paused".to_string());
+            }
+            (
+                session.source_kind.clone(),
+                session.consumer_id.clone(),
+                session.asr_request.clone(),
+                session.gain,
+                session.segments.clone(),
+                session.history_id.clone(),
+            )
+        };
+
+        let lease = crate::integrations::audio::set_native_live_capture_paused(
+            &self.services.audio,
+            &source_kind,
+            &consumer_id,
+            false,
+        )
+        .map_err(|e| format!("AUDIO_RESUME_FAILED: {e}"))?;
+
+        let mut coordinator_acquired = false;
+        if let Some(asr_req) = asr_request {
+            let inner_observer = crate::integrations::asr::TauriAsrRuntimeObserver::new(
+                self.services.emitter.clone(),
+                self.services.asr.metrics_store(),
+            );
+            let observer = Arc::new(AgentAsrRuntimeObserver::new(inner_observer, segments))
+                as Arc<dyn AsrRuntimeObserver>;
+
+            if let Err(e) = self
+                .services
+                .asr
+                .live_coordinator()
+                .acquire(
+                    consumer_id.clone(),
+                    LiveSourceEpoch::new(lease.source_id.clone(), lease.source_generation),
+                    lease.source_cursor,
+                    LiveInputTransform { gain },
+                    asr_req,
+                    observer,
+                )
+                .await
+            {
+                let _ = crate::integrations::audio::set_native_live_capture_paused(
+                    &self.services.audio,
+                    &source_kind,
+                    &consumer_id,
+                    true,
+                );
+                return Err(format!("ASR_ACQUIRE_FAILED: {e}"));
+            }
+            coordinator_acquired = true;
+        }
+
+        {
+            let mut session_guard = self.active_session.lock().await;
+            if let Some(session) = session_guard.as_mut() {
+                if coordinator_acquired {
+                    session.has_coordinator_consumer = true;
+                    session.coordinator_released = false;
+                }
+                if let Some(paused_at) = session.paused_at_instant.take() {
+                    session.accumulated_pause_duration += paused_at.elapsed();
+                }
+                session.is_paused = false;
+            }
+        }
+
+        let _ = self.services.emitter.emit(
+            "agent-control-recording-status",
+            serde_json::json!({
+                "active": true,
+                "isPaused": false,
+                "historyId": &history_id
+            }),
+        );
+
+        Ok(true)
+    }
+
+    pub async fn list_audio_devices(&self) -> Result<AudioDevicesResult, String> {
+        let microphones = crate::platform::blocking::spawn_blocking_map(
+            crate::integrations::audio::get_microphone_devices,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let system_devices = crate::platform::blocking::spawn_blocking_map(
+            crate::integrations::audio::get_system_audio_devices,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        Ok(AudioDevicesResult {
+            microphones,
+            system_devices,
+        })
+    }
+
+    pub async fn list_transcript_snapshots(
+        &self,
+        history_id: String,
+    ) -> Result<Vec<TranscriptSnapshotMetadata>, String> {
+        let hid = history_id.clone();
+        self.services
+            .history
+            .query_db(move |repo| repo.list_transcript_snapshots(&hid))
+            .await
+            .map_err(|e| e.to_string())
+    }
+
+    pub async fn revert_transcript_snapshot(
+        &self,
+        history_id: String,
+        snapshot_id: String,
+    ) -> Result<RevertTranscriptResult, String> {
+        let hid = history_id.clone();
+        let sid = snapshot_id.clone();
+        let snapshot = self
+            .services
+            .history
+            .query_db(move |repo| repo.load_transcript_snapshot(&hid, &sid))
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| {
+                format!(
+                    "SNAPSHOT_NOT_FOUND: Snapshot '{snapshot_id}' not found for history '{history_id}'"
+                )
+            })?;
+
+        let hid2 = history_id.clone();
+        let base_segments = self
+            .services
+            .history
+            .query_db(move |repo| repo.load_transcript(&hid2))
+            .await
+            .map_err(|e| e.to_string())?
+            .unwrap_or_default();
+
+        let edited_segments = snapshot.segments;
+        let segment_count = edited_segments.len();
+        let edit_session_id = uuid::Uuid::new_v4().to_string();
+
+        let commit_req =
+            sona_core::history::mutation_repository::HistoryCommitTranscriptEditRequest {
+                history_id: history_id.clone(),
+                edit_session_id,
+                base_segments,
+                edited_segments,
+                reason: Some(TranscriptSnapshotReason::ManualEdit),
+            };
+
+        let result = self
+            .services
+            .history
+            .mutation_db(move |service| service.commit_transcript_edit(commit_req))
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let new_snapshot_id = match result {
+            sona_core::history::mutation_repository::HistoryCommitTranscriptEditResult::Committed {
+                snapshot,
+                ..
+            } => snapshot.id,
+            sona_core::history::mutation_repository::HistoryCommitTranscriptEditResult::Unchanged => {
+                format!("unchanged-{}", history_id)
+            }
+            sona_core::history::mutation_repository::HistoryCommitTranscriptEditResult::Conflict {
+                ..
+            } => {
+                return Err("CONFLICT: Transcript was concurrently modified".to_string());
+            }
+        };
+
+        let _ = self.services.emitter.emit(
+            "transcript-updated",
+            serde_json::json!({ "historyId": &history_id }),
+        );
+
+        Ok(RevertTranscriptResult {
+            success: true,
+            snapshot_id: new_snapshot_id,
+            segment_count,
+        })
+    }
+
+    pub async fn update_history_meta(
+        &self,
+        history_id: String,
+        req: UpdateHistoryMetaRequest,
+    ) -> Result<bool, String> {
+        if req.title.is_some() || req.icon.is_some() {
+            let patch = sona_core::history::mutation_repository::HistoryItemMetaPatch {
+                title: req.title.clone(),
+                icon: req.icon.clone().map(Some),
+                ..Default::default()
+            };
+            let req_meta = sona_core::history::mutation_repository::HistoryUpdateItemMetaRequest {
+                history_id: history_id.clone(),
+                updates: patch,
+            };
+            self.services
+                .history
+                .mutation_db(move |service| service.update_item_meta(req_meta))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        if let Some(raw_pid) = req.project_id {
+            let normalized_pid = match raw_pid.trim() {
+                "" => None,
+                non_empty => Some(non_empty.to_string()),
+            };
+            let req_proj =
+                sona_core::history::mutation_repository::HistoryUpdateProjectAssignmentsRequest {
+                    ids: vec![history_id.clone()],
+                    project_id: normalized_pid,
+                };
+            self.services
+                .history
+                .mutation_db(move |service| service.update_project_assignments(req_proj))
+                .await
+                .map_err(|e| e.to_string())?;
+        }
+
+        let _ = self.services.emitter.emit(
+            "history-item-updated",
+            serde_json::json!({ "id": &history_id }),
+        );
+
+        Ok(true)
+    }
+
+    pub async fn delete_preset_model(&self, model_id: String) -> Result<bool, String> {
+        let app = self.app_handle.as_ref().ok_or_else(|| {
+            "APP_HANDLE_UNAVAILABLE: Desktop UI handle is required to delete models".to_string()
+        })?;
+        crate::platform::model_downloads::delete_preset_model(app, &model_id).await?;
+        Ok(true)
+    }
+
+    pub async fn list_sync_conflicts(&self) -> Result<Vec<SyncConflictSummary>, String> {
+        self.services.sync.list_conflicts().await
+    }
+
+    pub async fn resolve_sync_conflict(
+        &self,
+        conflict_id: String,
+        resolution: String,
+    ) -> Result<bool, String> {
+        let res = match resolution.trim().to_lowercase().as_str() {
+            "keep_current" | "keepcurrent" => SyncConflictResolution::KeepCurrent,
+            "use_conflicting" | "useconflicting" => SyncConflictResolution::UseConflicting,
+            "keep_both" | "keepboth" => SyncConflictResolution::KeepBoth,
+            other => {
+                return Err(format!(
+                    "INVALID_RESOLUTION: Unsupported conflict resolution '{other}', expected 'keep_current', 'use_conflicting', or 'keep_both'"
+                ));
+            }
+        };
+        self.services
+            .sync
+            .resolve_conflict(&conflict_id, res)
+            .await?;
+        Ok(true)
+    }
 }
 
 #[cfg(test)]
@@ -2685,5 +3109,259 @@ mod tests {
 
         let loaded_deleted = facade.load_summary(history_id.clone()).await.unwrap();
         assert!(loaded_deleted.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_recording_pause_and_resume() {
+        let (facade, _dir) = create_test_facade().await;
+
+        // 1. Initially no active recording
+        assert!(facade.pause_recording().await.is_err());
+        assert!(facade.resume_recording().await.is_err());
+
+        // 2. Set an active session
+        let history_id = "test-rec-pause-resume".to_string();
+        let segments = Arc::new(std::sync::Mutex::new(Vec::new()));
+        {
+            let mut guard = facade.active_session.lock().await;
+            *guard = Some(ActiveRecordingSession {
+                history_id: history_id.clone(),
+                consumer_id: "test-consumer-1".to_string(),
+                source_kind: "microphone".to_string(),
+                is_paused: false,
+                paused_at_instant: None,
+                accumulated_pause_duration: std::time::Duration::ZERO,
+                asr_request: None,
+                gain: 1.0,
+                started_at_epoch: 1700000000,
+                started_at_instant: std::time::Instant::now(),
+                segments: segments.clone(),
+                has_coordinator_consumer: false,
+                coordinator_released: false,
+                audio_stopped: true,
+                frozen_duration_seconds: None,
+                _sleep_guard: None,
+            });
+        }
+
+        let state_before = facade.get_client_state().await.unwrap();
+        assert!(state_before.is_recording);
+        assert!(!state_before.is_paused);
+
+        // 3. Pause recording
+        let paused = facade.pause_recording().await.unwrap();
+        assert!(paused);
+
+        let state_paused = facade.get_client_state().await.unwrap();
+        assert!(state_paused.is_recording);
+        assert!(state_paused.is_paused);
+
+        // Pausing again must error
+        let pause_err = facade.pause_recording().await;
+        assert!(pause_err.is_err());
+        assert!(pause_err.unwrap_err().contains("RECORDING_ALREADY_PAUSED"));
+
+        // 4. In this unit test environment without real native audio hardware capture,
+        // resume_recording must strictly fail with AUDIO_RESUME_FAILED (InstanceNotActive)
+        // and must NOT falsely mark the session as active/unpaused!
+        let resume_res = facade.resume_recording().await;
+        assert!(resume_res.is_err());
+        assert!(resume_res.unwrap_err().contains("AUDIO_RESUME_FAILED"));
+
+        // Verify the session remains paused
+        let state_after_failed_resume = facade.get_client_state().await.unwrap();
+        assert!(state_after_failed_resume.is_recording);
+        assert!(state_after_failed_resume.is_paused);
+        // 5. Clean up via stop_recording (with dummy draft created so stop succeeds)
+        let dummy_path = _dir.path().join("dummy.wav");
+        std::fs::write(&dummy_path, b"audio").unwrap();
+        let hid_clone = history_id.clone();
+        facade
+            .services
+            .history
+            .mutation_file(move |s| {
+                s.save_imported_file(sona_core::history::HistorySaveImportedFileRequest {
+                    id: Some(hid_clone),
+                    source_path: dummy_path.to_string_lossy().to_string(),
+                    segments: vec![],
+                    duration: 1.0,
+                    tag_ids: vec![],
+                    project_id: None,
+                    converted_source_path: None,
+                })
+            })
+            .await
+            .unwrap();
+
+        let stop_res = facade
+            .stop_recording(StopRecordingRequest { discard: false })
+            .await
+            .unwrap();
+        assert_eq!(stop_res.history_id, history_id);
+    }
+
+    #[tokio::test]
+    async fn test_history_meta_update() {
+        let (facade, _dir) = create_test_facade().await;
+        let dummy_path = _dir.path().join("dummy.wav");
+        std::fs::write(&dummy_path, b"audio").unwrap();
+        let history_id = "test-hist-meta-upd".to_string();
+        let hid_clone = history_id.clone();
+        facade
+            .services
+            .history
+            .mutation_file(move |s| {
+                s.save_imported_file(sona_core::history::HistorySaveImportedFileRequest {
+                    id: Some(hid_clone),
+                    source_path: dummy_path.to_string_lossy().to_string(),
+                    segments: vec![],
+                    duration: 1.0,
+                    tag_ids: vec![],
+                    project_id: None,
+                    converted_source_path: None,
+                })
+            })
+            .await
+            .unwrap();
+
+        // Update title, icon, and project_id
+        let upd = facade
+            .update_history_meta(
+                history_id.clone(),
+                UpdateHistoryMetaRequest {
+                    title: Some("Updated Title".to_string()),
+                    project_id: Some("proj-99".to_string()),
+                    icon: Some("bookmark".to_string()),
+                },
+            )
+            .await
+            .unwrap();
+        assert!(upd);
+
+        // Query back and verify
+        let hid_q = history_id.clone();
+        let items = facade
+            .services
+            .history
+            .query_db(move |repo| {
+                repo.list_items(sona_core::history::HistoryListOptions::default())
+            })
+            .await
+            .unwrap();
+        let item = items
+            .into_iter()
+            .find(|it| it.id == hid_q)
+            .expect("must exist");
+        assert_eq!(item.title, "Updated Title");
+        assert_eq!(item.project_id.as_deref(), Some("proj-99"));
+        assert_eq!(item.icon.as_deref(), Some("bookmark"));
+    }
+
+    #[tokio::test]
+    async fn test_snapshot_revert() {
+        let (facade, _dir) = create_test_facade().await;
+        let dummy_path = _dir.path().join("dummy.wav");
+        std::fs::write(&dummy_path, b"audio").unwrap();
+        let history_id = "test-snap-revert".to_string();
+        let hid_clone = history_id.clone();
+        facade
+            .services
+            .history
+            .mutation_file(move |s| {
+                s.save_imported_file(sona_core::history::HistorySaveImportedFileRequest {
+                    id: Some(hid_clone),
+                    source_path: dummy_path.to_string_lossy().to_string(),
+                    segments: vec![TranscriptSegment {
+                        id: "seg-1".to_string(),
+                        text: "Version 1 text".to_string(),
+                        start: 0.0,
+                        end: 2.0,
+                        is_final: true,
+                        timing: None,
+                        tokens: None,
+                        timestamps: None,
+                        durations: None,
+                        translation: None,
+                        speaker: None,
+                        speaker_attribution: None,
+                    }],
+                    duration: 2.0,
+                    tag_ids: vec![],
+                    project_id: None,
+                    converted_source_path: None,
+                })
+            })
+            .await
+            .unwrap();
+
+        // Edit to version 2 (creates a snapshot of version 1)
+        let edit_v2 = facade
+            .edit_transcript(EditTranscriptRequest {
+                history_id: history_id.clone(),
+                segments: vec![RelaxedTranscriptSegmentInput {
+                    id: Some("seg-1".to_string()),
+                    text: Some("Version 2 text".to_string()),
+                    start: None,
+                    end: None,
+                    is_final: None,
+                    translation: None,
+                }],
+                reason: Some("Edit to v2".to_string()),
+            })
+            .await
+            .unwrap();
+        assert!(edit_v2.success);
+
+        // Verify snapshots list
+        let snaps = facade
+            .list_transcript_snapshots(history_id.clone())
+            .await
+            .unwrap();
+        assert!(!snaps.is_empty());
+        let snap_id = snaps[0].id.clone();
+
+        // Edit to version 3
+        let edit_v3 = facade
+            .edit_transcript(EditTranscriptRequest {
+                history_id: history_id.clone(),
+                segments: vec![RelaxedTranscriptSegmentInput {
+                    id: Some("seg-1".to_string()),
+                    text: Some("Version 3 text".to_string()),
+                    start: None,
+                    end: None,
+                    is_final: None,
+                    translation: None,
+                }],
+                reason: Some("Edit to v3".to_string()),
+            })
+            .await
+            .unwrap();
+        assert!(edit_v3.success);
+
+        let current_v3 = facade.read_transcript(history_id.clone()).await.unwrap();
+        assert_eq!(current_v3.segments[0].text, "Version 3 text");
+
+        // Revert to snapshot
+        let revert_res = facade
+            .revert_transcript_snapshot(history_id.clone(), snap_id)
+            .await
+            .unwrap();
+        assert!(revert_res.success);
+
+        // Verify text was reverted back
+        let current_reverted = facade.read_transcript(history_id.clone()).await.unwrap();
+        assert_eq!(current_reverted.segments[0].text, "Version 1 text");
+    }
+
+    #[tokio::test]
+    async fn test_audio_device_listing() {
+        let (facade, _dir) = create_test_facade().await;
+        let devices = facade.list_audio_devices().await.unwrap();
+        // Even if empty in headless/container environments, lists must be returned without errors
+        let val = serde_json::to_value(&devices).unwrap();
+        assert!(val.get("microphones").is_some());
+        assert!(val.get("systemDevices").is_some());
+        assert!(val.get("microphones").unwrap().is_array());
+        assert!(val.get("systemDevices").unwrap().is_array());
     }
 }

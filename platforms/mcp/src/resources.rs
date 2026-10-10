@@ -47,6 +47,20 @@ pub fn list_resources() -> Vec<ResourceDefinition> {
             description: Some("List of deleted history items currently in trash"),
             mime_type: Some("application/json"),
         },
+        ResourceDefinition {
+            uri: "sona://audio/devices",
+            name: "Sona Audio Devices",
+            title: Some("Audio Devices"),
+            description: Some("Available microphone and system audio loopback capture devices"),
+            mime_type: Some("application/json"),
+        },
+        ResourceDefinition {
+            uri: "sona://sync/conflicts",
+            name: "Sona Sync Conflicts",
+            title: Some("Sync Conflicts"),
+            description: Some("Unresolved E2EE sync conflicts requiring manual intervention"),
+            mime_type: Some("application/json"),
+        },
     ]
 }
 
@@ -72,6 +86,15 @@ pub fn list_resource_templates() -> Vec<ResourceTemplateDefinition> {
             title: Some("History Translation"),
             description: Some("Read-only translation content for a specific history record by ID"),
             mime_type: Some("text/plain"),
+        },
+        ResourceTemplateDefinition {
+            uri_template: "sona://history/{history_id}/snapshots",
+            name: "Sona History Snapshots",
+            title: Some("History Snapshots"),
+            description: Some(
+                "Version snapshot history and metadata for a specific history record by ID",
+            ),
+            mime_type: Some("application/json"),
         },
     ]
 }
@@ -127,6 +150,26 @@ pub async fn read_resource(uri: &str, client: &IpcClient) -> Result<ResourceCont
             mime_type: Some("application/json"),
             text,
         })
+    } else if uri == "sona://audio/devices" {
+        let val = client
+            .call("sona_list_audio_devices", serde_json::json!({}))
+            .await?;
+        let text = serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string());
+        Ok(ResourceContent {
+            uri: uri.to_string(),
+            mime_type: Some("application/json"),
+            text,
+        })
+    } else if uri == "sona://sync/conflicts" {
+        let val = client
+            .call("sona_list_sync_conflicts", serde_json::json!({}))
+            .await?;
+        let text = serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string());
+        Ok(ResourceContent {
+            uri: uri.to_string(),
+            mime_type: Some("application/json"),
+            text,
+        })
     } else if let Some(rest) = uri.strip_prefix("sona://history/") {
         if let Some(history_id) = rest.strip_suffix("/summary") {
             let val = client
@@ -144,6 +187,19 @@ pub async fn read_resource(uri: &str, client: &IpcClient) -> Result<ResourceCont
             Ok(ResourceContent {
                 uri: uri.to_string(),
                 mime_type: Some("text/markdown"),
+                text,
+            })
+        } else if let Some(history_id) = rest.strip_suffix("/snapshots") {
+            let val = client
+                .call(
+                    "sona_list_transcript_snapshots",
+                    serde_json::json!({ "history_id": history_id }),
+                )
+                .await?;
+            let text = serde_json::to_string_pretty(&val).unwrap_or_else(|_| val.to_string());
+            Ok(ResourceContent {
+                uri: uri.to_string(),
+                mime_type: Some("application/json"),
                 text,
             })
         } else if let Some(history_id) = rest.strip_suffix("/translation") {

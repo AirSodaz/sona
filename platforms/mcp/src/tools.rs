@@ -44,19 +44,41 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "sona_start_recording",
             title: Some("Start Recording"),
-            description: "Start microphone capture and live transcription in Sona desktop client.",
+            description: "Start audio capture (microphone or system audio loopback) and live transcription in Sona desktop client.",
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
+                    "source": {
+                        "type": "string",
+                        "enum": ["microphone", "system"],
+                        "description": "Audio source: 'microphone' for mic capture or 'system' for WASAPI system audio loopback (default 'microphone')",
+                        "default": "microphone"
+                    },
                     "project_id": {
                         "type": "string",
                         "description": "Optional project ID to associate with the recording"
                     },
                     "device_name": {
                         "type": "string",
-                        "description": "Optional specific microphone device name"
+                        "description": "Optional specific audio device name"
                     }
                 }
+            }),
+        },
+        ToolDefinition {
+            name: "sona_control_recording",
+            title: Some("Control Recording"),
+            description: "Unified controller for active recording lifecycle: pause, resume, stop (save), or discard.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "action": {
+                        "type": "string",
+                        "enum": ["pause", "resume", "stop", "discard"],
+                        "description": "Recording action to execute: 'pause', 'resume', 'stop' (finalizes into history), or 'discard' (deletes draft)"
+                    }
+                },
+                "required": ["action"]
             }),
         },
         ToolDefinition {
@@ -72,6 +94,87 @@ pub fn list_tools() -> Vec<ToolDefinition> {
                         "default": false
                     }
                 }
+            }),
+        },
+        ToolDefinition {
+            name: "sona_revert_transcript_snapshot",
+            title: Some("Revert Transcript Snapshot"),
+            description: "Rollback transcript segments to a previous historical version snapshot.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "Target history record ID"
+                    },
+                    "snapshot_id": {
+                        "type": "string",
+                        "description": "Target snapshot ID to revert back to"
+                    }
+                },
+                "required": ["history_id", "snapshot_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_update_history_meta",
+            title: Some("Update History Metadata"),
+            description: "Update history item title, project assignment, or icon metadata.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item record ID"
+                    },
+                    "title": {
+                        "type": "string",
+                        "description": "New title for the history item"
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "description": "Optional project ID to assign item to (null or empty string to unassign)"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "description": "Optional icon identifier"
+                    }
+                },
+                "required": ["history_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_delete_preset_model",
+            title: Some("Delete Preset Model"),
+            description: "Physically delete an installed local preset model from disk to free storage space.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "model_id": {
+                        "type": "string",
+                        "description": "Model ID to physically delete from disk"
+                    }
+                },
+                "required": ["model_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_resolve_sync_conflict",
+            title: Some("Resolve Sync Conflict"),
+            description: "Resolve an unresolved E2EE sync conflict between local and remote versions.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "conflict_id": {
+                        "type": "string",
+                        "description": "Conflict ID from sona://sync/conflicts"
+                    },
+                    "resolution": {
+                        "type": "string",
+                        "enum": ["keep_current", "use_conflicting", "keep_both"],
+                        "description": "Resolution decision: 'keep_current' (retain local), 'use_conflicting' (overwrite with remote), or 'keep_both' (fork both copies)"
+                    }
+                },
+                "required": ["conflict_id", "resolution"]
             }),
         },
         ToolDefinition {
@@ -673,6 +776,87 @@ pub async fn call_tool(
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),
         },
+        "sona_control_recording" => {
+            let action = match arguments.get("action").and_then(|v| v.as_str()) {
+                Some(a) => a,
+                None => {
+                    return ToolCallResult::error(
+                        "INVALID_PARAMS: Missing required 'action' argument ('pause', 'resume', 'stop', or 'discard')"
+                            .to_string(),
+                    );
+                }
+            };
+            match action {
+                "pause" => match client
+                    .call("sona_pause_recording", serde_json::json!({}))
+                    .await
+                {
+                    Ok(val) => ToolCallResult::json(&val),
+                    Err(err) => ToolCallResult::error(err),
+                },
+                "resume" => match client
+                    .call("sona_resume_recording", serde_json::json!({}))
+                    .await
+                {
+                    Ok(val) => ToolCallResult::json(&val),
+                    Err(err) => ToolCallResult::error(err),
+                },
+                "stop" => {
+                    match client
+                        .call(
+                            "sona_stop_recording",
+                            serde_json::json!({ "discard": false }),
+                        )
+                        .await
+                    {
+                        Ok(val) => ToolCallResult::json(&val),
+                        Err(err) => ToolCallResult::error(err),
+                    }
+                }
+                "discard" => {
+                    match client
+                        .call(
+                            "sona_stop_recording",
+                            serde_json::json!({ "discard": true }),
+                        )
+                        .await
+                    {
+                        Ok(val) => ToolCallResult::json(&val),
+                        Err(err) => ToolCallResult::error(err),
+                    }
+                }
+                other => ToolCallResult::error(format!(
+                    "INVALID_ACTION: Unknown recording control action '{other}', expected 'pause', 'resume', 'stop', or 'discard'"
+                )),
+            }
+        }
+        "sona_revert_transcript_snapshot" => {
+            match client
+                .call("sona_revert_transcript_snapshot", arguments)
+                .await
+            {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
+        "sona_update_history_meta" => {
+            match client.call("sona_update_history_meta", arguments).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
+        "sona_delete_preset_model" => {
+            match client.call("sona_delete_preset_model", arguments).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
+        "sona_resolve_sync_conflict" => {
+            match client.call("sona_resolve_sync_conflict", arguments).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
         "sona_query_history" => match client.call("sona_query_history", arguments).await {
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),

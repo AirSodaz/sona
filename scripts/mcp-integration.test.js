@@ -159,6 +159,45 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 						];
 					} else if (req.method === "sona_restore_history") {
 						result = { success: true };
+					} else if (req.method === "sona_pause_recording") {
+						result = { success: true };
+					} else if (req.method === "sona_resume_recording") {
+						result = { success: true };
+					} else if (req.method === "sona_list_audio_devices") {
+						result = {
+							microphones: [{ name: "Default Microphone" }],
+							systemDevices: [{ name: "Default System Loopback" }],
+						};
+					} else if (req.method === "sona_list_transcript_snapshots") {
+						result = [
+							{
+								id: "snap-1",
+								history_id: "hist-123",
+								reason: "manual_edit",
+								timestamp: 1700000000,
+								segment_count: 1,
+							},
+						];
+					} else if (req.method === "sona_revert_transcript_snapshot") {
+						result = {
+							success: true,
+							snapshotId: "snap-revert-1",
+							segmentCount: 1,
+						};
+					} else if (req.method === "sona_update_history_meta") {
+						result = { success: true };
+					} else if (req.method === "sona_delete_preset_model") {
+						result = { success: true };
+					} else if (req.method === "sona_list_sync_conflicts") {
+						result = [
+							{
+								conflictId: "conf-1",
+								itemId: "hist-123",
+								conflictType: "concurrent_modification",
+							},
+						];
+					} else if (req.method === "sona_resolve_sync_conflict") {
+						result = { success: true };
 					}
 					const resp = { jsonrpc: "2.0", id: req.id, result };
 					stream.write(`${JSON.stringify(resp)}\n`);
@@ -245,7 +284,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(tools.result.resultType, "complete");
 		assert.equal(tools.result.ttlMs, 300000);
 		assert.equal(tools.result.cacheScope, "public");
-		assert.equal(tools.result.tools.length, 32);
+		assert.equal(tools.result.tools.length, 37);
 		assert.equal(tools.result.tools[0].title, "Get Client State");
 
 		// 2b. resources/list
@@ -257,7 +296,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(resList.result.resultType, "complete");
 		assert.equal(resList.result.ttlMs, 300000);
 		assert.equal(resList.result.cacheScope, "public");
-		assert.equal(resList.result.resources.length, 6);
+		assert.equal(resList.result.resources.length, 8);
 		assert.equal(resList.result.resources[0].title, "Client Status");
 		assert.ok(
 			resList.result.resources.some(
@@ -269,6 +308,12 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 			resList.result.resources.some((r) => r.uri === "sona://sync/status"),
 		);
 		assert.ok(resList.result.resources.some((r) => r.uri === "sona://trash"));
+		assert.ok(
+			resList.result.resources.some((r) => r.uri === "sona://audio/devices"),
+		);
+		assert.ok(
+			resList.result.resources.some((r) => r.uri === "sona://sync/conflicts"),
+		);
 
 		// 2c. resources/templates/list
 		const resTemplates = await send({
@@ -279,7 +324,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(resTemplates.result.resultType, "complete");
 		assert.equal(resTemplates.result.ttlMs, 300000);
 		assert.equal(resTemplates.result.cacheScope, "public");
-		assert.equal(resTemplates.result.resourceTemplates.length, 3);
+		assert.equal(resTemplates.result.resourceTemplates.length, 4);
 		assert.ok(
 			resTemplates.result.resourceTemplates.some(
 				(r) => r.uriTemplate === "sona://history/{history_id}",
@@ -293,6 +338,11 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.ok(
 			resTemplates.result.resourceTemplates.some(
 				(r) => r.uriTemplate === "sona://history/{history_id}/translation",
+			),
+		);
+		assert.ok(
+			resTemplates.result.resourceTemplates.some(
+				(r) => r.uriTemplate === "sona://history/{history_id}/snapshots",
 			),
 		);
 		// 2d. prompts/list
@@ -748,6 +798,83 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		const parsedRestoreHist = JSON.parse(restoreHist.result.content[0].text);
 		assert.equal(parsedRestoreHist.success, true);
 
+
+		// 16b. Unified recording controller (pause, resume)
+		const ctrlPause = await send({
+			jsonrpc: "2.0",
+			id: 1701,
+			method: "tools/call",
+			params: {
+				name: "sona_control_recording",
+				arguments: { action: "pause" },
+			},
+		});
+		const parsedCtrlPause = JSON.parse(ctrlPause.result.content[0].text);
+		assert.equal(parsedCtrlPause.success, true);
+
+		const ctrlResume = await send({
+			jsonrpc: "2.0",
+			id: 1702,
+			method: "tools/call",
+			params: {
+				name: "sona_control_recording",
+				arguments: { action: "resume" },
+			},
+		});
+		const parsedCtrlResume = JSON.parse(ctrlResume.result.content[0].text);
+		assert.equal(parsedCtrlResume.success, true);
+
+		// 16c. Revert transcript snapshot
+		const revertSnap = await send({
+			jsonrpc: "2.0",
+			id: 1703,
+			method: "tools/call",
+			params: {
+				name: "sona_revert_transcript_snapshot",
+				arguments: { history_id: "hist-123", snapshot_id: "snap-1" },
+			},
+		});
+		const parsedRevertSnap = JSON.parse(revertSnap.result.content[0].text);
+		assert.equal(parsedRevertSnap.success, true);
+		assert.equal(parsedRevertSnap.snapshotId, "snap-revert-1");
+		// 16d. Update history meta
+		const updMeta = await send({
+			jsonrpc: "2.0",
+			id: 1704,
+			method: "tools/call",
+			params: {
+				name: "sona_update_history_meta",
+				arguments: { history_id: "hist-123", title: "New Title", project_id: "p-1" },
+			},
+		});
+		const parsedUpdMeta = JSON.parse(updMeta.result.content[0].text);
+		assert.equal(parsedUpdMeta.success, true);
+
+		// 16e. Delete preset model
+		const delModel = await send({
+			jsonrpc: "2.0",
+			id: 1705,
+			method: "tools/call",
+			params: {
+				name: "sona_delete_preset_model",
+				arguments: { model_id: "whisper-base" },
+			},
+		});
+		const parsedDelModel = JSON.parse(delModel.result.content[0].text);
+		assert.equal(parsedDelModel.success, true);
+
+		// 16f. Resolve sync conflict
+		const resConflict = await send({
+			jsonrpc: "2.0",
+			id: 1706,
+			method: "tools/call",
+			params: {
+				name: "sona_resolve_sync_conflict",
+				arguments: { conflict_id: "conf-1", resolution: "keep_current" },
+			},
+		});
+		const parsedResConflict = JSON.parse(resConflict.result.content[0].text);
+		assert.equal(parsedResConflict.success, true);
 		// 17. New Resources Read
 		// 17a. sona://models
 		const resModels = await send({
@@ -799,6 +926,37 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(resTrans.result.contents[0].text, "Bonjour le monde");
 		assert.equal(resTrans.result.contents[0].mimeType, "text/plain");
 
+
+		// 17f. sona://audio/devices
+		const resAudioDev = await send({
+			jsonrpc: "2.0",
+			id: 181,
+			method: "resources/read",
+			params: { uri: "sona://audio/devices" },
+		});
+		const parsedAudioDev = JSON.parse(resAudioDev.result.contents[0].text);
+		assert.ok(Array.isArray(parsedAudioDev.microphones));
+		assert.ok(Array.isArray(parsedAudioDev.systemDevices));
+		// 17g. sona://sync/conflicts
+		const resSyncConf = await send({
+			jsonrpc: "2.0",
+			id: 182,
+			method: "resources/read",
+			params: { uri: "sona://sync/conflicts" },
+		});
+		const parsedSyncConf = JSON.parse(resSyncConf.result.contents[0].text);
+		assert.ok(Array.isArray(parsedSyncConf));
+		assert.equal(parsedSyncConf[0].conflictId, "conf-1");
+		// 17h. sona://history/hist-123/snapshots
+		const resSnapshots = await send({
+			jsonrpc: "2.0",
+			id: 183,
+			method: "resources/read",
+			params: { uri: "sona://history/hist-123/snapshots" },
+		});
+		const parsedSnapshots = JSON.parse(resSnapshots.result.contents[0].text);
+		assert.ok(Array.isArray(parsedSnapshots));
+		assert.equal(parsedSnapshots[0].id, "snap-1");
 		// 15c. Negative tests for MCP 2026-07-28 error codes
 		// Unsupported protocol version -> code -32022
 		const unsupported = await send({

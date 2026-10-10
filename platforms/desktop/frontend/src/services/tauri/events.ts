@@ -52,6 +52,7 @@ export const TauriEvent = {
 
 export interface AgentRecordingStatusPayload {
   active: boolean;
+  isPaused?: boolean;
   historyId?: string;
 }
 

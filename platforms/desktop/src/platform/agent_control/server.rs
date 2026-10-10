@@ -2,7 +2,7 @@ use super::facade::{
     AgentControlFacade, CreateProjectRequest, DownloadPresetModelRequest, EditTranscriptRequest,
     ExportTranscriptRequest, PatchSegmentsRequest, QueryHistoryRequest, QueryTrashRequest,
     SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest,
-    UpdateProjectRequest, UpdateTranslationsRequest,
+    UpdateHistoryMetaRequest, UpdateProjectRequest, UpdateTranslationsRequest,
 };
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -114,9 +114,31 @@ fn parse_optional_project_id(params: &Option<serde_json::Value>) -> Option<Strin
         Some(serde_json::Value::Object(map)) => map
             .get("project_id")
             .or_else(|| map.get("projectId"))
+            .or_else(|| map.get("id"))
             .and_then(|v| v.as_str())
             .map(ToString::to_string),
         _ => None,
+    }
+}
+
+fn extract_project_id(params: &Option<serde_json::Value>) -> Result<String, (i32, String)> {
+    match params.as_ref() {
+        Some(serde_json::Value::String(s)) => Ok(s.clone()),
+        Some(serde_json::Value::Object(map)) => {
+            if let Some(serde_json::Value::String(s)) = map
+                .get("project_id")
+                .or_else(|| map.get("projectId"))
+                .or_else(|| map.get("id"))
+            {
+                Ok(s.clone())
+            } else {
+                Err((-32602, "Missing 'project_id' or 'id' parameter".to_string()))
+            }
+        }
+        _ => Err((
+            -32602,
+            "Invalid or missing parameters for project id".to_string(),
+        )),
     }
 }
 
@@ -237,6 +259,68 @@ pub async fn dispatch_rpc_call(
             let req: StopRecordingRequest = parse_params(params)?;
             let res = facade.stop_recording(req).await.map_err(|e| (-32000, e))?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "pause_recording" => {
+            let res = facade.pause_recording().await.map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "resume_recording" => {
+            let res = facade.resume_recording().await.map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "list_audio_devices" => {
+            let res = facade.list_audio_devices().await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "list_transcript_snapshots" => {
+            let history_id = extract_history_id(&params)?;
+            let res = facade
+                .list_transcript_snapshots(history_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "revert_transcript_snapshot" => {
+            let history_id = extract_history_id(&params)?;
+            let snapshot_id = extract_string_param(&params, "snapshot_id")?;
+            let res = facade
+                .revert_transcript_snapshot(history_id, snapshot_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "update_history_meta" => {
+            let history_id = extract_history_id(&params)?;
+            let req: UpdateHistoryMetaRequest = parse_params(params)?;
+            let res = facade
+                .update_history_meta(history_id, req)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "delete_preset_model" => {
+            let model_id = extract_string_param(&params, "model_id")?;
+            let res = facade
+                .delete_preset_model(model_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "list_sync_conflicts" => {
+            let res = facade
+                .list_sync_conflicts()
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "resolve_sync_conflict" => {
+            let conflict_id = extract_string_param(&params, "conflict_id")?;
+            let resolution = extract_string_param(&params, "resolution")?;
+            let res = facade
+                .resolve_sync_conflict(conflict_id, resolution)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
         }
         "query_history" => {
             let req: QueryHistoryRequest = parse_params(params)?;
@@ -375,7 +459,7 @@ pub async fn dispatch_rpc_call(
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "update_project" => {
-            let project_id = extract_string_param(&params, "project_id")?;
+            let project_id = extract_project_id(&params)?;
             let req: UpdateProjectRequest = parse_params(params)?;
             let res = facade
                 .update_project(project_id, req)
@@ -384,7 +468,7 @@ pub async fn dispatch_rpc_call(
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "delete_project" => {
-            let project_id = extract_string_param(&params, "project_id")?;
+            let project_id = extract_project_id(&params)?;
             let cascade_action = parse_optional_string(&params, "cascade_action");
             let res = facade
                 .delete_project(project_id, cascade_action)
@@ -798,6 +882,47 @@ mod tests {
         let unknown = dispatch_rpc_call("unknown_method", None, &facade).await;
         assert!(unknown.is_err());
         assert_eq!(unknown.unwrap_err().0, -32601);
+    }
+
+    #[tokio::test]
+    async fn test_project_id_alias_dispatch() {
+        let (facade, _dir) = create_test_facade().await;
+
+        // 1. Create a project
+        let create_res = dispatch_rpc_call(
+            "sona_create_project",
+            Some(serde_json::json!({ "name": "Test Project" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        let proj_id = create_res.get("id").and_then(|v| v.as_str()).unwrap();
+
+        // 2. Update with {"id": ...} instead of {"project_id": ...}
+        let update_res = dispatch_rpc_call(
+            "sona_update_project",
+            Some(serde_json::json!({ "id": proj_id, "name": "Renamed Project" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            update_res.get("name").and_then(|v| v.as_str()),
+            Some("Renamed Project")
+        );
+
+        // 3. Delete with {"id": ...}
+        let delete_res = dispatch_rpc_call(
+            "sona_delete_project",
+            Some(serde_json::json!({ "id": proj_id })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            delete_res.get("success").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 
     #[tokio::test]

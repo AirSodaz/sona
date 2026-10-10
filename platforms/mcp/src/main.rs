@@ -453,7 +453,7 @@ mod tests {
             Some("public")
         );
         let tools = result.get("tools").and_then(|t| t.as_array()).unwrap();
-        assert_eq!(tools.len(), 32);
+        assert_eq!(tools.len(), 37);
         assert_eq!(
             tools[0].get("title").and_then(|t| t.as_str()),
             Some("Get Client State")
@@ -477,7 +477,7 @@ mod tests {
             .get("resourceTemplates")
             .and_then(|r| r.as_array())
             .unwrap();
-        assert_eq!(templates.len(), 3);
+        assert_eq!(templates.len(), 4);
         let uris: Vec<&str> = templates
             .iter()
             .filter_map(|t| t.get("uriTemplate").and_then(|u| u.as_str()))
@@ -504,7 +504,7 @@ mod tests {
         );
         assert_eq!(result.get("ttlMs").and_then(|t| t.as_i64()), Some(300000));
         let resources = result.get("resources").and_then(|r| r.as_array()).unwrap();
-        assert_eq!(resources.len(), 6);
+        assert_eq!(resources.len(), 8);
         assert_eq!(
             resources[0].get("title").and_then(|t| t.as_str()),
             Some("Client Status")
