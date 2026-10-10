@@ -184,7 +184,9 @@ fn create_overview(
     let item_count = history_items.len() as u64;
     let untagged_count = history_items
         .iter()
-        .filter(|item| item.deleted_at.is_none() && item.tag_ids.is_empty())
+        .filter(|item| {
+            item.deleted_at.is_none() && item.project_id.is_none() && item.tag_ids.is_empty()
+        })
         .count() as u64;
 
     let total_duration_seconds = history_items.iter().map(|item| item.duration).sum();

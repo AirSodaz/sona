@@ -48,8 +48,8 @@ pub use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
-    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
-    HistoryUpdateTranscriptRequest,
+    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 pub use sona_core::history::{
     HistoryAudioCleanupReport, HistoryAudioCleanupRequest, HistoryAudioStatus,
@@ -726,6 +726,7 @@ pub fn desktop_types() -> specta::Types {
         .register::<HistoryItemMetaPatch>()
         .register::<HistoryUpdateItemMetaRequest>()
         .register::<HistoryTrashItemsRequest>()
+        .register::<HistoryUpdateProjectAssignmentsRequest>()
         .register::<HistoryUpdateTagAssignmentsRequest>()
         .register::<HistoryReplaceTagAssignmentsRequest>()
         .register::<HistoryAudioCleanupRequest>()
@@ -986,6 +987,7 @@ const EXPORTED_CORE_TYPE_NAMES: &[&str] = &[
     "HistoryItemMetaPatch",
     "HistoryUpdateItemMetaRequest",
     "HistoryTrashItemsRequest",
+    "HistoryUpdateProjectAssignmentsRequest",
     "HistoryUpdateTagAssignmentsRequest",
     "HistoryReplaceTagAssignmentsRequest",
     "HistoryAudioCleanupRequest",
@@ -1311,7 +1313,7 @@ mod tests {
 
         for expected in [
             "export type RustTauriCommandContractMap = {",
-            "\"tag_update\": {",
+            "\"project_update\": {",
             "\"task_ledger_patch_task\": {",
             "\"recovery_save_snapshot\": {",
             "\"automation_validate_rule_activation\": {",
@@ -1811,6 +1813,7 @@ mod tests {
         assert_specta_type::<HistoryItemMetaPatch>();
         assert_specta_type::<HistoryUpdateItemMetaRequest>();
         assert_specta_type::<HistoryTrashItemsRequest>();
+        assert_specta_type::<HistoryUpdateProjectAssignmentsRequest>();
         assert_specta_type::<HistoryUpdateTagAssignmentsRequest>();
         assert_specta_type::<HistoryReplaceTagAssignmentsRequest>();
         assert_specta_type::<HistoryAudioCleanupRequest>();

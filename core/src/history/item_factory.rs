@@ -156,7 +156,7 @@ fn build_history_item_record(
         icon,
         kind,
         search_content: String::new(),
-        project_id: project_id.or_else(|| tag_ids.first().cloned()),
+        project_id,
         tag_ids,
         deleted_at: None,
         status: HistoryItemStatus::Complete,

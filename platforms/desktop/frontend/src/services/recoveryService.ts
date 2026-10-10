@@ -284,7 +284,6 @@ function queueSnapshotWrite(
 }
 
 export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
-  const tagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
   return {
     id: item.id,
     recoveryId: item.id,
@@ -296,8 +295,8 @@ export function toBatchQueueItem(item: RecoveredQueueItem): BatchQueueItem {
     audioUrl: null,
     historyId: item.historyId,
     historyTitle: item.historyTitle,
-    projectId: item.projectId ?? tagIds[0] ?? null,
-    tagIds,
+    projectId: item.projectId ?? null,
+    tagIds: item.tagIds ?? [],
     origin: item.source === 'automation' ? 'automation' : 'manual',
     automationRuleId: item.automationRuleId,
     automationRuleName: item.automationRuleName,

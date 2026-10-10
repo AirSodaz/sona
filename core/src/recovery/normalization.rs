@@ -59,7 +59,7 @@ impl RecoveryItemInput {
             resolution,
             progress: self.progress.unwrap_or(0.0),
             segments: normalize_segments(self.segments),
-            tag_ids: normalized_tag_ids(self.tag_ids, self.project_id),
+            tag_ids: self.tag_ids,
             history_id: self.history_id,
             history_title: self.history_title,
             last_known_stage: normalize_stage(self.last_known_stage.as_deref()),
@@ -117,7 +117,7 @@ impl RecoveryItemInput {
             resolution,
             progress: self.progress.unwrap_or(0.0),
             segments: normalize_segments(self.segments),
-            tag_ids: normalized_tag_ids(self.tag_ids, self.project_id),
+            tag_ids: self.tag_ids,
             history_id: self.history_id,
             history_title: self.history_title,
             last_known_stage: normalize_stage(self.last_known_stage.as_deref()),
@@ -411,16 +411,6 @@ fn filename_from_path(path: &str) -> String {
         .filter(|value| !value.is_empty())
         .unwrap_or(path)
         .to_string()
-}
-
-fn normalized_tag_ids(tag_ids: Vec<String>, project_id: Option<String>) -> Vec<String> {
-    if !tag_ids.is_empty() {
-        return tag_ids;
-    }
-    project_id
-        .filter(|project_id| !matches!(project_id.as_str(), "" | "inbox" | "none"))
-        .into_iter()
-        .collect()
 }
 
 fn non_empty_string(value: Option<String>) -> Option<String> {

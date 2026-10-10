@@ -14,7 +14,6 @@ pub mod speaker;
 pub mod storage;
 pub mod sync;
 pub mod system;
-pub mod tag;
 pub mod task_ledger;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
@@ -23,14 +22,6 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::archive::extract_tar_bz2,
         crate::commands::archive::create_tar_bz2,
         crate::commands::system::get_dashboard_snapshot,
-        crate::commands::tag::tag_list,
-        crate::commands::tag::tag_save_all,
-        crate::commands::tag::tag_create,
-        crate::commands::tag::tag_update,
-        crate::commands::tag::tag_delete,
-        crate::commands::tag::tag_reorder,
-        crate::commands::tag::tag_get_active_id,
-        crate::commands::tag::tag_set_active_id,
         crate::commands::project::project_list,
         crate::commands::project::project_create,
         crate::commands::project::project_update,
@@ -76,8 +67,6 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::history::history_update_item_meta,
         crate::commands::history::history_update_project_assignments,
         crate::commands::history::history_reassign_project,
-        crate::commands::history::history_update_tag_assignments,
-        crate::commands::history::history_replace_tag_assignments,
         crate::commands::history::history_load_summary,
         crate::commands::history::history_save_summary,
         crate::commands::history::history_delete_summary,

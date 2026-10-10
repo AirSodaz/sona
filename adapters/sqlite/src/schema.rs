@@ -1,7 +1,7 @@
 use super::{Database, DatabaseError};
 
 pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 9;
-const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 7;
+const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
 
 /// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
 pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
@@ -30,10 +30,8 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
                 [CURRENT_SCHEMA_VERSION],
             )?;
         } else {
-            if applied_version < 8 {
-                migrate_v8(tx)?;
-                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [8])?;
-            }
+            // Legacy v7 and earlier schemas (the tag era) are deprecated and no longer
+            // auto-migrated. Only v8 -> v9 migration remains active.
             if applied_version < 9 {
                 migrate_v9(tx)?;
                 tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
@@ -981,13 +979,13 @@ mod tests {
             err,
             DatabaseError::UnsupportedLegacySchemaVersion {
                 found: 6,
-                minimum: 7
+                minimum: 8
             }
         ));
     }
 
     #[test]
-    fn test_v7_schema_is_migrated_to_v8() {
+    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v9() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         connection
             .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
@@ -1000,25 +998,6 @@ mod tests {
         migrate_v5(&tx).unwrap();
         migrate_v6(&tx).unwrap();
         migrate_v7(&tx).unwrap();
-
-        tx.execute(
-            "INSERT INTO tags (id, name, description, icon, color, sort_order, created_at, updated_at)
-             VALUES ('proj-1', 'Project One', '', 'folder', '#2563EB', 0, 100, 200)",
-            [],
-        )
-        .unwrap();
-        tx.execute(
-            "INSERT INTO history_items (id, timestamp, duration, title)
-             VALUES ('item-1', 1000, 5.0, 'Test Item')",
-            [],
-        )
-        .unwrap();
-        tx.execute(
-            "INSERT INTO history_item_tags (history_id, tag_id)
-             VALUES ('item-1', 'proj-1')",
-            [],
-        )
-        .unwrap();
 
         tx.execute(
             "CREATE TABLE schema_version (version INTEGER PRIMARY KEY)",
@@ -1039,34 +1018,35 @@ mod tests {
         drop(backup);
         drop(disk_conn);
 
-        let db = Database::open(temp.path()).unwrap();
-        assert_eq!(schema_versions(&db), vec![7, 8, 9]);
+        // v7 database must be rejected since minimum supported version is 8
+        let err = Database::open(temp.path()).unwrap_err();
+        assert!(matches!(
+            err,
+            DatabaseError::UnsupportedLegacySchemaVersion {
+                found: 7,
+                minimum: 8
+            }
+        ));
 
-        db.with_connection(|conn| {
-            let pipelines_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'project_pipelines'",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!(pipelines_count, 1);
+        // v8 database must be auto-migrated to v9
+        let tx = connection.transaction().unwrap();
+        migrate_v8(&tx).unwrap();
+        tx.execute("INSERT INTO schema_version (version) VALUES (8)", [])
+            .unwrap();
+        tx.commit().unwrap();
 
-            let project_id: String = conn.query_row(
-                "SELECT project_id FROM history_items WHERE id = 'item-1'",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!(project_id, "proj-1");
+        let temp_v8 = tempfile::tempdir().unwrap();
+        let db_path_v8 = temp_v8.path().join("sona.db");
+        let mut disk_conn_v8 = rusqlite::Connection::open(&db_path_v8).unwrap();
+        let backup_v8 = rusqlite::backup::Backup::new(&connection, &mut disk_conn_v8).unwrap();
+        backup_v8
+            .run_to_completion(5, std::time::Duration::from_millis(10), None)
+            .unwrap();
+        drop(backup_v8);
+        drop(disk_conn_v8);
 
-            let index_count: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_history_items_project_id'",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!(index_count, 1);
-
-            Ok(())
-        })
-        .unwrap();
+        let db_v8 = Database::open(temp_v8.path()).unwrap();
+        assert_eq!(schema_versions(&db_v8), vec![7, 8, 9]);
     }
 
     #[test]

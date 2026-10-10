@@ -207,7 +207,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     assert_eq!(
         writer_items
             .iter()
-            .filter(|item| !item.tag_ids.is_empty())
+            .filter(|item| item.project_id.is_some())
             .count(),
         1
     );
@@ -224,7 +224,7 @@ fn read_only_dashboard_composes_all_ports_without_mutating_active_wal() {
     assert_eq!(
         read_only_items
             .iter()
-            .filter(|item| !item.tag_ids.is_empty())
+            .filter(|item| item.project_id.is_some())
             .count(),
         1
     );

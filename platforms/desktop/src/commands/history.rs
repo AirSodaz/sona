@@ -15,8 +15,8 @@ use sona_core::history::HistorySummaryPayload;
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
-    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
 use sona_core::history_store::HistoryStore;
@@ -411,43 +411,16 @@ pub async fn history_update_item_meta(
 }
 
 #[tauri::command]
-pub async fn history_update_tag_assignments(
-    services: State<'_, DesktopServices>,
-    ids: Vec<String>,
-    add_tag_ids: Vec<String>,
-    remove_tag_ids: Vec<String>,
-) -> Result<(), String> {
-    let request = HistoryUpdateTagAssignmentsRequest {
-        ids,
-        add_tag_ids,
-        remove_tag_ids,
-    };
-    services
-        .history
-        .mutation_db(move |service| service.update_tag_assignments(request))
-        .await
-}
-
-#[tauri::command]
-pub async fn history_replace_tag_assignments(
-    services: State<'_, DesktopServices>,
-    ids: Vec<String>,
-    tag_ids: Vec<String>,
-) -> Result<(), String> {
-    let request = HistoryReplaceTagAssignmentsRequest { ids, tag_ids };
-    services
-        .history
-        .mutation_db(move |service| service.replace_tag_assignments(request))
-        .await
-}
-
-#[tauri::command]
 pub async fn history_update_project_assignments(
     services: State<'_, DesktopServices>,
     ids: Vec<String>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    history_replace_tag_assignments(services, ids, project_id.into_iter().collect()).await
+    let request = HistoryUpdateProjectAssignmentsRequest { ids, project_id };
+    services
+        .history
+        .mutation_db(move |service| service.update_project_assignments(request))
+        .await
 }
 
 #[tauri::command]
@@ -467,20 +440,18 @@ pub async fn history_reassign_project(
         .await?;
     let ids = items
         .into_iter()
-        .filter(|item| item.tag_ids.contains(&current_project_id))
+        .filter(|item| item.project_id.as_deref() == Some(&current_project_id))
         .map(|item| item.id)
         .collect();
-    let request = HistoryUpdateTagAssignmentsRequest {
+    let request = HistoryUpdateProjectAssignmentsRequest {
         ids,
-        add_tag_ids: next_project_id.into_iter().collect(),
-        remove_tag_ids: vec![current_project_id],
+        project_id: next_project_id,
     };
     services
         .history
-        .mutation_db(move |service| service.update_tag_assignments(request))
+        .mutation_db(move |service| service.update_project_assignments(request))
         .await
 }
-
 #[tauri::command]
 pub async fn history_load_summary(
     services: State<'_, DesktopServices>,

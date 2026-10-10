@@ -672,7 +672,7 @@ impl AgentControlFacade {
         let active_project_id = self
             .services
             .projects
-            .get_active_tag_id()
+            .get_active_project_id()
             .await
             .ok()
             .flatten();
@@ -1182,7 +1182,10 @@ impl AgentControlFacade {
     }
 
     pub async fn set_active_project(&self, project_id: Option<String>) -> Result<bool, String> {
-        self.services.projects.set_active_tag_id(project_id).await?;
+        self.services
+            .projects
+            .set_active_project_id(project_id)
+            .await?;
         Ok(true)
     }
 

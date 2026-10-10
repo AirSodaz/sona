@@ -241,15 +241,12 @@ These items are explicit public compatibility leaves. Remove them only when the
 owning public contract is intentionally versioned; they are separate from the
 removed pre-v0.8.0 storage migrations.
 
-### Project to Tag
+### Project and Legacy Tag Cleanup
 
-- **Canonical write model:** Tag (`TagStore` / SQLite tag tables).
-- **Removed empty module:** `core/src/project/` is gone; do not recreate an empty Project core module.
-- **Host compatibility leaves that still use Project naming:**
-  - Desktop Tauri: `history_update_project_assignments`, `history_reassign_project` in `platforms/desktop/src/commands/history.rs` (delegates to tag assignment).
-  - UniFFI JSON: Project-named history/config helpers under `platforms/uniffi/src/` (for example project assignment and effective-config project JSON parameters).
-  - Desktop frontend product paths still named Project: `platforms/desktop/frontend/src/types/project.ts`, `services/projectService.ts`, `stores/projectStore.ts`, `components/projects/*`, and `components/ProjectsView.tsx`.
-- **Policy:** keep public Project names during the compatibility window; physical frontend/API renames are a later slice.
+- **Canonical model:** Project (`ProjectService` / Project pipelines and indexed `project_id`).
+- **Legacy Tag command deprecation:** The legacy Tag command surface (`tag_*`, `history_*_tag_assignments`) and tags-to-projects auto-migration have been removed. Desktop commands directly update project assignments.
+- **SQLite baseline:** Minimum supported schema version is 8. Legacy schemas (< 8) from the multi-tag era are deprecated and trigger a backup-and-reset flow.
+- **Host surface:** Desktop Tauri commands operate on projects (`project_*`, `history_update_project_assignments`, `history_reassign_project`).
 
 ### Local ASR wire tag alias
 

@@ -46,6 +46,21 @@ pub struct ProjectRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pipeline: Option<ProjectPipelineConfig>,
 }
+impl ProjectRecord {
+    pub fn from_tag(tag: crate::tag::TagRecord, pipeline: Option<ProjectPipelineConfig>) -> Self {
+        Self {
+            id: tag.id,
+            name: tag.name,
+            description: tag.description,
+            icon: (!tag.icon.is_empty()).then_some(tag.icon),
+            color: (!tag.color.is_empty()).then_some(tag.color),
+            sort_order: tag.sort_order,
+            created_at: tag.created_at,
+            updated_at: tag.updated_at,
+            pipeline,
+        }
+    }
+}
 
 #[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]

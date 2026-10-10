@@ -54,7 +54,7 @@ pub async fn project_reorder(
 pub async fn project_get_active_id(
     services: State<'_, DesktopServices>,
 ) -> Result<Option<String>, String> {
-    services.projects.get_active_tag_id().await
+    services.projects.get_active_project_id().await
 }
 
 #[tauri::command]
@@ -62,5 +62,5 @@ pub async fn project_set_active_id(
     services: State<'_, DesktopServices>,
     project_id: Option<String>,
 ) -> Result<(), String> {
-    services.projects.set_active_tag_id(project_id).await
+    services.projects.set_active_project_id(project_id).await
 }

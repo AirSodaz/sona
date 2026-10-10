@@ -144,7 +144,7 @@ export function buildWorkspaceViewModel({
           defaultValue: 'Restore items or delete them permanently.',
         })
       : browseProject
-        ? browseProject.description
+        ? browseProject.description || ''
         : t('projects.inbox_description', {
             defaultValue: 'Inbox collects recordings and imports without a project.',
           });

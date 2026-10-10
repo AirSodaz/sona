@@ -69,10 +69,6 @@ function getLiveDraftLockState(
   };
 }
 
-function getPrimaryTagId(item: HistoryItemType): string | null {
-  return item.tagIds?.[0] ?? item.projectId ?? null;
-}
-
 function createWorkspaceMenuRevision(
   contextId: string,
   browseScope: string,
@@ -238,7 +234,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
           audioUrl: url,
         });
         setSelectedHistoryId(item.id);
-        await useProjectStore.getState().setActiveProjectId(getPrimaryTagId(latestItem));
+        await useProjectStore.getState().setActiveProjectId(latestItem?.projectId ?? null);
       } catch (error) {
         await showError({
           code: 'history.load_failed',
@@ -341,11 +337,9 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         return true;
       }
       if (browseState.isInboxScope) {
-        return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).length === 0;
+        return !item.projectId || item.projectId === 'inbox';
       }
-      return (item.tagIds ?? (item.projectId ? [item.projectId] : [])).includes(
-        browseState.browseProjectId || ''
-      );
+      return item.projectId === browseState.browseProjectId;
     },
     [
       browseState.browseProjectId,
@@ -398,7 +392,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     () => historyItems.find((item) => item.id === effectiveSelectedHistoryId) || null,
     [effectiveSelectedHistoryId, historyItems]
   );
-  const tagAssignmentItems = useMemo(() => {
+  const projectAssignmentItems = useMemo(() => {
     const candidates = new Map<string, HistoryItemType>();
     historyItems.forEach((item) => {
       candidates.set(item.id, item);
@@ -1168,7 +1162,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
       <ProjectAssignmentModal
         isOpen={projectAssignmentIds.length > 0}
-        items={tagAssignmentItems}
+        items={projectAssignmentItems}
         projects={projects}
         onClose={() => setProjectAssignmentIds([])}
         onApply={async (projectId) => {

@@ -342,6 +342,7 @@ impl SonaContext {
     pub async fn sync_get_status_json(&self) -> SonaCoreBindingResult<String> {
         sync_bridge::get_status_json(self.source()).await
     }
+
     pub async fn sync_discover_vaults_json(
         &self,
         provider_json: String,
@@ -439,6 +440,7 @@ impl SonaContext {
     pub async fn sync_get_status_v1(&self) -> SonaCoreBindingResult<FfiSyncStatusSnapshotV1> {
         sync_bridge::get_status_v1(self.source()).await
     }
+
     pub async fn sync_discover_vaults_v1(
         &self,
         provider: FfiSyncProviderInputV1,

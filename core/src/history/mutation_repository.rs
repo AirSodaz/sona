@@ -179,6 +179,14 @@ pub struct HistoryReplaceTagAssignmentsRequest {
     pub tag_ids: Vec<String>,
 }
 
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct HistoryUpdateProjectAssignmentsRequest {
+    pub ids: Vec<String>,
+    pub project_id: Option<String>,
+}
+
 pub trait HistoryMutationRepository: Send + Sync {
     fn create_live_draft(
         &self,
@@ -241,5 +249,10 @@ pub trait HistoryMutationRepository: Send + Sync {
     fn replace_tag_assignments(
         &self,
         request: HistoryReplaceTagAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError>;
+
+    fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
     ) -> Result<(), HistoryMutationError>;
 }

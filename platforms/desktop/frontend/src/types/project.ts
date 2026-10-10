@@ -1,9 +1,3 @@
-import type {
-  TagCreateInput as GeneratedCreateInput,
-  TagRecord as GeneratedTagRecord,
-  TagUpdateInput as GeneratedUpdateInput,
-} from './tag';
-
 export type ProjectPipelineConfig = {
   enabled: boolean;
   autoPolish: boolean;
@@ -26,14 +20,33 @@ export type EffectivePipelineSnapshot = ProjectPipelineConfig & {
   isProjectPipeline: boolean;
 };
 
-export type ProjectRecord = Omit<GeneratedTagRecord, 'color' | 'sortOrder'> & {
-  color?: string;
+export interface ProjectRecord {
+  id: string;
+  name: string;
+  description?: string;
+  icon?: string | null;
+  color?: string | null;
   sortOrder?: number;
+  createdAt: number;
+  updatedAt: number;
   pipeline?: ProjectPipelineConfig;
-};
+}
 
-export type ProjectCreateInput = GeneratedCreateInput & { pipeline?: ProjectPipelineConfig };
-export type ProjectUpdateInput = GeneratedUpdateInput & { pipeline?: ProjectPipelineConfig };
+export interface ProjectCreateInput {
+  name: string;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  pipeline?: ProjectPipelineConfig;
+}
+
+export interface ProjectUpdateInput {
+  name?: string | null;
+  description?: string | null;
+  icon?: string | null;
+  color?: string | null;
+  pipeline?: ProjectPipelineConfig;
+}
 
 export const DEFAULT_PROJECT_PIPELINE: ProjectPipelineConfig = {
   enabled: false,

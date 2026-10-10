@@ -185,7 +185,6 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   assert.equal(new Set(registryCommands).size, registryCommands.length);
 
   const commandGroups = [
-    'tag',
     'project',
     'taskLedger',
     'recovery',
@@ -211,7 +210,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   assert.ok(manualMap, 'frontend contracts must retain a bounded manual map');
   assert.doesNotMatch(
     manualMap,
-    /\[TauriCommand\.(?:project|tag|taskLedger|recovery|automationRepository|automation|history)\./u,
+    /\[TauriCommand\.(?:project|taskLedger|recovery|automationRepository|automation|history)\./u,
   );
   assert.match(
     contracts,
@@ -223,7 +222,7 @@ test('Rust-owned Tauri command contracts stay generated and complete', () => {
   );
 
   for (const [command, args, result] of [
-    ['tag_update', '{ tagId: string; updates: TagUpdateInput }', 'TagRecord | null'],
+    ['project_update', '{ projectId: string; updates: ProjectUpdateInput }', 'ProjectRecord | null'],
     ['task_ledger_patch_task', '{ id: string; patch: TaskLedgerPatch_Deserialize }', 'TaskLedgerSnapshot_Serialize'],
     ['recovery_save_snapshot', '{ items: RecoveryItemInput_Deserialize[] }', 'RecoverySnapshot_Serialize'],
     ['automation_persist_repository_state', '{ profiles: AutomationProfileInput_Deserialize[]; rules: AutomationRuleInput_Deserialize[]; processedEntries: AutomationProcessedInput_Deserialize[] }', 'void'],

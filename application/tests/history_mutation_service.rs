@@ -6,8 +6,8 @@ use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
     HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryMutationError,
     HistoryMutationRepository, HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
-    HistoryUpdateTranscriptRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::{
     HistoryAudioStatus, HistoryCreateLiveDraftRequest, HistoryItemKind, HistoryItemRecord,
@@ -199,6 +199,18 @@ impl HistoryMutationRepository for RecordingHistoryMutationRepository {
             .push(format!("replace:{:?}:{:?}", request.ids, request.tag_ids));
         Ok(())
     }
+
+    fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        self.record("update_project_assignments");
+        self.forwarded_details.lock().unwrap().push(format!(
+            "project_assign:{:?}:{:?}",
+            request.ids, request.project_id
+        ));
+        Ok(())
+    }
 }
 
 fn history_item(id: &str) -> HistoryItemRecord {
@@ -338,6 +350,12 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             tag_ids: Vec::new(),
         })
         .unwrap();
+    service
+        .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
+            ids: vec!["history-1".to_string()],
+            project_id: Some("project-1".to_string()),
+        })
+        .unwrap();
 
     assert_eq!(
         *repository.calls.lock().unwrap(),
@@ -354,6 +372,7 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             "update_item_meta",
             "update_tag_assignments",
             "replace_tag_assignments",
+            "update_project_assignments",
         ]
     );
     assert_eq!(repository.forwarded_segments.lock().unwrap().len(), 5);
@@ -372,6 +391,7 @@ fn service_routes_every_history_mutation_through_the_focused_port() {
             "meta:history-1:{\"title\":\"Renamed\",\"icon\":null}",
             "assign:[\"history-1\"]:[\"project-2\"]:[\"project-1\"]",
             "replace:[\"history-1\"]:[]",
+            "project_assign:[\"history-1\"]:Some(\"project-1\")",
         ]
     );
 }

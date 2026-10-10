@@ -15,8 +15,8 @@ use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
     HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
     HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
-    HistoryUpdateTranscriptRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::query_repository::HistoryQueryRepository;
 use sona_core::history::transcript_payload::{
@@ -1852,6 +1852,34 @@ where
         })?)
     }
 
+    fn update_project_assignments(
+        &self,
+        ids: &[String],
+        project_id: Option<&str>,
+    ) -> Result<(), HistoryMutationError> {
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let now_ms = self.mutation_now_ms()?;
+        Ok(self.get_db()?.with_transaction(|tx| {
+            for id in ids {
+                tx.execute(
+                    "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
+                    rusqlite::params![project_id, id],
+                )?;
+                record_local_field_change_in_transaction(
+                    tx,
+                    SyncEntityKind::HistoryItem,
+                    id,
+                    "projectId",
+                    serde_json::json!(project_id),
+                    now_ms,
+                )?;
+            }
+            Ok(())
+        })?)
+    }
+
     fn load_summary(
         &self,
         history_id: &str,
@@ -2164,6 +2192,17 @@ where
         request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
         SqliteHistoryStore::replace_tag_assignments(self, &request.ids, &request.tag_ids)
+    }
+
+    fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        SqliteHistoryStore::update_project_assignments(
+            self,
+            &request.ids,
+            request.project_id.as_deref(),
+        )
     }
 }
 

@@ -68,9 +68,6 @@ export const TauriCommand = {
     updateItemMeta: 'history_update_item_meta',
     updateProjectAssignments: 'history_update_project_assignments',
     reassignProject: 'history_reassign_project',
-    // Legacy migration-only commands retained for bindings compatibility.
-    updateTagAssignments: 'history_update_tag_assignments',
-    replaceTagAssignments: 'history_replace_tag_assignments',
     loadSummary: 'history_load_summary',
     saveSummary: 'history_save_summary',
     deleteSummary: 'history_delete_summary',
@@ -96,16 +93,6 @@ export const TauriCommand = {
   },
   export: {
     transcriptFile: 'export_transcript_file',
-  },
-  tag: {
-    list: 'tag_list',
-    saveAll: 'tag_save_all',
-    create: 'tag_create',
-    update: 'tag_update',
-    delete: 'tag_delete',
-    reorder: 'tag_reorder',
-    getActiveId: 'tag_get_active_id',
-    setActiveId: 'tag_set_active_id',
   },
   project: {
     list: 'project_list',

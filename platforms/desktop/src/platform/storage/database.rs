@@ -349,47 +349,69 @@ mod tests {
     }
 
     #[test]
-    fn test_v7_database_is_auto_migrated_to_v8() {
+    fn test_v7_legacy_database_triggers_prompt_and_v8_is_auto_migrated_to_v9() {
         let temp = tempfile::tempdir().unwrap();
         let db_path = temp.path().join("sona.db");
         let conn = Connection::open(&db_path).unwrap();
         conn.execute_batch(
             "CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
-             INSERT INTO schema_version (version) VALUES (7);
-             CREATE TABLE tags (
-                 id TEXT PRIMARY KEY,
-                 name TEXT NOT NULL,
-                 description TEXT NOT NULL DEFAULT '',
-                 icon TEXT,
-                 color TEXT,
-                 sort_order INTEGER NOT NULL DEFAULT 0,
-                 created_at INTEGER NOT NULL DEFAULT 0,
-                 updated_at INTEGER NOT NULL DEFAULT 0
-             );
-             INSERT INTO tags (id, name) VALUES ('proj-a', 'Project Alpha');
-             CREATE TABLE history_items (
-                 id TEXT PRIMARY KEY,
-                 timestamp INTEGER NOT NULL,
-                 duration REAL NOT NULL DEFAULT 0.0,
-                 title TEXT NOT NULL DEFAULT ''
-             );
-             INSERT INTO history_items (id, timestamp, title) VALUES ('item-1', 12345, 'Sample');
-             CREATE TABLE history_item_tags (
-                 history_id TEXT NOT NULL,
-                 tag_id TEXT NOT NULL,
-                 PRIMARY KEY (history_id, tag_id)
-             );
-             INSERT INTO history_item_tags (history_id, tag_id) VALUES ('item-1', 'proj-a');",
+             INSERT INTO schema_version (version) VALUES (7);",
         )
         .unwrap();
         drop(conn);
 
-        let db = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |_found, _min| {
-            panic!("Prompt must NOT be called for a v7 database since it can be migrated!");
+        let mut prompted = false;
+        let _ = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |found, min| {
+            assert_eq!(found, 7);
+            assert_eq!(min, 8);
+            prompted = true;
+            LegacyDatabaseAction::Exit
+        });
+        assert!(prompted, "v7 legacy database must trigger migration prompt");
+
+        // Now test v8 database auto-migrating to v9
+        let temp_v8 = tempfile::tempdir().unwrap();
+        let db_path_v8 = temp_v8.path().join("sona.db");
+        let conn_v8 = Connection::open(&db_path_v8).unwrap();
+        conn_v8
+            .execute_batch(
+                "CREATE TABLE schema_version (version INTEGER PRIMARY KEY);
+                 INSERT INTO schema_version (version) VALUES (8);
+                 CREATE TABLE tags (
+                     id TEXT PRIMARY KEY,
+                     name TEXT NOT NULL,
+                     description TEXT NOT NULL DEFAULT '',
+                     icon TEXT,
+                     color TEXT,
+                     sort_order INTEGER NOT NULL DEFAULT 0,
+                     created_at INTEGER NOT NULL DEFAULT 0,
+                     updated_at INTEGER NOT NULL DEFAULT 0
+                 );
+                 CREATE TABLE project_pipelines (
+                     project_id TEXT PRIMARY KEY REFERENCES tags(id) ON DELETE CASCADE,
+                     pipeline_json TEXT NOT NULL DEFAULT '{}',
+                     updated_at INTEGER NOT NULL DEFAULT 0
+                 );
+                 CREATE TABLE history_items (
+                     id TEXT PRIMARY KEY,
+                     timestamp INTEGER NOT NULL,
+                     duration REAL NOT NULL DEFAULT 0.0,
+                     title TEXT NOT NULL DEFAULT '',
+                     project_id TEXT REFERENCES tags(id) ON DELETE SET NULL
+                 );
+                 CREATE TABLE speaker_profiles (
+                     id TEXT PRIMARY KEY,
+                     name TEXT NOT NULL
+                 );",
+            )
+            .unwrap();
+        drop(conn_v8);
+
+        let db = open_and_migrate_sqlite_for_path_with_prompt(temp_v8.path(), |_found, _min| {
+            panic!("Prompt must NOT be called for a v8 database since it can be migrated!");
         })
         .unwrap();
 
-        // The database should be automatically migrated to version 8
         let version: i64 = db
             .with_connection(|conn| {
                 conn.query_row(
@@ -401,32 +423,6 @@ mod tests {
             })
             .unwrap();
         assert_eq!(version, 9);
-
-        // project_pipelines table should now exist
-        let pipeline_exists: bool = db
-            .with_connection(|conn| {
-                let count: i64 = conn.query_row(
-                    "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='project_pipelines'",
-                    [],
-                    |row| row.get(0),
-                ).map_err(sona_sqlite::DatabaseError::QueryError)?;
-                Ok(count > 0)
-            })
-            .unwrap();
-        assert!(pipeline_exists);
-
-        // history_items.project_id should be backfilled from history_item_tags
-        let project_id: String = db
-            .with_connection(|conn| {
-                conn.query_row(
-                    "SELECT project_id FROM history_items WHERE id = 'item-1'",
-                    [],
-                    |row| row.get(0),
-                )
-                .map_err(sona_sqlite::DatabaseError::QueryError)
-            })
-            .unwrap();
-        assert_eq!(project_id, "proj-a");
     }
 
     #[test]

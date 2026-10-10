@@ -38,7 +38,7 @@ export function useProjectSettingsDraft({
       }
 
       setDraftName(project.name);
-      setDraftDescription(project.description);
+      setDraftDescription(project.description || '');
       setDraftIcon(project.icon || '');
       setDraftColor(project.color || '#64748b');
       setDraftPipeline(

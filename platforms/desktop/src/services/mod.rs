@@ -15,8 +15,8 @@ use crate::platform::history_repository::{
     HistoryRepositoryState, HistoryService, PreparedBackupImportState,
 };
 use crate::platform::model_downloads::DownloadState;
+use crate::platform::project_repository::ProjectService;
 use crate::platform::sync::DesktopSyncManager;
-use crate::platform::tag_repository::ProjectService;
 use crate::platform::task_ledger_repository::TaskLedgerService;
 
 pub mod db_runner;

@@ -1255,6 +1255,11 @@ export type HistoryUpdateItemMetaRequest_Serialize = {
 	updates: HistoryItemMetaPatch_Serialize,
 };
 
+export type HistoryUpdateProjectAssignmentsRequest = {
+	ids: string[],
+	projectId: string | null,
+};
+
 export type HistoryUpdateTagAssignmentsRequest = {
 	ids: string[],
 	addTagIds: string[],
@@ -3199,38 +3204,6 @@ export type RustTauriCommandContractMap = {
 		args: { projectId: string | null };
 		result: void;
 	};
-	"tag_list": {
-		args: { fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null };
-		result: TagRecord[];
-	};
-	"tag_save_all": {
-		args: { tags: TagRecord[] };
-		result: void;
-	};
-	"tag_create": {
-		args: { name: string; description?: string | null; icon?: string | null; color?: string | null };
-		result: TagRecord;
-	};
-	"tag_update": {
-		args: { tagId: string; updates: TagUpdateInput };
-		result: TagRecord | null;
-	};
-	"tag_delete": {
-		args: { tagId: string };
-		result: void;
-	};
-	"tag_reorder": {
-		args: { tagIds: string[] };
-		result: TagRecord[];
-	};
-	"tag_get_active_id": {
-		args: undefined;
-		result: string | null;
-	};
-	"tag_set_active_id": {
-		args: { tagId: string | null };
-		result: void;
-	};
 	"task_ledger_load_snapshot": {
 		args: undefined;
 		result: TaskLedgerSnapshot_Serialize;
@@ -3389,14 +3362,6 @@ export type RustTauriCommandContractMap = {
 	};
 	"history_reassign_project": {
 		args: { currentProjectId: string; nextProjectId: string | null };
-		result: void;
-	};
-	"history_update_tag_assignments": {
-		args: HistoryUpdateTagAssignmentsRequest;
-		result: void;
-	};
-	"history_replace_tag_assignments": {
-		args: HistoryReplaceTagAssignmentsRequest;
 		result: void;
 	};
 	"history_load_summary": {

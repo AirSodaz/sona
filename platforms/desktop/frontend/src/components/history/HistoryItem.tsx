@@ -161,15 +161,17 @@ export function HistoryItem({
   const { t, i18n } = useTranslation();
   const contentButtonRef = React.useRef<HTMLButtonElement>(null);
   const projects = useProjectStore((state) => state.projects);
-  const itemTagIds = item.tagIds ?? (item.projectId ? [item.projectId] : []);
-  const itemTags = itemTagIds
-    .map((tagId) => projects.find((tag) => tag.id === tagId))
-    .filter((tag): tag is NonNullable<typeof tag> => !!tag);
-  const visibleTags = itemTags.slice(0, 2);
-  const hiddenTagCount = Math.max(0, itemTags.length - visibleTags.length);
+  const project = item.projectId ? projects.find((p) => p.id === item.projectId) : null;
   const tagChips = (
     <span className="history-item-tag-chips">
-      {visibleTags.length === 0 && (
+      {project ? (
+        <ProjectBadge
+          key={project.id}
+          name={project.name}
+          icon={project.icon}
+          color={project.color}
+        />
+      ) : (
         <span className="history-item-project-badge history-item-project-badge--inbox">
           <InboxIcon width={12} height={12} />
           <span className="history-item-project-badge-text">
@@ -177,10 +179,6 @@ export function HistoryItem({
           </span>
         </span>
       )}
-      {visibleTags.map((tag) => (
-        <ProjectBadge key={tag.id} name={tag.name} icon={tag.icon} color={tag.color} />
-      ))}
-      {hiddenTagCount > 0 && <span className="history-item-project-badge">+{hiddenTagCount}</span>}
     </span>
   );
   const itemTypeLabel =

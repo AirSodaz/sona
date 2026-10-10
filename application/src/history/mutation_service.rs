@@ -6,8 +6,8 @@ use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryItemMetaPatch,
     HistoryMutationError, HistoryMutationRepository, HistoryPurgeItemsRequest,
     HistoryReplaceTagAssignmentsRequest, HistoryRestoreItemsRequest, HistoryTrashItemsRequest,
-    HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
-    HistoryUpdateTranscriptRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::transcript_payload::canonicalize_history_transcript_segments;
 use sona_core::history::{
@@ -199,6 +199,20 @@ impl HistoryMutationService {
             return Ok(());
         }
         self.repository.replace_tag_assignments(request)
+    }
+
+    pub fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        validate_ids(&request.ids)?;
+        if let Some(pid) = &request.project_id {
+            validate_nonempty("project ID", pid)?;
+        }
+        if request.ids.is_empty() {
+            return Ok(());
+        }
+        self.repository.update_project_assignments(request)
     }
 }
 

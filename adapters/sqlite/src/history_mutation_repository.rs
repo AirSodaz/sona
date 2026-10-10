@@ -1,4 +1,4 @@
-﻿use std::fmt;
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -7,7 +7,8 @@ use sona_core::history::mutation_repository::{
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest, HistoryMutationError,
     HistoryMutationRepository, HistoryPurgeItemsRequest, HistoryReplaceTagAssignmentsRequest,
     HistoryRestoreItemsRequest, HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest,
-    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryUpdateProjectAssignmentsRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryIdGenerator, HistoryItemRecord,
@@ -180,6 +181,15 @@ impl HistoryMutationRepository for DeferredSqliteHistoryMutationRepository {
         request: HistoryReplaceTagAssignmentsRequest,
     ) -> Result<(), HistoryMutationError> {
         self.with_store(|store| HistoryMutationRepository::replace_tag_assignments(store, request))
+    }
+
+    fn update_project_assignments(
+        &self,
+        request: HistoryUpdateProjectAssignmentsRequest,
+    ) -> Result<(), HistoryMutationError> {
+        self.with_store(|store| {
+            HistoryMutationRepository::update_project_assignments(store, request)
+        })
     }
 }
 

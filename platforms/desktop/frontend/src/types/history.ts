@@ -49,12 +49,7 @@ export function normalizeHistoryItemRecord(
     icon: typeof item?.icon === 'string' ? item.icon : undefined,
     type: item?.type === 'batch' ? 'batch' : 'recording',
     searchContent: item?.searchContent || '',
-    projectId:
-      typeof item?.projectId === 'string'
-        ? item.projectId
-        : Array.isArray(item?.tagIds) && typeof item.tagIds[0] === 'string'
-          ? item.tagIds[0]
-          : null,
+    projectId: typeof item?.projectId === 'string' ? item.projectId : null,
     tagIds: Array.isArray(item?.tagIds)
       ? item.tagIds.filter((tagId): tagId is string => typeof tagId === 'string')
       : [],

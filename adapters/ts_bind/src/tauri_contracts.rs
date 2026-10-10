@@ -46,26 +46,6 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "void",
     ),
     TauriCommandContract::new(
-        "tag_list",
-        "{ fallbackEnabledPolishKeywordSetIds?: string[] | null; fallbackEnabledSpeakerProfileIds?: string[] | null }",
-        "TagRecord[]",
-    ),
-    TauriCommandContract::new("tag_save_all", "{ tags: TagRecord[] }", "void"),
-    TauriCommandContract::new(
-        "tag_create",
-        "{ name: string; description?: string | null; icon?: string | null; color?: string | null }",
-        "TagRecord",
-    ),
-    TauriCommandContract::new(
-        "tag_update",
-        "{ tagId: string; updates: TagUpdateInput }",
-        "TagRecord | null",
-    ),
-    TauriCommandContract::new("tag_delete", "{ tagId: string }", "void"),
-    TauriCommandContract::new("tag_reorder", "{ tagIds: string[] }", "TagRecord[]"),
-    TauriCommandContract::new("tag_get_active_id", "undefined", "string | null"),
-    TauriCommandContract::new("tag_set_active_id", "{ tagId: string | null }", "void"),
-    TauriCommandContract::new(
         "task_ledger_load_snapshot",
         "undefined",
         "TaskLedgerSnapshot_Serialize",
@@ -250,16 +230,6 @@ const RUST_OWNED_TAURI_COMMAND_CONTRACTS: &[TauriCommandContract] = &[
         "void",
     ),
     TauriCommandContract::new(
-        "history_update_tag_assignments",
-        "HistoryUpdateTagAssignmentsRequest",
-        "void",
-    ),
-    TauriCommandContract::new(
-        "history_replace_tag_assignments",
-        "HistoryReplaceTagAssignmentsRequest",
-        "void",
-    ),
-    TauriCommandContract::new(
         "history_load_summary",
         "{ historyId: string }",
         "HistorySummaryPayload_Serialize | null",
@@ -313,7 +283,7 @@ mod tests {
     #[test]
     fn tauri_command_contract_registry_is_unique_and_complete_for_the_slice() {
         let contracts = rust_owned_tauri_command_contracts();
-        assert_eq!(contracts.len(), 64);
+        assert_eq!(contracts.len(), 54);
         let names = contracts
             .iter()
             .map(|contract| contract.command)
@@ -321,7 +291,6 @@ mod tests {
         assert_eq!(names.len(), contracts.len());
 
         for expected in [
-            "tag_list",
             "project_list",
             "project_create",
             "project_update",

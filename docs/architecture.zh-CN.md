@@ -227,15 +227,12 @@ macOS 与 Linux 在此为 no-op：它们的边框由平台层负责主题，而 
 下列项是显式保留的公开兼容叶节点。只有在有意版本化对应公开契约时才移除；它们与已删除的
 v0.8.0 之前存储迁移无关。
 
-### Project 到 Tag
+### Project 与遗留 Tag 清理
 
-- **规范写模型：** Tag（`TagStore` / SQLite tag 表）。
-- **已删除空模块：** `core/src/project/` 已移除；不要再创建空的 Project core 模块。
-- **仍使用 Project 命名的 Host 兼容叶节点：**
-  - Desktop Tauri：`platforms/desktop/src/commands/history.rs` 中的 `history_update_project_assignments`、`history_reassign_project`（委托到 tag assignment）。
-  - UniFFI JSON：`platforms/uniffi/src/` 下仍带 Project 命名的 history/config 辅助接口（例如 project assignment 与 effective-config 的 project JSON 参数）。
-  - Desktop 前端仍使用 Project 产品路径： `platforms/desktop/frontend/src/types/project.ts`、 `services/projectService.ts`、`stores/projectStore.ts`、 `components/projects/*`、以及 `components/ProjectsView.tsx`。
-- **策略：** 兼容窗口内保留公开 Project 名称；前端/API 物理重命名属于后续切片。
+- **规范模型：** Project（`ProjectService` / Project 流水线与索引化 `project_id`）。
+- **遗留 Tag 命令废弃：** 遗留 Tag 命令接口（`tag_*`、`history_*_tag_assignments`）及从 tags 到 projects 的自动迁移已被清理废弃。桌面命令直接操作项目分配。
+- **SQLite 基线：** 最小支持架构版本已提升为 8。多标签时期的遗留架构（< 8）已废弃，并触发备份与重置流程。
+- **Host 接口：** Desktop Tauri 命令直接操作 Project（`project_*`、`history_update_project_assignments`、`history_reassign_project`）。
 
 ### 本地 ASR wire tag 别名
 

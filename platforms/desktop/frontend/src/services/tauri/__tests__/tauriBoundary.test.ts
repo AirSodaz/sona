@@ -69,6 +69,7 @@ import {
   translateTranscriptSegments,
 } from '../llm';
 import { llmUsageEnsureStorage, llmUsageReadRaw, llmUsageReplaceRaw } from '../llmUsage';
+import { projectList } from '../project';
 import { normalizeAsrRequest, processBatchFile } from '../recognizer';
 import {
   recoveryLoadSnapshot,
@@ -101,7 +102,6 @@ import {
   injectText,
   setAuxWindowState,
 } from '../system';
-import { tagList, tagSaveAll } from '../tag';
 import {
   taskLedgerClearResolved,
   taskLedgerLoadSnapshot,
@@ -1952,9 +1952,9 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
-  it('tag repository wrappers normalize records at the Tauri boundary', async () => {
-    const wireTag = {
-      id: 'tag-1',
+  it('project repository wrappers normalize records at the Tauri boundary', async () => {
+    const wireProject = {
+      id: 'project-1',
       name: 'Research',
       description: 'Notes',
       icon: 'folder',
@@ -1962,17 +1962,23 @@ describe('tauri boundary wrappers', () => {
       sortOrder: 4,
       createdAt: 100,
       updatedAt: 101,
+      pipeline: null,
     };
-    const tag = { ...wireTag };
-    vi.mocked(invoke).mockResolvedValueOnce([wireTag]).mockResolvedValueOnce(undefined);
+    vi.mocked(invoke).mockResolvedValueOnce([wireProject]);
 
-    const listed = await tagList();
-    await tagSaveAll([tag]);
+    const listed = await projectList();
 
-    expect(listed).toEqual([tag]);
-    expect(invoke).toHaveBeenNthCalledWith(2, TauriCommand.tag.saveAll, {
-      tags: [wireTag],
-    });
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: 'project-1',
+        name: 'Research',
+        description: 'Notes',
+        icon: 'folder',
+        color: '#123456',
+        sortOrder: 4,
+      }),
+    ]);
+    expect(invoke).toHaveBeenCalledWith(TauriCommand.project.list);
   });
 
   it('sync wrappers convert WebDAV UI inputs to provider-neutral lifecycle requests', async () => {

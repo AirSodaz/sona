@@ -2,6 +2,7 @@ import type {
   AutomationProcessedRecord_Serialize,
   AutomationProfileRecord,
   AutomationRuleRecord,
+  TagRecord,
 } from '../../bindings';
 import type {
   AutomationActions,
@@ -11,7 +12,7 @@ import type {
   AutomationRuleValidationResult,
 } from '../../types/automation';
 import type { AppConfig } from '../../types/config';
-import type { TagRecord } from '../../types/tag';
+import type { ProjectRecord } from '../../types/project';
 import { TauriCommand } from './commands';
 import { invokeTauri } from './invoke';
 
@@ -167,7 +168,7 @@ export async function automationPersistRepositoryState(
 export async function automationValidateRuleActivation(
   rule: AutomationRule,
   globalConfig: AppConfig,
-  tags: TagRecord[] | TagRecord | null
+  tags: ProjectRecord[] | TagRecord[] | TagRecord | null
 ): Promise<AutomationRuleValidationResult> {
   return invokeTauri(TauriCommand.automationRepository.validateActivation, {
     rule: toAutomationRuleInput(rule),

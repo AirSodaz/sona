@@ -178,7 +178,10 @@ fn multi_tag_scopes_and_trash_lifecycle_preserve_then_purge_children_and_audio()
     let trash = query(&store, HistoryWorkspaceScope::Trash);
     assert_eq!(trash.filtered_item_count, 1);
     assert_eq!(trash.filtered_items[0].deleted_at, Some(900));
-    assert_eq!(trash.filtered_items[0].tag_ids, ["tag-secondary"]);
+    assert_eq!(
+        trash.filtered_items[0].project_id.as_deref(),
+        Some("tag-secondary")
+    );
     assert!(audio_path.is_file());
     assert_eq!(
         HistoryQueryRepository::load_transcript(&store, &tagged.id)

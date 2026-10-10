@@ -1,10 +1,15 @@
 import type {
   BackupManifest_Serialize as GeneratedBackupManifest,
   PreparedBackupImport_Serialize as GeneratedPreparedBackupImport,
+  TagRecord as GeneratedTagRecord,
 } from '../bindings';
 import type { AutomationProcessedEntry, AutomationProfile, AutomationRule } from './automation';
 import type { AppConfig } from './config';
-import type { TagRecord } from './tag';
+
+export type TagRecord = Omit<GeneratedTagRecord, 'color' | 'sortOrder'> & {
+  color?: string;
+  sortOrder?: number;
+};
 
 export const BACKUP_SCHEMA_VERSION = 3 as const;
 export const BACKUP_HISTORY_MODE = 'light' as const;
