@@ -109,7 +109,7 @@ internal fun DataRecoveryPane(
                         R.string.backup_confirm_body,
                         prepared.manifest.counts.historyItems,
                         prepared.manifest.counts.transcriptFiles,
-                        prepared.manifest.counts.tags,
+                        prepared.manifest.counts.projects,
                     ))
                     Text(stringResource(R.string.backup_replace_scopes))
                     Text(stringResource(R.string.backup_excludes))

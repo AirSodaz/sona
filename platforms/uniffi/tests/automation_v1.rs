@@ -1,6 +1,6 @@
 use sona_uniffi_bind::{
-    FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1, FfiAutomationRepositoryInputV1,
-    FfiAutomationRuleInputV1, FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1,
+    FfiAutomationExportConfigV1, FfiAutomationProcessedInputV1, FfiAutomationProjectReferenceV1,
+    FfiAutomationRepositoryInputV1, FfiAutomationRuleInputV1, FfiAutomationStageConfigV1,
     FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
     FfiAutomationValidationStageConfigV1, SonaCoreBindingError,
     load_automation_repository_state_v1, replace_automation_processed_entries_v1,
@@ -135,14 +135,14 @@ fn automation_v1_validation_uses_typed_rule_and_tags() {
             mode: "original".to_string(),
         },
     };
-    let tags = vec![FfiAutomationTagReferenceV1 {
+    let projects = vec![FfiAutomationProjectReferenceV1 {
         id: "tag-1".to_string(),
     }];
 
     let result = validate_automation_rule_activation_v1(
         rule.clone(),
         serde_json::json!({"offlineModelPath": model_path}).to_string(),
-        tags.clone(),
+        projects.clone(),
     )
     .unwrap();
     assert!(result.valid);
@@ -150,7 +150,8 @@ fn automation_v1_validation_uses_typed_rule_and_tags() {
     assert!(output_directory.is_dir());
 
     fs::remove_dir(&output_directory).unwrap();
-    let error = validate_automation_rule_activation_v1(rule, "{".to_string(), tags).unwrap_err();
+    let error =
+        validate_automation_rule_activation_v1(rule, "{".to_string(), projects).unwrap_err();
     assert!(matches!(error, SonaCoreBindingError::InvalidInput { .. }));
     assert!(!output_directory.exists());
 }

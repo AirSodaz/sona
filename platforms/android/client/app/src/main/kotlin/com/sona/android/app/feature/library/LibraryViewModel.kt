@@ -11,11 +11,11 @@ import com.sona.android.application.library.HistoryScope
 import com.sona.android.application.library.HistorySortOrder
 import com.sona.android.application.library.HistoryWorkspacePort
 import com.sona.android.application.library.HistoryWorkspaceQuery
-import com.sona.android.application.library.TagRecord
-import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.ProjectRecord
+import com.sona.android.application.library.ProjectWorkspacePort
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
-import com.sona.android.application.library.CreateTagRequest
+import com.sona.android.application.library.CreateProjectRequest
 import com.sona.android.application.library.CommitTranscriptEditRequest
 import com.sona.android.application.library.CommitTranscriptEditResult
 import com.sona.android.application.library.HistoryMediaSourcePort
@@ -117,7 +117,7 @@ data class LibraryUiState(
     val cloudTranscription: CloudTranscriptionUiState = CloudTranscriptionUiState.Idle,
     val audioImport: AudioImportJobState = AudioImportJobState.Idle,
     val query: HistoryWorkspaceQuery = HistoryWorkspaceQuery(),
-    val tags: List<TagRecord> = emptyList(),
+    val projects: List<ProjectRecord> = emptyList(),
     val selectedIds: Set<String> = emptySet(),
     val snapshots: List<TranscriptSnapshot> = emptyList(),
     val snapshotDetail: TranscriptSnapshotDetail? = null,
@@ -145,7 +145,7 @@ class LibraryViewModel(
     private val scheduleAudioImport: ScheduleAudioImport? = null,
     private val scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
     private val audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
-    private val tags: TagWorkspacePort,
+    private val projects: ProjectWorkspacePort,
     private val exporter: TranscriptExportPort,
     private val files: FileTransferPort,
     private val editor: TranscriptEditorPort? = null,
@@ -293,8 +293,8 @@ class LibraryViewModel(
                         trashCount = page.counts.trash,
                     )
                 }
-                runCatching { tags.listTags() }.getOrNull()?.let { loaded ->
-                    mutableState.update { it.copy(tags = loaded) }
+                runCatching { projects.listProjects() }.getOrNull()?.let { loaded ->
+                    mutableState.update { it.copy(projects = loaded) }
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -823,24 +823,25 @@ class LibraryViewModel(
     fun trashSelected() = mutateSelection { library.trash(it, System.currentTimeMillis()) }
     fun restoreSelected() = mutateSelection(library::restore)
     fun purgeSelected() = mutateSelection(library::purge)
-    fun addTagToSelected(tagId: String) = mutateSelection { library.updateTags(it, listOf(tagId), emptyList()) }
-    fun removeTagFromSelected(tagId: String) = mutateSelection { library.updateTags(it, emptyList(), listOf(tagId)) }
+    fun setProjectForSelected(projectId: String?) = mutateSelection { library.updateProjectAssignment(it, projectId) }
 
     fun updateTitle(historyId: String, title: String) = mutateWorkspace {
         library.updateTitle(historyId, title)
     }
-
-    fun updateTags(historyId: String, selectedTagIds: Set<String>) = mutateWorkspace {
-        val current = mutableState.value.items.firstOrNull { it.historyId == historyId }?.tagIds.orEmpty().toSet()
-        library.updateTags(
-            listOf(historyId),
-            (selectedTagIds - current).toList(),
-            (current - selectedTagIds).toList(),
-        )
+    fun updateItemProject(historyId: String, projectId: String?) = mutateWorkspace {
+        library.updateProjectAssignment(listOf(historyId), projectId)
     }
 
-    fun createTag(name: String) = mutateWorkspace {
-        tags.createTag(CreateTagRequest(name))
+    fun createProject(name: String) = mutateWorkspace {
+        projects.createProject(CreateProjectRequest(name))
+    }
+
+    fun renameProject(projectId: String, name: String) = mutateWorkspace {
+        projects.renameProject(projectId, name)
+    }
+
+    fun deleteProject(projectId: String) = mutateWorkspace {
+        projects.deleteProject(projectId)
     }
 
     fun loadSnapshot(historyId: String, snapshotId: String) {
@@ -981,7 +982,7 @@ class LibraryViewModel(
             scheduleAudioImport: ScheduleAudioImport? = null,
             scheduleAudioRetranscription: ScheduleAudioRetranscription? = null,
             audioImportJobs: AudioImportJobPort = IdleAudioImportJobPort,
-            tags: TagWorkspacePort,
+            projects: ProjectWorkspacePort,
             exporter: TranscriptExportPort,
             files: FileTransferPort,
             editor: TranscriptEditorPort? = null,
@@ -1002,7 +1003,7 @@ class LibraryViewModel(
                         scheduleAudioImport,
                         scheduleAudioRetranscription,
                         audioImportJobs,
-                        tags,
+                        projects,
                         exporter,
                         files,
                         editor,

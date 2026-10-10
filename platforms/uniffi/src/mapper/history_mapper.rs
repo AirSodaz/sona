@@ -7,8 +7,8 @@ use crate::{
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCommitTranscriptEditResult,
     HistoryCompleteLiveDraftRequest, HistoryCreateTranscriptSnapshotRequest,
-    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryReplaceTagAssignmentsRequest,
-    HistoryTrashItemsRequest, HistoryUpdateItemMetaRequest, HistoryUpdateTagAssignmentsRequest,
+    HistoryDeleteItemsRequest, HistoryItemMetaPatch, HistoryTrashItemsRequest,
+    HistoryUpdateItemMetaRequest, HistoryUpdateProjectAssignmentsRequest,
     HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::transcript_edit::TranscriptEditOperation;
@@ -71,8 +71,8 @@ pub enum FfiTranscriptSnapshotReasonV1 {
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiHistoryWorkspaceScopeV1 {
     All,
-    Untagged,
-    Tag { tag_id: String },
+    Inbox,
+    Project { project_id: String },
     Trash,
 }
 
@@ -113,7 +113,7 @@ pub struct FfiHistoryItemRecordV1 {
     pub icon: Option<String>,
     pub kind: FfiHistoryItemKindV1,
     pub search_content: String,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     pub deleted_at: Option<u64>,
     pub status: FfiHistoryItemStatusV1,
     pub draft_source: Option<FfiHistoryDraftSourceV1>,
@@ -123,7 +123,7 @@ pub struct FfiHistoryItemRecordV1 {
 pub struct FfiHistoryCreateLiveDraftRequestV1 {
     pub id: Option<String>,
     pub audio_extension: String,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     pub icon: Option<String>,
 }
 
@@ -213,7 +213,7 @@ pub enum FfiAudioSourceV1 {
 pub struct FfiHistorySaveRecordingRequestV1 {
     pub segments: Vec<FfiTranscriptSegment>,
     pub duration: f64,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     /// The audio for this recording, or `None` when no audio was captured.
     pub audio: Option<FfiAudioSourceV1>,
 }
@@ -224,7 +224,7 @@ pub struct FfiHistorySaveImportedFileRequestV1 {
     pub source_path: String,
     pub segments: Vec<FfiTranscriptSegment>,
     pub duration: f64,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     pub converted_source_path: Option<String>,
 }
 
@@ -264,16 +264,9 @@ pub struct FfiHistoryUpdateItemMetaRequestV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiHistoryUpdateTagAssignmentsRequestV1 {
+pub struct FfiHistoryUpdateProjectAssignmentsRequestV1 {
     pub ids: Vec<String>,
-    pub add_tag_ids: Vec<String>,
-    pub remove_tag_ids: Vec<String>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiHistoryReplaceTagAssignmentsRequestV1 {
-    pub ids: Vec<String>,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
@@ -338,16 +331,16 @@ pub struct FfiHistoryWorkspaceSummaryV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiHistoryTagCountEntryV1 {
-    pub tag_id: String,
+pub struct FfiHistoryProjectCountEntryV1 {
+    pub project_id: String,
     pub count: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiHistoryWorkspaceItemCountsV1 {
-    pub untagged: u64,
+    pub inbox: u64,
     pub trash: u64,
-    pub by_tag_id: Vec<FfiHistoryTagCountEntryV1>,
+    pub by_project_id: Vec<FfiHistoryProjectCountEntryV1>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -380,12 +373,12 @@ impl Display for HistoryMapperError {
 
 impl From<FfiHistoryCreateLiveDraftRequestV1> for HistoryCreateLiveDraftRequest {
     fn from(value: FfiHistoryCreateLiveDraftRequestV1) -> Self {
-        let project_id = value.tag_ids.first().cloned();
+        let tag_ids = value.project_id.clone().into_iter().collect();
         Self {
             id: value.id,
             audio_extension: value.audio_extension,
-            tag_ids: value.tag_ids,
-            project_id,
+            tag_ids,
+            project_id: value.project_id,
             icon: value.icon,
         }
     }
@@ -507,12 +500,12 @@ impl TryFrom<FfiHistorySaveRecordingRequestV1> for HistorySaveRecordingRequest {
             Some(FfiAudioSourceV1::NativePath { path }) => (None, Some(path), None),
             None => (None, None, None),
         };
-        let project_id = value.tag_ids.first().cloned();
+        let tag_ids = value.project_id.clone().into_iter().collect();
         Ok(Self {
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
-            tag_ids: value.tag_ids,
-            project_id,
+            tag_ids,
+            project_id: value.project_id,
             audio_bytes,
             native_audio_path,
             audio_extension,
@@ -524,14 +517,14 @@ impl TryFrom<FfiHistorySaveImportedFileRequestV1> for HistorySaveImportedFileReq
     type Error = HistoryMapperError;
 
     fn try_from(value: FfiHistorySaveImportedFileRequestV1) -> Result<Self, Self::Error> {
-        let project_id = value.tag_ids.first().cloned();
+        let tag_ids = value.project_id.clone().into_iter().collect();
         Ok(Self {
             id: value.id,
             source_path: value.source_path,
             segments: history_transcript_segments_from_ffi(value.segments)?,
             duration: value.duration,
-            tag_ids: value.tag_ids,
-            project_id,
+            tag_ids,
+            project_id: value.project_id,
             converted_source_path: value.converted_source_path,
         })
     }
@@ -592,21 +585,11 @@ impl From<FfiHistoryItemMetaPatchV1> for HistoryItemMetaPatch {
     }
 }
 
-impl From<FfiHistoryUpdateTagAssignmentsRequestV1> for HistoryUpdateTagAssignmentsRequest {
-    fn from(value: FfiHistoryUpdateTagAssignmentsRequestV1) -> Self {
+impl From<FfiHistoryUpdateProjectAssignmentsRequestV1> for HistoryUpdateProjectAssignmentsRequest {
+    fn from(value: FfiHistoryUpdateProjectAssignmentsRequestV1) -> Self {
         Self {
             ids: value.ids,
-            add_tag_ids: value.add_tag_ids,
-            remove_tag_ids: value.remove_tag_ids,
-        }
-    }
-}
-
-impl From<FfiHistoryReplaceTagAssignmentsRequestV1> for HistoryReplaceTagAssignmentsRequest {
-    fn from(value: FfiHistoryReplaceTagAssignmentsRequestV1) -> Self {
-        Self {
-            ids: value.ids,
-            tag_ids: value.tag_ids,
+            project_id: value.project_id,
         }
     }
 }
@@ -631,8 +614,8 @@ impl From<FfiHistoryWorkspaceScopeV1> for HistoryWorkspaceScope {
     fn from(value: FfiHistoryWorkspaceScopeV1) -> Self {
         match value {
             FfiHistoryWorkspaceScopeV1::All => Self::All,
-            FfiHistoryWorkspaceScopeV1::Untagged => Self::Inbox,
-            FfiHistoryWorkspaceScopeV1::Tag { tag_id } => Self::Project { project_id: tag_id },
+            FfiHistoryWorkspaceScopeV1::Inbox => Self::Inbox,
+            FfiHistoryWorkspaceScopeV1::Project { project_id } => Self::Project { project_id },
             FfiHistoryWorkspaceScopeV1::Trash => Self::Trash,
         }
     }
@@ -673,12 +656,6 @@ impl From<FfiHistoryWorkspaceSortOrderV1> for HistoryWorkspaceSortOrder {
 
 impl From<HistoryItemRecord> for FfiHistoryItemRecordV1 {
     fn from(value: HistoryItemRecord) -> Self {
-        let mut tag_ids = value.tag_ids;
-        if tag_ids.is_empty()
-            && let Some(pid) = value.project_id.as_ref()
-        {
-            tag_ids.push(pid.clone());
-        }
         Self {
             id: value.id,
             timestamp: value.timestamp,
@@ -691,7 +668,9 @@ impl From<HistoryItemRecord> for FfiHistoryItemRecordV1 {
             icon: value.icon,
             kind: value.kind.into(),
             search_content: value.search_content,
-            tag_ids,
+            project_id: value
+                .project_id
+                .or_else(|| value.tag_ids.into_iter().next()),
             deleted_at: value.deleted_at,
             status: value.status.into(),
             draft_source: value.draft_source.map(Into::into),
@@ -1003,16 +982,25 @@ fn history_summary_to_ffi(
 fn history_item_counts_to_ffi(
     value: HistoryWorkspaceItemCounts,
 ) -> Result<FfiHistoryWorkspaceItemCountsV1, HistoryMapperError> {
+    let inbox_count = if value.inbox > 0 || value.untagged == 0 {
+        value.inbox
+    } else {
+        value.untagged
+    };
+    let by_project = if !value.by_project_id.is_empty() {
+        value.by_project_id
+    } else {
+        value.by_tag_id
+    };
     Ok(FfiHistoryWorkspaceItemCountsV1 {
-        untagged: output_u64("untagged history count", value.untagged)?,
+        inbox: output_u64("inbox history count", inbox_count)?,
         trash: output_u64("trash history count", value.trash)?,
-        by_tag_id: value
-            .by_tag_id
+        by_project_id: by_project
             .into_iter()
-            .map(|(tag_id, count)| {
-                Ok(FfiHistoryTagCountEntryV1 {
-                    tag_id,
-                    count: output_u64("history tag count", count)?,
+            .map(|(project_id, count)| {
+                Ok(FfiHistoryProjectCountEntryV1 {
+                    project_id,
+                    count: output_u64("history project count", count)?,
                 })
             })
             .collect::<Result<_, HistoryMapperError>>()?,

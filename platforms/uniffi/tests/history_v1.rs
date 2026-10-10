@@ -2,22 +2,21 @@ use sona_uniffi_bind::{
     FfiAudioSourceV1, FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
     FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1, FfiHistoryItemMetaPatchV1,
-    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
-    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
+    FfiHistoryItemStatusV1, FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
     FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
-    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryUpdateProjectAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceScopeV1, FfiHistoryWorkspaceSortOrderV1,
-    FfiSpeakerAttribution, FfiSpeakerCandidate, FfiSpeakerTag, FfiStringPatchV1,
-    FfiTagCreateInputV1, FfiTranscriptSegment, FfiTranscriptSnapshotReasonV1, FfiTranscriptTiming,
+    FfiProjectCreateInputV1, FfiSpeakerAttribution, FfiSpeakerCandidate, FfiSpeakerTag,
+    FfiStringPatchV1, FfiTranscriptSegment, FfiTranscriptSnapshotReasonV1, FfiTranscriptTiming,
     FfiTranscriptTimingLevel, FfiTranscriptTimingSource, FfiTranscriptTimingUnit,
     SonaCoreBindingError, complete_history_live_draft_v1, create_history_live_draft_v1,
-    create_history_transcript_snapshot_v1, create_tag_v1, list_history_items_v1,
+    create_history_transcript_snapshot_v1, create_project_v1, list_history_items_v1,
     list_history_transcript_snapshots_v1, load_history_transcript_snapshot_v1,
     load_history_transcript_v1, purge_history_items_v1, query_history_workspace_v1,
-    replace_history_tag_assignments_v1, restore_history_items_v1, save_history_imported_file_v1,
-    save_history_recording_v1, trash_history_items_v1, update_history_item_meta_v1,
-    update_history_tag_assignments_v1, update_history_transcript_v1,
+    restore_history_items_v1, save_history_imported_file_v1, save_history_recording_v1,
+    trash_history_items_v1, update_history_item_meta_v1, update_history_project_assignments_v1,
+    update_history_transcript_v1,
 };
 
 fn segment() -> FfiTranscriptSegment {
@@ -91,8 +90,8 @@ fn empty_meta_patch() -> FfiHistoryItemMetaPatchV1 {
     }
 }
 
-fn tag_input(name: &str) -> FfiTagCreateInputV1 {
-    FfiTagCreateInputV1 {
+fn project_input(name: &str) -> FfiProjectCreateInputV1 {
+    FfiProjectCreateInputV1 {
         name: name.to_string(),
         description: None,
         icon: None,
@@ -110,7 +109,7 @@ async fn history_v1_covers_the_android_recording_and_library_lifecycle() {
         FfiHistoryCreateLiveDraftRequestV1 {
             id: Some("recording-1".to_string()),
             audio_extension: "wav".to_string(),
-            tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         },
     )
@@ -176,7 +175,7 @@ async fn history_v1_covers_the_android_recording_and_library_lifecycle() {
         FfiHistoryCreateLiveDraftRequestV1 {
             id: Some("draft-to-delete".to_string()),
             audio_extension: "wav".to_string(),
-            tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         },
     )
@@ -231,7 +230,7 @@ async fn history_v1_exposes_typed_lists_and_transcript_snapshots() {
         FfiHistorySaveRecordingRequestV1 {
             segments: vec![segment()],
             duration: 1.5,
-            tag_ids: Vec::new(),
+            project_id: None,
             audio: Some(FfiAudioSourceV1::Bytes {
                 data: vec![1, 2, 3],
                 extension: Some("wav".to_string()),
@@ -281,21 +280,21 @@ async fn history_v1_exposes_typed_lists_and_transcript_snapshots() {
 }
 
 #[tokio::test]
-async fn history_v1_covers_canonical_save_meta_tag_and_trash_mutations() {
+async fn history_v1_covers_canonical_save_meta_project_and_trash_mutations() {
     let dir = tempfile::tempdir().unwrap();
     let app_data_dir = dir.path().to_string_lossy().into_owned();
     let imported_source = dir.path().join("imported.wav");
     std::fs::write(&imported_source, [4, 5, 6]).unwrap();
-    let tag_a = create_tag_v1(app_data_dir.clone(), tag_input("Tag A")).unwrap();
-    let tag_b = create_tag_v1(app_data_dir.clone(), tag_input("Tag B")).unwrap();
-    let tag_c = create_tag_v1(app_data_dir.clone(), tag_input("Tag C")).unwrap();
+    let project_a = create_project_v1(app_data_dir.clone(), project_input("Project A")).unwrap();
+    let _project_b = create_project_v1(app_data_dir.clone(), project_input("Project B")).unwrap();
+    let project_c = create_project_v1(app_data_dir.clone(), project_input("Project C")).unwrap();
 
     let draft = create_history_live_draft_v1(
         app_data_dir.clone(),
         FfiHistoryCreateLiveDraftRequestV1 {
             id: Some("meta-draft".to_string()),
             audio_extension: "wav".to_string(),
-            tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         },
     )
@@ -308,7 +307,7 @@ async fn history_v1_covers_canonical_save_meta_tag_and_trash_mutations() {
             source_path: imported_source.to_string_lossy().into_owned(),
             segments: vec![segment()],
             duration: 1.5,
-            tag_ids: Vec::new(),
+            project_id: None,
             converted_source_path: None,
         },
     )
@@ -331,21 +330,20 @@ async fn history_v1_covers_canonical_save_meta_tag_and_trash_mutations() {
     )
     .await
     .unwrap();
-    update_history_tag_assignments_v1(
+    update_history_project_assignments_v1(
         app_data_dir.clone(),
-        FfiHistoryUpdateTagAssignmentsRequestV1 {
+        FfiHistoryUpdateProjectAssignmentsRequestV1 {
             ids: vec![draft.item.id.clone()],
-            add_tag_ids: vec![tag_a.id, tag_b.id],
-            remove_tag_ids: Vec::new(),
+            project_id: Some(project_a.id.clone()),
         },
     )
     .await
     .unwrap();
-    replace_history_tag_assignments_v1(
+    update_history_project_assignments_v1(
         app_data_dir.clone(),
-        FfiHistoryReplaceTagAssignmentsRequestV1 {
+        FfiHistoryUpdateProjectAssignmentsRequestV1 {
             ids: vec![draft.item.id.clone()],
-            tag_ids: vec![tag_c.id.clone()],
+            project_id: Some(project_c.id.clone()),
         },
     )
     .await
@@ -360,7 +358,7 @@ async fn history_v1_covers_canonical_save_meta_tag_and_trash_mutations() {
     assert_eq!(updated.title, "Typed title");
     assert_eq!(updated.icon.as_deref(), Some("microphone"));
     assert_eq!(updated.draft_source, None);
-    assert_eq!(updated.tag_ids, vec![tag_c.id]);
+    assert_eq!(updated.project_id, Some(project_c.id));
 
     let mut clear_meta = empty_meta_patch();
     clear_meta.icon = FfiStringPatchV1::Clear;
@@ -429,7 +427,7 @@ async fn history_v1_rejects_invalid_mutations_without_database_or_partial_writes
         FfiHistorySaveRecordingRequestV1 {
             segments: vec![segment()],
             duration: f64::NAN,
-            tag_ids: Vec::new(),
+            project_id: None,
             audio: Some(FfiAudioSourceV1::Bytes {
                 data: vec![1],
                 extension: Some("wav".to_string()),
@@ -448,7 +446,7 @@ async fn history_v1_rejects_invalid_mutations_without_database_or_partial_writes
         FfiHistoryCreateLiveDraftRequestV1 {
             id: Some("no-partial-meta".to_string()),
             audio_extension: "wav".to_string(),
-            tag_ids: Vec::new(),
+            project_id: None,
             icon: None,
         },
     )

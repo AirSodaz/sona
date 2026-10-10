@@ -851,7 +851,7 @@ test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
     'history_mutation_bridge.rs',
     'history_query_bridge.rs',
     'sync_bridge.rs',
-    'tag_bridge.rs',
+    'project_bridge.rs',
     'task_ledger_bridge.rs',
   ];
   for (const file of uniffiBridges) {
@@ -940,49 +940,48 @@ test('per-call reopening SQLite repositories stay behind the test-support featur
   }
 });
 
-test('UniFFI exposes versioned typed Tag contracts without extending legacy Project', () => {
+test('UniFFI exposes versioned typed Project contracts', () => {
   const binding = read('platforms', 'uniffi', 'src', 'lib.rs');
-  const tagBridge = withoutInlineRustTests(
-    read('platforms', 'uniffi', 'src', 'tag_bridge.rs'),
+  const projectBridge = withoutInlineRustTests(
+    read('platforms', 'uniffi', 'src', 'project_bridge.rs'),
   );
-  const tagMapper = read(
+  const projectMapper = read(
     'platforms',
     'uniffi',
     'src',
     'mapper',
-    'tag_mapper.rs',
+    'project_mapper.rs',
   );
 
   for (const typeName of [
-    'FfiTagCreateInputV1',
-    'FfiTagRecordV1',
-    'FfiTagRepositorySnapshotV1',
-    'FfiTagUpdateInputV1',
+    'FfiProjectCreateInputV1',
+    'FfiProjectRecordV1',
+    'FfiProjectRepositorySnapshotV1',
+    'FfiProjectUpdateInputV1',
   ]) {
-    assert.match(tagMapper, new RegExp(`struct\\s+${typeName}\\b`, 'u'));
+    assert.match(projectMapper, new RegExp(`struct\\s+${typeName}\\b`, 'u'));
   }
-  assert.doesNotMatch(tagMapper, /\bFfiTagDefaults\w*V1\b|\bdefaults\s*:/u);
-  assert.doesNotMatch(tagMapper, /serde_json|Value/u);
+  assert.doesNotMatch(projectMapper, /serde_json|Value/u);
 
   for (const functionName of [
-    'load_tag_repository_v1',
-    'replace_tags_v1',
-    'create_tag_v1',
-    'update_tag_v1',
-    'delete_tag_v1',
-    'reorder_tags_v1',
-    'set_active_tag_id_v1',
+    'load_project_repository_v1',
+    'replace_projects_v1',
+    'create_project_v1',
+    'update_project_v1',
+    'delete_project_v1',
+    'reorder_projects_v1',
+    'set_active_project_id_v1',
   ]) {
     const exportedFunction = new RegExp(
       `#\\[uniffi::export\\]\\s*pub\\s+fn\\s+${functionName}\\b`,
       'u',
     );
     assert.match(binding, exportedFunction);
-    assertBindingDelegatesToBridge(binding, functionName, 'tag_bridge');
-    assert.match(tagBridge, new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'));
+    assertBindingDelegatesToBridge(binding, functionName, 'project_bridge');
+    assert.match(projectBridge, new RegExp(`pub\\(crate\\)\\s+fn\\s+${functionName}\\b`, 'u'));
   }
 
-  assert.doesNotMatch(binding, /FfiProject\w*V1|\b\w*project\w*_v1\b/iu);
+  assert.doesNotMatch(binding, /FfiTag\w*V1|\b\w*tag\w*_v1\b/iu);
 });
 
 test('UniFFI exposes typed History V1 contracts and Android consumes them without JSON', () => {
@@ -1027,8 +1026,7 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
     'FfiHistoryCreateTranscriptSnapshotRequestV1',
     'FfiHistoryItemMetaPatchV1',
     'FfiHistoryUpdateItemMetaRequestV1',
-    'FfiHistoryUpdateTagAssignmentsRequestV1',
-    'FfiHistoryReplaceTagAssignmentsRequestV1',
+    'FfiHistoryUpdateProjectAssignmentsRequestV1',
     'FfiTranscriptSnapshotMetadataV1',
     'FfiTranscriptSnapshotRecordV1',
     'FfiHistoryWorkspaceQueryRequestV1',
@@ -1037,7 +1035,7 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
     'FfiHistoryWorkspaceItemSearchMatchV1',
     'FfiHistorySearchMatchEntryV1',
     'FfiHistoryWorkspaceSummaryV1',
-    'FfiHistoryTagCountEntryV1',
+    'FfiHistoryProjectCountEntryV1',
     'FfiHistoryWorkspaceItemCountsV1',
     'FfiHistoryWorkspaceQueryResultV1',
     'FfiLiveRecordingDraftResultV1',
@@ -1064,8 +1062,7 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
     'update_history_transcript_v1',
     'create_history_transcript_snapshot_v1',
     'update_history_item_meta_v1',
-    'update_history_tag_assignments_v1',
-    'replace_history_tag_assignments_v1',
+    'update_history_project_assignments_v1',
   ];
   for (const functionName of [...queryFunctions, ...mutationFunctions]) {
     assert.match(
@@ -1090,7 +1087,7 @@ test('UniFFI exposes typed History V1 contracts and Android consumes them withou
 
   assert.doesNotMatch(
     `${binding}\n${historyMapper}`,
-    /FfiProject\w*V1|\b\w*project\w*_v1\b|\bdelete_history_items_v1\b/iu,
+    /\bdelete_history_items_v1\b/iu,
   );
 });
 
@@ -1243,7 +1240,7 @@ test('UniFFI exposes typed Automation V1 repository and Tag-based validation con
     'FfiAutomationValidationStageConfigV1',
     'FfiAutomationValidationExportConfigV1',
     'FfiAutomationValidationRuleV1',
-    'FfiAutomationTagReferenceV1',
+    'FfiAutomationProjectReferenceV1',
     'FfiAutomationRuleValidationResultV1',
   ]) {
     assert.match(automationMapper, new RegExp(`struct\\s+${typeName}\\b`, 'u'));
@@ -1270,9 +1267,8 @@ test('UniFFI exposes typed Automation V1 repository and Tag-based validation con
   }
   assert.match(
     binding,
-    /pub\s+fn\s+validate_automation_rule_activation_v1\s*\([^)]*rule:\s*FfiAutomationValidationRuleV1[^)]*global_config_json:\s*String[^)]*tags:\s*Vec<FfiAutomationTagReferenceV1>/su,
+    /pub\s+fn\s+validate_automation_rule_activation_v1\s*\([^)]*rule:\s*FfiAutomationValidationRuleV1[^)]*global_config_json:\s*String[^)]*projects:\s*Vec<FfiAutomationProjectReferenceV1>/su,
   );
-  assert.doesNotMatch(binding, /FfiProject\w*V1|\b\w*project\w*_v1\b/iu);
 });
 
 // Every `*_json` UniFFI export without a `*_v1` sibling, and why it is still
@@ -1297,9 +1293,8 @@ const UNIFFI_JSON_ONLY_EXPORTS = new Map([
   ['volcengine_doubao_asr_config_from_json', 'dynamic-leaf'],
   // Legacy Project compatibility surface; deliberately gains no typed V1 API.
   ['delete_history_items_json', 'dynamic-leaf'],
-  ['update_history_project_assignments_json', 'dynamic-leaf'],
   ['reassign_history_project_json', 'dynamic-leaf'],
-  ['load_tag_repository_state_json', 'dynamic-leaf'],
+  ['load_project_repository_state_json', 'dynamic-leaf'],
   // Parser entry points: their whole purpose is turning the app's stored JSON
   // into the typed record, which is the *output*. A typed input would make them
   // identity functions, so they stay JSON by design.

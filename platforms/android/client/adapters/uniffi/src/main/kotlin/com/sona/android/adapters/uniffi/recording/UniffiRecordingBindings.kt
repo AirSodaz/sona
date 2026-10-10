@@ -16,7 +16,7 @@ import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceQueryResultV1
 import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
-import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateProjectAssignmentsRequestV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
 import uniffi.sona_uniffi_bind.FfiHistorySummaryPayloadV1
 import uniffi.sona_uniffi_bind.FfiHistoryCreateTranscriptSnapshotRequestV1
@@ -45,7 +45,7 @@ import uniffi.sona_uniffi_bind.saveHistoryImportedFileV1
 import uniffi.sona_uniffi_bind.restoreHistoryItemsV1
 import uniffi.sona_uniffi_bind.trashHistoryItemsV1
 import uniffi.sona_uniffi_bind.updateHistoryItemMetaV1
-import uniffi.sona_uniffi_bind.updateHistoryTagAssignmentsV1
+import uniffi.sona_uniffi_bind.updateHistoryProjectAssignmentsV1
 import uniffi.sona_uniffi_bind.updateHistoryTranscriptV1
 import uniffi.sona_uniffi_bind.volcengineDoubaoAsrConfigFromJson
 
@@ -183,7 +183,7 @@ internal interface UniffiHistoryBindings {
     ): List<FfiTranscriptSegment>?
 
     suspend fun updateItemMeta(appDataDir: String, request: FfiHistoryUpdateItemMetaRequestV1) {}
-    suspend fun updateTagAssignments(appDataDir: String, request: FfiHistoryUpdateTagAssignmentsRequestV1) {}
+    suspend fun updateProjectAssignments(appDataDir: String, request: FfiHistoryUpdateProjectAssignmentsRequestV1) {}
     suspend fun trashItems(appDataDir: String, request: FfiHistoryTrashItemsRequestV1) {}
     suspend fun restoreItems(appDataDir: String, request: FfiHistoryDeleteItemsRequestV1) {}
     suspend fun listSnapshots(appDataDir: String, historyId: String): List<FfiTranscriptSnapshotMetadataV1> = emptyList()
@@ -214,7 +214,7 @@ internal interface UniffiHistoryBindings {
             icon = null,
             kind = FfiHistoryItemKindV1.RECORDING,
             searchContent = "",
-            tagIds = emptyList(),
+            projectId = null,
             deletedAt = null,
             status = FfiHistoryItemStatusV1.COMPLETE,
             draftSource = null,
@@ -246,7 +246,7 @@ internal interface UniffiHistoryBindings {
         icon = null,
         kind = FfiHistoryItemKindV1.BATCH,
         searchContent = "",
-        tagIds = request.tagIds,
+        projectId = request.projectId,
         deletedAt = null,
         status = FfiHistoryItemStatusV1.COMPLETE,
         draftSource = null,
@@ -289,10 +289,10 @@ internal object GeneratedUniffiHistoryBindings : UniffiHistoryBindings {
         request: FfiHistoryUpdateItemMetaRequestV1,
     ) = updateHistoryItemMetaV1(appDataDir, request)
 
-    override suspend fun updateTagAssignments(
+    override suspend fun updateProjectAssignments(
         appDataDir: String,
-        request: FfiHistoryUpdateTagAssignmentsRequestV1,
-    ) = updateHistoryTagAssignmentsV1(appDataDir, request)
+        request: FfiHistoryUpdateProjectAssignmentsRequestV1,
+    ) = updateHistoryProjectAssignmentsV1(appDataDir, request)
 
     override suspend fun trashItems(
         appDataDir: String,

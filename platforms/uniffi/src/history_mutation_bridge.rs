@@ -4,10 +4,9 @@ use crate::{
     FfiHistoryCommitTranscriptEditRequestV1, FfiHistoryCommitTranscriptEditResultV1,
     FfiHistoryCompleteLiveDraftRequestV1, FfiHistoryCreateLiveDraftRequestV1,
     FfiHistoryCreateTranscriptSnapshotRequestV1, FfiHistoryDeleteItemsRequestV1,
-    FfiHistoryItemRecordV1, FfiHistoryReplaceTagAssignmentsRequestV1,
-    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
+    FfiHistoryItemRecordV1, FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
     FfiHistorySummaryPayloadV1, FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
-    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryUpdateProjectAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiLiveRecordingDraftResultV1, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
     FfiTranscriptSnapshotMetadataV1, SonaCoreBindingError, SonaCoreBindingResult,
 };
@@ -19,8 +18,8 @@ use sona_application::history::HistoryQueryService;
 use sona_core::history::mutation_repository::{
     HistoryCommitTranscriptEditRequest, HistoryCompleteLiveDraftRequest,
     HistoryCreateTranscriptSnapshotRequest, HistoryDeleteItemsRequest, HistoryMutationError,
-    HistoryReplaceTagAssignmentsRequest, HistoryTrashItemsRequest,
-    HistoryUpdateTagAssignmentsRequest, HistoryUpdateTranscriptRequest,
+    HistoryTrashItemsRequest, HistoryUpdateProjectAssignmentsRequest,
+    HistoryUpdateTranscriptRequest,
 };
 use sona_core::history::transcript_edit::apply_transcript_edit;
 use sona_core::history::transcript_payload::normalize_history_transcript_segments;
@@ -83,13 +82,6 @@ struct HistoryCreateTranscriptSnapshotJsonRequest {
     history_id: String,
     reason: TranscriptSnapshotReason,
     segments: Value,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LegacyHistoryProjectAssignmentsRequest {
-    ids: Vec<String>,
-    project_id: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -404,12 +396,19 @@ pub(crate) async fn update_history_project_assignments_json(
     context: impl Into<ContextSource>,
     request_json: String,
 ) -> SonaCoreBindingResult<String> {
-    let request: LegacyHistoryProjectAssignmentsRequest = parse_request(&request_json)?;
+    let request: HistoryUpdateProjectAssignmentsRequest = parse_request(&request_json)?;
     run_mutation(context, move |service| {
-        service.replace_tag_assignments(HistoryReplaceTagAssignmentsRequest {
-            ids: request.ids,
-            tag_ids: request.project_id.into_iter().collect(),
-        })
+        service.update_project_assignments(request)
+    })
+    .await
+}
+
+pub(crate) async fn update_history_project_assignments_v1(
+    context: impl Into<ContextSource>,
+    request: FfiHistoryUpdateProjectAssignmentsRequestV1,
+) -> SonaCoreBindingResult<()> {
+    run_typed_mutation(context, move |service| {
+        service.update_project_assignments(request.into())
     })
     .await
 }
@@ -420,48 +419,6 @@ pub(crate) async fn reassign_history_project_json(
 ) -> SonaCoreBindingResult<String> {
     let request: LegacyHistoryReassignProjectRequest = parse_request(&request_json)?;
     reassign_history_tag_compat(context, request).await
-}
-
-pub(crate) async fn update_history_tag_assignments_json(
-    context: impl Into<ContextSource>,
-    request_json: String,
-) -> SonaCoreBindingResult<String> {
-    let request: HistoryUpdateTagAssignmentsRequest = parse_request(&request_json)?;
-    run_mutation(context, move |service| {
-        service.update_tag_assignments(request)
-    })
-    .await
-}
-
-pub(crate) async fn update_history_tag_assignments_v1(
-    context: impl Into<ContextSource>,
-    request: FfiHistoryUpdateTagAssignmentsRequestV1,
-) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(context, move |service| {
-        service.update_tag_assignments(request.into())
-    })
-    .await
-}
-
-pub(crate) async fn replace_history_tag_assignments_json(
-    context: impl Into<ContextSource>,
-    request_json: String,
-) -> SonaCoreBindingResult<String> {
-    let request: HistoryReplaceTagAssignmentsRequest = parse_request(&request_json)?;
-    run_mutation(context, move |service| {
-        service.replace_tag_assignments(request)
-    })
-    .await
-}
-
-pub(crate) async fn replace_history_tag_assignments_v1(
-    context: impl Into<ContextSource>,
-    request: FfiHistoryReplaceTagAssignmentsRequestV1,
-) -> SonaCoreBindingResult<()> {
-    run_typed_mutation(context, move |service| {
-        service.replace_tag_assignments(request.into())
-    })
-    .await
 }
 
 async fn reassign_history_tag_compat(
@@ -503,10 +460,9 @@ async fn reassign_history_tag_compat(
         }
         let mutation = HistoryMutationService::new(Arc::new(context.history_store()));
         mutation
-            .update_tag_assignments(HistoryUpdateTagAssignmentsRequest {
+            .update_project_assignments(HistoryUpdateProjectAssignmentsRequest {
                 ids,
-                add_tag_ids: request.next_project_id.into_iter().collect(),
-                remove_tag_ids: vec![request.current_project_id],
+                project_id: request.next_project_id,
             })
             .map_err(history_mutation_error)?;
         canonical_json(())

@@ -26,7 +26,7 @@ import com.sona.android.adapters.android.system.UuidRecordingIdPort
 import com.sona.android.adapters.uniffi.bootstrap.UniffiSonaBootstrapAdapter
 import com.sona.android.adapters.uniffi.data.UniffiBackupAdapter
 import com.sona.android.adapters.uniffi.data.UniffiTranscriptExportAdapter
-import com.sona.android.adapters.uniffi.library.UniffiTagWorkspaceAdapter
+import com.sona.android.adapters.uniffi.library.UniffiProjectWorkspaceAdapter
 import com.sona.android.adapters.uniffi.library.UniffiTranscriptEditorAdapter
 import com.sona.android.adapters.uniffi.recovery.UniffiRecoveryAdapter
 import com.sona.android.adapters.uniffi.recording.UniffiOnlineBatchTranscriptionAdapter
@@ -44,7 +44,7 @@ import com.sona.android.app.feature.recording.AndroidRecordingServiceCommandLaun
 import com.sona.android.app.feature.recording.RecordingForegroundGateway
 import com.sona.android.application.bootstrap.LoadSonaBootstrap
 import com.sona.android.application.library.HistoryWorkspacePort
-import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.ProjectWorkspacePort
 import com.sona.android.application.library.HistoryMediaSourcePort
 import com.sona.android.application.library.TranscriptEditorPort
 import com.sona.android.application.media.AudioPlaybackPort
@@ -105,7 +105,7 @@ class SonaAppContainer(context: Context) {
     private val backup = UniffiBackupAdapter(appDataDir)
     private val transcriptExporter = UniffiTranscriptExportAdapter()
     private val fileTransfer = AndroidSafFileTransferAdapter.create(appContext)
-    private val tags = UniffiTagWorkspaceAdapter(appDataDir, syncScheduler::scheduleAfterLocalChange)
+    private val projects = UniffiProjectWorkspaceAdapter(appDataDir, syncScheduler::scheduleAfterLocalChange)
     private val providerCatalog = UniffiStreamingProviderCatalogAdapter()
     private val microphoneCapture = AndroidMicrophoneCapturePort(
         backendFactory = ::createAudioBackend,
@@ -169,7 +169,7 @@ class SonaAppContainer(context: Context) {
     val transcriptExports: TranscriptExportPort = transcriptExporter
     val fileTransfers: FileTransferPort = fileTransfer
     val recoveryJobs: RecoveryControllerPort = recoveryController
-    val tagWorkspace: TagWorkspacePort = tags
+    val projectWorkspace: ProjectWorkspacePort = projects
     val recordingLibrary: HistoryWorkspacePort = history
     val llmHistory: com.sona.android.application.llm.LlmHistorySummaryPort = history
     val transcriptEditor: TranscriptEditorPort = transcriptEditorAdapter

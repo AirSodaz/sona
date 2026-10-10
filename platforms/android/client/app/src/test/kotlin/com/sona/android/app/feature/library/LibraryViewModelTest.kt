@@ -15,8 +15,9 @@ import com.sona.android.application.library.HistoryWorkspacePage
 import com.sona.android.application.library.HistoryWorkspacePort
 import com.sona.android.application.library.HistoryWorkspaceQuery
 import com.sona.android.application.library.HistoryWorkspaceSummary
-import com.sona.android.application.library.TagRecord
-import com.sona.android.application.library.TagWorkspacePort
+import com.sona.android.application.library.ProjectRecord
+import com.sona.android.application.library.ProjectWorkspacePort
+import com.sona.android.application.library.CreateProjectRequest
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.HistoryScope
 import com.sona.android.application.library.CommitTranscriptEditRequest
@@ -529,13 +530,13 @@ class LibraryViewModelTest {
         val viewModel = libraryViewModel(port)
 
         viewModel.toggleSelection("history-1")
-        viewModel.addTagToSelected("tag-1")
+        viewModel.setProjectForSelected("project-1")
         advanceUntilIdle()
         viewModel.toggleSelection("history-2")
         viewModel.trashSelected()
         advanceUntilIdle()
 
-        assertEquals(listOf(listOf("history-1") to listOf("tag-1")), port.addedTags)
+        assertEquals(listOf(listOf("history-1") to "project-1"), port.assignedProjects)
         assertEquals(listOf(listOf("history-2")), port.trashed)
         assertTrue(viewModel.state.value.selectedIds.isEmpty())
     }
@@ -574,7 +575,7 @@ class LibraryViewModelTest {
     ) = LibraryViewModel(
         library = port,
         transcribeRecordingWithCloud = transcribe,
-        tags = FakeTagWorkspace,
+        projects = FakeProjectWorkspace,
         exporter = exporter,
         files = files,
         editor = editor,
@@ -626,7 +627,7 @@ class LibraryViewModelTest {
         val transcriptRequests = mutableListOf<String>()
         var pageFailure: Throwable? = null
         var transcriptFailure: Throwable? = null
-        val addedTags = mutableListOf<Pair<List<String>, List<String>>>()
+        val assignedProjects = mutableListOf<Pair<List<String>, String?>>()
         val trashed = mutableListOf<List<String>>()
 
         override suspend fun query(request: HistoryWorkspaceQuery): HistoryWorkspacePage {
@@ -645,8 +646,8 @@ class LibraryViewModelTest {
         }
 
         override suspend fun updateTitle(historyId: String, title: String) = Unit
-        override suspend fun updateTags(ids: List<String>, addTagIds: List<String>, removeTagIds: List<String>) {
-            if (addTagIds.isNotEmpty()) addedTags += ids to addTagIds
+        override suspend fun updateProjectAssignment(ids: List<String>, projectId: String?) {
+            assignedProjects += ids to projectId
         }
         override suspend fun trash(ids: List<String>, deletedAtEpochMillis: Long) { trashed += ids }
         override suspend fun restore(ids: List<String>) = Unit
@@ -655,12 +656,12 @@ class LibraryViewModelTest {
         override suspend fun loadSnapshot(historyId: String, snapshotId: String) = null
     }
 
-    private object FakeTagWorkspace : TagWorkspacePort {
-        override suspend fun listTags() = emptyList<TagRecord>()
-        override suspend fun createTag(request: com.sona.android.application.library.CreateTagRequest) =
-            error("must not create a tag")
-        override suspend fun renameTag(tagId: String, name: String): TagRecord? = null
-        override suspend fun deleteTag(tagId: String) = Unit
+    private object FakeProjectWorkspace : ProjectWorkspacePort {
+        override suspend fun listProjects() = emptyList<ProjectRecord>()
+        override suspend fun createProject(request: CreateProjectRequest) =
+            error("must not create a project")
+        override suspend fun renameProject(projectId: String, name: String): ProjectRecord? = null
+        override suspend fun deleteProject(projectId: String) = Unit
     }
 
     private object FakeFileTransfer : FileTransferPort {

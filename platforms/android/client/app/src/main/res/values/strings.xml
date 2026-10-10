@@ -117,7 +117,8 @@
     <string name="library_transcript_load_failed">Transcript could not be loaded</string>
     <string name="history_search">Search history</string>
     <string name="history_scope_all">All</string>
-    <string name="history_scope_untagged">Untagged</string>
+    <string name="history_scope_inbox">Inbox</string>
+    <string name="history_scope_untagged">Inbox</string>
     <string name="history_scope_trash">Trash</string>
     <plurals name="history_selected_count">
         <item quantity="one">%1$d item selected</item>
@@ -127,18 +128,18 @@
     <string name="history_delete_forever">Delete permanently</string>
     <string name="history_move_to_trash">Move to trash</string>
     <string name="history_clear_selection">Clear selection</string>
-    <string name="history_manage_selected_tags">Manage selected tags</string>
-    <string name="history_add_tag">Add %1$s</string>
-    <string name="history_remove_tag">Remove %1$s</string>
+    <string name="history_manage_selected_project">Assign project</string>
+    <string name="history_move_to_project">Move to %1$s</string>
+    <string name="history_move_to_inbox">Move to Inbox</string>
     <string name="history_delete_confirm_title">Delete permanently?</string>
     <plurals name="history_delete_confirm_body">
         <item quantity="one">%1$d history item and its lightweight transcript data will be permanently deleted.</item>
         <item quantity="other">%1$d history items and their lightweight transcript data will be permanently deleted.</item>
     </plurals>
     <string name="history_edit_title">Edit title</string>
-    <string name="history_tags">Tags</string>
-    <string name="history_create_tag">Create tag</string>
-    <string name="history_tag_name">Tag name</string>
+    <string name="history_projects">Projects</string>
+    <string name="history_create_project">Create project</string>
+    <string name="history_project_name">Project name</string>
     <string name="history_snapshots">Transcript snapshots</string>
     <string name="history_snapshot_empty">No transcript snapshots</string>
     <string name="history_snapshot_title">Snapshot · %1$s</string>
@@ -359,7 +360,7 @@
     <string name="backup_import">Import backup</string>
     <string name="backup_excludes">Backups exclude audio, device credentials, local models, and sync secrets.</string>
     <string name="backup_confirm_title">Replace local data?</string>
-    <string name="backup_confirm_body">Archive contents · History: %1$d · Transcripts: %2$d · Tags: %3$d. Current local data will be replaced.</string>
+    <string name="backup_confirm_body">Archive contents · History: %1$d · Transcripts: %2$d · Projects: %3$d. Current local data will be replaced.</string>
     <string name="backup_manifest_details">Schema %1$d · Created %2$s · App %3$s</string>
     <string name="backup_replace_scopes">Restore replaces local config, workspace, lightweight history, automation, and analytics included by this archive.</string>
     <string name="backup_restore">Restore</string>

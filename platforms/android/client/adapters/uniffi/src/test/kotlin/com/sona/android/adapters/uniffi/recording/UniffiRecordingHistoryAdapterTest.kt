@@ -39,7 +39,7 @@ import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryItemMetaPatchV1
 import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
-import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateProjectAssignmentsRequestV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotMetadataV1
 import uniffi.sona_uniffi_bind.FfiTranscriptSnapshotRecordV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
@@ -74,7 +74,7 @@ class UniffiRecordingHistoryAdapterTest {
                         previewText = "Hello mobile history",
                         status = HistoryItemStatus.DRAFT,
                         kind = HistoryItemKind.RECORDING,
-                        tagIds = listOf("tag-1"),
+                        projectId = "project-1",
                         deletedAtEpochMillis = null,
                         audioPath = "history-1.wav",
                         audioAvailable = true,
@@ -124,7 +124,7 @@ class UniffiRecordingHistoryAdapterTest {
         assertEquals("C:/app-data", bindings.createAppDataDir)
         assertEquals("recording-1", create.id)
         assertEquals("wav", create.audioExtension)
-        assertEquals(emptyList<String>(), create.tagIds)
+        assertNull(create.projectId)
         assertNull(create.icon)
         assertEquals("history-1", checkpoint.historyId)
         assertEquals("segment-1", checkpoint.segments.single().id)
@@ -329,9 +329,9 @@ class UniffiRecordingHistoryAdapterTest {
             request: FfiHistoryUpdateItemMetaRequestV1,
         ) = Unit
 
-        override suspend fun updateTagAssignments(
+        override suspend fun updateProjectAssignments(
             appDataDir: String,
-            request: FfiHistoryUpdateTagAssignmentsRequestV1,
+            request: FfiHistoryUpdateProjectAssignmentsRequestV1,
         ) = Unit
 
         override suspend fun trashItems(
@@ -383,7 +383,7 @@ class UniffiRecordingHistoryAdapterTest {
             icon = null,
             kind = FfiHistoryItemKindV1.RECORDING,
             searchContent = "",
-            tagIds = listOf("tag-1"),
+            projectId = "project-1",
             deletedAt = null,
             status = status,
             draftSource = FfiHistoryDraftSourceV1.LIVE_RECORD,
@@ -403,9 +403,9 @@ class UniffiRecordingHistoryAdapterTest {
                     batchCount = 0uL,
                 ),
                 itemCounts = FfiHistoryWorkspaceItemCountsV1(
-                    untagged = 0uL,
+                    inbox = 0uL,
                     trash = 0uL,
-                    byTagId = emptyList(),
+                    byProjectId = emptyList(),
                 ),
             )
     }

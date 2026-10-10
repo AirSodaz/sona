@@ -1,7 +1,8 @@
+use sona_core::project::ProjectRecord;
 use sona_core::tag::{TagCreateInput, TagRecord, TagRepositorySnapshot, TagUpdateInput};
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiTagCreateInputV1 {
+pub struct FfiProjectCreateInputV1 {
     pub name: String,
     pub description: Option<String>,
     pub icon: Option<String>,
@@ -9,7 +10,7 @@ pub struct FfiTagCreateInputV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiTagRecordV1 {
+pub struct FfiProjectRecordV1 {
     pub id: String,
     pub name: String,
     pub description: String,
@@ -21,7 +22,7 @@ pub struct FfiTagRecordV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiTagUpdateInputV1 {
+pub struct FfiProjectUpdateInputV1 {
     pub name: Option<String>,
     pub icon: Option<String>,
     pub color: Option<String>,
@@ -29,13 +30,13 @@ pub struct FfiTagUpdateInputV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiTagRepositorySnapshotV1 {
-    pub tags: Vec<FfiTagRecordV1>,
-    pub active_tag_id: Option<String>,
+pub struct FfiProjectRepositorySnapshotV1 {
+    pub projects: Vec<FfiProjectRecordV1>,
+    pub active_project_id: Option<String>,
 }
 
-impl From<FfiTagCreateInputV1> for TagCreateInput {
-    fn from(value: FfiTagCreateInputV1) -> Self {
+impl From<FfiProjectCreateInputV1> for TagCreateInput {
+    fn from(value: FfiProjectCreateInputV1) -> Self {
         Self {
             name: value.name,
             description: value.description,
@@ -45,7 +46,7 @@ impl From<FfiTagCreateInputV1> for TagCreateInput {
     }
 }
 
-impl From<TagRecord> for FfiTagRecordV1 {
+impl From<TagRecord> for FfiProjectRecordV1 {
     fn from(value: TagRecord) -> Self {
         Self {
             id: value.id,
@@ -60,10 +61,25 @@ impl From<TagRecord> for FfiTagRecordV1 {
     }
 }
 
-impl TryFrom<FfiTagRecordV1> for TagRecord {
+impl From<ProjectRecord> for FfiProjectRecordV1 {
+    fn from(value: ProjectRecord) -> Self {
+        Self {
+            id: value.id,
+            name: value.name,
+            description: value.description,
+            icon: value.icon.unwrap_or_default(),
+            color: value.color.unwrap_or_default(),
+            sort_order: value.sort_order as u64,
+            created_at: value.created_at,
+            updated_at: value.updated_at,
+        }
+    }
+}
+
+impl TryFrom<FfiProjectRecordV1> for TagRecord {
     type Error = String;
 
-    fn try_from(value: FfiTagRecordV1) -> Result<Self, Self::Error> {
+    fn try_from(value: FfiProjectRecordV1) -> Result<Self, Self::Error> {
         Ok(Self {
             id: value.id,
             name: value.name,
@@ -71,15 +87,15 @@ impl TryFrom<FfiTagRecordV1> for TagRecord {
             icon: value.icon,
             color: value.color,
             sort_order: usize::try_from(value.sort_order)
-                .map_err(|_| format!("tag sort order {} is too large", value.sort_order))?,
+                .map_err(|_| format!("project sort order {} is too large", value.sort_order))?,
             created_at: value.created_at,
             updated_at: value.updated_at,
         })
     }
 }
 
-impl From<FfiTagUpdateInputV1> for TagUpdateInput {
-    fn from(value: FfiTagUpdateInputV1) -> Self {
+impl From<FfiProjectUpdateInputV1> for TagUpdateInput {
+    fn from(value: FfiProjectUpdateInputV1) -> Self {
         Self {
             name: value.name,
             icon: value.icon,
@@ -89,11 +105,11 @@ impl From<FfiTagUpdateInputV1> for TagUpdateInput {
     }
 }
 
-impl From<TagRepositorySnapshot> for FfiTagRepositorySnapshotV1 {
+impl From<TagRepositorySnapshot> for FfiProjectRepositorySnapshotV1 {
     fn from(value: TagRepositorySnapshot) -> Self {
         Self {
-            tags: value.tags.into_iter().map(Into::into).collect(),
-            active_tag_id: value.active_tag_id,
+            projects: value.tags.into_iter().map(Into::into).collect(),
+            active_project_id: value.active_tag_id,
         }
     }
 }

@@ -105,14 +105,13 @@ internal fun LibraryScreen(
     onTrashSelected: () -> Unit,
     onRestoreSelected: () -> Unit,
     onPurgeSelected: () -> Unit,
-    onAddTagToSelected: (String) -> Unit,
-    onRemoveTagFromSelected: (String) -> Unit,
+    onMoveSelectedToProject: (String?) -> Unit,
     recoveryPendingCount: Int,
     onOpenRecovery: () -> Unit,
 ) {
     val listState = rememberLazyListState()
     var purgeConfirmationVisible by remember { mutableStateOf(false) }
-    var tagMenuVisible by remember { mutableStateOf(false) }
+    var projectMenuVisible by remember { mutableStateOf(false) }
 
     if (purgeConfirmationVisible) {
         AlertDialog(
@@ -222,9 +221,9 @@ internal fun LibraryScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ScopeChip(stringResource(R.string.history_scope_all), state.query.scope == HistoryScope.All) { onScopeChanged(HistoryScope.All) }
-                ScopeChip(stringResource(R.string.history_scope_untagged), state.query.scope == HistoryScope.Untagged) { onScopeChanged(HistoryScope.Untagged) }
-                state.tags.forEach { tag ->
-                    ScopeChip(tag.name, state.query.scope == HistoryScope.Tag(tag.id)) { onScopeChanged(HistoryScope.Tag(tag.id)) }
+                ScopeChip(stringResource(R.string.history_scope_inbox), state.query.scope == HistoryScope.Inbox) { onScopeChanged(HistoryScope.Inbox) }
+                state.projects.forEach { project ->
+                    ScopeChip(project.name, state.query.scope == HistoryScope.Project(project.id)) { onScopeChanged(HistoryScope.Project(project.id)) }
                 }
                 ScopeChip(stringResource(R.string.history_scope_trash), state.query.scope == HistoryScope.Trash) { onScopeChanged(HistoryScope.Trash) }
             }
@@ -282,23 +281,23 @@ internal fun LibraryScreen(
                             IconButton(onClick = { purgeConfirmationVisible = true }) { Icon(Icons.Rounded.DeleteForever, stringResource(R.string.history_delete_forever)) }
                         } else {
                             Box {
-                                IconButton(onClick = { tagMenuVisible = true }) {
-                                    Icon(Icons.AutoMirrored.Rounded.Label, stringResource(R.string.history_manage_selected_tags))
+                                IconButton(onClick = { projectMenuVisible = true }) {
+                                    Icon(Icons.Rounded.FolderOpen, stringResource(R.string.history_manage_selected_project))
                                 }
-                                DropdownMenu(expanded = tagMenuVisible, onDismissRequest = { tagMenuVisible = false }) {
-                                    state.tags.forEach { tag ->
+                                DropdownMenu(expanded = projectMenuVisible, onDismissRequest = { projectMenuVisible = false }) {
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(R.string.history_move_to_inbox)) },
+                                        onClick = {
+                                            projectMenuVisible = false
+                                            onMoveSelectedToProject(null)
+                                        },
+                                    )
+                                    state.projects.forEach { project ->
                                         DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.history_add_tag, tag.name)) },
+                                            text = { Text(stringResource(R.string.history_move_to_project, project.name)) },
                                             onClick = {
-                                                tagMenuVisible = false
-                                                onAddTagToSelected(tag.id)
-                                            },
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(R.string.history_remove_tag, tag.name)) },
-                                            onClick = {
-                                                tagMenuVisible = false
-                                                onRemoveTagFromSelected(tag.id)
+                                                projectMenuVisible = false
+                                                onMoveSelectedToProject(project.id)
                                             },
                                         )
                                     }

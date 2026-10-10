@@ -24,6 +24,8 @@ mod llm_runtime_mapper;
 mod llm_task_mapper;
 #[path = "mapper/model_mapper.rs"]
 mod model_mapper;
+#[path = "mapper/project_mapper.rs"]
+mod project_mapper;
 #[path = "mapper/recovery_mapper.rs"]
 mod recovery_mapper;
 #[path = "mapper/runtime_mapper.rs"]
@@ -34,8 +36,6 @@ mod secret_mapper;
 mod storage_usage_mapper;
 #[path = "mapper/sync_mapper.rs"]
 mod sync_mapper;
-#[path = "mapper/tag_mapper.rs"]
-mod tag_mapper;
 #[path = "mapper/task_ledger_mapper.rs"]
 mod task_ledger_mapper;
 
@@ -71,11 +71,10 @@ pub use history_mapper::{
     FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
     FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
     FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
-    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
-    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
-    FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1, FfiHistoryTagCountEntryV1,
+    FfiHistoryItemStatusV1, FfiHistoryProjectCountEntryV1, FfiHistorySaveImportedFileRequestV1,
+    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1,
     FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
-    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryUpdateProjectAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceItemCountsV1, FfiHistoryWorkspaceItemSearchMatchV1,
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
@@ -93,6 +92,7 @@ pub use llm_mapper::*;
 pub use llm_runtime_mapper::*;
 pub use llm_task_mapper::*;
 pub use model_mapper::*;
+pub use project_mapper::*;
 pub use recovery_mapper::{
     FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
     FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
@@ -117,5 +117,4 @@ pub use sync_mapper::{
     FfiSyncVersionV1,
 };
 pub(crate) use sync_mapper::{provider_configuration_from_ffi, sync_conflict_detail_to_ffi};
-pub use tag_mapper::*;
 pub use task_ledger_mapper::*;

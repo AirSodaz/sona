@@ -11,9 +11,9 @@ enum class TranscriptSnapshotReason { POLISH, TRANSLATE, RETRANSCRIBE, RESTORE, 
 
 sealed interface HistoryScope {
     data object All : HistoryScope
-    data object Untagged : HistoryScope
+    data object Inbox : HistoryScope
     data object Trash : HistoryScope
-    data class Tag(val tagId: String) : HistoryScope
+    data class Project(val projectId: String) : HistoryScope
 }
 
 data class HistoryWorkspaceQuery(
@@ -41,7 +41,7 @@ data class HistoryItem(
     val previewText: String,
     val status: HistoryItemStatus,
     val kind: HistoryItemKind,
-    val tagIds: List<String> = emptyList(),
+    val projectId: String? = null,
     val deletedAtEpochMillis: Long? = null,
     val audioPath: String = "",
     val audioAvailable: Boolean = false,
@@ -58,9 +58,9 @@ data class HistoryWorkspaceSummary(
 )
 
 data class HistoryWorkspaceCounts(
-    val untagged: Long,
+    val inbox: Long,
     val trash: Long,
-    val byTagId: Map<String, Long>,
+    val byProjectId: Map<String, Long>,
 )
 
 data class HistoryWorkspacePage(
@@ -88,7 +88,7 @@ interface HistoryWorkspacePort {
     suspend fun query(request: HistoryWorkspaceQuery): HistoryWorkspacePage
     suspend fun loadTranscript(historyId: String): List<TranscriptSegment>
     suspend fun updateTitle(historyId: String, title: String)
-    suspend fun updateTags(ids: List<String>, addTagIds: List<String>, removeTagIds: List<String>)
+    suspend fun updateProjectAssignment(ids: List<String>, projectId: String?)
     suspend fun trash(ids: List<String>, deletedAtEpochMillis: Long)
     suspend fun restore(ids: List<String>)
     suspend fun purge(ids: List<String>)

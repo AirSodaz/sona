@@ -41,7 +41,7 @@ import uniffi.sona_uniffi_bind.FfiHistorySaveImportedFileRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateTranscriptRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryTrashItemsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryUpdateItemMetaRequestV1
-import uniffi.sona_uniffi_bind.FfiHistoryUpdateTagAssignmentsRequestV1
+import uniffi.sona_uniffi_bind.FfiHistoryUpdateProjectAssignmentsRequestV1
 import uniffi.sona_uniffi_bind.FfiHistoryDraftSourcePatchV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceDateFilterV1
 import uniffi.sona_uniffi_bind.FfiHistoryWorkspaceFilterTypeV1
@@ -77,7 +77,7 @@ class UniffiRecordingHistoryAdapter internal constructor(
             FfiHistoryCreateLiveDraftRequestV1(
                 id = request.recordingId,
                 audioExtension = request.audioExtension,
-                tagIds = emptyList(),
+                projectId = null,
                 icon = null,
             ),
         )
@@ -163,9 +163,9 @@ class UniffiRecordingHistoryAdapter internal constructor(
                 batchCount = response.summary.batchCount.toLongChecked("Batch count"),
             ),
             counts = HistoryWorkspaceCounts(
-                untagged = response.itemCounts.untagged.toLongChecked("Untagged count"),
+                inbox = response.itemCounts.inbox.toLongChecked("Inbox count"),
                 trash = response.itemCounts.trash.toLongChecked("Trash count"),
-                byTagId = response.itemCounts.byTagId.associate { it.tagId to it.count.toLongChecked("Tag count") },
+                byProjectId = response.itemCounts.byProjectId.associate { it.projectId to it.count.toLongChecked("Project count") },
             ),
         )
     }
@@ -198,7 +198,7 @@ class UniffiRecordingHistoryAdapter internal constructor(
                 sourcePath = sourceName,
                 segments = request.segments.map(TranscriptSegment::toFfi),
                 duration = request.durationMillis.coerceAtLeast(0L) / 1_000.0,
-                tagIds = emptyList(),
+                projectId = null,
                 convertedSourcePath = request.normalizedWavPath,
             ),
         )
@@ -238,11 +238,11 @@ class UniffiRecordingHistoryAdapter internal constructor(
         onLocalChange()
     }
 
-    override suspend fun updateTags(ids: List<String>, addTagIds: List<String>, removeTagIds: List<String>) {
+    override suspend fun updateProjectAssignment(ids: List<String>, projectId: String?) {
         require(ids.isNotEmpty() && ids.none(String::isBlank)) { "History IDs must not be empty." }
-        bindings.updateTagAssignments(
+        bindings.updateProjectAssignments(
             appDataDir,
-            FfiHistoryUpdateTagAssignmentsRequestV1(ids, addTagIds, removeTagIds),
+            FfiHistoryUpdateProjectAssignmentsRequestV1(ids, projectId),
         )
         onLocalChange()
     }
@@ -326,7 +326,7 @@ private fun FfiHistoryItemRecordV1.toApplication(searchMatch: HistorySearchMatch
         FfiHistoryItemKindV1.RECORDING -> HistoryItemKind.RECORDING
         FfiHistoryItemKindV1.BATCH -> HistoryItemKind.BATCH
     },
-    tagIds = tagIds,
+    projectId = projectId,
     deletedAtEpochMillis = deletedAt?.toLongChecked("History deleted timestamp"),
     audioPath = audioPath,
     audioAvailable = audioStatus == FfiHistoryAudioStatusV1.AVAILABLE && audioPath.isNotBlank(),
@@ -336,9 +336,9 @@ private fun FfiHistoryItemRecordV1.toApplication(searchMatch: HistorySearchMatch
 
 private fun HistoryScope.toFfi(): FfiHistoryWorkspaceScopeV1 = when (this) {
     HistoryScope.All -> FfiHistoryWorkspaceScopeV1.All
-    HistoryScope.Untagged -> FfiHistoryWorkspaceScopeV1.Untagged
+    HistoryScope.Inbox -> FfiHistoryWorkspaceScopeV1.Inbox
     HistoryScope.Trash -> FfiHistoryWorkspaceScopeV1.Trash
-    is HistoryScope.Tag -> FfiHistoryWorkspaceScopeV1.Tag(tagId)
+    is HistoryScope.Project -> FfiHistoryWorkspaceScopeV1.Project(projectId)
 }
 
 private fun HistoryFilterType.toFfi() = when (this) {

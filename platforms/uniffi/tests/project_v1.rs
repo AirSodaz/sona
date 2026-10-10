@@ -1,30 +1,30 @@
 use sona_uniffi_bind::{
-    FfiTagCreateInputV1, FfiTagUpdateInputV1, create_tag_v1, load_tag_repository_v1,
-    reorder_tags_v1, update_tag_v1,
+    FfiProjectCreateInputV1, FfiProjectUpdateInputV1, create_project_v1,
+    load_project_repository_v1, reorder_projects_v1, update_project_v1,
 };
 
 #[test]
-fn tag_v1_roundtrips_records_without_json_payloads() {
+fn project_v1_roundtrips_records_without_json_payloads() {
     let dir = tempfile::tempdir().unwrap();
     let app_data_dir = dir.path().to_string_lossy().into_owned();
 
-    let empty = load_tag_repository_v1(app_data_dir.clone()).unwrap();
-    assert!(empty.tags.is_empty());
-    assert_eq!(empty.active_tag_id, None);
+    let empty = load_project_repository_v1(app_data_dir.clone()).unwrap();
+    assert!(empty.projects.is_empty());
+    assert_eq!(empty.active_project_id, None);
 
-    let first = create_tag_v1(
+    let first = create_project_v1(
         app_data_dir.clone(),
-        FfiTagCreateInputV1 {
+        FfiProjectCreateInputV1 {
             name: "First".to_string(),
             description: Some("Description".to_string()),
-            icon: Some("tag".to_string()),
+            icon: Some("project".to_string()),
             color: Some("#112233".to_string()),
         },
     )
     .unwrap();
-    let second = create_tag_v1(
+    let second = create_project_v1(
         app_data_dir.clone(),
-        FfiTagCreateInputV1 {
+        FfiProjectCreateInputV1 {
             name: "Second".to_string(),
             description: None,
             icon: None,
@@ -33,10 +33,10 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
     )
     .unwrap();
 
-    let updated = update_tag_v1(
+    let updated = update_project_v1(
         app_data_dir.clone(),
         first.id.clone(),
-        FfiTagUpdateInputV1 {
+        FfiProjectUpdateInputV1 {
             name: Some("Updated".to_string()),
             icon: None,
             color: None,
@@ -47,7 +47,7 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
     .unwrap();
     assert_eq!(updated.name, "Updated");
 
-    let reordered = reorder_tags_v1(
+    let reordered = reorder_projects_v1(
         app_data_dir.clone(),
         vec![second.id.clone(), first.id.clone()],
     )
@@ -57,6 +57,6 @@ fn tag_v1_roundtrips_records_without_json_payloads() {
     assert_eq!(reordered[1].id, first.id);
     assert_eq!(reordered[1].sort_order, 1);
 
-    let snapshot = load_tag_repository_v1(app_data_dir).unwrap();
-    assert_eq!(snapshot.tags, reordered);
+    let snapshot = load_project_repository_v1(app_data_dir).unwrap();
+    assert_eq!(snapshot.projects, reordered);
 }

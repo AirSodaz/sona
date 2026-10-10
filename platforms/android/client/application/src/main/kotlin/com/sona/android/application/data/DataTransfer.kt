@@ -27,7 +27,7 @@ data class BackupScopes(
 )
 
 data class BackupCounts(
-    val tags: Long,
+    val projects: Long,
     val historyItems: Long,
     val transcriptFiles: Long,
     val summaryFiles: Long,

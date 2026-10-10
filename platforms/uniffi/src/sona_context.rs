@@ -5,7 +5,7 @@ use crate::mapper::*;
 use crate::{
     SonaCoreBindingError, SonaCoreBindingResult, app_config_repository_bridge, automation_bridge,
     backup_bridge, dashboard_bridge, diagnostics_bridge, history_mutation_bridge,
-    history_query_bridge, recovery_bridge, storage_usage_bridge, sync_bridge, tag_bridge,
+    history_query_bridge, project_bridge, recovery_bridge, storage_usage_bridge, sync_bridge,
     task_ledger_bridge,
 };
 
@@ -69,74 +69,82 @@ impl SonaContext {
 // bridge this context instead of a directory to look up.
 #[uniffi::export(async_runtime = "tokio")]
 impl SonaContext {
-    pub fn load_tag_repository_state_json(&self) -> SonaCoreBindingResult<String> {
-        tag_bridge::load_tag_repository_state_json(self.source())
+    pub fn load_project_repository_state_json(&self) -> SonaCoreBindingResult<String> {
+        project_bridge::load_project_repository_state_json(self.source())
     }
 
-    pub fn load_tag_repository_v1(&self) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
-        tag_bridge::load_tag_repository_v1(self.source())
-    }
-
-    pub fn replace_tags_json(&self, tags_json: String) -> SonaCoreBindingResult<()> {
-        tag_bridge::replace_tags_json(self.source(), tags_json)
-    }
-
-    pub fn replace_tags_v1(&self, tags: Vec<FfiTagRecordV1>) -> SonaCoreBindingResult<()> {
-        tag_bridge::replace_tags_v1(self.source(), tags)
-    }
-
-    pub fn create_tag_json(&self, input_json: String) -> SonaCoreBindingResult<String> {
-        tag_bridge::create_tag_json(self.source(), input_json)
-    }
-
-    pub fn create_tag_v1(
+    pub fn load_project_repository_v1(
         &self,
-        input: FfiTagCreateInputV1,
-    ) -> SonaCoreBindingResult<FfiTagRecordV1> {
-        tag_bridge::create_tag_v1(self.source(), input)
+    ) -> SonaCoreBindingResult<FfiProjectRepositorySnapshotV1> {
+        project_bridge::load_project_repository_v1(self.source())
     }
 
-    pub fn update_tag_json(
+    pub fn replace_projects_json(&self, projects_json: String) -> SonaCoreBindingResult<()> {
+        project_bridge::replace_projects_json(self.source(), projects_json)
+    }
+
+    pub fn replace_projects_v1(
         &self,
-        tag_id: String,
+        projects: Vec<FfiProjectRecordV1>,
+    ) -> SonaCoreBindingResult<()> {
+        project_bridge::replace_projects_v1(self.source(), projects)
+    }
+
+    pub fn create_project_json(&self, input_json: String) -> SonaCoreBindingResult<String> {
+        project_bridge::create_project_json(self.source(), input_json)
+    }
+
+    pub fn create_project_v1(
+        &self,
+        input: FfiProjectCreateInputV1,
+    ) -> SonaCoreBindingResult<FfiProjectRecordV1> {
+        project_bridge::create_project_v1(self.source(), input)
+    }
+
+    pub fn update_project_json(
+        &self,
+        project_id: String,
         updates_json: String,
     ) -> SonaCoreBindingResult<String> {
-        tag_bridge::update_tag_json(self.source(), tag_id, updates_json)
+        project_bridge::update_project_json(self.source(), project_id, updates_json)
     }
 
-    pub fn update_tag_v1(
+    pub fn update_project_v1(
         &self,
-        tag_id: String,
-        updates: FfiTagUpdateInputV1,
-    ) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
-        tag_bridge::update_tag_v1(self.source(), tag_id, updates)
+        project_id: String,
+        updates: FfiProjectUpdateInputV1,
+    ) -> SonaCoreBindingResult<Option<FfiProjectRecordV1>> {
+        project_bridge::update_project_v1(self.source(), project_id, updates)
     }
 
-    pub fn delete_tag(&self, tag_id: String) -> SonaCoreBindingResult<()> {
-        tag_bridge::delete_tag(self.source(), tag_id)
+    pub fn delete_project(&self, project_id: String) -> SonaCoreBindingResult<()> {
+        project_bridge::delete_project(self.source(), project_id)
     }
 
-    pub fn delete_tag_v1(&self, tag_id: String) -> SonaCoreBindingResult<()> {
-        tag_bridge::delete_tag_v1(self.source(), tag_id)
+    pub fn delete_project_v1(&self, project_id: String) -> SonaCoreBindingResult<()> {
+        project_bridge::delete_project_v1(self.source(), project_id)
     }
 
-    pub fn reorder_tags_json(&self, tag_ids_json: String) -> SonaCoreBindingResult<String> {
-        tag_bridge::reorder_tags_json(self.source(), tag_ids_json)
+    pub fn reorder_projects_json(&self, project_ids_json: String) -> SonaCoreBindingResult<String> {
+        project_bridge::reorder_projects_json(self.source(), project_ids_json)
     }
 
-    pub fn reorder_tags_v1(
+    pub fn reorder_projects_v1(
         &self,
-        tag_ids: Vec<String>,
-    ) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
-        tag_bridge::reorder_tags_v1(self.source(), tag_ids)
+        project_ids: Vec<String>,
+    ) -> SonaCoreBindingResult<Vec<FfiProjectRecordV1>> {
+        project_bridge::reorder_projects_v1(self.source(), project_ids)
     }
 
-    pub fn set_active_tag_id(&self, tag_id: Option<String>) -> SonaCoreBindingResult<()> {
-        tag_bridge::set_active_tag_id(self.source(), tag_id)
+    pub fn set_active_project_id(&self, project_id: Option<String>) -> SonaCoreBindingResult<()> {
+        project_bridge::set_active_project_id(self.source(), project_id)
     }
 
-    pub fn set_active_tag_id_v1(&self, tag_id: Option<String>) -> SonaCoreBindingResult<()> {
-        tag_bridge::set_active_tag_id_v1(self.source(), tag_id)
+    pub fn set_active_project_id_v1(
+        &self,
+        project_id: Option<String>,
+    ) -> SonaCoreBindingResult<()> {
+        project_bridge::set_active_project_id_v1(self.source(), project_id)
     }
 
     pub fn load_recovery_snapshot_json(&self) -> SonaCoreBindingResult<String> {
@@ -824,34 +832,11 @@ impl SonaContext {
         .await
     }
 
-    pub async fn update_history_tag_assignments_json(
+    pub async fn update_history_project_assignments_v1(
         &self,
-        request_json: String,
-    ) -> SonaCoreBindingResult<String> {
-        history_mutation_bridge::update_history_tag_assignments_json(self.source(), request_json)
-            .await
-    }
-
-    pub async fn update_history_tag_assignments_v1(
-        &self,
-        request: FfiHistoryUpdateTagAssignmentsRequestV1,
+        request: FfiHistoryUpdateProjectAssignmentsRequestV1,
     ) -> SonaCoreBindingResult<()> {
-        history_mutation_bridge::update_history_tag_assignments_v1(self.source(), request).await
-    }
-
-    pub async fn replace_history_tag_assignments_json(
-        &self,
-        request_json: String,
-    ) -> SonaCoreBindingResult<String> {
-        history_mutation_bridge::replace_history_tag_assignments_json(self.source(), request_json)
-            .await
-    }
-
-    pub async fn replace_history_tag_assignments_v1(
-        &self,
-        request: FfiHistoryReplaceTagAssignmentsRequestV1,
-    ) -> SonaCoreBindingResult<()> {
-        history_mutation_bridge::replace_history_tag_assignments_v1(self.source(), request).await
+        history_mutation_bridge::update_history_project_assignments_v1(self.source(), request).await
     }
 
     pub async fn reassign_history_project_json(

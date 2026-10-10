@@ -33,6 +33,7 @@ import androidx.compose.material.icons.rounded.ContentCopy
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileDownload
+import androidx.compose.material.icons.rounded.FolderOpen
 import androidx.compose.material.icons.automirrored.rounded.CallMerge
 import androidx.compose.material.icons.automirrored.rounded.CallSplit
 import androidx.compose.material.icons.automirrored.rounded.Label
@@ -97,7 +98,7 @@ import com.sona.android.application.data.TranscriptExportFormat
 import com.sona.android.application.data.TranscriptExportMode
 import com.sona.android.application.library.HistoryItem
 import com.sona.android.application.library.HistoryItemStatus
-import com.sona.android.application.library.TagRecord
+import com.sona.android.application.library.ProjectRecord
 import com.sona.android.application.library.TranscriptSnapshot
 import com.sona.android.application.library.TranscriptSnapshotDetail
 import com.sona.android.application.llm.LlmFailureCategory
@@ -117,7 +118,7 @@ internal fun LibraryDetailScreen(
     item: HistoryItem?,
     detail: LibraryDetailUiState,
     cloudTranscription: CloudTranscriptionUiState,
-    tags: List<TagRecord>,
+    projects: List<ProjectRecord>,
     snapshots: List<TranscriptSnapshot>,
     snapshotDetail: TranscriptSnapshotDetail?,
     operationInProgress: Boolean,
@@ -126,8 +127,8 @@ internal fun LibraryDetailScreen(
     onTranscribeWithCloud: (HistoryItem) -> Unit,
     onTranscribeWithCurrentEngine: (HistoryItem) -> Unit,
     onUpdateTitle: (String) -> Unit,
-    onUpdateTags: (Set<String>) -> Unit,
-    onCreateTag: (String) -> Unit,
+    onUpdateProject: (String?) -> Unit,
+    onCreateProject: (String) -> Unit,
     onLoadSnapshot: (String) -> Unit,
     onCloseSnapshot: () -> Unit,
     onExportTranscript: (String, TranscriptExportFormat, TranscriptExportMode) -> Unit,
@@ -167,12 +168,12 @@ internal fun LibraryDetailScreen(
 
     var moreMenuExpanded by remember { mutableStateOf(false) }
     var aiSheetVisible by remember { mutableStateOf(false) }
-    var tagsDialogVisible by remember { mutableStateOf(false) }
+    var projectDialogVisible by remember { mutableStateOf(false) }
     var snapshotsDialogVisible by remember { mutableStateOf(false) }
     var titleEditorVisible by remember { mutableStateOf(false) }
     var titleInput by remember(item?.historyId, item?.title) { mutableStateOf(item?.title.orEmpty()) }
-    var tagCreatorVisible by remember { mutableStateOf(false) }
-    var tagNameInput by remember { mutableStateOf("") }
+    var projectCreatorVisible by remember { mutableStateOf(false) }
+    var projectNameInput by remember { mutableStateOf("") }
     var exportDialogVisible by remember { mutableStateOf(false) }
     var exportFormat by remember { mutableStateOf(TranscriptExportFormat.TXT) }
     var exportMode by remember { mutableStateOf(TranscriptExportMode.ORIGINAL) }
@@ -279,41 +280,41 @@ internal fun LibraryDetailScreen(
         )
     }
 
-    if (tagCreatorVisible) {
+    if (projectCreatorVisible) {
         AlertDialog(
-            onDismissRequest = { tagCreatorVisible = false },
-            title = { Text(stringResource(R.string.history_create_tag)) },
+            onDismissRequest = { projectCreatorVisible = false },
+            title = { Text(stringResource(R.string.history_create_project)) },
             text = {
                 OutlinedTextField(
-                    value = tagNameInput,
-                    onValueChange = { tagNameInput = it },
-                    label = { Text(stringResource(R.string.history_tag_name)) },
+                    value = projectNameInput,
+                    onValueChange = { projectNameInput = it },
+                    label = { Text(stringResource(R.string.history_project_name)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
             },
             confirmButton = {
                 TextButton(
-                    enabled = tagNameInput.isNotBlank() && !operationInProgress,
+                    enabled = projectNameInput.isNotBlank() && !operationInProgress,
                     onClick = {
-                        onCreateTag(tagNameInput.trim())
-                        tagNameInput = ""
-                        tagCreatorVisible = false
+                        onCreateProject(projectNameInput.trim())
+                        projectNameInput = ""
+                        projectCreatorVisible = false
                     },
-                ) { Text(stringResource(R.string.history_create_tag)) }
+                ) { Text(stringResource(R.string.history_create_project)) }
             },
             dismissButton = {
-                TextButton(onClick = { tagCreatorVisible = false }) {
+                TextButton(onClick = { projectCreatorVisible = false }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             },
         )
     }
 
-    if (tagsDialogVisible && item != null) {
+    if (projectDialogVisible && item != null) {
         AlertDialog(
-            onDismissRequest = { tagsDialogVisible = false },
-            title = { Text(stringResource(R.string.history_tags)) },
+            onDismissRequest = { projectDialogVisible = false },
+            title = { Text(stringResource(R.string.history_projects)) },
             text = {
                 Column(
                     modifier = Modifier
@@ -321,45 +322,42 @@ internal fun LibraryDetailScreen(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    if (tags.isEmpty()) {
-                        Text(
-                            text = stringResource(R.string.history_scope_untagged),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        FilterChip(
+                            selected = item.projectId == null,
+                            enabled = !operationInProgress,
+                            onClick = {
+                                onUpdateProject(null)
+                            },
+                            label = { Text(stringResource(R.string.history_scope_inbox)) },
                         )
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            tags.forEach { tag ->
-                                val selected = tag.id in item.tagIds
-                                FilterChip(
-                                    selected = selected,
-                                    enabled = !operationInProgress,
-                                    onClick = {
-                                        val updated = item.tagIds.toMutableSet().apply {
-                                            if (selected) remove(tag.id) else add(tag.id)
-                                        }
-                                        onUpdateTags(updated)
-                                    },
-                                    label = { Text(tag.name) },
-                                )
-                            }
+                        projects.forEach { project ->
+                            val selected = project.id == item.projectId
+                            FilterChip(
+                                selected = selected,
+                                enabled = !operationInProgress,
+                                onClick = {
+                                    onUpdateProject(if (selected) null else project.id)
+                                },
+                                label = { Text(project.name) },
+                            )
                         }
                     }
                     FilledTonalButton(
-                        onClick = { tagCreatorVisible = true },
+                        onClick = { projectCreatorVisible = true },
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(stringResource(R.string.history_create_tag))
+                        Text(stringResource(R.string.history_create_project))
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = { tagsDialogVisible = false }) {
+                TextButton(onClick = { projectDialogVisible = false }) {
                     Text(stringResource(R.string.action_done))
                 }
             },
@@ -770,12 +768,12 @@ internal fun LibraryDetailScreen(
                                 enabled = resolvedDetail is LibraryDetailUiState.Ready && !operationInProgress,
                             )
                             DropdownMenuItem(
-                                text = { Text(stringResource(R.string.history_tags)) },
+                                text = { Text(stringResource(R.string.history_projects)) },
                                 onClick = {
                                     moreMenuExpanded = false
-                                    tagsDialogVisible = true
+                                    projectDialogVisible = true
                                 },
-                                leadingIcon = { Icon(Icons.AutoMirrored.Rounded.Label, null) },
+                                leadingIcon = { Icon(Icons.Rounded.FolderOpen, null) },
                                 enabled = item != null && !operationInProgress,
                             )
                             DropdownMenuItem(
@@ -812,20 +810,21 @@ internal fun LibraryDetailScreen(
             )
 
             // Sub-header compact items
-            if (item != null && item.tagIds.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 16.dp, vertical = 2.dp),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    tags.filter { it.id in item.tagIds }.forEach { tag ->
+            if (item != null && item.projectId != null) {
+                val assignedProject = projects.firstOrNull { it.id == item.projectId }
+                if (assignedProject != null) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState())
+                            .padding(horizontal = 16.dp, vertical = 2.dp),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         FilterChip(
                             selected = true,
-                            onClick = { tagsDialogVisible = true },
-                            label = { Text(tag.name, style = MaterialTheme.typography.labelSmall) },
+                            onClick = { projectDialogVisible = true },
+                            label = { Text(assignedProject.name, style = MaterialTheme.typography.labelSmall) },
                             modifier = Modifier.height(28.dp),
                         )
                     }

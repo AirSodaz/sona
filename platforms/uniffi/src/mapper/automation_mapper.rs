@@ -181,7 +181,7 @@ pub struct FfiAutomationValidationRuleV1 {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
-pub struct FfiAutomationTagReferenceV1 {
+pub struct FfiAutomationProjectReferenceV1 {
     pub id: String,
 }
 

@@ -1,7 +1,7 @@
 use crate::application_context::ContextSource;
 use crate::{
-    FfiAutomationProcessedInputV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
-    FfiAutomationRuleInputV1, FfiAutomationRuleValidationResultV1, FfiAutomationTagReferenceV1,
+    FfiAutomationProcessedInputV1, FfiAutomationProjectReferenceV1, FfiAutomationRepositoryInputV1,
+    FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleValidationResultV1,
     FfiAutomationValidationRuleV1, SonaCoreBindingError, SonaCoreBindingResult,
 };
 use serde_json::Value;
@@ -118,14 +118,14 @@ pub(crate) fn validate_automation_rule_activation_json(
 pub(crate) fn validate_automation_rule_activation_v1(
     rule: FfiAutomationValidationRuleV1,
     global_config_json: String,
-    tags: Vec<FfiAutomationTagReferenceV1>,
+    projects: Vec<FfiAutomationProjectReferenceV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
     let global_config = parse_json_object("global config", &global_config_json)?;
-    let tags = tags
+    let projects = projects
         .into_iter()
-        .map(|tag| serde_json::json!({ "id": tag.id }))
+        .map(|project| serde_json::json!({ "id": project.id }))
         .collect::<Vec<_>>();
-    validate_native_automation_rule_activation(&rule.into(), &global_config, &tags)
+    validate_native_automation_rule_activation(&rule.into(), &global_config, &projects)
         .map(Into::into)
         .map_err(automation_error)
 }

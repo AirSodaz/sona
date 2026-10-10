@@ -21,13 +21,13 @@ mod llm_runtime_bridge;
 mod llm_task_bridge;
 mod mapper;
 mod model_bridge;
+mod project_bridge;
 mod recovery_bridge;
 mod runtime_bridge;
 mod sona_context;
 mod storage_usage_bridge;
 mod sync_bridge;
 mod sync_secret_store_bridge;
-mod tag_bridge;
 mod task_ledger_bridge;
 pub use asr_batch_bridge::{
     FfiLocalAsrBatchRequest, FfiLocalAsrBatchResult, FfiLocalAsrModelFiles, FfiOnlineAsrApiKey,
@@ -40,28 +40,28 @@ pub use mapper::{
     FfiAsrRuntimeMetricsSnapshotV1, FfiAsrStreamingErrorEvent, FfiAsrTranscriptUpdateEvent,
     FfiAudioSourceV1, FfiAudioUsageCategoryV1, FfiAutomationActionsV1, FfiAutomationExportConfigV1,
     FfiAutomationProcessedInputV1, FfiAutomationProcessedRecordV1, FfiAutomationProfileInputV1,
-    FfiAutomationProfileRecordV1, FfiAutomationRepositoryInputV1, FfiAutomationRepositoryStateV1,
-    FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1, FfiAutomationRuleValidationResultV1,
-    FfiAutomationStageConfigV1, FfiAutomationTagReferenceV1, FfiAutomationValidationExportConfigV1,
-    FfiAutomationValidationRuleV1, FfiAutomationValidationStageConfigV1, FfiBackupApplyResultV1,
-    FfiBackupManifestCountsV1, FfiBackupManifestScopesV1, FfiBackupManifestV1,
-    FfiBatchSegmentationMode, FfiConfigMigrationResult, FfiContentStatsV1, FfiContentTrendPointV1,
-    FfiDashboardSnapshotV1, FfiDashboardUsageBucketV1, FfiDatabaseUsageCategoryV1,
-    FfiDiagnosticsConfigV1, FfiDiagnosticsDeviceOptionV1, FfiDiagnosticsDeviceProbeV1,
-    FfiDiagnosticsInputV1, FfiDiagnosticsModelRuleV1, FfiDiagnosticsModelRulesV1,
-    FfiDiagnosticsModelSummaryV1, FfiDiagnosticsPathStatusesV1, FfiDiagnosticsSelectedModelsV1,
-    FfiDiagnosticsSnapshotV1, FfiDiscoveredVaultSummaryV1, FfiExportFormatV1, FfiExportModeV1,
+    FfiAutomationProfileRecordV1, FfiAutomationProjectReferenceV1, FfiAutomationRepositoryInputV1,
+    FfiAutomationRepositoryStateV1, FfiAutomationRuleInputV1, FfiAutomationRuleRecordV1,
+    FfiAutomationRuleValidationResultV1, FfiAutomationStageConfigV1,
+    FfiAutomationValidationExportConfigV1, FfiAutomationValidationRuleV1,
+    FfiAutomationValidationStageConfigV1, FfiBackupApplyResultV1, FfiBackupManifestCountsV1,
+    FfiBackupManifestScopesV1, FfiBackupManifestV1, FfiBatchSegmentationMode,
+    FfiConfigMigrationResult, FfiContentStatsV1, FfiContentTrendPointV1, FfiDashboardSnapshotV1,
+    FfiDashboardUsageBucketV1, FfiDatabaseUsageCategoryV1, FfiDiagnosticsConfigV1,
+    FfiDiagnosticsDeviceOptionV1, FfiDiagnosticsDeviceProbeV1, FfiDiagnosticsInputV1,
+    FfiDiagnosticsModelRuleV1, FfiDiagnosticsModelRulesV1, FfiDiagnosticsModelSummaryV1,
+    FfiDiagnosticsPathStatusesV1, FfiDiagnosticsSelectedModelsV1, FfiDiagnosticsSnapshotV1,
+    FfiDiscoveredVaultSummaryV1, FfiExportFormatV1, FfiExportModeV1,
     FfiExportTranscriptFileRequestV1, FfiExportTranscriptFileResultV1, FfiFileUsageCategoryV1,
     FfiHistoryAudioStatusV1, FfiHistoryCommitTranscriptEditRequestV1,
     FfiHistoryCommitTranscriptEditResultV1, FfiHistoryCompleteLiveDraftRequestV1,
     FfiHistoryCreateLiveDraftRequestV1, FfiHistoryCreateTranscriptSnapshotRequestV1,
     FfiHistoryDeleteItemsRequestV1, FfiHistoryDraftSourcePatchV1, FfiHistoryDraftSourceV1,
     FfiHistoryItemKindV1, FfiHistoryItemMetaPatchV1, FfiHistoryItemRecordV1,
-    FfiHistoryItemStatusV1, FfiHistoryReplaceTagAssignmentsRequestV1,
-    FfiHistorySaveImportedFileRequestV1, FfiHistorySaveRecordingRequestV1,
-    FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1, FfiHistoryTagCountEntryV1,
+    FfiHistoryItemStatusV1, FfiHistoryProjectCountEntryV1, FfiHistorySaveImportedFileRequestV1,
+    FfiHistorySaveRecordingRequestV1, FfiHistorySearchMatchEntryV1, FfiHistorySummaryPayloadV1,
     FfiHistoryTrashItemsRequestV1, FfiHistoryUpdateItemMetaRequestV1,
-    FfiHistoryUpdateTagAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
+    FfiHistoryUpdateProjectAssignmentsRequestV1, FfiHistoryUpdateTranscriptRequestV1,
     FfiHistoryWorkspaceDateFilterV1, FfiHistoryWorkspaceFilterTypeV1,
     FfiHistoryWorkspaceItemCountsV1, FfiHistoryWorkspaceItemSearchMatchV1,
     FfiHistoryWorkspaceQueryRequestV1, FfiHistoryWorkspaceQueryResultV1,
@@ -84,30 +84,31 @@ pub use mapper::{
     FfiOnlineAsrBatchCapability, FfiOnlineAsrCapability, FfiOnlineAsrLocalFileBatchMode,
     FfiOnlineAsrProvider, FfiOnlineAsrProviderRequest, FfiOverviewStatsV1, FfiPolishMode,
     FfiPolishSegmentsRequest, FfiPolishedSegment, FfiPreparedBackupImportV1, FfiPresetModel,
-    FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1, FfiRecoveredTranscriptTimingUnitV1,
-    FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1, FfiRecoveryItemInputV1,
-    FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1, FfiRecoveryResolutionV1,
-    FfiRecoverySnapshotV1, FfiRecoverySourceV1, FfiRequiredCompanionModels,
-    FfiResolvedModelDownload, FfiRuntimeEnvironmentStatusV1, FfiRuntimePathKind,
-    FfiRuntimePathStatus, FfiSecret, FfiSpeakerAttribution, FfiSpeakerCandidate,
-    FfiSpeakerLeaderV1, FfiSpeakerStatsV1, FfiSpeakerTag, FfiSqliteIndexUsageEntryV1,
-    FfiSqliteUsageSummaryV1, FfiStorageUsageCategoriesV1, FfiStorageUsageSnapshotV1,
-    FfiStringPatchV1, FfiSummarizeTranscriptRequest, FfiSummarySegmentInput,
-    FfiSummaryTemplateConfig, FfiSyncCausalContextV1, FfiSyncChangePasswordRequestV1,
-    FfiSyncConflictDetailV1, FfiSyncConflictKindV1, FfiSyncConflictResolutionV1,
-    FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1, FfiSyncCreateResultV1, FfiSyncEntityKeyV1,
-    FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1, FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1,
-    FfiSyncLifecycleStateV1, FfiSyncOperationKindV1, FfiSyncOperationV1, FfiSyncPairingInfoV1,
-    FfiSyncPresetV1, FfiSyncProviderDescriptorV1, FfiSyncProviderInputV1, FfiSyncRunResultV1,
-    FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1, FfiSyncVersionV1, FfiTagCreateInputV1,
-    FfiTagRecordV1, FfiTagRepositorySnapshotV1, FfiTagUpdateInputV1, FfiTaskLedgerKindV1,
-    FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1, FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1,
-    FfiTimestampSupportHint, FfiTranscriptEditOperationV1, FfiTranscriptSegment,
-    FfiTranscriptSnapshotMetadataV1, FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1,
-    FfiTranscriptSummaryRecordV1, FfiTranscriptTiming, FfiTranscriptTimingLevel,
-    FfiTranscriptTimingSource, FfiTranscriptTimingUnit, FfiTranscriptUpdate,
-    FfiTranslateSegmentsRequest, FfiTranslatedSegment, FfiUsageBreakdownV1, FfiUsageTrendPointV1,
-    FfiVoiceTypingReadinessV1, FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
+    FfiProjectCreateInputV1, FfiProjectRecordV1, FfiProjectRepositorySnapshotV1,
+    FfiProjectUpdateInputV1, FfiRecoveredQueueItemV1, FfiRecoveredTranscriptSegmentV1,
+    FfiRecoveredTranscriptTimingUnitV1, FfiRecoveredTranscriptTimingV1, FfiRecoveryFileStatV1,
+    FfiRecoveryItemInputV1, FfiRecoveryItemStageV1, FfiRecoveryQueueStatusV1,
+    FfiRecoveryResolutionV1, FfiRecoverySnapshotV1, FfiRecoverySourceV1,
+    FfiRequiredCompanionModels, FfiResolvedModelDownload, FfiRuntimeEnvironmentStatusV1,
+    FfiRuntimePathKind, FfiRuntimePathStatus, FfiSecret, FfiSpeakerAttribution,
+    FfiSpeakerCandidate, FfiSpeakerLeaderV1, FfiSpeakerStatsV1, FfiSpeakerTag,
+    FfiSqliteIndexUsageEntryV1, FfiSqliteUsageSummaryV1, FfiStorageUsageCategoriesV1,
+    FfiStorageUsageSnapshotV1, FfiStringPatchV1, FfiSummarizeTranscriptRequest,
+    FfiSummarySegmentInput, FfiSummaryTemplateConfig, FfiSyncCausalContextV1,
+    FfiSyncChangePasswordRequestV1, FfiSyncConflictDetailV1, FfiSyncConflictKindV1,
+    FfiSyncConflictResolutionV1, FfiSyncConflictSummaryV1, FfiSyncCreateRequestV1,
+    FfiSyncCreateResultV1, FfiSyncEntityKeyV1, FfiSyncEntityKindV1, FfiSyncErrorSnapshotV1,
+    FfiSyncJoinPreviewV1, FfiSyncJoinRequestV1, FfiSyncLifecycleStateV1, FfiSyncOperationKindV1,
+    FfiSyncOperationV1, FfiSyncPairingInfoV1, FfiSyncPresetV1, FfiSyncProviderDescriptorV1,
+    FfiSyncProviderInputV1, FfiSyncRunResultV1, FfiSyncStatusSnapshotV1, FfiSyncUnlockRequestV1,
+    FfiSyncVersionV1, FfiTaskLedgerKindV1, FfiTaskLedgerPatchV1, FfiTaskLedgerRecordV1,
+    FfiTaskLedgerSnapshotV1, FfiTaskLedgerStatusV1, FfiTimestampSupportHint,
+    FfiTranscriptEditOperationV1, FfiTranscriptSegment, FfiTranscriptSnapshotMetadataV1,
+    FfiTranscriptSnapshotReasonV1, FfiTranscriptSnapshotRecordV1, FfiTranscriptSummaryRecordV1,
+    FfiTranscriptTiming, FfiTranscriptTimingLevel, FfiTranscriptTimingSource,
+    FfiTranscriptTimingUnit, FfiTranscriptUpdate, FfiTranslateSegmentsRequest,
+    FfiTranslatedSegment, FfiUsageBreakdownV1, FfiUsageTrendPointV1, FfiVoiceTypingReadinessV1,
+    FfiVolcengineDoubaoAsrConfig, FfiWebviewCacheUsageCategoryV1,
 };
 pub use model_bridge::{FfiModelDownloadObserver, FfiModelDownloadProgress, FfiModelDownloadStage};
 pub use sona_context::SonaContext;
@@ -126,7 +127,7 @@ pub enum SonaCoreBindingError {
     #[error("{reason}")]
     Automation { reason: String },
     #[error("{reason}")]
-    Tag { reason: String },
+    Project { reason: String },
     #[error("{reason}")]
     AsrRuntime { code: String, reason: String },
     #[error("{reason}")]
@@ -169,101 +170,107 @@ impl From<sona_core::ports::asr::AsrPortError> for SonaCoreBindingError {
 }
 
 #[uniffi::export]
-pub fn load_tag_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
-    tag_bridge::load_tag_repository_state_json(app_data_dir)
+pub fn load_project_repository_state_json(app_data_dir: String) -> SonaCoreBindingResult<String> {
+    project_bridge::load_project_repository_state_json(app_data_dir)
 }
 
 #[uniffi::export]
-pub fn load_tag_repository_v1(
+pub fn load_project_repository_v1(
     app_data_dir: String,
-) -> SonaCoreBindingResult<FfiTagRepositorySnapshotV1> {
-    tag_bridge::load_tag_repository_v1(app_data_dir)
+) -> SonaCoreBindingResult<FfiProjectRepositorySnapshotV1> {
+    project_bridge::load_project_repository_v1(app_data_dir)
 }
 
 #[uniffi::export]
-pub fn replace_tags_json(app_data_dir: String, tags_json: String) -> SonaCoreBindingResult<()> {
-    tag_bridge::replace_tags_json(app_data_dir, tags_json)
-}
-
-#[uniffi::export]
-pub fn replace_tags_v1(
+pub fn replace_projects_json(
     app_data_dir: String,
-    tags: Vec<FfiTagRecordV1>,
+    projects_json: String,
 ) -> SonaCoreBindingResult<()> {
-    tag_bridge::replace_tags_v1(app_data_dir, tags)
+    project_bridge::replace_projects_json(app_data_dir, projects_json)
 }
 
 #[uniffi::export]
-pub fn create_tag_json(app_data_dir: String, input_json: String) -> SonaCoreBindingResult<String> {
-    tag_bridge::create_tag_json(app_data_dir, input_json)
-}
-
-#[uniffi::export]
-pub fn create_tag_v1(
+pub fn replace_projects_v1(
     app_data_dir: String,
-    input: FfiTagCreateInputV1,
-) -> SonaCoreBindingResult<FfiTagRecordV1> {
-    tag_bridge::create_tag_v1(app_data_dir, input)
+    projects: Vec<FfiProjectRecordV1>,
+) -> SonaCoreBindingResult<()> {
+    project_bridge::replace_projects_v1(app_data_dir, projects)
 }
 
 #[uniffi::export]
-pub fn update_tag_json(
+pub fn create_project_json(
     app_data_dir: String,
-    tag_id: String,
+    input_json: String,
+) -> SonaCoreBindingResult<String> {
+    project_bridge::create_project_json(app_data_dir, input_json)
+}
+
+#[uniffi::export]
+pub fn create_project_v1(
+    app_data_dir: String,
+    input: FfiProjectCreateInputV1,
+) -> SonaCoreBindingResult<FfiProjectRecordV1> {
+    project_bridge::create_project_v1(app_data_dir, input)
+}
+
+#[uniffi::export]
+pub fn update_project_json(
+    app_data_dir: String,
+    project_id: String,
     updates_json: String,
 ) -> SonaCoreBindingResult<String> {
-    tag_bridge::update_tag_json(app_data_dir, tag_id, updates_json)
+    project_bridge::update_project_json(app_data_dir, project_id, updates_json)
 }
 
 #[uniffi::export]
-pub fn update_tag_v1(
+pub fn update_project_v1(
     app_data_dir: String,
-    tag_id: String,
-    updates: FfiTagUpdateInputV1,
-) -> SonaCoreBindingResult<Option<FfiTagRecordV1>> {
-    tag_bridge::update_tag_v1(app_data_dir, tag_id, updates)
+    project_id: String,
+    updates: FfiProjectUpdateInputV1,
+) -> SonaCoreBindingResult<Option<FfiProjectRecordV1>> {
+    project_bridge::update_project_v1(app_data_dir, project_id, updates)
 }
 
 #[uniffi::export]
-pub fn delete_tag(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
-    tag_bridge::delete_tag(app_data_dir, tag_id)
+pub fn delete_project(app_data_dir: String, project_id: String) -> SonaCoreBindingResult<()> {
+    project_bridge::delete_project(app_data_dir, project_id)
 }
 
 #[uniffi::export]
-pub fn delete_tag_v1(app_data_dir: String, tag_id: String) -> SonaCoreBindingResult<()> {
-    tag_bridge::delete_tag_v1(app_data_dir, tag_id)
+pub fn delete_project_v1(app_data_dir: String, project_id: String) -> SonaCoreBindingResult<()> {
+    project_bridge::delete_project_v1(app_data_dir, project_id)
 }
 
 #[uniffi::export]
-pub fn reorder_tags_json(
+pub fn reorder_projects_json(
     app_data_dir: String,
-    tag_ids_json: String,
+    project_ids_json: String,
 ) -> SonaCoreBindingResult<String> {
-    tag_bridge::reorder_tags_json(app_data_dir, tag_ids_json)
+    project_bridge::reorder_projects_json(app_data_dir, project_ids_json)
 }
 
 #[uniffi::export]
-pub fn reorder_tags_v1(
+pub fn reorder_projects_v1(
     app_data_dir: String,
-    tag_ids: Vec<String>,
-) -> SonaCoreBindingResult<Vec<FfiTagRecordV1>> {
-    tag_bridge::reorder_tags_v1(app_data_dir, tag_ids)
+    project_ids: Vec<String>,
+) -> SonaCoreBindingResult<Vec<FfiProjectRecordV1>> {
+    project_bridge::reorder_projects_v1(app_data_dir, project_ids)
 }
 
 #[uniffi::export]
-pub fn set_active_tag_id(
+pub fn set_active_project_id(
     app_data_dir: String,
-    tag_id: Option<String>,
+    project_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
-    tag_bridge::set_active_tag_id(app_data_dir, tag_id)
+    project_bridge::set_active_project_id(app_data_dir, project_id)
 }
 
 #[uniffi::export]
-pub fn set_active_tag_id_v1(
+pub fn set_active_project_id_v1(
     app_data_dir: String,
-    tag_id: Option<String>,
+    project_id: Option<String>,
 ) -> SonaCoreBindingResult<()> {
-    tag_bridge::set_active_tag_id_v1(app_data_dir, tag_id)
+    project_bridge::set_active_project_id_v1(app_data_dir, project_id)
 }
 
 #[uniffi::export]
@@ -471,9 +478,9 @@ pub fn validate_automation_rule_activation_json(
 pub fn validate_automation_rule_activation_v1(
     rule: FfiAutomationValidationRuleV1,
     global_config_json: String,
-    tags: Vec<FfiAutomationTagReferenceV1>,
+    projects: Vec<FfiAutomationProjectReferenceV1>,
 ) -> SonaCoreBindingResult<FfiAutomationRuleValidationResultV1> {
-    automation_bridge::validate_automation_rule_activation_v1(rule, global_config_json, tags)
+    automation_bridge::validate_automation_rule_activation_v1(rule, global_config_json, projects)
 }
 
 #[uniffi::export]
@@ -1161,35 +1168,11 @@ pub async fn update_history_project_assignments_json(
 }
 
 #[uniffi::export(async_runtime = "tokio")]
-pub async fn update_history_tag_assignments_json(
+pub async fn update_history_project_assignments_v1(
     app_data_dir: String,
-    request_json: String,
-) -> SonaCoreBindingResult<String> {
-    history_mutation_bridge::update_history_tag_assignments_json(app_data_dir, request_json).await
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn update_history_tag_assignments_v1(
-    app_data_dir: String,
-    request: FfiHistoryUpdateTagAssignmentsRequestV1,
+    request: FfiHistoryUpdateProjectAssignmentsRequestV1,
 ) -> SonaCoreBindingResult<()> {
-    history_mutation_bridge::update_history_tag_assignments_v1(app_data_dir, request).await
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn replace_history_tag_assignments_json(
-    app_data_dir: String,
-    request_json: String,
-) -> SonaCoreBindingResult<String> {
-    history_mutation_bridge::replace_history_tag_assignments_json(app_data_dir, request_json).await
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn replace_history_tag_assignments_v1(
-    app_data_dir: String,
-    request: FfiHistoryReplaceTagAssignmentsRequestV1,
-) -> SonaCoreBindingResult<()> {
-    history_mutation_bridge::replace_history_tag_assignments_v1(app_data_dir, request).await
+    history_mutation_bridge::update_history_project_assignments_v1(app_data_dir, request).await
 }
 
 #[uniffi::export(async_runtime = "tokio")]

@@ -1,6 +1,6 @@
 package com.sona.android.application.library
 
-data class TagRecord(
+data class ProjectRecord(
     val id: String,
     val name: String,
     val description: String,
@@ -11,16 +11,16 @@ data class TagRecord(
     val updatedAtEpochMillis: Long,
 )
 
-data class CreateTagRequest(
+data class CreateProjectRequest(
     val name: String,
     val description: String? = null,
     val icon: String? = null,
     val color: String? = null,
 )
 
-interface TagWorkspacePort {
-    suspend fun listTags(): List<TagRecord>
-    suspend fun createTag(request: CreateTagRequest): TagRecord
-    suspend fun renameTag(tagId: String, name: String): TagRecord?
-    suspend fun deleteTag(tagId: String)
+interface ProjectWorkspacePort {
+    suspend fun listProjects(): List<ProjectRecord>
+    suspend fun createProject(request: CreateProjectRequest): ProjectRecord
+    suspend fun renameProject(projectId: String, name: String): ProjectRecord?
+    suspend fun deleteProject(projectId: String)
 }
