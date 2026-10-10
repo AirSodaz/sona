@@ -212,6 +212,300 @@ pub fn list_tools() -> Vec<ToolDefinition> {
                 "required": ["key", "value"]
             }),
         },
+        ToolDefinition {
+            name: "sona_transcribe_file",
+            title: Some("Transcribe File"),
+            description: "Transcribe a local audio or video file in batch mode and save into history.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file_path": {
+                        "type": "string",
+                        "description": "Absolute path to local media file"
+                    },
+                    "project_id": {
+                        "type": "string",
+                        "description": "Optional project ID to associate with the imported history"
+                    },
+                    "language": {
+                        "type": "string",
+                        "description": "Optional language override (e.g. 'zh', 'en', 'ja')"
+                    },
+                    "save_to_path": {
+                        "type": "string",
+                        "description": "Optional destination path to save normalized audio copy"
+                    },
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Optional custom instance ID for tracking and cancelling this batch task"
+                    }
+                },
+                "required": ["file_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_cancel_batch_task",
+            title: Some("Cancel Batch Task"),
+            description: "Cancel an active in-flight batch transcription task by instance ID.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "instance_id": {
+                        "type": "string",
+                        "description": "Batch task instance ID to cancel"
+                    }
+                },
+                "required": ["instance_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_export_transcript",
+            title: Some("Export Transcript"),
+            description: "Export transcript content into a file in SRT, VTT, Markdown, TXT, or JSON format.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item ID whose transcript will be exported"
+                    },
+                    "format": {
+                        "type": "string",
+                        "description": "Export format ('srt', 'vtt', 'markdown', 'md', 'txt', 'json')"
+                    },
+                    "output_path": {
+                        "type": "string",
+                        "description": "Target absolute file path where exported content will be written"
+                    },
+                    "mode": {
+                        "type": "string",
+                        "description": "Export mode ('original', 'translation', 'bilingual')"
+                    }
+                },
+                "required": ["history_id", "format", "output_path"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_save_summary",
+            title: Some("Save Summary"),
+            description: "Persist AI-generated summary text for a history record and notify desktop UI to refresh.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item ID to attach the summary to"
+                    },
+                    "content": {
+                        "type": "string",
+                        "description": "Summary text content"
+                    },
+                    "template_id": {
+                        "type": "string",
+                        "description": "Optional summary template identifier (e.g. 'meeting', 'general')"
+                    },
+                    "thought": {
+                        "type": "string",
+                        "description": "Optional reasoning or thinking process text"
+                    }
+                },
+                "required": ["history_id", "content"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_load_summary",
+            title: Some("Load Summary"),
+            description: "Load persisted AI summary payload for a specific history item.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item ID whose summary is being loaded"
+                    }
+                },
+                "required": ["history_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_get_model_catalog",
+            title: Some("Get Model Catalog"),
+            description: "Get snapshot of installed and available local ASR, VAD, and punctuation models.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "sona_download_preset_model",
+            title: Some("Download Preset Model"),
+            description: "Start downloading a preset model by ID and return a unique download ID.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "model_id": {
+                        "type": "string",
+                        "description": "Preset model ID to download"
+                    },
+                    "mirror": {
+                        "type": "string",
+                        "description": "Optional download mirror identifier (e.g. 'modelscope', 'huggingface')"
+                    },
+                    "download_id": {
+                        "type": "string",
+                        "description": "Optional custom download ID to identify this download task"
+                    }
+                },
+                "required": ["model_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_cancel_download",
+            title: Some("Cancel Download"),
+            description: "Cancel an active in-flight model download by download ID.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "download_id": {
+                        "type": "string",
+                        "description": "Download task ID to cancel"
+                    }
+                },
+                "required": ["download_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_get_sync_status",
+            title: Some("Get Sync Status"),
+            description: "Get E2EE cloud sync configuration, vault status, and conflict overview.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "sona_trigger_sync",
+            title: Some("Trigger Sync"),
+            description: "Trigger an immediate run of cloud synchronization.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "sona_create_project",
+            title: Some("Create Project"),
+            description: "Create a new workspace project/folder for categorizing transcription items.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "name": {
+                        "type": "string",
+                        "description": "Project display name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "Optional project description"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "description": "Optional project icon name"
+                    },
+                    "color": {
+                        "type": "string",
+                        "description": "Optional color hex code"
+                    }
+                },
+                "required": ["name"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_update_project",
+            title: Some("Update Project"),
+            description: "Update existing workspace project details like name, description, icon, or color.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "Project ID to update"
+                    },
+                    "name": {
+                        "type": "string",
+                        "description": "New project name"
+                    },
+                    "description": {
+                        "type": "string",
+                        "description": "New project description"
+                    },
+                    "icon": {
+                        "type": "string",
+                        "description": "New project icon"
+                    },
+                    "color": {
+                        "type": "string",
+                        "description": "New project color hex code"
+                    }
+                },
+                "required": ["project_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_delete_project",
+            title: Some("Delete Project"),
+            description: "Delete a workspace project and specify cascade action for associated items.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "Project ID to delete"
+                    },
+                    "cascade_action": {
+                        "type": "string",
+                        "description": "Cascade action for items in project ('moveToInbox' or 'trash', default 'moveToInbox')"
+                    }
+                },
+                "required": ["project_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_query_trash",
+            title: Some("Query Trash"),
+            description: "List and search items currently in the trash / recycle bin.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Optional keyword search query"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum number of items to return (default 20)"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Pagination offset"
+                    }
+                }
+            }),
+        },
+        ToolDefinition {
+            name: "sona_restore_history",
+            title: Some("Restore History"),
+            description: "Restore a previously trashed history item back into active history.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "History item ID to restore"
+                    }
+                },
+                "required": ["history_id"]
+            }),
+        },
     ]
 }
 
@@ -288,6 +582,68 @@ pub async fn call_tool(
             Err(err) => ToolCallResult::error(err),
         },
         "sona_update_setting" => match client.call("sona_update_setting", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_transcribe_file" => match client.call("sona_transcribe_file", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_cancel_batch_task" => match client.call("sona_cancel_batch_task", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_export_transcript" => match client.call("sona_export_transcript", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_save_summary" => match client.call("sona_save_summary", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_load_summary" => match client.call("sona_load_summary", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_get_model_catalog" => match client.call("sona_get_model_catalog", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_download_preset_model" => {
+            match client.call("sona_download_preset_model", arguments).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
+        "sona_cancel_download" => match client.call("sona_cancel_download", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_get_sync_status" => match client.call("sona_get_sync_status", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_trigger_sync" => match client.call("sona_trigger_sync", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_create_project" => match client.call("sona_create_project", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_update_project" => match client.call("sona_update_project", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_delete_project" => match client.call("sona_delete_project", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_query_trash" => match client.call("sona_query_trash", arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
+        "sona_restore_history" => match client.call("sona_restore_history", arguments).await {
             Ok(val) => ToolCallResult::json(&val),
             Err(err) => ToolCallResult::error(err),
         },

@@ -3,8 +3,9 @@ use std::path::PathBuf;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
 use super::facade::{
-    AgentControlFacade, EditTranscriptRequest, QueryHistoryRequest, StartRecordingRequest,
-    StopRecordingRequest,
+    AgentControlFacade, CreateProjectRequest, DownloadPresetModelRequest, EditTranscriptRequest,
+    ExportTranscriptRequest, QueryHistoryRequest, QueryTrashRequest, SaveSummaryRequest,
+    StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest, UpdateProjectRequest,
 };
 
 pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
@@ -144,6 +145,67 @@ fn parse_update_setting(
     }
 }
 
+fn extract_string_param(
+    params: &Option<serde_json::Value>,
+    key: &str,
+) -> Result<String, (i32, String)> {
+    let camel_key = key
+        .split('_')
+        .enumerate()
+        .map(|(i, part)| {
+            if i == 0 {
+                part.to_string()
+            } else {
+                let mut c = part.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }
+            }
+        })
+        .collect::<String>();
+
+    match params.as_ref() {
+        Some(serde_json::Value::String(s)) => Ok(s.clone()),
+        Some(serde_json::Value::Object(map)) => {
+            if let Some(serde_json::Value::String(s)) = map.get(key).or_else(|| map.get(&camel_key))
+            {
+                Ok(s.clone())
+            } else {
+                Err((-32602, format!("Missing '{key}' parameter")))
+            }
+        }
+        _ => Err((-32602, format!("Invalid or missing parameters for '{key}'"))),
+    }
+}
+
+fn parse_optional_string(params: &Option<serde_json::Value>, key: &str) -> Option<String> {
+    let camel_key = key
+        .split('_')
+        .enumerate()
+        .map(|(i, part)| {
+            if i == 0 {
+                part.to_string()
+            } else {
+                let mut c = part.chars();
+                match c.next() {
+                    None => String::new(),
+                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                }
+            }
+        })
+        .collect::<String>();
+
+    match params.as_ref() {
+        Some(serde_json::Value::Object(map)) => map
+            .get(key)
+            .or_else(|| map.get(&camel_key))
+            .and_then(|v| v.as_str())
+            .map(ToString::to_string),
+        _ => None,
+    }
+}
+
 pub async fn dispatch_rpc_call(
     method: &str,
     params: Option<serde_json::Value>,
@@ -219,6 +281,104 @@ pub async fn dispatch_rpc_call(
         "update_setting" => {
             let (key, value) = parse_update_setting(&params)?;
             let res = facade.update_setting(key, value).map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "transcribe_file" => {
+            let req: TranscribeFileRequest = parse_params(params)?;
+            let res = facade.transcribe_file(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "cancel_batch_task" => {
+            let instance_id = extract_string_param(&params, "instance_id")?;
+            let res = facade
+                .cancel_batch_task(instance_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "export_transcript" => {
+            let req: ExportTranscriptRequest = parse_params(params)?;
+            let res = facade
+                .export_transcript(req)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "save_summary" => {
+            let req: SaveSummaryRequest = parse_params(params)?;
+            let res = facade.save_summary(req).await.map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "load_summary" => {
+            let history_id = extract_history_id(&params)?;
+            let res = facade
+                .load_summary(history_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "get_model_catalog" => {
+            let res = facade.get_model_catalog().await.map_err(|e| (-32000, e))?;
+            Ok(res)
+        }
+        "download_preset_model" => {
+            let req: DownloadPresetModelRequest = parse_params(params)?;
+            let res = facade
+                .download_preset_model(req)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "cancel_download" => {
+            let download_id = extract_string_param(&params, "download_id")?;
+            let res = facade
+                .cancel_download(download_id)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "get_sync_status" => {
+            let res = facade.get_sync_status().await.map_err(|e| (-32000, e))?;
+            Ok(res)
+        }
+        "trigger_sync" => {
+            let res = facade.trigger_sync().await.map_err(|e| (-32000, e))?;
+            Ok(res)
+        }
+        "create_project" => {
+            let req: CreateProjectRequest = parse_params(params)?;
+            let res = facade.create_project(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "update_project" => {
+            let project_id = extract_string_param(&params, "project_id")?;
+            let req: UpdateProjectRequest = parse_params(params)?;
+            let res = facade
+                .update_project(project_id, req)
+                .await
+                .map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "delete_project" => {
+            let project_id = extract_string_param(&params, "project_id")?;
+            let cascade_action = parse_optional_string(&params, "cascade_action");
+            let res = facade
+                .delete_project(project_id, cascade_action)
+                .await
+                .map_err(|e| (-32000, e))?;
+            Ok(serde_json::json!({ "success": res }))
+        }
+        "query_trash" => {
+            let req: QueryTrashRequest = parse_params(params)?;
+            let res = facade.query_trash(req).await.map_err(|e| (-32000, e))?;
+            serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+        }
+        "restore_history" => {
+            let history_id = extract_history_id(&params)?;
+            let res = facade
+                .restore_history(history_id)
+                .await
+                .map_err(|e| (-32000, e))?;
             Ok(serde_json::json!({ "success": res }))
         }
         _ => Err((-32601, format!("Method '{method}' not found"))),
@@ -545,5 +705,110 @@ mod tests {
         reader.read_line(&mut resp_line).await.unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&resp_line).unwrap();
         assert_eq!(parsed.get("id").and_then(|v| v.as_i64()), Some(100));
+    }
+
+    #[tokio::test]
+    async fn test_dispatch_new_methods() {
+        let (facade, _dir) = create_test_facade().await;
+
+        // Model catalog
+        let cat = dispatch_rpc_call("sona_get_model_catalog", None, &facade)
+            .await
+            .unwrap();
+        assert!(cat.is_object());
+
+        // Sync status
+        let sync = dispatch_rpc_call("sona_get_sync_status", None, &facade)
+            .await
+            .unwrap();
+        assert!(sync.is_object());
+
+        // Query trash
+        let trash = dispatch_rpc_call(
+            "sona_query_trash",
+            Some(serde_json::json!({ "query": "" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert!(trash.is_array());
+
+        // Project lifecycle via RPC
+        let proj = dispatch_rpc_call(
+            "sona_create_project",
+            Some(serde_json::json!({ "name": "RPC Project" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        let proj_id = proj.get("id").and_then(|v| v.as_str()).unwrap().to_string();
+        assert_eq!(
+            proj.get("name").and_then(|v| v.as_str()),
+            Some("RPC Project")
+        );
+
+        let updated = dispatch_rpc_call(
+            "sona_update_project",
+            Some(serde_json::json!({ "project_id": &proj_id, "name": "Updated RPC Project" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            updated.get("name").and_then(|v| v.as_str()),
+            Some("Updated RPC Project")
+        );
+
+        let deleted = dispatch_rpc_call(
+            "sona_delete_project",
+            Some(serde_json::json!({ "projectId": &proj_id })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(deleted.get("success").and_then(|v| v.as_bool()), Some(true));
+
+        // Cancel non-existent task returns false
+        let cancel_batch_miss = dispatch_rpc_call(
+            "sona_cancel_batch_task",
+            Some(serde_json::json!({ "instance_id": "inst-miss" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            cancel_batch_miss.get("success").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+
+        // Register an active task in batch_cancel and cancel it -> returns true
+        let (_rx, _guard) = facade
+            .services
+            .asr
+            .batch_cancel
+            .register("inst-active")
+            .await;
+        let cancel_batch_hit = dispatch_rpc_call(
+            "sona_cancel_batch_task",
+            Some(serde_json::json!({ "instance_id": "inst-active" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            cancel_batch_hit.get("success").and_then(|v| v.as_bool()),
+            Some(true)
+        );
+        let cancel_dl = dispatch_rpc_call(
+            "sona_cancel_download",
+            Some(serde_json::json!({ "download_id": "dl-1" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            cancel_dl.get("success").and_then(|v| v.as_bool()),
+            Some(true)
+        );
     }
 }

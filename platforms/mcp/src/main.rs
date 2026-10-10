@@ -453,7 +453,7 @@ mod tests {
             Some("public")
         );
         let tools = result.get("tools").and_then(|t| t.as_array()).unwrap();
-        assert_eq!(tools.len(), 13);
+        assert_eq!(tools.len(), 28);
         assert_eq!(
             tools[0].get("title").and_then(|t| t.as_str()),
             Some("Get Client State")
@@ -479,7 +479,7 @@ mod tests {
         );
         assert_eq!(result.get("ttlMs").and_then(|t| t.as_i64()), Some(300000));
         let resources = result.get("resources").and_then(|r| r.as_array()).unwrap();
-        assert_eq!(resources.len(), 3);
+        assert_eq!(resources.len(), 6);
         assert_eq!(
             resources[0].get("title").and_then(|t| t.as_str()),
             Some("Client Status")
