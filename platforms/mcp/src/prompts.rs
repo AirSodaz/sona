@@ -5,18 +5,22 @@ pub fn list_prompts() -> Vec<PromptDefinition> {
     vec![
         PromptDefinition {
             name: "summarize_meeting",
+            title: Some("Summarize Meeting"),
             description: "Summarize a meeting transcript into key decisions, discussion highlights, and action items",
             arguments: vec![PromptArgument {
                 name: "history_id",
+                title: Some("History ID"),
                 description: "History record ID to summarize",
                 required: true,
             }],
         },
         PromptDefinition {
             name: "proofread_transcript",
+            title: Some("Proofread Transcript"),
             description: "Proofread transcript segments for homophones, typos, and proper noun corrections",
             arguments: vec![PromptArgument {
                 name: "history_id",
+                title: Some("History ID"),
                 description: "History record ID to proofread",
                 required: true,
             }],

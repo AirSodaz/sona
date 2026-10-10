@@ -26,10 +26,17 @@ pub struct IpcClient {
 
 impl IpcClient {
     pub fn new() -> Self {
-        Self::default()
+        let custom_endpoint = std::env::var("SONA_IPC_ENDPOINT")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .or_else(|| {
+                std::env::var("SONA_IPC_PIPE")
+                    .ok()
+                    .filter(|s| !s.trim().is_empty())
+            });
+        Self { custom_endpoint }
     }
 
-    #[cfg(test)]
     pub fn with_endpoint(endpoint: String) -> Self {
         Self {
             custom_endpoint: Some(endpoint),

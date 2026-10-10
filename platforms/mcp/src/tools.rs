@@ -5,6 +5,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "sona_get_client_state",
+            title: Some("Get Client State"),
             description: "Query Sona desktop client online status, recording state, and active project.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -13,6 +14,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_launch_desktop",
+            title: Some("Launch Desktop Client"),
             description: "Launch Sona desktop client when offline and poll IPC until connection is ready.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -27,6 +29,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_focus_window",
+            title: Some("Focus Window"),
             description: "Bring Sona desktop window to front and focus.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -35,6 +38,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_start_recording",
+            title: Some("Start Recording"),
             description: "Start microphone capture and live transcription in Sona desktop client.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -52,6 +56,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_stop_recording",
+            title: Some("Stop Recording"),
             description: "Stop active recording session and finalize into history or discard draft.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -66,6 +71,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_query_history",
+            title: Some("Query History"),
             description: "Full-text search and filter transcript history in Sona desktop client.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -94,6 +100,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_read_transcript",
+            title: Some("Read Transcript"),
             description: "Read full transcript segments and text of a history record.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -108,6 +115,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_edit_transcript",
+            title: Some("Edit Transcript"),
             description: "Commit modified transcript segments and create an immutable history version snapshot.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -131,6 +139,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_delete_history",
+            title: Some("Delete History"),
             description: "Delete or permanently purge a history record.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -150,6 +159,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_list_projects",
+            title: Some("List Projects"),
             description: "List all workspace projects and their configurations in Sona desktop.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -158,6 +168,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_set_active_project",
+            title: Some("Set Active Project"),
             description: "Switch the active workspace project in Sona desktop.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -171,6 +182,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_get_settings",
+            title: Some("Get Settings"),
             description: "Read global or specific client preference settings.",
             input_schema: serde_json::json!({
                 "type": "object",
@@ -184,6 +196,7 @@ pub fn list_tools() -> Vec<ToolDefinition> {
         },
         ToolDefinition {
             name: "sona_update_setting",
+            title: Some("Update Setting"),
             description: "Update and persist a client preference setting.",
             input_schema: serde_json::json!({
                 "type": "object",

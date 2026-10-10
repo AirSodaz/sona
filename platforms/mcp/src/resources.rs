@@ -6,6 +6,7 @@ pub fn list_resources() -> Vec<ResourceDefinition> {
         ResourceDefinition {
             uri: "sona://client/status",
             name: "Sona Client Status",
+            title: Some("Client Status"),
             description: Some(
                 "Current Sona desktop online status, recording state, and active project view",
             ),
@@ -14,12 +15,14 @@ pub fn list_resources() -> Vec<ResourceDefinition> {
         ResourceDefinition {
             uri: "sona://projects",
             name: "Sona Workspace Projects",
+            title: Some("Workspace Projects"),
             description: Some("List of workspace projects and their configurations"),
             mime_type: Some("application/json"),
         },
         ResourceDefinition {
             uri: "sona://history/{history_id}",
             name: "Sona History Transcript",
+            title: Some("History Transcript"),
             description: Some("Read-only transcript content for a specific history record by ID"),
             mime_type: Some("text/plain"),
         },
@@ -30,6 +33,7 @@ pub fn list_resource_templates() -> Vec<ResourceTemplateDefinition> {
     vec![ResourceTemplateDefinition {
         uri_template: "sona://history/{history_id}",
         name: "Sona History Transcript",
+        title: Some("History Transcript"),
         description: Some("Read-only transcript content for a specific history record by ID"),
         mime_type: Some("text/plain"),
     }]
