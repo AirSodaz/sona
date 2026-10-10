@@ -118,7 +118,6 @@
     <string name="history_search">搜索录音记录</string>
     <string name="history_scope_all">全部</string>
     <string name="history_scope_inbox">收件箱</string>
-    <string name="history_scope_untagged">收件箱</string>
     <string name="history_scope_trash">废纸篓</string>
     <string name="history_restore">恢复</string>
     <string name="history_delete_forever">永久删除</string>

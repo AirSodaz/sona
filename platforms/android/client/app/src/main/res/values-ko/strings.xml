@@ -118,7 +118,6 @@
     <string name="history_search">기록 검색</string>
     <string name="history_scope_all">전체</string>
     <string name="history_scope_inbox">받은편지함</string>
-    <string name="history_scope_untagged">받은편지함</string>
     <string name="history_scope_trash">휴지통</string>
     <string name="history_restore">복원</string>
     <string name="history_delete_forever">영구 삭제</string>

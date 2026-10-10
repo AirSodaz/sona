@@ -118,7 +118,6 @@
     <string name="history_search">履歴を検索</string>
     <string name="history_scope_all">すべて</string>
     <string name="history_scope_inbox">受信トレイ</string>
-    <string name="history_scope_untagged">受信トレイ</string>
     <string name="history_scope_trash">ゴミ箱</string>
     <string name="history_restore">復元</string>
     <string name="history_delete_forever">完全に削除</string>
