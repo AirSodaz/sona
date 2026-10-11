@@ -32,7 +32,12 @@ import type {
 import { Dropdown, type DropdownOption } from '../../Dropdown';
 import { Modal } from '../../Modal';
 import { Switch } from '../../Switch';
-import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
+import {
+  ScenarioCardTabs,
+  SettingsAccordion,
+  SettingsItem,
+  SettingsSection,
+} from '../SettingsLayout';
 import { PasswordInput } from './PasswordInput';
 import {
   detectProviderPresetId,
@@ -1295,74 +1300,77 @@ export function SyncSetupPanel({
             })}
           </p>
 
-          <div className="sync-multivault-options-list">
-            {discoveredVaults?.map((v) => {
-              const isSelected = !isCreatingNewVault && selectedVaultToJoin === v.vaultId;
-              return (
-                <label
-                  key={v.vaultId}
-                  className={`sync-multivault-option-card ${isSelected ? 'is-selected' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="vault-selection"
-                    className="sync-radio-input"
-                    checked={isSelected}
-                    onChange={() => {
-                      setSelectedVaultToJoin(v.vaultId);
-                      setIsCreatingNewVault(false);
-                    }}
-                  />
-                  <div className="sync-multivault-icon-col">
-                    <DatabaseZap size={18} className={isSelected ? 'is-active-icon' : ''} />
-                  </div>
-                  <div className="sync-multivault-option-info">
-                    <div className="sync-multivault-option-title-row">
-                      <strong className="sync-multivault-id">{v.vaultId}</strong>
-                      <span className="sync-multivault-tag">
-                        {t(`settings.sync.preset_${v.preset}`, { defaultValue: v.preset })}
+          <div className="sync-multivault-options-container">
+            <ScenarioCardTabs<string>
+              ariaLabel={t('settings.sync.multi_vault_detected_title', {
+                defaultValue: 'Multiple Sync Vaults Detected',
+              })}
+              role="radiogroup"
+              columns={1}
+              className="sync-multivault-tabs"
+              activeTab={isCreatingNewVault ? '__create_new__' : selectedVaultToJoin}
+              onChange={(val) => {
+                if (val === '__create_new__') {
+                  setIsCreatingNewVault(true);
+                } else {
+                  setSelectedVaultToJoin(val);
+                  setIsCreatingNewVault(false);
+                }
+              }}
+              items={[
+                ...(discoveredVaults ?? []).map((v) => {
+                  const isSelected = !isCreatingNewVault && selectedVaultToJoin === v.vaultId;
+                  return {
+                    value: v.vaultId,
+                    icon: <DatabaseZap size={18} />,
+                    label: (
+                      <span className="sync-multivault-label-row">
+                        <strong className="sync-multivault-id" title={v.vaultId}>
+                          {v.vaultId}
+                        </strong>
+                        <span className="sync-scope-tag is-badge">
+                          {t(`settings.sync.preset_${v.preset}`, { defaultValue: v.preset })}
+                        </span>
                       </span>
-                    </div>
-                    <span className="sync-multivault-hint">
-                      {v.vaultId === 'default'
+                    ),
+                    description:
+                      v.vaultId === 'default'
                         ? t('settings.sync.vault_default_hint', { defaultValue: 'Default vault' })
                         : t('settings.sync.existing_vault_hint', {
                             defaultValue: 'Existing remote vault',
-                          })}
+                          }),
+                    trailing: (
+                      <span
+                        className={`sync-multivault-radio-dot ${isSelected ? 'is-active' : ''}`}
+                        aria-hidden="true"
+                      />
+                    ),
+                  };
+                }),
+                {
+                  value: '__create_new__',
+                  icon: <Sparkles size={18} />,
+                  label: (
+                    <span className="sync-multivault-label-row">
+                      <strong className="sync-multivault-id">
+                        {t('settings.sync.create_new_vault_option', {
+                          defaultValue: 'Create a new independent vault',
+                        })}
+                      </strong>
                     </span>
-                  </div>
-                </label>
-              );
-            })}
-
-            <label
-              className={`sync-multivault-option-card ${isCreatingNewVault ? 'is-selected' : ''}`}
-            >
-              <input
-                type="radio"
-                name="vault-selection"
-                className="sync-radio-input"
-                checked={isCreatingNewVault}
-                onChange={() => setIsCreatingNewVault(true)}
-              />
-              <div className="sync-multivault-icon-col">
-                <Sparkles size={18} className={isCreatingNewVault ? 'is-active-icon' : ''} />
-              </div>
-              <div className="sync-multivault-option-info">
-                <div className="sync-multivault-option-title-row">
-                  <strong>
-                    {t('settings.sync.create_new_vault_option', {
-                      defaultValue: 'Create a new independent vault',
-                    })}
-                  </strong>
-                </div>
-                <span className="sync-multivault-hint">
-                  {t('settings.sync.create_new_vault_option_desc', {
+                  ),
+                  description: t('settings.sync.create_new_vault_option_desc', {
                     defaultValue: 'Initialize a separate workspace on this storage',
-                  })}
-                </span>
-              </div>
-            </label>
+                  }),
+                  trailing: (
+                    <span
+                      className={`sync-multivault-radio-dot ${isCreatingNewVault ? 'is-active' : ''}`}
+                      aria-hidden="true"
+                    />
+                  ),
+                },
+              ]}
+            />
           </div>
         </div>
       </Modal>

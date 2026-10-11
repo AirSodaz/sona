@@ -103,6 +103,45 @@ describe('SyncConnectedPanel', () => {
     expect(onChangePreset).toHaveBeenCalledWith('content');
   });
 
+  it('allows canceling a staged preset change using the action bar cancel button', () => {
+    const { container } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    // Click 'Content' to stage a change
+    const contentBtn = screen.getByRole('button', { name: /Content/i });
+    fireEvent.click(contentBtn);
+
+    // Staged change action bar should appear
+    expect(container.querySelector('.sync-preset-action-bar')).not.toBeNull();
+    expect(container.querySelector('.sync-scope-tag.is-pending')).not.toBeNull();
+
+    // Click Cancel
+    const cancelBtn = screen.getByRole('button', { name: /Cancel/i });
+    fireEvent.click(cancelBtn);
+
+    // Action bar disappears and pending tag is removed
+    expect(container.querySelector('.sync-preset-action-bar')).toBeNull();
+    expect(container.querySelector('.sync-scope-tag.is-pending')).toBeNull();
+    expect(onChangePreset).not.toHaveBeenCalled();
+  });
+
   it('handles recovery key masking, partial view, copy, and delete with confirmation', async () => {
     const rawKey = 'secret-long-recovery-key-token-abcd-1234';
     useDialogStore.setState({
@@ -196,5 +235,32 @@ describe('SyncConnectedPanel', () => {
 
     fireEvent.click(disconnectBtn);
     expect(onDisconnect).toHaveBeenCalled();
+  });
+
+  it('renders security accordion header with icon and title wrapper', () => {
+    const { container } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    const titleEl = container.querySelector('.settings-accordion-copy-title.sync-security-title');
+    expect(titleEl).not.toBeNull();
+    expect(titleEl?.querySelector('svg')).not.toBeNull();
+    expect(titleEl?.querySelector('span')?.textContent).toBe('Vault Security & Recovery');
   });
 });

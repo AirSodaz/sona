@@ -11,6 +11,7 @@ import {
   KeyRound,
   Layers,
   Link2,
+  Loader2,
   Lock,
   Pause,
   Play,
@@ -36,6 +37,7 @@ import { Modal } from '../../Modal';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
 import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
+import { isPresetShrink } from './syncPreset';
 
 interface SyncConnectedPanelProps {
   busyAction: string | null;
@@ -119,6 +121,30 @@ export function SyncConnectedPanel({
   const [recoveryInput, setRecoveryInput] = React.useState('');
   const [userSelectedPreset, setUserSelectedPreset] = React.useState<SyncPresetV1 | null>(null);
   const selectedPreset = userSelectedPreset ?? status.preset ?? 'standard';
+  const getPresetLabel = React.useCallback(
+    (presetId: SyncPresetV1 | null): string => {
+      switch (presetId) {
+        case 'content':
+          return t('settings.sync.preset_content', { defaultValue: 'Content' });
+        case 'standard':
+          return t('settings.sync.preset_standard', { defaultValue: 'Standard' });
+        case 'full':
+          return t('settings.sync.preset_full', { defaultValue: 'Full' });
+        default:
+          return '';
+      }
+    },
+    [t]
+  );
+
+  const handleApplyPreset = React.useCallback(async () => {
+    try {
+      await onChangePreset(selectedPreset);
+      setUserSelectedPreset(null);
+    } catch {
+      // Retain selection if failed so user can retry or cancel
+    }
+  }, [onChangePreset, selectedPreset]);
   const [currentPassword, setCurrentPassword] = React.useState('');
   const [nextPassword, setNextPassword] = React.useState('');
   const [confirmPassword, setConfirmPassword] = React.useState('');
@@ -590,6 +616,8 @@ export function SyncConnectedPanel({
                 },
               ].map((p) => {
                 const isSelected = selectedPreset === p.id;
+                const isCurrent = status.preset === p.id;
+                const isPending = isSelected && !isCurrent;
                 return (
                   <button
                     key={p.id}
@@ -604,9 +632,25 @@ export function SyncConnectedPanel({
                     <span className="settings-scenario-card-text">
                       <span className="settings-scenario-card-label">
                         {p.label}
-                        {p.badge && (
-                          <span className="sync-scope-tag is-badge" style={{ marginLeft: '6px' }}>
-                            {p.badge}
+                        {p.badge && <span className="sync-scope-tag is-badge">{p.badge}</span>}
+                        {isCurrent && (
+                          <span
+                            className="sync-scope-tag is-current"
+                            title={t('settings.sync.preset_current_tag', {
+                              defaultValue: 'Current',
+                            })}
+                          >
+                            {t('settings.sync.preset_current_tag', { defaultValue: 'Current' })}
+                          </span>
+                        )}
+                        {isPending && (
+                          <span
+                            className="sync-scope-tag is-pending"
+                            title={t('settings.sync.preset_pending_tag', {
+                              defaultValue: 'Pending',
+                            })}
+                          >
+                            {t('settings.sync.preset_pending_tag', { defaultValue: 'Pending' })}
                           </span>
                         )}
                       </span>
@@ -616,22 +660,82 @@ export function SyncConnectedPanel({
                 );
               })}
             </div>
-            {selectedPreset !== status.preset && (
-              <button
-                type="button"
-                className="btn btn-primary btn-sm"
-                style={{ alignSelf: 'flex-start' }}
-                onClick={() => {
-                  void onChangePreset(selectedPreset);
-                  setUserSelectedPreset(null);
-                }}
-                disabled={isBusy}
-              >
-                {busyAction === 'change_preset'
-                  ? t('settings.sync.updating_preset', { defaultValue: 'Updating...' })
-                  : t('settings.sync.apply_preset', { defaultValue: 'Apply preset change' })}
-              </button>
-            )}
+            {selectedPreset !== status.preset &&
+              (() => {
+                const isShrink = status.preset
+                  ? isPresetShrink(status.preset, selectedPreset)
+                  : false;
+                const currentLabel = getPresetLabel(status.preset);
+                const targetLabel = getPresetLabel(selectedPreset);
+
+                return (
+                  <div
+                    className="sync-preset-action-bar"
+                    role="region"
+                    aria-label={t('settings.sync.preset', { defaultValue: 'Sync preset' })}
+                  >
+                    <div className="sync-preset-action-info">
+                      <span className={`sync-preset-action-icon${isShrink ? ' is-shrink' : ''}`}>
+                        {isShrink ? <AlertTriangle size={15} /> : <Layers size={15} />}
+                      </span>
+                      <div className="sync-preset-action-text">
+                        <span className="sync-preset-action-title">
+                          {t('settings.sync.preset_change_desc', {
+                            from: currentLabel,
+                            to: targetLabel,
+                            defaultValue: `Preset will change from "${currentLabel}" to "${targetLabel}"`,
+                          })}
+                        </span>
+                        <span className="sync-preset-action-hint">
+                          {isShrink
+                            ? t('settings.sync.shrink_confirm', {
+                                defaultValue:
+                                  'Shrinking the preset publishes tombstones for excluded data. Continue?',
+                              })
+                            : t('settings.sync.preset_hint', {
+                                defaultValue:
+                                  'Choose which data domains participate in cloud sync.',
+                              })}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="sync-preset-action-buttons">
+                      <button
+                        type="button"
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => setUserSelectedPreset(null)}
+                        disabled={isBusy}
+                      >
+                        {t('common.cancel', { defaultValue: 'Cancel' })}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-primary btn-sm"
+                        onClick={() => void handleApplyPreset()}
+                        disabled={isBusy}
+                      >
+                        {busyAction === 'change_preset' ? (
+                          <>
+                            <Loader2 size={14} className="spin" />
+                            <span>
+                              {t('settings.sync.updating_preset', { defaultValue: 'Updating...' })}
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            <Check size={14} />
+                            <span>
+                              {t('settings.sync.apply_preset', {
+                                defaultValue: 'Apply preset change',
+                              })}
+                            </span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                );
+              })()}
           </div>
         </SettingsItem>
       </SettingsSection>
@@ -642,9 +746,11 @@ export function SyncConnectedPanel({
           defaultOpen={Boolean(recoveryKey)}
           title={
             <div className="settings-accordion-copy">
-              <div className="settings-accordion-copy-title">
+              <div className="settings-accordion-copy-title sync-security-title">
                 <ShieldCheck size={16} />
-                {t('settings.sync.security_title', { defaultValue: 'Vault Security & Recovery' })}
+                <span>
+                  {t('settings.sync.security_title', { defaultValue: 'Vault Security & Recovery' })}
+                </span>
               </div>
               <div className="settings-accordion-copy-hint">
                 {t('settings.sync.security_hint', {

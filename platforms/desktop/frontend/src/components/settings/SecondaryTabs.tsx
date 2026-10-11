@@ -10,6 +10,8 @@ export interface SecondaryTabItem<T extends string = string> {
   label: React.ReactNode;
   description?: React.ReactNode;
   icon?: React.ReactNode;
+  badge?: React.ReactNode;
+  trailing?: React.ReactNode;
   tooltip?: string;
   tooltipPos?: 'top' | 'bottom' | 'left' | 'right';
   id?: string;
@@ -26,7 +28,7 @@ export interface SecondaryTabsProps<T extends string = string> {
   onChange: (value: T) => void;
   ariaLabel?: string;
   id?: string;
-  columns?: 2 | 3 | 'two-columns' | 'three-columns';
+  columns?: 1 | 2 | 3 | 'single-column' | 'two-columns' | 'three-columns';
   idPrefix?: string;
   getPanelId?: (value: T) => string;
   className?: string;
@@ -76,6 +78,7 @@ export function SecondaryTabs<T extends string = string>({
     enabled: keyboardNavigation && !disabled,
   });
   const isSegmented = variant === 'segmented';
+  const isSingleColumn = columns === 1 || columns === 'single-column';
   const isThreeColumns = columns === 3 || columns === 'three-columns';
   const hasSlider = isSegmented && animated;
 
@@ -170,6 +173,7 @@ export function SecondaryTabs<T extends string = string>({
         .join(' ')
     : [
         'settings-scenario-cards',
+        isSingleColumn ? 'single-column' : '',
         isThreeColumns ? 'three-columns' : '',
         bordered ? 'is-bordered' : '',
         disabled ? 'is-disabled' : '',
@@ -246,11 +250,17 @@ export function SecondaryTabs<T extends string = string>({
               <>
                 {tab.icon && <span className="settings-scenario-card-icon">{tab.icon}</span>}
                 <span className="settings-scenario-card-text">
-                  <span className="settings-scenario-card-label">{tab.label}</span>
+                  <span className="settings-scenario-card-label">
+                    {tab.label}
+                    {tab.badge && <span className="settings-scenario-card-badge">{tab.badge}</span>}
+                  </span>
                   {tab.description && (
                     <span className="settings-scenario-card-description">{tab.description}</span>
                   )}
                 </span>
+                {tab.trailing && (
+                  <span className="settings-scenario-card-trailing">{tab.trailing}</span>
+                )}
               </>
             )}
           </button>
