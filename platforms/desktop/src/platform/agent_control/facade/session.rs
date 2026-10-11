@@ -75,6 +75,7 @@ pub struct ActiveRecordingSession {
     pub frozen_duration_seconds: Option<f64>,
     pub _sleep_guard: Option<Arc<crate::platform::system::power::SleepPreventionGuard>>,
     pub is_ui_session: bool,
+    pub saved_wav_path: Option<String>,
 }
 
 pub async fn start_recording(
@@ -270,6 +271,7 @@ pub async fn start_recording(
             frozen_duration_seconds: None,
             _sleep_guard: Some(sleep_guard),
             is_ui_session: false,
+            saved_wav_path: None,
         });
     }
 
@@ -317,6 +319,74 @@ pub async fn stop_recording(
         session.frozen_duration_seconds = Some(dur);
         (session.clone(), dur)
     };
+    // Delegate UI-session teardown to its recorder before backend teardown so that
+    // the recorder stops native capture, receives the saved WAV path, and persists
+    // the recording draft cleanly.
+    if session_snapshot.is_ui_session {
+        let _ = services.emitter.emit(
+            "agent-control-ui-recording-stop-requested",
+            serde_json::json!({
+                "historyId": session_snapshot.history_id,
+                "discard": req.discard
+            }),
+        );
+
+        // Wait for UI to finish teardown (active_session cleared by stop_native_live_transcription)
+        let start = std::time::Instant::now();
+        let mut ui_teardown_completed = false;
+        while start.elapsed() < std::time::Duration::from_millis(2000) {
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+            if active_session.lock().await.is_none() {
+                ui_teardown_completed = true;
+                break;
+            }
+        }
+
+        if !ui_teardown_completed {
+            log::warn!("UI recording teardown timed out; falling back to backend teardown");
+            if session_snapshot.has_coordinator_consumer && !session_snapshot.coordinator_released {
+                let _ = services
+                    .asr
+                    .live_coordinator()
+                    .release(&session_snapshot.consumer_id)
+                    .await;
+            }
+            if !session_snapshot.audio_stopped {
+                let path = crate::integrations::audio::stop_native_live_capture(
+                    &services.audio,
+                    &session_snapshot.source_kind,
+                    session_snapshot.consumer_id.clone(),
+                )
+                .await;
+                if let Ok(saved_path) = path {
+                    if req.discard {
+                        let _ = tokio::fs::remove_file(&saved_path).await;
+                    } else {
+                        services
+                            .recording_session
+                            .cache_saved_wav_path(session_snapshot.consumer_id.clone(), saved_path)
+                            .await;
+                    }
+                }
+            }
+            let mut session_guard = active_session.lock().await;
+            *session_guard = None;
+        }
+
+        let _ = services.emitter.emit(
+            "agent-control-recording-status",
+            serde_json::json!({ "active": false, "isPaused": false }),
+        );
+        if let Some(app) = app_handle {
+            crate::app::tray::set_recording_active(app, false);
+        }
+
+        return Ok(StopRecordingResult {
+            history_id: session_snapshot.history_id,
+            duration_seconds,
+            segment_count: 0,
+        });
+    }
 
     // 1. Release coordinator if active and not already released
     if session_snapshot.has_coordinator_consumer && !session_snapshot.coordinator_released {
@@ -346,9 +416,7 @@ pub async fn stop_recording(
     }
 
     // 3. Finalize or discard draft with strict error checking
-    let segment_count = if session_snapshot.is_ui_session {
-        0
-    } else if req.discard {
+    let segment_count = if req.discard {
         let deleted_at = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_err(|e| e.to_string())?

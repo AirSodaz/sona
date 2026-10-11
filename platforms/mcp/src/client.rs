@@ -131,38 +131,30 @@ impl IpcClient {
                 };
             }
 
-            if let Ok(mut conn_guard) = self.connection.try_lock() {
-                if let Some(conn) = conn_guard.as_mut() {
-                    match Self::send_receive_on_conn(conn, &req_line).await {
-                        Ok(val) => return Ok(val),
-                        Err(IpcCallError::Application(app_err)) => return Err(app_err),
-                        Err(IpcCallError::Transport(_)) => {
-                            *conn_guard = None;
-                        }
-                    }
-                }
-
-                let mut new_conn = self.connect_ipc().await?;
-                match Self::send_receive_on_conn(&mut new_conn, &req_line).await {
-                    Ok(val) => {
-                        *conn_guard = Some(new_conn);
-                        Ok(val)
-                    }
-                    Err(IpcCallError::Application(app_err)) => {
-                        *conn_guard = Some(new_conn);
-                        Err(app_err)
-                    }
-                    Err(IpcCallError::Transport(err)) => {
+            let mut conn_guard = self.connection.lock().await;
+            if let Some(conn) = conn_guard.as_mut() {
+                match Self::send_receive_on_conn(conn, &req_line).await {
+                    Ok(val) => return Ok(val),
+                    Err(IpcCallError::Application(app_err)) => return Err(app_err),
+                    Err(IpcCallError::Transport(_)) => {
                         *conn_guard = None;
-                        Err(err)
                     }
                 }
-            } else {
-                let mut direct_conn = self.connect_ipc().await?;
-                match Self::send_receive_on_conn(&mut direct_conn, &req_line).await {
-                    Ok(val) => Ok(val),
-                    Err(IpcCallError::Application(app_err)) => Err(app_err),
-                    Err(IpcCallError::Transport(err)) => Err(err),
+            }
+
+            let mut new_conn = self.connect_ipc().await?;
+            match Self::send_receive_on_conn(&mut new_conn, &req_line).await {
+                Ok(val) => {
+                    *conn_guard = Some(new_conn);
+                    Ok(val)
+                }
+                Err(IpcCallError::Application(app_err)) => {
+                    *conn_guard = Some(new_conn);
+                    Err(app_err)
+                }
+                Err(IpcCallError::Transport(err)) => {
+                    *conn_guard = None;
+                    Err(err)
                 }
             }
         }
@@ -255,12 +247,26 @@ impl IpcClient {
             .unwrap_or(WINDOWS_PIPE_NAME)
             .to_string();
 
-        let client = tokio::task::spawn_blocking(move || {
-            tokio::net::windows::named_pipe::ClientOptions::new().open(&pipe_name)
-        })
-        .await
-        .map_err(|e| format!("Join error: {e}"))?
-        .map_err(|_| "DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string())?;
+        let mut attempts = 0;
+        let client = loop {
+            attempts += 1;
+            let pipe_name_clone = pipe_name.clone();
+            let open_res = tokio::task::spawn_blocking(move || {
+                tokio::net::windows::named_pipe::ClientOptions::new().open(&pipe_name_clone)
+            })
+            .await
+            .map_err(|e| format!("Join error: {e}"))?;
+
+            match open_res {
+                Ok(client) => break client,
+                Err(err) if err.raw_os_error() == Some(231) && attempts < 10 => {
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(_) => {
+                    return Err("DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string());
+                }
+            }
+        };
 
         let (reader, writer) = tokio::io::split(client);
         Ok(IpcConnection {

@@ -47,6 +47,7 @@ export const TauriEvent = {
   agent: {
     recordingStatus: 'agent-control-recording-status',
     transcriptUpdated: 'transcript-updated',
+    uiRecordingStopRequested: 'agent-control-ui-recording-stop-requested',
   },
 } as const;
 
@@ -58,6 +59,10 @@ export interface AgentRecordingStatusPayload {
 
 export interface TranscriptUpdatedPayload {
   historyId: string;
+}
+export interface UiRecordingStopRequestedPayload {
+  historyId: string;
+  discard?: boolean;
 }
 
 export function buildRecognizerOutputEvent(instanceId: string): `recognizer-output-${string}` {

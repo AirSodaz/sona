@@ -26,6 +26,7 @@ pub use db_runner::*;
 #[derive(Clone, Default)]
 pub struct DesktopRecordingSessionTracker {
     inner: Arc<tokio::sync::Mutex<Option<crate::platform::agent_control::ActiveRecordingSession>>>,
+    completed_wav_paths: Arc<tokio::sync::Mutex<std::collections::HashMap<String, String>>>,
 }
 
 impl DesktopRecordingSessionTracker {
@@ -45,6 +46,21 @@ impl DesktopRecordingSessionTracker {
     ) -> tokio::sync::MutexGuard<'_, Option<crate::platform::agent_control::ActiveRecordingSession>>
     {
         self.inner.lock().await
+    }
+
+    pub async fn cache_saved_wav_path(&self, consumer_id: String, path: String) {
+        let mut map = self.completed_wav_paths.lock().await;
+        map.insert(consumer_id, path);
+    }
+
+    pub async fn take_cached_saved_wav_path(&self, consumer_id: &str) -> Option<String> {
+        let mut map = self.completed_wav_paths.lock().await;
+        map.remove(consumer_id)
+    }
+
+    pub async fn clear_cached_saved_wav_paths(&self) {
+        let mut map = self.completed_wav_paths.lock().await;
+        map.clear();
     }
 }
 

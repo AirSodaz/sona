@@ -372,10 +372,29 @@ fn parse_toml_value(raw: &str) -> toml_edit::Item {
     toml_edit::value(trimmed)
 }
 
+fn resolve_item_for_leaf(existing: Option<&toml_edit::Item>, raw_value: &str) -> toml_edit::Item {
+    let trimmed = raw_value.trim();
+    if matches!(
+        existing,
+        Some(toml_edit::Item::Value(toml_edit::Value::String(_)))
+    ) {
+        let unquoted = if (trimmed.starts_with('"') && trimmed.ends_with('"') && trimmed.len() >= 2)
+            || (trimmed.starts_with('\'') && trimmed.ends_with('\'') && trimmed.len() >= 2)
+        {
+            &trimmed[1..trimmed.len() - 1]
+        } else {
+            trimmed
+        };
+        toml_edit::value(unquoted)
+    } else {
+        parse_toml_value(raw_value)
+    }
+}
+
 fn set_in_document(
     doc: &mut toml_edit::DocumentMut,
     key_path: &str,
-    item: toml_edit::Item,
+    raw_value: &str,
 ) -> CliResult<()> {
     let mut parts: Vec<&str> = key_path
         .split('.')
@@ -401,7 +420,8 @@ fn set_in_document(
     }
 
     if parts.len() == 1 {
-        doc[parts[0]] = item;
+        let existing = doc.as_table().get(parts[0]);
+        doc[parts[0]] = resolve_item_for_leaf(existing, raw_value);
         return Ok(());
     }
 
@@ -424,7 +444,8 @@ fn set_in_document(
     }
 
     let last_key = parts.last().unwrap();
-    current_table.insert(last_key, item);
+    let existing = current_table.get(last_key);
+    current_table.insert(last_key, resolve_item_for_leaf(existing, raw_value));
     Ok(())
 }
 
@@ -457,8 +478,7 @@ fn run_config_set(args: ConfigSetArgs) -> CliResult<CliOutput> {
         CliError::Validation(format!("Invalid TOML syntax in {}: {e}", path.display()))
     })?;
 
-    let parsed_item = parse_toml_value(&args.value);
-    set_in_document(&mut doc, &args.key, parsed_item)?;
+    set_in_document(&mut doc, &args.key, &args.value)?;
 
     let new_content = doc.to_string();
 
@@ -662,4 +682,36 @@ fn run_config_edit(args: ConfigEditArgs) -> CliResult<CliOutput> {
     }
 
     check_config_file(&path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_set_in_document_preserves_existing_string_type() {
+        let mut doc: toml_edit::DocumentMut = r#"
+[transcribe]
+model_id = "whisper-base"
+"#
+        .parse()
+        .unwrap();
+
+        set_in_document(&mut doc, "transcribe.model_id", "12345").unwrap();
+        assert_eq!(doc["transcribe"]["model_id"].as_str(), Some("12345"));
+
+        set_in_document(&mut doc, "transcribe.model_id", "true").unwrap();
+        assert_eq!(doc["transcribe"]["model_id"].as_str(), Some("true"));
+    }
+
+    #[test]
+    fn test_set_in_document_parses_new_numbers_and_booleans() {
+        let mut doc: toml_edit::DocumentMut = "".parse().unwrap();
+
+        set_in_document(&mut doc, "serve.port", "8080").unwrap();
+        assert_eq!(doc["serve"]["port"].as_integer(), Some(8080));
+
+        set_in_document(&mut doc, "serve.cors", "true").unwrap();
+        assert_eq!(doc["serve"]["cors"].as_bool(), Some(true));
+    }
 }

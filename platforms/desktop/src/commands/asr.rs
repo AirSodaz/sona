@@ -201,6 +201,7 @@ pub async fn start_native_live_transcription(
                         frozen_duration_seconds: None,
                         _sleep_guard: None,
                         is_ui_session: true,
+                        saved_wav_path: None,
                     });
                 }
             }
@@ -393,13 +394,37 @@ pub async fn stop_native_live_transcription(
     consumer_id: String,
     source_kind: String,
 ) -> Result<String, AsrPortError> {
-    let capture_result = crate::integrations::audio::stop_native_live_capture(
+    let capture_result = match crate::integrations::audio::stop_native_live_capture(
         &services.audio,
         &source_kind,
         consumer_id.clone(),
     )
     .await
-    .map_err(AsrPortError::runtime);
+    {
+        Ok(path) => Ok(path),
+        Err(err) => {
+            if let Some(path) = services
+                .recording_session
+                .take_cached_saved_wav_path(&consumer_id)
+                .await
+            {
+                Ok(path)
+            } else {
+                let cached_path = {
+                    let guard = services.recording_session.lock().await;
+                    guard
+                        .as_ref()
+                        .filter(|s| s.consumer_id == consumer_id)
+                        .and_then(|s| s.saved_wav_path.clone())
+                };
+                if let Some(path) = cached_path {
+                    Ok(path)
+                } else {
+                    Err(AsrPortError::runtime(err))
+                }
+            }
+        }
+    };
     let release_result = if services
         .asr
         .live_coordinator()

@@ -40,42 +40,46 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
     let meta = params_val.and_then(|p| p.get("_meta"));
 
     // Modern MCP 2026-07-28 per-request _meta validation
-    if let Some(meta_obj) = meta {
-        if !meta_obj.is_object() {
+    if let Some(meta_val) = meta {
+        let Some(meta_obj) = meta_val.as_object() else {
             return Some(JsonRpcResponse::error(
                 id,
                 protocol::INVALID_PARAMS,
                 "Invalid params: '_meta' must be an object",
             ));
-        }
+        };
 
-        // Validate protocol version
-        let version = meta_obj
-            .get("io.modelcontextprotocol/protocolVersion")
-            .and_then(|v| v.as_str());
+        if req.method == "server/discover"
+            || meta_obj.contains_key("io.modelcontextprotocol/protocolVersion")
+        {
+            // Validate protocol version
+            let version = meta_obj
+                .get("io.modelcontextprotocol/protocolVersion")
+                .and_then(|v| v.as_str());
 
-        match version {
-            Some(v) if protocol::SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => {}
-            Some(v) => {
-                return Some(JsonRpcResponse::unsupported_protocol_version(id, v));
+            match version {
+                Some(v) if protocol::SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => {}
+                Some(v) => {
+                    return Some(JsonRpcResponse::unsupported_protocol_version(id, v));
+                }
+                None => {
+                    return Some(JsonRpcResponse::error(
+                        id,
+                        protocol::INVALID_PARAMS,
+                        "Invalid params: missing required 'io.modelcontextprotocol/protocolVersion' in _meta",
+                    ));
+                }
             }
-            None => {
+
+            // Validate client capabilities
+            let client_caps = meta_obj.get("io.modelcontextprotocol/clientCapabilities");
+            if !client_caps.is_some_and(|c| c.is_object()) {
                 return Some(JsonRpcResponse::error(
                     id,
                     protocol::INVALID_PARAMS,
-                    "Invalid params: missing required 'io.modelcontextprotocol/protocolVersion' in _meta",
+                    "Invalid params: missing required 'io.modelcontextprotocol/clientCapabilities' in _meta",
                 ));
             }
-        }
-
-        // Validate client capabilities
-        let client_caps = meta_obj.get("io.modelcontextprotocol/clientCapabilities");
-        if !client_caps.is_some_and(|c| c.is_object()) {
-            return Some(JsonRpcResponse::error(
-                id,
-                protocol::INVALID_PARAMS,
-                "Invalid params: missing required 'io.modelcontextprotocol/clientCapabilities' in _meta",
-            ));
         }
     } else if req.method == "server/discover" {
         return Some(JsonRpcResponse::error(
@@ -441,6 +445,26 @@ mod tests {
         assert_eq!(resp.id, serde_json::json!(3));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_PARAMS);
+    }
+
+    #[tokio::test]
+    async fn test_handle_standard_mcp_meta_progress_token() {
+        let client = offline_test_client();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({
+                "_meta": {
+                    "progressToken": 123
+                }
+            })),
+        };
+
+        let resp = handle_request(req, &client).await.unwrap();
+        assert_eq!(resp.id, serde_json::json!(1));
+        assert!(resp.error.is_none());
+        assert!(resp.result.is_some());
     }
 
     #[tokio::test]

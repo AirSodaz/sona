@@ -425,9 +425,12 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
     return recordController.startRecording();
   }, [recordController, showError]);
 
-  const stopRecording = useCallback(async () => {
-    return recordController.stopRecording();
-  }, [recordController]);
+  const stopRecording = useCallback(
+    async (options?: { discard?: boolean }) => {
+      return recordController.stopRecording(options);
+    },
+    [recordController]
+  );
 
   const pauseRecording = useCallback(async () => {
     peakLevelRef.current = 0;

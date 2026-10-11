@@ -9,6 +9,11 @@ import { useTranscriptStore } from '../../stores/transcriptStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import { useAgentControlSync } from '../useAgentControlSync';
 
+const stopActiveRecordingMock = vi.fn().mockResolvedValue(true);
+vi.mock('../../stores/transcriptCoordinator', () => ({
+  stopActiveRecording: (options?: { discard?: boolean }) => stopActiveRecordingMock(options),
+}));
+
 const listeners = new Map<string, (...args: unknown[]) => unknown>();
 const unlistenMocks = new Map<string, Mock>();
 
@@ -103,6 +108,59 @@ describe('useAgentControlSync', () => {
     expect(useTranscriptRuntimeStore.getState().isRecording).toBe(false);
     expect(useTranscriptRuntimeStore.getState().isPaused).toBe(false);
     expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
+  });
+
+  it('calls stopActiveRecording with discard false when agent requests UI recording stop', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('agent-control-ui-recording-stop-requested')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('agent-control-ui-recording-stop-requested')?.({
+        payload: { historyId: 'hist-ui-1', discard: false },
+      });
+    });
+
+    expect(stopActiveRecordingMock).toHaveBeenCalledWith({ discard: false });
+  });
+
+  it('calls stopActiveRecording with discard true when agent requests UI recording discard', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('agent-control-ui-recording-stop-requested')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('agent-control-ui-recording-stop-requested')?.({
+        payload: { historyId: 'hist-ui-2', discard: true },
+      });
+    });
+
+    expect(stopActiveRecordingMock).toHaveBeenCalledWith({ discard: true });
+  });
+
+  it('calls stopActiveRecording when recordingStatus reports active false during active UI recording', async () => {
+    useTranscriptStore.setState({
+      isRecording: true,
+      isAgentRecording: false,
+    });
+
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('agent-control-recording-status')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('agent-control-recording-status')?.({
+        payload: { active: false },
+      });
+    });
+
+    expect(stopActiveRecordingMock).toHaveBeenCalled();
   });
 
   it('updates isPaused in runtime store when recordingStatus reports paused', async () => {
@@ -249,7 +307,7 @@ describe('useAgentControlSync', () => {
     const { unmount } = renderHook(() => useAgentControlSync());
 
     await waitFor(() => {
-      expect(listeners.size).toBe(3);
+      expect(listeners.size).toBe(4);
     });
 
     unmount();

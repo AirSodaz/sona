@@ -584,6 +584,7 @@ async fn test_recording_pause_and_resume() {
             frozen_duration_seconds: None,
             _sleep_guard: None,
             is_ui_session: false,
+            saved_wav_path: None,
         });
     }
 
@@ -641,6 +642,125 @@ async fn test_recording_pause_and_resume() {
         .await
         .unwrap();
     assert_eq!(stop_res.history_id, history_id);
+}
+
+#[tokio::test]
+async fn test_ui_session_stop_delegation() {
+    let (facade, _dir) = create_test_facade().await;
+    let history_id = "test-ui-rec-session".to_string();
+    let segments = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    // Set an active UI recording session
+    {
+        let mut guard = facade.active_session.lock().await;
+        *guard = Some(ActiveRecordingSession {
+            history_id: history_id.clone(),
+            consumer_id: "test-ui-consumer".to_string(),
+            source_kind: "microphone".to_string(),
+            is_paused: false,
+            paused_at_instant: None,
+            accumulated_pause_duration: std::time::Duration::ZERO,
+            asr_request: None,
+            gain: 1.0,
+            started_at_epoch: 1700000000,
+            started_at_instant: std::time::Instant::now(),
+            segments: segments.clone(),
+            has_coordinator_consumer: false,
+            coordinator_released: false,
+            audio_stopped: false,
+            frozen_duration_seconds: None,
+            _sleep_guard: None,
+            is_ui_session: true,
+            saved_wav_path: None,
+        });
+    }
+
+    // Simulate UI recorder reacting to the event by clearing active_session
+    let active_session_clone = facade.active_session.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let mut guard = active_session_clone.lock().await;
+        *guard = None;
+    });
+
+    let stop_res = facade
+        .stop_recording(StopRecordingRequest { discard: false })
+        .await
+        .unwrap();
+
+    assert_eq!(stop_res.history_id, history_id);
+    assert_eq!(stop_res.segment_count, 0);
+
+    let state_after = facade.get_client_state().await.unwrap();
+    assert!(!state_after.is_recording);
+}
+
+#[tokio::test]
+async fn test_ui_session_stop_fallback_caches_saved_path() {
+    let (facade, _dir) = create_test_facade().await;
+    let history_id = "test-ui-fallback-session".to_string();
+    let consumer_id = "test-ui-fallback-consumer".to_string();
+    let segments = Arc::new(std::sync::Mutex::new(Vec::new()));
+
+    // Set an active UI session where audio is already marked stopped,
+    // simulating a timeout where UI never clears active_session
+    {
+        let mut guard = facade.active_session.lock().await;
+        *guard = Some(ActiveRecordingSession {
+            history_id: history_id.clone(),
+            consumer_id: consumer_id.clone(),
+            source_kind: "microphone".to_string(),
+            is_paused: false,
+            paused_at_instant: None,
+            accumulated_pause_duration: std::time::Duration::ZERO,
+            asr_request: None,
+            gain: 1.0,
+            started_at_epoch: 1700000000,
+            started_at_instant: std::time::Instant::now(),
+            segments: segments.clone(),
+            has_coordinator_consumer: false,
+            coordinator_released: false,
+            audio_stopped: true,
+            frozen_duration_seconds: None,
+            _sleep_guard: None,
+            is_ui_session: true,
+            saved_wav_path: None,
+        });
+    }
+
+    facade
+        .services
+        .recording_session
+        .cache_saved_wav_path(
+            consumer_id.clone(),
+            "C:/recordings/fallback.wav".to_string(),
+        )
+        .await;
+
+    let stop_res = facade
+        .stop_recording(StopRecordingRequest { discard: false })
+        .await
+        .unwrap();
+
+    assert_eq!(stop_res.history_id, history_id);
+    assert!(facade.active_session.lock().await.is_none());
+
+    assert_eq!(
+        facade
+            .services
+            .recording_session
+            .take_cached_saved_wav_path(&consumer_id)
+            .await,
+        Some("C:/recordings/fallback.wav".to_string())
+    );
+    assert_eq!(
+        facade
+            .services
+            .recording_session
+            .take_cached_saved_wav_path(&consumer_id)
+            .await,
+        None
+    );
 }
 
 #[tokio::test]

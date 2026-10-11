@@ -4,13 +4,20 @@ use std::sync::LazyLock;
 use crate::client::IpcClient;
 use crate::protocol::{ToolCallResult, ToolDefinition};
 
+static TOOL_DEFINITIONS: LazyLock<Vec<ToolDefinition>> = LazyLock::new(build_tool_definitions);
+
 static KNOWN_TOOL_NAMES: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| list_tools().into_iter().map(|t| t.name).collect());
+    LazyLock::new(|| TOOL_DEFINITIONS.iter().map(|t| t.name).collect());
 
 pub fn is_known_tool(name: &str) -> bool {
     KNOWN_TOOL_NAMES.contains(name)
 }
+
 pub fn list_tools() -> Vec<ToolDefinition> {
+    TOOL_DEFINITIONS.clone()
+}
+
+fn build_tool_definitions() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
             name: "sona_get_client_state",

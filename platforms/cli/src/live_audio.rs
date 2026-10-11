@@ -101,12 +101,17 @@ where
     R: Read + Send + 'static,
 {
     let (sender, receiver) = tokio::sync::mpsc::channel(16);
+    let is_cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let is_cancelled_reader = is_cancelled.clone();
     std::thread::spawn(move || {
         let mut decoder = PcmS16LeDecoder::default();
         let mut buffer = vec![0_u8; STDIN_READ_BUFFER_SIZE];
         let mut header_prefix = Vec::with_capacity(4);
         let mut header_checked = false;
         loop {
+            if is_cancelled_reader.load(std::sync::atomic::Ordering::Relaxed) {
+                break;
+            }
             let read = match reader.read(&mut buffer) {
                 Ok(read) => read,
                 Err(error) => {
@@ -183,7 +188,10 @@ where
             }
         }
     });
-    RunningAudioInput::from_parts(receiver, None, None, false)
+    let stop_handle = Arc::new(move || {
+        is_cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+    });
+    RunningAudioInput::from_parts(receiver, None, None, false).with_stop_handle(stop_handle)
 }
 
 pub(crate) fn microphone_device_names() -> Result<Vec<String>, String> {

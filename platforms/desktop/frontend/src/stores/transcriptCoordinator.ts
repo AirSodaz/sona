@@ -65,20 +65,21 @@ export const setRecordingSessionId = (id: string | null): void => {
   useTranscriptStore.getState().setRecordingSessionId(id);
 };
 
-let activeRecorderStopHandler: (() => Promise<unknown>) | null = null;
+let activeRecorderStopHandler: ((options?: { discard?: boolean }) => Promise<unknown>) | null =
+  null;
 
 export const registerActiveRecorderStopHandler = (
-  handler: (() => Promise<unknown>) | null
+  handler: ((options?: { discard?: boolean }) => Promise<unknown>) | null
 ): void => {
   activeRecorderStopHandler = handler;
 };
 
-export const stopActiveRecording = async (): Promise<boolean> => {
+export const stopActiveRecording = async (options?: { discard?: boolean }): Promise<boolean> => {
   const handler = activeRecorderStopHandler;
   if (handler) {
     activeRecorderStopHandler = null;
     try {
-      await handler();
+      await handler(options);
       return true;
     } catch (error) {
       console.error('Failed to cleanly stop active recording from coordinator:', error);

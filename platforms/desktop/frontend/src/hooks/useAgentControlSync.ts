@@ -4,10 +4,12 @@ import {
   type AgentRecordingStatusPayload,
   TauriEvent,
   type TranscriptUpdatedPayload,
+  type UiRecordingStopRequestedPayload,
 } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
+import { stopActiveRecording } from '../stores/transcriptCoordinator';
 import { sessionActions, transcriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
@@ -28,12 +30,19 @@ export function useAgentControlSync(): void {
         // 1. Listen for Agent Recording status changes
         const unlistenRec = await listen<AgentRecordingStatusPayload>(
           TauriEvent.agent.recordingStatus,
-          (event) => {
+          async (event) => {
             if (!isMounted) return;
             const { active, isPaused = false, historyId } = event.payload;
             logger.info(
               `[AgentControlSync] Agent recording status changed: active=${active}, isPaused=${isPaused}, historyId=${historyId ?? 'none'}`
             );
+            if (
+              !active &&
+              useTranscriptStore.getState().isRecording &&
+              !useTranscriptStore.getState().isAgentRecording
+            ) {
+              await stopActiveRecording();
+            }
             useTranscriptStore.getState().setIsRecording(active);
             useTranscriptStore.getState().setIsPaused(active ? isPaused : false);
             useTranscriptStore.getState().setIsAgentRecording(active, historyId ?? null);
@@ -42,6 +51,21 @@ export function useAgentControlSync(): void {
         );
         if (isMounted) unlisteners.push(unlistenRec);
         else unlistenRec();
+
+        // 1b. Listen for UI recording stop requested by Agent
+        const unlistenStopReq = await listen<UiRecordingStopRequestedPayload>(
+          TauriEvent.agent.uiRecordingStopRequested,
+          async (event) => {
+            if (!isMounted) return;
+            const discard = event.payload?.discard ?? false;
+            logger.info(
+              `[AgentControlSync] UI recording stop requested by agent (discard=${discard})`
+            );
+            await stopActiveRecording({ discard });
+          }
+        );
+        if (isMounted) unlisteners.push(unlistenStopReq);
+        else unlistenStopReq();
 
         // 2. Listen for background transcript updates (transcribe_file, translation, summary mutations)
         const unlistenTrans = await listen<TranscriptUpdatedPayload>(

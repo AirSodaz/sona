@@ -156,6 +156,18 @@ export default defineConfig(async () => ({
               test: (id) => id.replace(/\\/g, '/').includes('/node_modules/lucide-react/'),
             },
             {
+              name: 'lexical-vendor',
+              test: (id) => {
+                const normalizedId = id.replace(/\\/g, '/');
+                return (
+                  normalizedId.includes('/node_modules/lexical/') ||
+                  normalizedId.includes('/node_modules/@lexical/') ||
+                  normalizedId.includes('/node_modules/.pnpm/lexical@') ||
+                  normalizedId.includes('/node_modules/.pnpm/@lexical')
+                );
+              },
+            },
+            {
               name: 'i18n-vendor',
               test: (id) => {
                 const normalizedId = id.replace(/\\/g, '/');
@@ -168,8 +180,24 @@ export default defineConfig(async () => ({
               },
             },
             {
-              name: 'i18n-locales',
-              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/'),
+              name: 'locale-en',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/en.json'),
+            },
+            {
+              name: 'locale-zh',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/zh.json'),
+            },
+            {
+              name: 'locale-zh-tw',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/zh-TW.json'),
+            },
+            {
+              name: 'locale-ja',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/ja.json'),
+            },
+            {
+              name: 'locale-ko',
+              test: (id) => id.replace(/\\/g, '/').includes('/src/locales/ko.json'),
             },
 
             {

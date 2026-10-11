@@ -251,45 +251,11 @@ async fn inspect_hardware() -> DoctorHardwareStatus {
 
 #[cfg(not(target_os = "macos"))]
 async fn check_vulkan_availability() -> bool {
-    // 1. Check if vulkaninfo can query physical devices successfully
-    let vulkaninfo_ok = tokio::process::Command::new("vulkaninfo")
+    tokio::process::Command::new("vulkaninfo")
         .arg("--summary")
         .output()
         .await
-        .is_ok_and(|output| output.status.success());
-    if vulkaninfo_ok {
-        return true;
-    }
-    // 2. On Windows, check for vulkan-1.dll loader
-    #[cfg(target_os = "windows")]
-    {
-        let system32_vulkan_ok = std::env::var("SystemRoot").is_ok_and(|root| {
-            std::path::Path::new(&root)
-                .join("System32")
-                .join("vulkan-1.dll")
-                .is_file()
-        });
-        if system32_vulkan_ok
-            || std::path::Path::new("C:\\Windows\\System32\\vulkan-1.dll").is_file()
-        {
-            return true;
-        }
-    }
-    // 3. On Linux, check common libvulkan paths
-    #[cfg(target_os = "linux")]
-    {
-        for path in [
-            "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
-            "/usr/lib/libvulkan.so.1",
-            "/usr/lib64/libvulkan.so.1",
-            "/usr/local/lib/libvulkan.so.1",
-        ] {
-            if std::path::Path::new(path).is_file() {
-                return true;
-            }
-        }
-    }
-    false
+        .is_ok_and(|output| output.status.success())
 }
 
 fn inspect_ffmpeg(custom_path: Option<&str>) -> DoctorFfmpegStatus {

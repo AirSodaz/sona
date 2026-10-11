@@ -105,7 +105,7 @@ interface CreateRecordControllerArgs {
 }
 export interface RecordController {
   startRecording: () => Promise<boolean>;
-  stopRecording: () => Promise<void>;
+  stopRecording: (options?: { discard?: boolean }) => Promise<void>;
   pauseRecording: () => Promise<void>;
   resumeRecording: () => Promise<void>;
 }
@@ -256,7 +256,7 @@ export function createRecordController({
     }
   }
 
-  async function stopRecording(): Promise<void> {
+  async function stopRecording(options?: { discard?: boolean }): Promise<void> {
     const sessionId = session.getSessionId();
     if (!sessionId) {
       return;
@@ -282,7 +282,7 @@ export function createRecordController({
         await flushPendingAutoSave(liveDraft.item.id, latestSegments);
       }
 
-      if (!liveDraft || latestSegments.length === 0) {
+      if (!liveDraft || latestSegments.length === 0 || options?.discard) {
         liveDraftRef.current = null;
         await capture.stopFileRecording();
         await capture.teardownWebCaptureResources();

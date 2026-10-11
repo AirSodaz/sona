@@ -91,9 +91,6 @@ where
                 }
                 LegacyDatabaseAction::Exit => {
                     log::info!("User chose to exit on legacy schema version {found} < {minimum}");
-                    #[cfg(not(test))]
-                    std::process::exit(0);
-                    #[cfg(test)]
                     Err(Box::new(
                         sona_sqlite::DatabaseError::UnsupportedLegacySchemaVersion {
                             found,
