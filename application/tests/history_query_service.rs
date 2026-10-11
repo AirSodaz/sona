@@ -22,6 +22,17 @@ impl HistoryQueryRepository for RecordingHistoryQueryRepository {
         Ok(Vec::new())
     }
 
+    fn get_item(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<sona_core::history::HistoryItemRecord>, HistoryStoreError> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(format!("item:{history_id}"));
+        Ok(None)
+    }
+
     fn list_items_with_reconciled_live_drafts(
         &self,
     ) -> Result<Vec<sona_core::history::HistoryItemRecord>, HistoryStoreError> {
@@ -141,6 +152,7 @@ fn service_routes_all_history_query_operations_through_the_focused_port() {
     service.query_workspace(workspace_request()).unwrap();
     service.load_transcript("history-1").unwrap();
     service.list_transcript_snapshots("history-1").unwrap();
+    service.get_item("history-1").unwrap();
     service
         .load_transcript_snapshot("history-1", "snapshot-1")
         .unwrap();
@@ -152,6 +164,7 @@ fn service_routes_all_history_query_operations_through_the_focused_port() {
             "query:25:5",
             "transcript:history-1",
             "snapshots:history-1",
+            "item:history-1",
             "snapshot:history-1:snapshot-1",
         ]
     );
@@ -165,6 +178,7 @@ fn service_rejects_empty_ids_before_calling_the_repository() {
     for error in [
         service.load_transcript("  ").unwrap_err(),
         service.list_transcript_snapshots("").unwrap_err(),
+        service.get_item("  ").unwrap_err(),
         service
             .load_transcript_snapshot("history-1", " \t")
             .unwrap_err(),

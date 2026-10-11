@@ -700,6 +700,23 @@ where
         })?)
     }
 
+    pub(crate) fn get_item(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<HistoryItemRecord>, HistoryStoreError> {
+        validate_id(history_id, "History ID").map_err(DatabaseError::Internal)?;
+        Ok(self.get_db()?.with_connection(|conn| {
+            let columns = history_select_columns(None, &[]);
+            let query = format!("SELECT {columns} FROM history_items WHERE id = ?1");
+            let mut stmt = conn.prepare_cached(&query)?;
+            match stmt.query_row([history_id], map_row_to_item) {
+                Ok(item) => Ok(Some(item)),
+                Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+                Err(e) => Err(DatabaseError::QueryError(e)),
+            }
+        })?)
+    }
+
     fn list_items_with_reconciled_live_drafts(
         &self,
     ) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
@@ -2041,6 +2058,14 @@ where
 {
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryStoreError> {
         SqliteHistoryStore::list_items(self)
+    }
+
+    fn get_item(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<HistoryItemRecord>, sona_core::history::query_repository::HistoryQueryError>
+    {
+        SqliteHistoryStore::get_item(self, history_id)
     }
 
     fn list_items_with_reconciled_live_drafts(

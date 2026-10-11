@@ -66,6 +66,11 @@ pub(crate) trait CliIo: Send {
     fn read_bounded_stdin(&mut self, buf: &mut Vec<u8>, _limit: usize) -> io::Result<usize> {
         self.read_to_end_stdin(buf)
     }
+    fn copy_bounded_stdin_to_writer(
+        &mut self,
+        writer: &mut (dyn Write + Send),
+        limit: usize,
+    ) -> io::Result<u64>;
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
@@ -128,6 +133,16 @@ impl CliIo for MemoryCliIo {
         buf.extend(self.stdin_bytes.drain(..max_to_read));
         Ok(max_to_read)
     }
+    fn copy_bounded_stdin_to_writer(
+        &mut self,
+        writer: &mut (dyn Write + Send),
+        limit: usize,
+    ) -> io::Result<u64> {
+        let max_to_read = self.stdin_bytes.len().min(limit.saturating_add(1));
+        writer.write_all(&self.stdin_bytes[..max_to_read])?;
+        self.stdin_bytes.drain(..max_to_read);
+        Ok(max_to_read as u64)
+    }
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
@@ -179,6 +194,17 @@ impl CliIo for StdCliIo {
         io::stdin()
             .take(limit.saturating_add(1) as u64)
             .read_to_end(buf)
+    }
+    fn copy_bounded_stdin_to_writer(
+        &mut self,
+        writer: &mut (dyn Write + Send),
+        limit: usize,
+    ) -> io::Result<u64> {
+        use io::Read;
+        io::copy(
+            &mut io::stdin().take(limit.saturating_add(1) as u64),
+            writer,
+        )
     }
     fn prompt_line_async<'a>(
         &'a mut self,

@@ -53,10 +53,10 @@ pub(crate) fn create_llm_transcript_snapshot_record(
         return Ok(None);
     }
 
-    let items = repository
-        .list_items()
-        .map_err(history_query_error_to_mutation)?;
-    let Some(item) = items.iter().find(|entry| entry.id == history_id) else {
+    let Some(item) = repository
+        .get_item(history_id)
+        .map_err(history_query_error_to_mutation)?
+    else {
         return Ok(None);
     };
 

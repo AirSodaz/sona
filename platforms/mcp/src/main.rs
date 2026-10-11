@@ -231,7 +231,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
-    let mut stdout = tokio::io::stdout();
+    let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(64);
+    let writer_handle = tokio::spawn(async move {
+        let mut stdout = tokio::io::stdout();
+        while let Some(resp) = resp_rx.recv().await {
+            if let Ok(resp_str) = serde_json::to_string(&resp) {
+                let _ = stdout.write_all(resp_str.as_bytes()).await;
+                let _ = stdout.write_all(b"\n").await;
+                let _ = stdout.flush().await;
+            }
+        }
+    });
 
     let mut line = String::new();
     while reader.read_line(&mut line).await? > 0 {
@@ -243,12 +253,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match serde_json::from_str::<JsonRpcRequest>(trimmed) {
             Ok(req) => {
-                if let Some(resp) = handle_request(req, &client).await {
-                    let resp_str = serde_json::to_string(&resp)?;
-                    stdout.write_all(resp_str.as_bytes()).await?;
-                    stdout.write_all(b"\n").await?;
-                    stdout.flush().await?;
-                }
+                let client_clone = client.clone();
+                let tx_clone = resp_tx.clone();
+                tokio::spawn(async move {
+                    if let Some(resp) = handle_request(req, &client_clone).await {
+                        let _ = tx_clone.send(resp).await;
+                    }
+                });
             }
             Err(e) => {
                 let err_resp = JsonRpcResponse::error(
@@ -256,16 +267,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                     protocol::PARSE_ERROR,
                     format!("Parse error: {e}"),
                 );
-                let resp_str = serde_json::to_string(&err_resp)?;
-                stdout.write_all(resp_str.as_bytes()).await?;
-                stdout.write_all(b"\n").await?;
-                stdout.flush().await?;
+                let _ = resp_tx.send(err_resp).await;
             }
         }
 
         line.clear();
     }
 
+    drop(resp_tx);
+    let _ = writer_handle.await;
     eprintln!("[sona-mcp] Stdio loop finished.");
     Ok(())
 }

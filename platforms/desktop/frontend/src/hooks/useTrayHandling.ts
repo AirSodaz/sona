@@ -5,6 +5,7 @@ import { updateTrayMenu } from '../services/tauri/app';
 import { stopMicrophoneCapture, stopSystemAudioCapture } from '../services/tauri/audio';
 import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
+import { stopLiveTranscription, stopNativeLiveTranscription } from '../services/tauri/recognizer';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
 import { stopActiveRecording } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
@@ -93,14 +94,20 @@ export function useTrayHandling(
           const stopped = await stopActiveRecording();
           if (!stopped) {
             if (useTranscriptStore.getState().isRecording) {
-              await Promise.allSettled([
-                stopMicrophoneCapture('record').catch((error) => {
-                  logger.error('[Tray] Failed to fallback stop microphone capture:', error);
-                }),
-                stopSystemAudioCapture('record').catch((error) => {
-                  logger.error('[Tray] Failed to fallback stop system audio capture:', error);
-                }),
-              ]);
+              const targets = ['record'];
+              await Promise.allSettled(
+                targets.flatMap((id) => [
+                  stopMicrophoneCapture(id).catch((error) => {
+                    logger.error('[Tray] Failed to fallback stop microphone capture:', error);
+                  }),
+                  stopSystemAudioCapture(id).catch((error) => {
+                    logger.error('[Tray] Failed to fallback stop system audio capture:', error);
+                  }),
+                  stopNativeLiveTranscription(id, 'microphone').catch(() => {}),
+                  stopNativeLiveTranscription(id, 'system').catch(() => {}),
+                  stopLiveTranscription(id).catch(() => {}),
+                ])
+              );
             }
             useTranscriptStore.getState().setIsRecording(false);
             useTranscriptStore.getState().setIsPaused(false);

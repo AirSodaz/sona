@@ -23,6 +23,31 @@ pub mod db_runner;
 
 pub use db_runner::*;
 
+#[derive(Clone, Default)]
+pub struct DesktopRecordingSessionTracker {
+    inner: Arc<tokio::sync::Mutex<Option<crate::platform::agent_control::ActiveRecordingSession>>>,
+}
+
+impl DesktopRecordingSessionTracker {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn handle(
+        &self,
+    ) -> Arc<tokio::sync::Mutex<Option<crate::platform::agent_control::ActiveRecordingSession>>>
+    {
+        self.inner.clone()
+    }
+
+    pub async fn lock(
+        &self,
+    ) -> tokio::sync::MutexGuard<'_, Option<crate::platform::agent_control::ActiveRecordingSession>>
+    {
+        self.inner.lock().await
+    }
+}
+
 /// Pure Rust container aggregating all desktop domain services.
 ///
 /// Strictly prohibits any dependency on `tauri::*`.
@@ -38,6 +63,7 @@ pub struct DesktopServices {
     pub asr: Arc<AsrState>,
     pub downloads: Arc<DownloadState>,
     pub emitter: Arc<dyn EventEmitterPort>,
+    pub recording_session: DesktopRecordingSessionTracker,
 }
 
 #[derive(Default)]
@@ -127,6 +153,7 @@ impl DesktopServicesBuilder {
         let downloads = self
             .downloads
             .unwrap_or_else(|| Arc::new(DownloadState::new()));
+        let recording_session = DesktopRecordingSessionTracker::new();
 
         Ok(DesktopServices {
             sqlite,
@@ -139,6 +166,7 @@ impl DesktopServicesBuilder {
             asr,
             downloads,
             emitter,
+            recording_session,
         })
     }
 }

@@ -1,4 +1,4 @@
-﻿use crate::history::{
+use crate::history::{
     HistoryItemRecord, HistoryListOptions, HistoryWorkspaceQueryRequest,
     HistoryWorkspaceQueryResult, TranscriptSnapshotMetadata, TranscriptSnapshotRecord,
 };
@@ -26,6 +26,7 @@ pub enum HistoryQueryError {
 
 pub trait HistoryQueryRepository: Send + Sync {
     fn list_items(&self) -> Result<Vec<HistoryItemRecord>, HistoryQueryError>;
+    fn get_item(&self, history_id: &str) -> Result<Option<HistoryItemRecord>, HistoryQueryError>;
 
     fn list_items_with_reconciled_live_drafts(
         &self,

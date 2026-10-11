@@ -576,24 +576,45 @@ pub fn disconnect_all_agents(app_handle: &tauri::AppHandle) {
 }
 
 pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
-    if let Some(facade) = app_handle.try_state::<AgentControlFacade>() {
-        let facade_clone = facade.inner().clone();
-        tauri::async_runtime::spawn(async move {
-            let _ = facade_clone
-                .stop_recording(
-                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
-                )
-                .await;
-        });
-    }
-    if let Some(services) = app_handle.try_state::<crate::services::DesktopServices>() {
-        let audio = services.audio.clone();
-        tauri::async_runtime::spawn(async move {
-            crate::integrations::audio::stop_all_captures(&audio).await;
-        });
-    }
-    let _ = app_handle.emit("tray-stop-recording", ());
-    crate::app::tray::set_recording_active(app_handle, false);
+    let facade = app_handle
+        .try_state::<AgentControlFacade>()
+        .map(|f| f.inner().clone());
+    let services = app_handle
+        .try_state::<crate::services::DesktopServices>()
+        .map(|s| s.inner().clone());
+    let app_handle_clone = app_handle.clone();
+    tauri::async_runtime::spawn(async move {
+        let is_ui = if let Some(services) = services.as_ref() {
+            services
+                .recording_session
+                .lock()
+                .await
+                .as_ref()
+                .map(|s| s.is_ui_session)
+                .unwrap_or(false)
+        } else {
+            false
+        };
+
+        if !is_ui {
+            let mut stopped = false;
+            if let Some(facade) = facade {
+                stopped = facade
+                    .stop_recording(
+                        crate::platform::agent_control::facade::StopRecordingRequest {
+                            discard: false,
+                        },
+                    )
+                    .await
+                    .is_ok();
+            }
+            if !stopped && let Some(services) = services.as_ref() {
+                crate::integrations::audio::stop_all_captures(&services.audio).await;
+            }
+        }
+        let _ = app_handle_clone.emit("tray-stop-recording", ());
+        crate::app::tray::set_recording_active(&app_handle_clone, false);
+    });
 }
 
 pub async fn handle_connection<S>(
@@ -755,17 +776,6 @@ pub async fn run_ipc_server(
         }
 
         let connected_client = server;
-        server = match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
-            Ok(s) => s,
-            Err(e) => {
-                log::error!(
-                    "[AgentControlIPC] Failed to create next named pipe instance: {e}, retrying..."
-                );
-                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
-                ServerOptions::new().create(WINDOWS_PIPE_NAME)?
-            }
-        };
-
         let facade_clone = facade.clone();
         let tracker_clone = tracker.clone();
         let app_handle_clone = app_handle.clone();
@@ -781,6 +791,20 @@ pub async fn run_ipc_server(
                 log::debug!("[AgentControlIPC] Client connection ended: {e}");
             }
         });
+
+        let mut retry_delay = tokio::time::Duration::from_millis(100);
+        server = loop {
+            match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
+                Ok(s) => break s,
+                Err(e) => {
+                    log::error!(
+                        "[AgentControlIPC] Failed to create next named pipe instance: {e}, retrying in {retry_delay:?}..."
+                    );
+                    tokio::time::sleep(retry_delay).await;
+                    retry_delay = (retry_delay * 2).min(tokio::time::Duration::from_secs(5));
+                }
+            }
+        };
     }
 }
 

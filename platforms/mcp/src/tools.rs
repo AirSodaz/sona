@@ -1,6 +1,15 @@
+use std::collections::HashSet;
+use std::sync::LazyLock;
+
 use crate::client::IpcClient;
 use crate::protocol::{ToolCallResult, ToolDefinition};
 
+static KNOWN_TOOL_NAMES: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| list_tools().into_iter().map(|t| t.name).collect());
+
+pub fn is_known_tool(name: &str) -> bool {
+    KNOWN_TOOL_NAMES.contains(name)
+}
 pub fn list_tools() -> Vec<ToolDefinition> {
     vec![
         ToolDefinition {
@@ -764,18 +773,6 @@ pub async fn call_tool(
                 })),
             }
         }
-        "sona_focus_window" => match client.call("sona_focus_window", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_start_recording" => match client.call("sona_start_recording", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_stop_recording" => match client.call("sona_stop_recording", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
         "sona_control_recording" => {
             let action = match arguments.get("action").and_then(|v| v.as_str()) {
                 Some(a) => a,
@@ -830,148 +827,16 @@ pub async fn call_tool(
                 )),
             }
         }
-        "sona_revert_transcript_snapshot" => {
-            match client
-                .call("sona_revert_transcript_snapshot", arguments)
-                .await
-            {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
+        _ => {
+            if is_known_tool(name) {
+                match client.call(name, arguments).await {
+                    Ok(val) => ToolCallResult::json(&val),
+                    Err(err) => ToolCallResult::error(err),
+                }
+            } else {
+                ToolCallResult::error(format!("Unknown tool: {name}"))
             }
         }
-        "sona_update_history_meta" => {
-            match client.call("sona_update_history_meta", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_delete_preset_model" => {
-            match client.call("sona_delete_preset_model", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_resolve_sync_conflict" => {
-            match client.call("sona_resolve_sync_conflict", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_query_history" => match client.call("sona_query_history", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_read_transcript" => match client.call("sona_read_transcript", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_edit_transcript" => match client.call("sona_edit_transcript", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_patch_segments" => match client.call("sona_patch_segments", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_update_translations" => {
-            match client.call("sona_update_translations", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_delete_history" => match client.call("sona_delete_history", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_list_projects" => match client.call("sona_list_projects", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_set_active_project" => {
-            match client.call("sona_set_active_project", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_get_settings" => match client.call("sona_get_settings", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_update_setting" => match client.call("sona_update_setting", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_transcribe_file" => match client.call("sona_transcribe_file", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_cancel_batch_task" => match client.call("sona_cancel_batch_task", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_export_transcript" => match client.call("sona_export_transcript", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_save_summary" => match client.call("sona_save_summary", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_edit_summary" => match client.call("sona_edit_summary", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_delete_summary" => match client.call("sona_delete_summary", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_load_summary" => match client.call("sona_load_summary", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_get_model_catalog" => match client.call("sona_get_model_catalog", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_download_preset_model" => {
-            match client.call("sona_download_preset_model", arguments).await {
-                Ok(val) => ToolCallResult::json(&val),
-                Err(err) => ToolCallResult::error(err),
-            }
-        }
-        "sona_cancel_download" => match client.call("sona_cancel_download", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_get_sync_status" => match client.call("sona_get_sync_status", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_trigger_sync" => match client.call("sona_trigger_sync", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_create_project" => match client.call("sona_create_project", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_update_project" => match client.call("sona_update_project", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_delete_project" => match client.call("sona_delete_project", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_query_trash" => match client.call("sona_query_trash", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        "sona_restore_history" => match client.call("sona_restore_history", arguments).await {
-            Ok(val) => ToolCallResult::json(&val),
-            Err(err) => ToolCallResult::error(err),
-        },
-        _ => ToolCallResult::error(format!("Unknown tool: {name}")),
     }
 }
 
@@ -1013,5 +878,12 @@ mod tests {
             timeout_prop.get("default").and_then(|v| v.as_u64()),
             Some(10)
         );
+    }
+
+    #[test]
+    fn test_is_known_tool() {
+        assert!(is_known_tool("sona_focus_window"));
+        assert!(is_known_tool("sona_query_history"));
+        assert!(!is_known_tool("sona_nonexistent_tool"));
     }
 }

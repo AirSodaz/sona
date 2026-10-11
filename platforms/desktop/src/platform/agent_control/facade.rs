@@ -78,6 +78,7 @@ pub struct ActiveRecordingSession {
     pub audio_stopped: bool,
     pub frozen_duration_seconds: Option<f64>,
     pub _sleep_guard: Option<Arc<crate::platform::system::power::SleepPreventionGuard>>,
+    pub is_ui_session: bool,
 }
 
 #[derive(Clone)]
@@ -791,10 +792,11 @@ pub fn resolve_live_asr_request_from_config(
 
 impl AgentControlFacade {
     pub fn new(services: DesktopServices, app_handle: Option<tauri::AppHandle>) -> Self {
+        let active_session = services.recording_session.handle();
         Self {
             services,
             app_handle,
-            active_session: Arc::new(Mutex::new(None)),
+            active_session,
             recording_op_lock: Arc::new(Mutex::new(())),
         }
     }
@@ -1035,6 +1037,7 @@ impl AgentControlFacade {
             audio_stopped: false,
             frozen_duration_seconds: None,
             _sleep_guard: Some(sleep_guard),
+            is_ui_session: false,
         });
 
         let _ = self.services.emitter.emit(
@@ -1109,7 +1112,9 @@ impl AgentControlFacade {
         }
 
         // 3. Finalize or discard draft with strict error checking
-        let segment_count = if req.discard {
+        let segment_count = if session_snapshot.is_ui_session {
+            0
+        } else if req.discard {
             let deleted_at = std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_err(|e| e.to_string())?
@@ -3141,6 +3146,7 @@ mod tests {
                 audio_stopped: true,
                 frozen_duration_seconds: None,
                 _sleep_guard: None,
+                is_ui_session: false,
             });
         }
 

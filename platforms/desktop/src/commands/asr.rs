@@ -173,6 +173,7 @@ pub async fn start_native_live_transcription(
         );
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
+    let asr_request_for_session = asr_request.clone();
     match services
         .asr
         .live_coordinator()
@@ -188,6 +189,33 @@ pub async fn start_native_live_transcription(
     {
         Ok(subscription) => {
             crate::app::tray::set_recording_active(&app, true);
+            {
+                let mut guard = services.recording_session.lock().await;
+                if guard.is_none() {
+                    *guard = Some(crate::platform::agent_control::ActiveRecordingSession {
+                        history_id: format!("ui-record-{}", uuid::Uuid::new_v4()),
+                        consumer_id: consumer_id.clone(),
+                        source_kind: source_kind.clone(),
+                        is_paused: false,
+                        paused_at_instant: None,
+                        accumulated_pause_duration: std::time::Duration::ZERO,
+                        asr_request: Some(asr_request_for_session),
+                        gain,
+                        started_at_epoch: std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0),
+                        started_at_instant: std::time::Instant::now(),
+                        segments: Arc::new(std::sync::Mutex::new(Vec::new())),
+                        has_coordinator_consumer: true,
+                        coordinator_released: false,
+                        audio_stopped: false,
+                        frozen_duration_seconds: None,
+                        _sleep_guard: None,
+                        is_ui_session: true,
+                    });
+                }
+            }
             Ok(LiveNativeTranscriptionStart {
                 lease,
                 subscription,
@@ -239,6 +267,14 @@ pub async fn stop_live_transcription(
     } else {
         Ok(())
     };
+    {
+        let mut guard = services.recording_session.lock().await;
+        if let Some(session) = guard.as_ref()
+            && session.consumer_id == consumer_id
+        {
+            *guard = None;
+        }
+    }
     if !services.audio.has_active_captures() {
         crate::app::tray::set_recording_active(&app, false);
     }
@@ -267,7 +303,7 @@ pub async fn pause_native_live_transcription(
     } else {
         Ok(())
     };
-    if let Err(error) = release_result {
+    let res = if let Err(error) = release_result {
         if pause_result.is_ok() {
             let _ = crate::integrations::audio::set_native_live_capture_paused(
                 &services.audio,
@@ -276,14 +312,28 @@ pub async fn pause_native_live_transcription(
                 false,
             );
         }
-        return Err(error);
+        Err(error)
+    } else {
+        match pause_result {
+            Ok(_) | Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(_)) => {
+                Ok(())
+            }
+            Err(err) => Err(AsrPortError::runtime(err.to_string())),
+        }
+    };
+    if res.is_ok() {
+        let mut guard = services.recording_session.lock().await;
+        if let Some(session) = guard.as_mut()
+            && session.consumer_id == consumer_id
+            && !session.is_paused
+        {
+            session.is_paused = true;
+            session.paused_at_instant = Some(std::time::Instant::now());
+            session.coordinator_released = true;
+        }
     }
-    match pause_result {
-        Ok(_) | Err(crate::integrations::audio::AudioCaptureError::InstanceNotActive(_)) => Ok(()),
-        Err(err) => Err(AsrPortError::runtime(err.to_string())),
-    }
+    res
 }
-
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn resume_native_live_transcription(
@@ -317,10 +367,25 @@ pub async fn resume_native_live_transcription(
         )
         .await
     {
-        Ok(subscription) => Ok(LiveNativeTranscriptionStart {
-            lease,
-            subscription,
-        }),
+        Ok(subscription) => {
+            {
+                let mut guard = services.recording_session.lock().await;
+                if let Some(session) = guard.as_mut()
+                    && session.consumer_id == consumer_id
+                    && session.is_paused
+                {
+                    if let Some(paused_at) = session.paused_at_instant.take() {
+                        session.accumulated_pause_duration += paused_at.elapsed();
+                    }
+                    session.is_paused = false;
+                    session.coordinator_released = false;
+                }
+            }
+            Ok(LiveNativeTranscriptionStart {
+                lease,
+                subscription,
+            })
+        }
         Err(error) => {
             let _ = crate::integrations::audio::set_native_live_capture_paused(
                 &services.audio,
@@ -357,6 +422,14 @@ pub async fn stop_native_live_transcription(
     } else {
         Ok(())
     };
+    {
+        let mut guard = services.recording_session.lock().await;
+        if let Some(session) = guard.as_ref()
+            && session.consumer_id == consumer_id
+        {
+            *guard = None;
+        }
+    }
     if !services.audio.has_active_captures() {
         crate::app::tray::set_recording_active(&app, false);
     }

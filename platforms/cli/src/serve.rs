@@ -124,7 +124,7 @@ pub async fn run_serve(
     } = start_api_server_runtime(ApiServerServiceParts {
         resolved,
         temp_dir,
-        online_asr_config: Arc::new(tokio::sync::RwLock::new(HashMap::new())),
+        online_asr_config: Arc::new(tokio::sync::RwLock::new(resolve_cli_online_asr_config())),
         batch_transcriber: Arc::new(crate::asr_adapter::local_batch_transcriber()),
         media_validator: Arc::new(sona_media_detector::MagicNumberMediaFileValidator),
         gpu_availability: Arc::new(sona_sherpa_onnx::gpu::LocalGpuAvailabilityProvider),
@@ -227,6 +227,35 @@ fn load_config(path: Option<&PathBuf>) -> CliResult<Option<ServeConfigSection>> 
     sona_runtime_fs::load_serve_config_file(path)
         .map(Some)
         .map_err(|error| CliError::Validation(error.to_string()))
+}
+
+fn resolve_cli_online_asr_config() -> HashMap<String, serde_json::Value> {
+    let mut config_map = HashMap::new();
+    for provider in sona_core::ports::asr::online_asr_providers() {
+        let mut key = provider
+            .default_api_key_env()
+            .and_then(|env_name| std::env::var(env_name).ok());
+
+        if key.is_none() && provider.id == "volcengine-doubao" {
+            key = std::env::var("VOLCENGINE_API_KEY").ok();
+        }
+
+        if let Some(raw_key) = key {
+            let trimmed = raw_key.trim();
+            if !trimmed.is_empty() {
+                let mut provider_obj = serde_json::Map::new();
+                if let Some(defaults) = provider.defaults.as_object() {
+                    provider_obj.extend(defaults.clone());
+                }
+                provider_obj.insert(
+                    "apiKey".to_string(),
+                    serde_json::Value::String(trimmed.to_string()),
+                );
+                config_map.insert(provider.id.clone(), serde_json::Value::Object(provider_obj));
+            }
+        }
+    }
+    config_map
 }
 
 fn default_temp_dir() -> PathBuf {
@@ -369,6 +398,25 @@ mod tests {
                     .contains(sona_api_server::ONLINE_ASR_BATCH_UNAVAILABLE),
                 "CliApiServerPlatform should route online batch instead of returning unavailable"
             );
+        }
+    }
+
+    #[test]
+    fn resolve_cli_online_asr_config_loads_credentials_from_env() {
+        let original = std::env::var("GROQ_API_KEY").ok();
+        unsafe {
+            std::env::set_var("GROQ_API_KEY", "test-groq-key-123");
+        }
+        let config = resolve_cli_online_asr_config();
+        assert!(config.contains_key("groq-whisper"));
+        let groq = config.get("groq-whisper").unwrap();
+        assert_eq!(
+            groq.get("apiKey").and_then(|v| v.as_str()),
+            Some("test-groq-key-123")
+        );
+        match original {
+            Some(val) => unsafe { std::env::set_var("GROQ_API_KEY", val) },
+            None => unsafe { std::env::remove_var("GROQ_API_KEY") },
         }
     }
 }

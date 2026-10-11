@@ -241,21 +241,6 @@ pub async fn run_transcribe(
             ));
             }
             const MAX_STDIN_BYTES: usize = 512 * 1024 * 1024;
-            let mut buf = Vec::new();
-            io.read_bounded_stdin(&mut buf, MAX_STDIN_BYTES)
-                .map_err(|error| {
-                    CliError::Io(format!("Failed to read audio input from stdin: {error}"))
-                })?;
-            if buf.is_empty() {
-                return Err(CliError::Validation(
-                    "Standard input was empty; no audio data received.".to_string(),
-                ));
-            }
-            if buf.len() > MAX_STDIN_BYTES {
-                return Err(CliError::Validation(
-                    "Audio input from stdin exceeds maximum supported size (512 MB).".to_string(),
-                ));
-            }
             let mut temp_file = tempfile::Builder::new()
                 .prefix("sona_stdin_")
                 .suffix(".tmp")
@@ -263,8 +248,23 @@ pub async fn run_transcribe(
                 .map_err(|e| {
                     CliError::Io(format!("Failed to create temporary file for stdin: {e}"))
                 })?;
-            std::io::Write::write_all(&mut temp_file, &buf).map_err(|e| {
-                CliError::Io(format!("Failed to write stdin to temporary file: {e}"))
+            let bytes_copied = io
+                .copy_bounded_stdin_to_writer(&mut temp_file, MAX_STDIN_BYTES)
+                .map_err(|error| {
+                    CliError::Io(format!("Failed to read audio input from stdin: {error}"))
+                })?;
+            if bytes_copied == 0 {
+                return Err(CliError::Validation(
+                    "Standard input was empty; no audio data received.".to_string(),
+                ));
+            }
+            if bytes_copied > MAX_STDIN_BYTES as u64 {
+                return Err(CliError::Validation(
+                    "Audio input from stdin exceeds maximum supported size (512 MB).".to_string(),
+                ));
+            }
+            std::io::Write::flush(&mut temp_file).map_err(|e| {
+                CliError::Io(format!("Failed to flush temporary file for stdin: {e}"))
             })?;
             let path = temp_file.path().to_path_buf();
             (path, Some(temp_file))

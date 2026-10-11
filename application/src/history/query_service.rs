@@ -27,6 +27,14 @@ impl HistoryQueryService {
             .list_items_with_reconciled_live_drafts_paginated(opts)
     }
 
+    pub fn get_item(
+        &self,
+        history_id: &str,
+    ) -> Result<Option<HistoryItemRecord>, HistoryQueryError> {
+        validate_id("history ID", history_id)?;
+        self.repository.get_item(history_id)
+    }
+
     pub fn query_workspace(
         &self,
         request: HistoryWorkspaceQueryRequest,
