@@ -22,17 +22,6 @@ pub async fn cancel_batch_task(
     Ok(())
 }
 
-async fn run_native_capture_start<F>(
-    task: F,
-) -> Result<crate::integrations::audio::LiveCaptureLease, AsrPortError>
-where
-    F: FnOnce() -> Result<crate::integrations::audio::LiveCaptureLease, String> + Send + 'static,
-{
-    crate::platform::blocking::spawn_blocking_map(task)
-        .await
-        .map_err(AsrPortError::runtime)
-}
-
 #[tauri::command(async)]
 pub async fn prepare_live_transcription(
     services: State<'_, DesktopServices>,
@@ -145,19 +134,18 @@ pub async fn start_native_live_transcription(
         .to_path_buf();
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
-    let lease = run_native_capture_start(move || {
-        crate::integrations::audio::start_native_live_capture(
-            audio_arc,
-            asr_arc,
-            emitter,
-            app_data_dir,
-            &capture_source_kind,
-            device_name,
-            capture_consumer_id,
-            output_path,
-        )
-    })
-    .await?;
+    let lease = crate::integrations::audio::start_native_live_capture(
+        audio_arc,
+        asr_arc,
+        emitter,
+        app_data_dir,
+        &capture_source_kind,
+        device_name,
+        capture_consumer_id,
+        output_path,
+    )
+    .await
+    .map_err(AsrPortError::runtime)?;
     let observer = Arc::new(TauriAsrRuntimeObserver::new(
         services.emitter.clone(),
         services.asr.metrics_store(),
@@ -484,31 +472,31 @@ pub async fn test_online_asr_provider(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[tokio::test(flavor = "current_thread")]
     async fn native_capture_start_does_not_starve_async_writer_acknowledgement() {
-        let (writer_tx, writer_rx) = std::sync::mpsc::channel();
+        let (recorder_tx, mut recorder_rx) = tokio::sync::mpsc::channel(1);
         let writer = tokio::spawn(async move {
             tokio::task::yield_now().await;
-            writer_tx.send(()).unwrap();
+            if let Some(crate::integrations::audio::RecorderCommand::Start { completed, .. }) =
+                recorder_rx.recv().await
+            {
+                let _ = completed.send(Ok(()));
+            }
         });
 
-        let lease = run_native_capture_start(move || {
-            writer_rx
-                .recv_timeout(std::time::Duration::from_secs(1))
-                .map_err(|error| error.to_string())?;
-            Ok(crate::integrations::audio::LiveCaptureLease {
-                source_id: "test-source".to_string(),
-                source_generation: 1,
-                source_cursor: 0,
-            })
-        })
-        .await
-        .unwrap();
+        let res = crate::integrations::audio::recorder::queue_recording_start(
+            Some(&recorder_tx),
+            true,
+            "Microphone",
+            "test-consumer",
+            Some("test_non_starve.wav".to_string()),
+            || Ok("test.wav".to_string()),
+        )
+        .await;
 
         writer.await.unwrap();
-        assert_eq!(lease.source_id, "test-source");
+        assert!(res.is_ok());
     }
 
     #[test]

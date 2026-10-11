@@ -154,18 +154,16 @@ pub async fn start_recording(
         }
     };
     let source_kind_capture = source_kind.clone();
-    let lease = match crate::platform::blocking::spawn_blocking_map(move || {
-        crate::integrations::audio::start_native_live_capture(
-            audio_state,
-            asr_state,
-            emitter,
-            app_data_dir,
-            &source_kind_capture,
-            device_name,
-            consumer_id_clone,
-            output_path,
-        )
-    })
+    let lease = match crate::integrations::audio::start_native_live_capture(
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
+        &source_kind_capture,
+        device_name,
+        consumer_id_clone,
+        output_path,
+    )
     .await
     {
         Ok(lease) => lease,

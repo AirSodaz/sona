@@ -35,17 +35,15 @@ pub async fn start_system_audio_capture(
         .current_context()?
         .app_data_dir()
         .to_path_buf();
-    let res = crate::platform::blocking::spawn_blocking_map(move || {
-        crate::integrations::audio::start_system_audio_capture(
-            audio_state,
-            asr_state,
-            emitter,
-            app_data_dir,
-            device_name,
-            instance_id,
-            output_path,
-        )
-    })
+    let res = crate::integrations::audio::start_system_audio_capture(
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
+        device_name,
+        instance_id,
+        output_path,
+    )
     .await;
     if res.is_ok() {
         crate::app::tray::set_recording_active(&app, true);
@@ -69,17 +67,15 @@ pub async fn start_microphone_capture(
         .current_context()?
         .app_data_dir()
         .to_path_buf();
-    let res = crate::platform::blocking::spawn_blocking_map(move || {
-        crate::integrations::audio::start_microphone_capture(
-            audio_state,
-            asr_state,
-            emitter,
-            app_data_dir,
-            device_name,
-            instance_id,
-            output_path,
-        )
-    })
+    let res = crate::integrations::audio::start_microphone_capture(
+        audio_state,
+        asr_state,
+        emitter,
+        app_data_dir,
+        device_name,
+        instance_id,
+        output_path,
+    )
     .await;
     if res.is_ok() {
         crate::app::tray::set_recording_active(&app, true);
