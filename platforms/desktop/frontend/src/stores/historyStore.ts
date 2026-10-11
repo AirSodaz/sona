@@ -10,21 +10,18 @@ import { useTranscriptSidecarStore } from './transcriptSidecarStore';
 
 export type HistoryTranscriptUpdateListener = (id: string, segments: TranscriptSegment[]) => void;
 
-const transcriptUpdateListeners = new Set<HistoryTranscriptUpdateListener>();
-
 export function addHistoryTranscriptUpdateListener(
   listener: HistoryTranscriptUpdateListener
 ): () => void {
-  transcriptUpdateListeners.add(listener);
-  return () => {
-    transcriptUpdateListeners.delete(listener);
-  };
+  return useHistoryStore.getState().addTranscriptUpdateListener(listener);
 }
 
 interface HistoryState {
   items: HistoryItem[];
   isLoading: boolean;
   error: string | null;
+  transcriptUpdateListeners: Set<HistoryTranscriptUpdateListener>;
+  addTranscriptUpdateListener: (listener: HistoryTranscriptUpdateListener) => () => void;
 
   // Actions
   loadItems: () => Promise<void>;
@@ -62,6 +59,21 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
   isLoading: false,
   error: null,
 
+  transcriptUpdateListeners: new Set(),
+  addTranscriptUpdateListener: (listener) => {
+    set((state) => {
+      const next = new Set(state.transcriptUpdateListeners);
+      next.add(listener);
+      return { transcriptUpdateListeners: next };
+    });
+    return () => {
+      set((state) => {
+        const next = new Set(state.transcriptUpdateListeners);
+        next.delete(listener);
+        return { transcriptUpdateListeners: next };
+      });
+    };
+  },
   loadItems: async () => {
     set({ isLoading: true, error: null });
     try {
@@ -157,7 +169,7 @@ export const useHistoryStore = create<HistoryState>((set, get) => ({
         items: state.items.map((item) => (item.id === id ? { ...item, ...updatedItem } : item)),
       }));
       if (useTranscriptSessionStore.getState().sourceHistoryId === id) {
-        for (const listener of transcriptUpdateListeners) {
+        for (const listener of get().transcriptUpdateListeners) {
           listener(id, segments);
         }
       }

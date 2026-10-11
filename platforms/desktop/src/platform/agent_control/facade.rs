@@ -4,6 +4,7 @@ pub mod history;
 pub mod models;
 pub mod projects;
 pub mod session;
+pub mod settings;
 pub mod sync;
 pub mod transcript;
 pub mod types;
@@ -17,6 +18,7 @@ pub use history::*;
 pub use models::*;
 pub use projects::*;
 pub use session::*;
+pub use settings::*;
 pub use sync::*;
 pub use transcript::*;
 pub use types::*;
@@ -274,11 +276,11 @@ impl AgentControlFacade {
     }
 
     pub fn get_settings(&self, key: Option<String>) -> Result<serde_json::Value, String> {
-        projects::get_settings(&self.services, key)
+        settings::get_settings(&self.services, key)
     }
 
     pub fn update_setting(&self, key: String, value: serde_json::Value) -> Result<bool, String> {
-        projects::update_setting(&self.services, key, value)
+        settings::update_setting(&self.services, key, value)
     }
 
     pub async fn get_model_catalog(&self) -> Result<serde_json::Value, String> {

@@ -59,29 +59,3 @@ pub async fn delete_project(
         .await?;
     Ok(true)
 }
-
-pub fn get_settings(
-    services: &DesktopServices,
-    key: Option<String>,
-) -> Result<serde_json::Value, String> {
-    if let Some(k) = key {
-        services
-            .config
-            .get_setting(&k)
-            .map(|v| v.unwrap_or(serde_json::Value::Null))
-    } else {
-        services
-            .config
-            .load()
-            .map(|v| v.unwrap_or(serde_json::Value::Null))
-    }
-}
-
-pub fn update_setting(
-    services: &DesktopServices,
-    key: String,
-    value: serde_json::Value,
-) -> Result<bool, String> {
-    services.config.set_setting(&key, &value)?;
-    Ok(true)
-}

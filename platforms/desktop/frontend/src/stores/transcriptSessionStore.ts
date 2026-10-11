@@ -98,6 +98,20 @@ export const {
   clearSegments,
 } = sessionActions;
 
+export {
+  registerActiveRecorderStopHandler,
+  stopActiveRecording,
+} from './transcriptStore';
+export {
+  clearSegments as clearTranscriptSegmentsLegacy,
+  deleteSegment as deleteTranscriptSegment,
+  finalizeLastSegment as finalizeLastTranscriptSegment,
+  mergeSegments as mergeTranscriptSegments,
+  openSession as openTranscriptSession,
+  setSegments as setTranscriptSegments,
+  updateSegment as updateTranscriptSegment,
+};
+
 export function hasSessionContentChanged(a: SessionData, b: SessionData): boolean {
   if (a === b) return false;
   return (

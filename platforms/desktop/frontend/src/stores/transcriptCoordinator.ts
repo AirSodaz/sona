@@ -4,33 +4,17 @@
  * Store boundary architecture:
  * - `transcriptStore.ts`: Canonical multi-session Zustand store and state mutations.
  * - `transcriptSessionStore.ts`: Active-session selector projection facade for standard UI components.
- * - `transcriptCoordinator.ts`: Action forwarding bridge for callers requiring flat imports.
+ * - `transcriptCoordinator.ts`: Stateless action forwarding facade for backward-compatible flat imports.
  *   - For active-session state or actions, prefer `useTranscriptSessionStore` or `sessionActions`.
  *   - For direct multi-session coordination outside React, prefer `useTranscriptStore.getState()`.
  */
 
-import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
-import {
-  clearActiveTranscriptSession,
-  clearSegments,
-  clearTranscriptSegments,
-  finalizeLastSegment as finalizeLastTranscriptSegment,
-  loadTranscriptSession,
-  mergeSegments as mergeTranscriptSegments,
-  openSession as openTranscriptSession,
-  sessionActions,
-  setSegments as setTranscriptSegments,
-  splitTranscriptSegment,
-  syncSavedRecordingMeta,
-  updateSegment as updateTranscriptSegment,
-  upsertTranscriptSegmentAndSetActive,
-} from './transcriptSessionStore';
-import { useTranscriptStore } from './transcriptStore';
-
 export {
+  applyTranscriptUpdate,
   clearActiveTranscriptSession,
   clearSegments,
   clearTranscriptSegments,
+  deleteTranscriptSegment,
   finalizeLastTranscriptSegment,
   loadTranscriptSession,
   mergeTranscriptSegments,
@@ -40,50 +24,12 @@ export {
   syncSavedRecordingMeta,
   updateTranscriptSegment,
   upsertTranscriptSegmentAndSetActive,
-};
+} from './transcriptSessionStore';
 
-export const deleteTranscriptSegment = sessionActions.deleteSegment;
-export const applyTranscriptUpdate = sessionActions.applyTranscriptUpdate;
-
-export const applyTranscriptUpdateToSession = (
-  sessionId: string,
-  update: TranscriptUpdate,
-  activeSegmentId?: string | null
-): void => {
-  useTranscriptStore.getState().applyTranscriptUpdateToSession(sessionId, update, activeSegmentId);
-};
-
-export const updateTranscriptSegmentForSession = (
-  sessionId: string,
-  id: string,
-  updates: Partial<Omit<TranscriptSegment, 'id'>>
-): void => {
-  useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
-};
-
-export const setRecordingSessionId = (id: string | null): void => {
-  useTranscriptStore.getState().setRecordingSessionId(id);
-};
-
-let activeRecorderStopHandler: ((options?: { discard?: boolean }) => Promise<unknown>) | null =
-  null;
-
-export const registerActiveRecorderStopHandler = (
-  handler: ((options?: { discard?: boolean }) => Promise<unknown>) | null
-): void => {
-  activeRecorderStopHandler = handler;
-};
-
-export const stopActiveRecording = async (options?: { discard?: boolean }): Promise<boolean> => {
-  const handler = activeRecorderStopHandler;
-  if (handler) {
-    activeRecorderStopHandler = null;
-    try {
-      await handler(options);
-      return true;
-    } catch (error) {
-      console.error('Failed to cleanly stop active recording from coordinator:', error);
-    }
-  }
-  return false;
-};
+export {
+  applyTranscriptUpdateToSession,
+  registerActiveRecorderStopHandler,
+  setRecordingSessionId,
+  stopActiveRecording,
+  updateTranscriptSegmentForSession,
+} from './transcriptStore';

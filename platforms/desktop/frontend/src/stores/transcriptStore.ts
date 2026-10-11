@@ -96,6 +96,11 @@ export interface TranscriptStore {
   llmStates: Record<string, LlmState>;
   autoSaveStates: Record<string, AutoSaveState>;
 
+  activeRecorderStopHandler: ((options?: { discard?: boolean }) => Promise<unknown>) | null;
+  registerActiveRecorderStopHandler: (
+    handler: ((options?: { discard?: boolean }) => Promise<unknown>) | null
+  ) => void;
+  stopActiveRecording: (options?: { discard?: boolean }) => Promise<boolean>;
   // --- Actions ---
   // Coordinator / Session Pointers
   setRecordingSessionId: (id: string | null) => void;
@@ -259,6 +264,21 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   summaryStates: { current: createDefaultSummaryState() },
   llmStates: { current: { ...DEFAULT_LLM_STATE } },
   autoSaveStates: {},
+  activeRecorderStopHandler: null,
+  registerActiveRecorderStopHandler: (handler) => set({ activeRecorderStopHandler: handler }),
+  stopActiveRecording: async (options) => {
+    const handler = get().activeRecorderStopHandler;
+    if (handler) {
+      set({ activeRecorderStopHandler: null });
+      try {
+        await handler(options);
+        return true;
+      } catch (error) {
+        console.error('Failed to cleanly stop active recording:', error);
+      }
+    }
+    return false;
+  },
 
   // --- Runtime ---
   setMode: (mode) => set({ mode }),
@@ -708,3 +728,33 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       return { autoSaveStates };
     }),
 }));
+
+export const registerActiveRecorderStopHandler = (
+  handler: ((options?: { discard?: boolean }) => Promise<unknown>) | null
+): void => {
+  useTranscriptStore.getState().registerActiveRecorderStopHandler(handler);
+};
+
+export const stopActiveRecording = async (options?: { discard?: boolean }): Promise<boolean> => {
+  return useTranscriptStore.getState().stopActiveRecording(options);
+};
+
+export const applyTranscriptUpdateToSession = (
+  sessionId: string,
+  update: TranscriptUpdate,
+  activeSegmentId?: string | null
+): void => {
+  useTranscriptStore.getState().applyTranscriptUpdateToSession(sessionId, update, activeSegmentId);
+};
+
+export const updateTranscriptSegmentForSession = (
+  sessionId: string,
+  id: string,
+  updates: Partial<Omit<TranscriptSegment, 'id'>>
+): void => {
+  useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
+};
+
+export const setRecordingSessionId = (id: string | null): void => {
+  useTranscriptStore.getState().setRecordingSessionId(id);
+};
