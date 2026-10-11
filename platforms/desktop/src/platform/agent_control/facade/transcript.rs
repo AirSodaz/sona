@@ -87,20 +87,28 @@ pub async fn edit_transcript(
             let is_final = s
                 .is_final
                 .unwrap_or_else(|| base.as_ref().map(|b| b.is_final).unwrap_or(true));
-            let translation = s.translation.or_else(|| base.and_then(|b| b.translation));
+            let translation = s
+                .translation
+                .or_else(|| base.as_ref().and_then(|b| b.translation.clone()));
+            let speaker = base.as_ref().and_then(|b| b.speaker.clone());
+            let speaker_attribution = base.as_ref().and_then(|b| b.speaker_attribution.clone());
+            let timestamps = base.as_ref().and_then(|b| b.timestamps.clone());
+            let tokens = base.as_ref().and_then(|b| b.tokens.clone());
+            let durations = base.as_ref().and_then(|b| b.durations.clone());
+            let timing = base.as_ref().and_then(|b| b.timing.clone());
             TranscriptSegment {
                 id,
                 text,
                 start,
                 end,
                 is_final,
-                timing: None,
-                tokens: None,
-                timestamps: None,
-                durations: None,
+                timing,
+                tokens,
+                timestamps,
+                durations,
                 translation,
-                speaker: None,
-                speaker_attribution: None,
+                speaker,
+                speaker_attribution,
             }
         })
         .collect();

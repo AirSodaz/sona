@@ -32,6 +32,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-sync-s3` | outbound-adapter |
 | `sona` | host |
 | `sona-cli` | host |
+| `sona-mcp` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -79,6 +80,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
 | `platforms/desktop/` | `sona` | host | 桌面 Tauri Host |
 | `platforms/cli/` | `sona-cli` | host | |
+| `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) 服务端 Host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 

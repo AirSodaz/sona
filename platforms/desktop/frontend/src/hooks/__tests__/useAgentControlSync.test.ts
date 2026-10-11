@@ -1,9 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
+import { historyService } from '../../services/historyService';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import { sessionActions } from '../../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../../stores/transcriptStore';
+import type { TranscriptSegment } from '../../types/transcript';
 import { useAgentControlSync } from '../useAgentControlSync';
 
 const listeners = new Map<string, (...args: unknown[]) => unknown>();
@@ -30,6 +33,12 @@ vi.mock('../../stores/historyStore', () => {
     },
   };
 });
+
+vi.mock('../../services/historyService', () => ({
+  historyService: {
+    loadTranscript: vi.fn(),
+  },
+}));
 
 describe('useAgentControlSync', () => {
   beforeEach(() => {
@@ -114,7 +123,38 @@ describe('useAgentControlSync', () => {
     expect(useTranscriptStore.getState().isPaused).toBe(true);
   });
 
-  it('reloads history when transcriptUpdated event is emitted', async () => {
+  it('reloads history and reloads active transcript segments if sourceHistoryId matches', async () => {
+    const mockSegments: TranscriptSegment[] = [
+      { id: 'seg-1', text: 'Updated segment text', start: 0, end: 1, isFinal: true },
+    ];
+    vi.mocked(historyService.loadTranscript).mockResolvedValue(mockSegments);
+    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+
+    useTranscriptStore.getState().setSourceHistoryId('hist-active-1');
+
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('transcript-updated')).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get('transcript-updated')?.({
+        payload: { historyId: 'hist-active-1' },
+      });
+    });
+
+    expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
+    expect(historyService.loadTranscript).toHaveBeenCalledWith('hist-active-1');
+    expect(setSegmentsSpy).toHaveBeenCalledWith(mockSegments);
+  });
+
+  it('reloads history but does not reload transcript segments if sourceHistoryId does not match', async () => {
+    vi.mocked(historyService.loadTranscript).mockResolvedValue([]);
+    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+
+    useTranscriptStore.getState().setSourceHistoryId('hist-other');
+
     renderHook(() => useAgentControlSync());
 
     await waitFor(() => {
@@ -128,6 +168,43 @@ describe('useAgentControlSync', () => {
     });
 
     expect(useHistoryStore.getState().loadItems).toHaveBeenCalled();
+    expect(historyService.loadTranscript).not.toHaveBeenCalled();
+    expect(setSegmentsSpy).not.toHaveBeenCalled();
+  });
+
+  it('does not set segments if active session changes while loadTranscript is in flight', async () => {
+    let resolveTranscript: (value: TranscriptSegment[]) => void = () => {};
+    const pendingPromise = new Promise<TranscriptSegment[]>((resolve) => {
+      resolveTranscript = resolve;
+    });
+    vi.mocked(historyService.loadTranscript).mockReturnValue(pendingPromise);
+    const setSegmentsSpy = vi.spyOn(sessionActions, 'setSegments');
+
+    useTranscriptStore.getState().setSourceHistoryId('hist-active-1');
+
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('transcript-updated')).toBe(true);
+    });
+
+    let handlerPromise: Promise<unknown> | undefined;
+    act(() => {
+      handlerPromise = listeners.get('transcript-updated')?.({
+        payload: { historyId: 'hist-active-1' },
+      }) as Promise<unknown>;
+    });
+
+    // User navigates to another history item before loadTranscript resolves
+    useTranscriptStore.getState().setSourceHistoryId('hist-navigated-away');
+
+    await act(async () => {
+      resolveTranscript([{ id: 'seg-1', text: 'Late arrival', start: 0, end: 1, isFinal: true }]);
+      await handlerPromise;
+    });
+
+    expect(historyService.loadTranscript).toHaveBeenCalledWith('hist-active-1');
+    expect(setSegmentsSpy).not.toHaveBeenCalled();
   });
 
   it('patches task progress in taskLedgerStore when batchProgress arrives for an active task', async () => {

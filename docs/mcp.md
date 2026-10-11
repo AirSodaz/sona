@@ -53,7 +53,7 @@ When the Sona desktop client is not currently running:
 - **Standard Discovery**: Exposes `server/discover` capability negotiation.
 - **Legacy Compatibility**: Supports conventional initialization workflows (`initialize` followed by `notifications/initialized`).
 - **Declared Capabilities**:
-  - `tools`: 32 granular tools covering state, recording, transcript editing, translations, summaries, projects, and settings.
+  - `tools`: 36 granular tools covering state, recording, transcript editing, translations, summaries, projects, and settings.
   - `resources`: 7 static resources and 4 parameterized resource templates.
   - `prompts`: Pre-configured prompts for meeting summarization and transcript proofreading.
 
@@ -75,7 +75,7 @@ When the Sona desktop client is not currently running:
 
 ## Public Tools Reference
 
-`sona-mcp` registers 32 public tools categorized by functionality:
+`sona-mcp` registers 36 public tools categorized by functionality:
 
 ### 1. Client State & Window Control
 

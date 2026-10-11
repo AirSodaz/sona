@@ -3,7 +3,7 @@ use crate::platform::database::DesktopSqliteState;
 use crate::platform::event::MockEventEmitter;
 use sona_core::history::TranscriptSnapshotReason;
 use sona_core::ports::asr::AsrMode;
-use sona_core::transcription::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
 async fn create_test_facade() -> (AgentControlFacade, tempfile::TempDir) {
     let temp = tempfile::tempdir().unwrap();
@@ -816,4 +816,84 @@ async fn test_audio_device_listing() {
     assert!(val.get("systemDevices").is_some());
     assert!(val.get("microphones").unwrap().is_array());
     assert!(val.get("systemDevices").unwrap().is_array());
+}
+
+#[tokio::test]
+async fn test_edit_transcript_preserves_speaker_and_timestamps() {
+    let (facade, _dir) = create_test_facade().await;
+    let dummy_path = _dir.path().join("dummy_speaker.wav");
+    std::fs::write(&dummy_path, b"audio").unwrap();
+    let history_id = "test-speaker-preserve".to_string();
+    let hid_clone = history_id.clone();
+
+    facade
+        .services
+        .history
+        .mutation_file(move |s| {
+            s.save_imported_file(sona_core::history::HistorySaveImportedFileRequest {
+                id: Some(hid_clone),
+                source_path: dummy_path.to_string_lossy().to_string(),
+                segments: vec![TranscriptSegment {
+                    id: "seg-preserve-1".to_string(),
+                    text: "Original text before edit".to_string(),
+                    start: 0.0,
+                    end: 3.5,
+                    is_final: true,
+                    timing: None,
+                    tokens: Some(vec!["Original".to_string(), "text".to_string()]),
+                    timestamps: Some(vec![0.1, 0.8]),
+                    durations: Some(vec![0.5, 0.4]),
+                    translation: Some("Original translation".to_string()),
+                    speaker: Some(SpeakerTag {
+                        id: "spk-alice".to_string(),
+                        label: "Alice".to_string(),
+                        kind: "known".to_string(),
+                        score: Some(0.95),
+                    }),
+                    speaker_attribution: None,
+                }],
+                duration: 3.5,
+                tag_ids: vec![],
+                project_id: None,
+                converted_source_path: None,
+            })
+        })
+        .await
+        .unwrap();
+
+    let edit_res = facade
+        .edit_transcript(EditTranscriptRequest {
+            history_id: history_id.clone(),
+            segments: vec![RelaxedTranscriptSegmentInput {
+                id: Some("seg-preserve-1".to_string()),
+                text: Some("Polished text after edit".to_string()),
+                start: None,
+                end: None,
+                is_final: None,
+                translation: None,
+            }],
+            reason: Some("Polish text".to_string()),
+        })
+        .await
+        .unwrap();
+    assert!(edit_res.success);
+
+    let current = facade.read_transcript(history_id).await.unwrap();
+    assert_eq!(current.segments.len(), 1);
+    let seg = &current.segments[0];
+    assert_eq!(seg.text, "Polished text after edit");
+    assert_eq!(seg.start, 0.0);
+    assert_eq!(seg.end, 3.5);
+    assert_eq!(seg.translation, Some("Original translation".to_string()));
+    let speaker = seg.speaker.as_ref().expect("speaker should be preserved");
+    assert_eq!(speaker.id, "spk-alice");
+    assert_eq!(speaker.label, "Alice");
+    assert_eq!(speaker.kind, "known");
+    assert_eq!(speaker.score, Some(0.95));
+    assert_eq!(seg.timestamps, Some(vec![0.1, 0.8]));
+    assert_eq!(
+        seg.tokens,
+        Some(vec!["Original".to_string(), "text".to_string()])
+    );
+    assert_eq!(seg.durations, Some(vec![0.5, 0.4]));
 }

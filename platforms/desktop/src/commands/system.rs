@@ -4,11 +4,6 @@ use tauri::{AppHandle, Manager, Runtime, State};
 // Command wrappers & implementations
 
 #[tauri::command]
-pub fn greet(name: &str) -> String {
-    crate::platform::system::greet(name)
-}
-
-#[tauri::command]
 pub fn force_exit(app: AppHandle) {
     crate::platform::system::force_exit(app);
 }

@@ -348,7 +348,7 @@ test('Rust Tauri command handlers and TypeScript contracts parameter names stay 
 
   const snakeToCamel = (s) => s.replace(/_([a-z])/gu, (_, c) => c.toUpperCase());
 
-  const excludedCommands = new Set(['greet', 'create_tar_bz2', 'check_gpu_availability']);
+  const excludedCommands = new Set(['create_tar_bz2', 'check_gpu_availability']);
 
   // 1. Bi-directional: Verify all Rust commands are present in allContracts
   for (const [cmdName] of rustCommands) {

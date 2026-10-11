@@ -154,8 +154,22 @@ impl IpcClient {
             IpcCallError::Transport(format!("Failed to flush request to desktop: {e}"))
         })?;
 
+        let is_batch_transcribe = serde_json::from_str::<serde_json::Value>(req_line)
+            .ok()
+            .and_then(|v| {
+                v.get("method")
+                    .and_then(|m| m.as_str())
+                    .map(|m| m == "sona_transcribe_file" || m == "transcribe_file")
+            })
+            .unwrap_or_else(|| req_line.contains("sona_transcribe_file"));
+        let timeout_duration = if is_batch_transcribe {
+            Duration::from_secs(300)
+        } else {
+            Duration::from_secs(30)
+        };
+
         let mut resp_line = String::new();
-        tokio::time::timeout(Duration::from_secs(30), reader.read_line(&mut resp_line))
+        tokio::time::timeout(timeout_duration, reader.read_line(&mut resp_line))
             .await
             .map_err(|_| {
                 IpcCallError::Transport(
@@ -302,15 +316,17 @@ pub fn find_desktop_binary() -> Option<PathBuf> {
         }
     }
 
-    for rel in &[
-        "target/debug/sona.exe",
-        "target/release/sona.exe",
-        "target/debug/sona",
-        "target/release/sona",
-    ] {
-        let candidate = PathBuf::from(rel);
-        if candidate.exists() {
-            return Some(candidate);
+    if std::env::var("CARGO_MANIFEST_DIR").is_ok() || std::path::Path::new("Cargo.toml").exists() {
+        for rel in &[
+            "target/debug/sona.exe",
+            "target/release/sona.exe",
+            "target/debug/sona",
+            "target/release/sona",
+        ] {
+            let candidate = PathBuf::from(rel);
+            if candidate.exists() {
+                return Some(candidate);
+            }
         }
     }
 
@@ -431,5 +447,40 @@ mod tests {
             IpcCallError::Application(msg) => assert_eq!(msg, "Method not found"),
             other => panic!("Expected application error, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn test_send_receive_batch_transcribe_call() {
+        let (client, mut server) = tokio::io::duplex(4096);
+
+        tokio::spawn(async move {
+            let mut reader = tokio::io::BufReader::new(&mut server);
+            let mut line = String::new();
+            reader.read_line(&mut line).await.unwrap();
+
+            let resp = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": 1,
+                "result": { "status": "completed", "segments": [] }
+            });
+            let resp_str = format!("{}\n", serde_json::to_string(&resp).unwrap());
+            server.write_all(resp_str.as_bytes()).await.unwrap();
+            server.flush().await.unwrap();
+        });
+
+        let (read_half, mut write_half) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(read_half);
+        let result = IpcClient::send_receive_io(
+            &mut buf_reader,
+            &mut write_half,
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sona_transcribe_file\",\"params\":{\"file_path\":\"test.wav\"}}\n",
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            result.get("status").and_then(|v| v.as_str()),
+            Some("completed")
+        );
     }
 }

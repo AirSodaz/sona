@@ -170,32 +170,62 @@ fn parse_update_setting(
     }
 }
 
+fn find_string_param<'a>(
+    map: &'a serde_json::Map<String, serde_json::Value>,
+    snake_key: &str,
+) -> Option<&'a str> {
+    if let Some(val) = map.get(snake_key).and_then(|v| v.as_str()) {
+        return Some(val);
+    }
+
+    let static_camel = match snake_key {
+        "history_id" => Some("historyId"),
+        "project_id" => Some("projectId"),
+        "snapshot_id" => Some("snapshotId"),
+        "conflict_id" => Some("conflictId"),
+        "instance_id" => Some("instanceId"),
+        "download_id" => Some("downloadId"),
+        "model_id" => Some("modelId"),
+        "cascade_action" => Some("cascadeAction"),
+        _ => None,
+    };
+
+    if let Some(camel) = static_camel {
+        if let Some(val) = map.get(camel).and_then(|v| v.as_str()) {
+            return Some(val);
+        }
+    } else {
+        let mut camel = String::with_capacity(snake_key.len());
+        let mut capitalize_next = false;
+        for ch in snake_key.chars() {
+            if ch == '_' {
+                capitalize_next = true;
+            } else if capitalize_next {
+                for upper in ch.to_uppercase() {
+                    camel.push(upper);
+                }
+                capitalize_next = false;
+            } else {
+                camel.push(ch);
+            }
+        }
+        if let Some(val) = map.get(&camel).and_then(|v| v.as_str()) {
+            return Some(val);
+        }
+    }
+
+    None
+}
+
 fn extract_string_param(
     params: &Option<serde_json::Value>,
     key: &str,
 ) -> Result<String, (i32, String)> {
-    let camel_key = key
-        .split('_')
-        .enumerate()
-        .map(|(i, part)| {
-            if i == 0 {
-                part.to_string()
-            } else {
-                let mut c = part.chars();
-                match c.next() {
-                    None => String::new(),
-                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-                }
-            }
-        })
-        .collect::<String>();
-
     match params.as_ref() {
         Some(serde_json::Value::String(s)) => Ok(s.clone()),
         Some(serde_json::Value::Object(map)) => {
-            if let Some(serde_json::Value::String(s)) = map.get(key).or_else(|| map.get(&camel_key))
-            {
-                Ok(s.clone())
+            if let Some(s) = find_string_param(map, key) {
+                Ok(s.to_string())
             } else {
                 Err((-32602, format!("Missing '{key}' parameter")))
             }
@@ -205,28 +235,10 @@ fn extract_string_param(
 }
 
 fn parse_optional_string(params: &Option<serde_json::Value>, key: &str) -> Option<String> {
-    let camel_key = key
-        .split('_')
-        .enumerate()
-        .map(|(i, part)| {
-            if i == 0 {
-                part.to_string()
-            } else {
-                let mut c = part.chars();
-                match c.next() {
-                    None => String::new(),
-                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
-                }
-            }
-        })
-        .collect::<String>();
-
     match params.as_ref() {
-        Some(serde_json::Value::Object(map)) => map
-            .get(key)
-            .or_else(|| map.get(&camel_key))
-            .and_then(|v| v.as_str())
-            .map(ToString::to_string),
+        Some(serde_json::Value::Object(map)) => {
+            find_string_param(map, key).map(ToString::to_string)
+        }
         _ => None,
     }
 }
@@ -1204,5 +1216,45 @@ mod tests {
 
         tracker.disconnect_all(None);
         assert_eq!(tracker.active_count(), 0);
+    }
+
+    #[test]
+    fn test_find_string_param_and_extraction() {
+        let mut map = serde_json::Map::new();
+        map.insert("history_id".to_string(), serde_json::json!("h-snake"));
+        map.insert("instanceId".to_string(), serde_json::json!("inst-camel"));
+        map.insert("customField".to_string(), serde_json::json!("custom-val"));
+
+        assert_eq!(find_string_param(&map, "history_id"), Some("h-snake"));
+        assert_eq!(find_string_param(&map, "instance_id"), Some("inst-camel"));
+        assert_eq!(find_string_param(&map, "custom_field"), Some("custom-val"));
+        assert_eq!(find_string_param(&map, "missing_key"), None);
+
+        let obj_params = Some(serde_json::Value::Object(map));
+        assert_eq!(
+            extract_string_param(&obj_params, "history_id").unwrap(),
+            "h-snake"
+        );
+        assert_eq!(
+            extract_string_param(&obj_params, "instance_id").unwrap(),
+            "inst-camel"
+        );
+        assert_eq!(
+            extract_string_param(&obj_params, "custom_field").unwrap(),
+            "custom-val"
+        );
+        assert!(extract_string_param(&obj_params, "missing_key").is_err());
+
+        let bare_str = Some(serde_json::json!("bare-value"));
+        assert_eq!(
+            extract_string_param(&bare_str, "any_key").unwrap(),
+            "bare-value"
+        );
+
+        assert_eq!(
+            parse_optional_string(&obj_params, "instance_id"),
+            Some("inst-camel".to_string())
+        );
+        assert_eq!(parse_optional_string(&obj_params, "missing_key"), None);
     }
 }

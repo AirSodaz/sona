@@ -1,4 +1,5 @@
 import { useEffect } from 'react';
+import { historyService } from '../services/historyService';
 import {
   type AgentRecordingStatusPayload,
   TauriEvent,
@@ -7,6 +8,7 @@ import {
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
+import { sessionActions, transcriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 
@@ -44,12 +46,30 @@ export function useAgentControlSync(): void {
         // 2. Listen for background transcript updates (transcribe_file, translation, summary mutations)
         const unlistenTrans = await listen<TranscriptUpdatedPayload>(
           TauriEvent.agent.transcriptUpdated,
-          (event) => {
+          async (event) => {
             if (!isMounted) return;
+            const historyId = event.payload?.historyId;
             logger.info(
-              `[AgentControlSync] Transcript updated for historyId=${event.payload?.historyId}, refreshing history`
+              `[AgentControlSync] Transcript updated for historyId=${historyId}, refreshing history`
             );
             void useHistoryStore.getState().loadItems();
+            if (historyId && transcriptSessionStore.getState().sourceHistoryId === historyId) {
+              try {
+                const updatedSegments = await historyService.loadTranscript(historyId);
+                if (
+                  isMounted &&
+                  updatedSegments &&
+                  transcriptSessionStore.getState().sourceHistoryId === historyId
+                ) {
+                  sessionActions.setSegments(updatedSegments);
+                }
+              } catch (error) {
+                logger.error(
+                  '[AgentControlSync] Failed to reload active transcript segments:',
+                  error
+                );
+              }
+            }
           }
         );
         if (isMounted) unlisteners.push(unlistenTrans);

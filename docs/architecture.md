@@ -32,6 +32,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-sync-s3` | outbound-adapter |
 | `sona` | host |
 | `sona-cli` | host |
+| `sona-mcp` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -79,6 +80,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/sync_s3/` | `sona-sync-s3` | outbound-adapter | |
 | `platforms/desktop/` | `sona` | host | Desktop Tauri host |
 | `platforms/cli/` | `sona-cli` | host | |
+| `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) server host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 

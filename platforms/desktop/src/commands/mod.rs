@@ -18,7 +18,6 @@ pub mod task_ledger;
 
 pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
     tauri::generate_handler![
-        crate::commands::system::greet,
         crate::commands::archive::extract_tar_bz2,
         crate::commands::archive::create_tar_bz2,
         crate::commands::system::get_dashboard_snapshot,
