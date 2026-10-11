@@ -1,13 +1,15 @@
-use clap::Args;
-use std::path::PathBuf;
-
 use crate::{CliError, CliOutput, CliResult};
+use clap::Args;
 use sona_core::ports::asr::{AsrMode, BatchTranscriberPort};
 use sona_core::runtime::config::TranscribeConfigSection;
 use sona_core::transcription::runtime::{
-    BatchTranscribeOptions, OutputTarget, resolve_export_format, resolve_output_target,
+    BatchOutputPlan, BatchTranscribeOptions, OutputTarget, resolve_export_format,
+    resolve_output_target,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
+use std::future::Future;
+use std::path::PathBuf;
+use std::sync::Arc;
 
 #[derive(Debug, Args)]
 #[command(
@@ -141,7 +143,7 @@ pub struct TranscribeArgs {
     /// List available online ASR providers and exit (deprecated: use 'sona-cli providers' instead).
     #[arg(long, default_value_t = false, hide = true)]
     pub list_providers: bool,
-    /// Number of batch transcription jobs (experimental; current execution is sequential).
+    /// Number of concurrent batch transcription jobs (default: 1).
     #[arg(long, value_name = "N", hide = true)]
     jobs: Option<usize>,
 }
@@ -185,7 +187,11 @@ pub async fn run_transcribe(
         match infer_batch_model(args.models_dir.as_ref()) {
             BatchModelInference::AutoSelected(inferred) => {
                 if !args.quiet {
-                    eprintln!("Note: Automatically selected installed batch model '{inferred}'");
+                    writeln!(
+                        io.stderr(),
+                        "Note: Automatically selected installed batch model '{inferred}'"
+                    )
+                    .map_err(|e| CliError::Io(e.to_string()))?;
                 }
                 resolved_model_id = Some(inferred);
             }
@@ -211,6 +217,7 @@ pub async fn run_transcribe(
             resolved_jobs,
             resolved_model_id,
             export_mode,
+            io,
         )
         .await;
     }
@@ -332,6 +339,165 @@ pub async fn run_transcribe(
     render_transcription(segments, export_format, output_target, export_mode)
 }
 
+enum BatchJobProgress {
+    Success {
+        index: usize,
+        total: usize,
+        input: std::path::PathBuf,
+        output: std::path::PathBuf,
+    },
+    Failure {
+        index: usize,
+        total: usize,
+        input: std::path::PathBuf,
+        error: CliError,
+    },
+}
+
+async fn run_batch_transcribe_dispatched<F, Fut>(
+    args: &TranscribeArgs,
+    plans: &[BatchOutputPlan],
+    output_dir: &std::path::Path,
+    resolved_jobs: usize,
+    io: &mut (dyn crate::CliIo + Send),
+    execute_item: F,
+) -> CliResult<CliOutput>
+where
+    F: Fn(BatchOutputPlan) -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = Result<(), CliError>> + Send + 'static,
+{
+    let total = plans.len();
+    let mut failures = Vec::new();
+    let mut succeeded = 0;
+
+    let concurrency = resolved_jobs.max(1);
+    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(concurrency * 2);
+    let mut worker_handles = Vec::with_capacity(total);
+    let execute_item = Arc::new(execute_item);
+
+    for (index, plan_item) in plans.iter().enumerate() {
+        let sem = semaphore.clone();
+        let tx = progress_tx.clone();
+        let plan_item = plan_item.clone();
+        let exec = execute_item.clone();
+
+        let handle = tokio::spawn(async move {
+            let _permit = match sem.acquire().await {
+                Ok(permit) => permit,
+                Err(_) => return,
+            };
+            let input_path = plan_item.input_path.clone();
+            let output_path = plan_item.output_path.clone();
+            let res = exec(plan_item).await;
+
+            let progress = match res {
+                Ok(()) => BatchJobProgress::Success {
+                    index,
+                    total,
+                    input: input_path,
+                    output: output_path,
+                },
+                Err(error) => BatchJobProgress::Failure {
+                    index,
+                    total,
+                    input: input_path,
+                    error,
+                },
+            };
+            let _ = tx.send(progress).await;
+        });
+        worker_handles.push(handle);
+    }
+
+    drop(progress_tx);
+
+    let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
+    let mut total_processed = 0;
+    while total_processed < total {
+        tokio::select! {
+            biased;
+            _ = &mut ctrl_c => {
+                for handle in &worker_handles {
+                    handle.abort();
+                }
+                return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
+            }
+            recv_opt = progress_rx.recv() => {
+                match recv_opt {
+                    Some(progress) => {
+                        total_processed += 1;
+                        match progress {
+                            BatchJobProgress::Success { index, total, input, output } => {
+                                succeeded += 1;
+                                if !args.quiet {
+                                    if let Err(e) = writeln!(
+                                        io.stderr(),
+                                        "[{}/{}] Transcribed {} -> {}",
+                                        index + 1,
+                                        total,
+                                        input.display(),
+                                        output.display()
+                                    ) {
+                                        for handle in &worker_handles {
+                                            handle.abort();
+                                        }
+                                        return Err(CliError::Io(e.to_string()));
+                                    }
+                                }
+                            }
+                            BatchJobProgress::Failure { index, total, input, error } => {
+                                if let Err(e) = writeln!(
+                                    io.stderr(),
+                                    "[{}/{}] [FAIL] {}: {error}",
+                                    index + 1,
+                                    total,
+                                    input.display()
+                                ) {
+                                    for handle in &worker_handles {
+                                        handle.abort();
+                                    }
+                                    return Err(CliError::Io(e.to_string()));
+                                }
+                                if args.continue_on_error {
+                                    failures.push((input, error.to_string()));
+                                } else {
+                                    for handle in &worker_handles {
+                                        handle.abort();
+                                    }
+                                    return Err(error);
+                                }
+                            }
+                        }
+                    }
+                    None => {
+                        for handle in &worker_handles {
+                            handle.abort();
+                        }
+                        return Err(CliError::Validation(format!(
+                            "Batch transcription channel closed prematurely: completed {total_processed}/{total} tasks"
+                        )));
+                    }
+                }
+            }
+        }
+    }
+
+    if !failures.is_empty() {
+        let msg = format!(
+            "Transcribed {succeeded}/{total} file(s) into {}. {} file(s) failed.",
+            output_dir.display(),
+            failures.len()
+        );
+        return Err(CliError::Validation(msg));
+    }
+
+    Ok(CliOutput::stderr(format!(
+        "Transcribed {total} file(s) into {}",
+        output_dir.display()
+    )))
+}
+
 async fn run_batch_transcribe(
     args: &TranscribeArgs,
     resolved_online: &crate::online_asr::OnlineAsrArgs,
@@ -339,6 +505,7 @@ async fn run_batch_transcribe(
     resolved_jobs: usize,
     resolved_model_id: Option<String>,
     export_mode: sona_core::export::ExportMode,
+    io: &mut (dyn crate::CliIo + Send),
 ) -> CliResult<CliOutput> {
     let batch_source = sona_runtime_fs::resolve_batch_input_source(
         args.input_dir.as_deref(),
@@ -358,11 +525,6 @@ async fn run_batch_transcribe(
             "--output cannot be used with multiple input files. Specify --format <FORMAT> (and optionally --output-dir <DIR>) to export each transcript individually."
                 .to_string(),
         ));
-    }
-    if resolved_jobs > 1 {
-        log::warn!(
-            "Concurrent batch transcription (--jobs > 1) is currently experimental; running sequentially with 1 job."
-        );
     }
 
     let output_dir = if let Some(dir) = &args.output_dir {
@@ -391,10 +553,6 @@ async fn run_batch_transcribe(
     )
     .map_err(crate::map_runtime_fs_error)?;
 
-    let total = plans.len();
-    let mut failures = Vec::new();
-    let mut succeeded = 0;
-
     if resolved_online.is_online() {
         reject_online_local_options(args)?;
         let language = args
@@ -410,17 +568,18 @@ async fn run_batch_transcribe(
         let request =
             resolved_online.build_request(AsrMode::Batch, language, enable_itn, hotwords)?;
 
-        let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
-        for (index, plan_item) in plans.iter().enumerate() {
-            let res: Result<(), CliError> = tokio::select! {
-                biased;
-                _ = &mut ctrl_c => {
-                    return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
-                }
-                item_res = async {
+        run_batch_transcribe_dispatched(
+            args,
+            &plans,
+            &output_dir,
+            resolved_jobs,
+            io,
+            move |plan_item| {
+                let request = request.clone();
+                async move {
                     let segments = crate::asr_adapter::online_batch_transcribe(
                         plan_item.input_path.clone(),
-                        request.clone(),
+                        request,
                     )
                     .await
                     .map_err(crate::online_asr::map_asr_error)?;
@@ -435,39 +594,12 @@ async fn run_batch_transcribe(
                     sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
                         .map_err(|error| CliError::Io(error.to_string()))?;
                     Ok(())
-                } => item_res,
-            };
-
-            match res {
-                Ok(()) => {
-                    succeeded += 1;
-                    if !args.quiet {
-                        eprintln!(
-                            "[{}/{}] Transcribed {} -> {}",
-                            index + 1,
-                            total,
-                            plan_item.input_path.display(),
-                            plan_item.output_path.display()
-                        );
-                    }
                 }
-                Err(err) => {
-                    eprintln!(
-                        "[{}/{}] [FAIL] {}: {err}",
-                        index + 1,
-                        total,
-                        plan_item.input_path.display()
-                    );
-                    if args.continue_on_error {
-                        failures.push((plan_item.input_path.clone(), err.to_string()));
-                    } else {
-                        return Err(err);
-                    }
-                }
-            }
-        }
+            },
+        )
+        .await
     } else {
-        let transcriber = crate::asr_adapter::local_batch_transcriber();
+        let transcriber = Arc::new(crate::asr_adapter::local_batch_transcriber());
         let format_name = match export_format {
             sona_core::export::ExportFormat::Json => "json",
             sona_core::export::ExportFormat::Txt => "txt",
@@ -475,38 +607,56 @@ async fn run_batch_transcribe(
             sona_core::export::ExportFormat::Vtt => "vtt",
             sona_core::export::ExportFormat::Md => "md",
         };
-        let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
-        for (index, plan_item) in plans.iter().enumerate() {
-            let res: Result<(), CliError> = tokio::select! {
-                biased;
-                _ = &mut ctrl_c => {
-                    return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
-                }
-                item_res = async {
-                    let single_options = BatchTranscribeOptions {
-                        input: plan_item.input_path.clone(),
-                        output: Some(plan_item.output_path.clone()),
-                        format: Some(format_name.to_string()),
-                        language: args.language.clone(),
-                        model_id: resolved_model_id.clone(),
-                        models_dir: args.models_dir.clone(),
-                        default_models_dir: crate::desktop_paths::default_models_dir(),
-                        vad_model_id: args.vad_model_id.clone(),
-                        punctuation_model_id: args.punctuation_model_id.clone(),
-                        threads: args.threads,
-                        enable_itn: if args.enable_itn { Some(true) } else { None },
-                        hotwords: args.hotwords.clone(),
-                        gpu_acceleration: args.gpu_acceleration.clone(),
-                        vad_buffer: args.vad_buffer,
-                        save_wav: None,
-                        quiet: args.quiet,
-                        force: args.force,
-                        ffmpeg_path: args.ffmpeg_path.clone(),
-                    };
 
+        let resolved_model_id = resolved_model_id.clone();
+        let config_clone = config.cloned();
+        let args_language = args.language.clone();
+        let args_models_dir = args.models_dir.clone();
+        let args_vad_model_id = args.vad_model_id.clone();
+        let args_punctuation_model_id = args.punctuation_model_id.clone();
+        let args_threads = args.threads;
+        let args_enable_itn = if args.enable_itn { Some(true) } else { None };
+        let args_hotwords = args.hotwords.clone();
+        let args_gpu_acceleration = args.gpu_acceleration.clone();
+        let args_vad_buffer = args.vad_buffer;
+        let args_quiet = args.quiet;
+        let args_force = args.force;
+        let args_ffmpeg_path = args.ffmpeg_path.clone();
+
+        run_batch_transcribe_dispatched(
+            args,
+            &plans,
+            &output_dir,
+            resolved_jobs,
+            io,
+            move |plan_item| {
+                let transcriber = transcriber.clone();
+                let single_options = BatchTranscribeOptions {
+                    input: plan_item.input_path.clone(),
+                    output: Some(plan_item.output_path.clone()),
+                    format: Some(format_name.to_string()),
+                    language: args_language.clone(),
+                    model_id: resolved_model_id.clone(),
+                    models_dir: args_models_dir.clone(),
+                    default_models_dir: crate::desktop_paths::default_models_dir(),
+                    vad_model_id: args_vad_model_id.clone(),
+                    punctuation_model_id: args_punctuation_model_id.clone(),
+                    threads: args_threads,
+                    enable_itn: args_enable_itn,
+                    hotwords: args_hotwords.clone(),
+                    gpu_acceleration: args_gpu_acceleration.clone(),
+                    vad_buffer: args_vad_buffer,
+                    save_wav: None,
+                    quiet: args_quiet,
+                    force: args_force,
+                    ffmpeg_path: args_ffmpeg_path.clone(),
+                };
+                let config_clone = config_clone.clone();
+
+                async move {
                     let file_plan = sona_runtime_fs::resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
                         single_options,
-                        config.cloned(),
+                        config_clone,
                         crate::desktop_paths::models_dir_status,
                     )
                     .map_err(crate::map_runtime_fs_error)?;
@@ -516,58 +666,21 @@ async fn run_batch_transcribe(
                         .await
                         .map_err(crate::online_asr::map_asr_error)?;
 
-                    let content =
-                        sona_core::export::export_segments_with_mode(&segments, export_format, export_mode)
-                            .map_err(|error| CliError::Serialize(error.to_string()))?;
+                    let content = sona_core::export::export_segments_with_mode(
+                        &segments,
+                        export_format,
+                        export_mode,
+                    )
+                    .map_err(|error| CliError::Serialize(error.to_string()))?;
 
                     sona_runtime_fs::write_transcript_output_file(&plan_item.output_path, &content)
                         .map_err(|error| CliError::Io(error.to_string()))?;
                     Ok(())
-                } => item_res,
-            };
-            match res {
-                Ok(()) => {
-                    succeeded += 1;
-                    if !args.quiet {
-                        eprintln!(
-                            "[{}/{}] Transcribed {} -> {}",
-                            index + 1,
-                            total,
-                            plan_item.input_path.display(),
-                            plan_item.output_path.display()
-                        );
-                    }
                 }
-                Err(err) => {
-                    eprintln!(
-                        "[{}/{}] [FAIL] {}: {err}",
-                        index + 1,
-                        total,
-                        plan_item.input_path.display()
-                    );
-                    if args.continue_on_error {
-                        failures.push((plan_item.input_path.clone(), err.to_string()));
-                    } else {
-                        return Err(err);
-                    }
-                }
-            }
-        }
+            },
+        )
+        .await
     }
-
-    if !failures.is_empty() {
-        let msg = format!(
-            "Transcribed {succeeded}/{total} file(s) into {}. {} file(s) failed.",
-            output_dir.display(),
-            failures.len()
-        );
-        return Err(CliError::Validation(msg));
-    }
-
-    Ok(CliOutput::stderr(format!(
-        "Transcribed {total} file(s) into {}",
-        output_dir.display()
-    )))
 }
 
 async fn run_online_transcribe(
@@ -1021,6 +1134,195 @@ mod tests {
         assert_eq!(
             err.to_string(),
             "Cancelled: Transcription cancelled by user"
+        );
+    }
+    #[tokio::test]
+    async fn test_batch_transcribe_concurrency_and_io_isolation() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file1 = temp_dir.path().join("audio1.wav");
+        let file2 = temp_dir.path().join("audio2.wav");
+        std::fs::write(&file1, b"test audio 1").unwrap();
+        std::fs::write(&file2, b"test audio 2").unwrap();
+        let out_dir = temp_dir.path().join("out");
+        std::fs::create_dir_all(&out_dir).unwrap();
+
+        let plans = vec![
+            BatchOutputPlan {
+                input_path: file1.clone(),
+                output_path: out_dir.join("audio1.json"),
+            },
+            BatchOutputPlan {
+                input_path: file2.clone(),
+                output_path: out_dir.join("audio2.json"),
+            },
+        ];
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+
+        let active_clone = active.clone();
+        let peak_clone = peak.clone();
+
+        let args = TranscribeArgs {
+            inputs: vec![file1, file2],
+            input_dir: None,
+            output_dir: Some(out_dir.clone()),
+            recursive: false,
+            output: None,
+            format: None,
+            language: None,
+            mode: "source".to_string(),
+            model_id: None,
+            models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: false,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: false,
+            force: true,
+            continue_on_error: false,
+            ffmpeg_path: None,
+            online: crate::online_asr::OnlineAsrArgs::default(),
+            config: None,
+            list_providers: false,
+            jobs: Some(2),
+        };
+
+        let mut io = crate::MemoryCliIo::default();
+        let result =
+            run_batch_transcribe_dispatched(&args, &plans, &out_dir, 2, &mut io, move |_plan| {
+                let active = active_clone.clone();
+                let peak = peak_clone.clone();
+                async move {
+                    let cur = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(cur, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            })
+            .await;
+
+        assert!(
+            result.is_ok(),
+            "Batch transcribe should succeed: {result:?}"
+        );
+        let output = result.unwrap();
+        let captured = io.into_output();
+
+        // Standard out should be empty (strict IO isolation)
+        assert_eq!(captured.stdout, "", "Nothing should leak onto stdout");
+        assert_eq!(output.stdout, "", "CliOutput stdout must be empty");
+
+        // Stderr should contain progress for both jobs
+        assert!(
+            captured.stderr.contains("[1/2] Transcribed"),
+            "Stderr must report job 1: {}",
+            captured.stderr
+        );
+        assert!(
+            captured.stderr.contains("[2/2] Transcribed"),
+            "Stderr must report job 2: {}",
+            captured.stderr
+        );
+        assert!(
+            output.stderr.contains("Transcribed 2 file(s) into"),
+            "Output stderr must report summary: {}",
+            output.stderr
+        );
+
+        // Peak concurrency with --jobs 2 must reach 2
+        assert_eq!(
+            peak.load(Ordering::SeqCst),
+            2,
+            "Concurrent execution with jobs=2 must execute 2 tasks in parallel"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_batch_transcribe_sequential_with_jobs_1() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file1 = temp_dir.path().join("audio1.wav");
+        let file2 = temp_dir.path().join("audio2.wav");
+        std::fs::write(&file1, b"test audio 1").unwrap();
+        std::fs::write(&file2, b"test audio 2").unwrap();
+        let out_dir = temp_dir.path().join("out");
+        std::fs::create_dir_all(&out_dir).unwrap();
+
+        let plans = vec![
+            BatchOutputPlan {
+                input_path: file1.clone(),
+                output_path: out_dir.join("audio1.json"),
+            },
+            BatchOutputPlan {
+                input_path: file2.clone(),
+                output_path: out_dir.join("audio2.json"),
+            },
+        ];
+
+        let active = Arc::new(AtomicUsize::new(0));
+        let peak = Arc::new(AtomicUsize::new(0));
+
+        let active_clone = active.clone();
+        let peak_clone = peak.clone();
+
+        let args = TranscribeArgs {
+            inputs: vec![file1, file2],
+            input_dir: None,
+            output_dir: Some(out_dir.clone()),
+            recursive: false,
+            output: None,
+            format: None,
+            language: None,
+            mode: "source".to_string(),
+            model_id: None,
+            models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: false,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: false,
+            force: true,
+            continue_on_error: false,
+            ffmpeg_path: None,
+            online: crate::online_asr::OnlineAsrArgs::default(),
+            config: None,
+            list_providers: false,
+            jobs: Some(1),
+        };
+
+        let mut io = crate::MemoryCliIo::default();
+        let result =
+            run_batch_transcribe_dispatched(&args, &plans, &out_dir, 1, &mut io, move |_plan| {
+                let active = active_clone.clone();
+                let peak = peak_clone.clone();
+                async move {
+                    let cur = active.fetch_add(1, Ordering::SeqCst) + 1;
+                    peak.fetch_max(cur, Ordering::SeqCst);
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                    active.fetch_sub(1, Ordering::SeqCst);
+                    Ok(())
+                }
+            })
+            .await;
+
+        assert!(result.is_ok());
+        assert_eq!(
+            peak.load(Ordering::SeqCst),
+            1,
+            "Execution with jobs=1 must be strictly sequential"
         );
     }
 }

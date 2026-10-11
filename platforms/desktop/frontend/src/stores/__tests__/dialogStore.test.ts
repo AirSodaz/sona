@@ -1,5 +1,8 @@
+// @vitest-environment jsdom
+import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { useDialogStore } from '../dialogStore';
+import { isAnyDialogOpen, useDialogStore, useIsAnyDialogOpen } from '../dialogStore';
+import { useErrorDialogStore } from '../errorDialogStore';
 
 describe('dialogStore', () => {
   beforeEach(() => {
@@ -130,5 +133,62 @@ describe('dialogStore', () => {
     const result = await promise;
     expect(result).toEqual({ confirmed: false, checked: false });
     expect(useDialogStore.getState().isOpen).toBe(false);
+  });
+});
+
+describe('isAnyDialogOpen', () => {
+  beforeEach(() => {
+    useDialogStore.setState({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
+      checkboxResolveRef: null,
+    });
+    useErrorDialogStore.setState({
+      isOpen: false,
+      options: null,
+      resolveRef: null,
+    });
+  });
+
+  it('returns false when both stores are closed', () => {
+    expect(isAnyDialogOpen()).toBe(false);
+  });
+
+  it('returns true when useDialogStore is open and useErrorDialogStore is closed', () => {
+    useDialogStore.setState({ isOpen: true });
+    expect(isAnyDialogOpen()).toBe(true);
+  });
+
+  it('returns true when useErrorDialogStore is open and useDialogStore is closed', () => {
+    useErrorDialogStore.setState({ isOpen: true });
+    expect(isAnyDialogOpen()).toBe(true);
+  });
+
+  it('returns true when both stores are open', () => {
+    useDialogStore.setState({ isOpen: true });
+    useErrorDialogStore.setState({ isOpen: true });
+    expect(isAnyDialogOpen()).toBe(true);
+  });
+
+  it('useIsAnyDialogOpen reactively tracks dialog open state', () => {
+    const { result } = renderHook(() => useIsAnyDialogOpen());
+    expect(result.current).toBe(false);
+
+    act(() => {
+      useDialogStore.setState({ isOpen: true });
+    });
+    expect(result.current).toBe(true);
+
+    act(() => {
+      useDialogStore.setState({ isOpen: false });
+      useErrorDialogStore.setState({ isOpen: true });
+    });
+    expect(result.current).toBe(true);
+
+    act(() => {
+      useErrorDialogStore.setState({ isOpen: false });
+    });
+    expect(result.current).toBe(false);
   });
 });

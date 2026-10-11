@@ -162,7 +162,7 @@ impl OnlineAsrArgs {
         F: FnOnce(&str) -> Result<String, ()>,
     {
         self.build_request_with_warn(mode, language, enable_itn, hotwords, read_env, |warning| {
-            eprintln!("{warning}");
+            log::warn!("{warning}");
         })
     }
 

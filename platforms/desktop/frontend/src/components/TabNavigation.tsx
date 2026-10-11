@@ -2,8 +2,7 @@ import type React from 'react';
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
-import { useDialogStore } from '../stores/dialogStore';
-import { useErrorDialogStore } from '../stores/errorDialogStore';
+import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppMode } from '../types/transcript';
@@ -71,10 +70,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
       if (e.ctrlKey && e.key === 'Tab') {
         // Check if any modal/dialog is open
         const isSettingsOpen = !!document.querySelector('.settings-overlay');
-        const isDialogOpen = useDialogStore.getState().isOpen;
-        const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
-
-        if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) return;
+        if (isSettingsOpen || isAnyDialogOpen()) return;
 
         e.preventDefault();
         const modes: AppMode[] = ['live', 'batch', 'projects'];

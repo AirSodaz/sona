@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import i18n from '../i18n';
 import { type AppErrorInput, buildErrorDialogOptions, normalizeError } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { useErrorDialogStore } from './errorDialogStore';
 
 /** Supported dialog types. */
 export type DialogType = 'alert' | 'confirm' | 'prompt';
@@ -258,3 +259,15 @@ export const useDialogStore = create<DialogState>((set, get) => ({
     });
   },
 }));
+
+/** Returns true if either a global dialog (alert/confirm/prompt) or a dedicated error dialog is open. */
+export function isAnyDialogOpen(): boolean {
+  return useDialogStore.getState().isOpen || useErrorDialogStore.getState().isOpen;
+}
+
+/** Reactively tracks whether any dialog (global or error) is currently open. */
+export function useIsAnyDialogOpen(): boolean {
+  const isGlobalOpen = useDialogStore((state) => state.isOpen);
+  const isErrorOpen = useErrorDialogStore((state) => state.isOpen);
+  return isGlobalOpen || isErrorOpen;
+}

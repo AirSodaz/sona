@@ -1,7 +1,6 @@
 import type React from 'react';
 import { useCallback, useEffect } from 'react';
-import { useDialogStore } from '../../../stores/dialogStore';
-import { useErrorDialogStore } from '../../../stores/errorDialogStore';
+import { isAnyDialogOpen } from '../../../stores/dialogStore';
 import type { HistoryItem as HistoryItemType } from '../../../types/history';
 import { getWorkspaceSearchResultDomId } from '../../../utils/workspaceSearch';
 
@@ -59,9 +58,7 @@ export function useWorkspaceSearchNavigation({
       }
 
       const isSettingsOpen = !!document.querySelector('.settings-overlay');
-      const isDialogOpen = useDialogStore.getState().isOpen;
-      const isErrorDialogOpen = useErrorDialogStore.getState().isOpen;
-      if (isSettingsOpen || isDialogOpen || isErrorDialogOpen) {
+      if (isSettingsOpen || isAnyDialogOpen()) {
         return;
       }
 

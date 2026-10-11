@@ -4,8 +4,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } fro
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
-import { useDialogStore } from '../stores/dialogStore';
-import { useErrorDialogStore } from '../stores/errorDialogStore';
+import { isAnyDialogOpen } from '../stores/dialogStore';
 import type { SettingsTab, SettingsTabInput } from '../types/settings';
 import { markSettingsPerf } from '../utils/settingsPerf';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
@@ -349,7 +348,7 @@ export function Settings({
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'Tab') {
         // If a dialog is open on top of settings, don't switch tabs
-        if (useDialogStore.getState().isOpen || useErrorDialogStore.getState().isOpen) {
+        if (isAnyDialogOpen()) {
           return;
         }
 

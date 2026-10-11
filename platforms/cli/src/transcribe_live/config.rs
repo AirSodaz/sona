@@ -345,7 +345,7 @@ pub(crate) fn resolve_live_command(
         if resolved_model_id.is_none() && config.model_id.is_none() {
             match infer_streaming_model(args.models_dir.as_ref()) {
                 StreamingModelInference::AutoSelected(inferred) => {
-                    eprintln!(
+                    log::info!(
                         "Note: Automatically selected installed streaming model '{inferred}'"
                     );
                     resolved_model_id = Some(inferred);

@@ -79,17 +79,17 @@ pub(crate) trait CliIo: Send {
 }
 
 #[derive(Default)]
-struct MemoryCliIo {
-    stdout: Vec<u8>,
-    stderr: Vec<u8>,
-    stdin_lines: VecDeque<String>,
-    stdin_bytes: Vec<u8>,
-    stdout_is_terminal: bool,
-    stdin_is_terminal: bool,
-    stderr_is_terminal: bool,
+pub(crate) struct MemoryCliIo {
+    pub(crate) stdout: Vec<u8>,
+    pub(crate) stderr: Vec<u8>,
+    pub(crate) stdin_lines: VecDeque<String>,
+    pub(crate) stdin_bytes: Vec<u8>,
+    pub(crate) stdout_is_terminal: bool,
+    pub(crate) stdin_is_terminal: bool,
+    pub(crate) stderr_is_terminal: bool,
 }
 impl MemoryCliIo {
-    fn into_output(self) -> CliOutput {
+    pub(crate) fn into_output(self) -> CliOutput {
         CliOutput {
             stdout: String::from_utf8_lossy(&self.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
