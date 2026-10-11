@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forceExitWithGuard } from '../services/quitGuard';
 import { updateTrayMenu } from '../services/tauri/app';
+import { stopMicrophoneCapture, stopSystemAudioCapture } from '../services/tauri/audio';
 import { TauriEvent } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useAppUpdaterStore } from '../stores/appUpdaterStore';
@@ -91,6 +92,16 @@ export function useTrayHandling(
           logger.info('[Tray] Received tray-stop-recording event, cleanly stopping UI recording');
           const stopped = await stopActiveRecording();
           if (!stopped) {
+            if (useTranscriptStore.getState().isRecording) {
+              await Promise.allSettled([
+                stopMicrophoneCapture('record').catch((error) => {
+                  logger.error('[Tray] Failed to fallback stop microphone capture:', error);
+                }),
+                stopSystemAudioCapture('record').catch((error) => {
+                  logger.error('[Tray] Failed to fallback stop system audio capture:', error);
+                }),
+              ]);
+            }
             useTranscriptStore.getState().setIsRecording(false);
             useTranscriptStore.getState().setIsPaused(false);
           }

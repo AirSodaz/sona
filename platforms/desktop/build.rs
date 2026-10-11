@@ -3,6 +3,7 @@ use std::path::Path;
 
 fn main() {
     println!("cargo:rustc-check-cfg=cfg(sona_sherpa_directml)");
+    println!("cargo:rerun-if-changed=build.rs");
     println!("cargo:rerun-if-env-changed=SHERPA_ONNX_LIB_DIR");
 
     let target_os = env::var("CARGO_CFG_TARGET_OS").unwrap_or_default();
@@ -23,8 +24,13 @@ fn main() {
     } else if target_os == "windows" && target_env == "msvc" {
         println!("cargo:rustc-link-arg=delayimp.lib");
         println!("cargo:rustc-link-arg=/DELAYLOAD:sherpa-onnx-c-api.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:llama.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:llama-common.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-base.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:ggml-cpu.dll");
+        println!("cargo:rustc-link-arg=/DELAYLOAD:comctl32.dll");
     }
-
     tauri_build::build()
 }
 

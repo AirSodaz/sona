@@ -296,11 +296,11 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(resList.result.resultType, "complete");
 		assert.equal(resList.result.ttlMs, 300000);
 		assert.equal(resList.result.cacheScope, "public");
-		assert.equal(resList.result.resources.length, 8);
+		assert.equal(resList.result.resources.length, 7);
 		assert.equal(resList.result.resources[0].title, "Client Status");
 		assert.ok(
-			resList.result.resources.some(
-				(r) => r.uri === "sona://history/{history_id}",
+			!resList.result.resources.some((r) =>
+				r.uri.includes("{history_id}"),
 			),
 		);
 		assert.ok(resList.result.resources.some((r) => r.uri === "sona://models"));

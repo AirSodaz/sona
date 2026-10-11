@@ -3224,13 +3224,25 @@ mod tests {
             .await
             .unwrap();
 
+        // Create a valid project to associate
+        let proj = facade
+            .create_project(CreateProjectRequest {
+                name: "Meta Test Project".to_string(),
+                description: None,
+                icon: None,
+                color: None,
+            })
+            .await
+            .unwrap();
+        let proj_id = proj.id;
+
         // Update title, icon, and project_id
         let upd = facade
             .update_history_meta(
                 history_id.clone(),
                 UpdateHistoryMetaRequest {
                     title: Some("Updated Title".to_string()),
-                    project_id: Some("proj-99".to_string()),
+                    project_id: Some(proj_id.clone()),
                     icon: Some("bookmark".to_string()),
                 },
             )
@@ -3253,7 +3265,7 @@ mod tests {
             .find(|it| it.id == hid_q)
             .expect("must exist");
         assert_eq!(item.title, "Updated Title");
-        assert_eq!(item.project_id.as_deref(), Some("proj-99"));
+        assert_eq!(item.project_id.as_deref(), Some(proj_id.as_str()));
         assert_eq!(item.icon.as_deref(), Some("bookmark"));
     }
 

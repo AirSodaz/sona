@@ -615,7 +615,7 @@ fn transcribe_jobs_on_single_file_reports_validation_error() {
 }
 
 #[test]
-fn transcribe_jobs_greater_than_one_reports_unsupported() {
+fn transcribe_jobs_greater_than_one_downgrades_to_sequential_and_proceeds() {
     let dir = tempfile::tempdir().unwrap();
     let file1 = dir.path().join("audio1.wav");
     let file2 = dir.path().join("audio2.wav");
@@ -627,19 +627,17 @@ fn transcribe_jobs_greater_than_one_reports_unsupported() {
         "transcribe",
         file1.to_str().unwrap(),
         file2.to_str().unwrap(),
-        "-m",
-        "whisper-turbo",
+        "--online-provider",
+        "groq-whisper",
+        "--api-key",
+        "   ",
         "--jobs",
         "2",
     ])
     .unwrap_err();
 
     assert_eq!(error.exit_code(), 2);
-    assert!(
-        error
-            .to_string()
-            .contains("Concurrent batch transcription (--jobs > 1) is experimental; current execution is sequential")
-    );
+    assert_eq!(error.to_string(), "--api-key must not be empty.");
 }
 
 #[test]

@@ -240,7 +240,7 @@ mod tests {
         let err = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |found, minimum| {
             prompt_called = true;
             assert_eq!(found, 6);
-            assert_eq!(minimum, 7);
+            assert_eq!(minimum, 8);
             LegacyDatabaseAction::Exit
         })
         .unwrap_err();
@@ -251,7 +251,7 @@ mod tests {
             db_err,
             sona_sqlite::DatabaseError::UnsupportedLegacySchemaVersion {
                 found: 6,
-                minimum: 7,
+                minimum: 8,
             }
         ));
 
@@ -280,7 +280,7 @@ mod tests {
         let db = open_and_migrate_sqlite_for_path_with_prompt(temp.path(), |found, minimum| {
             prompt_called = true;
             assert_eq!(found, 6);
-            assert_eq!(minimum, 7);
+            assert_eq!(minimum, 8);
             LegacyDatabaseAction::BackupAndReset
         })
         .unwrap();

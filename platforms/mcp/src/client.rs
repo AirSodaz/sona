@@ -138,78 +138,33 @@ impl IpcClient {
         }
     }
 
-    pub async fn send_receive<S>(stream: S, req_line: String) -> Result<serde_json::Value, String>
-    where
-        S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin,
-    {
-        let (reader, mut writer) = tokio::io::split(stream);
-        let mut buf_reader = tokio::io::BufReader::new(reader);
-
-        writer
-            .write_all(req_line.as_bytes())
-            .await
-            .map_err(|e| format!("Failed to send request to desktop: {e}"))?;
-        writer
-            .flush()
-            .await
-            .map_err(|e| format!("Failed to flush request to desktop: {e}"))?;
-
-        let mut resp_line = String::new();
-        tokio::time::timeout(
-            Duration::from_secs(30),
-            buf_reader.read_line(&mut resp_line),
-        )
-        .await
-        .map_err(|_| "Timeout waiting for response from desktop client".to_string())?
-        .map_err(|e| format!("Failed to read response from desktop: {e}"))?;
-
-        if resp_line.trim().is_empty() {
-            return Err("Empty response received from desktop client".to_string());
-        }
-
-        let resp: serde_json::Value = serde_json::from_str(resp_line.trim())
-            .map_err(|e| format!("Invalid JSON response from desktop: {e}"))?;
-
-        if let Some(err_obj) = resp.get("error") {
-            let msg = err_obj
-                .get("message")
-                .and_then(|m| m.as_str())
-                .unwrap_or("Unknown error from desktop client");
-            return Err(msg.to_string());
-        }
-
-        resp.get("result")
-            .cloned()
-            .ok_or_else(|| "Missing 'result' in response from desktop client".to_string())
-    }
-
-    #[cfg(any(windows, unix))]
-    async fn send_receive_on_conn(
-        conn: &mut IpcConnection,
+    async fn send_receive_io<R, W>(
+        reader: &mut tokio::io::BufReader<R>,
+        writer: &mut W,
         req_line: &str,
-    ) -> Result<serde_json::Value, IpcCallError> {
-        conn.writer
-            .write_all(req_line.as_bytes())
-            .await
-            .map_err(|e| {
-                IpcCallError::Transport(format!("Failed to send request to desktop: {e}"))
-            })?;
-        conn.writer.flush().await.map_err(|e| {
+    ) -> Result<serde_json::Value, IpcCallError>
+    where
+        R: tokio::io::AsyncRead + Unpin,
+        W: tokio::io::AsyncWrite + Unpin,
+    {
+        writer.write_all(req_line.as_bytes()).await.map_err(|e| {
+            IpcCallError::Transport(format!("Failed to send request to desktop: {e}"))
+        })?;
+        writer.flush().await.map_err(|e| {
             IpcCallError::Transport(format!("Failed to flush request to desktop: {e}"))
         })?;
 
         let mut resp_line = String::new();
-        tokio::time::timeout(
-            Duration::from_secs(30),
-            conn.reader.read_line(&mut resp_line),
-        )
-        .await
-        .map_err(|_| {
-            IpcCallError::Transport("Timeout waiting for response from desktop client".to_string())
-        })?
-        .map_err(|e| {
-            IpcCallError::Transport(format!("Failed to read response from desktop: {e}"))
-        })?;
+        tokio::time::timeout(Duration::from_secs(30), reader.read_line(&mut resp_line))
+            .await
+            .map_err(|_| {
+                IpcCallError::Transport(
+                    "Timeout waiting for response from desktop client".to_string(),
+                )
+            })?
+            .map_err(|e| {
+                IpcCallError::Transport(format!("Failed to read response from desktop: {e}"))
+            })?;
 
         if resp_line.trim().is_empty() {
             return Err(IpcCallError::Transport(
@@ -234,6 +189,14 @@ impl IpcClient {
                 "Missing 'result' in response from desktop client".to_string(),
             )
         })
+    }
+
+    #[cfg(any(windows, unix))]
+    async fn send_receive_on_conn(
+        conn: &mut IpcConnection,
+        req_line: &str,
+    ) -> Result<serde_json::Value, IpcCallError> {
+        Self::send_receive_io(&mut conn.reader, &mut conn.writer, req_line).await
     }
 
     #[cfg(windows)]
@@ -426,9 +389,12 @@ mod tests {
             server.flush().await.unwrap();
         });
 
-        let result = IpcClient::send_receive(
-            client,
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}\n".to_string(),
+        let (read_half, mut write_half) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(read_half);
+        let result = IpcClient::send_receive_io(
+            &mut buf_reader,
+            &mut write_half,
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}\n",
         )
         .await
         .unwrap();
@@ -451,13 +417,19 @@ mod tests {
             server.flush().await.unwrap();
         });
 
-        let err = IpcClient::send_receive(
-            client,
-            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}\n".to_string(),
+        let (read_half, mut write_half) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(read_half);
+        let err = IpcClient::send_receive_io(
+            &mut buf_reader,
+            &mut write_half,
+            "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"test\",\"params\":{}}\n",
         )
         .await
         .unwrap_err();
 
-        assert_eq!(err, "Method not found");
+        match err {
+            IpcCallError::Application(msg) => assert_eq!(msg, "Method not found"),
+            other => panic!("Expected application error, got {other:?}"),
+        }
     }
 }

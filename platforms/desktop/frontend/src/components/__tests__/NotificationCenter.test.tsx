@@ -75,6 +75,10 @@ vi.mock('../../services/automationTaskRetryService', () => ({
   retryAutomationTaskFromLedger: (...args: unknown[]) => retryAutomationTaskFromLedgerMock(...args),
 }));
 
+vi.mock('../../services/tauri/recognizer', () => ({
+  cancelBatchTask: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock('../../stores/errorDialogStore', () => ({
   useErrorDialogStore: {
     getState: () => ({

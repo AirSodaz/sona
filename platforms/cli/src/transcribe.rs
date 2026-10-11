@@ -356,9 +356,9 @@ async fn run_batch_transcribe(
         ));
     }
     if resolved_jobs > 1 {
-        return Err(CliError::Validation(
-            "Concurrent batch transcription (--jobs > 1) is experimental; current execution is sequential.".to_string(),
-        ));
+        log::warn!(
+            "Concurrent batch transcription (--jobs > 1) is currently experimental; running sequentially with 1 job."
+        );
     }
 
     let output_dir = if let Some(dir) = &args.output_dir {

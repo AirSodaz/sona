@@ -34,8 +34,8 @@ Options:
 
 If `--endpoint` is not explicitly supplied, `sona-mcp` automatically detects the platform default:
 
-- **Windows**: `\\.\pipe\sona-agent-control-v1`
-- **macOS / Linux**: `$TMPDIR/sona-agent-control-v1.sock` (fallback: `/tmp/sona-agent-control-v1.sock`)
+- **Windows**: `\\.\pipe\sona-agent-ipc`
+- **macOS / Linux**: `$XDG_RUNTIME_DIR/sona-agent.sock` (fallback: `~/.local/share/sona/agent.sock`)
 
 ### Offline State & Lazy Launch
 
@@ -54,7 +54,7 @@ When the Sona desktop client is not currently running:
 - **Legacy Compatibility**: Supports conventional initialization workflows (`initialize` followed by `notifications/initialized`).
 - **Declared Capabilities**:
   - `tools`: 32 granular tools covering state, recording, transcript editing, translations, summaries, projects, and settings.
-  - `resources`: 6 static resources and 3 parameterized resource templates.
+  - `resources`: 7 static resources and 4 parameterized resource templates.
   - `prompts`: Pre-configured prompts for meeting summarization and transcript proofreading.
 
 ## Exit Codes & Errors
@@ -519,7 +519,7 @@ To test the MCP server manually over standard I/O:
 sona-mcp
 
 # Or specify a custom IPC pipe/socket endpoint
-sona-mcp --endpoint \\.\pipe\sona-agent-control-v1
+sona-mcp --endpoint \\.\pipe\sona-agent-ipc
 ```
 
 Send standard JSON-RPC requests via stdin:

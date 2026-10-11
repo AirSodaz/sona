@@ -20,13 +20,6 @@ pub fn list_resources() -> Vec<ResourceDefinition> {
             mime_type: Some("application/json"),
         },
         ResourceDefinition {
-            uri: "sona://history/{history_id}",
-            name: "Sona History Transcript",
-            title: Some("History Transcript"),
-            description: Some("Read-only transcript content for a specific history record by ID"),
-            mime_type: Some("text/plain"),
-        },
-        ResourceDefinition {
             uri: "sona://models",
             name: "Sona Model Catalog",
             title: Some("Model Catalog"),

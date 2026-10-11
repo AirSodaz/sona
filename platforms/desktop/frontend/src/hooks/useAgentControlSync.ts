@@ -7,7 +7,6 @@ import {
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
-import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 
@@ -33,8 +32,6 @@ export function useAgentControlSync(): void {
             logger.info(
               `[AgentControlSync] Agent recording status changed: active=${active}, isPaused=${isPaused}, historyId=${historyId ?? 'none'}`
             );
-            useTranscriptRuntimeStore.getState().setIsRecording(active);
-            useTranscriptRuntimeStore.getState().setIsPaused(active ? isPaused : false);
             useTranscriptStore.getState().setIsRecording(active);
             useTranscriptStore.getState().setIsPaused(active ? isPaused : false);
             useTranscriptStore.getState().setIsAgentRecording(active, historyId ?? null);

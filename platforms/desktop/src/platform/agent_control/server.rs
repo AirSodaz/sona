@@ -755,7 +755,16 @@ pub async fn run_ipc_server(
         }
 
         let connected_client = server;
-        server = ServerOptions::new().create(WINDOWS_PIPE_NAME)?;
+        server = match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
+            Ok(s) => s,
+            Err(e) => {
+                log::error!(
+                    "[AgentControlIPC] Failed to create next named pipe instance: {e}, retrying..."
+                );
+                tokio::time::sleep(tokio::time::Duration::from_millis(200)).await;
+                ServerOptions::new().create(WINDOWS_PIPE_NAME)?
+            }
+        };
 
         let facade_clone = facade.clone();
         let tracker_clone = tracker.clone();
@@ -799,7 +808,14 @@ pub async fn run_ipc_server(
     );
 
     loop {
-        let (stream, _) = listener.accept().await?;
+        let (stream, _) = match listener.accept().await {
+            Ok(conn) => conn,
+            Err(e) => {
+                log::warn!("[AgentControlIPC] Accept connection error: {e}");
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                continue;
+            }
+        };
         let facade_clone = facade.clone();
         let tracker_clone = tracker.clone();
         let app_handle_clone = app_handle.clone();
@@ -830,8 +846,10 @@ pub fn start_agent_control_ipc_server(
     app_handle: Option<tauri::AppHandle>,
 ) {
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run_ipc_server(facade, tracker, app_handle).await {
-            log::error!("[AgentControlIPC] Server terminated with error: {e}");
+        while let Err(e) = run_ipc_server(facade.clone(), tracker.clone(), app_handle.clone()).await
+        {
+            log::error!("[AgentControlIPC] Server loop ended with error: {e}. Restarting in 1s...");
+            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
         }
     });
 }

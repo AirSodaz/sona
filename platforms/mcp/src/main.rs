@@ -70,7 +70,7 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
 
         // Validate client capabilities
         let client_caps = meta_obj.get("io.modelcontextprotocol/clientCapabilities");
-        if client_caps.is_none() || !client_caps.unwrap().is_object() {
+        if !client_caps.is_some_and(|c| c.is_object()) {
             return Some(JsonRpcResponse::error(
                 id,
                 protocol::INVALID_PARAMS,
@@ -504,7 +504,12 @@ mod tests {
         );
         assert_eq!(result.get("ttlMs").and_then(|t| t.as_i64()), Some(300000));
         let resources = result.get("resources").and_then(|r| r.as_array()).unwrap();
-        assert_eq!(resources.len(), 8);
+        assert_eq!(resources.len(), 7);
+        assert!(!resources.iter().any(|r| {
+            r.get("uri")
+                .and_then(|u| u.as_str())
+                .is_some_and(|u| u.contains("{history_id}"))
+        }));
         assert_eq!(
             resources[0].get("title").and_then(|t| t.as_str()),
             Some("Client Status")
