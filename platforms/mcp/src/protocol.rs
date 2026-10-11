@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 pub const LATEST_PROTOCOL_VERSION: &str = "2026-07-28";
-pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2026-07-28"];
+pub const SUPPORTED_PROTOCOL_VERSIONS: &[&str] = &["2026-07-28", "2024-11-05"];
 pub const JSONRPC_VERSION: &str = "2.0";
 
 // Standard JSON-RPC error codes

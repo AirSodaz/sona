@@ -11,6 +11,7 @@ import {
   clearActiveTranscriptSession,
   openTranscriptSession,
   syncSavedRecordingMeta,
+  updateTranscriptSegmentForSession,
 } from '../transcriptCoordinator';
 import { useTranscriptPlaybackStore } from '../transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../transcriptRuntimeStore';
@@ -326,31 +327,63 @@ describe('Transcript Stores', () => {
     expect(afterSessionUpdate).not.toBe(firstCall);
   });
 
-  it('maintains referential stability during audio playback setCurrentTime ticks', () => {
+  it('creates a new state snapshot during playback updates without mutating previous state', () => {
     const initialSessionState = useTranscriptSessionStore.getState();
     const playbackStore = useTranscriptPlaybackStore.getState();
 
     playbackStore.setCurrentTime(1.5);
     const afterFirstTick = useTranscriptSessionStore.getState();
-    expect(afterFirstTick).toBe(initialSessionState);
+    expect(afterFirstTick).not.toBe(initialSessionState);
+    expect(initialSessionState.currentTime).toBe(0);
     expect(afterFirstTick.currentTime).toBe(1.5);
 
     playbackStore.setCurrentTime(3.0);
     const afterSecondTick = useTranscriptSessionStore.getState();
-    expect(afterSecondTick).toBe(initialSessionState);
+    expect(afterSecondTick).not.toBe(afterFirstTick);
+    expect(afterFirstTick.currentTime).toBe(1.5);
     expect(afterSecondTick.currentTime).toBe(3.0);
   });
 
-  it('does not trigger transcriptSessionStore.subscribe on playback currentTime updates', () => {
+  it('triggers transcriptSessionStore.subscribe on playback currentTime updates', () => {
     const listener = vi.fn();
     const unsubscribe = useTranscriptSessionStore.subscribe(listener);
 
     useTranscriptPlaybackStore.getState().setCurrentTime(5.0);
-    expect(listener).not.toHaveBeenCalled();
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ currentTime: 5.0 }),
+      expect.objectContaining({ currentTime: 0 })
+    );
 
     useTranscriptSessionStore.getState().setTitle('New Title');
-    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledTimes(2);
 
     unsubscribe();
+  });
+
+  it('updateTranscriptSegmentForSession isolates updates to the targeted session without touching other sessions', () => {
+    const sessionA = 'session-a';
+    const sessionB = 'session-b';
+    const store = useTranscriptStore.getState();
+
+    store.setSegmentsForSession(sessionA, [
+      { id: 'seg-a1', text: 'Original text A', start: 0, end: 1, isFinal: true },
+    ]);
+    openTranscriptSession({
+      sourceHistoryId: sessionB,
+      segments: [{ id: 'seg-b1', text: 'Original text B', start: 0, end: 1, isFinal: true }],
+    });
+    expect(useTranscriptStore.getState().activeSessionId).toBe(sessionB);
+
+    // Update segment in session A while session B is active
+    updateTranscriptSegmentForSession(sessionA, 'seg-a1', { text: 'Polished text A' });
+
+    // Assert session A segment was updated
+    const updatedSessionA = useTranscriptStore.getState().sessions[sessionA];
+    expect(updatedSessionA.segments[0].text).toBe('Polished text A');
+
+    // Assert session B (active session) was untouched
+    const untouchedSessionB = useTranscriptStore.getState().sessions[sessionB];
+    expect(untouchedSessionB.segments[0].text).toBe('Original text B');
   });
 });

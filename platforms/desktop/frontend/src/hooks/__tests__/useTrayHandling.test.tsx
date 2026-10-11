@@ -81,4 +81,40 @@ describe('useTrayHandling', () => {
 
     expect(stopActiveRecordingMock).toHaveBeenCalledTimes(1);
   });
+
+  it('does not re-register listeners on rerender with new callback references', async () => {
+    const setIsSettingsOpen1 = vi.fn();
+    const setSettingsInitialTab1 = vi.fn();
+    const { rerender } = renderHook(({ setOpen, setTab }) => useTrayHandling(setOpen, setTab), {
+      initialProps: {
+        setOpen: setIsSettingsOpen1,
+        setTab: setSettingsInitialTab1,
+      },
+    });
+
+    await waitFor(() => {
+      expect(listeners.has('open-settings')).toBe(true);
+    });
+    const initialListenCallCount = listenMock.mock.calls.length;
+
+    const setIsSettingsOpen2 = vi.fn();
+    const setSettingsInitialTab2 = vi.fn();
+    rerender({
+      setOpen: setIsSettingsOpen2,
+      setTab: setSettingsInitialTab2,
+    });
+
+    // Listener count should remain unchanged (no re-registration)
+    expect(listenMock.mock.calls.length).toBe(initialListenCallCount);
+
+    // Firing event uses the updated callback references
+    await act(async () => {
+      await listeners.get('open-settings')?.();
+    });
+
+    expect(setIsSettingsOpen1).not.toHaveBeenCalled();
+    expect(setSettingsInitialTab1).not.toHaveBeenCalled();
+    expect(setIsSettingsOpen2).toHaveBeenCalledWith(true);
+    expect(setSettingsInitialTab2).toHaveBeenCalledWith('general');
+  });
 });

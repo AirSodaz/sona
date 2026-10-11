@@ -89,11 +89,13 @@ pub async fn start_recording(
         return Err("DEVICE_BUSY: Audio capture or ASR engine is currently in use".to_string());
     }
 
-    let mut session_guard = active_session.lock().await;
-    if session_guard.is_some() {
-        return Err(
-            "RECORDING_ALREADY_ACTIVE: A recording session is already in progress".to_string(),
-        );
+    {
+        let session_guard = active_session.lock().await;
+        if session_guard.is_some() {
+            return Err(
+                "RECORDING_ALREADY_ACTIVE: A recording session is already in progress".to_string(),
+            );
+        }
     }
 
     // 1. Resolve ASR request FIRST before creating draft or starting hardware capture
@@ -248,25 +250,28 @@ pub async fn start_recording(
         crate::platform::system::power::SleepPreventionGuard::acquire("Agent Live Audio Recording"),
     );
 
-    *session_guard = Some(ActiveRecordingSession {
-        history_id: draft.item.id.clone(),
-        consumer_id,
-        source_kind,
-        is_paused: false,
-        paused_at_instant: None,
-        accumulated_pause_duration: std::time::Duration::ZERO,
-        asr_request: resolved_asr_req,
-        gain: 1.0,
-        started_at_epoch: now_epoch_secs,
-        started_at_instant: std::time::Instant::now(),
-        segments,
-        has_coordinator_consumer,
-        coordinator_released: false,
-        audio_stopped: false,
-        frozen_duration_seconds: None,
-        _sleep_guard: Some(sleep_guard),
-        is_ui_session: false,
-    });
+    {
+        let mut session_guard = active_session.lock().await;
+        *session_guard = Some(ActiveRecordingSession {
+            history_id: draft.item.id.clone(),
+            consumer_id,
+            source_kind,
+            is_paused: false,
+            paused_at_instant: None,
+            accumulated_pause_duration: std::time::Duration::ZERO,
+            asr_request: resolved_asr_req,
+            gain: 1.0,
+            started_at_epoch: now_epoch_secs,
+            started_at_instant: std::time::Instant::now(),
+            segments,
+            has_coordinator_consumer,
+            coordinator_released: false,
+            audio_stopped: false,
+            frozen_duration_seconds: None,
+            _sleep_guard: Some(sleep_guard),
+            is_ui_session: false,
+        });
+    }
 
     let _ = services.emitter.emit(
         "agent-control-recording-status",

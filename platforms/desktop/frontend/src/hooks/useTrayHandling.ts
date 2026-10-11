@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { forceExitWithGuard } from '../services/quitGuard';
 import { updateTrayMenu } from '../services/tauri/app';
@@ -24,6 +24,9 @@ export function useTrayHandling(
 ) {
   const { t, i18n } = useTranslation();
   const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+
+  const callbacksRef = useRef({ setIsSettingsOpen, setSettingsInitialTab });
+  callbacksRef.current = { setIsSettingsOpen, setSettingsInitialTab };
 
   // Update tray menu language when locale changes or caption state changes
   useEffect(() => {
@@ -55,8 +58,8 @@ export function useTrayHandling(
       try {
         const unlistenOpenSettings = await listen(TauriEvent.tray.openSettings, () => {
           if (!isMounted) return;
-          setSettingsInitialTab('general');
-          setIsSettingsOpen(true);
+          callbacksRef.current.setSettingsInitialTab('general');
+          callbacksRef.current.setIsSettingsOpen(true);
         });
         if (isMounted) unlistenFunctions.push(unlistenOpenSettings);
         else unlistenOpenSettings();
@@ -71,8 +74,8 @@ export function useTrayHandling(
 
         const unlistenCheckUpdates = await listen(TauriEvent.tray.checkUpdates, () => {
           if (!isMounted) return;
-          setSettingsInitialTab('about');
-          setIsSettingsOpen(true);
+          callbacksRef.current.setSettingsInitialTab('about');
+          callbacksRef.current.setIsSettingsOpen(true);
           void useAppUpdaterStore.getState().checkUpdate(true);
         });
         if (isMounted) unlistenFunctions.push(unlistenCheckUpdates);
@@ -128,5 +131,5 @@ export function useTrayHandling(
         fn();
       });
     };
-  }, [setIsSettingsOpen, setSettingsInitialTab]);
+  }, []);
 }

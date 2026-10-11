@@ -122,9 +122,9 @@ function App(): React.JSX.Element | null {
 
   useNumberStepperHoverEffect();
 
-  const preloadSettings = (tab: SettingsTab = 'general') => {
+  const preloadSettings = useCallback((tab: SettingsTab = 'general') => {
     void preloadSettingsTab(tab);
-  };
+  }, []);
 
   const preloadAllSettings = useCallback(() => {
     markSettingsPerf('settings.preload.all.start');
@@ -140,10 +140,13 @@ function App(): React.JSX.Element | null {
       });
   }, []);
 
-  const setPreloadedSettingsInitialTab = (tab: SettingsTab) => {
-    preloadSettings(tab);
-    setSettingsInitialTab(tab);
-  };
+  const setPreloadedSettingsInitialTab = useCallback(
+    (tab: SettingsTab) => {
+      preloadSettings(tab);
+      setSettingsInitialTab(tab);
+    },
+    [preloadSettings]
+  );
 
   // Handle tray events
   useTrayHandling(setIsSettingsOpen, setPreloadedSettingsInitialTab);

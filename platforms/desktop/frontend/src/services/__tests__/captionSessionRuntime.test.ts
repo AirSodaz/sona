@@ -142,4 +142,22 @@ describe('captionSessionRuntime', () => {
       backgroundOpacity: config.captionBackgroundOpacity,
     });
   });
+
+  it('rolls back and cleans up resources if isActive becomes false during start', async () => {
+    let callCount = 0;
+    // active initially, but becomes false after native capture starts
+    const isActive = vi.fn(() => {
+      callCount += 1;
+      return callCount <= 2;
+    });
+
+    const unlisten = vi.fn();
+    tauriEventMocks.listen.mockResolvedValue(unlisten);
+
+    await captionSessionRuntime.start(config, isActive, vi.fn());
+
+    expect(transcriptionServiceMocks.captionStop).toHaveBeenCalledTimes(1);
+    expect(unlisten).toHaveBeenCalledTimes(1);
+    expect(captionWindowService.close).toHaveBeenCalledTimes(1);
+  });
 });

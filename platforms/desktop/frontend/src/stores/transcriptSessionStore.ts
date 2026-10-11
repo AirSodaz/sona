@@ -99,13 +99,22 @@ export const {
 } = sessionActions;
 
 export function hasSessionContentChanged(a: SessionData, b: SessionData): boolean {
+  if (a === b) return false;
   return (
     a.segments !== b.segments ||
     a.sourceHistoryId !== b.sourceHistoryId ||
     a.title !== b.title ||
     a.icon !== b.icon ||
     a.editingSegmentId !== b.editingSegmentId ||
-    a.aligningSegmentIds !== b.aligningSegmentIds
+    a.aligningSegmentIds !== b.aligningSegmentIds ||
+    a.audioFile !== b.audioFile ||
+    a.audioUrl !== b.audioUrl ||
+    a.currentTime !== b.currentTime ||
+    a.isPlaying !== b.isPlaying ||
+    a.activeSegmentId !== b.activeSegmentId ||
+    a.activeSegmentIndex !== b.activeSegmentIndex ||
+    a.seekRequest !== b.seekRequest ||
+    a.lastSeekTimestamp !== b.lastSeekTimestamp
   );
 }
 
@@ -126,8 +135,6 @@ export function getSessionStoreState(state: TranscriptStore): SessionStoreState 
     cachedSession.sessionId === state.activeSessionId &&
     !hasSessionContentChanged(cachedSession.session, activeSession)
   ) {
-    Object.assign(cachedSession.state, activeSession);
-    cachedSession.session = activeSession;
     return cachedSession.state;
   }
   const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);

@@ -15,6 +15,7 @@ import {
   openTranscriptSession,
   setRecordingSessionId,
   updateTranscriptSegment,
+  updateTranscriptSegmentForSession,
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
@@ -114,8 +115,9 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     const frequency = config.autoPolishFrequency ?? 5;
 
     if (autoPolish && frequency > 0) {
-      const session = meta.sessionId
-        ? useTranscriptStore.getState().sessions[meta.sessionId]
+      const targetSessionId = meta.sessionId;
+      const session = targetSessionId
+        ? useTranscriptStore.getState().sessions[targetSessionId]
         : null;
       const allSegments = session?.segments || [];
       const unpolished = allSegments.filter((s) => s.isFinal && !polishedIdsRef.current.has(s.id));
@@ -129,7 +131,13 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         polishService
           .polishSegments(toPolish, (chunk) => {
             chunk.forEach((polishedSegment) => {
-              updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
+              if (targetSessionId) {
+                updateTranscriptSegmentForSession(targetSessionId, polishedSegment.id, {
+                  text: polishedSegment.text,
+                });
+              } else {
+                updateTranscriptSegment(polishedSegment.id, { text: polishedSegment.text });
+              }
             });
           })
           .catch((err) => {

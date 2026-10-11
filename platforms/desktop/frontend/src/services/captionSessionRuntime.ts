@@ -273,6 +273,7 @@ class CaptionSessionRuntime {
     }
 
     if (!isActive()) {
+      await this.stop();
       return;
     }
 
@@ -280,6 +281,7 @@ class CaptionSessionRuntime {
       this.audioContext = await resolveCaptionAudioContext(this.audioContext, isActive);
 
       if (!isActive()) {
+        await this.stop();
         return;
       }
     }
@@ -288,6 +290,7 @@ class CaptionSessionRuntime {
     await captionWindowService.open(buildCaptionWindowOptions(config));
 
     if (!isActive()) {
+      await this.stop();
       return;
     }
 
@@ -298,7 +301,7 @@ class CaptionSessionRuntime {
     }
 
     if (!isActive()) {
-      await captionService.stop();
+      await this.stop();
       return;
     }
 

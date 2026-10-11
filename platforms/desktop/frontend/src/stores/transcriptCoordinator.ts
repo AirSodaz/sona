@@ -9,7 +9,7 @@
  *   - For direct multi-session coordination outside React, prefer `useTranscriptStore.getState()`.
  */
 
-import type { TranscriptUpdate } from '../types/transcript';
+import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import {
   clearActiveTranscriptSession,
   clearSegments,
@@ -51,6 +51,14 @@ export const applyTranscriptUpdateToSession = (
   activeSegmentId?: string | null
 ): void => {
   useTranscriptStore.getState().applyTranscriptUpdateToSession(sessionId, update, activeSegmentId);
+};
+
+export const updateTranscriptSegmentForSession = (
+  sessionId: string,
+  id: string,
+  updates: Partial<Omit<TranscriptSegment, 'id'>>
+): void => {
+  useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
 };
 
 export const setRecordingSessionId = (id: string | null): void => {

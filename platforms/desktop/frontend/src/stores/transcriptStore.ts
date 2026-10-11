@@ -143,6 +143,11 @@ export interface TranscriptStore {
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
+  updateSegmentForSession: (
+    sessionId: string,
+    id: string,
+    updates: Partial<Omit<TranscriptSegment, 'id'>>
+  ) => void;
   deleteSegment: (id: string) => void;
   mergeSegments: (id1: string, id2: string) => void;
   splitTranscriptSegment: (id: string, leftText: string, rightText: string) => string | null;
@@ -367,6 +372,23 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
       ),
     }));
+  },
+  updateSegmentForSession: (sessionId, id, updates) => {
+    set((state: TranscriptStore) => {
+      const session = state.sessions[sessionId];
+      if (!session) return state;
+      return {
+        sessions: {
+          ...state.sessions,
+          [sessionId]: {
+            ...session,
+            segments: session.segments.map((s) =>
+              s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
+            ),
+          },
+        },
+      };
+    });
   },
   deleteSegment: (id) =>
     updateActiveSession(set, (session) => ({

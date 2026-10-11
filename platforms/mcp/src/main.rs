@@ -55,7 +55,7 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
             .and_then(|v| v.as_str());
 
         match version {
-            Some(v) if v == protocol::LATEST_PROTOCOL_VERSION => {}
+            Some(v) if protocol::SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => {}
             Some(v) => {
                 return Some(JsonRpcResponse::unsupported_protocol_version(id, v));
             }
@@ -100,8 +100,17 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
         }
         "initialize" => {
             // Dual-era backward compatibility for legacy clients (SEP-2575)
+            let requested_version = req
+                .params
+                .as_ref()
+                .and_then(|p| p.get("protocolVersion"))
+                .and_then(|v| v.as_str());
+            let negotiated_version = match requested_version {
+                Some(v) if protocol::SUPPORTED_PROTOCOL_VERSIONS.contains(&v) => v,
+                _ => protocol::LATEST_PROTOCOL_VERSION,
+            };
             let result = serde_json::json!({
-                "protocolVersion": protocol::LATEST_PROTOCOL_VERSION,
+                "protocolVersion": negotiated_version,
                 "capabilities": protocol::server_capabilities(),
                 "serverInfo": {
                     "name": "sona-mcp",
@@ -367,7 +376,7 @@ mod tests {
             method: "tools/list".to_string(),
             params: Some(serde_json::json!({
                 "_meta": {
-                    "io.modelcontextprotocol/protocolVersion": "2024-11-05",
+                    "io.modelcontextprotocol/protocolVersion": "2023-01-01",
                     "io.modelcontextprotocol/clientCapabilities": {}
                 }
             })),
@@ -382,9 +391,35 @@ mod tests {
         let data = err.data.unwrap();
         let supported = data.get("supported").and_then(|s| s.as_array()).unwrap();
         assert!(supported.iter().any(|v| v.as_str() == Some("2026-07-28")));
+        assert!(supported.iter().any(|v| v.as_str() == Some("2024-11-05")));
         assert_eq!(
             data.get("requested").and_then(|r| r.as_str()),
-            Some("2024-11-05")
+            Some("2023-01-01")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_supported_protocol_version_2024_11_05() {
+        let client = offline_test_client();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(200)),
+            method: "tools/list".to_string(),
+            params: Some(serde_json::json!({
+                "_meta": {
+                    "io.modelcontextprotocol/protocolVersion": "2024-11-05",
+                    "io.modelcontextprotocol/clientCapabilities": {}
+                }
+            })),
+        };
+
+        let resp = handle_request(req, &client).await.unwrap();
+        assert_eq!(resp.id, serde_json::json!(200));
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        assert_eq!(
+            result.get("resultType").and_then(|r| r.as_str()),
+            Some("complete")
         );
     }
 
@@ -432,6 +467,28 @@ mod tests {
                 .and_then(|s| s.get("name"))
                 .and_then(|n| n.as_str()),
             Some("sona-mcp")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_handle_initialize_negotiates_version() {
+        let client = offline_test_client();
+        let req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(11)),
+            method: "initialize".to_string(),
+            params: Some(serde_json::json!({
+                "protocolVersion": "2024-11-05"
+            })),
+        };
+
+        let resp = handle_request(req, &client).await.unwrap();
+        assert_eq!(resp.id, serde_json::json!(11));
+        assert!(resp.error.is_none());
+        let result = resp.result.unwrap();
+        assert_eq!(
+            result.get("protocolVersion").and_then(|v| v.as_str()),
+            Some("2024-11-05")
         );
     }
 
