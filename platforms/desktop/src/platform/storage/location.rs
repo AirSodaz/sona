@@ -701,7 +701,10 @@ pub async fn migrate_data_directory(
         let _ = dashboard_state.reload(new_dashboard_service);
     }
 
-    if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>() {
+    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.sync.reset().await;
+    } else if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>()
+    {
         sync_manager.reset().await;
     }
 
@@ -793,7 +796,10 @@ pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesI
         let _ = dashboard_state.reload(new_dashboard_service);
     }
 
-    if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>() {
+    if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
+        services.sync.reset().await;
+    } else if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>()
+    {
         sync_manager.reset().await;
     }
 

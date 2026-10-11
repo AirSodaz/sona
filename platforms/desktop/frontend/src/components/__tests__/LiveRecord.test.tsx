@@ -780,6 +780,56 @@ describe('LiveRecord', () => {
     expect(useTranscriptStore.getState().isRecording).toBe(false);
   });
 
+  it('should not intercept Space key when focused in an editable element during recording', async () => {
+    render(<LiveRecord />);
+
+    // Start recording
+    await act(async () => {
+      fireEvent.keyDown(window, { key: ' ', code: 'Space', ctrlKey: true });
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(useTranscriptStore.getState().isRecording).toBe(true);
+    expect(useTranscriptStore.getState().isPaused).toBe(false);
+
+    // Create and focus an input element
+    const input = document.createElement('input');
+    input.setAttribute('data-testid', 'test-input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const inputSpaceEvent = new KeyboardEvent('keydown', {
+      key: ' ',
+      code: 'Space',
+      bubbles: true,
+      cancelable: true,
+    });
+    const dispatched = input.dispatchEvent(inputSpaceEvent);
+
+    expect(dispatched).toBe(true);
+    expect(inputSpaceEvent.defaultPrevented).toBe(false);
+    expect(mockPauseStream).not.toHaveBeenCalled();
+    expect(useTranscriptStore.getState().isPaused).toBe(false);
+
+    input.remove();
+
+    // Press Space without input focus -> should toggle pause
+    await act(async () => {
+      const windowSpaceEvent = new KeyboardEvent('keydown', {
+        key: ' ',
+        code: 'Space',
+        bubbles: true,
+        cancelable: true,
+      });
+      window.dispatchEvent(windowSpaceEvent);
+      expect(windowSpaceEvent.defaultPrevented).toBe(true);
+      await vi.advanceTimersByTimeAsync(100);
+    });
+
+    expect(mockPauseStream).toHaveBeenCalled();
+    expect(useTranscriptStore.getState().isPaused).toBe(true);
+  });
+
   it('reopens onboarding instead of starting recording when no live model is configured', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     const { useConfigStore } = await import('../../stores/configStore');

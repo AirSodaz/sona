@@ -41,11 +41,18 @@ enum IpcCallError {
     Application(String),
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 pub struct IpcClient {
     custom_endpoint: Option<String>,
+    request_counter: Arc<std::sync::atomic::AtomicU64>,
     #[cfg(any(windows, unix))]
     connection: Arc<tokio::sync::Mutex<Option<IpcConnection>>>,
+}
+
+impl Default for IpcClient {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl std::fmt::Debug for IpcClient {
@@ -68,6 +75,7 @@ impl IpcClient {
             });
         Self {
             custom_endpoint,
+            request_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             #[cfg(any(windows, unix))]
             connection: Arc::new(tokio::sync::Mutex::new(None)),
         }
@@ -76,10 +84,16 @@ impl IpcClient {
     pub fn with_endpoint(endpoint: String) -> Self {
         Self {
             custom_endpoint: Some(endpoint),
+            request_counter: Arc::new(std::sync::atomic::AtomicU64::new(1)),
             #[cfg(any(windows, unix))]
             connection: Arc::new(tokio::sync::Mutex::new(None)),
         }
     }
+    pub fn next_request_id(&self) -> u64 {
+        self.request_counter
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+    }
+
     pub async fn is_online(&self) -> bool {
         self.call("sona_get_client_state", serde_json::json!({}))
             .await
@@ -91,9 +105,10 @@ impl IpcClient {
         method: &str,
         params: serde_json::Value,
     ) -> Result<serde_json::Value, String> {
+        let req_id = self.next_request_id();
         let req = serde_json::json!({
             "jsonrpc": "2.0",
-            "id": 1,
+            "id": req_id,
             "method": method,
             "params": params,
         });
@@ -104,34 +119,53 @@ impl IpcClient {
 
         #[cfg(any(windows, unix))]
         {
-            let mut conn_guard = self.connection.lock().await;
-            if let Some(conn) = conn_guard.as_mut() {
-                match Self::send_receive_on_conn(conn, &req_line).await {
-                    Ok(val) => return Ok(val),
-                    Err(IpcCallError::Application(app_err)) => return Err(app_err),
-                    Err(IpcCallError::Transport(_)) => {
-                        *conn_guard = None;
-                    }
-                }
+            let is_batch_transcribe =
+                method == "sona_transcribe_file" || method == "transcribe_file";
+
+            if is_batch_transcribe {
+                let mut conn = self.connect_ipc().await?;
+                return match Self::send_receive_on_conn(&mut conn, &req_line).await {
+                    Ok(val) => Ok(val),
+                    Err(IpcCallError::Application(app_err)) => Err(app_err),
+                    Err(IpcCallError::Transport(err)) => Err(err),
+                };
             }
 
-            let mut new_conn = self.connect_ipc().await?;
-            match Self::send_receive_on_conn(&mut new_conn, &req_line).await {
-                Ok(val) => {
-                    *conn_guard = Some(new_conn);
-                    Ok(val)
+            if let Ok(mut conn_guard) = self.connection.try_lock() {
+                if let Some(conn) = conn_guard.as_mut() {
+                    match Self::send_receive_on_conn(conn, &req_line).await {
+                        Ok(val) => return Ok(val),
+                        Err(IpcCallError::Application(app_err)) => return Err(app_err),
+                        Err(IpcCallError::Transport(_)) => {
+                            *conn_guard = None;
+                        }
+                    }
                 }
-                Err(IpcCallError::Application(app_err)) => {
-                    *conn_guard = Some(new_conn);
-                    Err(app_err)
+
+                let mut new_conn = self.connect_ipc().await?;
+                match Self::send_receive_on_conn(&mut new_conn, &req_line).await {
+                    Ok(val) => {
+                        *conn_guard = Some(new_conn);
+                        Ok(val)
+                    }
+                    Err(IpcCallError::Application(app_err)) => {
+                        *conn_guard = Some(new_conn);
+                        Err(app_err)
+                    }
+                    Err(IpcCallError::Transport(err)) => {
+                        *conn_guard = None;
+                        Err(err)
+                    }
                 }
-                Err(IpcCallError::Transport(err)) => {
-                    *conn_guard = None;
-                    Err(err)
+            } else {
+                let mut direct_conn = self.connect_ipc().await?;
+                match Self::send_receive_on_conn(&mut direct_conn, &req_line).await {
+                    Ok(val) => Ok(val),
+                    Err(IpcCallError::Application(app_err)) => Err(app_err),
+                    Err(IpcCallError::Transport(err)) => Err(err),
                 }
             }
         }
-
         #[cfg(not(any(windows, unix)))]
         {
             Err("IPC transport is not supported on this operating system".to_string())
@@ -482,5 +516,258 @@ mod tests {
             result.get("status").and_then(|v| v.as_str()),
             Some("completed")
         );
+    }
+
+    #[test]
+    fn test_request_counter_increment() {
+        let client = IpcClient::new();
+        assert_eq!(client.next_request_id(), 1);
+        assert_eq!(client.next_request_id(), 2);
+        assert_eq!(client.next_request_id(), 3);
+        let client_clone = client.clone();
+        assert_eq!(client_clone.next_request_id(), 4);
+        assert_eq!(client.next_request_id(), 5);
+    }
+
+    #[cfg(windows)]
+    static TEST_PIPE_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(100);
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_concurrent_batch_transcribe_and_cancel() {
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let seq = TEST_PIPE_SEQ.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let pipe_name = format!(
+            r"\\.\pipe\sona-mcp-test-cancel-{}-{}",
+            std::process::id(),
+            seq
+        );
+        let endpoint = pipe_name.clone();
+
+        let cancel_received = Arc::new(tokio::sync::Notify::new());
+        let cancel_received_server = cancel_received.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+
+        let srv_handle = tokio::spawn(async move {
+            let mut server = match ServerOptions::new()
+                .first_pipe_instance(true)
+                .create(&pipe_name)
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("Failed to create pipe: {e}");
+                    return;
+                }
+            };
+
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    conn_res = server.connect() => {
+                        if conn_res.is_err() {
+                            break;
+                        }
+                        let connected = server;
+                        let cancel_notif = cancel_received_server.clone();
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(connected);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).await.is_ok() {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                                    let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                    if method == "sona_transcribe_file" {
+                                        tokio::select! {
+                                            _ = cancel_notif.notified() => {}
+                                            _ = tokio::time::sleep(Duration::from_secs(3)) => {}
+                                        }
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "cancelled" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    } else if method == "sona_cancel_batch_task" {
+                                        cancel_notif.notify_waiters();
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "ok", "task_id": "batch-123" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    }
+                                }
+                            }
+                        });
+
+                        match ServerOptions::new().create(&pipe_name) {
+                            Ok(next_s) => server = next_s,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let client_clone = client.clone();
+        let transcribe_task = tokio::spawn(async move {
+            client_clone
+                .call(
+                    "sona_transcribe_file",
+                    serde_json::json!({ "file_path": "audio.wav" }),
+                )
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        let start = std::time::Instant::now();
+        let cancel_res = tokio::time::timeout(
+            Duration::from_secs(1),
+            client.call(
+                "sona_cancel_batch_task",
+                serde_json::json!({ "task_id": "batch-123" }),
+            ),
+        )
+        .await
+        .expect("Cancel call must not time out");
+
+        assert!(cancel_res.is_ok(), "Cancel call failed: {cancel_res:?}");
+        let cancel_val = cancel_res.unwrap();
+        assert_eq!(
+            cancel_val.get("status").and_then(|s| s.as_str()),
+            Some("ok")
+        );
+        assert!(
+            start.elapsed() < Duration::from_millis(500),
+            "Cancel must complete promptly without waiting for transcribe"
+        );
+
+        let transcribe_res = transcribe_task.await.unwrap();
+        assert!(transcribe_res.is_ok());
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_concurrent_batch_transcribe_and_cancel() {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static TEST_SOCK_SEQ: AtomicU64 = AtomicU64::new(100);
+
+        let seq = TEST_SOCK_SEQ.fetch_add(1, Ordering::Relaxed);
+        let socket_path = std::env::temp_dir().join(format!(
+            "sona-test-cancel-{}-{}.sock",
+            std::process::id(),
+            seq
+        ));
+        let _ = std::fs::remove_file(&socket_path);
+        let endpoint = socket_path.to_string_lossy().to_string();
+
+        let cancel_received = Arc::new(tokio::sync::Notify::new());
+        let cancel_received_server = cancel_received.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+
+        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+
+        let srv_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    accept_res = listener.accept() => {
+                        let (stream, _) = match accept_res {
+                            Ok(s) => s,
+                            Err(_) => break,
+                        };
+                        let cancel_notif = cancel_received_server.clone();
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(stream);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).await.is_ok() {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                    let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
+                                    let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                    if method == "sona_transcribe_file" {
+                                        tokio::select! {
+                                            _ = cancel_notif.notified() => {}
+                                            _ = tokio::time::sleep(Duration::from_secs(3)) => {}
+                                        }
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "cancelled" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    } else if method == "sona_cancel_batch_task" {
+                                        cancel_notif.notify_waiters();
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "ok", "task_id": "batch-123" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let client_clone = client.clone();
+        let transcribe_task = tokio::spawn(async move {
+            client_clone
+                .call(
+                    "sona_transcribe_file",
+                    serde_json::json!({ "file_path": "audio.wav" }),
+                )
+                .await
+        });
+
+        tokio::time::sleep(Duration::from_millis(80)).await;
+
+        let start = std::time::Instant::now();
+        let cancel_res = tokio::time::timeout(
+            Duration::from_secs(1),
+            client.call(
+                "sona_cancel_batch_task",
+                serde_json::json!({ "task_id": "batch-123" }),
+            ),
+        )
+        .await
+        .expect("Cancel call must not time out");
+
+        assert!(cancel_res.is_ok(), "Cancel call failed: {cancel_res:?}");
+        let cancel_val = cancel_res.unwrap();
+        assert_eq!(
+            cancel_val.get("status").and_then(|s| s.as_str()),
+            Some("ok")
+        );
+        assert!(
+            start.elapsed() < Duration::from_millis(500),
+            "Cancel must complete promptly without waiting for transcribe"
+        );
+
+        let transcribe_res = transcribe_task.await.unwrap();
+        assert!(transcribe_res.is_ok());
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+        let _ = std::fs::remove_file(&socket_path);
     }
 }

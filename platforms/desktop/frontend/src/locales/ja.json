@@ -107,7 +107,7 @@
       "legacy_import_failed": "Failed to import the legacy WebDAV backup."
     },
     "history": {
-      "missing_files_deleted": "音声ファイルとトランスクリプト ファイルの両方がありません。この記録は削除されます。",
+      "missing_files_deleted": "音声ファイルとトランスクリプト ファイルの両方が見つからないか、読み込めません。",
       "load_failed": "履歴アイテムのロードに失敗しました。",
       "audio_cleanup_failed": "履歴音声のクリーンアップに失敗しました。"
     },

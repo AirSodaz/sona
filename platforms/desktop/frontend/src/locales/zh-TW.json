@@ -107,7 +107,7 @@
       "legacy_import_failed": "Failed to import the legacy WebDAV backup."
     },
     "history": {
-      "missing_files_deleted": "音檔和轉錄檔均已遺失。此記錄將被刪除。",
+      "missing_files_deleted": "音檔和轉錄檔均不可用或遺失。",
       "load_failed": "載入記錄失敗。",
       "audio_cleanup_failed": "清理歷史音訊失敗。"
     },

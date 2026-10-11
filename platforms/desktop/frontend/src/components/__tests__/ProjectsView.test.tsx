@@ -7,6 +7,7 @@ import {
 } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { historyService } from '../../services/historyService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -787,6 +788,45 @@ describe('ProjectsView', () => {
     await waitFor(() => {
       expect(historyService.deleteRecording).toHaveBeenCalledWith('hist-inbox');
     });
+  });
+  it('does not delete history item when audio and transcript files are missing', async () => {
+    vi.mocked(historyService.loadTranscript).mockResolvedValueOnce(null as any);
+    vi.mocked(historyService.getAudioUrl).mockResolvedValueOnce(null as any);
+
+    const deleteItemSpy = vi.fn().mockResolvedValue(undefined);
+    useHistoryStore.setState({
+      deleteItem: deleteItemSpy,
+      items: [
+        {
+          id: 'hist-missing',
+          title: 'Missing File Item',
+          timestamp: Date.now(),
+          duration: 120,
+          audioPath: 'missing.wav',
+          transcriptPath: 'missing.json',
+          previewText: 'Missing preview',
+          searchContent: 'Missing preview',
+          type: 'recording',
+          projectId: null,
+        },
+      ],
+    } as any);
+
+    render(<ProjectsView />);
+    await waitForInitialHistoryLoad();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Missing File Item' }));
+
+    await waitFor(() => {
+      expect(useDialogStore.getState().showError).toHaveBeenCalledWith({
+        code: 'history.missing_files_deleted',
+        messageKey: 'errors.history.missing_files_deleted',
+        showCause: false,
+      });
+    });
+
+    expect(deleteItemSpy).not.toHaveBeenCalled();
+    expect(useHistoryStore.getState().items.some((i) => i.id === 'hist-missing')).toBe(true);
   });
 
   it('directly purges a history item when direct delete checkbox is checked in confirmation dialog', async () => {

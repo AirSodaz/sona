@@ -97,6 +97,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         connection_tracker,
         Some(app.handle().clone()),
     );
+    app.manage((*desktop_services.sync).clone());
     app.manage(desktop_services);
     app.manage((*audio_state).clone());
     app.manage((*asr_state).clone());

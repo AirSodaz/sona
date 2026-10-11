@@ -234,6 +234,14 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target &&
+        (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable)
+      ) {
+        return;
+      }
+
       const shortcutStr = config.liveRecordShortcut || 'Ctrl + Space';
       const parts = shortcutStr.split(' + ').map((p) => p.trim());
 
@@ -254,24 +262,21 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         e.metaKey === needsMeta &&
         (eventKey === mainKeyPart || e.code === mainKeyPart || e.code === `Key${mainKeyPart}`);
 
+      const isPlainSpaceStartStop =
+        !needsCtrl && !needsAlt && !needsShift && !needsMeta && mainKeyPart === 'Space';
+
       if (isStartStopMatch) {
         e.preventDefault();
         void handleToggleRecording();
       } else if (
         e.code === 'Space' &&
-        !needsCtrl &&
-        !needsAlt &&
-        !needsShift &&
-        !needsMeta &&
-        mainKeyPart === 'Space'
+        !e.ctrlKey &&
+        !e.altKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        !isPlainSpaceStartStop &&
+        isRecordingRef.current
       ) {
-        // If the user mapped start/stop to just "Space", we don't handle pause with "Space"
-        // to avoid double triggering. But if they didn't map it to just "Space", we can pause with "Space".
-        if (isRecordingRef.current) {
-          e.preventDefault();
-          void handleTogglePause();
-        }
-      } else if (e.code === 'Space' && isRecordingRef.current) {
         e.preventDefault();
         void handleTogglePause();
       }

@@ -205,20 +205,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             messageKey: 'errors.history.missing_files_deleted',
             showCause: false,
           });
-
-          const deletableItem = useHistoryStore
-            .getState()
-            .items.find((candidate) => candidate.id === item.id);
-          const deleteLockState = getLiveDraftLockState();
-          if (
-            !deletableItem ||
-            (deleteLockState.isLocked && item.id === deleteLockState.sourceHistoryId)
-          ) {
-            return;
-          }
-
-          await useHistoryStore.getState().deleteItem(item.id);
-          await useHistoryStore.getState().refresh();
           return;
         }
 

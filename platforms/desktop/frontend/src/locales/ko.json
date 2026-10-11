@@ -107,7 +107,7 @@
       "legacy_import_failed": "Failed to import the legacy WebDAV backup."
     },
     "history": {
-      "missing_files_deleted": "오디오 파일과 전사 파일이 모두 없습니다. 이 기록은 삭제됩니다.",
+      "missing_files_deleted": "오디오 파일과 전사 파일이 모두 없거나 읽을 수 없습니다.",
       "load_failed": "기록 항목을 불러오지 못했습니다.",
       "audio_cleanup_failed": "기록 오디오를 정리하지 못했습니다."
     },

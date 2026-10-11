@@ -107,7 +107,7 @@
       "legacy_import_failed": "Failed to import the legacy WebDAV backup."
     },
     "history": {
-      "missing_files_deleted": "Both the audio and transcript files are missing. This record will be deleted.",
+      "missing_files_deleted": "Both the audio and transcript files are missing or unreadable.",
       "load_failed": "Failed to load the history item.",
       "audio_cleanup_failed": "Failed to clean up history audio."
     },

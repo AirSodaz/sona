@@ -107,7 +107,7 @@
       "legacy_import_failed": "导入旧 WebDAV 备份失败。"
     },
     "history": {
-      "missing_files_deleted": "音频文件和转录文件均已丢失。此记录将被删除。",
+      "missing_files_deleted": "音频文件和转录文件均不可用或丢失。",
       "load_failed": "加载记录失败。",
       "audio_cleanup_failed": "清理历史音频失败。"
     },
