@@ -321,10 +321,14 @@ pub async fn run_transcribe(
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let transcriber = crate::asr_adapter::local_batch_transcriber();
-    let segments = transcriber
-        .transcribe(plan)
-        .await
-        .map_err(crate::online_asr::map_asr_error)?;
+    let segments = tokio::select! {
+        res = transcriber.transcribe(plan) => {
+            res.map_err(crate::online_asr::map_asr_error)?
+        }
+        _ = tokio::signal::ctrl_c() => {
+            return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
+        }
+    };
     render_transcription(segments, export_format, output_target, export_mode)
 }
 
@@ -598,9 +602,14 @@ async fn run_online_transcribe(
     )
     .map_err(|error| CliError::Validation(error.to_string()))?;
     let output_target = resolve_output_target(args.output.clone());
-    let segments = crate::asr_adapter::online_batch_transcribe(input.to_path_buf(), request)
-        .await
-        .map_err(crate::online_asr::map_asr_error)?;
+    let segments = tokio::select! {
+        res = crate::asr_adapter::online_batch_transcribe(input.to_path_buf(), request) => {
+            res.map_err(crate::online_asr::map_asr_error)?
+        }
+        _ = tokio::signal::ctrl_c() => {
+            return Err(CliError::Cancelled("Online transcription cancelled by user".to_string()));
+        }
+    };
     render_transcription(segments, export_format, output_target, export_mode)
 }
 
@@ -971,6 +980,47 @@ mod tests {
         assert_eq!(
             resolve_single_transcribe_format(None, None, Some("srt"), true),
             None
+        );
+    }
+
+    #[test]
+    fn single_transcribe_cancelled_returns_exit_code_130() {
+        let local_cancel = CliError::Cancelled("Transcription cancelled by user".to_string());
+        assert_eq!(local_cancel.exit_code(), 130);
+        assert_eq!(
+            local_cancel.to_string(),
+            "Cancelled: Transcription cancelled by user"
+        );
+
+        let online_cancel =
+            CliError::Cancelled("Online transcription cancelled by user".to_string());
+        assert_eq!(online_cancel.exit_code(), 130);
+        assert_eq!(
+            online_cancel.to_string(),
+            "Cancelled: Online transcription cancelled by user"
+        );
+    }
+    #[tokio::test]
+    async fn single_transcribe_select_simulated_cancellation() {
+        // Verify the tokio::select! cancellation branch pattern
+        let (cancel_tx, cancel_rx) = tokio::sync::oneshot::channel::<()>();
+        cancel_tx.send(()).unwrap();
+
+        let result: Result<(), CliError> = tokio::select! {
+            _ = async {
+                tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+                Ok::<(), CliError>(())
+            } => Ok(()),
+            _ = cancel_rx => {
+                Err(CliError::Cancelled("Transcription cancelled by user".to_string()))
+            }
+        };
+
+        let err = result.unwrap_err();
+        assert_eq!(err.exit_code(), 130);
+        assert_eq!(
+            err.to_string(),
+            "Cancelled: Transcription cancelled by user"
         );
     }
 }

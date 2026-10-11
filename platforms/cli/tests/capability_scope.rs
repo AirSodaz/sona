@@ -1103,3 +1103,30 @@ fn transcribe_reports_error_when_multiple_ambiguous_batch_models_installed() {
         "Unexpected error: {error}"
     );
 }
+
+#[test]
+fn cancellation_error_maps_to_exit_code_130_with_distinct_message() {
+    let single_cancel =
+        sona_cli::CliError::Cancelled("Transcription cancelled by user".to_string());
+    assert_eq!(single_cancel.exit_code(), 130);
+    assert_eq!(
+        single_cancel.to_string(),
+        "Cancelled: Transcription cancelled by user"
+    );
+
+    let online_cancel =
+        sona_cli::CliError::Cancelled("Online transcription cancelled by user".to_string());
+    assert_eq!(online_cancel.exit_code(), 130);
+    assert_eq!(
+        online_cancel.to_string(),
+        "Cancelled: Online transcription cancelled by user"
+    );
+
+    let batch_cancel =
+        sona_cli::CliError::Cancelled("Batch transcription cancelled by user".to_string());
+    assert_eq!(batch_cancel.exit_code(), 130);
+    assert_eq!(
+        batch_cancel.to_string(),
+        "Cancelled: Batch transcription cancelled by user"
+    );
+}

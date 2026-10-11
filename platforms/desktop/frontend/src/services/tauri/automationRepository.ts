@@ -149,15 +149,10 @@ export async function automationPersistProcessedEntries(
 }
 
 export async function automationPersistRepositoryState(
-  profilesOrRules: AutomationProfile[] | AutomationRule[],
-  rulesOrProcessed: AutomationRule[] | AutomationProcessedEntry[],
-  maybeProcessed?: AutomationProcessedEntry[]
+  profiles: AutomationProfile[],
+  rules: AutomationRule[],
+  processedEntries: AutomationProcessedEntry[]
 ): Promise<void> {
-  const profiles = maybeProcessed ? (profilesOrRules as AutomationProfile[]) : [];
-  const rules = maybeProcessed
-    ? (rulesOrProcessed as AutomationRule[])
-    : (profilesOrRules as AutomationRule[]);
-  const processedEntries = maybeProcessed ?? (rulesOrProcessed as AutomationProcessedEntry[]);
   await invokeTauri(TauriCommand.automationRepository.persistState, {
     profiles: profiles.map(toAutomationProfileInput),
     rules: rules.map(toAutomationRuleInput),

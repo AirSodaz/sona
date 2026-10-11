@@ -6,7 +6,7 @@ use sona_core::models::catalog::{ModelListEntry, ModelListFilter, ModelSummary, 
 use sona_core::models::downloads::{
     ResolvedModelDownload, required_companion_models, resolve_model_download,
 };
-use sona_model_downloads::{download_model, installed_model_is_valid};
+use sona_model_downloads::installed_model_is_valid;
 use sona_runtime_fs::list_models as list_model_catalog;
 
 #[derive(Debug, Args)]
@@ -994,36 +994,30 @@ async fn download_model_with_mirror_choice<F>(
 where
     F: FnMut(u64, u64) + Send + 'static,
 {
-    match mirror {
-        None | Some(sona_model_downloads::DownloadMirror::Auto) => {
-            download_model(resolved, on_progress).await
+    let strategy = mirror.unwrap_or(sona_model_downloads::DownloadMirror::Auto);
+    let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    let notify_clone = notify.clone();
+    let ctrl_c_task = tokio::spawn(async move {
+        if let Ok(()) = tokio::signal::ctrl_c().await {
+            notify_clone.notify_one();
         }
-        Some(strategy) => {
-            let notify = std::sync::Arc::new(tokio::sync::Notify::new());
-            let notify_clone = notify.clone();
-            let ctrl_c_task = tokio::spawn(async move {
-                if let Ok(()) = tokio::signal::ctrl_c().await {
-                    notify_clone.notify_one();
-                }
-            });
+    });
 
-            let mut on_progress = on_progress;
-            let result = sona_model_downloads::download_model_with_cancel_and_mirror(
-                resolved,
-                notify,
-                strategy,
-                move |progress| {
-                    if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
-                        on_progress(progress.downloaded_bytes, progress.total_bytes);
-                    }
-                },
-            )
-            .await;
+    let mut on_progress = on_progress;
+    let result = sona_model_downloads::download_model_with_cancel_and_mirror(
+        resolved,
+        notify,
+        strategy,
+        move |progress| {
+            if progress.stage == sona_model_downloads::ModelDownloadStage::Downloading {
+                on_progress(progress.downloaded_bytes, progress.total_bytes);
+            }
+        },
+    )
+    .await;
 
-            ctrl_c_task.abort();
-            result
-        }
-    }
+    ctrl_c_task.abort();
+    result
 }
 
 async fn download_one_model(
@@ -1326,5 +1320,52 @@ mod tests {
         assert_eq!(hash.exit_code(), 3);
         assert!(matches!(cancelled, CliError::Cancelled(_)));
         assert_eq!(cancelled.exit_code(), 130);
+    }
+
+    #[tokio::test]
+    async fn download_model_with_mirror_choice_uses_cancel_and_mirror_for_none_and_auto() {
+        let dir = tempfile::tempdir().unwrap();
+        let models_dir = dir.path().join("models");
+        let model = sona_core::models::preset_models::find_preset_model("silero-vad")
+            .unwrap()
+            .clone();
+        let install_path = models_dir.join("silero_vad.onnx");
+        let resolved = ResolvedModelDownload {
+            model,
+            models_dir: models_dir.clone(),
+            download_path: install_path.clone(),
+            install_path: install_path.clone(),
+            artifacts: vec![sona_core::models::downloads::ResolvedModelArtifact {
+                url: "http://127.0.0.1:1/nonexistent-model.onnx".to_string(),
+                filename: "silero_vad.onnx".to_string(),
+                sha256: Some("abcd".to_string()),
+                size_bytes: Some(10),
+                install_path: install_path.clone(),
+            }],
+        };
+
+        // None strategy should go through download_model_with_cancel_and_mirror
+        let err_none = download_model_with_mirror_choice(&resolved, None, |_, _| {})
+            .await
+            .unwrap_err();
+        assert!(matches!(
+            err_none,
+            sona_model_downloads::DownloadError::HashMismatch { .. }
+                | sona_model_downloads::DownloadError::Network(_)
+        ));
+
+        // Some(Auto) strategy should go through download_model_with_cancel_and_mirror
+        let err_auto = download_model_with_mirror_choice(
+            &resolved,
+            Some(sona_model_downloads::DownloadMirror::Auto),
+            |_, _| {},
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(
+            err_auto,
+            sona_model_downloads::DownloadError::HashMismatch { .. }
+                | sona_model_downloads::DownloadError::Network(_)
+        ));
     }
 }

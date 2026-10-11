@@ -61,15 +61,11 @@ export class AutomationService {
   };
 
   saveAutomationRepositoryState = async (
-    profilesOrRules: AutomationProfile[] | AutomationRule[],
-    rulesOrProcessed: AutomationRule[] | AutomationProcessedEntry[],
-    maybeProcessed?: AutomationProcessedEntry[]
+    profiles: AutomationProfile[],
+    rules: AutomationRule[],
+    processedEntries: AutomationProcessedEntry[]
   ): Promise<void> => {
-    await this.ports.automationPersistRepositoryState(
-      profilesOrRules,
-      rulesOrProcessed,
-      maybeProcessed
-    );
+    await this.ports.automationPersistRepositoryState(profiles, rules, processedEntries);
   };
 
   normalizeAutomationPath = (path: string): string => {

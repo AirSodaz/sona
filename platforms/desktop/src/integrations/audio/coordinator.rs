@@ -137,11 +137,11 @@ pub async fn start_shared_capture(
                 }
                 CaptureEvent::Error(err) => {
                     error!("[Audio] Hardware capture stream error: {err}");
-                    let _ = event_tx_for_stream.blocking_send(CaptureEvent::Error(err));
+                    let _ = event_tx_for_stream.try_send(CaptureEvent::Error(err));
                     false
                 }
                 CaptureEvent::Eof => {
-                    let _ = event_tx_for_stream.blocking_send(CaptureEvent::Eof);
+                    let _ = event_tx_for_stream.try_send(CaptureEvent::Eof);
                     false
                 }
             },

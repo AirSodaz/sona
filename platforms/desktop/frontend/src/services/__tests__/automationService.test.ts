@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { AutomationProcessedEntry, AutomationRule } from '../../types/automation';
+import type {
+  AutomationProcessedEntry,
+  AutomationProfile,
+  AutomationRule,
+} from '../../types/automation';
 
 const testContext = vi.hoisted(() => ({
   automationLoadRepositoryStateMock: vi.fn(),
@@ -35,6 +39,7 @@ import {
   loadAutomationRepositoryState,
   loadAutomationRules,
   saveAutomationProcessedEntries,
+  saveAutomationProfiles,
   saveAutomationRepositoryState,
   saveAutomationRules,
   validateAutomationRuleForActivation,
@@ -59,6 +64,23 @@ function createRule(overrides: Partial<AutomationRule> = {}): AutomationRule {
       format: 'txt',
       mode: 'original',
     },
+    createdAt: 1,
+    updatedAt: 1,
+    ...overrides,
+  };
+}
+
+function createProfile(overrides: Partial<AutomationProfile> = {}): AutomationProfile {
+  return {
+    id: 'profile-1',
+    name: 'Default Profile',
+    translationLanguage: 'en',
+    polishPresetId: 'default',
+    summaryTemplateId: 'default',
+    enabledTextReplacementSetIds: [],
+    enabledHotwordSetIds: [],
+    enabledPolishKeywordSetIds: [],
+    enabledSpeakerProfileIds: [],
     createdAt: 1,
     updatedAt: 1,
     ...overrides,
@@ -98,6 +120,7 @@ describe('automationService repository persistence', () => {
   });
 
   it('persists repository data through native repository commands', async () => {
+    const profile = createProfile();
     const rule = createRule();
     const processedEntry: AutomationProcessedEntry = {
       ruleId: rule.id,
@@ -109,18 +132,20 @@ describe('automationService repository persistence', () => {
       processedAt: 30,
     };
 
+    await saveAutomationProfiles([profile]);
     await saveAutomationRules([rule]);
     await saveAutomationProcessedEntries([processedEntry]);
-    await saveAutomationRepositoryState([rule], [processedEntry]);
+    await saveAutomationRepositoryState([profile], [rule], [processedEntry]);
 
+    expect(testContext.automationPersistProfilesMock).toHaveBeenCalledWith([profile]);
     expect(testContext.automationPersistRulesMock).toHaveBeenCalledWith([rule]);
     expect(testContext.automationPersistProcessedEntriesMock).toHaveBeenCalledWith([
       processedEntry,
     ]);
     expect(testContext.automationPersistRepositoryStateMock).toHaveBeenCalledWith(
+      [profile],
       [rule],
-      [processedEntry],
-      undefined
+      [processedEntry]
     );
   });
 

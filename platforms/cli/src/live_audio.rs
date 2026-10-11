@@ -222,11 +222,11 @@ pub(crate) fn start_microphone_input(
             }
             CaptureEvent::Error(err) => {
                 log::error!("[CLI Audio] Audio capture device error: {err}");
-                let _ = sender.blocking_send(LiveAudioMessage::Error(err));
+                let _ = sender.try_send(LiveAudioMessage::Error(err));
                 false
             }
             CaptureEvent::Eof => {
-                let _ = sender.blocking_send(LiveAudioMessage::Eof);
+                let _ = sender.try_send(LiveAudioMessage::Eof);
                 false
             }
         },

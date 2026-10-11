@@ -575,8 +575,9 @@ mod tests {
                             let (read_half, mut write_half) = tokio::io::split(connected);
                             let mut reader = tokio::io::BufReader::new(read_half);
                             let mut line = String::new();
-                            if reader.read_line(&mut line).await.is_ok() {
-                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                            if reader.read_line(&mut line).await.is_ok()
+                                && let Ok(val) = serde_json::from_str::<serde_json::Value>(&line)
+                            {
                                     let method = val.get("method").and_then(|m| m.as_str()).unwrap_or("");
                                     let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
                                     if method == "sona_transcribe_file" {
@@ -600,7 +601,6 @@ mod tests {
                                         let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
                                     }
                                 }
-                            }
                         });
 
                         match ServerOptions::new().create(&pipe_name) {
