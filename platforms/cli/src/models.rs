@@ -486,7 +486,7 @@ fn run_model_list(args: ModelListArgs) -> CliResult<CliOutput> {
             ));
         }
         table.push_str("\n\n");
-        table.push_str(&crate::transcribe::render_online_providers_with_models());
+        table.push_str(&crate::online_asr::render_online_providers_with_models());
         table.push_str(
             "(Use 'sona-cli providers <PROVIDER>' to see options, authentication, and examples)\n",
         );

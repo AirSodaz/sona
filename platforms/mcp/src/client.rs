@@ -436,10 +436,10 @@ impl IpcClient {
             {
                 Ok(Ok(stream)) => break stream,
                 Ok(Err(err))
-                    if err.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 5 =>
+                    if err.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 2 =>
                 {
                     attempts += 1;
-                    tokio::time::sleep(Duration::from_millis(100)).await;
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 }
                 _ => {
                     return Err("DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string());

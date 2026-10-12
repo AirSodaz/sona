@@ -154,7 +154,7 @@ impl AsrBatchProcessor for LocalAsrBatchProcessor {
                             break;
                         }
                     }
-                } => Err(AsrPortError::runtime("Task cancelled.")),
+                } => Err(AsrPortError::runtime("Task cancelled.").with_code("TASK_CANCELLED")),
             };
             drop(guard);
             result?

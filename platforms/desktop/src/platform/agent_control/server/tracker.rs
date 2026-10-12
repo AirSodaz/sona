@@ -108,21 +108,12 @@ pub fn stop_recording_from_tray(app_handle: &tauri::AppHandle) {
             false
         };
 
-        if !is_ui {
-            let mut stopped = false;
-            if let Some(facade) = facade {
-                stopped = facade
-                    .stop_recording(
-                        crate::platform::agent_control::facade::StopRecordingRequest {
-                            discard: false,
-                        },
-                    )
-                    .await
-                    .is_ok();
-            }
-            if !stopped && let Some(services) = services.as_ref() {
-                crate::integrations::audio::stop_all_captures(&services.audio).await;
-            }
+        if !is_ui && let Some(facade) = facade {
+            let _ = facade
+                .stop_recording(
+                    crate::platform::agent_control::facade::StopRecordingRequest { discard: false },
+                )
+                .await;
         }
         let _ = app_handle_clone.emit("tray-stop-recording", ());
         crate::app::tray::set_recording_active(&app_handle_clone, false);

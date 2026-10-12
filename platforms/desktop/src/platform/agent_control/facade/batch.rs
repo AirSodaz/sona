@@ -79,8 +79,7 @@ pub async fn transcribe_file(
     {
         Ok(s) => s,
         Err(e) => {
-            let err_str = e.to_string();
-            let is_cancelled = err_str.contains("Task cancelled");
+            let is_cancelled = e.code() == "TASK_CANCELLED" || e.message.contains("Task cancelled");
             let status = if is_cancelled {
                 sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
             } else {
@@ -90,6 +89,11 @@ pub async fn transcribe_file(
                 "cancelled".to_string()
             } else {
                 "failed".to_string()
+            };
+            let err_str = if is_cancelled {
+                super::AgentControlError::TaskCancelled(e.message).to_string()
+            } else {
+                e.to_string()
             };
             let _ = services
                 .task_ledger

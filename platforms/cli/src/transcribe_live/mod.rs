@@ -30,7 +30,7 @@ pub(crate) async fn run_transcribe_live(
     io: &mut dyn CliIo,
 ) -> CliResult<()> {
     if args.list_providers {
-        let output = crate::transcribe::render_online_providers_table();
+        let output = crate::online_asr::render_online_providers_table();
         io.stdout()
             .write_all(output.as_bytes())
             .map_err(|error| CliError::Io(format!("Failed to write online providers: {error}")))?;

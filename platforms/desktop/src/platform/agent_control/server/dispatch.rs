@@ -7,6 +7,14 @@ use crate::platform::agent_control::facade::{
 
 use super::params::*;
 
+pub(crate) fn map_rpc_error(e: String) -> (i32, String) {
+    if e.starts_with("TASK_CANCELLED") || e.contains("Task cancelled") {
+        (-32800, e)
+    } else {
+        (-32000, e)
+    }
+}
+
 pub async fn dispatch_rpc_call(
     method: &str,
     params: Option<serde_json::Value>,
@@ -19,33 +27,33 @@ pub async fn dispatch_rpc_call(
 
     match clean_method {
         "get_client_state" => {
-            let res = facade.get_client_state().await.map_err(|e| (-32000, e))?;
+            let res = facade.get_client_state().await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "focus_window" => {
-            let res = facade.focus_window().map_err(|e| (-32000, e))?;
+            let res = facade.focus_window().map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "start_recording" => {
             let req: StartRecordingRequest = parse_params(params)?;
-            let res = facade.start_recording(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.start_recording(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "stop_recording" => {
             let req: StopRecordingRequest = parse_params(params)?;
-            let res = facade.stop_recording(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.stop_recording(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "pause_recording" => {
-            let res = facade.pause_recording().await.map_err(|e| (-32000, e))?;
+            let res = facade.pause_recording().await.map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "resume_recording" => {
-            let res = facade.resume_recording().await.map_err(|e| (-32000, e))?;
+            let res = facade.resume_recording().await.map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "list_audio_devices" => {
-            let res = facade.list_audio_devices().await.map_err(|e| (-32000, e))?;
+            let res = facade.list_audio_devices().await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "list_transcript_snapshots" => {
@@ -53,7 +61,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .list_transcript_snapshots(history_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "revert_transcript_snapshot" => {
@@ -62,7 +70,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .revert_transcript_snapshot(history_id, snapshot_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "update_history_meta" => {
@@ -71,7 +79,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .update_history_meta(history_id, req)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "delete_preset_model" => {
@@ -79,14 +87,11 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .delete_preset_model(model_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "list_sync_conflicts" => {
-            let res = facade
-                .list_sync_conflicts()
-                .await
-                .map_err(|e| (-32000, e))?;
+            let res = facade.list_sync_conflicts().await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "resolve_sync_conflict" => {
@@ -95,12 +100,12 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .resolve_sync_conflict(conflict_id, resolution)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "query_history" => {
             let req: QueryHistoryRequest = parse_params(params)?;
-            let res = facade.query_history(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.query_history(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "read_transcript" => {
@@ -108,17 +113,17 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .read_transcript(history_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "edit_transcript" => {
             let req: EditTranscriptRequest = parse_params(params)?;
-            let res = facade.edit_transcript(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.edit_transcript(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "patch_segments" => {
             let req: PatchSegmentsRequest = parse_params(params)?;
-            let res = facade.patch_segments(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.patch_segments(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "update_translations" | "edit_translations" => {
@@ -126,7 +131,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .update_translations(req)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "delete_history" => {
@@ -134,11 +139,11 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .delete_history(history_id, permanent)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "list_projects" => {
-            let res = facade.list_projects().await.map_err(|e| (-32000, e))?;
+            let res = facade.list_projects().await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "set_active_project" => {
@@ -146,22 +151,22 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .set_active_project(project_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "get_settings" => {
             let key = parse_optional_key(&params);
-            let res = facade.get_settings(key).map_err(|e| (-32000, e))?;
+            let res = facade.get_settings(key).map_err(map_rpc_error)?;
             Ok(res)
         }
         "update_setting" => {
             let (key, value) = parse_update_setting(&params)?;
-            let res = facade.update_setting(key, value).map_err(|e| (-32000, e))?;
+            let res = facade.update_setting(key, value).map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "transcribe_file" => {
             let req: TranscribeFileRequest = parse_params(params)?;
-            let res = facade.transcribe_file(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.transcribe_file(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "cancel_batch_task" => {
@@ -169,20 +174,17 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .cancel_batch_task(instance_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "export_transcript" => {
             let req: ExportTranscriptRequest = parse_params(params)?;
-            let res = facade
-                .export_transcript(req)
-                .await
-                .map_err(|e| (-32000, e))?;
+            let res = facade.export_transcript(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "save_summary" | "edit_summary" => {
             let req: SaveSummaryRequest = parse_params(params)?;
-            let res = facade.save_summary(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.save_summary(req).await.map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "delete_summary" => {
@@ -190,7 +192,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .delete_summary(history_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "load_summary" => {
@@ -198,11 +200,11 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .load_summary(history_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "get_model_catalog" => {
-            let res = facade.get_model_catalog().await.map_err(|e| (-32000, e))?;
+            let res = facade.get_model_catalog().await.map_err(map_rpc_error)?;
             Ok(res)
         }
         "download_preset_model" => {
@@ -210,7 +212,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .download_preset_model(req)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "cancel_download" => {
@@ -218,20 +220,20 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .cancel_download(download_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "get_sync_status" => {
-            let res = facade.get_sync_status().await.map_err(|e| (-32000, e))?;
+            let res = facade.get_sync_status().await.map_err(map_rpc_error)?;
             Ok(res)
         }
         "trigger_sync" => {
-            let res = facade.trigger_sync().await.map_err(|e| (-32000, e))?;
+            let res = facade.trigger_sync().await.map_err(map_rpc_error)?;
             Ok(res)
         }
         "create_project" => {
             let req: CreateProjectRequest = parse_params(params)?;
-            let res = facade.create_project(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.create_project(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "update_project" => {
@@ -240,7 +242,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .update_project(project_id, req)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "delete_project" => {
@@ -249,12 +251,12 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .delete_project(project_id, cascade_action)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         "query_trash" => {
             let req: QueryTrashRequest = parse_params(params)?;
-            let res = facade.query_trash(req).await.map_err(|e| (-32000, e))?;
+            let res = facade.query_trash(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "restore_history" => {
@@ -262,7 +264,7 @@ pub async fn dispatch_rpc_call(
             let res = facade
                 .restore_history(history_id)
                 .await
-                .map_err(|e| (-32000, e))?;
+                .map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
         }
         _ => Err((-32601, format!("Method '{method}' not found"))),

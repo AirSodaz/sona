@@ -1,5 +1,6 @@
 pub mod asr_config;
 pub mod batch;
+pub mod error;
 pub mod history;
 pub mod models;
 pub mod projects;
@@ -14,6 +15,7 @@ mod tests;
 
 pub use asr_config::*;
 pub use batch::*;
+pub use error::*;
 pub use history::*;
 pub use models::*;
 pub use projects::*;

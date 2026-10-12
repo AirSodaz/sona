@@ -698,6 +698,26 @@ mod tests {
             Some(true)
         );
     }
+    #[tokio::test]
+    async fn test_dispatch_error_mapping_cancellation() {
+        let (facade, _dir) = create_test_facade().await;
+
+        // Regular facade errors map to -32000
+        let stop_err =
+            dispatch_rpc_call("sona_stop_recording", Some(serde_json::json!({})), &facade)
+                .await
+                .unwrap_err();
+        assert_eq!(stop_err.0, -32000);
+        assert!(stop_err.1.starts_with("NO_ACTIVE_RECORDING"));
+
+        // Cancellation errors map to -32800 (REQUEST_CANCELLED)
+        let rpc_err = dispatch::map_rpc_error("TASK_CANCELLED: Task cancelled.".to_string());
+        assert_eq!(rpc_err.0, -32800);
+        assert_eq!(rpc_err.1, "TASK_CANCELLED: Task cancelled.");
+
+        let rpc_err2 = dispatch::map_rpc_error("Task cancelled.".to_string());
+        assert_eq!(rpc_err2.0, -32800);
+    }
 
     #[tokio::test]
     async fn test_active_connection_tracker() {

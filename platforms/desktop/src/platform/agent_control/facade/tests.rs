@@ -1095,3 +1095,59 @@ async fn test_edit_transcript_preserves_speaker_and_timestamps() {
     );
     assert_eq!(seg.durations, Some(vec![0.5, 0.4]));
 }
+#[tokio::test]
+async fn test_agent_control_error_typing_and_cancellation() {
+    let err1 = AgentControlError::from("TASK_CANCELLED: Task cancelled.");
+    assert!(err1.is_cancelled());
+    assert_eq!(err1.rpc_code(), -32800);
+    assert_eq!(err1.to_string(), "TASK_CANCELLED: Task cancelled.");
+
+    let err2 = AgentControlError::from("Task cancelled.");
+    assert!(err2.is_cancelled());
+    assert_eq!(err2.rpc_code(), -32800);
+
+    let err3 =
+        AgentControlError::from("NO_ACTIVE_RECORDING: No recording is currently in progress");
+    assert!(!err3.is_cancelled());
+    assert_eq!(err3.rpc_code(), -32000);
+    assert_eq!(
+        err3.to_string(),
+        "NO_ACTIVE_RECORDING: No recording is currently in progress"
+    );
+
+    let (code, msg): (i32, String) = err1.into();
+    assert_eq!(code, -32800);
+    assert_eq!(msg, "TASK_CANCELLED: Task cancelled.");
+}
+#[tokio::test]
+async fn test_stop_recording_fallback_when_no_active_session() {
+    let (facade, _dir) = create_test_facade().await;
+
+    // Initially no active session and no active captures -> should return NO_ACTIVE_RECORDING
+    let res = facade
+        .stop_recording(StopRecordingRequest { discard: false })
+        .await;
+    assert!(res.is_err());
+    assert!(res.unwrap_err().starts_with("NO_ACTIVE_RECORDING"));
+
+    // Simulate active hardware captures running without an active session
+    {
+        let mut reg = facade.services.audio.registry.lock().unwrap();
+        let key = crate::integrations::audio::CaptureKey {
+            kind: crate::integrations::audio::CaptureKind::Microphone,
+            device_name: "default".to_string(),
+        };
+        let epoch = sona_application::live_transcription::LiveSourceEpoch::new("test", 1);
+        reg.mark_stopping(key, epoch);
+    }
+    assert!(facade.services.audio.has_active_captures());
+
+    // When facade.stop_recording is called, it cleanly falls back and returns Ok
+    let res = facade
+        .stop_recording(StopRecordingRequest { discard: false })
+        .await
+        .expect("stop_recording should succeed with fallback");
+    assert_eq!(res.history_id, "");
+    assert_eq!(res.duration_seconds, 0.0);
+    assert_eq!(res.segment_count, 0);
+}

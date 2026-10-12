@@ -715,15 +715,15 @@ fn run_providers(args: ProvidersArgs) -> CliResult<CliOutput> {
             .map_err(|e| CliError::Serialize(e.to_string()))?;
         Ok(CliOutput::stdout(output))
     } else if let Some(provider_id) = &args.provider {
-        let output = transcribe::render_online_provider_detail(provider_id)?;
+        let output = online_asr::render_online_provider_detail(provider_id)?;
         Ok(CliOutput::stdout(output))
     } else if args.models {
         Ok(CliOutput::stdout(
-            transcribe::render_online_providers_with_models(),
+            online_asr::render_online_providers_with_models(),
         ))
     } else {
         Ok(CliOutput::stdout(
-            transcribe::render_online_providers_table(),
+            online_asr::render_online_providers_table(),
         ))
     }
 }

@@ -299,26 +299,46 @@ pub async fn stop_recording(
     let _op_guard = recording_op_lock.lock().await;
     let (session_snapshot, duration_seconds) = {
         let mut session_guard = active_session.lock().await;
-        let session = session_guard.as_mut().ok_or_else(|| {
-            "NO_ACTIVE_RECORDING: No recording is currently in progress".to_string()
-        })?;
-
-        let dur = session.frozen_duration_seconds.unwrap_or_else(|| {
-            let total_elapsed = session.started_at_instant.elapsed();
-            let pause_duration = session.accumulated_pause_duration
-                + if session.is_paused {
-                    session
-                        .paused_at_instant
-                        .map(|p| p.elapsed())
-                        .unwrap_or_default()
-                } else {
-                    std::time::Duration::ZERO
-                };
-            total_elapsed.saturating_sub(pause_duration).as_secs_f64()
-        });
-        session.frozen_duration_seconds = Some(dur);
-        (session.clone(), dur)
+        if let Some(session) = session_guard.as_mut() {
+            let dur = session.frozen_duration_seconds.unwrap_or_else(|| {
+                let total_elapsed = session.started_at_instant.elapsed();
+                let pause_duration = session.accumulated_pause_duration
+                    + if session.is_paused {
+                        session
+                            .paused_at_instant
+                            .map(|p| p.elapsed())
+                            .unwrap_or_default()
+                    } else {
+                        std::time::Duration::ZERO
+                    };
+                total_elapsed.saturating_sub(pause_duration).as_secs_f64()
+            });
+            session.frozen_duration_seconds = Some(dur);
+            (Some(session.clone()), dur)
+        } else if services.audio.has_active_captures() {
+            (None, 0.0)
+        } else {
+            return Err("NO_ACTIVE_RECORDING: No recording is currently in progress".to_string());
+        }
     };
+
+    if session_snapshot.is_none() {
+        log::info!("[AgentControl] Stopping active audio captures without active session");
+        crate::integrations::audio::stop_all_captures(&services.audio).await;
+        let _ = services.emitter.emit(
+            "agent-control-recording-status",
+            serde_json::json!({ "active": false, "isPaused": false }),
+        );
+        if let Some(app) = app_handle {
+            crate::app::tray::set_recording_active(app, false);
+        }
+        return Ok(StopRecordingResult {
+            history_id: String::new(),
+            duration_seconds: 0.0,
+            segment_count: 0,
+        });
+    }
+    let session_snapshot = session_snapshot.unwrap();
     // Delegate UI-session teardown to its recorder before backend teardown so that
     // the recorder stops native capture, receives the saved WAV path, and persists
     // the recording draft cleanly.

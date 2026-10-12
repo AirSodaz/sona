@@ -10,6 +10,7 @@ use sona_core::transcription::postprocess::{
 };
 use std::path::{Path, PathBuf};
 
+use crate::table::{append_table_row, append_table_separator, column_widths};
 use crate::{CliError, CliResult};
 
 fn online_provider_value_parser() -> PossibleValuesParser {
@@ -347,6 +348,196 @@ pub(crate) fn map_asr_error(error: AsrPortError) -> CliError {
         | AsrPortErrorKind::Unavailable => CliError::Network(error.to_string()),
         AsrPortErrorKind::Runtime => CliError::Other(error.to_string()),
     }
+}
+pub(crate) fn render_online_providers_table() -> String {
+    let providers = sona_core::ports::asr::online_asr_providers();
+    let headers = ["PROVIDER", "DEFAULT_ENV_VAR", "STATUS", "MODES"];
+    let mut rows = Vec::new();
+    for p in providers {
+        let env_var = p.default_api_key_env().unwrap_or("-");
+        let is_configured = p
+            .default_api_key_env()
+            .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
+        let status = if is_configured {
+            "configured"
+        } else {
+            "not set"
+        };
+        let mut modes = vec!["batch"];
+        if p.streaming.supported.unwrap_or(false) {
+            modes.push("streaming");
+        }
+        rows.push([
+            p.id.clone(),
+            env_var.to_string(),
+            status.to_string(),
+            modes.join(", "),
+        ]);
+    }
+    let widths = column_widths(&headers, &rows);
+    let mut out = String::new();
+    append_table_row(&mut out, &headers, &widths);
+    append_table_separator(&mut out, &widths);
+    for row in rows {
+        append_table_row(&mut out, &[&row[0], &row[1], &row[2], &row[3]], &widths);
+    }
+    out
+}
+
+pub(crate) fn render_online_providers_with_models() -> String {
+    let providers = sona_core::ports::asr::online_asr_providers();
+    let mut out = String::new();
+    out.push_str("Supported Online ASR Providers & Models:\n\n");
+
+    for p in providers {
+        let env_var = p.default_api_key_env().unwrap_or("-");
+        let is_configured = p
+            .default_api_key_env()
+            .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
+        let status = if is_configured {
+            "configured"
+        } else {
+            "not set"
+        };
+        let mut modes = vec!["batch"];
+        if p.streaming.supported.unwrap_or(false) {
+            modes.push("streaming");
+        }
+
+        out.push_str(&format!(
+            "{} (Status: {}, Env: {}, Modes: {})\n",
+            p.id,
+            status,
+            env_var,
+            modes.join(", ")
+        ));
+        if p.models.is_empty() {
+            out.push_str("  (no curated models listed; pass custom model via --online-model)\n");
+        } else {
+            for m in &p.models {
+                let default_tag = if m.is_default.unwrap_or(false) {
+                    " [default]"
+                } else {
+                    ""
+                };
+                let modes_tag = if m.modes.is_empty() {
+                    String::new()
+                } else {
+                    format!(" ({})", m.modes.join(", "))
+                };
+                let desc = m
+                    .description
+                    .as_deref()
+                    .map(|d| format!(" - {d}"))
+                    .unwrap_or_default();
+                out.push_str(&format!(
+                    "  * {}{}{}: {}{}\n",
+                    m.id, default_tag, modes_tag, m.name, desc
+                ));
+            }
+        }
+        out.push('\n');
+    }
+    out.push_str("Run 'sona-cli providers <PROVIDER>' for details on a specific provider.\n");
+    out
+}
+
+pub(crate) fn render_online_provider_detail(provider_id: &str) -> CliResult<String> {
+    let provider = sona_core::ports::asr::find_online_asr_provider(provider_id).ok_or_else(|| {
+        CliError::Validation(format!(
+            "Unknown online ASR provider '{provider_id}'. Run 'sona-cli providers' to see available providers."
+        ))
+    })?;
+
+    let env_var = provider.default_api_key_env().unwrap_or("-");
+    let is_configured = provider
+        .default_api_key_env()
+        .is_some_and(|var| std::env::var_os(var).is_some_and(|val| !val.is_empty()));
+    let status = if is_configured {
+        "configured"
+    } else {
+        "not set"
+    };
+    let mut modes = vec!["batch"];
+    if provider.streaming.supported.unwrap_or(false) {
+        modes.push("streaming");
+    }
+
+    let mut out = String::new();
+    out.push_str(&format!("Provider: {}\n", provider.id));
+    out.push_str(&format!("Status:   {} (Env: {})\n", status, env_var));
+    out.push_str(&format!("Modes:    {}\n", modes.join(", ")));
+    if !provider.languages.is_empty() {
+        let sample_len = provider.languages.len().min(12);
+        let sample = provider.languages[..sample_len].join(", ");
+        if provider.languages.len() > sample_len {
+            out.push_str(&format!(
+                "Languages ({}): {}, ...\n",
+                provider.languages.len(),
+                sample
+            ));
+        } else {
+            out.push_str(&format!(
+                "Languages ({}): {}\n",
+                provider.languages.len(),
+                sample
+            ));
+        }
+    }
+    out.push('\n');
+    out.push_str("Supported Models:\n");
+
+    let headers = ["MODEL ID", "NAME", "MODES", "DEFAULT", "DESCRIPTION"];
+    let rows: Vec<[String; 5]> = provider
+        .models
+        .iter()
+        .map(|m| {
+            [
+                m.id.clone(),
+                m.name.clone(),
+                m.modes.join(", "),
+                if m.is_default.unwrap_or(false) {
+                    "yes"
+                } else {
+                    "-"
+                }
+                .to_string(),
+                m.description.clone().unwrap_or_default(),
+            ]
+        })
+        .collect();
+
+    let widths = column_widths(&headers, &rows);
+    append_table_row(&mut out, &headers, &widths);
+    append_table_separator(&mut out, &widths);
+    for row in &rows {
+        append_table_row(
+            &mut out,
+            &[&row[0], &row[1], &row[2], &row[3], &row[4]],
+            &widths,
+        );
+    }
+
+    out.push_str("\nUsage Examples:\n");
+    let sample_model = provider
+        .models
+        .iter()
+        .find(|m| m.is_default.unwrap_or(false))
+        .or_else(|| provider.models.first())
+        .map(|m| m.id.as_str())
+        .unwrap_or("model-name");
+    out.push_str(&format!(
+        "  sona-cli transcribe ./audio.wav --online-provider {} --online-model {}\n",
+        provider.id, sample_model
+    ));
+    if provider.streaming.supported.unwrap_or(false) {
+        out.push_str(&format!(
+            "  sona-cli live --online-provider {} --stream ndjson\n",
+            provider.id
+        ));
+    }
+
+    Ok(out)
 }
 
 #[cfg(test)]
