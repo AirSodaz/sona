@@ -203,8 +203,8 @@ pub async fn read_resource(uri: &str, client: &IpcClient) -> Result<ResourceCont
                 )
                 .await?;
             let text = val
-                .get("translation_text")
-                .or_else(|| val.get("translationText"))
+                .get("translationText")
+                .or_else(|| val.get("translation_text"))
                 .and_then(|t| t.as_str())
                 .unwrap_or("")
                 .to_string();

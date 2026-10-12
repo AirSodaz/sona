@@ -11,6 +11,8 @@ pub const METHOD_NOT_FOUND: i32 = -32601;
 pub const INVALID_PARAMS: i32 = -32602;
 pub const INTERNAL_ERROR: i32 = -32603;
 
+// MCP 2.0 cancellation error code
+pub const REQUEST_CANCELLED: i32 = -32800;
 // MCP 2026-07-28 specification error codes (SEP-2575 / SEP-2322)
 pub const HEADER_MISMATCH: i32 = -32020;
 pub const MISSING_REQUIRED_CLIENT_CAPABILITY: i32 = -32021;

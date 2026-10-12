@@ -819,8 +819,9 @@ pub async fn call_tool(
         "sona_cancel_batch_task" => {
             let mut args = arguments;
             if let Some(obj) = args.as_object_mut() {
-                let task_id = if !obj.contains_key("instance_id") {
-                    obj.get("task_id").cloned()
+                let task_id = if !obj.contains_key("instance_id") && !obj.contains_key("instanceId")
+                {
+                    obj.get("task_id").or_else(|| obj.get("taskId")).cloned()
                 } else {
                     None
                 };

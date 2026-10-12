@@ -1,4 +1,6 @@
 use clap::Parser;
+use std::collections::HashMap;
+use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 
 pub mod client;
@@ -20,7 +22,21 @@ struct Args {
     #[arg(long, help = "Custom IPC pipe or socket endpoint")]
     endpoint: Option<String>,
 }
+pub type ActiveTaskRegistry =
+    Arc<tokio::sync::Mutex<HashMap<serde_json::Value, tokio::task::AbortHandle>>>;
 
+pub async fn cancel_active_task(
+    active_tasks: &ActiveTaskRegistry,
+    target_id: &serde_json::Value,
+) -> bool {
+    let mut tasks = active_tasks.lock().await;
+    if let Some(handle) = tasks.remove(target_id) {
+        handle.abort();
+        true
+    } else {
+        false
+    }
+}
 pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<JsonRpcResponse> {
     // Notifications (requests without an ID) MUST NOT send responses per JSON-RPC 2.0
     let id = match req.id {
@@ -245,6 +261,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let stdin = tokio::io::stdin();
     let mut reader = BufReader::new(stdin);
     let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(64);
+    let active_tasks: ActiveTaskRegistry = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
     let writer_handle = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(resp) = resp_rx.recv().await {
@@ -266,13 +283,41 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match serde_json::from_str::<JsonRpcRequest>(trimmed) {
             Ok(req) => {
+                if req.id.is_none() {
+                    // Handle MCP 2.0 / JSON-RPC notifications
+                    if req.method == "notifications/cancelled" || req.method == "$/cancelRequest" {
+                        let target_id = req
+                            .params
+                            .as_ref()
+                            .and_then(|p| p.get("requestId").or_else(|| p.get("id")).cloned());
+                        if let Some(target_id) = target_id
+                            && cancel_active_task(&active_tasks, &target_id).await
+                        {
+                            eprintln!(
+                                "[sona-mcp] Aborted in-flight task for request id: {target_id}"
+                            );
+                        }
+                    }
+                    // Notifications must not produce responses per JSON-RPC 2.0
+                    line.clear();
+                    continue;
+                }
+
+                let id = req.id.clone().unwrap();
                 let client_clone = client.clone();
                 let tx_clone = resp_tx.clone();
-                tokio::spawn(async move {
+                let active_tasks_clone = active_tasks.clone();
+                let id_key = id.clone();
+
+                let mut tasks = active_tasks.lock().await;
+                let handle = tokio::spawn(async move {
                     if let Some(resp) = handle_request(req, &client_clone).await {
                         let _ = tx_clone.send(resp).await;
                     }
+                    active_tasks_clone.lock().await.remove(&id_key);
                 });
+                tasks.insert(id, handle.abort_handle());
+                drop(tasks);
             }
             Err(e) => {
                 let err_resp = JsonRpcResponse::error(
@@ -722,5 +767,74 @@ mod tests {
         assert_eq!(resp.id, serde_json::json!(99));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_notification_cancellation_aborts_active_task() {
+        use std::time::Duration;
+
+        let active_tasks: ActiveTaskRegistry = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+
+        let task_started = Arc::new(tokio::sync::Notify::new());
+        let task_started_clone = task_started.clone();
+
+        let req_id = serde_json::json!(42);
+        let id_key = req_id.clone();
+        let active_tasks_clone = active_tasks.clone();
+
+        let handle = tokio::spawn(async move {
+            task_started_clone.notify_waiters();
+            tokio::time::sleep(Duration::from_secs(30)).await;
+            active_tasks_clone.lock().await.remove(&id_key);
+        });
+
+        active_tasks
+            .lock()
+            .await
+            .insert(req_id.clone(), handle.abort_handle());
+
+        task_started.notified().await;
+
+        let cancelled = cancel_active_task(&active_tasks, &req_id).await;
+        assert!(cancelled, "Task should be found and cancelled");
+
+        assert!(active_tasks.lock().await.get(&req_id).is_none());
+
+        let join_res = handle.await;
+        assert!(join_res.is_err());
+        assert!(join_res.unwrap_err().is_cancelled());
+
+        let second_cancel = cancel_active_task(&active_tasks, &req_id).await;
+        assert!(!second_cancel);
+    }
+
+    #[tokio::test]
+    async fn test_notification_cancelled_parsing() {
+        use std::time::Duration;
+
+        let active_tasks: ActiveTaskRegistry = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+
+        let req_id = serde_json::json!("task-100");
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_secs(30)).await;
+        });
+        active_tasks
+            .lock()
+            .await
+            .insert(req_id.clone(), handle.abort_handle());
+
+        let notification_json = r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"task-100","reason":"user requested"}}"#;
+        let req: JsonRpcRequest = serde_json::from_str(notification_json).unwrap();
+        assert!(req.id.is_none());
+
+        let target_id = req
+            .params
+            .as_ref()
+            .and_then(|p| p.get("requestId").or_else(|| p.get("id")).cloned());
+        assert_eq!(target_id, Some(req_id.clone()));
+
+        let cancelled = cancel_active_task(&active_tasks, &target_id.unwrap()).await;
+        assert!(cancelled);
+        assert!(handle.await.unwrap_err().is_cancelled());
     }
 }
