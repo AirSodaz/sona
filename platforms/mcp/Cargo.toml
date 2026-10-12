@@ -13,3 +13,4 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "io-util", 
 serde = { workspace = true }
 serde_json = { workspace = true }
 clap = { workspace = true }
+uuid = { workspace = true }

@@ -35,6 +35,23 @@ pub struct IpcConnection {
     reader: tokio::io::BufReader<IpcReadHalf>,
     writer: IpcWriteHalf,
 }
+#[cfg(any(windows, unix))]
+impl IpcConnection {
+    pub fn is_stale(&mut self) -> bool {
+        use std::task::{Context, Poll, Waker};
+        use tokio::io::AsyncRead;
+        let waker = Waker::noop();
+        let mut cx = Context::from_waker(waker);
+        let mut buf = [0u8; 1];
+        let mut read_buf = tokio::io::ReadBuf::new(&mut buf);
+        match std::pin::Pin::new(&mut self.reader).poll_read(&mut cx, &mut read_buf) {
+            Poll::Ready(Ok(())) if read_buf.filled().is_empty() => true,
+            Poll::Ready(Err(_)) => true,
+            Poll::Pending => false,
+            Poll::Ready(Ok(())) => true,
+        }
+    }
+}
 pub const MAX_IDLE_CONNECTIONS: usize = 4;
 
 #[cfg(any(windows, unix))]
@@ -138,14 +155,27 @@ impl IpcClient {
     }
     #[cfg(any(windows, unix))]
     pub async fn acquire_connection(&self) -> Result<IpcConnection, String> {
-        let pooled = {
-            let mut idle = self.pool.idle.lock().await;
-            idle.pop()
-        };
-        if let Some(conn) = pooled {
-            Ok(conn)
-        } else {
-            self.connect_ipc().await
+        let (conn, _) = self.acquire_connection_tracked().await?;
+        Ok(conn)
+    }
+
+    #[cfg(any(windows, unix))]
+    pub async fn acquire_connection_tracked(&self) -> Result<(IpcConnection, bool), String> {
+        loop {
+            let pooled = {
+                let mut idle = self.pool.idle.lock().await;
+                idle.pop()
+            };
+            if let Some(mut conn) = pooled {
+                if conn.is_stale() {
+                    self.clear_pool().await;
+                    continue;
+                }
+                return Ok((conn, true));
+            } else {
+                let conn = self.connect_ipc().await?;
+                return Ok((conn, false));
+            }
         }
     }
 
@@ -201,7 +231,7 @@ impl IpcClient {
                 Duration::from_secs(30)
             };
 
-            let mut conn = self.acquire_connection().await?;
+            let (mut conn, _was_pooled) = self.acquire_connection_tracked().await?;
             match Self::send_receive_on_conn(&mut conn, &req_line, req_id, timeout_duration).await {
                 Ok(val) => {
                     self.release_connection(conn).await;
@@ -212,8 +242,8 @@ impl IpcClient {
                     Err(app_err)
                 }
                 Err(IpcCallError::SendFailed(_)) => {
-                    // Stale connection failed on send - drop broken conn and retry once on fresh connection
                     drop(conn);
+                    self.clear_pool().await;
                     let mut fresh_conn = self.connect_ipc().await?;
                     match Self::send_receive_on_conn(
                         &mut fresh_conn,
@@ -238,6 +268,7 @@ impl IpcClient {
                 }
                 Err(IpcCallError::Transport(err)) => {
                     drop(conn);
+                    self.clear_pool().await;
                     if !Self::is_idempotent_method(method) {
                         return Err(format!(
                             "Transport error communicating with desktop client: {err} (non-idempotent operation '{method}' will not retry)"
@@ -360,7 +391,6 @@ impl IpcClient {
             .to_string();
 
         let mut pipe_busy_attempts = 0;
-        let mut file_not_found_attempts = 0;
         let client = loop {
             let pipe_name_clone = pipe_name.clone();
             let open_res = tokio::task::spawn_blocking(move || {
@@ -374,10 +404,6 @@ impl IpcClient {
                 Err(err) if err.raw_os_error() == Some(231) && pipe_busy_attempts < 10 => {
                     pipe_busy_attempts += 1;
                     tokio::time::sleep(Duration::from_millis(100)).await;
-                }
-                Err(err) if err.raw_os_error() == Some(2) && file_not_found_attempts < 5 => {
-                    file_not_found_attempts += 1;
-                    tokio::time::sleep(Duration::from_millis(50)).await;
                 }
                 Err(_) => {
                     return Err("DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string());
@@ -410,9 +436,7 @@ impl IpcClient {
             {
                 Ok(Ok(stream)) => break stream,
                 Ok(Err(err))
-                    if (err.kind() == std::io::ErrorKind::NotFound
-                        || err.kind() == std::io::ErrorKind::ConnectionRefused)
-                        && attempts < 5 =>
+                    if err.kind() == std::io::ErrorKind::ConnectionRefused && attempts < 5 =>
                 {
                     attempts += 1;
                     tokio::time::sleep(Duration::from_millis(100)).await;
@@ -1840,6 +1864,251 @@ mod tests {
 
         assert_eq!(connection_count.load(Ordering::SeqCst), 2);
         assert_eq!(client.idle_connection_count().await, 2);
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+        let _ = std::fs::remove_file(&socket_path);
+    }
+    #[tokio::test]
+    async fn test_fast_offline_fail_latency() {
+        let dummy_endpoint = if cfg!(windows) {
+            r"\\.\pipe\sona-offline-test-fast-fail".to_string()
+        } else {
+            "/tmp/sona-offline-test-fast-fail.sock".to_string()
+        };
+        let client = IpcClient::with_endpoint(dummy_endpoint);
+        let start = std::time::Instant::now();
+        let res = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        let elapsed = start.elapsed();
+        assert!(res.is_err());
+        assert!(res.unwrap_err().contains("DESKTOP_OFFLINE"));
+        assert!(
+            elapsed < Duration::from_millis(150),
+            "Offline state should fail immediately without retry sleeps; took {elapsed:?}"
+        );
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_stale_pooled_connection_recovery() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let seq = TEST_PIPE_SEQ.fetch_add(1, Ordering::Relaxed);
+        let pipe_name = format!(
+            r"\\.\pipe\sona-mcp-test-stale-pool-{}-{}",
+            std::process::id(),
+            seq
+        );
+        let endpoint = pipe_name.clone();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_count_srv = connection_count.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+        let close_first_conn = Arc::new(tokio::sync::Notify::new());
+        let close_first_conn_clone = close_first_conn.clone();
+
+        let srv_handle = tokio::spawn(async move {
+            let mut server = match ServerOptions::new()
+                .first_pipe_instance(true)
+                .create(&pipe_name)
+            {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    conn_res = server.connect() => {
+                        if conn_res.is_err() {
+                            break;
+                        }
+                        let conn_idx = connection_count_srv.fetch_add(1, Ordering::SeqCst);
+                        let connected = server;
+                        let close_notif = close_first_conn_clone.clone();
+
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(connected);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+
+                            if conn_idx == 0 {
+                                if reader.read_line(&mut line).await.is_ok() && !line.trim().is_empty() {
+                                    let resp = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": 1,
+                                        "result": { "status": "ok" }
+                                    });
+                                    let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    let _ = write_half.flush().await;
+                                }
+                                close_notif.notified().await;
+                                drop(reader);
+                                drop(write_half);
+                            } else {
+                                while reader.read_line(&mut line).await.is_ok() {
+                                    if line.trim().is_empty() {
+                                        break;
+                                    }
+                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                        let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "fresh_conn_ok" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                        let _ = write_half.flush().await;
+                                    }
+                                    line.clear();
+                                }
+                            }
+                        });
+
+                        match ServerOptions::new().create(&pipe_name) {
+                            Ok(next_s) => server = next_s,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let r1 = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        assert!(r1.is_ok());
+        assert_eq!(client.idle_connection_count().await, 1);
+
+        close_first_conn.notify_waiters();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let r2 = client
+            .call(
+                "sona_transcribe_file",
+                serde_json::json!({ "file_path": "audio.wav" }),
+            )
+            .await;
+        assert!(r2.is_ok());
+        let val = r2.unwrap();
+        assert_eq!(
+            val.get("status").and_then(|v| v.as_str()),
+            Some("fresh_conn_ok")
+        );
+        assert_eq!(connection_count.load(Ordering::SeqCst), 2);
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_stale_pooled_connection_recovery_unix() {
+        use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+        static TEST_SOCK_SEQ_STALE_POOL: AtomicU64 = AtomicU64::new(600);
+
+        let seq = TEST_SOCK_SEQ_STALE_POOL.fetch_add(1, Ordering::Relaxed);
+        let socket_path = std::env::temp_dir().join(format!(
+            "sona-test-stale-pool-{}-{}.sock",
+            std::process::id(),
+            seq
+        ));
+        let _ = std::fs::remove_file(&socket_path);
+        let endpoint = socket_path.to_string_lossy().to_string();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_count_srv = connection_count.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+        let close_first_conn = Arc::new(tokio::sync::Notify::new());
+        let close_first_conn_clone = close_first_conn.clone();
+
+        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+
+        let srv_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    accept_res = listener.accept() => {
+                        let (stream, _) = match accept_res {
+                            Ok(s) => s,
+                            Err(_) => break,
+                        };
+                        let conn_idx = connection_count_srv.fetch_add(1, Ordering::SeqCst);
+                        let close_notif = close_first_conn_clone.clone();
+
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(stream);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+
+                            if conn_idx == 0 {
+                                if reader.read_line(&mut line).await.is_ok() && !line.trim().is_empty() {
+                                    let resp = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": 1,
+                                        "result": { "status": "ok" }
+                                    });
+                                    let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    let _ = write_half.flush().await;
+                                }
+                                close_notif.notified().await;
+                                drop(reader);
+                                drop(write_half);
+                            } else {
+                                while reader.read_line(&mut line).await.is_ok() {
+                                    if line.trim().is_empty() {
+                                        break;
+                                    }
+                                    if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                        let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                        let resp = serde_json::json!({
+                                            "jsonrpc": "2.0",
+                                            "id": id,
+                                            "result": { "status": "fresh_conn_ok" }
+                                        });
+                                        let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                        let _ = write_half.flush().await;
+                                    }
+                                    line.clear();
+                                }
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let r1 = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        assert!(r1.is_ok());
+        assert_eq!(client.idle_connection_count().await, 1);
+
+        close_first_conn.notify_waiters();
+        tokio::time::sleep(Duration::from_millis(50)).await;
+
+        let r2 = client
+            .call(
+                "sona_transcribe_file",
+                serde_json::json!({ "file_path": "audio.wav" }),
+            )
+            .await;
+        assert!(r2.is_ok());
+        let val = r2.unwrap();
+        assert_eq!(
+            val.get("status").and_then(|v| v.as_str()),
+            Some("fresh_conn_ok")
+        );
+        assert_eq!(connection_count.load(Ordering::SeqCst), 2);
 
         server_shutdown.notify_waiters();
         let _ = srv_handle.await;

@@ -22,19 +22,36 @@ struct Args {
     #[arg(long, help = "Custom IPC pipe or socket endpoint")]
     endpoint: Option<String>,
 }
-pub type ActiveTaskRegistry =
-    Arc<tokio::sync::Mutex<HashMap<serde_json::Value, tokio::task::AbortHandle>>>;
+#[derive(Debug, Clone)]
+pub struct ActiveTaskInfo {
+    pub abort_handle: tokio::task::AbortHandle,
+    pub batch_instance_id: Option<String>,
+}
+pub type ActiveTaskRegistry = Arc<tokio::sync::Mutex<HashMap<serde_json::Value, ActiveTaskInfo>>>;
 
 pub async fn cancel_active_task(
     active_tasks: &ActiveTaskRegistry,
     target_id: &serde_json::Value,
-) -> bool {
+    client: Option<&IpcClient>,
+) -> Option<ActiveTaskInfo> {
     let mut tasks = active_tasks.lock().await;
-    if let Some(handle) = tasks.remove(target_id) {
-        handle.abort();
-        true
+    if let Some(info) = tasks.remove(target_id) {
+        info.abort_handle.abort();
+        if let (Some(batch_id), Some(client)) = (&info.batch_instance_id, client) {
+            let client = client.clone();
+            let batch_id = batch_id.clone();
+            tokio::spawn(async move {
+                let _ = client
+                    .call(
+                        "sona_cancel_batch_task",
+                        serde_json::json!({ "instance_id": batch_id }),
+                    )
+                    .await;
+            });
+        }
+        Some(info)
     } else {
-        false
+        None
     }
 }
 pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<JsonRpcResponse> {
@@ -291,11 +308,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                             .as_ref()
                             .and_then(|p| p.get("requestId").or_else(|| p.get("id")).cloned());
                         if let Some(target_id) = target_id
-                            && cancel_active_task(&active_tasks, &target_id).await
+                            && cancel_active_task(&active_tasks, &target_id, Some(&client))
+                                .await
+                                .is_some()
                         {
                             eprintln!(
                                 "[sona-mcp] Aborted in-flight task for request id: {target_id}"
                             );
+                            let cancel_resp = JsonRpcResponse::error(
+                                target_id,
+                                protocol::REQUEST_CANCELLED,
+                                "Request was cancelled by client",
+                            );
+                            let _ = resp_tx.send(cancel_resp).await;
                         }
                     }
                     // Notifications must not produce responses per JSON-RPC 2.0
@@ -304,6 +329,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
 
                 let id = req.id.clone().unwrap();
+                let mut req = req;
+                let mut batch_instance_id = None;
+                if req.method == "tools/call"
+                    && let Some(params_obj) = req.params.as_mut().and_then(|p| p.as_object_mut())
+                    && params_obj.get("name").and_then(|n| n.as_str())
+                        == Some("sona_transcribe_file")
+                {
+                    let args_val = params_obj
+                        .entry("arguments")
+                        .or_insert_with(|| serde_json::json!({}));
+                    if !args_val.is_object() {
+                        *args_val = serde_json::json!({});
+                    }
+                    if let Some(args_obj) = args_val.as_object_mut() {
+                        let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str())
+                        {
+                            Some(id) if !id.trim().is_empty() => id.to_string(),
+                            _ => {
+                                let id = format!("mcp-transcribe-{}", uuid::Uuid::new_v4());
+                                args_obj.insert(
+                                    "instance_id".to_string(),
+                                    serde_json::Value::String(id.clone()),
+                                );
+                                id
+                            }
+                        };
+                        batch_instance_id = Some(instance_id);
+                    }
+                }
+
                 let client_clone = client.clone();
                 let tx_clone = resp_tx.clone();
                 let active_tasks_clone = active_tasks.clone();
@@ -311,12 +366,21 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let mut tasks = active_tasks.lock().await;
                 let handle = tokio::spawn(async move {
-                    if let Some(resp) = handle_request(req, &client_clone).await {
+                    let maybe_resp = handle_request(req, &client_clone).await;
+                    let mut tasks = active_tasks_clone.lock().await;
+                    if tasks.remove(&id_key).is_some()
+                        && let Some(resp) = maybe_resp
+                    {
                         let _ = tx_clone.send(resp).await;
                     }
-                    active_tasks_clone.lock().await.remove(&id_key);
                 });
-                tasks.insert(id, handle.abort_handle());
+                tasks.insert(
+                    id,
+                    ActiveTaskInfo {
+                        abort_handle: handle.abort_handle(),
+                        batch_instance_id,
+                    },
+                );
                 drop(tasks);
             }
             Err(e) => {
@@ -788,15 +852,18 @@ mod tests {
             active_tasks_clone.lock().await.remove(&id_key);
         });
 
-        active_tasks
-            .lock()
-            .await
-            .insert(req_id.clone(), handle.abort_handle());
+        active_tasks.lock().await.insert(
+            req_id.clone(),
+            ActiveTaskInfo {
+                abort_handle: handle.abort_handle(),
+                batch_instance_id: None,
+            },
+        );
 
         task_started.notified().await;
 
-        let cancelled = cancel_active_task(&active_tasks, &req_id).await;
-        assert!(cancelled, "Task should be found and cancelled");
+        let cancelled = cancel_active_task(&active_tasks, &req_id, None).await;
+        assert!(cancelled.is_some(), "Task should be found and cancelled");
 
         assert!(active_tasks.lock().await.get(&req_id).is_none());
 
@@ -804,8 +871,8 @@ mod tests {
         assert!(join_res.is_err());
         assert!(join_res.unwrap_err().is_cancelled());
 
-        let second_cancel = cancel_active_task(&active_tasks, &req_id).await;
-        assert!(!second_cancel);
+        let second_cancel = cancel_active_task(&active_tasks, &req_id, None).await;
+        assert!(second_cancel.is_none());
     }
 
     #[tokio::test]
@@ -818,10 +885,13 @@ mod tests {
         let handle = tokio::spawn(async move {
             tokio::time::sleep(Duration::from_secs(30)).await;
         });
-        active_tasks
-            .lock()
-            .await
-            .insert(req_id.clone(), handle.abort_handle());
+        active_tasks.lock().await.insert(
+            req_id.clone(),
+            ActiveTaskInfo {
+                abort_handle: handle.abort_handle(),
+                batch_instance_id: Some("batch-100".to_string()),
+            },
+        );
 
         let notification_json = r#"{"jsonrpc":"2.0","method":"notifications/cancelled","params":{"requestId":"task-100","reason":"user requested"}}"#;
         let req: JsonRpcRequest = serde_json::from_str(notification_json).unwrap();
@@ -833,8 +903,68 @@ mod tests {
             .and_then(|p| p.get("requestId").or_else(|| p.get("id")).cloned());
         assert_eq!(target_id, Some(req_id.clone()));
 
-        let cancelled = cancel_active_task(&active_tasks, &target_id.unwrap()).await;
-        assert!(cancelled);
+        let cancelled = cancel_active_task(&active_tasks, &target_id.unwrap(), None).await;
+        assert!(cancelled.is_some());
+        let info = cancelled.unwrap();
+        assert_eq!(info.batch_instance_id.as_deref(), Some("batch-100"));
         assert!(handle.await.unwrap_err().is_cancelled());
+    }
+
+    #[tokio::test]
+    async fn test_cancellation_jsonrpc_error_response() {
+        let resp = JsonRpcResponse::error(
+            serde_json::json!(101),
+            protocol::REQUEST_CANCELLED,
+            "Request was cancelled by client",
+        );
+        assert_eq!(resp.id, serde_json::json!(101));
+        assert!(resp.result.is_none());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, -32800);
+        assert_eq!(err.message, "Request was cancelled by client");
+    }
+
+    #[test]
+    fn test_batch_instance_id_injection() {
+        let mut req: JsonRpcRequest = serde_json::from_str(
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sona_transcribe_file","arguments":{"file_path":"test.wav"}}}"#,
+        )
+        .unwrap();
+
+        let mut batch_instance_id = None;
+        if req.method == "tools/call"
+            && let Some(params_obj) = req.params.as_mut().and_then(|p| p.as_object_mut())
+            && params_obj.get("name").and_then(|n| n.as_str()) == Some("sona_transcribe_file")
+        {
+            let args_val = params_obj
+                .entry("arguments")
+                .or_insert_with(|| serde_json::json!({}));
+            if !args_val.is_object() {
+                *args_val = serde_json::json!({});
+            }
+            if let Some(args_obj) = args_val.as_object_mut() {
+                let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str()) {
+                    Some(id) if !id.trim().is_empty() => id.to_string(),
+                    _ => {
+                        let id = format!("mcp-transcribe-{}", uuid::Uuid::new_v4());
+                        args_obj.insert(
+                            "instance_id".to_string(),
+                            serde_json::Value::String(id.clone()),
+                        );
+                        id
+                    }
+                };
+                batch_instance_id = Some(instance_id);
+            }
+        }
+
+        assert!(batch_instance_id.is_some());
+        let id = batch_instance_id.unwrap();
+        assert!(id.starts_with("mcp-transcribe-"));
+        let injected = req.params.unwrap()["arguments"]["instance_id"]
+            .as_str()
+            .unwrap()
+            .to_string();
+        assert_eq!(injected, id);
     }
 }

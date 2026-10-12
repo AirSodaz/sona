@@ -98,8 +98,26 @@ where
     let mut line = String::new();
     let mut disconnect_rx = tracker.disconnect_rx.clone();
     let initial_version = *disconnect_rx.borrow();
+    let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<String>(64);
+    let writer_task = tokio::spawn(async move {
+        while let Some(resp_str) = resp_rx.recv().await {
+            if writer.write_all(resp_str.as_bytes()).await.is_err() {
+                break;
+            }
+            if writer.write_all(b"\n").await.is_err() {
+                break;
+            }
+            if writer.flush().await.is_err() {
+                break;
+            }
+        }
+    });
+
+    let mut task_set = tokio::task::JoinSet::new();
 
     loop {
+        while task_set.try_join_next().is_some() {}
+
         tokio::select! {
             changed = disconnect_rx.changed() => {
                 match changed {
@@ -126,72 +144,80 @@ where
                     continue;
                 }
 
-        let resp_json: Option<String> = match serde_json::from_str::<JsonRpcRequest>(trimmed) {
-            Ok(rpc_req) => {
-                if rpc_req.jsonrpc != "2.0" {
-                    let resp = JsonRpcErrorResponse {
-                        jsonrpc: "2.0",
-                        id: rpc_req.id.unwrap_or(serde_json::Value::Null),
-                        error: JsonRpcErrorObject {
-                            code: -32600,
-                            message: "Invalid Request: jsonrpc must be '2.0'",
-                            data: None,
-                        },
-                    };
-                    Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
-                } else if rpc_req.id.is_none() {
-                    // JSON-RPC 2.0 Notification: process without response
-                    let _ = dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade).await;
-                    None
-                } else {
-                    let id = rpc_req.id.unwrap();
-                    match dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade).await {
-                        Ok(result) => {
-                            let resp = JsonRpcSuccessResponse {
-                                jsonrpc: "2.0",
-                                id,
-                                result,
-                            };
-                            Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
-                        }
-                        Err((code, message)) => {
+                match serde_json::from_str::<JsonRpcRequest>(trimmed) {
+                    Ok(rpc_req) => {
+                        if rpc_req.jsonrpc != "2.0" {
                             let resp = JsonRpcErrorResponse {
                                 jsonrpc: "2.0",
-                                id,
+                                id: rpc_req.id.unwrap_or(serde_json::Value::Null),
                                 error: JsonRpcErrorObject {
-                                    code,
-                                    message: &message,
+                                    code: -32600,
+                                    message: "Invalid Request: jsonrpc must be '2.0'",
                                     data: None,
                                 },
                             };
-                            Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
+                            let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                            let _ = resp_tx.send(resp_str).await;
+                        } else if rpc_req.id.is_none() {
+                            // JSON-RPC 2.0 Notification: process without response
+                            let facade_clone = facade.clone();
+                            task_set.spawn(async move {
+                                let _ = dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade_clone).await;
+                            });
+                        } else {
+                            let id = rpc_req.id.unwrap();
+                            let facade_clone = facade.clone();
+                            let resp_tx_clone = resp_tx.clone();
+                            task_set.spawn(async move {
+                                let resp_str = match dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade_clone).await {
+                                    Ok(result) => {
+                                        let resp = JsonRpcSuccessResponse {
+                                            jsonrpc: "2.0",
+                                            id,
+                                            result,
+                                        };
+                                        serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string())
+                                    }
+                                    Err((code, message)) => {
+                                        let resp = JsonRpcErrorResponse {
+                                            jsonrpc: "2.0",
+                                            id,
+                                            error: JsonRpcErrorObject {
+                                                code,
+                                                 message: &message,
+                                                data: None,
+                                            },
+                                        };
+                                        serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string())
+                                    }
+                                };
+                                let _ = resp_tx_clone.send(resp_str).await;
+                            });
                         }
                     }
+                    Err(e) => {
+                        let resp = JsonRpcErrorResponse {
+                            jsonrpc: "2.0",
+                            id: serde_json::Value::Null,
+                            error: JsonRpcErrorObject {
+                                code: -32700,
+                                message: &format!("Parse error: {e}"),
+                                data: None,
+                            },
+                        };
+                        let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                        let _ = resp_tx.send(resp_str).await;
+                    }
                 }
-            }
-            Err(e) => {
-                let resp = JsonRpcErrorResponse {
-                    jsonrpc: "2.0",
-                    id: serde_json::Value::Null,
-                    error: JsonRpcErrorObject {
-                        code: -32700,
-                        message: &format!("Parse error: {e}"),
-                        data: None,
-                    },
-                };
-                Some(serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string()))
-            }
-        };
 
-                if let Some(resp_str) = resp_json {
-                    writer.write_all(resp_str.as_bytes()).await?;
-                    writer.write_all(b"\n").await?;
-                    writer.flush().await?;
-                }
                 line.clear();
             }
         }
     }
+
+    task_set.abort_all();
+    drop(resp_tx);
+    let _ = writer_task.await;
 
     Ok(())
 }
@@ -443,6 +469,56 @@ mod tests {
                 .and_then(|v| v.as_bool()),
             Some(true)
         );
+    }
+    #[tokio::test]
+    async fn test_handle_connection_concurrent_requests_no_blocking() {
+        let (facade, _dir) = create_test_facade().await;
+        let (client, server) = tokio::io::duplex(4096);
+
+        tokio::spawn(async move {
+            let _ = handle_connection(server, facade).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut reader = tokio::io::BufReader::new(client_read);
+
+        let req1 = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 101,
+            "method": "sona_get_client_state",
+            "params": {}
+        });
+        let req2 = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 102,
+            "method": "sona_get_sync_status",
+            "params": {}
+        });
+        let payload = format!(
+            "{}\n{}\n",
+            serde_json::to_string(&req1).unwrap(),
+            serde_json::to_string(&req2).unwrap()
+        );
+        client_write.write_all(payload.as_bytes()).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut resp1 = String::new();
+        reader.read_line(&mut resp1).await.unwrap();
+        let val1: serde_json::Value = serde_json::from_str(&resp1).unwrap();
+
+        let mut resp2 = String::new();
+        reader.read_line(&mut resp2).await.unwrap();
+        let val2: serde_json::Value = serde_json::from_str(&resp2).unwrap();
+
+        let ids: std::collections::HashSet<i64> = [
+            val1.get("id").and_then(|v| v.as_i64()).unwrap(),
+            val2.get("id").and_then(|v| v.as_i64()).unwrap(),
+        ]
+        .into_iter()
+        .collect();
+
+        assert!(ids.contains(&101));
+        assert!(ids.contains(&102));
     }
     #[tokio::test]
     async fn test_handle_connection_invalid_version() {
