@@ -677,12 +677,13 @@ async fn test_ui_session_stop_delegation() {
 
     // Simulate UI recorder reacting to the event by clearing active_session
     let active_session_clone = facade.active_session.clone();
+    let services_clone = facade.services.clone();
     tokio::spawn(async move {
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         let mut guard = active_session_clone.lock().await;
         *guard = None;
+        services_clone.recording_session.notify_cleared();
     });
-
     let stop_res = facade
         .stop_recording(StopRecordingRequest { discard: false })
         .await
@@ -693,6 +694,83 @@ async fn test_ui_session_stop_delegation() {
 
     let state_after = facade.get_client_state().await.unwrap();
     assert!(!state_after.is_recording);
+}
+
+#[tokio::test]
+async fn test_ui_session_stop_returns_accumulated_segment_count() {
+    let (facade, _dir) = create_test_facade().await;
+    let history_id = "test-ui-segments-session".to_string();
+    let segments = Arc::new(std::sync::Mutex::new(vec![
+        TranscriptSegment {
+            id: "seg-1".to_string(),
+            text: "Hello world".to_string(),
+            start: 0.0,
+            end: 1.5,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        },
+        TranscriptSegment {
+            id: "seg-2".to_string(),
+            text: "Second segment".to_string(),
+            start: 1.5,
+            end: 3.0,
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        },
+    ]));
+
+    {
+        let mut guard = facade.active_session.lock().await;
+        *guard = Some(ActiveRecordingSession {
+            history_id: history_id.clone(),
+            consumer_id: "test-ui-consumer-seg".to_string(),
+            source_kind: "microphone".to_string(),
+            is_paused: false,
+            paused_at_instant: None,
+            accumulated_pause_duration: std::time::Duration::ZERO,
+            asr_request: None,
+            gain: 1.0,
+            started_at_epoch: 1700000000,
+            started_at_instant: std::time::Instant::now(),
+            segments: segments.clone(),
+            has_coordinator_consumer: false,
+            coordinator_released: false,
+            audio_stopped: false,
+            frozen_duration_seconds: None,
+            _sleep_guard: None,
+            is_ui_session: true,
+            saved_wav_path: None,
+        });
+    }
+
+    let active_session_clone = facade.active_session.clone();
+    let services_clone = facade.services.clone();
+    tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        let mut guard = active_session_clone.lock().await;
+        *guard = None;
+        services_clone.recording_session.notify_cleared();
+    });
+
+    let stop_res = facade
+        .stop_recording(StopRecordingRequest { discard: false })
+        .await
+        .unwrap();
+
+    assert_eq!(stop_res.history_id, history_id);
+    assert_eq!(stop_res.segment_count, 2);
 }
 
 #[tokio::test]

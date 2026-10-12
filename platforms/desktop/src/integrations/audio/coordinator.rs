@@ -297,10 +297,14 @@ pub async fn stop_shared_capture(
             None => false,
         };
         if sent {
-            match rx.await {
-                Ok(path) => saved_path = path,
+            match tokio::time::timeout(Duration::from_secs(5), rx).await {
+                Ok(Ok(path)) => saved_path = path,
+                Ok(Err(_)) => warn!(
+                    "[Audio] Recorder task dropped completion channel for {}",
+                    kind.log_name()
+                ),
                 Err(_) => warn!(
-                    "[Audio] Failed to receive {} WAV filepath from task",
+                    "[Audio] Timed out waiting for {} recorder to flush and finalize WAV file",
                     kind.log_name()
                 ),
             }

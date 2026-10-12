@@ -87,11 +87,11 @@ export function SegmentItem({
 
   // LLM state (translation visibility)
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
-  const llmState = useTranscriptSidecarStore(
-    (state) => state.llmStates[sourceHistoryId || 'current']
+  const isTranslationVisible = useTranscriptSidecarStore(
+    (state) =>
+      (sourceHistoryId ? state.llmStates[sourceHistoryId] : state.llmStates.current)
+        ?.isTranslationVisible ?? DEFAULT_LLM_STATE.isTranslationVisible
   );
-  const isTranslationVisible =
-    llmState?.isTranslationVisible ?? DEFAULT_LLM_STATE.isTranslationVisible;
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
 
   // Subscribe to store for hasNext to avoid passing unstable props

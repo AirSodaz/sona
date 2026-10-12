@@ -4,8 +4,8 @@ use std::sync::Arc;
 use serde::{Deserialize, Serialize};
 use sona_core::sync::{
     SyncConflictDetail, SyncConflictResolution, SyncConflictSummary, SyncJoinPreview,
-    SyncObjectKey, SyncPresetV1, SyncProviderDescriptor, SyncRunResult, SyncSecretStore,
-    SyncStatusSnapshot,
+    SyncLifecycleState, SyncObjectKey, SyncPresetV1, SyncProviderDescriptor, SyncRunResult,
+    SyncSecretStore, SyncStatusSnapshot,
 };
 use sona_runtime_fs::SystemClock;
 use sona_sync::{
@@ -144,6 +144,17 @@ impl DesktopSyncManager {
 
     pub async fn reset(&self) {
         *self.inner.application.lock().await = None;
+    }
+
+    pub async fn is_running(&self) -> bool {
+        match self.get_status().await {
+            Ok(status) => status.state == SyncLifecycleState::Syncing,
+            Err(_) => false,
+        }
+    }
+
+    pub async fn has_active_tasks(&self) -> bool {
+        self.is_running().await
     }
 
     async fn application(&self) -> Result<Arc<SyncApplication>, String> {

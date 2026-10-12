@@ -190,21 +190,18 @@ pub async fn check_active_tasks_idle(app: &AppHandle) -> Result<(), String> {
                     .to_string(),
             );
         }
+        if services.sync.is_running().await || services.sync.has_active_tasks().await {
+            return Err(
+                "Cannot migrate storage while synchronization is running. Please wait for sync to finish."
+                    .to_string(),
+            );
+        }
     }
     if let Some(server_controller) = app.try_state::<crate::app::server::ApiServerController>()
         && server_controller.has_active_jobs().await
     {
         return Err(
             "Cannot migrate storage while API server has active or queued transcription jobs. Please wait for tasks to finish or stop the API server."
-                .to_string(),
-        );
-    }
-    if let Some(history_state) =
-        app.try_state::<crate::platform::history_repository::HistoryRepositoryState>()
-        && history_state.is_file_task_active()
-    {
-        return Err(
-            "Cannot migrate storage while history operations or backup archives are being processed. Please wait for them to finish."
                 .to_string(),
         );
     }
@@ -703,9 +700,6 @@ pub async fn migrate_data_directory(
 
     if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
         services.sync.reset().await;
-    } else if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>()
-    {
-        sync_manager.reset().await;
     }
 
     if copy_existing && active_data_dir.exists() {
@@ -798,11 +792,7 @@ pub async fn reset_data_directory(app: &AppHandle) -> Result<StorageDirectoriesI
 
     if let Some(services) = app.try_state::<crate::services::DesktopServices>() {
         services.sync.reset().await;
-    } else if let Some(sync_manager) = app.try_state::<crate::platform::sync::DesktopSyncManager>()
-    {
-        sync_manager.reset().await;
     }
-
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     bootstrap.custom_data_dir = None;
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;

@@ -146,10 +146,15 @@ pub async fn start_native_live_transcription(
     )
     .await
     .map_err(AsrPortError::runtime)?;
-    let observer = Arc::new(TauriAsrRuntimeObserver::new(
-        services.emitter.clone(),
-        services.asr.metrics_store(),
-    )) as Arc<dyn AsrRuntimeObserver>;
+    let segments_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let observer_inner =
+        TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store());
+    let observer = Arc::new(
+        crate::platform::agent_control::AgentAsrRuntimeObserver::new(
+            observer_inner,
+            segments_arc.clone(),
+        ),
+    ) as Arc<dyn AsrRuntimeObserver>;
     if services
         .asr
         .live_coordinator()
@@ -194,7 +199,7 @@ pub async fn start_native_live_transcription(
                             .map(|d| d.as_secs())
                             .unwrap_or(0),
                         started_at_instant: std::time::Instant::now(),
-                        segments: Arc::new(std::sync::Mutex::new(Vec::new())),
+                        segments: segments_arc,
                         has_coordinator_consumer: true,
                         coordinator_released: false,
                         audio_stopped: false,
@@ -262,6 +267,7 @@ pub async fn stop_live_transcription(
             && session.consumer_id == consumer_id
         {
             *guard = None;
+            services.recording_session.notify_cleared();
         }
     }
     if !services.audio.has_active_captures() {
@@ -441,6 +447,7 @@ pub async fn stop_native_live_transcription(
             && session.consumer_id == consumer_id
         {
             *guard = None;
+            services.recording_session.notify_cleared();
         }
     }
     if !services.audio.has_active_captures() {

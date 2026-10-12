@@ -27,6 +27,7 @@ pub use db_runner::*;
 pub struct DesktopRecordingSessionTracker {
     inner: Arc<tokio::sync::Mutex<Option<crate::platform::agent_control::ActiveRecordingSession>>>,
     completed_wav_paths: Arc<tokio::sync::Mutex<std::collections::HashMap<String, String>>>,
+    session_cleared_notify: Arc<tokio::sync::Notify>,
 }
 
 impl DesktopRecordingSessionTracker {
@@ -61,6 +62,23 @@ impl DesktopRecordingSessionTracker {
     pub async fn clear_cached_saved_wav_paths(&self) {
         let mut map = self.completed_wav_paths.lock().await;
         map.clear();
+    }
+
+    pub async fn get_cached_saved_wav_path(&self, consumer_id: &str) -> Option<String> {
+        let map = self.completed_wav_paths.lock().await;
+        map.get(consumer_id).cloned()
+    }
+
+    pub fn notify_cleared(&self) {
+        self.session_cleared_notify.notify_waiters();
+    }
+
+    pub fn notified_cleared(&self) -> tokio::sync::futures::Notified<'_> {
+        self.session_cleared_notify.notified()
+    }
+
+    pub async fn wait_cleared(&self) {
+        self.session_cleared_notify.notified().await;
     }
 }
 
@@ -288,5 +306,28 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(services.projects.list().await.unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_desktop_recording_session_tracker_notify_and_wait() {
+        let tracker = DesktopRecordingSessionTracker::new();
+        let tracker_clone = tracker.clone();
+
+        let handle = tokio::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+            tracker_clone.notify_cleared();
+        });
+
+        let wait_res = tokio::time::timeout(
+            std::time::Duration::from_millis(500),
+            tracker.wait_cleared(),
+        )
+        .await;
+
+        assert!(
+            wait_res.is_ok(),
+            "wait_cleared should be notified promptly without timing out"
+        );
+        handle.await.unwrap();
     }
 }

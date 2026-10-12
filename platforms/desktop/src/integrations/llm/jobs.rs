@@ -9,8 +9,8 @@ use tauri::{AppHandle, Emitter, State};
 
 use super::*;
 use crate::integrations::asr::TranscriptSegment;
+use crate::platform::history_repository::TranscriptSnapshotReason;
 use crate::platform::history_repository::llm_helpers;
-use crate::platform::history_repository::{HistoryRepositoryState, TranscriptSnapshotReason};
 
 fn emit_transcript_job_update(
     app: &AppHandle,
@@ -273,7 +273,7 @@ async fn run_summary_job(
 
 pub(crate) async fn run_transcript_llm_job_command(
     app: AppHandle,
-    _state: State<'_, HistoryRepositoryState>,
+    _services: State<'_, crate::services::DesktopServices>,
     mut request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
     request.sanitize_for_task();

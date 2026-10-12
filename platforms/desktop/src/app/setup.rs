@@ -97,13 +97,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         connection_tracker,
         Some(app.handle().clone()),
     );
-    app.manage((*desktop_services.sync).clone());
     app.manage(desktop_services);
-    app.manage((*audio_state).clone());
-    app.manage((*asr_state).clone());
-    app.manage((*download_state).clone());
-    app.manage(history_state);
-    app.manage(backup_state);
     crate::app::window::create_main_window(app.handle(), start_silently)?;
     let listener_app_handle = app_handle_for_listener.clone();
     app.listen_any("asr-config-updated", move |_event| {

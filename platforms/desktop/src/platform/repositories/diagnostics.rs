@@ -1,7 +1,6 @@
 use crate::integrations::asr::AsrState;
 use crate::platform::paths::{PathKind, PathPort};
 use sona_application::diagnostics::DiagnosticsService;
-use tauri::State;
 
 pub use sona_core::runtime::diagnostics::{
     DeviceOptionInput, DeviceProbeInput, DiagnosticsConfigInput, DiagnosticsCoreInput,
@@ -23,28 +22,28 @@ fn validate_diagnostics_snapshot(snapshot: &DiagnosticsCoreSnapshot) -> Result<(
 
 pub async fn get_diagnostics_core_snapshot(
     provider: &dyn PathPort,
-    state: State<'_, AsrState>,
+    asr: &AsrState,
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     let models_dir = provider
         .resolve_path(PathKind::AppLocalData)
         .map_err(|error| error.to_string())?
         .join("models");
-    get_diagnostics_core_snapshot_with_models_dir(provider, models_dir, state, input).await
+    get_diagnostics_core_snapshot_with_models_dir(provider, models_dir, asr, input).await
 }
 
 pub async fn get_diagnostics_core_snapshot_with_models_dir(
     provider: &dyn PathPort,
     models_dir: std::path::PathBuf,
-    state: State<'_, AsrState>,
+    asr: &AsrState,
     mut input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     validate_diagnostics_input(&input)?;
     let log_dir = provider
         .resolve_path(PathKind::AppLogData)
         .map_err(|error| error.to_string())?;
-    input.asr_runtime_metrics = state.metrics_snapshot().await;
-    let live = state.live_coordinator().metrics().await;
+    input.asr_runtime_metrics = asr.metrics_snapshot().await;
+    let live = asr.live_coordinator().metrics().await;
     input.live_transcription = LiveTranscriptionDiagnosticsSnapshot {
         active_sources: live.active_sources,
         active_pipelines: live.active_pipelines,
@@ -73,12 +72,12 @@ pub async fn get_diagnostics_core_snapshot_with_models_dir(
 
 pub async fn get_diagnostics_core_snapshot_for_app<R: tauri::Runtime>(
     app: &tauri::AppHandle<R>,
-    state: State<'_, AsrState>,
+    asr: &AsrState,
     input: DiagnosticsCoreInput,
 ) -> Result<DiagnosticsCoreSnapshot, String> {
     let provider = crate::platform::paths::TauriPathProvider::from_app(app);
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
-    get_diagnostics_core_snapshot_with_models_dir(&provider, models_dir, state, input).await
+    get_diagnostics_core_snapshot_with_models_dir(&provider, models_dir, asr, input).await
 }
 
 #[cfg(test)]

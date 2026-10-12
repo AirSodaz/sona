@@ -323,6 +323,10 @@ pub async fn stop_recording(
     // the recorder stops native capture, receives the saved WAV path, and persists
     // the recording draft cleanly.
     if session_snapshot.is_ui_session {
+        let mut final_history_id = session_snapshot.history_id.clone();
+        let notified = services.recording_session.notified_cleared();
+        tokio::pin!(notified);
+        notified.as_mut().enable();
         let _ = services.emitter.emit(
             "agent-control-ui-recording-stop-requested",
             serde_json::json!({
@@ -332,15 +336,14 @@ pub async fn stop_recording(
         );
 
         // Wait for UI to finish teardown (active_session cleared by stop_native_live_transcription)
-        let start = std::time::Instant::now();
-        let mut ui_teardown_completed = false;
-        while start.elapsed() < std::time::Duration::from_millis(2000) {
-            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
-            if active_session.lock().await.is_none() {
-                ui_teardown_completed = true;
-                break;
-            }
-        }
+        let ui_teardown_completed = if active_session.lock().await.is_none() {
+            true
+        } else {
+            tokio::time::timeout(std::time::Duration::from_millis(2000), notified)
+                .await
+                .is_ok()
+                || active_session.lock().await.is_none()
+        };
 
         if !ui_teardown_completed {
             log::warn!("UI recording teardown timed out; falling back to backend teardown");
@@ -351,6 +354,7 @@ pub async fn stop_recording(
                     .release(&session_snapshot.consumer_id)
                     .await;
             }
+            let mut captured_path: Option<String> = None;
             if !session_snapshot.audio_stopped {
                 let path = crate::integrations::audio::stop_native_live_capture(
                     &services.audio,
@@ -362,15 +366,145 @@ pub async fn stop_recording(
                     if req.discard {
                         let _ = tokio::fs::remove_file(&saved_path).await;
                     } else {
+                        captured_path = Some(saved_path.clone());
                         services
                             .recording_session
                             .cache_saved_wav_path(session_snapshot.consumer_id.clone(), saved_path)
                             .await;
                     }
                 }
+            } else if req.discard {
+                if let Some(path) = services
+                    .recording_session
+                    .take_cached_saved_wav_path(&session_snapshot.consumer_id)
+                    .await
+                {
+                    let _ = tokio::fs::remove_file(path).await;
+                }
+            } else {
+                captured_path = services
+                    .recording_session
+                    .get_cached_saved_wav_path(&session_snapshot.consumer_id)
+                    .await;
             }
             let mut session_guard = active_session.lock().await;
             *session_guard = None;
+            services.recording_session.notify_cleared();
+
+            if !req.discard {
+                let segments = session_snapshot
+                    .segments
+                    .lock()
+                    .map(|s| s.clone())
+                    .unwrap_or_default();
+
+                let hid = session_snapshot.history_id.clone();
+                let exists = if hid.starts_with("ui-record-") {
+                    false
+                } else {
+                    services
+                        .history
+                        .query_db(move |s| s.get_item(&hid))
+                        .await
+                        .ok()
+                        .flatten()
+                        .is_some()
+                };
+
+                let native_audio_path = captured_path.filter(|p| std::path::Path::new(p).is_file());
+
+                if exists {
+                    let hid = session_snapshot.history_id.clone();
+                    let complete_req =
+                        sona_core::history::mutation_repository::HistoryCompleteLiveDraftRequest {
+                            history_id: hid,
+                            segments,
+                            duration: duration_seconds,
+                        };
+                    if let Err(e) = services
+                        .history
+                        .mutation_file(move |s| s.complete_live_draft(complete_req))
+                        .await
+                    {
+                        log::error!("Failed to complete fallback recording draft: {e}");
+                    }
+                } else if let Some(path) = native_audio_path {
+                    let save_req = sona_core::history::HistorySaveRecordingRequest {
+                        segments,
+                        duration: duration_seconds,
+                        tag_ids: Vec::new(),
+                        project_id: None,
+                        audio_bytes: None,
+                        native_audio_path: Some(path),
+                        audio_extension: Some("wav".to_string()),
+                    };
+                    match services
+                        .history
+                        .mutation_file(move |s| s.save_recording(save_req))
+                        .await
+                    {
+                        Ok(record) => {
+                            final_history_id = record.id;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to save fallback recording draft: {e}");
+                        }
+                    }
+                } else {
+                    let draft_id = if session_snapshot.history_id.starts_with("ui-record-") {
+                        None
+                    } else {
+                        Some(session_snapshot.history_id.clone())
+                    };
+                    let draft_req =
+                        crate::platform::history_repository::HistoryCreateLiveDraftRequest {
+                            id: draft_id,
+                            audio_extension: "wav".to_string(),
+                            tag_ids: Vec::new(),
+                            project_id: None,
+                            icon: None,
+                        };
+                    let dur = duration_seconds;
+                    match services
+                        .history
+                        .mutation_file(move |s| {
+                            let draft = s.create_live_draft(draft_req)?;
+                            s.complete_live_draft(
+                                sona_core::history::mutation_repository::HistoryCompleteLiveDraftRequest {
+                                    history_id: draft.item.id,
+                                    segments,
+                                    duration: dur,
+                                },
+                            )
+                        })
+                        .await
+                    {
+                        Ok(record) => {
+                            final_history_id = record.id;
+                        }
+                        Err(e) => {
+                            log::error!("Failed to save fallback recording draft: {e}");
+                        }
+                    }
+                }
+            } else if !session_snapshot.history_id.starts_with("ui-record-") {
+                let hid = session_snapshot.history_id.clone();
+                let deleted_at = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as u64)
+                    .unwrap_or(0);
+                let _ = services
+                    .history
+                    .mutation_file(move |s| {
+                        s.trash_items(
+                            sona_core::history::mutation_repository::HistoryTrashItemsRequest {
+                                ids: vec![hid],
+                                deleted_at,
+                            },
+                        )
+                    })
+                    .await;
+            }
         }
 
         let _ = services.emitter.emit(
@@ -381,10 +515,20 @@ pub async fn stop_recording(
             crate::app::tray::set_recording_active(app, false);
         }
 
+        let segment_count = if req.discard {
+            0
+        } else {
+            session_snapshot
+                .segments
+                .lock()
+                .map(|s| s.len())
+                .unwrap_or(0)
+        };
+
         return Ok(StopRecordingResult {
-            history_id: session_snapshot.history_id,
+            history_id: final_history_id,
             duration_seconds,
-            segment_count: 0,
+            segment_count,
         });
     }
 

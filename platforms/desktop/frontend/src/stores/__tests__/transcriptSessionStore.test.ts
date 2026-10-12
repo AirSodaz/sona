@@ -23,26 +23,26 @@ describe('transcriptSessionStore cache dirty checking and immutability', () => {
       expect(hasSessionContentChanged(a, b)).toBe(false);
     });
 
-    it('returns true when playback properties change', () => {
+    it('returns false when playback properties change (decoupled from session content)', () => {
       const base: SessionData = { ...DEFAULT_SESSION_DATA };
-      expect(hasSessionContentChanged(base, { ...base, currentTime: 2.5 })).toBe(true);
-      expect(hasSessionContentChanged(base, { ...base, isPlaying: true })).toBe(true);
-      expect(hasSessionContentChanged(base, { ...base, activeSegmentId: 'seg-1' })).toBe(true);
-      expect(hasSessionContentChanged(base, { ...base, activeSegmentIndex: 3 })).toBe(true);
+      expect(hasSessionContentChanged(base, { ...base, currentTime: 2.5 })).toBe(false);
+      expect(hasSessionContentChanged(base, { ...base, isPlaying: true })).toBe(false);
+      expect(hasSessionContentChanged(base, { ...base, activeSegmentId: 'seg-1' })).toBe(false);
+      expect(hasSessionContentChanged(base, { ...base, activeSegmentIndex: 3 })).toBe(false);
       expect(
         hasSessionContentChanged(base, {
           ...base,
           seekRequest: { time: 10, timestamp: 12345 },
         })
-      ).toBe(true);
-      expect(hasSessionContentChanged(base, { ...base, lastSeekTimestamp: 999 })).toBe(true);
-      expect(hasSessionContentChanged(base, { ...base, audioUrl: 'blob:test' })).toBe(true);
+      ).toBe(false);
+      expect(hasSessionContentChanged(base, { ...base, lastSeekTimestamp: 999 })).toBe(false);
+      expect(hasSessionContentChanged(base, { ...base, audioUrl: 'blob:test' })).toBe(false);
       expect(
         hasSessionContentChanged(base, {
           ...base,
           audioFile: new File([], 'test.wav'),
         })
-      ).toBe(true);
+      ).toBe(false);
     });
 
     it('returns true when session content properties change', () => {
@@ -73,44 +73,46 @@ describe('transcriptSessionStore cache dirty checking and immutability', () => {
       expect(state1).toBe(direct1);
     });
 
-    it('returns a new reference on playback changes without mutating the previous snapshot', () => {
+    it('returns the same cached state across playback changes without creating new objects', () => {
       const initialSnapshot = transcriptSessionStore.getState();
-      expect(initialSnapshot.currentTime).toBe(0);
-      expect(initialSnapshot.isPlaying).toBe(false);
 
       useTranscriptStore.getState().setCurrentTime(3.5);
       const afterTimeUpdate = transcriptSessionStore.getState();
-
-      expect(afterTimeUpdate).not.toBe(initialSnapshot);
-      expect(initialSnapshot.currentTime).toBe(0);
-      expect(afterTimeUpdate.currentTime).toBe(3.5);
+      expect(afterTimeUpdate).toBe(initialSnapshot);
 
       useTranscriptStore.getState().setIsPlaying(true);
       const afterPlayUpdate = transcriptSessionStore.getState();
+      expect(afterPlayUpdate).toBe(initialSnapshot);
+    });
 
-      expect(afterPlayUpdate).not.toBe(afterTimeUpdate);
-      expect(afterTimeUpdate.isPlaying).toBe(false);
-      expect(afterPlayUpdate.isPlaying).toBe(true);
+    it('returns a new reference on session content changes', () => {
+      const initialSnapshot = transcriptSessionStore.getState();
+
+      useTranscriptStore.getState().setTitle('New Title');
+      const afterTitleUpdate = transcriptSessionStore.getState();
+      expect(afterTitleUpdate).not.toBe(initialSnapshot);
+      expect(afterTitleUpdate.title).toBe('New Title');
     });
   });
 
   describe('transcriptSessionStore.subscribe', () => {
-    it('notifies subscribers on playback changes', () => {
+    it('notifies subscribers on session content changes and ignores playback changes', () => {
       const listener = vi.fn();
       const unsubscribe = transcriptSessionStore.subscribe(listener);
 
+      // Playback change should not notify session subscribers
       useTranscriptStore.getState().setCurrentTime(7.2);
-      expect(listener).toHaveBeenCalledTimes(1);
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({ currentTime: 7.2 }),
-        expect.objectContaining({ currentTime: 0 })
-      );
+      expect(listener).not.toHaveBeenCalled();
 
       useTranscriptStore.getState().setIsPlaying(true);
-      expect(listener).toHaveBeenCalledTimes(2);
+      expect(listener).not.toHaveBeenCalled();
+
+      // Content change should notify
+      useTranscriptStore.getState().setTitle('Session 1');
+      expect(listener).toHaveBeenCalledTimes(1);
       expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({ isPlaying: true }),
-        expect.objectContaining({ isPlaying: false })
+        expect.objectContaining({ title: 'Session 1' }),
+        expect.objectContaining({ title: '' })
       );
 
       unsubscribe();

@@ -327,36 +327,32 @@ describe('Transcript Stores', () => {
     expect(afterSessionUpdate).not.toBe(firstCall);
   });
 
-  it('creates a new state snapshot during playback updates without mutating previous state', () => {
+  it('preserves cached session state snapshot during playback updates without allocating new objects', () => {
     const initialSessionState = useTranscriptSessionStore.getState();
     const playbackStore = useTranscriptPlaybackStore.getState();
 
     playbackStore.setCurrentTime(1.5);
     const afterFirstTick = useTranscriptSessionStore.getState();
-    expect(afterFirstTick).not.toBe(initialSessionState);
-    expect(initialSessionState.currentTime).toBe(0);
-    expect(afterFirstTick.currentTime).toBe(1.5);
+    expect(afterFirstTick).toBe(initialSessionState);
 
     playbackStore.setCurrentTime(3.0);
     const afterSecondTick = useTranscriptSessionStore.getState();
-    expect(afterSecondTick).not.toBe(afterFirstTick);
-    expect(afterFirstTick.currentTime).toBe(1.5);
-    expect(afterSecondTick.currentTime).toBe(3.0);
+    expect(afterSecondTick).toBe(initialSessionState);
   });
 
-  it('triggers transcriptSessionStore.subscribe on playback currentTime updates', () => {
+  it('triggers transcriptSessionStore.subscribe on session content updates but ignores playback updates', () => {
     const listener = vi.fn();
     const unsubscribe = useTranscriptSessionStore.subscribe(listener);
 
     useTranscriptPlaybackStore.getState().setCurrentTime(5.0);
-    expect(listener).toHaveBeenCalledTimes(1);
-    expect(listener).toHaveBeenCalledWith(
-      expect.objectContaining({ currentTime: 5.0 }),
-      expect.objectContaining({ currentTime: 0 })
-    );
+    expect(listener).not.toHaveBeenCalled();
 
     useTranscriptSessionStore.getState().setTitle('New Title');
-    expect(listener).toHaveBeenCalledTimes(2);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'New Title' }),
+      expect.objectContaining({ title: '' })
+    );
 
     unsubscribe();
   });

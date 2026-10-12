@@ -60,6 +60,12 @@ export function SegmentEditor({
   const editorRef = useRef<LexicalEditor | null>(null);
   const isContextMenuOpenRef = useRef(false);
 
+  useEffect(() => {
+    return () => {
+      clearActiveEditor(editorRef.current);
+    };
+  }, []);
+
   // Detect and convert old format (<b>/<i>/<u>) to Lexical format
   const lexicalHtml = convertOldFormatToLexical(initialHtml);
 

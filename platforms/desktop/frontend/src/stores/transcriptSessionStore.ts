@@ -112,13 +112,19 @@ export {
   updateSegment as updateTranscriptSegment,
 };
 
+const SESSION_CONTENT_KEYS: (keyof SessionData)[] = [
+  'segments',
+  'sourceHistoryId',
+  'title',
+  'icon',
+  'editingSegmentId',
+  'aligningSegmentIds',
+];
+
 export function hasSessionContentChanged(a: SessionData, b: SessionData): boolean {
   if (a === b) return false;
-  const aKeys = Object.keys(a) as (keyof SessionData)[];
-  const bKeys = Object.keys(b) as (keyof SessionData)[];
-  if (aKeys.length !== bKeys.length) return true;
-  for (let i = 0; i < aKeys.length; i++) {
-    const key = aKeys[i];
+  for (let i = 0; i < SESSION_CONTENT_KEYS.length; i++) {
+    const key = SESSION_CONTENT_KEYS[i];
     if (a[key] !== b[key]) {
       return true;
     }

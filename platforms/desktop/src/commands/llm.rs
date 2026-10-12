@@ -4,7 +4,7 @@ use crate::integrations::llm::{
     TranscriptLlmJobRequest, TranscriptLlmJobResult, TranscriptSummaryResult,
     TranslateSegmentsRequest, TranslatedSegment,
 };
-use crate::platform::history_repository::HistoryRepositoryState;
+use crate::services::DesktopServices;
 use tauri::{AppHandle, State};
 
 #[tauri::command]
@@ -50,10 +50,10 @@ pub async fn summarize_transcript(
 #[tauri::command]
 pub async fn run_transcript_llm_job(
     app: AppHandle,
-    state: State<'_, HistoryRepositoryState>,
+    services: State<'_, DesktopServices>,
     request: TranscriptLlmJobRequest,
 ) -> Result<TranscriptLlmJobResult, String> {
-    crate::integrations::llm::run_transcript_llm_job_command(app, state, request).await
+    crate::integrations::llm::run_transcript_llm_job_command(app, services, request).await
 }
 
 #[tauri::command]

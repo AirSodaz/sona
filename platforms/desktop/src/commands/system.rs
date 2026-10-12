@@ -191,10 +191,11 @@ pub async fn resolve_model_catalog_selected_ids_command(
 #[tauri::command]
 pub async fn get_diagnostics_core_snapshot(
     app: AppHandle,
-    state: State<'_, crate::integrations::asr::AsrState>,
+    services: State<'_, crate::services::DesktopServices>,
     input: crate::platform::diagnostics::DiagnosticsCoreInput,
 ) -> Result<crate::platform::diagnostics::DiagnosticsCoreSnapshot, String> {
-    crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app(&app, state, input).await
+    crate::platform::diagnostics::get_diagnostics_core_snapshot_for_app(&app, &services.asr, input)
+        .await
 }
 
 #[tauri::command]
