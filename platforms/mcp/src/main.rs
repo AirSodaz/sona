@@ -544,7 +544,7 @@ mod tests {
             Some("public")
         );
         let tools = result.get("tools").and_then(|t| t.as_array()).unwrap();
-        assert_eq!(tools.len(), 37);
+        assert_eq!(tools.len(), 40);
         assert_eq!(
             tools[0].get("title").and_then(|t| t.as_str()),
             Some("Get Client State")

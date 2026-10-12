@@ -114,22 +114,16 @@ export {
 
 export function hasSessionContentChanged(a: SessionData, b: SessionData): boolean {
   if (a === b) return false;
-  return (
-    a.segments !== b.segments ||
-    a.sourceHistoryId !== b.sourceHistoryId ||
-    a.title !== b.title ||
-    a.icon !== b.icon ||
-    a.editingSegmentId !== b.editingSegmentId ||
-    a.aligningSegmentIds !== b.aligningSegmentIds ||
-    a.audioFile !== b.audioFile ||
-    a.audioUrl !== b.audioUrl ||
-    a.currentTime !== b.currentTime ||
-    a.isPlaying !== b.isPlaying ||
-    a.activeSegmentId !== b.activeSegmentId ||
-    a.activeSegmentIndex !== b.activeSegmentIndex ||
-    a.seekRequest !== b.seekRequest ||
-    a.lastSeekTimestamp !== b.lastSeekTimestamp
-  );
+  const aKeys = Object.keys(a) as (keyof SessionData)[];
+  const bKeys = Object.keys(b) as (keyof SessionData)[];
+  if (aKeys.length !== bKeys.length) return true;
+  for (let i = 0; i < aKeys.length; i++) {
+    const key = aKeys[i];
+    if (a[key] !== b[key]) {
+      return true;
+    }
+  }
+  return false;
 }
 
 let cachedSession: {

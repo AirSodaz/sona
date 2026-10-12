@@ -119,6 +119,16 @@ pub fn find_string_param<'a>(
         return Some(val);
     }
 
+    if snake_key == "instance_id" {
+        let alias = map
+            .get("task_id")
+            .or_else(|| map.get("taskId"))
+            .and_then(|v| v.as_str());
+        if alias.is_some() {
+            return alias;
+        }
+    }
+
     let static_camel = match snake_key {
         "history_id" => Some("historyId"),
         "project_id" => Some("projectId"),

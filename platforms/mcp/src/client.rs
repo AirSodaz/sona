@@ -37,8 +37,9 @@ pub struct IpcConnection {
 }
 #[derive(Debug)]
 enum IpcCallError {
-    Transport(String),
     Application(String),
+    SendFailed(String),
+    Transport(String),
 }
 
 #[derive(Clone)]
@@ -159,7 +160,9 @@ impl IpcClient {
                 {
                     Ok(val) => Ok(val),
                     Err(IpcCallError::Application(app_err)) => Err(app_err),
-                    Err(IpcCallError::Transport(err)) => Err(err),
+                    Err(IpcCallError::SendFailed(err)) | Err(IpcCallError::Transport(err)) => {
+                        Err(err)
+                    }
                 };
             }
 
@@ -168,6 +171,9 @@ impl IpcClient {
                 match Self::send_receive_on_conn(conn, &req_line, timeout_duration).await {
                     Ok(val) => return Ok(val),
                     Err(IpcCallError::Application(app_err)) => return Err(app_err),
+                    Err(IpcCallError::SendFailed(_)) => {
+                        *conn_guard = None;
+                    }
                     Err(IpcCallError::Transport(err)) => {
                         *conn_guard = None;
                         if !Self::is_idempotent_method(method) {
@@ -189,7 +195,7 @@ impl IpcClient {
                     *conn_guard = Some(new_conn);
                     Err(app_err)
                 }
-                Err(IpcCallError::Transport(err)) => {
+                Err(IpcCallError::SendFailed(err)) | Err(IpcCallError::Transport(err)) => {
                     *conn_guard = None;
                     Err(err)
                 }
@@ -212,10 +218,10 @@ impl IpcClient {
         W: tokio::io::AsyncWrite + Unpin,
     {
         writer.write_all(req_line.as_bytes()).await.map_err(|e| {
-            IpcCallError::Transport(format!("Failed to send request to desktop: {e}"))
+            IpcCallError::SendFailed(format!("Failed to send request to desktop: {e}"))
         })?;
         writer.flush().await.map_err(|e| {
-            IpcCallError::Transport(format!("Failed to flush request to desktop: {e}"))
+            IpcCallError::SendFailed(format!("Failed to flush request to desktop: {e}"))
         })?;
 
         let mut resp_line = String::new();
@@ -278,9 +284,9 @@ impl IpcClient {
             .unwrap_or(WINDOWS_PIPE_NAME)
             .to_string();
 
-        let mut attempts = 0;
+        let mut pipe_busy_attempts = 0;
+        let mut file_not_found_attempts = 0;
         let client = loop {
-            attempts += 1;
             let pipe_name_clone = pipe_name.clone();
             let open_res = tokio::task::spawn_blocking(move || {
                 tokio::net::windows::named_pipe::ClientOptions::new().open(&pipe_name_clone)
@@ -290,8 +296,13 @@ impl IpcClient {
 
             match open_res {
                 Ok(client) => break client,
-                Err(err) if err.raw_os_error() == Some(231) && attempts < 10 => {
+                Err(err) if err.raw_os_error() == Some(231) && pipe_busy_attempts < 10 => {
+                    pipe_busy_attempts += 1;
                     tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+                Err(err) if err.raw_os_error() == Some(2) && file_not_found_attempts < 5 => {
+                    file_not_found_attempts += 1;
+                    tokio::time::sleep(Duration::from_millis(50)).await;
                 }
                 Err(_) => {
                     return Err("DESKTOP_OFFLINE: Sona desktop client is not running. Call sona_launch_desktop to start it.".to_string());
@@ -660,7 +671,16 @@ mod tests {
                             let (read_half, mut write_half) = tokio::io::split(connected);
                             let mut reader = tokio::io::BufReader::new(read_half);
                             let mut line = String::new();
-                            if reader.read_line(&mut line).await.is_ok() {
+                            while reader.read_line(&mut line).await.is_ok() {
+                                if line.trim().is_empty() {
+                                    break;
+                                }
+                                if line.contains("sona_delete_history") {
+                                    // Simulate in-flight transport error: drop without replying
+                                    drop(reader);
+                                    drop(write_half);
+                                    return;
+                                }
                                 if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
                                     let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
                                     let resp = serde_json::json!({
@@ -671,11 +691,7 @@ mod tests {
                                     let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
                                     let _ = write_half.flush().await;
                                 }
-                            }
-                            if count == 1 {
-                                // Drop write_half and reader immediately to cause EOF on connection 1 for next call
-                                drop(reader);
-                                drop(write_half);
+                                line.clear();
                             }
                         });
 
@@ -743,6 +759,105 @@ mod tests {
         server_shutdown.notify_waiters();
         let _ = srv_handle.await;
     }
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn test_non_idempotent_operation_retries_on_stale_idle_connection() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::net::windows::named_pipe::ServerOptions;
+
+        let seq = TEST_PIPE_SEQ.fetch_add(1, Ordering::Relaxed);
+        let pipe_name = format!(
+            r"\\.\pipe\sona-mcp-test-stale-{}-{}",
+            std::process::id(),
+            seq
+        );
+        let endpoint = pipe_name.clone();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_count_srv = connection_count.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+
+        let srv_handle = tokio::spawn(async move {
+            let mut server = match ServerOptions::new()
+                .first_pipe_instance(true)
+                .create(&pipe_name)
+            {
+                Ok(s) => s,
+                Err(_) => return,
+            };
+
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    conn_res = server.connect() => {
+                        if conn_res.is_err() {
+                            break;
+                        }
+                        connection_count_srv.fetch_add(1, Ordering::SeqCst);
+                        let connected = server;
+                        let count = connection_count_srv.load(Ordering::SeqCst);
+
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(connected);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+                            if reader.read_line(&mut line).await.is_ok() {
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                    let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                    let resp = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": id,
+                                        "result": { "status": "ok" }
+                                    });
+                                    let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    let _ = write_half.flush().await;
+                                }
+                            }
+                            if count == 1 {
+                                drop(reader);
+                                drop(write_half);
+                            }
+                        });
+
+                        match ServerOptions::new().create(&pipe_name) {
+                            Ok(next_s) => server = next_s,
+                            Err(_) => break,
+                        }
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let first_res = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        assert!(first_res.is_ok());
+        assert_eq!(connection_count.load(Ordering::SeqCst), 1);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mutating_res = client
+            .call(
+                "sona_delete_history",
+                serde_json::json!({ "id": "entry-1" }),
+            )
+            .await;
+        assert!(
+            mutating_res.is_ok(),
+            "Non-idempotent operation should reconnect and succeed on stale idle connection: {mutating_res:?}"
+        );
+        assert_eq!(
+            connection_count.load(Ordering::SeqCst),
+            2,
+            "Should have opened connection 2 after stale connection send failure"
+        );
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+    }
 
     #[cfg(unix)]
     #[tokio::test]
@@ -753,6 +868,122 @@ mod tests {
         let seq = TEST_SOCK_SEQ_IDEMP.fetch_add(1, Ordering::Relaxed);
         let socket_path = std::env::temp_dir().join(format!(
             "sona-test-idemp-{}-{}.sock",
+            std::process::id(),
+            seq
+        ));
+        let _ = std::fs::remove_file(&socket_path);
+        let endpoint = socket_path.to_string_lossy().to_string();
+        let connection_count = Arc::new(AtomicUsize::new(0));
+        let connection_count_srv = connection_count.clone();
+        let server_shutdown = Arc::new(tokio::sync::Notify::new());
+        let server_shutdown_clone = server_shutdown.clone();
+
+        let listener = tokio::net::UnixListener::bind(&socket_path).unwrap();
+
+        let srv_handle = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = server_shutdown_clone.notified() => break,
+                    accept_res = listener.accept() => {
+                        let (stream, _) = match accept_res {
+                            Ok(s) => s,
+                            Err(_) => break,
+                        };
+                        connection_count_srv.fetch_add(1, Ordering::SeqCst);
+                        let count = connection_count_srv.load(Ordering::SeqCst);
+                        tokio::spawn(async move {
+                            let (read_half, mut write_half) = tokio::io::split(stream);
+                            let mut reader = tokio::io::BufReader::new(read_half);
+                            let mut line = String::new();
+                            while reader.read_line(&mut line).await.is_ok() {
+                                if line.trim().is_empty() {
+                                    break;
+                                }
+                                if line.contains("sona_delete_history") {
+                                    // Simulate in-flight transport error: drop without replying
+                                    drop(reader);
+                                    drop(write_half);
+                                    return;
+                                }
+                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(&line) {
+                                    let id = val.get("id").cloned().unwrap_or(serde_json::json!(1));
+                                    let resp = serde_json::json!({
+                                        "jsonrpc": "2.0",
+                                        "id": id,
+                                        "result": { "status": "ok" }
+                                    });
+                                    let _ = write_half.write_all(format!("{resp}\n").as_bytes()).await;
+                                    let _ = write_half.flush().await;
+                                }
+                                line.clear();
+                            }
+                        });
+                    }
+                }
+            }
+        });
+
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        let client = IpcClient::with_endpoint(endpoint);
+
+        let first_res = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        assert!(
+            first_res.is_ok(),
+            "First call should succeed: {first_res:?}"
+        );
+        assert_eq!(connection_count.load(Ordering::SeqCst), 1);
+
+        tokio::time::sleep(Duration::from_millis(100)).await;
+
+        let mutating_res = client
+            .call(
+                "sona_delete_history",
+                serde_json::json!({ "id": "entry-1" }),
+            )
+            .await;
+        assert!(
+            mutating_res.is_err(),
+            "Mutating call on dead connection must fail"
+        );
+        let err_msg = mutating_res.unwrap_err();
+        assert!(
+            err_msg.contains("non-idempotent operation 'sona_delete_history' will not retry"),
+            "Error should explain non-idempotent operation will not retry: {err_msg}"
+        );
+        assert_eq!(
+            connection_count.load(Ordering::SeqCst),
+            1,
+            "Mutating method must NOT open a second connection on transport failure"
+        );
+
+        let third_res = client
+            .call("sona_get_client_state", serde_json::json!({}))
+            .await;
+        assert!(
+            third_res.is_ok(),
+            "Idempotent call should reconnect and succeed: {third_res:?}"
+        );
+        assert_eq!(
+            connection_count.load(Ordering::SeqCst),
+            2,
+            "Idempotent method should have opened connection 2"
+        );
+
+        server_shutdown.notify_waiters();
+        let _ = srv_handle.await;
+        let _ = std::fs::remove_file(&socket_path);
+    }
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_non_idempotent_operation_retries_on_stale_idle_connection() {
+        use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
+        static TEST_SOCK_SEQ_STALE: AtomicU64 = AtomicU64::new(300);
+
+        let seq = TEST_SOCK_SEQ_STALE.fetch_add(1, Ordering::Relaxed);
+        let socket_path = std::env::temp_dir().join(format!(
+            "sona-test-stale-{}-{}.sock",
             std::process::id(),
             seq
         ));
@@ -808,10 +1039,7 @@ mod tests {
         let first_res = client
             .call("sona_get_client_state", serde_json::json!({}))
             .await;
-        assert!(
-            first_res.is_ok(),
-            "First call should succeed: {first_res:?}"
-        );
+        assert!(first_res.is_ok());
         assert_eq!(connection_count.load(Ordering::SeqCst), 1);
 
         tokio::time::sleep(Duration::from_millis(100)).await;
@@ -823,31 +1051,13 @@ mod tests {
             )
             .await;
         assert!(
-            mutating_res.is_err(),
-            "Mutating call on dead connection must fail"
-        );
-        let err_msg = mutating_res.unwrap_err();
-        assert!(
-            err_msg.contains("non-idempotent operation 'sona_delete_history' will not retry"),
-            "Error should explain non-idempotent operation will not retry: {err_msg}"
-        );
-        assert_eq!(
-            connection_count.load(Ordering::SeqCst),
-            1,
-            "Mutating method must NOT open a second connection on transport failure"
-        );
-
-        let third_res = client
-            .call("sona_get_client_state", serde_json::json!({}))
-            .await;
-        assert!(
-            third_res.is_ok(),
-            "Idempotent call should reconnect and succeed: {third_res:?}"
+            mutating_res.is_ok(),
+            "Non-idempotent operation should reconnect and succeed on stale idle connection: {mutating_res:?}"
         );
         assert_eq!(
             connection_count.load(Ordering::SeqCst),
             2,
-            "Idempotent method should have opened connection 2"
+            "Should have opened connection 2 after stale connection send failure"
         );
 
         server_shutdown.notify_waiters();

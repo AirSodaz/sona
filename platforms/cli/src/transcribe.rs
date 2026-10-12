@@ -371,45 +371,61 @@ where
     let mut succeeded = 0;
 
     let concurrency = resolved_jobs.max(1);
-    let semaphore = Arc::new(tokio::sync::Semaphore::new(concurrency));
+    let (job_tx, job_rx) = tokio::sync::mpsc::channel::<(usize, BatchOutputPlan)>(concurrency);
     let (progress_tx, mut progress_rx) = tokio::sync::mpsc::channel(concurrency * 2);
-    let mut worker_handles = Vec::with_capacity(total);
+    let job_rx = Arc::new(tokio::sync::Mutex::new(job_rx));
+    let mut worker_handles = Vec::with_capacity(concurrency + 1);
     let execute_item = Arc::new(execute_item);
 
-    for (index, plan_item) in plans.iter().enumerate() {
-        let sem = semaphore.clone();
+    for _ in 0..concurrency {
+        let rx = job_rx.clone();
         let tx = progress_tx.clone();
-        let plan_item = plan_item.clone();
         let exec = execute_item.clone();
 
         let handle = tokio::spawn(async move {
-            let _permit = match sem.acquire().await {
-                Ok(permit) => permit,
-                Err(_) => return,
-            };
-            let input_path = plan_item.input_path.clone();
-            let output_path = plan_item.output_path.clone();
-            let res = exec(plan_item).await;
+            loop {
+                let job = {
+                    let mut guard = rx.lock().await;
+                    guard.recv().await
+                };
+                let Some((index, plan_item)) = job else {
+                    break;
+                };
+                let input_path = plan_item.input_path.clone();
+                let output_path = plan_item.output_path.clone();
+                let res = exec(plan_item).await;
 
-            let progress = match res {
-                Ok(()) => BatchJobProgress::Success {
-                    index,
-                    total,
-                    input: input_path,
-                    output: output_path,
-                },
-                Err(error) => BatchJobProgress::Failure {
-                    index,
-                    total,
-                    input: input_path,
-                    error,
-                },
-            };
-            let _ = tx.send(progress).await;
+                let progress = match res {
+                    Ok(()) => BatchJobProgress::Success {
+                        index,
+                        total,
+                        input: input_path,
+                        output: output_path,
+                    },
+                    Err(error) => BatchJobProgress::Failure {
+                        index,
+                        total,
+                        input: input_path,
+                        error,
+                    },
+                };
+                if tx.send(progress).await.is_err() {
+                    break;
+                }
+            }
         });
         worker_handles.push(handle);
     }
 
+    let plans_items = plans.to_vec();
+    let producer_handle = tokio::spawn(async move {
+        for (index, plan_item) in plans_items.into_iter().enumerate() {
+            if job_tx.send((index, plan_item)).await.is_err() {
+                break;
+            }
+        }
+    });
+    worker_handles.push(producer_handle);
     drop(progress_tx);
 
     let mut ctrl_c = std::pin::pin!(tokio::signal::ctrl_c());
@@ -431,19 +447,20 @@ where
                             BatchJobProgress::Success { index, total, input, output } => {
                                 succeeded += 1;
                                 if !args.quiet {
-                                    if let Err(e) = writeln!(
+                                    writeln!(
                                         io.stderr(),
                                         "[{}/{}] Transcribed {} -> {}",
                                         index + 1,
                                         total,
                                         input.display(),
                                         output.display()
-                                    ) {
+                                    )
+                                    .map_err(|e| {
                                         for handle in &worker_handles {
                                             handle.abort();
                                         }
-                                        return Err(CliError::Io(e.to_string()));
-                                    }
+                                        CliError::Io(e.to_string())
+                                    })?;
                                 }
                             }
                             BatchJobProgress::Failure { index, total, input, error } => {

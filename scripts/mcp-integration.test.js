@@ -284,7 +284,7 @@ test("sona-mcp end-to-end integration over IPC pipe", async (t) => {
 		assert.equal(tools.result.resultType, "complete");
 		assert.equal(tools.result.ttlMs, 300000);
 		assert.equal(tools.result.cacheScope, "public");
-		assert.equal(tools.result.tools.length, 37);
+		assert.equal(tools.result.tools.length, 40);
 		assert.equal(tools.result.tools[0].title, "Get Client State");
 
 		// 2b. resources/list

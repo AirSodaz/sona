@@ -53,7 +53,7 @@ When the Sona desktop client is not currently running:
 - **Standard Discovery**: Exposes `server/discover` capability negotiation.
 - **Legacy Compatibility**: Supports conventional initialization workflows (`initialize` followed by `notifications/initialized`).
 - **Declared Capabilities**:
-  - `tools`: 36 granular tools covering state, recording, transcript editing, translations, summaries, projects, and settings.
+  - `tools`: 40 granular tools covering state, recording, transcript editing, translations, summaries, projects, and settings.
   - `resources`: 7 static resources and 4 parameterized resource templates.
   - `prompts`: Pre-configured prompts for meeting summarization and transcript proofreading.
 
@@ -75,7 +75,7 @@ When the Sona desktop client is not currently running:
 
 ## Public Tools Reference
 
-`sona-mcp` registers 36 public tools categorized by functionality:
+`sona-mcp` registers 40 public tools categorized by functionality:
 
 ### 1. Client State & Window Control
 
@@ -84,7 +84,7 @@ When the Sona desktop client is not currently running:
 Queries desktop client connectivity, recording status, active project ID, and active recording session details.
 
 - **Parameters**: None.
-- **Returns**: Client status object (`online`, `recording`, `activeSessionId`, `activeProject`).
+- **Returns**: `{ "online": boolean, "isRecording": boolean, "isPaused": boolean, "activeProjectId": string | null }`.
 
 #### `sona_launch_desktop`
 
@@ -108,14 +108,13 @@ Brings the Sona desktop application window to the foreground and focuses it.
 
 #### `sona_start_recording`
 
-Initiates microphone capture and real-time live transcription in Sona desktop.
+Initiates microphone or system audio capture and real-time live transcription in Sona desktop.
 
 - **Parameters**:
+  - `source` (*string*, optional, default: `'microphone'`, enum: `['microphone', 'system']`): Audio source: `'microphone'` for mic capture or `'system'` for WASAPI system audio loopback.
   - `project_id` (*string*, optional): Assign active workspace project for the new recording.
-  - `model_id` (*string*, optional): Preferred local ASR model ID override.
-  - `online_provider` (*string*, optional): Cloud provider override.
-  - `language` (*string*, optional): Spoken language hint (e.g. `en`, `zh`).
-- **Returns**: `{ "sessionId": string, "startedAt": number }`.
+  - `device_name` (*string*, optional): Specific audio input device name.
+- **Returns**: `{ "historyId": string, "startedAt": number }`.
 
 #### `sona_stop_recording`
 
@@ -123,8 +122,14 @@ Stops active recording capture and either finalizes it into persistent history o
 
 - **Parameters**:
   - `discard` (*boolean*, optional, default: `false`): If `true`, aborts and deletes audio draft without saving.
-- **Returns**: `{ "historyId": string, "duration": number, "segmentCount": number }`.
+- **Returns**: `{ "historyId": string, "durationSeconds": number, "segmentCount": number }`.
 
+#### `sona_list_audio_devices`
+
+Lists available microphone and system audio input devices in Sona desktop.
+
+- **Parameters**: None.
+- **Returns**: Audio devices object (`{ "microphones": [...], "systemAudio": [...] }`).
 ---
 
 ### 3. Transcript Inspection & Segment Editing
@@ -167,6 +172,14 @@ Batch writes, updates, or clears segment translations for a history record. Gene
   - `translations` (*array*, required): Array of translation pairs (`[{ "id": string, "translation": string | null }]`).
   - `clear_all` (*boolean*, optional, default: `false`): Clear all existing segment translations before applying new entries.
 - **Returns**: `{ "success": true, "snapshotId": string, "updatedCount": number }`.
+
+#### `sona_list_transcript_snapshots`
+
+Lists historical transcript version snapshots for a history record.
+
+- **Parameters**:
+  - `history_id` (*string*, required): Target history record ID.
+- **Returns**: Array of snapshot metadata records (`[{ "id": string, "historyId": string, "reason": string, "createdAt": number, "segmentCount": number }]`).
 
 ---
 
@@ -257,21 +270,22 @@ Restores a previously soft-deleted item from the trash back to active history.
 
 #### `sona_transcribe_file`
 
-Submits a local audio or video file for offline batch transcription and stores results in history.
+Submits a local audio or video file for offline batch transcription and stores results in history. Operates synchronously and returns the completed transcription record.
 
 - **Parameters**:
   - `file_path` (*string*, required): Absolute path to audio or video file.
-  - `model_id` (*string*, optional): Local ASR model ID.
   - `project_id` (*string*, optional): Target project ID.
-  - `language` (*string*, optional): Spoken language hint.
-- **Returns**: `{ "taskId": string, "status": "queued" | "running" }`.
+  - `language` (*string*, optional): Spoken language hint (e.g. `'zh'`, `'en'`, `'ja'`).
+  - `save_to_path` (*string*, optional): Destination path to save normalized audio copy.
+  - `instance_id` (*string*, optional): Custom instance ID for tracking and cancelling this batch task.
+- **Returns**: `{ "historyId": string, "durationSeconds": number, "segmentCount": number, "text": string }`.
 
 #### `sona_cancel_batch_task`
 
 Cancels an in-flight batch transcription task by instance ID.
 
 - **Parameters**:
-  - `task_id` (*string*, required): In-flight batch task ID.
+  - `instance_id` (*string*, required; `task_id` accepted as alias): In-flight batch task instance ID to cancel.
 - **Returns**: `{ "success": true }`.
 
 #### `sona_export_transcript`
@@ -402,6 +416,13 @@ Triggers an immediate cloud synchronization cycle.
 - **Parameters**: None.
 - **Returns**: `{ "success": true }`.
 
+
+#### `sona_list_sync_conflicts`
+
+Lists active cloud synchronization conflicts between local and remote versions.
+
+- **Parameters**: None.
+- **Returns**: Array of active conflict summary items (`[{ "conflictId": string, "historyId": string, "localUpdatedAt": number, "remoteUpdatedAt": number }]`).
 ---
 
 ## Public Resources Reference

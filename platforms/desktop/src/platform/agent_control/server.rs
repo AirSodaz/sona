@@ -674,6 +674,29 @@ mod tests {
             "custom-val"
         );
         assert!(extract_string_param(&obj_params, "missing_key").is_err());
+        let mut map_task_id = serde_json::Map::new();
+        map_task_id.insert("task_id".to_string(), serde_json::json!("task-123"));
+        assert_eq!(
+            find_string_param(&map_task_id, "instance_id"),
+            Some("task-123")
+        );
+        let obj_task_id = Some(serde_json::Value::Object(map_task_id));
+        assert_eq!(
+            extract_string_param(&obj_task_id, "instance_id").unwrap(),
+            "task-123"
+        );
+
+        let mut map_task_id_camel = serde_json::Map::new();
+        map_task_id_camel.insert("taskId".to_string(), serde_json::json!("task-camel-456"));
+        assert_eq!(
+            find_string_param(&map_task_id_camel, "instance_id"),
+            Some("task-camel-456")
+        );
+        let obj_task_id_camel = Some(serde_json::Value::Object(map_task_id_camel));
+        assert_eq!(
+            extract_string_param(&obj_task_id_camel, "instance_id").unwrap(),
+            "task-camel-456"
+        );
 
         let bare_str = Some(serde_json::json!("bare-value"));
         assert_eq!(

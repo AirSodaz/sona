@@ -448,9 +448,12 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                     "instance_id": {
                         "type": "string",
                         "description": "Batch task instance ID to cancel"
+                    },
+                    "task_id": {
+                        "type": "string",
+                        "description": "Optional alias for instance_id"
                     }
-                },
-                "required": ["instance_id"]
+                }
             }),
         },
         ToolDefinition {
@@ -743,6 +746,39 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                 "required": ["history_id"]
             }),
         },
+        ToolDefinition {
+            name: "sona_list_audio_devices",
+            title: Some("List Audio Devices"),
+            description: "List available microphone and system audio input devices in Sona desktop.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
+        ToolDefinition {
+            name: "sona_list_transcript_snapshots",
+            title: Some("List Transcript Snapshots"),
+            description: "List historical transcript version snapshots for a history record.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "history_id": {
+                        "type": "string",
+                        "description": "Target history record ID"
+                    }
+                },
+                "required": ["history_id"]
+            }),
+        },
+        ToolDefinition {
+            name: "sona_list_sync_conflicts",
+            title: Some("List Sync Conflicts"),
+            description: "List active cloud synchronization conflicts between local and remote versions.",
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {}
+            }),
+        },
     ]
 }
 
@@ -778,6 +814,23 @@ pub async fn call_tool(
                     "success": false,
                     "message": err
                 })),
+            }
+        }
+        "sona_cancel_batch_task" => {
+            let mut args = arguments;
+            if let Some(obj) = args.as_object_mut() {
+                let task_id = if !obj.contains_key("instance_id") {
+                    obj.get("task_id").cloned()
+                } else {
+                    None
+                };
+                if let Some(task_id) = task_id {
+                    obj.insert("instance_id".to_string(), task_id);
+                }
+            }
+            match client.call("sona_cancel_batch_task", args).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
             }
         }
         "sona_control_recording" => {
@@ -892,5 +945,25 @@ mod tests {
         assert!(is_known_tool("sona_focus_window"));
         assert!(is_known_tool("sona_query_history"));
         assert!(!is_known_tool("sona_nonexistent_tool"));
+    }
+
+    #[test]
+    fn test_new_read_only_tools_registered() {
+        let tools = list_tools();
+        assert_eq!(tools.len(), 40);
+        assert!(is_known_tool("sona_list_audio_devices"));
+        assert!(is_known_tool("sona_list_transcript_snapshots"));
+        assert!(is_known_tool("sona_list_sync_conflicts"));
+
+        let snap_tool = tools
+            .iter()
+            .find(|t| t.name == "sona_list_transcript_snapshots")
+            .expect("sona_list_transcript_snapshots should be listed");
+        let req = snap_tool
+            .input_schema
+            .get("required")
+            .and_then(|r| r.as_array())
+            .expect("required array present");
+        assert!(req.iter().any(|v| v.as_str() == Some("history_id")));
     }
 }
