@@ -3,7 +3,7 @@ mod config_cmd;
 mod config_template;
 mod desktop_paths;
 mod diagnostics;
-mod doctor;
+pub mod doctor;
 mod export;
 mod init_config;
 pub mod live_audio;
@@ -47,7 +47,7 @@ impl CliOutput {
     }
 }
 
-pub(crate) trait CliIo: Send {
+pub trait CliIo: Send {
     fn stdout(&mut self) -> &mut (dyn Write + Send);
     fn stderr(&mut self) -> &mut (dyn Write + Send);
     fn stdout_is_terminal(&self) -> bool;
@@ -79,17 +79,17 @@ pub(crate) trait CliIo: Send {
 }
 
 #[derive(Default)]
-pub(crate) struct MemoryCliIo {
-    pub(crate) stdout: Vec<u8>,
-    pub(crate) stderr: Vec<u8>,
-    pub(crate) stdin_lines: VecDeque<String>,
-    pub(crate) stdin_bytes: Vec<u8>,
-    pub(crate) stdout_is_terminal: bool,
-    pub(crate) stdin_is_terminal: bool,
-    pub(crate) stderr_is_terminal: bool,
+pub struct MemoryCliIo {
+    pub stdout: Vec<u8>,
+    pub stderr: Vec<u8>,
+    pub stdin_lines: VecDeque<String>,
+    pub stdin_bytes: Vec<u8>,
+    pub stdout_is_terminal: bool,
+    pub stdin_is_terminal: bool,
+    pub stderr_is_terminal: bool,
 }
 impl MemoryCliIo {
-    pub(crate) fn into_output(self) -> CliOutput {
+    pub fn into_output(self) -> CliOutput {
         CliOutput {
             stdout: String::from_utf8_lossy(&self.stdout).into_owned(),
             stderr: String::from_utf8_lossy(&self.stderr).into_owned(),
@@ -151,9 +151,41 @@ impl CliIo for MemoryCliIo {
     }
 }
 
+struct StdinPromptRequest {
+    response_tx: tokio::sync::oneshot::Sender<io::Result<Option<String>>>,
+}
+
+#[derive(Clone)]
+struct StdinPromptWorkerHandle {
+    request_tx: tokio::sync::mpsc::Sender<StdinPromptRequest>,
+}
+
+impl StdinPromptWorkerHandle {
+    fn new() -> Self {
+        let (request_tx, mut request_rx) = tokio::sync::mpsc::channel::<StdinPromptRequest>(1);
+        std::thread::Builder::new()
+            .name("cli-stdin-prompt-worker".into())
+            .spawn(move || {
+                while let Some(req) = request_rx.blocking_recv() {
+                    let mut line = String::new();
+                    let res = match io::stdin().read_line(&mut line) {
+                        Ok(0) => Ok(None),
+                        Ok(_) => Ok(Some(line)),
+                        Err(e) => Err(e),
+                    };
+                    let _ = req.response_tx.send(res);
+                }
+            })
+            .expect("Failed to spawn CLI stdin prompt worker");
+
+        Self { request_tx }
+    }
+}
+
 struct StdCliIo {
     stdout: io::Stdout,
     stderr: io::Stderr,
+    worker: Option<StdinPromptWorkerHandle>,
 }
 
 impl Default for StdCliIo {
@@ -161,6 +193,7 @@ impl Default for StdCliIo {
         Self {
             stdout: io::stdout(),
             stderr: io::stderr(),
+            worker: None,
         }
     }
 }
@@ -209,26 +242,23 @@ impl CliIo for StdCliIo {
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
-        let (tx, rx) = tokio::sync::oneshot::channel();
-        let spawn_res = std::thread::Builder::new()
-            .name("cli-stdin-prompt".into())
-            .spawn(move || {
-                let mut line = String::new();
-                let res = match io::stdin().read_line(&mut line) {
-                    Ok(0) => Ok(None),
-                    Ok(_) => Ok(Some(line)),
-                    Err(error) => Err(error),
-                };
-                let _ = tx.send(res);
-            });
-
+        let worker = self
+            .worker
+            .get_or_insert_with(StdinPromptWorkerHandle::new)
+            .clone();
         Box::pin(async move {
-            match spawn_res {
-                Ok(_) => match rx.await {
-                    Ok(res) => res,
-                    Err(_) => Ok(None),
-                },
-                Err(e) => Err(e),
+            let (response_tx, response_rx) = tokio::sync::oneshot::channel();
+            if worker
+                .request_tx
+                .send(StdinPromptRequest { response_tx })
+                .await
+                .is_err()
+            {
+                return Ok(None);
+            }
+            match response_rx.await {
+                Ok(res) => res,
+                Err(_) => Ok(None),
             }
         })
     }
@@ -525,6 +555,21 @@ where
     })?
 }
 
+pub async fn run_cli_with_io_async<I, T>(
+    args: I,
+    io: &mut (dyn CliIo + Send),
+) -> CliResult<Option<CliOutput>>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<OsString> + Clone,
+{
+    let (command, verbose) = match parse_cli_args(args)? {
+        ParsedCli::Command(cli) => (cli.command, cli.verbose),
+        ParsedCli::EarlyExit(output) => return Ok(Some(output)),
+    };
+    dispatch(command, verbose, io).await
+}
+
 pub async fn execute_cli_from_args<I, T>(args: I) -> CliResult<()>
 where
     I: IntoIterator<Item = T>,
@@ -589,7 +634,7 @@ async fn dispatch(
                 String::from_utf8(buf).map_err(|error| CliError::Serialize(error.to_string()))?;
             Ok(CliOutput::stdout(script))
         }
-        Commands::Doctor(args) => doctor::run_doctor(args).await,
+        Commands::Doctor(args) => doctor::run_doctor(args, io).await,
         Commands::Devices(args) => run_devices(args),
         Commands::Providers(args) => run_providers(args),
     }?;
@@ -741,5 +786,26 @@ mod tests {
         assert_eq!(serialization.exit_code(), 1);
         assert!(matches!(validation, CliError::Validation(_)));
         assert_eq!(validation.exit_code(), 2);
+    }
+
+    #[test]
+    fn std_cli_io_prompt_worker_reuses_single_thread() {
+        let mut io = StdCliIo::default();
+        assert!(io.worker.is_none());
+        let fut1 = io.prompt_line_async();
+        drop(fut1);
+        assert!(io.worker.is_some());
+        let worker_tx = io.worker.as_ref().unwrap().request_tx.clone();
+
+        let fut2 = io.prompt_line_async();
+        drop(fut2);
+        assert!(io.worker.is_some());
+        assert!(
+            io.worker
+                .as_ref()
+                .unwrap()
+                .request_tx
+                .same_channel(&worker_tx)
+        );
     }
 }

@@ -80,106 +80,116 @@ pub struct DoctorConfigStatus {
     pub message: String,
 }
 
-pub async fn run_doctor(args: DoctorArgs) -> CliResult<CliOutput> {
+pub async fn run_doctor(
+    args: DoctorArgs,
+    io: &mut (dyn crate::CliIo + Send),
+) -> CliResult<CliOutput> {
     let report = inspect_system(&args).await;
 
+    let output_text = if args.json {
+        serde_json::to_string_pretty(&report)
+            .map_err(|error| CliError::Serialize(error.to_string()))?
+    } else {
+        let mut lines = Vec::new();
+        lines.push("Sona CLI System Health Check:".to_string());
+        lines.push("--------------------------------------------------".to_string());
+
+        // 1. Built-in decoder and FFmpeg
+        lines.push(
+            "  [OK]   Built-in Audio Decoder: Ready (MP3, WAV, M4A, AAC, FLAC, OGG)".to_string(),
+        );
+        if report.ffmpeg.found {
+            let ver = report
+                .ffmpeg
+                .version
+                .as_deref()
+                .unwrap_or("unknown version");
+            let path = report.ffmpeg.path.as_deref().unwrap_or("-");
+            lines.push(format!("  [OK]   FFmpeg: {path} ({ver})"));
+        } else if args.ffmpeg_path.is_some() {
+            lines.push(format!("  [WARN] FFmpeg: {}", report.ffmpeg.message));
+        } else {
+            lines.push("  [INFO] FFmpeg: Not installed (optional; video extraction and extended formats disabled)".to_string());
+            lines.push(format!("         Hint: {}", ffmpeg_install_suggestion()));
+        }
+        // 2. Audio input
+        if report.audio_input.available {
+            let def = report
+                .audio_input
+                .default_device
+                .as_deref()
+                .unwrap_or("none");
+            lines.push(format!(
+                "  [OK]   Audio Input: {} device(s) found (default: {def})",
+                report.audio_input.device_count
+            ));
+        } else {
+            lines.push(format!(
+                "  [WARN] Audio Input: {}",
+                report.audio_input.message
+            ));
+            lines.push("         Hint: Connect a microphone or grant microphone permissions in system settings".to_string());
+        }
+
+        // 3. Models directory
+        if report.models.exists && report.models.installed_count > 0 {
+            lines.push(format!(
+                "  [OK]   Models: {} ({} preset model(s) installed)",
+                report.models.path, report.models.installed_count
+            ));
+        } else if report.models.exists {
+            lines.push(format!(
+                "  [INFO] Models: {} (0 preset models installed)",
+                report.models.path
+            ));
+            lines.push("         Hint: Run 'sona-cli models download whisper-turbo' or 'sona-cli models list --recommended'".to_string());
+        } else {
+            lines.push(format!("  [WARN] Models: {}", report.models.message));
+            lines.push("         Hint: Create the models directory or run 'sona-cli models download whisper-turbo'".to_string());
+        }
+
+        // 4. Hardware acceleration
+        lines.push(format!(
+            "  [OK]   Hardware Acceleration: {} ({})",
+            report.hardware_acceleration.message,
+            report.hardware_acceleration.available_modes.join(", ")
+        ));
+        // 5. Config
+        if report.config.found {
+            if report.config.valid {
+                lines.push(format!(
+                    "  [OK]   Configuration: {} (valid)",
+                    report.config.path.as_deref().unwrap_or("-")
+                ));
+            } else {
+                lines.push(format!("  [FAIL] Configuration: {}", report.config.message));
+            }
+        } else {
+            lines.push(format!("  [INFO] Configuration: {}", report.config.message));
+        }
+
+        lines.push("--------------------------------------------------".to_string());
+        if report.all_ok {
+            lines.push("Environment is ready for speech recognition.".to_string());
+        } else {
+            lines.push(
+                "Environment has warnings. Some optional features may be limited.".to_string(),
+            );
+        }
+        lines.join("\n")
+    };
+
     if args.strict && !report.all_ok {
+        writeln!(io.stdout(), "{output_text}")
+            .map_err(|e| CliError::Io(format!("Failed to write doctor report: {e}")))?;
+        let _ = io.stdout().flush();
         return Err(CliError::Other(
             "Doctor health check failed: environment has warnings or missing dependencies."
                 .to_string(),
         ));
     }
 
-    if args.json {
-        let output = serde_json::to_string_pretty(&report)
-            .map_err(|error| CliError::Serialize(error.to_string()))?;
-        return Ok(CliOutput::stdout(output));
-    }
-
-    let mut lines = Vec::new();
-    lines.push("Sona CLI System Health Check:".to_string());
-    lines.push("--------------------------------------------------".to_string());
-
-    // 1. Built-in decoder and FFmpeg
-    lines
-        .push("  [OK]   Built-in Audio Decoder: Ready (MP3, WAV, M4A, AAC, FLAC, OGG)".to_string());
-    if report.ffmpeg.found {
-        let ver = report
-            .ffmpeg
-            .version
-            .as_deref()
-            .unwrap_or("unknown version");
-        let path = report.ffmpeg.path.as_deref().unwrap_or("-");
-        lines.push(format!("  [OK]   FFmpeg: {path} ({ver})"));
-    } else if args.ffmpeg_path.is_some() {
-        lines.push(format!("  [WARN] FFmpeg: {}", report.ffmpeg.message));
-    } else {
-        lines.push("  [INFO] FFmpeg: Not installed (optional; video extraction and extended formats disabled)".to_string());
-        lines.push(format!("         Hint: {}", ffmpeg_install_suggestion()));
-    }
-    // 2. Audio input
-    if report.audio_input.available {
-        let def = report
-            .audio_input
-            .default_device
-            .as_deref()
-            .unwrap_or("none");
-        lines.push(format!(
-            "  [OK]   Audio Input: {} device(s) found (default: {def})",
-            report.audio_input.device_count
-        ));
-    } else {
-        lines.push(format!(
-            "  [WARN] Audio Input: {}",
-            report.audio_input.message
-        ));
-        lines.push("         Hint: Connect a microphone or grant microphone permissions in system settings".to_string());
-    }
-
-    // 3. Models directory
-    if report.models.exists && report.models.installed_count > 0 {
-        lines.push(format!(
-            "  [OK]   Models: {} ({} preset model(s) installed)",
-            report.models.path, report.models.installed_count
-        ));
-    } else if report.models.exists {
-        lines.push(format!(
-            "  [INFO] Models: {} (0 preset models installed)",
-            report.models.path
-        ));
-        lines.push("         Hint: Run 'sona-cli models download whisper-turbo' or 'sona-cli models list --recommended'".to_string());
-    } else {
-        lines.push(format!("  [WARN] Models: {}", report.models.message));
-        lines.push("         Hint: Create the models directory or run 'sona-cli models download whisper-turbo'".to_string());
-    }
-
-    // 4. Hardware acceleration
-    lines.push(format!(
-        "  [OK]   Hardware Acceleration: {} ({})",
-        report.hardware_acceleration.message,
-        report.hardware_acceleration.available_modes.join(", ")
-    ));
-    // 5. Config
-    if report.config.found {
-        if report.config.valid {
-            lines.push(format!(
-                "  [OK]   Configuration: {} (valid)",
-                report.config.path.as_deref().unwrap_or("-")
-            ));
-        } else {
-            lines.push(format!("  [FAIL] Configuration: {}", report.config.message));
-        }
-    } else {
-        lines.push(format!("  [INFO] Configuration: {}", report.config.message));
-    }
-
-    lines.push("--------------------------------------------------".to_string());
-    if report.all_ok {
-        lines.push("Environment is ready for speech recognition.".to_string());
-    } else {
-        lines.push("Environment has warnings. Some optional features may be limited.".to_string());
-    }
-    Ok(CliOutput::stdout(lines.join("\n")))
+    Ok(CliOutput::stdout(output_text))
 }
 
 async fn inspect_system(args: &DoctorArgs) -> DoctorReport {

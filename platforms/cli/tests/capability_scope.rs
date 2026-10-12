@@ -746,6 +746,35 @@ fn doctor_strict_mode_fails_with_exit_code_1_on_warnings() {
     assert!(error.to_string().contains("Doctor health check failed"));
 }
 
+#[tokio::test]
+async fn doctor_strict_mode_outputs_report_before_failure() {
+    let mut io = sona_cli::MemoryCliIo::default();
+    let error = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "doctor",
+            "--ffmpeg-path",
+            "/path/that/definitely/does/not/exist/ffmpeg",
+            "--strict",
+        ],
+        &mut io,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(error.exit_code(), 1);
+    assert!(error.to_string().contains("Doctor health check failed"));
+    let stdout = String::from_utf8_lossy(&io.stdout);
+    assert!(
+        stdout.contains("Sona CLI System Health Check:"),
+        "Standard output must contain system health check header: {stdout}"
+    );
+    assert!(
+        stdout.contains("[WARN] FFmpeg:"),
+        "Standard output must contain FFmpeg warning: {stdout}"
+    );
+}
+
 #[test]
 fn devices_command_outputs_device_list_or_empty() {
     let output = sona_cli::run_cli_from_args(["sona-cli", "devices"])

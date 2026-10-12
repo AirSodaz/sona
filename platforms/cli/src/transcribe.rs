@@ -437,7 +437,9 @@ where
                 for handle in &worker_handles {
                     handle.abort();
                 }
-                return Err(CliError::Cancelled("Batch transcription cancelled by user".to_string()));
+                return Err(CliError::Cancelled(format!(
+                    "Batch transcription cancelled by user ({succeeded}/{total} completed)"
+                )));
             }
             recv_opt = progress_rx.recv() => {
                 match recv_opt {
@@ -491,7 +493,7 @@ where
                         for handle in &worker_handles {
                             handle.abort();
                         }
-                        return Err(CliError::Validation(format!(
+                        return Err(CliError::Other(format!(
                             "Batch transcription channel closed prematurely: completed {total_processed}/{total} tasks"
                         )));
                     }
@@ -506,7 +508,7 @@ where
             output_dir.display(),
             failures.len()
         );
-        return Err(CliError::Validation(msg));
+        return Err(CliError::Other(msg));
     }
 
     Ok(CliOutput::stderr(format!(
@@ -1341,5 +1343,101 @@ mod tests {
             1,
             "Execution with jobs=1 must be strictly sequential"
         );
+    }
+
+    #[tokio::test]
+    async fn test_batch_transcribe_partial_failure_with_continue_on_error_returns_cli_error_other()
+    {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file1 = temp_dir.path().join("audio1.wav");
+        let file2 = temp_dir.path().join("audio2.wav");
+        std::fs::write(&file1, b"test audio 1").unwrap();
+        std::fs::write(&file2, b"test audio 2").unwrap();
+        let out_dir = temp_dir.path().join("out");
+        std::fs::create_dir_all(&out_dir).unwrap();
+
+        let plans = vec![
+            BatchOutputPlan {
+                input_path: file1.clone(),
+                output_path: out_dir.join("audio1.json"),
+            },
+            BatchOutputPlan {
+                input_path: file2.clone(),
+                output_path: out_dir.join("audio2.json"),
+            },
+        ];
+
+        let args = TranscribeArgs {
+            inputs: vec![file1.clone(), file2.clone()],
+            input_dir: None,
+            output_dir: Some(out_dir.clone()),
+            recursive: false,
+            output: None,
+            format: None,
+            language: None,
+            mode: "source".to_string(),
+            model_id: None,
+            models_dir: None,
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: false,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: false,
+            force: true,
+            continue_on_error: true,
+            ffmpeg_path: None,
+            online: crate::online_asr::OnlineAsrArgs::default(),
+            config: None,
+            list_providers: false,
+            jobs: Some(1),
+        };
+
+        let mut io = crate::MemoryCliIo::default();
+        let result = run_batch_transcribe_dispatched(
+            &args,
+            &plans,
+            &out_dir,
+            1,
+            &mut io,
+            move |plan| async move {
+                if plan.input_path.ends_with("audio1.wav") {
+                    Ok(())
+                } else {
+                    Err(CliError::Other("corrupt audio frames".to_string()))
+                }
+            },
+        )
+        .await;
+
+        assert!(
+            result.is_err(),
+            "Batch transcription with failures should return Err"
+        );
+        let error = result.unwrap_err();
+        assert!(
+            matches!(error, CliError::Other(_)),
+            "Partial failure must return CliError::Other, got: {error:?}"
+        );
+        assert_eq!(
+            error.exit_code(),
+            1,
+            "Exit code must be 1 (runtime failure), not 2 (validation)"
+        );
+        assert!(
+            error.to_string().contains("Transcribed 1/2 file(s)"),
+            "Error message must report succeeded count: {error}"
+        );
+        assert!(
+            error.to_string().contains("1 file(s) failed"),
+            "Error message must report failed count: {error}"
+        );
+
+        let captured = io.into_output();
+        assert!(captured.stderr.contains("[1/2] Transcribed"));
+        assert!(captured.stderr.contains("[2/2] [FAIL]"));
     }
 }
