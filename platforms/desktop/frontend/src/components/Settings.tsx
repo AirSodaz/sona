@@ -1,4 +1,4 @@
-import { BarChart3, Cloud, HardDrive, Server } from 'lucide-react';
+import { BarChart3, Bot, Cloud, HardDrive, Server } from 'lucide-react';
 import type React from 'react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -16,6 +16,7 @@ import {
   loadSettingsDashboardTab,
   loadSettingsGeneralTab,
   loadSettingsLLMServiceTab,
+  loadSettingsMcpTab,
   loadSettingsMicrophoneTab,
   loadSettingsModelsPane,
   loadSettingsShortcutsTab,
@@ -59,6 +60,7 @@ const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
 const SettingsApiServerTab = lazy(loadSettingsApiServerTab);
+const SettingsMcpTab = lazy(loadSettingsMcpTab);
 const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
@@ -106,6 +108,8 @@ function renderSettingsPane(
       return <SettingsSyncTab isVisible={isOpen} isPrewarming={isPrewarming} />;
     case 'api_server':
       return <SettingsApiServerTab />;
+    case 'mcp':
+      return <SettingsMcpTab />;
     case 'llm_service':
       return (
         <SettingsLLMServiceTab
@@ -504,6 +508,14 @@ export function Settings({
             activeTab={renderedTab}
             setActiveTab={navigateToTab}
             tabIndex={renderedTab === 'api_server' ? 0 : -1}
+          />
+          <SettingsTabButton
+            id="mcp"
+            label={t('settings.mcp.title', { defaultValue: 'MCP Agents' })}
+            Icon={() => <Bot size={18} />}
+            activeTab={renderedTab}
+            setActiveTab={navigateToTab}
+            tabIndex={renderedTab === 'mcp' ? 0 : -1}
           />
           <SettingsTabButton
             id="llm_service"

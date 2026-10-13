@@ -1,0 +1,293 @@
+/* =========================================================================
+   Settings MCP Tab - Warm Minimalism & Unified Design System
+   ========================================================================= */
+
+/* Inline code snippet inside settings rows */
+.settings-code-inline {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-primary);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm, 6px);
+  border: 1px solid var(--color-border);
+  user-select: all;
+  word-break: break-all;
+}
+
+/* Pulsing status dot */
+.mcp-status-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--color-text-muted);
+  margin-right: 6px;
+  vertical-align: middle;
+}
+
+.mcp-status-dot.active {
+  background-color: var(--color-success);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-success) 24%, transparent);
+}
+
+/* Secondary subtle badge */
+.badge-subtle {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+}
+
+/* Row-level action cluster */
+.mcp-actions-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+}
+
+/* Client tabs in integration guide */
+.mcp-client-tabs {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 6px);
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.mcp-guide-path-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+  width: 100%;
+  padding-bottom: var(--spacing-xs, 6px);
+}
+
+.mcp-guide-path-label {
+  font-size: 0.8125rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+/* Code container */
+.mcp-code-container {
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: color-mix(in srgb, var(--color-bg-secondary) 85%, var(--color-bg-primary));
+  overflow: hidden;
+  margin-top: var(--spacing-xs, 6px);
+}
+
+.mcp-code-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.mcp-code-lang {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.mcp-code-body {
+  margin: 0;
+  padding: 12px 14px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* Audit log toolbar */
+.mcp-log-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm, 8px);
+  flex-wrap: wrap;
+  width: 100%;
+  padding-bottom: var(--spacing-xs, 6px);
+}
+
+.mcp-log-pills {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mcp-log-search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  padding: 4px 10px;
+  min-width: 200px;
+  flex: 1;
+  max-width: 320px;
+}
+
+.mcp-log-search-input {
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-size: 0.8125rem;
+  outline: none;
+  width: 100%;
+}
+
+.mcp-log-search-input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Audit log list */
+.mcp-log-table {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+  background: var(--color-bg-primary);
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.mcp-log-entry-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md, 12px);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+.mcp-log-entry-row:last-child {
+  border-bottom: none;
+}
+
+.mcp-log-entry-row:hover {
+  background: var(--color-bg-hover);
+}
+
+.mcp-log-entry-row.status-blocked {
+  background: color-mix(in srgb, var(--color-error) 4%, transparent);
+}
+
+.mcp-log-entry-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.mcp-log-time {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+}
+
+.mcp-log-method {
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+.mcp-log-category-tag {
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  border: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.mcp-log-summary-text {
+  color: var(--color-text-muted);
+  font-size: 0.78rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mcp-log-entry-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mcp-log-duration-label {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+/* Tools matrix grid inside accordion */
+.mcp-tools-matrix-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--spacing-sm, 10px);
+  padding: var(--spacing-md, 14px);
+  background: var(--color-bg-primary);
+}
+
+.mcp-tool-unified-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 8px);
+  transition: border-color var(--transition-fast, 0.15s) ease;
+}
+
+.mcp-tool-unified-card:hover {
+  border-color: var(--color-border-hover);
+}
+
+.mcp-tool-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.mcp-tool-card-name {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.mcp-tool-card-title {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.mcp-tool-card-desc {
+  font-size: 0.75rem;
+  color: var(--color-text-secondary);
+  line-height: 1.35;
+}

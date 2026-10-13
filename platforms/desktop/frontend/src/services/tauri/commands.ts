@@ -223,6 +223,15 @@ export const TauriCommand = {
     activate: 'activate_cuda_addon',
     download: 'download_cuda_addon',
   },
+  mcp: {
+    getStatus: 'mcp_get_status',
+    setEnabled: 'mcp_set_enabled',
+    disconnectAll: 'mcp_disconnect_all',
+    getActivityLogs: 'mcp_get_activity_logs',
+    clearActivityLogs: 'mcp_clear_activity_logs',
+    getToolsCatalog: 'mcp_get_tools_catalog',
+    getClientConfigs: 'mcp_get_client_configs',
+  },
 } as const;
 
 export type TauriCommandName = DeepValueOf<typeof TauriCommand>;

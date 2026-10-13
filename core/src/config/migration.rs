@@ -75,6 +75,10 @@ fn should_upgrade_config(config: &Value) -> bool {
         return true;
     }
 
+    if config.get("mcpEnabled").is_none() {
+        return true;
+    }
+
     if config.get("keepMicrophoneActive").is_none() {
         return true;
     }
@@ -179,6 +183,48 @@ fn normalize_current_config(existing: Value) -> Value {
     );
     set(&mut config, "ffmpegEnabled", json!(ffmpeg_enabled));
     set(&mut config, "ffmpegPath", json!(ffmpeg_path));
+    let mcp_enabled = bool_at(&config, "mcpEnabled").unwrap_or(true);
+    let mcp_permission_mode = string_or_default(&config, "mcpPermissionMode", "full");
+    let mcp_allow_recording = bool_at(&config, "mcpAllowRecording").unwrap_or(true);
+    let mcp_allow_transcript_edit = bool_at(&config, "mcpAllowTranscriptEdit").unwrap_or(true);
+    let mcp_allow_destructive = bool_at(&config, "mcpAllowDestructive").unwrap_or(false);
+    let mcp_allow_settings_update = bool_at(&config, "mcpAllowSettingsUpdate").unwrap_or(false);
+    let mcp_allow_model_management = bool_at(&config, "mcpAllowModelManagement").unwrap_or(true);
+    let mcp_notify_on_mutation = bool_at(&config, "mcpNotifyOnMutation").unwrap_or(true);
+    let mcp_audit_log_enabled = bool_at(&config, "mcpAuditLogEnabled").unwrap_or(true);
+    set(&mut config, "mcpEnabled", json!(mcp_enabled));
+    set(&mut config, "mcpPermissionMode", json!(mcp_permission_mode));
+    set(&mut config, "mcpAllowRecording", json!(mcp_allow_recording));
+    set(
+        &mut config,
+        "mcpAllowTranscriptEdit",
+        json!(mcp_allow_transcript_edit),
+    );
+    set(
+        &mut config,
+        "mcpAllowDestructive",
+        json!(mcp_allow_destructive),
+    );
+    set(
+        &mut config,
+        "mcpAllowSettingsUpdate",
+        json!(mcp_allow_settings_update),
+    );
+    set(
+        &mut config,
+        "mcpAllowModelManagement",
+        json!(mcp_allow_model_management),
+    );
+    set(
+        &mut config,
+        "mcpNotifyOnMutation",
+        json!(mcp_notify_on_mutation),
+    );
+    set(
+        &mut config,
+        "mcpAuditLogEnabled",
+        json!(mcp_audit_log_enabled),
+    );
     sanitize_typed_config_fields(&mut config);
     set(&mut config, "__original", original);
     config
@@ -254,6 +300,18 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     }
     if existing.get("gpuAcceleration").is_some()
         && existing.get("gpuAcceleration") != normalized.get("gpuAcceleration")
+    {
+        return true;
+    }
+    if existing.get("mcpEnabled") != normalized.get("mcpEnabled")
+        || existing.get("mcpPermissionMode") != normalized.get("mcpPermissionMode")
+        || existing.get("mcpAllowRecording") != normalized.get("mcpAllowRecording")
+        || existing.get("mcpAllowTranscriptEdit") != normalized.get("mcpAllowTranscriptEdit")
+        || existing.get("mcpAllowDestructive") != normalized.get("mcpAllowDestructive")
+        || existing.get("mcpAllowSettingsUpdate") != normalized.get("mcpAllowSettingsUpdate")
+        || existing.get("mcpAllowModelManagement") != normalized.get("mcpAllowModelManagement")
+        || existing.get("mcpNotifyOnMutation") != normalized.get("mcpNotifyOnMutation")
+        || existing.get("mcpAuditLogEnabled") != normalized.get("mcpAuditLogEnabled")
     {
         return true;
     }
@@ -567,6 +625,42 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             "httpServerApiKey",
             json!(string_or_default(&parsed, "httpServerApiKey", "")),
         ),
+        (
+            "mcpEnabled",
+            json!(bool_at(&parsed, "mcpEnabled").unwrap_or(true)),
+        ),
+        (
+            "mcpPermissionMode",
+            json!(string_or_default(&parsed, "mcpPermissionMode", "full")),
+        ),
+        (
+            "mcpAllowRecording",
+            json!(bool_at(&parsed, "mcpAllowRecording").unwrap_or(true)),
+        ),
+        (
+            "mcpAllowTranscriptEdit",
+            json!(bool_at(&parsed, "mcpAllowTranscriptEdit").unwrap_or(true)),
+        ),
+        (
+            "mcpAllowDestructive",
+            json!(bool_at(&parsed, "mcpAllowDestructive").unwrap_or(false)),
+        ),
+        (
+            "mcpAllowSettingsUpdate",
+            json!(bool_at(&parsed, "mcpAllowSettingsUpdate").unwrap_or(false)),
+        ),
+        (
+            "mcpAllowModelManagement",
+            json!(bool_at(&parsed, "mcpAllowModelManagement").unwrap_or(true)),
+        ),
+        (
+            "mcpNotifyOnMutation",
+            json!(bool_at(&parsed, "mcpNotifyOnMutation").unwrap_or(true)),
+        ),
+        (
+            "mcpAuditLogEnabled",
+            json!(bool_at(&parsed, "mcpAuditLogEnabled").unwrap_or(true)),
+        ),
     ] {
         set(&mut config, key, value);
     }
@@ -721,6 +815,14 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "autoPolish",
         "voiceTypingEnabled",
         "httpServerEnabled",
+        "mcpEnabled",
+        "mcpAllowRecording",
+        "mcpAllowTranscriptEdit",
+        "mcpAllowDestructive",
+        "mcpAllowSettingsUpdate",
+        "mcpAllowModelManagement",
+        "mcpNotifyOnMutation",
+        "mcpAuditLogEnabled",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }
@@ -766,6 +868,11 @@ fn sanitize_typed_config_fields(config: &mut Value) {
 
     repair_field_type(config, &defaults, "historyAudioRetentionDays", |value| {
         value.is_null() || value.as_i64().is_some()
+    });
+    repair_field_type(config, &defaults, "mcpPermissionMode", |value| {
+        value
+            .as_str()
+            .is_some_and(|mode| matches!(mode, "full" | "read_only" | "granular"))
     });
 }
 

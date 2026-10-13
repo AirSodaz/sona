@@ -52,6 +52,113 @@ impl AgentControlFacade {
         }
     }
 
+    pub fn services(&self) -> &DesktopServices {
+        &self.services
+    }
+
+    pub fn load_app_config(&self) -> sona_core::config::AppConfig {
+        let mut config: sona_core::config::AppConfig = self
+            .services
+            .config
+            .load()
+            .ok()
+            .flatten()
+            .and_then(|v| serde_json::from_value(v).ok())
+            .unwrap_or_default();
+
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpEnabled")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_enabled = Some(b);
+        }
+        if let Some(s) = self
+            .services
+            .config
+            .get_setting("mcpPermissionMode")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(ToString::to_string))
+        {
+            config.mcp_permission_mode = Some(s);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAllowRecording")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_allow_recording = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAllowTranscriptEdit")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_allow_transcript_edit = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAllowDestructive")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_allow_destructive = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAllowSettingsUpdate")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_allow_settings_update = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAllowModelManagement")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_allow_model_management = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpNotifyOnMutation")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_notify_on_mutation = Some(b);
+        }
+        if let Some(b) = self
+            .services
+            .config
+            .get_setting("mcpAuditLogEnabled")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_bool())
+        {
+            config.mcp_audit_log_enabled = Some(b);
+        }
+        config
+    }
+
     pub async fn get_client_state(&self) -> Result<ClientStateResult, String> {
         let (is_recording, is_paused) = {
             let session_guard = self.active_session.lock().await;

@@ -7,6 +7,7 @@ pub mod downloads;
 pub mod export;
 pub mod history;
 pub mod llm;
+pub mod mcp;
 pub mod project;
 pub mod recovery;
 pub mod server;
@@ -197,6 +198,13 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::server::stop_api_server,
         crate::commands::server::get_api_server_dashboard_snapshot,
         crate::commands::server::has_active_api_server_jobs,
-        crate::commands::system::check_media_formats
+        crate::commands::system::check_media_formats,
+        crate::commands::mcp::mcp_get_status,
+        crate::commands::mcp::mcp_set_enabled,
+        crate::commands::mcp::mcp_disconnect_all,
+        crate::commands::mcp::mcp_get_activity_logs,
+        crate::commands::mcp::mcp_clear_activity_logs,
+        crate::commands::mcp::mcp_get_tools_catalog,
+        crate::commands::mcp::mcp_get_client_configs
     ]
 }

@@ -8,10 +8,12 @@ import {
 } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
 import { useHistoryStore } from '../stores/historyStore';
+import { useMcpStore } from '../stores/mcpStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { stopActiveRecording } from '../stores/transcriptCoordinator';
 import { sessionActions, transcriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import type { McpActivityLogEntry, McpMutationNotice } from '../types/mcp';
 import { logger } from '../utils/logger';
 
 /**
@@ -119,6 +121,38 @@ export function useAgentControlSync(): void {
         });
         if (isMounted) unlisteners.push(unlistenBatch);
         else unlistenBatch();
+
+        // 4. Listen for MCP status changes
+        const unlistenMcpStatus = await listen<void>(TauriEvent.mcp.statusChanged, () => {
+          if (!isMounted) return;
+          void useMcpStore.getState().fetchStatus();
+        });
+        if (isMounted) unlisteners.push(unlistenMcpStatus);
+        else unlistenMcpStatus();
+
+        // 5. Listen for MCP activity logs
+        const unlistenMcpActivity = await listen<McpActivityLogEntry>(
+          TauriEvent.mcp.activity,
+          (event) => {
+            if (!isMounted) return;
+            if (event.payload) {
+              useMcpStore.getState().addLogEntry(event.payload);
+            }
+          }
+        );
+        if (isMounted) unlisteners.push(unlistenMcpActivity);
+        else unlistenMcpActivity();
+
+        // 6. Listen for MCP mutation notice
+        const unlistenMcpMutation = await listen<McpMutationNotice>(
+          TauriEvent.mcp.mutationNotice,
+          (event) => {
+            if (!isMounted) return;
+            logger.info('[AgentControlSync] MCP mutation notice:', event.payload);
+          }
+        );
+        if (isMounted) unlisteners.push(unlistenMcpMutation);
+        else unlistenMcpMutation();
       } catch (error) {
         logger.error('[AgentControlSync] Failed to setup listeners:', error);
       }

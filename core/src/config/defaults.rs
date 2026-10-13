@@ -94,6 +94,15 @@ pub fn default_config() -> Value {
         ("httpServerHost", json!("127.0.0.1")),
         ("httpServerApiKey", json!("")),
         ("historyAudioRetentionDays", Value::Null),
+        ("mcpEnabled", json!(true)),
+        ("mcpPermissionMode", json!("full")),
+        ("mcpAllowRecording", json!(true)),
+        ("mcpAllowTranscriptEdit", json!(true)),
+        ("mcpAllowDestructive", json!(false)),
+        ("mcpAllowSettingsUpdate", json!(false)),
+        ("mcpAllowModelManagement", json!(true)),
+        ("mcpNotifyOnMutation", json!(true)),
+        ("mcpAuditLogEnabled", json!(true)),
     ] {
         config.insert(key.to_string(), value);
     }

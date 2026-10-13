@@ -176,3 +176,36 @@ fn migration_enables_ffmpeg_when_legacy_config_has_custom_ffmpeg_path() {
     let empty_result = migrate_app_config(Some(empty_ffmpeg_config), "Default Rules".to_string());
     assert_eq!(empty_result.config["ffmpegEnabled"], false);
 }
+
+#[test]
+fn migration_populates_and_validates_mcp_config_defaults() {
+    let mut legacy_config = default_config();
+    let obj = legacy_config.as_object_mut().unwrap();
+    obj.remove("mcpEnabled");
+    obj.remove("mcpPermissionMode");
+    obj.remove("mcpAllowRecording");
+    obj.remove("mcpAllowTranscriptEdit");
+    obj.remove("mcpAllowDestructive");
+    obj.remove("mcpAllowSettingsUpdate");
+    obj.remove("mcpAllowModelManagement");
+    obj.remove("mcpNotifyOnMutation");
+    obj.remove("mcpAuditLogEnabled");
+
+    let result = migrate_app_config(Some(legacy_config), "Default Rules".to_string());
+    assert!(result.migrated);
+    assert_eq!(result.config["mcpEnabled"], true);
+    assert_eq!(result.config["mcpPermissionMode"], "full");
+    assert_eq!(result.config["mcpAllowRecording"], true);
+    assert_eq!(result.config["mcpAllowTranscriptEdit"], true);
+    assert_eq!(result.config["mcpAllowDestructive"], false);
+    assert_eq!(result.config["mcpAllowSettingsUpdate"], false);
+    assert_eq!(result.config["mcpAllowModelManagement"], true);
+    assert_eq!(result.config["mcpNotifyOnMutation"], true);
+    assert_eq!(result.config["mcpAuditLogEnabled"], true);
+
+    let typed: AppConfig = serde_json::from_value(result.config.clone())
+        .expect("migrated config should deserialize into AppConfig");
+    assert_eq!(typed.mcp_enabled, Some(true));
+    assert_eq!(typed.mcp_permission_mode.as_deref(), Some("full"));
+    assert_eq!(typed.mcp_allow_destructive, Some(false));
+}

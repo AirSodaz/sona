@@ -411,6 +411,24 @@ pub struct AppConfig {
         specta(type = Option<specta_typescript::Number>)
     )]
     pub history_audio_retention_days: Option<i64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_permission_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_allow_recording: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_allow_transcript_edit: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_allow_destructive: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_allow_settings_update: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_allow_model_management: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_notify_on_mutation: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mcp_audit_log_enabled: Option<bool>,
     #[serde(flatten)]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub extra: BTreeMap<String, Value>,

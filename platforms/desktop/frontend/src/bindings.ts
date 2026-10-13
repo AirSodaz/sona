@@ -153,6 +153,15 @@ export type AppConfig_Deserialize = {
 	httpServerJobTtlMinutes?: number | null,
 	httpServerIpWhitelist?: string | null,
 	historyAudioRetentionDays?: number | null,
+	mcpEnabled?: boolean | null,
+	mcpPermissionMode?: string | null,
+	mcpAllowRecording?: boolean | null,
+	mcpAllowTranscriptEdit?: boolean | null,
+	mcpAllowDestructive?: boolean | null,
+	mcpAllowSettingsUpdate?: boolean | null,
+	mcpAllowModelManagement?: boolean | null,
+	mcpNotifyOnMutation?: boolean | null,
+	mcpAuditLogEnabled?: boolean | null,
 } & {
 	enableITN?: boolean | null,
 } & {
@@ -251,6 +260,15 @@ export type AppConfig_Serialize = {
 	httpServerJobTtlMinutes?: number | null,
 	httpServerIpWhitelist?: string | null,
 	historyAudioRetentionDays?: number | null,
+	mcpEnabled?: boolean | null,
+	mcpPermissionMode?: string | null,
+	mcpAllowRecording?: boolean | null,
+	mcpAllowTranscriptEdit?: boolean | null,
+	mcpAllowDestructive?: boolean | null,
+	mcpAllowSettingsUpdate?: boolean | null,
+	mcpAllowModelManagement?: boolean | null,
+	mcpNotifyOnMutation?: boolean | null,
+	mcpAuditLogEnabled?: boolean | null,
 };
 
 export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";

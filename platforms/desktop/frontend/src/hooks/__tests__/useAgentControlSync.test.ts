@@ -303,11 +303,21 @@ describe('useAgentControlSync', () => {
     );
   });
 
+  it('subscribes to mcp statusChanged and activity events', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has('mcp-status-changed')).toBe(true);
+      expect(listeners.has('mcp-activity')).toBe(true);
+      expect(listeners.has('mcp-mutation-notice')).toBe(true);
+    });
+  });
+
   it('unregisters all listeners on unmount', async () => {
     const { unmount } = renderHook(() => useAgentControlSync());
 
     await waitFor(() => {
-      expect(listeners.size).toBe(4);
+      expect(listeners.size).toBe(7);
     });
 
     unmount();

@@ -12,6 +12,7 @@ export const SETTINGS_TABS = [
   'storage',
   'sync',
   'api_server',
+  'mcp',
   'llm_service',
   'shortcuts',
   'about',
@@ -93,6 +94,10 @@ export const loadSettingsApiServerTab = memoizeLoader(async () => {
   const module = await import('./SettingsApiServerTab');
   return resolveModuleComponent(module, 'SettingsApiServerTab');
 });
+export const loadSettingsMcpTab = memoizeLoader(async () => {
+  const module = await import('./SettingsMcpTab');
+  return resolveModuleComponent(module, 'SettingsMcpTab');
+});
 
 export const loadSettingsLLMServiceTab = memoizeLoader(async () => {
   const module = await import('./SettingsLLMServiceTab');
@@ -124,6 +129,7 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
   storage: () => loadSettingsStorageTab().then(() => undefined),
   sync: () => loadSettingsSyncTab().then(() => undefined),
   api_server: () => loadSettingsApiServerTab().then(() => undefined),
+  mcp: () => loadSettingsMcpTab().then(() => undefined),
   llm_service: () => loadSettingsLLMServiceTab().then(() => undefined),
   shortcuts: () => loadSettingsShortcutsTab().then(() => undefined),
   about: () => loadSettingsAboutTab().then(() => undefined),

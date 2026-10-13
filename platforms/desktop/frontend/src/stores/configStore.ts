@@ -13,6 +13,7 @@ import type {
   CaptionConfig,
   HistoryStorageConfig,
   LlmAssistantConfig,
+  McpConfig,
   ModelConfig,
   ShortcutConfig,
   TranscriptionConfig,
@@ -173,6 +174,17 @@ export const DEFAULT_CONFIG: AppConfig = {
 
   // History storage
   historyAudioRetentionDays: null,
+
+  // MCP Agent Control
+  mcpEnabled: true,
+  mcpPermissionMode: 'full',
+  mcpAllowRecording: true,
+  mcpAllowTranscriptEdit: true,
+  mcpAllowDestructive: false,
+  mcpAllowSettingsUpdate: false,
+  mcpAllowModelManagement: true,
+  mcpNotifyOnMutation: true,
+  mcpAuditLogEnabled: true,
 };
 
 // ---------------------------------------------------------------------------
@@ -319,6 +331,18 @@ const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [
   'gpuAcceleration',
 ];
 const HISTORY_STORAGE_KEYS: (keyof HistoryStorageConfig)[] = ['historyAudioRetentionDays'];
+
+const MCP_KEYS: (keyof McpConfig)[] = [
+  'mcpEnabled',
+  'mcpPermissionMode',
+  'mcpAllowRecording',
+  'mcpAllowTranscriptEdit',
+  'mcpAllowDestructive',
+  'mcpAllowSettingsUpdate',
+  'mcpAllowModelManagement',
+  'mcpNotifyOnMutation',
+  'mcpAuditLogEnabled',
+];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -381,6 +405,11 @@ export function useApiServerConfig(): ApiServerConfig {
 /** History audio retention and storage settings. */
 export function useHistoryStorageConfig(): HistoryStorageConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, HISTORY_STORAGE_KEYS)));
+}
+
+/** MCP Agent Control settings. */
+export function useMcpConfig(): McpConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, MCP_KEYS)));
 }
 
 // ---------------------------------------------------------------------------

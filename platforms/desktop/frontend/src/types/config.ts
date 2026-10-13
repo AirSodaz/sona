@@ -455,6 +455,32 @@ export interface HistoryStorageConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Model Context Protocol (MCP) Agent Control
+// ---------------------------------------------------------------------------
+
+export type McpPermissionMode = 'full' | 'read_only' | 'granular';
+
+export interface McpConfig {
+  /** Master switch for MCP IPC agent control server. Default: true. */
+  mcpEnabled?: boolean;
+  /** Permission mode for agent calls: 'full' | 'read_only' | 'granular'. Default: 'full'. */
+  mcpPermissionMode?: McpPermissionMode;
+  /** Whether external agents are permitted to control audio recording. Default: true. */
+  mcpAllowRecording?: boolean;
+  /** Whether external agents are permitted to edit transcripts & summaries. Default: true. */
+  mcpAllowTranscriptEdit?: boolean;
+  /** Whether external agents are permitted to perform destructive actions (deletion/discard). Default: false. */
+  mcpAllowDestructive?: boolean;
+  /** Whether external agents are permitted to modify desktop settings. Default: false. */
+  mcpAllowSettingsUpdate?: boolean;
+  /** Whether external agents are permitted to manage models. Default: true. */
+  mcpAllowModelManagement?: boolean;
+  /** Whether to show a desktop toast/notification on agent mutations or recording actions. Default: true. */
+  mcpNotifyOnMutation?: boolean;
+  /** Whether local MCP activity audit logging is enabled. Default: true. */
+  mcpAuditLogEnabled?: boolean;
+}
+// ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
 
@@ -476,4 +502,5 @@ export type AppConfig = GeneratedAppConfig &
   VoiceTypingConfig &
   ApiServerConfig &
   LlmAssistantConfig &
-  HistoryStorageConfig;
+  HistoryStorageConfig &
+  McpConfig;

@@ -90,13 +90,17 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         Some(app.handle().clone()),
     );
     let connection_tracker = crate::platform::agent_control::ActiveConnectionTracker::new();
-    app.manage(agent_facade.clone());
-    app.manage(connection_tracker.clone());
-    crate::platform::agent_control::start_agent_control_ipc_server(
-        agent_facade,
-        connection_tracker,
-        Some(app.handle().clone()),
+    let mcp_controller = crate::platform::agent_control::AgentControlServerController::new(
+        connection_tracker.clone(),
     );
+    app.manage(agent_facade.clone());
+    app.manage(connection_tracker);
+    app.manage(mcp_controller.clone());
+
+    let mcp_config = agent_facade.load_app_config();
+    if mcp_config.mcp_enabled.unwrap_or(true) {
+        mcp_controller.start(Some(app.handle().clone()), agent_facade);
+    }
     app.manage(desktop_services);
     crate::app::window::create_main_window(app.handle(), start_silently)?;
     let listener_app_handle = app_handle_for_listener.clone();

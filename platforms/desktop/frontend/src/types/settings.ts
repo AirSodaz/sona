@@ -11,6 +11,7 @@ export type SettingsTab =
   | 'automation'
   | 'storage'
   | 'sync'
-  | 'api_server';
+  | 'api_server'
+  | 'mcp';
 
 export type SettingsTabInput = SettingsTab | 'context' | 'voice_typing';

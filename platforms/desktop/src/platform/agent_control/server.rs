@@ -8,9 +8,13 @@ pub use tracker::*;
 
 use super::facade::AgentControlFacade;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
-
+use tokio::sync::{RwLock, watch};
 pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
 
 pub fn get_unix_socket_path() -> PathBuf {
@@ -58,6 +62,197 @@ pub struct JsonRpcErrorResponse<'a> {
     pub id: serde_json::Value,
     pub error: JsonRpcErrorObject<'a>,
 }
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpActivityLogEntry {
+    pub id: String,
+    pub timestamp: u64,
+    pub method: String,
+    pub category: String,
+    pub status: String, // "success" | "error" | "blocked"
+    pub duration_ms: u64,
+    pub params_summary: Option<String>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Clone)]
+pub struct AgentControlServerController {
+    active_shutdown_tx: Arc<std::sync::Mutex<Option<watch::Sender<bool>>>>,
+    is_running: Arc<AtomicBool>,
+    generation: Arc<std::sync::atomic::AtomicU64>,
+    tracker: ActiveConnectionTracker,
+    activity_logs: Arc<RwLock<VecDeque<McpActivityLogEntry>>>,
+}
+
+impl Default for AgentControlServerController {
+    fn default() -> Self {
+        Self::new(ActiveConnectionTracker::default())
+    }
+}
+
+impl AgentControlServerController {
+    pub fn new(tracker: ActiveConnectionTracker) -> Self {
+        Self {
+            active_shutdown_tx: Arc::new(std::sync::Mutex::new(None)),
+            is_running: Arc::new(AtomicBool::new(false)),
+            generation: Arc::new(std::sync::atomic::AtomicU64::new(0)),
+            tracker,
+            activity_logs: Arc::new(RwLock::new(VecDeque::with_capacity(100))),
+        }
+    }
+
+    pub fn tracker(&self) -> &ActiveConnectionTracker {
+        &self.tracker
+    }
+
+    pub fn is_running(&self) -> bool {
+        self.is_running.load(Ordering::SeqCst)
+    }
+
+    pub fn start(&self, app_handle: Option<tauri::AppHandle>, facade: AgentControlFacade) {
+        if self.is_running.load(Ordering::SeqCst) {
+            log::info!("[AgentControlIPC] Server is already running");
+            return;
+        }
+        let generation_id = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
+        let (shutdown_tx, mut shutdown_rx) = watch::channel(false);
+        {
+            if let Ok(mut active) = self.active_shutdown_tx.lock() {
+                let old_tx = active.replace(shutdown_tx);
+                if let Some(tx) = old_tx {
+                    let _ = tx.send(true);
+                }
+            }
+        }
+        self.is_running.store(true, Ordering::SeqCst);
+
+        let tracker = self.tracker.clone();
+        let app_handle_clone = app_handle.clone();
+        let controller_clone = self.clone();
+        let is_running_flag = self.is_running.clone();
+        let gen_checker = self.generation.clone();
+
+        tauri::async_runtime::spawn(async move {
+            log::info!("[AgentControlIPC] Starting IPC server worker generation {generation_id}");
+            while is_running_flag.load(Ordering::SeqCst)
+                && gen_checker.load(Ordering::SeqCst) == generation_id
+            {
+                if let Err(e) = run_ipc_server(
+                    facade.clone(),
+                    tracker.clone(),
+                    app_handle_clone.clone(),
+                    shutdown_rx.clone(),
+                    Some(controller_clone.clone()),
+                )
+                .await
+                {
+                    if !is_running_flag.load(Ordering::SeqCst)
+                        || gen_checker.load(Ordering::SeqCst) != generation_id
+                    {
+                        break;
+                    }
+                    log::error!(
+                        "[AgentControlIPC] Server loop ended with error: {e}. Retrying in 1s..."
+                    );
+                    tokio::select! {
+                        _ = tokio::time::sleep(tokio::time::Duration::from_secs(1)) => {},
+                        changed = shutdown_rx.changed() => {
+                            if changed.is_ok() && *shutdown_rx.borrow() {
+                                break;
+                            }
+                        }
+                    }
+                } else {
+                    break;
+                }
+            }
+            if gen_checker.load(Ordering::SeqCst) == generation_id {
+                is_running_flag.store(false, Ordering::SeqCst);
+                if let Some(app) = &app_handle_clone {
+                    let _ = app.emit("mcp-status-changed", ());
+                }
+            }
+            log::info!("[AgentControlIPC] IPC server worker generation {generation_id} exited");
+        });
+
+        if let Some(app) = &app_handle {
+            let _ = app.emit("mcp-status-changed", ());
+        }
+    }
+
+    pub fn stop(&self, app_handle: Option<&tauri::AppHandle>) {
+        self.generation.fetch_add(1, Ordering::SeqCst);
+        if !self.is_running.swap(false, Ordering::SeqCst) {
+            return;
+        }
+        {
+            if let Some(tx) = self
+                .active_shutdown_tx
+                .lock()
+                .ok()
+                .and_then(|mut active| active.take())
+            {
+                let _ = tx.send(true);
+            }
+        }
+        self.tracker.disconnect_all(app_handle);
+        if let Some(app) = app_handle {
+            let _ = app.emit("mcp-status-changed", ());
+        }
+        log::info!("[AgentControlIPC] IPC server stopped");
+    }
+
+    pub fn disconnect_all(&self, app_handle: Option<&tauri::AppHandle>) {
+        self.tracker.disconnect_all(app_handle);
+    }
+
+    pub async fn record_activity(
+        &self,
+        entry: McpActivityLogEntry,
+        app_handle: Option<&tauri::AppHandle>,
+        notify_on_mutation: bool,
+    ) {
+        {
+            let mut logs = self.activity_logs.write().await;
+            if logs.len() >= 100 {
+                logs.pop_front();
+            }
+            logs.push_back(entry.clone());
+        }
+
+        if let Some(app) = app_handle {
+            let _ = app.emit("mcp-activity", &entry);
+            if notify_on_mutation && entry.status == "success" {
+                let is_mutation = matches!(
+                    entry.category.as_str(),
+                    "recording" | "transcript_edit" | "destructive" | "settings_update"
+                );
+                if is_mutation {
+                    let _ = app.emit(
+                        "mcp-mutation-notice",
+                        serde_json::json!({
+                            "id": entry.id,
+                            "method": entry.method,
+                            "category": entry.category,
+                            "summary": entry.params_summary,
+                            "timestamp": entry.timestamp,
+                        }),
+                    );
+                }
+            }
+        }
+    }
+
+    pub async fn get_activity_logs(&self) -> Vec<McpActivityLogEntry> {
+        let logs = self.activity_logs.read().await;
+        logs.iter().cloned().collect()
+    }
+
+    pub async fn clear_activity_logs(&self) {
+        let mut logs = self.activity_logs.write().await;
+        logs.clear();
+    }
+}
 
 pub async fn handle_connection<S>(
     stream: S,
@@ -66,7 +261,14 @@ pub async fn handle_connection<S>(
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
 {
-    handle_connection_tracked(stream, facade, ActiveConnectionTracker::default(), None).await
+    handle_connection_tracked(
+        stream,
+        facade,
+        ActiveConnectionTracker::default(),
+        None,
+        None,
+    )
+    .await
 }
 
 pub async fn handle_connection_tracked<S>(
@@ -74,6 +276,7 @@ pub async fn handle_connection_tracked<S>(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
     app_handle: Option<tauri::AppHandle>,
+    controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
 where
     S: tokio::io::AsyncRead + tokio::io::AsyncWrite + Unpin + Send + 'static,
@@ -90,7 +293,7 @@ where
     }
     let _guard = ConnectionGuard {
         tracker: tracker.clone(),
-        app_handle,
+        app_handle: app_handle.clone(),
     };
 
     let (reader, mut writer) = tokio::io::split(stream);
@@ -158,40 +361,96 @@ where
                             };
                             let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
                             let _ = resp_tx.send(resp_str).await;
-                        } else if rpc_req.id.is_none() {
-                            // JSON-RPC 2.0 Notification: process without response
-                            let facade_clone = facade.clone();
-                            task_set.spawn(async move {
-                                let _ = dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade_clone).await;
-                            });
                         } else {
-                            let id = rpc_req.id.unwrap();
                             let facade_clone = facade.clone();
+                            let controller_clone = controller.clone();
+                            let app_handle_clone = app_handle.clone();
                             let resp_tx_clone = resp_tx.clone();
+                            let is_notification = rpc_req.id.is_none();
+                            let req_id = rpc_req.id.clone().unwrap_or(serde_json::Value::Null);
+
                             task_set.spawn(async move {
-                                let resp_str = match dispatch_rpc_call(&rpc_req.method, rpc_req.params, &facade_clone).await {
-                                    Ok(result) => {
-                                        let resp = JsonRpcSuccessResponse {
-                                            jsonrpc: "2.0",
-                                            id,
-                                            result,
-                                        };
-                                        serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string())
-                                    }
+                                let start = std::time::Instant::now();
+                                let method = rpc_req.method;
+                                let params = rpc_req.params;
+                                let category = classify_tool(&method, params.as_ref());
+                                let params_summary = summarize_params(params.as_ref());
+
+                                let config = facade_clone.load_app_config();
+                                let perm_result = check_permission(&method, category, &config);
+
+                                let (response_str, log_status, error_msg) = match perm_result {
                                     Err((code, message)) => {
                                         let resp = JsonRpcErrorResponse {
                                             jsonrpc: "2.0",
-                                            id,
+                                            id: req_id,
                                             error: JsonRpcErrorObject {
                                                 code,
-                                                 message: &message,
+                                                message: &message,
                                                 data: None,
                                             },
                                         };
-                                        serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string())
+                                        let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                                        (Some(s), "blocked", Some(message))
+                                    }
+                                    Ok(()) => {
+                                        match dispatch_rpc_call(&method, params, &facade_clone).await {
+                                            Ok(result) => {
+                                                let resp = JsonRpcSuccessResponse {
+                                                    jsonrpc: "2.0",
+                                                    id: req_id,
+                                                    result,
+                                                };
+                                                let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                                                (Some(s), "success", None)
+                                            }
+                                            Err((code, message)) => {
+                                                let resp = JsonRpcErrorResponse {
+                                                    jsonrpc: "2.0",
+                                                    id: req_id,
+                                                    error: JsonRpcErrorObject {
+                                                        code,
+                                                        message: &message,
+                                                        data: None,
+                                                    },
+                                                };
+                                                let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                                                (Some(s), "error", Some(message))
+                                            }
+                                        }
                                     }
                                 };
-                                let _ = resp_tx_clone.send(resp_str).await;
+
+                                let duration_ms = start.elapsed().as_millis() as u64;
+
+                                if !is_notification && let Some(resp_str) = response_str {
+                                    let _ = resp_tx_clone.send(resp_str).await;
+                                }
+
+                                if let Some(ctrl) = controller_clone
+                                    && config.mcp_audit_log_enabled.unwrap_or(true)
+                                {
+                                    let now_ms = std::time::SystemTime::now()
+                                            .duration_since(std::time::UNIX_EPOCH)
+                                            .unwrap_or_default()
+                                            .as_millis() as u64;
+                                        let entry = McpActivityLogEntry {
+                                            id: uuid::Uuid::new_v4().to_string(),
+                                            timestamp: now_ms,
+                                            method,
+                                            category: category.as_str().to_string(),
+                                            status: log_status.to_string(),
+                                            duration_ms,
+                                            params_summary,
+                                            error_message: error_msg,
+                                        };
+                                        ctrl.record_activity(
+                                            entry,
+                                            app_handle_clone.as_ref(),
+                                            config.mcp_notify_on_mutation.unwrap_or(true),
+                                        )
+                                        .await;
+                                }
                             });
                         }
                     }
@@ -227,6 +486,8 @@ pub async fn run_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
     app_handle: Option<tauri::AppHandle>,
+    mut shutdown_rx: watch::Receiver<bool>,
+    controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::net::windows::named_pipe::ServerOptions;
 
@@ -237,42 +498,69 @@ pub async fn run_ipc_server(
     log::info!("[AgentControlIPC] Named pipe server listening on {WINDOWS_PIPE_NAME}");
 
     loop {
-        if let Err(e) = server.connect().await {
-            log::warn!("[AgentControlIPC] Named pipe connect error: {e}");
-            tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-            continue;
+        if *shutdown_rx.borrow() {
+            log::info!("[AgentControlIPC] Shutdown requested, closing named pipe server");
+            return Ok(());
         }
 
-        let connected_client = server;
-        let facade_clone = facade.clone();
-        let tracker_clone = tracker.clone();
-        let app_handle_clone = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) = handle_connection_tracked(
-                connected_client,
-                facade_clone,
-                tracker_clone,
-                app_handle_clone,
-            )
-            .await
-            {
-                log::debug!("[AgentControlIPC] Client connection ended: {e}");
-            }
-        });
+        tokio::select! {
+            res = server.connect() => {
+                if let Err(e) = res {
+                    log::warn!("[AgentControlIPC] Named pipe connect error: {e}");
+                    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                    continue;
+                }
 
-        let mut retry_delay = tokio::time::Duration::from_millis(100);
-        server = loop {
-            match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
-                Ok(s) => break s,
-                Err(e) => {
-                    log::error!(
-                        "[AgentControlIPC] Failed to create next named pipe instance: {e}, retrying in {retry_delay:?}..."
-                    );
-                    tokio::time::sleep(retry_delay).await;
-                    retry_delay = (retry_delay * 2).min(tokio::time::Duration::from_secs(5));
+                let connected_client = server;
+                let facade_clone = facade.clone();
+                let tracker_clone = tracker.clone();
+                let app_handle_clone = app_handle.clone();
+                let controller_clone = controller.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = handle_connection_tracked(
+                        connected_client,
+                        facade_clone,
+                        tracker_clone,
+                        app_handle_clone,
+                        controller_clone,
+                    )
+                    .await
+                    {
+                        log::debug!("[AgentControlIPC] Client connection ended: {e}");
+                    }
+                });
+
+                let mut retry_delay = tokio::time::Duration::from_millis(100);
+                server = loop {
+                    if *shutdown_rx.borrow() {
+                        return Ok(());
+                    }
+                    match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
+                        Ok(s) => break s,
+                        Err(e) => {
+                            log::error!(
+                                "[AgentControlIPC] Failed to create next named pipe instance: {e}, retrying in {retry_delay:?}..."
+                            );
+                            tokio::select! {
+                                _ = tokio::time::sleep(retry_delay) => {},
+                                changed = shutdown_rx.changed() => {
+                                    if changed.is_ok() && *shutdown_rx.borrow() {
+                                        return Ok(());
+                                    }
+                                }
+                            }
+                            retry_delay = (retry_delay * 2).min(tokio::time::Duration::from_secs(5));
+                        }
+                    }
+                };
+            }
+            changed = shutdown_rx.changed() => {
+                if changed.is_ok() && *shutdown_rx.borrow() {
+                    log::info!("[AgentControlIPC] Shutdown requested on named pipe accept loop");
+                    return Ok(());
                 }
             }
-        };
+        }
     }
 }
 
@@ -281,6 +569,8 @@ pub async fn run_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
     app_handle: Option<tauri::AppHandle>,
+    mut shutdown_rx: watch::Receiver<bool>,
+    controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let socket_path = get_unix_socket_path();
     if let Some(parent) = socket_path.parent() {
@@ -300,25 +590,46 @@ pub async fn run_ipc_server(
     );
 
     loop {
-        let (stream, _) = match listener.accept().await {
-            Ok(conn) => conn,
-            Err(e) => {
-                log::warn!("[AgentControlIPC] Accept connection error: {e}");
-                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-                continue;
-            }
-        };
-        let facade_clone = facade.clone();
-        let tracker_clone = tracker.clone();
-        let app_handle_clone = app_handle.clone();
-        tauri::async_runtime::spawn(async move {
-            if let Err(e) =
-                handle_connection_tracked(stream, facade_clone, tracker_clone, app_handle_clone)
+        if *shutdown_rx.borrow() {
+            let _ = std::fs::remove_file(&socket_path);
+            return Ok(());
+        }
+
+        tokio::select! {
+            accept_res = listener.accept() => {
+                let (stream, _) = match accept_res {
+                    Ok(conn) => conn,
+                    Err(e) => {
+                        log::warn!("[AgentControlIPC] Accept connection error: {e}");
+                        tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+                        continue;
+                    }
+                };
+                let facade_clone = facade.clone();
+                let tracker_clone = tracker.clone();
+                let app_handle_clone = app_handle.clone();
+                let controller_clone = controller.clone();
+                tauri::async_runtime::spawn(async move {
+                    if let Err(e) = handle_connection_tracked(
+                        stream,
+                        facade_clone,
+                        tracker_clone,
+                        app_handle_clone,
+                        controller_clone,
+                    )
                     .await
-            {
-                log::debug!("[AgentControlIPC] Client connection ended: {e}");
+                    {
+                        log::debug!("[AgentControlIPC] Client connection ended: {e}");
+                    }
+                });
             }
-        });
+            changed = shutdown_rx.changed() => {
+                if changed.is_ok() && *shutdown_rx.borrow() {
+                    let _ = std::fs::remove_file(&socket_path);
+                    return Ok(());
+                }
+            }
+        }
     }
 }
 
@@ -327,8 +638,11 @@ pub async fn run_ipc_server(
     _facade: AgentControlFacade,
     _tracker: ActiveConnectionTracker,
     _app_handle: Option<tauri::AppHandle>,
+    mut shutdown_rx: watch::Receiver<bool>,
+    _controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     log::warn!("[AgentControlIPC] IPC server is not supported on this platform");
+    let _ = shutdown_rx.changed().await;
     Ok(())
 }
 
@@ -336,14 +650,10 @@ pub fn start_agent_control_ipc_server(
     facade: AgentControlFacade,
     tracker: ActiveConnectionTracker,
     app_handle: Option<tauri::AppHandle>,
-) {
-    tauri::async_runtime::spawn(async move {
-        while let Err(e) = run_ipc_server(facade.clone(), tracker.clone(), app_handle.clone()).await
-        {
-            log::error!("[AgentControlIPC] Server loop ended with error: {e}. Restarting in 1s...");
-            tokio::time::sleep(tokio::time::Duration::from_secs(1)).await;
-        }
-    });
+) -> AgentControlServerController {
+    let controller = AgentControlServerController::new(tracker);
+    controller.start(app_handle, facade);
+    controller
 }
 #[cfg(test)]
 mod tests {
@@ -805,5 +1115,192 @@ mod tests {
             Some("inst-camel".to_string())
         );
         assert_eq!(parse_optional_string(&obj_params, "missing_key"), None);
+    }
+
+    #[test]
+    fn test_tool_permission_classification_and_check() {
+        assert_eq!(
+            classify_tool("sona_get_client_state", None),
+            ToolPermissionCategory::ReadOnly
+        );
+        assert_eq!(
+            classify_tool("sona_start_recording", None),
+            ToolPermissionCategory::Recording
+        );
+        assert_eq!(
+            classify_tool("sona_edit_transcript", None),
+            ToolPermissionCategory::TranscriptEdit
+        );
+        assert_eq!(
+            classify_tool("sona_delete_history", None),
+            ToolPermissionCategory::Destructive
+        );
+        assert_eq!(
+            classify_tool(
+                "sona_stop_recording",
+                Some(&serde_json::json!({ "discard": true }))
+            ),
+            ToolPermissionCategory::Destructive
+        );
+        assert_eq!(
+            classify_tool(
+                "sona_stop_recording",
+                Some(&serde_json::json!({ "discard": false }))
+            ),
+            ToolPermissionCategory::Recording
+        );
+
+        let mut config = sona_core::config::AppConfig::default();
+        config.mcp_permission_mode = Some("read_only".to_string());
+        assert!(
+            check_permission(
+                "get_client_state",
+                ToolPermissionCategory::ReadOnly,
+                &config
+            )
+            .is_ok()
+        );
+        assert!(
+            check_permission(
+                "start_recording",
+                ToolPermissionCategory::Recording,
+                &config
+            )
+            .is_err()
+        );
+        assert_eq!(
+            check_permission(
+                "start_recording",
+                ToolPermissionCategory::Recording,
+                &config
+            )
+            .unwrap_err()
+            .0,
+            -32001
+        );
+
+        config.mcp_permission_mode = Some("granular".to_string());
+        config.mcp_allow_recording = Some(true);
+        config.mcp_allow_destructive = Some(false);
+        assert!(
+            check_permission(
+                "start_recording",
+                ToolPermissionCategory::Recording,
+                &config
+            )
+            .is_ok()
+        );
+        assert!(
+            check_permission(
+                "delete_history",
+                ToolPermissionCategory::Destructive,
+                &config
+            )
+            .is_err()
+        );
+
+        config.mcp_permission_mode = Some("full".to_string());
+        assert!(
+            check_permission(
+                "delete_history",
+                ToolPermissionCategory::Destructive,
+                &config
+            )
+            .is_ok()
+        );
+    }
+
+    #[tokio::test]
+    async fn test_controller_lifecycle_and_activity_logs() {
+        let tracker = ActiveConnectionTracker::new();
+        let controller = AgentControlServerController::new(tracker);
+        assert!(!controller.is_running());
+
+        controller
+            .record_activity(
+                McpActivityLogEntry {
+                    id: "act-1".to_string(),
+                    timestamp: 1000,
+                    method: "sona_query_history".to_string(),
+                    category: "read_only".to_string(),
+                    status: "success".to_string(),
+                    duration_ms: 12,
+                    params_summary: Some("history: 1".to_string()),
+                    error_message: None,
+                },
+                None,
+                false,
+            )
+            .await;
+
+        let logs = controller.get_activity_logs().await;
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].id, "act-1");
+        assert_eq!(logs[0].method, "sona_query_history");
+
+        controller.clear_activity_logs().await;
+        let logs_cleared = controller.get_activity_logs().await;
+        assert!(logs_cleared.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_permission_gate_blocks_mutation_in_read_only_mode() {
+        let (facade, _dir) = create_test_facade().await;
+        facade
+            .services()
+            .config
+            .set_setting("mcpPermissionMode", &serde_json::json!("read_only"))
+            .unwrap();
+
+        let tracker = ActiveConnectionTracker::new();
+        let controller = AgentControlServerController::new(tracker.clone());
+        let (client, server) = tokio::io::duplex(4096);
+
+        let facade_clone = facade.clone();
+        let controller_clone = controller.clone();
+        tokio::spawn(async move {
+            let _ = handle_connection_tracked(
+                server,
+                facade_clone,
+                tracker,
+                None,
+                Some(controller_clone),
+            )
+            .await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(client_read);
+
+        // Try to call sona_start_recording in read_only mode
+        let req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "sona_start_recording",
+            "params": {}
+        });
+        let mut req_bytes = serde_json::to_vec(&req).unwrap();
+        req_bytes.push(b'\n');
+        client_write.write_all(&req_bytes).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut line = String::new();
+        buf_reader.read_line(&mut line).await.unwrap();
+        let resp: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert!(resp.get("error").is_some(), "response should be an error");
+        let err = resp.get("error").unwrap();
+        assert_eq!(err.get("code").and_then(|v| v.as_i64()), Some(-32001));
+        assert!(
+            err.get("message")
+                .and_then(|v| v.as_str())
+                .unwrap()
+                .contains("blocked by Sona desktop security policy")
+        );
+
+        // Verify log was recorded with blocked status
+        let logs = controller.get_activity_logs().await;
+        assert_eq!(logs.len(), 1);
+        assert_eq!(logs[0].status, "blocked");
+        assert_eq!(logs[0].method, "sona_start_recording");
     }
 }

@@ -49,6 +49,11 @@ export const TauriEvent = {
     transcriptUpdated: 'transcript-updated',
     uiRecordingStopRequested: 'agent-control-ui-recording-stop-requested',
   },
+  mcp: {
+    statusChanged: 'mcp-status-changed',
+    activity: 'mcp-activity',
+    mutationNotice: 'mcp-mutation-notice',
+  },
 } as const;
 
 export interface AgentRecordingStatusPayload {

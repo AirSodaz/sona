@@ -34,6 +34,12 @@ import type {
   TranscriptSummaryResult,
   TranslatedSegment,
 } from '../../types/llmTask';
+import type {
+  McpActivityLogEntry,
+  McpClientConfigMap,
+  McpStatus,
+  McpToolCatalogItem,
+} from '../../types/mcp';
 import type { ProjectRecord } from '../../types/project';
 import type {
   AsrRuntimeMetricsSnapshot,
@@ -746,6 +752,34 @@ type ManualTauriCommandContractMap = {
       expectedSha256?: string;
     };
     result: CudaAddonInspection;
+  };
+  [TauriCommand.mcp.getStatus]: {
+    args: undefined;
+    result: McpStatus;
+  };
+  [TauriCommand.mcp.setEnabled]: {
+    args: { enabled: boolean };
+    result: undefined;
+  };
+  [TauriCommand.mcp.disconnectAll]: {
+    args: undefined;
+    result: undefined;
+  };
+  [TauriCommand.mcp.getActivityLogs]: {
+    args: undefined;
+    result: McpActivityLogEntry[];
+  };
+  [TauriCommand.mcp.clearActivityLogs]: {
+    args: undefined;
+    result: undefined;
+  };
+  [TauriCommand.mcp.getToolsCatalog]: {
+    args: undefined;
+    result: McpToolCatalogItem[];
+  };
+  [TauriCommand.mcp.getClientConfigs]: {
+    args: undefined;
+    result: McpClientConfigMap;
   };
 };
 

@@ -4,6 +4,463 @@ use crate::platform::agent_control::facade::{
     SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest,
     UpdateHistoryMetaRequest, UpdateProjectRequest, UpdateTranslationsRequest,
 };
+use serde::{Deserialize, Serialize};
+use sona_core::config::AppConfig;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ToolPermissionCategory {
+    ReadOnly,
+    Recording,
+    TranscriptEdit,
+    Destructive,
+    SettingsUpdate,
+    ModelManagement,
+}
+
+impl ToolPermissionCategory {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::ReadOnly => "read_only",
+            Self::Recording => "recording",
+            Self::TranscriptEdit => "transcript_edit",
+            Self::Destructive => "destructive",
+            Self::SettingsUpdate => "settings_update",
+            Self::ModelManagement => "model_management",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpToolCatalogItem {
+    pub name: String,
+    pub title: String,
+    pub description: String,
+    pub category: String,
+    pub allowed: bool,
+}
+
+pub fn classify_tool(method: &str, params: Option<&serde_json::Value>) -> ToolPermissionCategory {
+    let clean_method = method
+        .strip_prefix("sona_")
+        .or_else(|| method.strip_prefix("agent_"))
+        .unwrap_or(method);
+
+    match clean_method {
+        "stop_recording" => {
+            if params
+                .and_then(|p| p.get("discard"))
+                .and_then(|d| d.as_bool())
+                .unwrap_or(false)
+            {
+                ToolPermissionCategory::Destructive
+            } else {
+                ToolPermissionCategory::Recording
+            }
+        }
+        "control_recording" => {
+            let action = params
+                .and_then(|p| p.get("action"))
+                .and_then(|a| a.as_str());
+            if action == Some("discard") {
+                ToolPermissionCategory::Destructive
+            } else {
+                ToolPermissionCategory::Recording
+            }
+        }
+        "start_recording" | "pause_recording" | "resume_recording" => {
+            ToolPermissionCategory::Recording
+        }
+        "delete_history" | "delete_project" | "delete_preset_model" => {
+            ToolPermissionCategory::Destructive
+        }
+        "update_setting" => ToolPermissionCategory::SettingsUpdate,
+        "download_preset_model" | "cancel_download" => ToolPermissionCategory::ModelManagement,
+        "edit_transcript"
+        | "patch_segments"
+        | "update_translations"
+        | "edit_translations"
+        | "revert_transcript_snapshot"
+        | "update_history_meta"
+        | "save_summary"
+        | "edit_summary"
+        | "delete_summary"
+        | "restore_history"
+        | "transcribe_file"
+        | "cancel_batch_task"
+        | "export_transcript"
+        | "create_project"
+        | "update_project"
+        | "set_active_project"
+        | "trigger_sync"
+        | "resolve_sync_conflict" => ToolPermissionCategory::TranscriptEdit,
+        _ => ToolPermissionCategory::ReadOnly,
+    }
+}
+
+pub fn check_permission(
+    method: &str,
+    category: ToolPermissionCategory,
+    config: &AppConfig,
+) -> Result<(), (i32, String)> {
+    let mode = config.mcp_permission_mode.as_deref().unwrap_or("full");
+    match mode {
+        "read_only" => {
+            if category != ToolPermissionCategory::ReadOnly {
+                return Err((
+                    -32001,
+                    format!(
+                        "Permission Denied: Method '{method}' is blocked by Sona desktop security policy (read-only mode)"
+                    ),
+                ));
+            }
+        }
+        "granular" => {
+            let allowed = match category {
+                ToolPermissionCategory::ReadOnly => true,
+                ToolPermissionCategory::Recording => config.mcp_allow_recording.unwrap_or(true),
+                ToolPermissionCategory::TranscriptEdit => {
+                    config.mcp_allow_transcript_edit.unwrap_or(true)
+                }
+                ToolPermissionCategory::Destructive => {
+                    config.mcp_allow_destructive.unwrap_or(false)
+                }
+                ToolPermissionCategory::SettingsUpdate => {
+                    config.mcp_allow_settings_update.unwrap_or(false)
+                }
+                ToolPermissionCategory::ModelManagement => {
+                    config.mcp_allow_model_management.unwrap_or(true)
+                }
+            };
+            if !allowed {
+                return Err((
+                    -32001,
+                    format!(
+                        "Permission Denied: Method '{method}' is blocked by Sona desktop security policy"
+                    ),
+                ));
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+pub fn summarize_params(params: Option<&serde_json::Value>) -> Option<String> {
+    let p = params?;
+    if p.is_null() {
+        return None;
+    }
+    if let Some(obj) = p.as_object() {
+        if obj.is_empty() {
+            return None;
+        }
+        let mut parts = Vec::new();
+        if let Some(history_id) = obj
+            .get("history_id")
+            .or_else(|| obj.get("historyId"))
+            .and_then(|v| v.as_str())
+        {
+            parts.push(format!("history: {history_id}"));
+        }
+        if let Some(project_id) = obj
+            .get("project_id")
+            .or_else(|| obj.get("projectId"))
+            .and_then(|v| v.as_str())
+        {
+            parts.push(format!("project: {project_id}"));
+        }
+        if let Some(model_id) = obj
+            .get("model_id")
+            .or_else(|| obj.get("modelId"))
+            .and_then(|v| v.as_str())
+        {
+            parts.push(format!("model: {model_id}"));
+        }
+        if let Some(key) = obj.get("key").and_then(|v| v.as_str()) {
+            parts.push(format!("key: {key}"));
+        }
+        if let Some(action) = obj.get("action").and_then(|v| v.as_str()) {
+            parts.push(format!("action: {action}"));
+        }
+        if obj.get("discard").and_then(|v| v.as_bool()) == Some(true) {
+            parts.push("discard: true".to_string());
+        }
+        if let Some(name) = obj.get("name").and_then(|v| v.as_str()) {
+            parts.push(format!("name: {name}"));
+        }
+        if !parts.is_empty() {
+            return Some(parts.join(", "));
+        }
+    }
+    let s = p.to_string();
+    if s.chars().count() > 100 {
+        let truncated: String = s.chars().take(100).collect();
+        Some(format!("{truncated}..."))
+    } else {
+        Some(s)
+    }
+}
+
+pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
+    (
+        "sona_get_client_state",
+        "Get Client State",
+        "Query Sona desktop client online status, recording state, and active project.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_launch_desktop",
+        "Launch Desktop Client",
+        "Launch Sona desktop client when offline and poll IPC until connection is ready.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_focus_window",
+        "Focus Window",
+        "Bring Sona desktop window to front and focus.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_start_recording",
+        "Start Recording",
+        "Start audio capture (microphone or system audio loopback) and live transcription.",
+        ToolPermissionCategory::Recording,
+    ),
+    (
+        "sona_control_recording",
+        "Control Recording",
+        "Unified controller for active recording lifecycle: pause, resume, stop (save), or discard.",
+        ToolPermissionCategory::Recording,
+    ),
+    (
+        "sona_stop_recording",
+        "Stop Recording",
+        "Stop active recording session and finalize into history or discard draft.",
+        ToolPermissionCategory::Recording,
+    ),
+    (
+        "sona_list_audio_devices",
+        "List Audio Devices",
+        "List available microphone and system audio input devices in Sona desktop.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_query_history",
+        "Query History",
+        "Full-text search and filter transcript history in Sona desktop client.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_read_transcript",
+        "Read Transcript",
+        "Read full transcript segments and text of a history record.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_edit_transcript",
+        "Edit Transcript",
+        "Commit modified transcript segments and create an immutable history version snapshot.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_patch_segments",
+        "Patch Transcript Segments",
+        "Incrementally patch transcript segments by ID (modify text, timing, or translation).",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_update_translations",
+        "Update Translations",
+        "Batch write, update, or clear segment translations for a history record.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_list_transcript_snapshots",
+        "List Transcript Snapshots",
+        "List historical transcript version snapshots for a history record.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_revert_transcript_snapshot",
+        "Revert Transcript Snapshot",
+        "Rollback transcript segments to a previous historical version snapshot.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_update_history_meta",
+        "Update History Metadata",
+        "Update history item title, project assignment, or icon metadata.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_delete_history",
+        "Delete History",
+        "Delete or permanently purge a history record.",
+        ToolPermissionCategory::Destructive,
+    ),
+    (
+        "sona_query_trash",
+        "Query Trash",
+        "List and search items currently in the trash / recycle bin.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_restore_history",
+        "Restore History",
+        "Restore a previously trashed history item back into active history.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_list_projects",
+        "List Projects",
+        "List all workspace projects and their configurations in Sona desktop.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_create_project",
+        "Create Project",
+        "Create a new workspace project/folder for categorizing transcription items.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_update_project",
+        "Update Project",
+        "Update existing workspace project details like name, description, icon, or color.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_delete_project",
+        "Delete Project",
+        "Delete a workspace project and specify cascade action for associated items.",
+        ToolPermissionCategory::Destructive,
+    ),
+    (
+        "sona_set_active_project",
+        "Set Active Project",
+        "Switch the active workspace project in Sona desktop.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_transcribe_file",
+        "Transcribe File",
+        "Transcribe a local audio or video file in batch mode and save into history.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_cancel_batch_task",
+        "Cancel Batch Task",
+        "Cancel an active in-flight batch transcription task by instance ID.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_export_transcript",
+        "Export Transcript",
+        "Export transcript content into a file in SRT, VTT, Markdown, TXT, or JSON format.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_save_summary",
+        "Save Summary",
+        "Persist AI-generated summary text for a history record and notify desktop UI.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_load_summary",
+        "Load Summary",
+        "Load persisted AI summary payload for a specific history item.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_edit_summary",
+        "Edit Summary",
+        "Edit existing AI summary content for a history record.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_delete_summary",
+        "Delete Summary",
+        "Delete persisted AI summary for a specific history record and refresh desktop UI.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_get_settings",
+        "Get Settings",
+        "Read global or specific client preference settings.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_update_setting",
+        "Update Setting",
+        "Update and persist a client preference setting.",
+        ToolPermissionCategory::SettingsUpdate,
+    ),
+    (
+        "sona_get_model_catalog",
+        "Get Model Catalog",
+        "Get snapshot of installed and available local ASR, VAD, and punctuation models.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_download_preset_model",
+        "Download Preset Model",
+        "Start downloading a preset model by ID and return a unique download ID.",
+        ToolPermissionCategory::ModelManagement,
+    ),
+    (
+        "sona_cancel_download",
+        "Cancel Download",
+        "Cancel an active in-flight model download by download ID.",
+        ToolPermissionCategory::ModelManagement,
+    ),
+    (
+        "sona_delete_preset_model",
+        "Delete Preset Model",
+        "Physically delete an installed local preset model from disk to free storage space.",
+        ToolPermissionCategory::Destructive,
+    ),
+    (
+        "sona_get_sync_status",
+        "Get Sync Status",
+        "Get E2EE cloud sync configuration, vault status, and conflict overview.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_trigger_sync",
+        "Trigger Sync",
+        "Trigger an immediate run of cloud synchronization.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+    (
+        "sona_list_sync_conflicts",
+        "List Sync Conflicts",
+        "List active cloud synchronization conflicts between local and remote versions.",
+        ToolPermissionCategory::ReadOnly,
+    ),
+    (
+        "sona_resolve_sync_conflict",
+        "Resolve Sync Conflict",
+        "Resolve an unresolved E2EE sync conflict between local and remote versions.",
+        ToolPermissionCategory::TranscriptEdit,
+    ),
+];
+
+pub fn get_tools_catalog(config: &AppConfig) -> Vec<McpToolCatalogItem> {
+    TOOLS_CATALOG
+        .iter()
+        .map(|(name, title, description, category)| {
+            let allowed = check_permission(name, *category, config).is_ok();
+            McpToolCatalogItem {
+                name: (*name).to_string(),
+                title: (*title).to_string(),
+                description: (*description).to_string(),
+                category: category.as_str().to_string(),
+                allowed,
+            }
+        })
+        .collect()
+}
 
 use super::params::*;
 
@@ -51,6 +508,38 @@ pub async fn dispatch_rpc_call(
         "resume_recording" => {
             let res = facade.resume_recording().await.map_err(map_rpc_error)?;
             Ok(serde_json::json!({ "success": res }))
+        }
+        "control_recording" => {
+            let action = params
+                .as_ref()
+                .and_then(|p| p.get("action"))
+                .and_then(|a| a.as_str())
+                .ok_or_else(|| (-32602, "Missing 'action' parameter".to_string()))?;
+            match action {
+                "pause" => {
+                    let res = facade.pause_recording().await.map_err(map_rpc_error)?;
+                    Ok(serde_json::json!({ "success": res }))
+                }
+                "resume" => {
+                    let res = facade.resume_recording().await.map_err(map_rpc_error)?;
+                    Ok(serde_json::json!({ "success": res }))
+                }
+                "stop" => {
+                    let res = facade
+                        .stop_recording(StopRecordingRequest { discard: false })
+                        .await
+                        .map_err(map_rpc_error)?;
+                    serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+                }
+                "discard" => {
+                    let res = facade
+                        .stop_recording(StopRecordingRequest { discard: true })
+                        .await
+                        .map_err(map_rpc_error)?;
+                    serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
+                }
+                other => Err((-32602, format!("Invalid action '{other}'"))),
+            }
         }
         "list_audio_devices" => {
             let res = facade.list_audio_devices().await.map_err(map_rpc_error)?;

@@ -221,6 +221,7 @@ describe('Settings Focus Trap & Navigation', () => {
       'settings.storage.title',
       'settings.sync.title',
       'settings.api_server.title',
+      'settings.mcp.title',
       'settings.llm.title',
       'shortcuts.title',
       'settings.about',
