@@ -1,50 +1,19 @@
-import { useConfigStore } from '../stores/configStore';
-import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
-import { useProjectStore } from '../stores/projectStore';
 import { logger } from '../utils/logger';
-
-function syncEffectiveConfig() {
-  void useEffectiveConfigStore
-    .getState()
-    .syncConfig()
-    .catch((error) => {
-      logger.error('[EffectiveConfig] Failed to resolve effective config:', error);
-    });
-}
 
 class EffectiveConfigRuntime {
   private started = false;
 
-  private unsubscribeConfig: (() => void) | null = null;
-
-  private unsubscribeProject: (() => void) | null = null;
-
   init() {
     if (this.started) {
-      syncEffectiveConfig();
       return;
     }
-
     this.started = true;
-    syncEffectiveConfig();
-
-    this.unsubscribeConfig = useConfigStore.subscribe(() => {
-      syncEffectiveConfig();
-    });
-
-    if (typeof useProjectStore.subscribe === 'function') {
-      this.unsubscribeProject = useProjectStore.subscribe(() => {
-        syncEffectiveConfig();
-      });
-    }
+    logger.debug?.('[EffectiveConfig] Runtime initialized');
   }
 
   stop() {
-    this.unsubscribeConfig?.();
-    this.unsubscribeProject?.();
-    this.unsubscribeConfig = null;
-    this.unsubscribeProject = null;
     this.started = false;
+    logger.debug?.('[EffectiveConfig] Runtime stopped');
   }
 }
 

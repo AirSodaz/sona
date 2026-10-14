@@ -7,61 +7,26 @@ interface EffectiveConfigState {
   syncConfig: () => Promise<void>;
 }
 
-let syncRequestId = 0;
-
-function isAppConfigLike(value: unknown): value is AppConfig {
-  if (!value || typeof value !== 'object') {
-    return false;
+function getStoreConfig(): AppConfig {
+  if (typeof useConfigStore?.getState === 'function') {
+    return useConfigStore.getState().config ?? DEFAULT_CONFIG;
   }
-  const candidate = value as Partial<AppConfig>;
-  return (
-    typeof candidate.streamingModelPath === 'string' && typeof candidate.batchModelPath === 'string'
-  );
+  return DEFAULT_CONFIG;
 }
 
-function shouldUseGlobalSnapshot(
-  snapshot: AppConfig | undefined,
-  globalConfig: AppConfig
-): boolean {
-  return (
-    !snapshot ||
-    (snapshot === DEFAULT_CONFIG && globalConfig !== DEFAULT_CONFIG) ||
-    snapshot.streamingModelPath !== globalConfig.streamingModelPath ||
-    snapshot.batchModelPath !== globalConfig.batchModelPath ||
-    snapshot.asr !== globalConfig.asr
-  );
-}
-
-async function computeEffectiveConfig(): Promise<AppConfig> {
-  return useConfigStore.getState().config;
-}
-
-export const useEffectiveConfigStore = create<EffectiveConfigState>((set, get) => ({
-  config: DEFAULT_CONFIG,
+export const useEffectiveConfigStore = create<EffectiveConfigState>((set) => ({
+  config: getStoreConfig(),
   syncConfig: async () => {
-    const requestId = ++syncRequestId;
-    const globalConfig = useConfigStore.getState().config ?? DEFAULT_CONFIG;
-    if (shouldUseGlobalSnapshot(get().config, globalConfig)) {
-      set({ config: globalConfig });
-    }
-    try {
-      const resolved = await computeEffectiveConfig();
-      if (requestId === syncRequestId) {
-        set({ config: isAppConfigLike(resolved) ? resolved : globalConfig });
-      }
-    } catch {
-      if (requestId === syncRequestId) {
-        set({ config: globalConfig });
-      }
-    }
+    set({ config: getStoreConfig() });
   },
 }));
 
+if (typeof useConfigStore?.subscribe === 'function') {
+  useConfigStore.subscribe((state) => {
+    useEffectiveConfigStore.setState({ config: state?.config ?? DEFAULT_CONFIG });
+  });
+}
+
 export function getEffectiveConfigSnapshot(): AppConfig {
-  const globalConfig = useConfigStore.getState().config ?? DEFAULT_CONFIG;
-  const snapshot = useEffectiveConfigStore.getState().config;
-  if (shouldUseGlobalSnapshot(snapshot, globalConfig)) {
-    return globalConfig;
-  }
-  return snapshot;
+  return getStoreConfig();
 }

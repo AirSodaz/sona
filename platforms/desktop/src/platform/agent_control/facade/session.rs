@@ -361,14 +361,17 @@ pub async fn stop_recording(
         let ui_teardown_completed = if active_session.lock().await.is_none() {
             true
         } else {
-            tokio::time::timeout(std::time::Duration::from_millis(2000), notified)
+            tokio::time::timeout(std::time::Duration::from_millis(1000), notified)
                 .await
                 .is_ok()
                 || active_session.lock().await.is_none()
         };
 
         if !ui_teardown_completed {
-            log::warn!("UI recording teardown timed out; falling back to backend teardown");
+            log::warn!(
+                "[AgentControl] UI recording teardown timed out after 1000ms for history_id {}; falling back to clean backend teardown",
+                session_snapshot.history_id
+            );
             if session_snapshot.has_coordinator_consumer && !session_snapshot.coordinator_released {
                 let _ = services
                     .asr

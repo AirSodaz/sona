@@ -487,6 +487,24 @@ where
                             };
                             let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
                             let _ = resp_tx.send(resp_str).await;
+                        } else if rpc_req.method == "ping" {
+                            if let Some(req_id) = rpc_req.id {
+                                let resp = JsonRpcSuccessResponse {
+                                    jsonrpc: "2.0",
+                                    id: req_id,
+                                    result: serde_json::json!({}),
+                                };
+                                let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                                let _ = resp_tx.send(resp_str).await;
+                            }
+                        } else if rpc_req.method == "notifications/cancelled"
+                            || rpc_req.method == "$/cancelRequest"
+                        {
+                            log::info!(
+                                "[AgentControlIPC] Cancellation notice received for method '{}': {:?}",
+                                rpc_req.method,
+                                rpc_req.params
+                            );
                         } else if req_tx.send(rpc_req).await.is_err() {
                             break;
                         }
@@ -1438,6 +1456,86 @@ mod tests {
         let n = buf_reader.read_line(&mut line).await.unwrap();
         assert_eq!(n, 0, "server should close stream after draining responses");
 
+        server_handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_priority_ping_and_cancellation_dispatch() {
+        let (facade, _dir) = create_test_facade().await;
+        let tracker = ActiveConnectionTracker::new();
+        let (client, server) = tokio::io::duplex(8192);
+
+        let facade_clone = facade.clone();
+        let tracker_clone = tracker.clone();
+        let server_handle = tokio::spawn(async move {
+            let _ =
+                handle_connection_tracked(server, facade_clone, tracker_clone, None, None).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(client_read);
+
+        // 1. Send ping with id 42
+        let ping_req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 42,
+            "method": "ping"
+        });
+        let mut ping_bytes = serde_json::to_vec(&ping_req).unwrap();
+        ping_bytes.push(b'\n');
+        client_write.write_all(&ping_bytes).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut line = String::new();
+        let n = buf_reader.read_line(&mut line).await.unwrap();
+        assert!(n > 0, "expected ping response");
+        let resp: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(resp.get("id").and_then(|v| v.as_i64()), Some(42));
+        assert_eq!(resp.get("result"), Some(&serde_json::json!({})));
+
+        // 1b. Send ping notification without id (must not receive any response)
+        let ping_notif = serde_json::json!({
+            "jsonrpc": "2.0",
+            "method": "ping"
+        });
+        let mut notif_bytes = serde_json::to_vec(&ping_notif).unwrap();
+        notif_bytes.push(b'\n');
+        client_write.write_all(&notif_bytes).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        // 2. Send cancellation notices
+        for cancel_method in ["notifications/cancelled", "$/cancelRequest"] {
+            let cancel_req = serde_json::json!({
+                "jsonrpc": "2.0",
+                "method": cancel_method,
+                "params": { "requestId": 123 }
+            });
+            let mut cancel_bytes = serde_json::to_vec(&cancel_req).unwrap();
+            cancel_bytes.push(b'\n');
+            client_write.write_all(&cancel_bytes).await.unwrap();
+        }
+        client_write.flush().await.unwrap();
+
+        // 3. Send regular request after cancellations to verify connection is intact
+        let regular_req = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": 43,
+            "method": "sona_get_client_state",
+            "params": {}
+        });
+        let mut regular_bytes = serde_json::to_vec(&regular_req).unwrap();
+        regular_bytes.push(b'\n');
+        client_write.write_all(&regular_bytes).await.unwrap();
+        client_write.flush().await.unwrap();
+
+        let mut reg_line = String::new();
+        let n = buf_reader.read_line(&mut reg_line).await.unwrap();
+        assert!(n > 0, "expected response for regular request");
+        let reg_resp: serde_json::Value = serde_json::from_str(&reg_line).unwrap();
+        assert_eq!(reg_resp.get("id").and_then(|v| v.as_i64()), Some(43));
+
+        client_write.shutdown().await.unwrap();
+        drop(client_write);
         server_handle.await.unwrap();
     }
 }
