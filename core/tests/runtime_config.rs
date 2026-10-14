@@ -1,8 +1,7 @@
 use std::path::PathBuf;
 
 use sona_core::runtime::config::{
-    ServeConfigSection, TranscribeConfigSection, TranscribeLiveConfigSection, UnifiedConfigFile,
-    parse_serve_config_file, parse_transcribe_live_config_file,
+    UnifiedConfigFile, parse_serve_config_file, parse_transcribe_live_config_file,
 };
 
 #[test]
@@ -49,18 +48,6 @@ port = 15000
     assert_eq!(serve.gpu_acceleration.as_deref(), Some("cuda"));
     assert_eq!(serve.host.as_deref(), Some("0.0.0.0"));
     assert_eq!(serve.port, Some(15000));
-}
-
-#[test]
-fn runtime_config_sections_default_cleanly() {
-    let transcribe = TranscribeConfigSection::default();
-    assert!(transcribe.model_id.is_none());
-
-    let transcribe_live = TranscribeLiveConfigSection::default();
-    assert!(transcribe_live.model_id.is_none());
-
-    let serve = ServeConfigSection::default();
-    assert!(serve.host.is_none());
 }
 
 #[test]

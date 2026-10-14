@@ -239,6 +239,7 @@ mod tests {
             "format",
             "quiet",
             "jobs",
+            "ffmpeg_enabled",
             "ffmpeg_path",
         ] {
             assert!(

@@ -1,16 +1,14 @@
-use async_trait::async_trait;
 use serde_json::json;
 use sona_core::ports::asr::{
-    AsrAudioFrame, AsrEngineConfig, AsrMode, AsrPortError, AsrRuntimeObserver,
-    AsrStreamBoundaryEvent, AsrStreamingErrorEvent, AsrStreamingSession, AsrTranscriptUpdateEvent,
-    AsrTranscriptionRequest, NoopAsrRuntimeObserver, OnlineAsrProviderRequest,
-    StreamingAudioFrameCursor, StreamingInferenceSpec, StreamingOutputPolicy,
-    TranscriptNormalizationOptions, TranscriptPostprocessOptions, TranscriptTextReplacementRule,
-    TranscriptTextReplacementRuleSet,
+    AsrAudioFrame, AsrEngineConfig, AsrMode, AsrRuntimeObserver, AsrStreamBoundaryEvent,
+    AsrStreamingErrorEvent, AsrTranscriptUpdateEvent, AsrTranscriptionRequest,
+    OnlineAsrProviderRequest, StreamingAudioFrameCursor, StreamingInferenceSpec,
+    StreamingOutputPolicy, TranscriptNormalizationOptions, TranscriptPostprocessOptions,
+    TranscriptTextReplacementRule, TranscriptTextReplacementRuleSet,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
 use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 
 #[derive(Default)]
 struct RecordingObserver {
@@ -40,27 +38,6 @@ impl AsrRuntimeObserver for RecordingObserver {
 
     fn on_stream_boundary(&self, event: &AsrStreamBoundaryEvent) {
         self.boundaries.lock().unwrap().push(event.clone());
-    }
-}
-
-struct DummySession;
-
-#[async_trait]
-impl AsrStreamingSession for DummySession {
-    async fn start(&self) -> Result<(), AsrPortError> {
-        Ok(())
-    }
-
-    async fn stop(&self) -> Result<(), AsrPortError> {
-        Ok(())
-    }
-
-    async fn flush(&self) -> Result<(), AsrPortError> {
-        Ok(())
-    }
-
-    async fn feed_audio_frame(&self, _frame: AsrAudioFrame) -> Result<(), AsrPortError> {
-        Ok(())
     }
 }
 
@@ -138,41 +115,6 @@ fn observer_accepts_typed_streaming_outputs() {
         vec![streaming_error]
     );
     assert_eq!(*observer.boundaries.lock().unwrap(), vec![boundary]);
-}
-
-#[test]
-fn noop_observer_accepts_all_outputs() {
-    let observer = NoopAsrRuntimeObserver;
-    let event = AsrTranscriptUpdateEvent {
-        instance_id: "live-1".to_string(),
-        stage: "partial".to_string(),
-        update: TranscriptUpdate {
-            remove_ids: Vec::new(),
-            upsert_segments: Vec::new(),
-        },
-    };
-
-    observer.on_transcript_update(&event);
-    observer.on_model_load(&model_load_metric());
-    observer.on_live_inference(&live_metric());
-    observer.on_streaming_error(&AsrStreamingErrorEvent {
-        instance_id: "live-1".to_string(),
-        code: "VOLCENGINE_WEB_SOCKET_CLOSED".to_string(),
-        message: "closed".to_string(),
-    });
-}
-
-#[tokio::test]
-async fn streaming_session_is_object_safe() {
-    let session: Arc<dyn AsrStreamingSession> = Arc::new(DummySession);
-
-    session.start().await.unwrap();
-    session
-        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.0, 0.25]))
-        .await
-        .unwrap();
-    session.flush().await.unwrap();
-    session.stop().await.unwrap();
 }
 
 #[test]

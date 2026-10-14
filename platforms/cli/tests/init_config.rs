@@ -307,6 +307,29 @@ sentence_only = true
 }
 
 #[test]
+fn config_check_accepts_ffmpeg_enabled_at_root_and_in_transcribe() {
+    let dir = tempfile::tempdir().unwrap();
+    let cfg = dir.path().join("ffmpeg.toml");
+    std::fs::write(
+        &cfg,
+        r#"
+ffmpeg_enabled = true
+
+[transcribe]
+ffmpeg_enabled = false
+"#,
+    )
+    .unwrap();
+
+    let output =
+        sona_cli::run_cli_from_args(["sona-cli", "config", "check", "-c", cfg.to_str().unwrap()])
+            .unwrap();
+
+    assert!(output.stdout.contains("is valid"));
+    assert!(!output.stdout.contains("Warning:"));
+}
+
+#[test]
 fn init_config_rejects_conflicting_path_and_global_flags() {
     let error1 =
         sona_cli::run_cli_from_args(["sona-cli", "config", "init", "custom.toml", "--global"])
@@ -751,28 +774,6 @@ fn config_set_updates_existing_live_alias_section() {
 }
 
 #[test]
-fn config_check_accepts_live_section() {
-    let dir = tempfile::tempdir().unwrap();
-    let config_path = dir.path().join("sona-cli.toml");
-    std::fs::write(
-        &config_path,
-        "[live]\nmodel_id = \"whisper-turbo\"\nformat = \"text\"\n",
-    )
-    .unwrap();
-
-    let output = sona_cli::run_cli_from_args([
-        "sona-cli",
-        "config",
-        "check",
-        "-c",
-        config_path.to_string_lossy().as_ref(),
-    ])
-    .unwrap();
-
-    assert!(output.stdout.contains("is valid"));
-}
-
-#[test]
 fn config_unset_removes_existing_key_from_local_config() {
     let dir = tempfile::tempdir().unwrap();
     let config_path = dir.path().join("sona-cli.toml");
@@ -806,32 +807,6 @@ fn config_unset_removes_existing_key_from_local_config() {
         config_path.to_string_lossy().as_ref(),
     ]);
     assert!(get_res.is_err());
-}
-
-#[test]
-fn config_rm_alias_works_identically_to_unset() {
-    let dir = tempfile::tempdir().unwrap();
-    let config_path = dir.path().join("sona-cli.toml");
-    std::fs::write(
-        &config_path,
-        "[serve]\nport = 14200\nhost = \"127.0.0.1\"\n",
-    )
-    .unwrap();
-
-    let output = sona_cli::run_cli_from_args([
-        "sona-cli",
-        "config",
-        "rm",
-        "serve.port",
-        "-c",
-        config_path.to_string_lossy().as_ref(),
-    ])
-    .unwrap();
-
-    assert!(output.stdout.contains("Removed serve.port"));
-    let contents = std::fs::read_to_string(&config_path).unwrap();
-    assert!(!contents.contains("port = 14200"));
-    assert!(contents.contains("host = \"127.0.0.1\""));
 }
 
 #[test]

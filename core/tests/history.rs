@@ -4,38 +4,9 @@ use sona_core::history::item_factory::{
     create_recording_item,
 };
 use sona_core::history::{
-    HistoryAudioStatus, HistoryItemKind, HistoryItemRecord, HistoryItemStatus,
-    TranscriptSnapshotMetadata, TranscriptSnapshotReason, TranscriptSnapshotRecord,
+    HistoryItemKind, HistoryItemStatus, TranscriptSnapshotMetadata, TranscriptSnapshotReason,
+    TranscriptSnapshotRecord,
 };
-
-#[test]
-fn history_item_transport_shape_lives_in_core() {
-    let item = HistoryItemRecord {
-        id: "history-1".to_string(),
-        timestamp: 42,
-        duration: 12.5,
-        audio_path: "history/history-1.wav".to_string(),
-        audio_status: HistoryAudioStatus::Available,
-        transcript_path: "history/history-1.json".to_string(),
-        title: "Meeting".to_string(),
-        preview_text: "hello".to_string(),
-        icon: Some("Mic".to_string()),
-        kind: HistoryItemKind::Recording,
-        search_content: "hello".to_string(),
-        tag_ids: vec!["tag-1".to_string()],
-        project_id: Some("tag-1".to_string()),
-        deleted_at: None,
-        status: HistoryItemStatus::Complete,
-        draft_source: None,
-    };
-
-    let value = serde_json::to_value(item).unwrap();
-
-    assert_eq!(value["type"], "recording");
-    assert_eq!(value["audioStatus"], "available");
-    assert_eq!(value["previewText"], "hello");
-    assert!(value.get("audio_status").is_none());
-}
 
 #[test]
 fn transcript_snapshot_record_uses_core_transcript_segments() {

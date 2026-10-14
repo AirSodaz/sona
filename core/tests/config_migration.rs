@@ -209,3 +209,43 @@ fn migration_populates_and_validates_mcp_config_defaults() {
     assert_eq!(typed.mcp_permission_mode.as_deref(), Some("full"));
     assert_eq!(typed.mcp_allow_destructive, Some(false));
 }
+
+#[test]
+fn migration_populates_live_and_batch_model_paths_and_buffer_sizes_from_legacy_config() {
+    let mut legacy_config = default_config();
+    legacy_config["configVersion"] = json!(7);
+    let obj = legacy_config.as_object_mut().unwrap();
+    obj.remove("liveVadBufferSize");
+    obj.remove("batchVadBufferSize");
+    obj.remove("livePunctuationModelPath");
+    obj.remove("batchPunctuationModelPath");
+    obj.remove("liveVadModelPath");
+    obj.remove("batchVadModelPath");
+    legacy_config["punctuationModelPath"] = json!("C:/models/punct.onnx");
+    legacy_config["vadModelPath"] = json!("C:/models/vad.onnx");
+    legacy_config["vadBufferSize"] = json!(10.0);
+    legacy_config["batchModelPath"] = json!("C:/models/batch.onnx");
+
+    let result = migrate_app_config(Some(legacy_config), "Default Rules".to_string());
+    assert_eq!(
+        result.config["livePunctuationModelPath"],
+        "C:/models/punct.onnx"
+    );
+    assert_eq!(
+        result.config["batchPunctuationModelPath"],
+        "C:/models/punct.onnx"
+    );
+    assert_eq!(result.config["liveVadModelPath"], "C:/models/vad.onnx");
+    assert_eq!(result.config["batchVadModelPath"], "C:/models/vad.onnx");
+    assert_eq!(result.config["liveVadBufferSize"], 10.0);
+    assert_eq!(result.config["batchVadBufferSize"], 10.0);
+    assert_eq!(result.config["batchModelPath"], "C:/models/batch.onnx");
+    assert!(result.config.get("punctuationModelPath").is_none());
+    assert!(result.config.get("vadModelPath").is_none());
+    assert!(result.config.get("vadBufferSize").is_none());
+    assert_eq!(
+        result.config["asr"]["selections"]["live"]["engine"],
+        "local"
+    );
+    validate_app_config(&result.config).expect("migrated config should match AppConfig");
+}

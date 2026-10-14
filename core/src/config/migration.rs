@@ -377,9 +377,36 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
     .unwrap_or_default();
     let batch_model_path = first_string(
         &parsed,
-        &["offlineModelPath", "recognitionModelPath", "modelPath"],
+        &[
+            "batchModelPath",
+            "offlineModelPath",
+            "recognitionModelPath",
+            "modelPath",
+        ],
     )
     .unwrap_or_default();
+    let live_punctuation_model_path = first_string(
+        &parsed,
+        &["livePunctuationModelPath", "punctuationModelPath"],
+    )
+    .unwrap_or_default();
+    let batch_punctuation_model_path = first_string(
+        &parsed,
+        &["batchPunctuationModelPath", "punctuationModelPath"],
+    )
+    .unwrap_or_default();
+    let live_vad_model_path =
+        first_string(&parsed, &["liveVadModelPath", "vadModelPath"]).unwrap_or_default();
+    let batch_vad_model_path =
+        first_string(&parsed, &["batchVadModelPath", "vadModelPath"]).unwrap_or_default();
+    let live_vad_buffer_size = ["liveVadBufferSize", "vadBufferSize", "vadBuffer"]
+        .iter()
+        .find_map(|key| parsed.get(*key).and_then(Value::as_f64))
+        .unwrap_or(5.0);
+    let batch_vad_buffer_size = ["batchVadBufferSize", "vadBufferSize", "vadBuffer"]
+        .iter()
+        .find_map(|key| parsed.get(*key).and_then(Value::as_f64))
+        .unwrap_or(5.0);
     let normalized_polish_custom_presets =
         normalize_polish_custom_presets(parsed.get("polishCustomPresets"));
     let normalized_summary_custom_templates =
@@ -399,21 +426,21 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ("streamingModelPath", json!(streaming_model_path.clone())),
         ("batchModelPath", json!(batch_model_path.clone())),
         (
-            "punctuationModelPath",
-            json!(string_at(&parsed, "punctuationModelPath").unwrap_or_default()),
+            "livePunctuationModelPath",
+            json!(live_punctuation_model_path),
         ),
         (
-            "vadModelPath",
-            json!(string_at(&parsed, "vadModelPath").unwrap_or_default()),
+            "batchPunctuationModelPath",
+            json!(batch_punctuation_model_path),
         ),
+        ("liveVadModelPath", json!(live_vad_model_path)),
+        ("batchVadModelPath", json!(batch_vad_model_path)),
         (
             "enableITN",
             json!(bool_at(&parsed, "enableITN").unwrap_or(true)),
         ),
-        (
-            "vadBufferSize",
-            json!(number_or_default(&parsed, "vadBufferSize", 5)),
-        ),
+        ("liveVadBufferSize", json!(live_vad_buffer_size)),
+        ("batchVadBufferSize", json!(batch_vad_buffer_size)),
         (
             "batchVadEnabled",
             json!(bool_at(&parsed, "batchVadEnabled").unwrap_or(true)),
@@ -717,6 +744,20 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
                 "rules": rules,
             }]),
         );
+    }
+
+    if let Some(object) = config.as_object_mut() {
+        for key in [
+            "punctuationModelPath",
+            "vadModelPath",
+            "vadBufferSize",
+            "vadBuffer",
+            "recognitionModelPath",
+            "offlineModelPath",
+            "modelPath",
+        ] {
+            object.remove(key);
+        }
     }
 
     sanitize_typed_config_fields(&mut config);
@@ -1048,7 +1089,10 @@ fn has_valid_or_legacy_current_asr_config(config: &Value) -> bool {
         let Some(selection) = selections.get(slot).and_then(Value::as_object) else {
             return false;
         };
-        if selection.get("engine").and_then(Value::as_str) != Some("local-sherpa") {
+        if !matches!(
+            selection.get("engine").and_then(Value::as_str),
+            Some("local") | Some("local-sherpa")
+        ) {
             return false;
         }
         if selection.get("mode").and_then(Value::as_str) != Some(expected_mode) {
@@ -1110,7 +1154,7 @@ fn normalize_asr_selection(
         .unwrap_or(fallback_model_path);
 
     json!({
-        "engine": "local-sherpa",
+        "engine": "local",
         "mode": expected_mode,
         "modelId": model_id,
         "modelPath": model_path,

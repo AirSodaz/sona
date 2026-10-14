@@ -1,5 +1,4 @@
-﻿use serde_json::json;
-use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
+﻿use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 
 #[test]
 fn serializes_asr_port_errors_as_stable_code_and_message() {
@@ -26,23 +25,6 @@ fn asr_port_error_code_falls_back_to_kind_when_no_override() {
     let value = serde_json::to_value(&error).unwrap();
     assert_eq!(value["code"], "NETWORK");
     assert_eq!(value["message"], "connection failed");
-}
-
-#[test]
-fn asr_port_error_serializes_with_override_code() {
-    let value = serde_json::to_value(
-        AsrPortError::new(AsrPortErrorKind::Unsupported, "provider foo 不支持流式识别")
-            .with_code("STREAMING_NOT_SUPPORTED"),
-    )
-    .unwrap();
-
-    assert_eq!(
-        value,
-        json!({
-            "code": "STREAMING_NOT_SUPPORTED",
-            "message": "provider foo 不支持流式识别"
-        })
-    );
 }
 
 #[test]

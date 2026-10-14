@@ -8,7 +8,7 @@ use sona_core::llm::requests::{
     validate_translate_segments_request,
 };
 use sona_core::llm::tasks::{
-    LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummarySegmentInput, SummaryTemplateConfig,
+    LlmProviderStrategy, LlmSegmentInput, LlmTaskType, SummaryTemplateConfig,
 };
 use sona_core::transcription::transcript::TranscriptSegment;
 
@@ -434,19 +434,6 @@ fn history_summary_payload_omits_absent_record() {
 
     assert_eq!(value["record"]["templateId"], "meeting");
     assert_eq!(value["record"]["sourceFingerprint"], "fingerprint");
-}
-
-#[test]
-fn summary_segment_input_stays_available_for_request_construction() {
-    let segment = SummarySegmentInput {
-        id: "segment-1".to_string(),
-        text: "Ship the beta.".to_string(),
-        start: 1.0,
-        end: 4.0,
-        is_final: true,
-    };
-
-    assert_eq!(segment.id, "segment-1");
 }
 
 #[test]

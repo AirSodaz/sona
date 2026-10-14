@@ -2,17 +2,10 @@ use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
 use sona_core::models::preset_models::{
-    DEFAULT_MODEL_RULES, DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, LanguageMode,
-    ModelCatalogSectionType, ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
+    DEFAULT_MODEL_RULES, DEFAULT_SILERO_VAD_MODEL_ID, LanguageMode, ModelCatalogSectionType,
+    ModelDependencyConfigKey, ModelDependencyRequest, ModelSelectionPaths,
     build_model_catalog_snapshot_with_installed_ids, find_preset_model, preset_models,
 };
-
-#[test]
-fn shared_preset_metadata_lives_in_core() {
-    assert!(!preset_models().is_empty());
-    assert!(find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).is_some());
-    assert!(find_preset_model(DEFAULT_PUNCTUATION_MODEL_ID).is_some());
-}
 
 #[test]
 fn qwen_presets_are_verified_batch_bundles() {

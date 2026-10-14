@@ -33,6 +33,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 [transcribe]
 # models_dir = "..."
 # gpu_acceleration = "auto"
+# ffmpeg_enabled = false
 # ffmpeg_path = "..."
 # vad_model_id = "{vad_model_id}"
 # punctuation_model_id = "{punctuation_model_id}"

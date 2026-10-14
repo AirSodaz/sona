@@ -23,6 +23,7 @@ pub struct SharedConfig {
     pub online_provider: Option<String>,
     pub api_key_env: Option<String>,
     pub online_config: Option<PathBuf>,
+    pub ffmpeg_enabled: Option<bool>,
     pub ffmpeg_path: Option<String>,
 
     pub model_id: Option<String>,
@@ -146,6 +147,7 @@ impl UnifiedConfigFile {
         config.vad_buffer_size = config.vad_buffer_size.or(self.shared.vad_buffer_size);
         config.format = config.format.or(self.shared.format);
         config.gpu_acceleration = config.gpu_acceleration.or(self.shared.gpu_acceleration);
+        config.ffmpeg_enabled = config.ffmpeg_enabled.or(self.shared.ffmpeg_enabled);
         config.ffmpeg_path = config.ffmpeg_path.or(self.shared.ffmpeg_path.clone());
         config.save_wav = config.save_wav.or(self.shared.save_wav.clone());
         config.mode = config.mode.or(self.shared.mode.clone());
@@ -241,6 +243,7 @@ pub const ROOT_CONFIG_KEYS: &[&str] = &[
     "online_provider",
     "api_key_env",
     "online_config",
+    "ffmpeg_enabled",
     "ffmpeg_path",
     "model_id",
     "language",
@@ -289,6 +292,7 @@ pub const TRANSCRIBE_CONFIG_KEYS: &[&str] = &[
     "vad_buffer_size",
     "format",
     "gpu_acceleration",
+    "ffmpeg_enabled",
     "ffmpeg_path",
     "save_audio",
     "save_wav",
