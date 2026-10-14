@@ -1161,3 +1161,27 @@ async fn test_stop_recording_fallback_when_no_active_session() {
     assert_eq!(res.duration_seconds, 0.0);
     assert_eq!(res.segment_count, 0);
 }
+
+#[tokio::test]
+async fn test_facade_shares_recording_operation_lock_with_services() {
+    let (facade, _dir) = create_test_facade().await;
+
+    // Acquire lock via services.recording_session
+    let guard = facade.services.recording_session.lock_operation().await;
+
+    // Verify facade's recording_op_lock cannot be acquired concurrently
+    let try_lock = facade.recording_op_lock.try_lock();
+    assert!(
+        try_lock.is_err(),
+        "facade.recording_op_lock must share the same mutex with services.recording_session"
+    );
+
+    drop(guard);
+
+    // After dropping guard, lock should be available
+    let try_lock_after = facade.recording_op_lock.try_lock();
+    assert!(
+        try_lock_after.is_ok(),
+        "facade.recording_op_lock must be free after guard is dropped"
+    );
+}

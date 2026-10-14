@@ -488,3 +488,65 @@ async fn stop_shared_capture_retrieves_saved_recording_path() {
     recorder_task.await.unwrap();
     assert_eq!(path, "path/to/recorded.wav");
 }
+
+#[tokio::test]
+async fn stop_shared_capture_times_out_on_stalled_hardware_join_and_clears_stopping() {
+    let state = AudioState::new();
+    let key = CaptureKey {
+        kind: CaptureKind::Microphone,
+        device_name: "stalled-mic".to_string(),
+    };
+    let (recorder_tx, _recorder_rx) = tokio::sync::mpsc::channel::<RecorderCommand>(4);
+    let mut capture = SharedCaptureState::default();
+    let epoch = LiveSourceEpoch::new("stalled-source", 1);
+    let running = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let running_clone = running.clone();
+    let stop_signal = AudioStopSignal::with_joiner(
+        || {},
+        move || {
+            while running_clone.load(std::sync::atomic::Ordering::Relaxed) {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+        },
+    );
+    capture.commit_start_with_source(
+        "stalled-owner".to_string(),
+        false,
+        stop_signal,
+        recorder_tx,
+        epoch.clone(),
+        Arc::new(AtomicU64::new(0)),
+    );
+
+    {
+        let mut reg = state.registry.lock().unwrap();
+        reg.captures.insert(key.clone(), capture);
+        reg.instance_keys.insert(
+            (CaptureKind::Microphone, "stalled-owner".to_string()),
+            key.clone(),
+        );
+    }
+
+    let start = std::time::Instant::now();
+    let res = super::coordinator::stop_shared_capture(
+        &state,
+        CaptureKind::Microphone,
+        "stalled-owner".to_string(),
+    )
+    .await;
+    let elapsed = start.elapsed();
+
+    assert!(res.is_ok());
+    assert!(
+        elapsed >= std::time::Duration::from_secs(3) && elapsed < std::time::Duration::from_secs(6),
+        "Expected timeout around 3s, elapsed: {:?}",
+        elapsed
+    );
+
+    let reg = state.registry.lock().unwrap();
+    assert!(
+        !reg.stopping_keys.contains_key(&key),
+        "Stopping state must be cleared despite timeout"
+    );
+    running.store(false, std::sync::atomic::Ordering::Relaxed);
+}

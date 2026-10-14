@@ -320,10 +320,19 @@ pub async fn stop_shared_capture(
     if detach_result.should_stop_hardware {
         if let Some(signal) = detach_result.stop_signal.as_ref() {
             let signal_clone = signal.clone();
-            let _ = tokio::task::spawn_blocking(move || {
-                signal_clone.join_hardware();
-            })
+            let join_res = tokio::time::timeout(
+                Duration::from_secs(3),
+                tokio::task::spawn_blocking(move || {
+                    signal_clone.join_hardware();
+                }),
+            )
             .await;
+            if join_res.is_err() {
+                warn!(
+                    "[Audio] Timed out waiting for {} hardware capture stream to join",
+                    kind.log_name()
+                );
+            }
         }
         if let Ok(mut registry) = state.registry.lock() {
             registry.clear_stopping(&key, &source);

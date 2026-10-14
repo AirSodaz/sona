@@ -28,6 +28,7 @@ pub struct DesktopRecordingSessionTracker {
     inner: Arc<tokio::sync::Mutex<Option<crate::platform::agent_control::ActiveRecordingSession>>>,
     completed_wav_paths: Arc<tokio::sync::Mutex<std::collections::HashMap<String, String>>>,
     session_cleared_notify: Arc<tokio::sync::Notify>,
+    operation_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl DesktopRecordingSessionTracker {
@@ -47,6 +48,14 @@ impl DesktopRecordingSessionTracker {
     ) -> tokio::sync::MutexGuard<'_, Option<crate::platform::agent_control::ActiveRecordingSession>>
     {
         self.inner.lock().await
+    }
+
+    pub fn operation_lock_handle(&self) -> Arc<tokio::sync::Mutex<()>> {
+        self.operation_lock.clone()
+    }
+
+    pub async fn lock_operation(&self) -> tokio::sync::MutexGuard<'_, ()> {
+        self.operation_lock.lock().await
     }
 
     pub async fn cache_saved_wav_path(&self, consumer_id: String, path: String) {
@@ -329,5 +338,24 @@ mod tests {
             "wait_cleared should be notified promptly without timing out"
         );
         handle.await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_desktop_recording_session_tracker_operation_lock() {
+        let tracker = DesktopRecordingSessionTracker::new();
+        let tracker_clone = tracker.clone();
+
+        let guard = tracker.lock_operation().await;
+        let op_handle = tracker_clone.operation_lock_handle();
+        assert!(
+            op_handle.try_lock().is_err(),
+            "operation lock should be held by tracker"
+        );
+        drop(guard);
+
+        assert!(
+            op_handle.try_lock().is_ok(),
+            "operation lock should be free after drop"
+        );
     }
 }

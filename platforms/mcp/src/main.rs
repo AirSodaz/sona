@@ -1,8 +1,8 @@
 use clap::Parser;
 use std::collections::HashMap;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-
 pub mod client;
 pub mod prompts;
 pub mod protocol;
@@ -54,11 +54,20 @@ pub async fn cancel_active_task(
         None
     }
 }
-pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<JsonRpcResponse> {
+pub async fn handle_request(
+    req: JsonRpcRequest,
+    client: &IpcClient,
+    is_initialized: &AtomicBool,
+) -> Option<JsonRpcResponse> {
     // Notifications (requests without an ID) MUST NOT send responses per JSON-RPC 2.0
     let id = match req.id {
         Some(id) => id,
-        None => return None,
+        None => {
+            if req.method == "notifications/initialized" {
+                is_initialized.store(true, Ordering::SeqCst);
+            }
+            return None;
+        }
     };
 
     if req.jsonrpc != protocol::JSONRPC_VERSION {
@@ -69,6 +78,17 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
         ));
     }
 
+    if req.method != "server/discover"
+        && req.method != "initialize"
+        && req.method != "ping"
+        && !is_initialized.load(Ordering::SeqCst)
+    {
+        return Some(JsonRpcResponse::error(
+            id,
+            protocol::SERVER_NOT_INITIALIZED,
+            "Server not initialized. Call 'initialize' or 'server/discover' first.",
+        ));
+    }
     let params_val = req.params.as_ref();
     let meta = params_val.and_then(|p| p.get("_meta"));
 
@@ -124,6 +144,7 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
 
     let response = match req.method.as_str() {
         "server/discover" => {
+            is_initialized.store(true, Ordering::SeqCst);
             let result = serde_json::json!({
                 "resultType": "complete",
                 "supportedVersions": protocol::SUPPORTED_PROTOCOL_VERSIONS,
@@ -136,6 +157,7 @@ pub async fn handle_request(req: JsonRpcRequest, client: &IpcClient) -> Option<J
             JsonRpcResponse::success(id, result)
         }
         "initialize" => {
+            is_initialized.store(true, Ordering::SeqCst);
             // Dual-era backward compatibility for legacy clients (SEP-2575)
             let requested_version = req
                 .params
@@ -279,6 +301,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut reader = BufReader::new(stdin);
     let (resp_tx, mut resp_rx) = tokio::sync::mpsc::channel::<JsonRpcResponse>(64);
     let active_tasks: ActiveTaskRegistry = Arc::new(tokio::sync::Mutex::new(HashMap::new()));
+    let is_initialized = Arc::new(AtomicBool::new(false));
     let writer_handle = tokio::spawn(async move {
         let mut stdout = tokio::io::stdout();
         while let Some(resp) = resp_rx.recv().await {
@@ -302,6 +325,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Ok(req) => {
                 if req.id.is_none() {
                     // Handle MCP 2.0 / JSON-RPC notifications
+                    if req.method == "notifications/initialized" {
+                        is_initialized.store(true, Ordering::SeqCst);
+                    }
                     if req.method == "notifications/cancelled" || req.method == "$/cancelRequest" {
                         let target_id = req
                             .params
@@ -335,11 +361,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let client_clone = client.clone();
                 let tx_clone = resp_tx.clone();
                 let active_tasks_clone = active_tasks.clone();
+                let is_initialized_clone = is_initialized.clone();
                 let id_key = id.clone();
 
                 let mut tasks = active_tasks.lock().await;
                 let handle = tokio::spawn(async move {
-                    let maybe_resp = handle_request(req, &client_clone).await;
+                    let maybe_resp =
+                        handle_request(req, &client_clone, &is_initialized_clone).await;
                     let mut tasks = active_tasks_clone.lock().await;
                     if tasks.remove(&id_key).is_some()
                         && let Some(resp) = maybe_resp
@@ -442,7 +470,9 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(false);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
+        assert!(initialized.load(Ordering::SeqCst));
         assert_eq!(resp.id, serde_json::json!(1));
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
@@ -480,7 +510,9 @@ mod tests {
             params: None,
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(false);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
+        assert!(!initialized.load(Ordering::SeqCst));
         assert_eq!(resp.id, serde_json::json!(1));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_PARAMS);
@@ -501,7 +533,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(2));
         assert!(resp.error.is_some());
         let err = resp.error.unwrap();
@@ -532,7 +565,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(200));
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
@@ -556,7 +590,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(3));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_PARAMS);
@@ -576,7 +611,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(1));
         assert!(resp.error.is_none());
         assert!(resp.result.is_some());
@@ -592,7 +628,9 @@ mod tests {
             params: Some(serde_json::json!({})),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(false);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
+        assert!(initialized.load(Ordering::SeqCst));
         assert_eq!(resp.id, serde_json::json!(10));
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
@@ -621,7 +659,9 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(false);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
+        assert!(initialized.load(Ordering::SeqCst));
         assert_eq!(resp.id, serde_json::json!(11));
         assert!(resp.error.is_none());
         let result = resp.result.unwrap();
@@ -646,7 +686,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(20));
         let result = resp.result.unwrap();
         assert_eq!(
@@ -676,7 +717,8 @@ mod tests {
             params: None,
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(301));
         let result = resp.result.unwrap();
         let templates = result
@@ -701,7 +743,8 @@ mod tests {
             params: None,
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(30));
         let result = resp.result.unwrap();
         assert_eq!(
@@ -734,7 +777,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(31));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_PARAMS);
@@ -750,7 +794,8 @@ mod tests {
             params: None,
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(40));
         let result = resp.result.unwrap();
         assert_eq!(
@@ -779,7 +824,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(41));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_PARAMS);
@@ -798,7 +844,8 @@ mod tests {
             })),
         };
 
-        let resp = handle_request(req, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(req, &client, &initialized).await.unwrap();
         assert_eq!(resp.id, serde_json::json!(50));
         let result = resp.result.unwrap();
         assert_eq!(
@@ -820,8 +867,10 @@ mod tests {
             method: "notifications/initialized".to_string(),
             params: None,
         };
-        let resp = handle_request(notification, &client).await;
+        let initialized = AtomicBool::new(false);
+        let resp = handle_request(notification, &client, &initialized).await;
         assert!(resp.is_none());
+        assert!(initialized.load(Ordering::SeqCst));
     }
 
     #[tokio::test]
@@ -833,10 +882,91 @@ mod tests {
             method: "ping".to_string(),
             params: None,
         };
-        let resp = handle_request(invalid, &client).await.unwrap();
+        let initialized = AtomicBool::new(true);
+        let resp = handle_request(invalid, &client, &initialized)
+            .await
+            .unwrap();
         assert_eq!(resp.id, serde_json::json!(99));
         assert!(resp.error.is_some());
         assert_eq!(resp.error.unwrap().code, protocol::INVALID_REQUEST);
+    }
+
+    #[tokio::test]
+    async fn test_uninitialized_request_rejected() {
+        let client = offline_test_client();
+        let initialized = AtomicBool::new(false);
+
+        // Calling tools/list before initialize must return SERVER_NOT_INITIALIZED (-32002)
+        let list_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(1)),
+            method: "tools/list".to_string(),
+            params: None,
+        };
+        let resp = handle_request(list_req, &client, &initialized)
+            .await
+            .unwrap();
+        assert_eq!(resp.id, serde_json::json!(1));
+        assert!(resp.error.is_some());
+        let err = resp.error.unwrap();
+        assert_eq!(err.code, protocol::SERVER_NOT_INITIALIZED);
+
+        // Calling tools/call before initialize must return SERVER_NOT_INITIALIZED (-32002)
+        let call_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(2)),
+            method: "tools/call".to_string(),
+            params: Some(serde_json::json!({
+                "name": "sona_get_client_state",
+                "arguments": {}
+            })),
+        };
+        let resp = handle_request(call_req, &client, &initialized)
+            .await
+            .unwrap();
+        assert_eq!(resp.id, serde_json::json!(2));
+        assert!(resp.error.is_some());
+        assert_eq!(resp.error.unwrap().code, protocol::SERVER_NOT_INITIALIZED);
+
+        // Ping is allowed even when uninitialized
+        let ping_req = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(3)),
+            method: "ping".to_string(),
+            params: None,
+        };
+        let resp = handle_request(ping_req, &client, &initialized)
+            .await
+            .unwrap();
+        assert_eq!(resp.id, serde_json::json!(3));
+        assert!(resp.error.is_none());
+
+        // Initializing allows subsequent tool calls
+        let init_notif = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: None,
+            method: "notifications/initialized".to_string(),
+            params: None,
+        };
+        assert!(
+            handle_request(init_notif, &client, &initialized)
+                .await
+                .is_none()
+        );
+        assert!(initialized.load(Ordering::SeqCst));
+
+        let list_req_after = JsonRpcRequest {
+            jsonrpc: "2.0".to_string(),
+            id: Some(serde_json::json!(4)),
+            method: "tools/list".to_string(),
+            params: None,
+        };
+        let resp = handle_request(list_req_after, &client, &initialized)
+            .await
+            .unwrap();
+        assert_eq!(resp.id, serde_json::json!(4));
+        assert!(resp.error.is_none());
+        assert!(resp.result.is_some());
     }
 
     #[tokio::test]

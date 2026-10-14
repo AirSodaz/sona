@@ -123,6 +123,7 @@ pub async fn start_native_live_transcription(
     gain: f32,
     asr_request: AsrTranscriptionRequest,
 ) -> Result<LiveNativeTranscriptionStart, AsrPortError> {
+    let _op_guard = services.recording_session.lock_operation().await;
     let audio_arc = services.audio.clone();
     let asr_arc = services.asr.clone();
     let emitter = services.emitter.clone();

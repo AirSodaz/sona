@@ -1040,6 +1040,23 @@ test("sona-mcp offline handling returns offline state and clear offline errors",
 	}
 
 	try {
+		// 0. Verify uninitialized calls are rejected, then perform initialize handshake
+		const uninit = await send({
+			jsonrpc: "2.0",
+			id: 0,
+			method: "tools/call",
+			params: { name: "sona_get_client_state", arguments: {} },
+		});
+		assert.equal(uninit.error.code, -32002);
+
+		const init = await send({
+			jsonrpc: "2.0",
+			id: 100,
+			method: "initialize",
+			params: {},
+		});
+		assert.equal(init.result.serverInfo.name, "sona-mcp");
+
 		// 1. sona_get_client_state when desktop is offline
 		const state = await send({
 			jsonrpc: "2.0",

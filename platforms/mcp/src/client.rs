@@ -508,6 +508,9 @@ pub(crate) fn build_desktop_command(
     if silent {
         cmd.arg("--silent");
     }
+    cmd.stdin(std::process::Stdio::null());
+    cmd.stdout(std::process::Stdio::null());
+    cmd.stderr(std::process::Stdio::inherit());
     cmd
 }
 
@@ -896,6 +899,29 @@ mod tests {
             .map(|a| a.to_string_lossy().to_string())
             .collect();
         assert!(!args.contains(&"--silent".to_string()));
+    }
+
+    #[test]
+    fn test_build_desktop_command_isolates_stdio() {
+        #[cfg(windows)]
+        {
+            let mut cmd = build_desktop_command(std::path::Path::new("cmd.exe"), None, false);
+            cmd.args(["/c", "echo", "leak_check"]);
+            let mut child = cmd.spawn().expect("failed to spawn cmd.exe");
+            let status = child.wait().expect("failed to wait on child");
+            assert!(status.success());
+            assert!(child.stdout.is_none());
+            assert!(child.stdin.is_none());
+        }
+        #[cfg(not(windows))]
+        {
+            let mut cmd = build_desktop_command(std::path::Path::new("true"), None, false);
+            let mut child = cmd.spawn().expect("failed to spawn true");
+            let status = child.wait().expect("failed to wait on child");
+            assert!(status.success());
+            assert!(child.stdout.is_none());
+            assert!(child.stdin.is_none());
+        }
     }
 
     #[cfg(windows)]

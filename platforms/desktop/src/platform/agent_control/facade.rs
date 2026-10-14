@@ -44,11 +44,12 @@ pub struct AgentControlFacade {
 impl AgentControlFacade {
     pub fn new(services: DesktopServices, app_handle: Option<tauri::AppHandle>) -> Self {
         let active_session = services.recording_session.handle();
+        let recording_op_lock = services.recording_session.operation_lock_handle();
         Self {
             services,
             app_handle,
             active_session,
-            recording_op_lock: Arc::new(Mutex::new(())),
+            recording_op_lock,
         }
     }
 
