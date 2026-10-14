@@ -23,11 +23,12 @@ describe('SettingsTabButton', () => {
     const button = screen.getByRole('tab');
     expect(button).toBeDefined();
     expect(button.getAttribute('aria-selected')).toBe('false');
+    expect(button.getAttribute('title')).toBe('General Settings');
     expect(button.className).not.toContain('active');
     screen.getByTestId('icon');
-    screen.getByText('General Settings');
+    const labelSpan = screen.getByText('General Settings');
+    expect(labelSpan.className).toBe('settings-tab-btn-text');
   });
-
   it('calls setActiveTab when clicking an inactive tab', () => {
     render(
       <SettingsTabButton

@@ -21,7 +21,8 @@
   border-radius: var(--radius-lg);
   width: min(1120px, 92vw);
   height: min(780px, 88vh);
-  min-height: 550px;
+  min-height: min(550px, calc(100vh - var(--spacing-md) * 2));
+  max-height: calc(100vh - var(--spacing-md) * 2);
   display: flex;
   flex-direction: row;
   box-shadow: var(--shadow-xl);
@@ -33,15 +34,26 @@
   width: clamp(220px, 22vw, 280px);
   background: var(--color-bg-secondary);
   border-right: 1px solid var(--color-border);
-  padding: var(--spacing-md);
+  padding: var(--spacing-md) 0;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-lg);
+  gap: var(--spacing-xs);
   flex-shrink: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .settings-sidebar-header {
-  padding: var(--spacing-sm) 12px;
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm);
+  flex-shrink: 0;
+  border-bottom: 1px solid transparent;
+  transition:
+    border-color var(--transition-fast),
+    box-shadow var(--transition-fast);
+}
+
+.settings-sidebar-header.is-scrolled {
+  border-bottom-color: var(--color-border);
 }
 
 .settings-sidebar-header h2 {
@@ -49,14 +61,20 @@
   font-weight: 600;
   color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  padding: 0 12px;
 }
 
 .settings-tabs-container {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px var(--spacing-md) var(--spacing-md);
+  overscroll-behavior: contain;
 }
-
 .settings-tab-btn {
   display: flex;
   align-items: center;
@@ -65,6 +83,7 @@
   padding: 8px 12px;
   height: 40px;
   /* Fixed height for consistency */
+  flex-shrink: 0;
   border: none;
   background: transparent;
   color: var(--color-text-secondary);
@@ -79,6 +98,17 @@
     box-shadow var(--transition-fast),
     color var(--transition-fast),
     transform var(--transition-fast);
+}
+
+.settings-tab-btn svg {
+  flex-shrink: 0;
+}
+
+.settings-tab-btn-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .settings-tab-btn:hover {
@@ -183,6 +213,26 @@
   }
 }
 
+@media (max-height: 640px) {
+  .settings-overlay {
+    padding: var(--spacing-xs);
+  }
+
+  .settings-modal {
+    height: calc(100vh - var(--spacing-xs) * 2);
+    max-height: calc(100vh - var(--spacing-xs) * 2);
+    min-height: 0;
+  }
+
+  .settings-sidebar {
+    padding: var(--spacing-sm) 0;
+  }
+
+  .settings-close-btn-container {
+    padding: var(--spacing-xs) var(--spacing-md) 0;
+  }
+}
+
 @media (max-width: 720px) {
   .settings-overlay {
     padding: var(--spacing-sm);
@@ -200,14 +250,21 @@
     gap: var(--spacing-md);
     border-right: none;
     border-bottom: 1px solid var(--color-border);
-    padding-bottom: var(--spacing-sm);
+    padding: var(--spacing-sm) 0;
+  }
+
+  .settings-sidebar-header {
+    padding: 0 var(--spacing-md);
+    border-bottom: none;
   }
 
   .settings-tabs-container {
     flex-direction: row;
     flex-wrap: nowrap;
     overflow-x: auto;
-    padding-bottom: 2px;
+    overflow-y: hidden;
+    padding: 0 var(--spacing-md) 4px;
+    -webkit-overflow-scrolling: touch;
   }
 
   .settings-tab-btn {

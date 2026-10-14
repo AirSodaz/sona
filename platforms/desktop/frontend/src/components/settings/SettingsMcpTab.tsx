@@ -172,7 +172,7 @@ export function SettingsMcpTab(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
-          title={t('settings.mcp.status_listening', { defaultValue: 'Service Status & Clients' })}
+          title={t('settings.mcp.service_status', { defaultValue: 'Service Status & Clients' })}
           hint={
             status?.running
               ? t('settings.mcp.status_active_hint', {
@@ -236,7 +236,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               {copiedKey === 'endpoint' ? <Check size={13} /> : <Copy size={13} />}
               {copiedKey === 'endpoint'
                 ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                : t('settings.mcp.btn_copy_config', { defaultValue: 'Copy' })}
+                : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })}
             </button>
           </div>
         </SettingsItem>
@@ -518,7 +518,7 @@ export function SettingsMcpTab(): React.JSX.Element {
                   {copiedKey === 'guide-path' ? <Check size={12} /> : <Copy size={12} />}
                   {copiedKey === 'guide-path'
                     ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                    : t('settings.mcp.btn_copy_config', { defaultValue: 'Copy' })}
+                    : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })}
                 </button>
               </div>
 
@@ -609,7 +609,11 @@ export function SettingsMcpTab(): React.JSX.Element {
                       {new Date(entry.timestamp).toLocaleTimeString()}
                     </span>
                     <span className="mcp-log-method">{entry.method}</span>
-                    <span className="mcp-log-category-tag">{entry.category}</span>
+                    <span className="mcp-log-category-tag">
+                      {t(`settings.mcp.category_${entry.category}`, {
+                        defaultValue: entry.category,
+                      })}
+                    </span>
                     {entry.paramsSummary && (
                       <span className="mcp-log-summary-text" title={entry.paramsSummary}>
                         {entry.paramsSummary}
@@ -653,6 +657,7 @@ export function SettingsMcpTab(): React.JSX.Element {
       {/* 5. Tool Capability Matrix */}
       <SettingsAccordion
         title={t('settings.mcp.tools_matrix_title', {
+          count: (tools || []).length,
           defaultValue: `Tool Capability Matrix (${(tools || []).length} Tools)`,
         })}
         status={
@@ -671,7 +676,9 @@ export function SettingsMcpTab(): React.JSX.Element {
                   color: pingLatency >= 0 ? 'var(--color-success)' : 'var(--color-error)',
                 }}
               >
-                {pingLatency >= 0 ? `${pingLatency} ms` : 'Ping failed'}
+                {pingLatency >= 0
+                  ? `${pingLatency} ms`
+                  : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })}
               </span>
             )}
             <button
@@ -684,7 +691,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               }}
             >
               <Zap size={12} />
-              Ping
+              {t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
             </button>
           </div>
         }

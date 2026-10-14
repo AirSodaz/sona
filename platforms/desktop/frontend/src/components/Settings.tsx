@@ -236,6 +236,7 @@ export function Settings({
   const { t } = useTranslation();
   const modalRef = useRef<HTMLDivElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const [isSidebarScrolled, setIsSidebarScrolled] = useState(false);
   const isPrewarming = prewarm && !isOpen;
   const shouldRender = isOpen || isPrewarming;
   const effectiveInitialTab = isPrewarming ? 'general' : initialTab;
@@ -259,6 +260,11 @@ export function Settings({
     },
     [renderedTab, setActiveTab]
   );
+
+  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const scrolled = e.currentTarget.scrollTop > 4;
+    setIsSidebarScrolled((prev) => (prev !== scrolled ? scrolled : prev));
+  }, []);
   const navigationContextValue = {
     activeTab: renderedTab,
     navigateToTab,
@@ -274,6 +280,15 @@ export function Settings({
       scrollContainerRef.current.scrollTop = 0;
     }
   }, [activeTab, isOpen]);
+  // Ensure the active tab button in the sidebar is visible inside the scroll container
+  useEffect(() => {
+    if (!isOpen) return;
+    const frameId = requestAnimationFrame(() => {
+      const btn = document.getElementById(`settings-tab-${renderedTab}`);
+      btn?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    });
+    return () => cancelAnimationFrame(frameId);
+  }, [isOpen, renderedTab]);
 
   useEffect(() => {
     if (!shouldRender) return;
@@ -417,7 +432,7 @@ export function Settings({
     >
       {/* Sidebar */}
       <div className="settings-sidebar">
-        <div className="settings-sidebar-header">
+        <div className={`settings-sidebar-header ${isSidebarScrolled ? 'is-scrolled' : ''}`}>
           <h2 id="settings-title">{t('settings.title')}</h2>
         </div>
 
@@ -426,6 +441,7 @@ export function Settings({
           role="tablist"
           aria-orientation="vertical"
           onKeyDown={handleTabKeyDown}
+          onScroll={handleSidebarScroll}
         >
           <SettingsTabButton
             id="general"

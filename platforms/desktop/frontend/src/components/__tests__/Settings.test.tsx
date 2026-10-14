@@ -587,4 +587,41 @@ describe('Settings', () => {
       expect(useTranscriptStore.getState().config.streamingModelPath).toBe('/path/to/test-model');
     });
   });
+
+  it('toggles is-scrolled class on the sidebar header when tabs container scrolls', async () => {
+    const { container } = render(<Settings isOpen={true} onClose={vi.fn()} />);
+
+    const header = container.querySelector('.settings-sidebar-header');
+    const tabsContainer = container.querySelector('.settings-tabs-container');
+
+    expect(header).toBeDefined();
+    expect(tabsContainer).toBeDefined();
+    expect(header?.classList.contains('is-scrolled')).toBe(false);
+
+    fireEvent.scroll(tabsContainer!, { target: { scrollTop: 50 } });
+    expect(header?.classList.contains('is-scrolled')).toBe(true);
+
+    fireEvent.scroll(tabsContainer!, { target: { scrollTop: 0 } });
+    expect(header?.classList.contains('is-scrolled')).toBe(false);
+  });
+
+  it('invokes scrollIntoView for the target tab button on navigation', async () => {
+    const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    try {
+      render(<Settings isOpen={true} onClose={vi.fn()} initialTab="general" />);
+      scrollIntoViewMock.mockClear();
+
+      const shortcutsTab = screen.getByRole('tab', { name: 'shortcuts.title' });
+      fireEvent.click(shortcutsTab);
+
+      await waitFor(() => {
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+      });
+    } finally {
+      window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    }
+  });
 });

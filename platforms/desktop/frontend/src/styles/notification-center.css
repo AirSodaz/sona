@@ -424,8 +424,6 @@
   overscroll-behavior: contain;
   -webkit-mask-image: none;
   mask-image: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-hover) transparent;
 }
 
 .notification-center-expand-btn {
@@ -545,8 +543,6 @@
   overscroll-behavior: contain;
   -webkit-mask-image: none;
   mask-image: none;
-  scrollbar-width: thin;
-  scrollbar-color: var(--color-border-hover) transparent;
 }
 
 .notification-center-detail-actions {

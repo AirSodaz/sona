@@ -40,13 +40,14 @@ export function SettingsTabButton({
       }}
       role="tab"
       aria-label={label}
+      title={label}
       aria-selected={activeTab === id}
       aria-controls={`settings-panel-${id}`}
       id={`settings-tab-${id}`}
       tabIndex={tabIndex}
     >
       <Icon />
-      {label}
+      <span className="settings-tab-btn-text">{label}</span>
     </button>
   );
 }

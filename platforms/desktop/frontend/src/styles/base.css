@@ -34,6 +34,37 @@ body {
 }
 
 /* ===========================
+   Unified Scrollbar Styles
+   =========================== */
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-text-disabled) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-disabled);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-muted);
+}
+
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* ===========================
    App Layout
    =========================== */
 
