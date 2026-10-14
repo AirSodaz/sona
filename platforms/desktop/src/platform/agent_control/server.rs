@@ -32,6 +32,37 @@ pub fn get_unix_socket_path() -> PathBuf {
         .join("agent.sock")
 }
 
+pub fn get_ipc_endpoint() -> String {
+    resolve_ipc_endpoint(|k| std::env::var(k).ok())
+}
+
+pub(crate) fn resolve_ipc_endpoint<F: Fn(&str) -> Option<String>>(env_lookup: F) -> String {
+    if let Some(endpoint) = env_lookup("SONA_IPC_ENDPOINT") {
+        let trimmed = endpoint.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    if let Some(pipe) = env_lookup("SONA_IPC_PIPE") {
+        let trimmed = pipe.trim();
+        if !trimmed.is_empty() {
+            return trimmed.to_string();
+        }
+    }
+    #[cfg(windows)]
+    {
+        WINDOWS_PIPE_NAME.to_string()
+    }
+    #[cfg(unix)]
+    {
+        get_unix_socket_path().to_string_lossy().to_string()
+    }
+    #[cfg(not(any(windows, unix)))]
+    {
+        "unsupported".to_string()
+    }
+}
+
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {
     pub jsonrpc: String,
@@ -491,11 +522,12 @@ pub async fn run_ipc_server(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     use tokio::net::windows::named_pipe::ServerOptions;
 
+    let pipe_name = get_ipc_endpoint();
     let mut server = ServerOptions::new()
         .first_pipe_instance(true)
-        .create(WINDOWS_PIPE_NAME)?;
+        .create(&pipe_name)?;
 
-    log::info!("[AgentControlIPC] Named pipe server listening on {WINDOWS_PIPE_NAME}");
+    log::info!("[AgentControlIPC] Named pipe server listening on {pipe_name}");
 
     loop {
         if *shutdown_rx.borrow() {
@@ -535,7 +567,7 @@ pub async fn run_ipc_server(
                     if *shutdown_rx.borrow() {
                         return Ok(());
                     }
-                    match ServerOptions::new().create(WINDOWS_PIPE_NAME) {
+                    match ServerOptions::new().create(&pipe_name) {
                         Ok(s) => break s,
                         Err(e) => {
                             log::error!(
@@ -572,7 +604,7 @@ pub async fn run_ipc_server(
     mut shutdown_rx: watch::Receiver<bool>,
     controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let socket_path = get_unix_socket_path();
+    let socket_path = PathBuf::from(get_ipc_endpoint());
     if let Some(parent) = socket_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
@@ -1052,6 +1084,32 @@ mod tests {
 
         tracker.disconnect_all(None);
         assert_eq!(tracker.active_count(), 0);
+    }
+
+    #[test]
+    fn test_resolve_ipc_endpoint_precedence() {
+        let ep1 = resolve_ipc_endpoint(|k| match k {
+            "SONA_IPC_ENDPOINT" => Some("custom-endpoint".to_string()),
+            "SONA_IPC_PIPE" => Some("custom-pipe".to_string()),
+            _ => None,
+        });
+        assert_eq!(ep1, "custom-endpoint");
+
+        let ep2 = resolve_ipc_endpoint(|k| match k {
+            "SONA_IPC_PIPE" => Some(r"\\.\pipe\custom-pipe".to_string()),
+            _ => None,
+        });
+        assert_eq!(ep2, r"\\.\pipe\custom-pipe");
+
+        let ep3 = resolve_ipc_endpoint(|k| match k {
+            "SONA_IPC_ENDPOINT" => Some("   ".to_string()),
+            "SONA_IPC_PIPE" => Some("".to_string()),
+            _ => None,
+        });
+        #[cfg(windows)]
+        assert_eq!(ep3, WINDOWS_PIPE_NAME);
+        #[cfg(unix)]
+        assert_eq!(ep3, get_unix_socket_path().to_string_lossy().to_string());
     }
 
     #[test]

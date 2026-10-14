@@ -20,6 +20,12 @@ vi.mock('../../../services/tauri/invoke', () => ({
   invokeTauri: vi.fn(),
 }));
 
+vi.mock('../../../services/configPersistenceService', () => ({
+  persistConfigImmediately: vi.fn(async (patch) => {
+    useConfigStore.getState().setConfig(patch);
+  }),
+}));
+
 const mockInvokeTauri = vi.mocked(invokeTauri);
 
 describe('SettingsMcpTab', () => {

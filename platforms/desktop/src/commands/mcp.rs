@@ -3,8 +3,10 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::platform::agent_control::{
     AgentControlFacade, AgentControlServerController, McpActivityLogEntry, McpToolCatalogItem,
-    WINDOWS_PIPE_NAME, get_tools_catalog,
+    get_tools_catalog,
 };
+
+pub use crate::platform::agent_control::get_ipc_endpoint;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -35,23 +37,6 @@ pub struct McpClientConfigMap {
     pub binary_exists: bool,
     pub endpoint: String,
     pub guides: Vec<McpClientGuide>,
-}
-
-pub fn get_ipc_endpoint() -> String {
-    #[cfg(windows)]
-    {
-        WINDOWS_PIPE_NAME.to_string()
-    }
-    #[cfg(unix)]
-    {
-        crate::platform::agent_control::get_unix_socket_path()
-            .to_string_lossy()
-            .to_string()
-    }
-    #[cfg(not(any(windows, unix)))]
-    {
-        "unsupported".to_string()
-    }
 }
 
 pub fn resolve_sona_mcp_binary_path() -> (Option<String>, bool) {

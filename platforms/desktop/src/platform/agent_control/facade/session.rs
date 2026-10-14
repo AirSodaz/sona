@@ -339,10 +339,12 @@ pub async fn stop_recording(
         });
     }
     let session_snapshot = session_snapshot.unwrap();
+    let is_ui_session =
+        session_snapshot.is_ui_session || session_snapshot.history_id.starts_with("ui-record-");
     // Delegate UI-session teardown to its recorder before backend teardown so that
     // the recorder stops native capture, receives the saved WAV path, and persists
     // the recording draft cleanly.
-    if session_snapshot.is_ui_session {
+    if is_ui_session {
         let mut final_history_id = session_snapshot.history_id.clone();
         let notified = services.recording_session.notified_cleared();
         tokio::pin!(notified);
@@ -410,7 +412,6 @@ pub async fn stop_recording(
             let mut session_guard = active_session.lock().await;
             *session_guard = None;
             services.recording_session.notify_cleared();
-
             if !req.discard {
                 let segments = session_snapshot
                     .segments
@@ -419,7 +420,7 @@ pub async fn stop_recording(
                     .unwrap_or_default();
 
                 let hid = session_snapshot.history_id.clone();
-                let exists = if hid.starts_with("ui-record-") {
+                let exists = if is_ui_session {
                     false
                 } else {
                     services

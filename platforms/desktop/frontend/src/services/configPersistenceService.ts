@@ -1,3 +1,4 @@
+import { useConfigStore } from '../stores/configStore';
 import type { AppConfig } from '../types/config';
 import { logger } from '../utils/logger';
 import { STORE_KEY_CONFIG, settingsStore } from './storageService';
@@ -54,4 +55,13 @@ export function scheduleConfigPersistence(config: AppConfig): void {
       logger.error('Failed to save config to store:', e);
     });
   }, 500);
+}
+
+export async function persistConfigImmediately(patch: Partial<AppConfig>): Promise<void> {
+  useConfigStore.getState().setConfig(patch);
+  pendingConfig = useConfigStore.getState().config;
+  pendingGeneration += 1;
+  clearTimeout(pendingTimer);
+  pendingTimer = undefined;
+  await flushConfigPersistence();
 }

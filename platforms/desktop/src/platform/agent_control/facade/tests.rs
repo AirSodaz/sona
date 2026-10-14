@@ -1118,6 +1118,16 @@ async fn test_agent_control_error_typing_and_cancellation() {
     let (code, msg): (i32, String) = err1.into();
     assert_eq!(code, -32800);
     assert_eq!(msg, "TASK_CANCELLED: Task cancelled.");
+
+    let err_exact = AgentControlError::from("cancelled");
+    assert!(err_exact.is_cancelled());
+    assert_eq!(err_exact.rpc_code(), -32800);
+
+    let err_unrelated = AgentControlError::from(
+        "Database operation failed: transaction cancelled due to lock timeout",
+    );
+    assert!(!err_unrelated.is_cancelled());
+    assert_eq!(err_unrelated.rpc_code(), -32000);
 }
 #[tokio::test]
 async fn test_stop_recording_fallback_when_no_active_session() {

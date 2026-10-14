@@ -2246,6 +2246,8 @@
       "status_stopped_hint": "서비스가 중지되었습니다. 외부 에이전트가 연결할 수 없습니다.",
       "active_clients": "연결된 클라이언트",
       "active_clients_count": "{{count}}개 에이전트 연결됨",
+      "active_clients_count_one": "{{count}}개 에이전트 연결됨",
+      "active_clients_count_other": "{{count}}개 에이전트 연결됨",
       "ipc_endpoint": "통신 엔드포인트",
       "ipc_endpoint_hint": "외부 에이전트 프로세스가 Sona와 로컬 통신하는 데 사용하는 통합 IPC 엔드포인트입니다.",
       "bridge_binary": "브리지 실행 파일 (sona-mcp)",

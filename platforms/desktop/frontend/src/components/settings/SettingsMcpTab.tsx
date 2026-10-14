@@ -19,9 +19,10 @@ import {
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { persistConfigImmediately } from '../../services/configPersistenceService';
 import { useMcpConfig, useSetConfig } from '../../stores/configStore';
 import { useMcpStore } from '../../stores/mcpStore';
-import type { McpPermissionMode } from '../../types/config';
+import type { AppConfig, McpPermissionMode } from '../../types/config';
 import { Switch } from '../Switch';
 import {
   SettingsAccordion,
@@ -84,20 +85,24 @@ export function SettingsMcpTab(): React.JSX.Element {
 
   const handleRestart = useCallback(async () => {
     await toggleEnabled(false);
-    setTimeout(() => {
-      void toggleEnabled(true);
-    }, 200);
+    await toggleEnabled(true);
   }, [toggleEnabled]);
 
   const handleModeChange = useCallback(
-    (mode: McpPermissionMode) => {
-      setConfig({ mcpPermissionMode: mode });
-      setTimeout(() => {
-        void fetchTools();
-        void fetchStatus();
-      }, 50);
+    async (mode: McpPermissionMode) => {
+      await persistConfigImmediately({ mcpPermissionMode: mode });
+      await fetchTools();
+      await fetchStatus();
     },
-    [setConfig, fetchTools, fetchStatus]
+    [fetchTools, fetchStatus]
+  );
+
+  const handlePermissionToggle = useCallback(
+    async (patch: Partial<AppConfig>) => {
+      await persistConfigImmediately(patch);
+      await fetchTools();
+    },
+    [fetchTools]
   );
 
   const handlePing = useCallback(async () => {
@@ -372,8 +377,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               <Switch
                 checked={config.mcpAllowRecording ?? true}
                 onChange={(val) => {
-                  setConfig({ mcpAllowRecording: val });
-                  setTimeout(() => void fetchTools(), 50);
+                  void handlePermissionToggle({ mcpAllowRecording: val });
                 }}
               />
             </SettingsItem>
@@ -388,8 +392,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               <Switch
                 checked={config.mcpAllowTranscriptEdit ?? true}
                 onChange={(val) => {
-                  setConfig({ mcpAllowTranscriptEdit: val });
-                  setTimeout(() => void fetchTools(), 50);
+                  void handlePermissionToggle({ mcpAllowTranscriptEdit: val });
                 }}
               />
             </SettingsItem>
@@ -419,8 +422,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               <Switch
                 checked={config.mcpAllowDestructive ?? false}
                 onChange={(val) => {
-                  setConfig({ mcpAllowDestructive: val });
-                  setTimeout(() => void fetchTools(), 50);
+                  void handlePermissionToggle({ mcpAllowDestructive: val });
                 }}
               />
             </SettingsItem>
@@ -434,8 +436,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               <Switch
                 checked={config.mcpAllowSettingsUpdate ?? false}
                 onChange={(val) => {
-                  setConfig({ mcpAllowSettingsUpdate: val });
-                  setTimeout(() => void fetchTools(), 50);
+                  void handlePermissionToggle({ mcpAllowSettingsUpdate: val });
                 }}
               />
             </SettingsItem>
@@ -449,8 +450,7 @@ export function SettingsMcpTab(): React.JSX.Element {
               <Switch
                 checked={config.mcpAllowModelManagement ?? true}
                 onChange={(val) => {
-                  setConfig({ mcpAllowModelManagement: val });
-                  setTimeout(() => void fetchTools(), 50);
+                  void handlePermissionToggle({ mcpAllowModelManagement: val });
                 }}
               />
             </SettingsItem>

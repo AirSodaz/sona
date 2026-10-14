@@ -2217,6 +2217,8 @@
       "status_stopped_hint": "服务已停止，外部智能体无法建立连接。",
       "active_clients": "已连接客户端",
       "active_clients_count": "{{count}} 个智能体连接",
+      "active_clients_count_one": "{{count}} 个智能体连接",
+      "active_clients_count_other": "{{count}} 个智能体连接",
       "ipc_endpoint": "通信端点",
       "ipc_endpoint_hint": "外部智能体进程用于同 Sona 进行本地通信的统一 IPC 端点。",
       "bridge_binary": "桥接程序 (sona-mcp)",

@@ -1,8 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { settingsStore } from '../../services/storageService';
 import { emit } from '../../services/tauri/platform/events';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
-import { flushConfigPersistence, scheduleConfigPersistence } from '../useConfigPersistence';
+import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
+import {
+  flushConfigPersistence,
+  persistConfigImmediately,
+  scheduleConfigPersistence,
+} from '../useConfigPersistence';
 
 vi.mock('../../services/storageService', () => ({
   STORE_KEY_CONFIG: 'config',
@@ -33,5 +37,16 @@ describe('useConfigPersistence', () => {
   it('no-ops when there is no pending config to flush', async () => {
     await flushConfigPersistence();
     expect(settingsStore.set).not.toHaveBeenCalled();
+  });
+
+  it('updates config store and persists immediately on persistConfigImmediately', async () => {
+    await persistConfigImmediately({ language: 'ja' });
+
+    expect(useConfigStore.getState().config.language).toBe('ja');
+    expect(settingsStore.set).toHaveBeenCalledWith(
+      'config',
+      expect.objectContaining({ language: 'ja' })
+    );
+    expect(emit).toHaveBeenCalledWith('asr-config-updated');
   });
 });

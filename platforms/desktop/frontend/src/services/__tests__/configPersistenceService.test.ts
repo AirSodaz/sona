@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_CONFIG } from '../../stores/configStore';
-import { flushConfigPersistence, scheduleConfigPersistence } from '../configPersistenceService';
+import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
+import {
+  flushConfigPersistence,
+  persistConfigImmediately,
+  scheduleConfigPersistence,
+} from '../configPersistenceService';
 import { settingsStore } from '../storageService';
 import { emit } from '../tauri/platform/events';
 
@@ -33,5 +37,16 @@ describe('configPersistenceService', () => {
   it('no-ops when there is no pending config to flush', async () => {
     await flushConfigPersistence();
     expect(settingsStore.set).not.toHaveBeenCalled();
+  });
+
+  it('updates config store and persists immediately on persistConfigImmediately', async () => {
+    await persistConfigImmediately({ language: 'ja' });
+
+    expect(useConfigStore.getState().config.language).toBe('ja');
+    expect(settingsStore.set).toHaveBeenCalledWith(
+      'config',
+      expect.objectContaining({ language: 'ja' })
+    );
+    expect(emit).toHaveBeenCalledWith('asr-config-updated');
   });
 });

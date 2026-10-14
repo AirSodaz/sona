@@ -69,8 +69,7 @@ impl From<String> for AgentControlError {
         } else if s.starts_with("TASK_CANCELLED")
             || s.contains("Task cancelled")
             || s.contains("task cancelled")
-            || s.contains("cancelled")
-            || s.contains("Cancelled")
+            || s.eq_ignore_ascii_case("cancelled")
         {
             Self::TaskCancelled(s)
         } else if let Some(rest) = s.strip_prefix("NOT_FOUND: ") {
