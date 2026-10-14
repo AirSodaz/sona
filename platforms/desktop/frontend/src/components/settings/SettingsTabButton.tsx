@@ -40,7 +40,6 @@ export function SettingsTabButton({
       }}
       role="tab"
       aria-label={label}
-      title={label}
       aria-selected={activeTab === id}
       aria-controls={`settings-panel-${id}`}
       id={`settings-tab-${id}`}
@@ -49,5 +48,22 @@ export function SettingsTabButton({
       <Icon />
       <span className="settings-tab-btn-text">{label}</span>
     </button>
+  );
+}
+
+export function SettingsSidebarGroupHeader({
+  label,
+  first,
+}: {
+  label: string;
+  first: boolean;
+}): React.JSX.Element {
+  return (
+    <div
+      className={`settings-sidebar-group-header${first ? '' : ' settings-sidebar-group-separator'}`}
+      role="presentation"
+    >
+      <span className="settings-sidebar-group-label">{label}</span>
+    </div>
   );
 }

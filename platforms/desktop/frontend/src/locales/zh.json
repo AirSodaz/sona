@@ -1716,6 +1716,12 @@
     "advanced_no_punct": "不需要标点",
     "cloud_managed": "云端自动处理",
     "online_automated_processing_hint": "云端 ASR 服务会自动处理端点检测 (VAD)、分句与标点，无需配置本地伴生模型与本地 VAD 分割。",
+    "group": {
+      "general": "一般",
+      "audio": "音频与识别",
+      "intelligence": "AI 服务",
+      "infrastructure": "数据与集成"
+    },
     "general": "常规",
     "general_title": "常规偏好",
     "general_description": "管理基本应用行为和外观。",

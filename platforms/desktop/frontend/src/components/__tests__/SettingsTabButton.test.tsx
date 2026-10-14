@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { SettingsTabButton } from '../settings/SettingsTabButton';
+import { SettingsSidebarGroupHeader, SettingsTabButton } from '../settings/SettingsTabButton';
 
 describe('SettingsTabButton', () => {
   const mockSetActiveTab = vi.fn();
@@ -23,7 +23,7 @@ describe('SettingsTabButton', () => {
     const button = screen.getByRole('tab');
     expect(button).toBeDefined();
     expect(button.getAttribute('aria-selected')).toBe('false');
-    expect(button.getAttribute('title')).toBe('General Settings');
+    expect(button.getAttribute('title')).toBeNull();
     expect(button.className).not.toContain('active');
     screen.getByTestId('icon');
     const labelSpan = screen.getByText('General Settings');
@@ -74,5 +74,28 @@ describe('SettingsTabButton', () => {
     expect(mockScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
 
     querySelectorSpy.mockRestore();
+  });
+});
+
+describe('SettingsSidebarGroupHeader', () => {
+  it('renders with presentation role and label text', () => {
+    const { container } = render(<SettingsSidebarGroupHeader label="General" first={true} />);
+
+    const header = container.querySelector('.settings-sidebar-group-header');
+    expect(header).toBeDefined();
+    expect(header?.getAttribute('role')).toBe('presentation');
+    expect(header?.textContent).toBe('General');
+    expect(header?.className).not.toContain('settings-sidebar-group-separator');
+  });
+
+  it('includes separator class when not the first group', () => {
+    const { container } = render(
+      <SettingsSidebarGroupHeader label="Audio & Recognition" first={false} />
+    );
+
+    const header = container.querySelector('.settings-sidebar-group-header');
+    expect(header).toBeDefined();
+    expect(header?.className).toContain('settings-sidebar-group-separator');
+    expect(header?.textContent).toBe('Audio & Recognition');
   });
 });

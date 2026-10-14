@@ -1,6 +1,6 @@
 import { BarChart3, Bot, Cloud, HardDrive, Server } from 'lucide-react';
 import type React from 'react';
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
@@ -8,7 +8,7 @@ import { isAnyDialogOpen } from '../stores/dialogStore';
 import type { SettingsTab, SettingsTabInput } from '../types/settings';
 import { markSettingsPerf } from '../utils/settingsPerf';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
-import { SettingsTabButton } from './settings/SettingsTabButton';
+import { SettingsSidebarGroupHeader, SettingsTabButton } from './settings/SettingsTabButton';
 import {
   loadSettingsAboutTab,
   loadSettingsApiServerTab,
@@ -24,6 +24,7 @@ import {
   loadSettingsSubtitleTab,
   loadSettingsSyncTab,
   loadSettingsVocabularyTab,
+  SETTINGS_TAB_GROUPS,
   SETTINGS_TABS,
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
@@ -65,6 +66,50 @@ const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);
+
+const SETTINGS_TAB_META: Record<
+  SettingsTab,
+  { labelKey: string; defaultValue?: string; Icon: () => React.JSX.Element }
+> = {
+  general: { labelKey: 'settings.general', Icon: GeneralIcon },
+  dashboard: {
+    labelKey: 'settings.dashboard.title',
+    defaultValue: 'Dashboard',
+    Icon: () => <BarChart3 size={18} />,
+  },
+  shortcuts: { labelKey: 'shortcuts.title', Icon: KeyboardIcon },
+  about: { labelKey: 'settings.about', Icon: InfoIcon },
+  microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
+  models: { labelKey: 'settings.model_hub', Icon: ModelIcon },
+  subtitle: {
+    labelKey: 'settings.subtitle_voice_typing_title',
+    defaultValue: 'Subtitles & Voice Typing',
+    Icon: SubtitleIcon,
+  },
+  vocabulary: { labelKey: 'settings.vocabulary', Icon: BookIcon },
+  llm_service: { labelKey: 'settings.llm.title', Icon: RobotIcon },
+  automation: { labelKey: 'settings.automation', defaultValue: 'Automation', Icon: AutomationIcon },
+  storage: {
+    labelKey: 'settings.storage.title',
+    defaultValue: 'Storage',
+    Icon: () => <HardDrive size={18} />,
+  },
+  sync: {
+    labelKey: 'settings.sync.title',
+    defaultValue: 'Cloud Sync',
+    Icon: () => <Cloud size={18} />,
+  },
+  api_server: {
+    labelKey: 'settings.api_server.title',
+    defaultValue: 'API Server',
+    Icon: () => <Server size={18} />,
+  },
+  mcp: {
+    labelKey: 'settings.mcp.title',
+    defaultValue: 'MCP Agents',
+    Icon: () => <Bot size={18} />,
+  },
+};
 
 function renderSettingsPane(
   activeTab: SettingsTab,
@@ -443,120 +488,25 @@ export function Settings({
           onKeyDown={handleTabKeyDown}
           onScroll={handleSidebarScroll}
         >
-          <SettingsTabButton
-            id="general"
-            label={t('settings.general')}
-            Icon={GeneralIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'general' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="dashboard"
-            label={t('settings.dashboard.title', { defaultValue: 'Dashboard' })}
-            Icon={() => <BarChart3 size={18} />}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'dashboard' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="microphone"
-            label={t('settings.input_device', { defaultValue: 'Input Device' })}
-            Icon={MicIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'microphone' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="subtitle"
-            label={t('settings.subtitle_voice_typing_title', {
-              defaultValue: 'Subtitles & Voice Typing',
-            })}
-            Icon={SubtitleIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'subtitle' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="models"
-            label={t('settings.model_hub')}
-            Icon={ModelIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'models' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="vocabulary"
-            label={t('settings.vocabulary')}
-            Icon={BookIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'vocabulary' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="automation"
-            label={t('settings.automation', { defaultValue: 'Automation' })}
-            Icon={AutomationIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'automation' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="storage"
-            label={t('settings.storage.title', { defaultValue: 'Storage' })}
-            Icon={() => <HardDrive size={18} />}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'storage' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="sync"
-            label={t('settings.sync.title', { defaultValue: 'Cloud Sync' })}
-            Icon={() => <Cloud size={18} />}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'sync' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="api_server"
-            label={t('settings.api_server.title', { defaultValue: 'API Server' })}
-            Icon={() => <Server size={18} />}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'api_server' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="mcp"
-            label={t('settings.mcp.title', { defaultValue: 'MCP Agents' })}
-            Icon={() => <Bot size={18} />}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'mcp' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="llm_service"
-            label={t('settings.llm.title')}
-            Icon={RobotIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'llm_service' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="shortcuts"
-            label={t('shortcuts.title')}
-            Icon={KeyboardIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'shortcuts' ? 0 : -1}
-          />
-          <SettingsTabButton
-            id="about"
-            label={t('settings.about')}
-            Icon={InfoIcon}
-            activeTab={renderedTab}
-            setActiveTab={navigateToTab}
-            tabIndex={renderedTab === 'about' ? 0 : -1}
-          />
+          {SETTINGS_TAB_GROUPS.map((group, gi) => (
+            <Fragment key={group.labelKey}>
+              <SettingsSidebarGroupHeader label={t(group.labelKey)} first={gi === 0} />
+              {group.tabs.map((tabId) => {
+                const meta = SETTINGS_TAB_META[tabId];
+                return (
+                  <SettingsTabButton
+                    key={tabId}
+                    id={tabId}
+                    label={t(meta.labelKey, { defaultValue: meta.defaultValue ?? meta.labelKey })}
+                    Icon={meta.Icon}
+                    activeTab={renderedTab}
+                    setActiveTab={navigateToTab}
+                    tabIndex={renderedTab === tabId ? 0 : -1}
+                  />
+                );
+              })}
+            </Fragment>
+          ))}
         </div>
       </div>
 

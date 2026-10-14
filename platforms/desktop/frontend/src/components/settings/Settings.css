@@ -75,6 +75,25 @@
   padding: 2px var(--spacing-md) var(--spacing-md);
   overscroll-behavior: contain;
 }
+
+.settings-sidebar-group-header {
+  padding: 4px 12px 2px;
+  user-select: none;
+}
+
+.settings-sidebar-group-separator {
+  margin-top: 6px;
+  border-top: 1px solid var(--color-border);
+  padding-top: 10px;
+}
+
+.settings-sidebar-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-tertiary);
+}
 .settings-tab-btn {
   display: flex;
   align-items: center;
@@ -270,6 +289,23 @@
   .settings-tab-btn {
     width: auto;
     min-width: fit-content;
+    flex-shrink: 0;
+  }
+
+  .settings-sidebar-group-header,
+  .settings-sidebar-group-label {
+    display: none;
+  }
+
+  .settings-sidebar-group-separator {
+    display: block;
+    margin: 0;
+    padding: 0;
+    border-top: none;
+    border-left: 1px solid var(--color-border);
+    width: 1px;
+    min-height: 16px;
+    align-self: stretch;
     flex-shrink: 0;
   }
 

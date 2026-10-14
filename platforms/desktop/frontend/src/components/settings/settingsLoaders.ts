@@ -1,22 +1,32 @@
 import type { SettingsTab } from '../../types/settings';
 import { preloadSettingsGeneralDeferredSections } from './settingsGeneralDeferredLoaders';
 
-export const SETTINGS_TABS = [
-  'general',
-  'dashboard',
-  'microphone',
-  'subtitle',
-  'models',
-  'vocabulary',
-  'automation',
-  'storage',
-  'sync',
-  'api_server',
-  'mcp',
-  'llm_service',
-  'shortcuts',
-  'about',
-] as const satisfies readonly SettingsTab[];
+export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
+  labelKey: string;
+  tabs: readonly SettingsTab[];
+}> = [
+  {
+    labelKey: 'settings.group.general',
+    tabs: ['general', 'dashboard', 'shortcuts', 'about'],
+  },
+  {
+    labelKey: 'settings.group.audio',
+    tabs: ['microphone', 'models', 'subtitle', 'vocabulary'],
+  },
+  {
+    labelKey: 'settings.group.intelligence',
+    tabs: ['llm_service', 'automation'],
+  },
+  {
+    labelKey: 'settings.group.infrastructure',
+    tabs: ['storage', 'sync', 'api_server', 'mcp'],
+  },
+] as const;
+
+export const SETTINGS_TABS = SETTINGS_TAB_GROUPS.flatMap((g) => g.tabs) as unknown as readonly [
+  SettingsTab,
+  ...SettingsTab[],
+];
 
 function memoizeLoader<T>(loader: () => Promise<T>): () => Promise<T> {
   let promise: Promise<T> | null = null;

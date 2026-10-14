@@ -180,16 +180,16 @@ describe('Settings Focus Trap & Navigation', () => {
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // Arrow Up -> Should switch to 'about' (loops around from general)
+    // Arrow Up -> Should switch to 'mcp' (loops around from general)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('about');
+    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
 
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // End -> Should switch to 'about' (last)
+    // End -> Should switch to 'mcp' (last)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('about');
+    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
 
     // Reset mock
     setActiveTabMock.mockClear();
@@ -199,7 +199,7 @@ describe('Settings Focus Trap & Navigation', () => {
     expect(setActiveTabMock).toHaveBeenCalledWith('general');
   });
 
-  it('renders the combined subtitle and voice typing tab before model hub', () => {
+  it('renders settings tabs in the expected grouped order', () => {
     const onClose = vi.fn();
     render(<Settings isOpen={true} onClose={onClose} />);
 
@@ -213,18 +213,18 @@ describe('Settings Focus Trap & Navigation', () => {
     expect(tabLabels).toEqual([
       'settings.general',
       'settings.dashboard.title',
+      'shortcuts.title',
+      'settings.about',
       'settings.input_device',
-      'settings.subtitle_voice_typing_title',
       'settings.model_hub',
+      'settings.subtitle_voice_typing_title',
       'settings.vocabulary',
+      'settings.llm.title',
       'settings.automation',
       'settings.storage.title',
       'settings.sync.title',
       'settings.api_server.title',
       'settings.mcp.title',
-      'settings.llm.title',
-      'shortcuts.title',
-      'settings.about',
     ]);
   });
 
@@ -248,7 +248,7 @@ describe('Settings Focus Trap & Navigation', () => {
     setActiveTabMock.mockClear();
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
-    expect(setActiveTabMock).toHaveBeenCalledWith('about');
+    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
   });
 
   it('keeps prewarmed inactive panes closed when the settings dialog opens', async () => {

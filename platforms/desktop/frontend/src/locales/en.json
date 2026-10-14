@@ -1716,6 +1716,12 @@
     "advanced_no_punct": "No punctuation required",
     "cloud_managed": "Cloud Managed",
     "online_automated_processing_hint": "Cloud ASR automatically handles voice activity detection (VAD), segmentation, and punctuation. Local companion models and local batch VAD segmentation are not required.",
+    "group": {
+      "general": "General",
+      "audio": "Audio & Recognition",
+      "intelligence": "AI Services",
+      "infrastructure": "Data & Integration"
+    },
     "general": "General",
     "general_title": "General Preferences",
     "general_description": "Manage basic application behaviors and appearance.",
