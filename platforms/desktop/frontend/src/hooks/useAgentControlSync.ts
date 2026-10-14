@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { historyService } from '../services/historyService';
+import { APP_SETTING_UPDATED_EVENT, STORE_KEY_CONFIG } from '../services/storageService';
 import {
   type AgentRecordingStatusPayload,
   TauriEvent,
@@ -7,12 +8,14 @@ import {
   type UiRecordingStopRequestedPayload,
 } from '../services/tauri/events';
 import { listen, type UnlistenFn } from '../services/tauri/platform/events';
+import { useConfigStore } from '../stores/configStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useMcpStore } from '../stores/mcpStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import { stopActiveRecording } from '../stores/transcriptCoordinator';
 import { sessionActions, transcriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
+import type { AppConfig } from '../types/config';
 import type { McpActivityLogEntry, McpMutationNotice } from '../types/mcp';
 import { logger } from '../utils/logger';
 
@@ -153,6 +156,37 @@ export function useAgentControlSync(): void {
         );
         if (isMounted) unlisteners.push(unlistenMcpMutation);
         else unlistenMcpMutation();
+
+        // 7. Listen for setting updates from Agent Control / external callers
+        const unlistenSetting = await listen<{ key: string; value: unknown }>(
+          APP_SETTING_UPDATED_EVENT,
+          (event) => {
+            if (!isMounted) return;
+            const { key, value } = event.payload ?? {};
+            if (!key) return;
+            const currentConfig = useConfigStore.getState().config;
+            if (key === STORE_KEY_CONFIG && typeof value === 'object' && value !== null) {
+              const incoming = value as Record<string, unknown>;
+              let changed = false;
+              for (const [k, v] of Object.entries(incoming)) {
+                if (JSON.stringify(currentConfig[k as keyof AppConfig]) !== JSON.stringify(v)) {
+                  changed = true;
+                  break;
+                }
+              }
+              if (changed) {
+                useConfigStore.getState().setConfig(value as Partial<AppConfig>);
+              }
+            } else if (!key.startsWith('sona-') && key in currentConfig) {
+              const currentVal = currentConfig[key as keyof AppConfig];
+              if (JSON.stringify(currentVal) !== JSON.stringify(value)) {
+                useConfigStore.getState().setConfig({ [key]: value } as Partial<AppConfig>);
+              }
+            }
+          }
+        );
+        if (isMounted) unlisteners.push(unlistenSetting);
+        else unlistenSetting();
       } catch (error) {
         logger.error('[AgentControlSync] Failed to setup listeners:', error);
       }

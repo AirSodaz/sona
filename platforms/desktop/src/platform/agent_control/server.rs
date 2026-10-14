@@ -347,11 +347,106 @@ where
         }
     });
 
-    let mut task_set = tokio::task::JoinSet::new();
+    let (req_tx, mut req_rx) = tokio::sync::mpsc::channel::<JsonRpcRequest>(32);
+    let worker_facade = facade.clone();
+    let worker_controller = controller.clone();
+    let worker_app_handle = app_handle.clone();
+    let worker_resp_tx = resp_tx.clone();
+
+    let worker_task = tokio::spawn(async move {
+        while let Some(rpc_req) = req_rx.recv().await {
+            let start = std::time::Instant::now();
+            let method = rpc_req.method;
+            let params = rpc_req.params;
+            let category = classify_tool(&method, params.as_ref());
+            let params_summary = summarize_params(params.as_ref());
+
+            let config = worker_facade.load_app_config();
+            let perm_result = check_permission(&method, category, &config);
+
+            let req_id = rpc_req.id.clone().unwrap_or(serde_json::Value::Null);
+            let is_notification = rpc_req.id.is_none();
+
+            let (response_str, log_status, error_msg) = match perm_result {
+                Err((code, message)) => {
+                    let resp = JsonRpcErrorResponse {
+                        jsonrpc: "2.0",
+                        id: req_id,
+                        error: JsonRpcErrorObject {
+                            code,
+                            message: &message,
+                            data: None,
+                        },
+                    };
+                    let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                    (Some(s), "blocked", Some(message))
+                }
+                Ok(()) => match dispatch_rpc_call(&method, params, &worker_facade).await {
+                    Ok(result) => {
+                        let resp = JsonRpcSuccessResponse {
+                            jsonrpc: "2.0",
+                            id: req_id,
+                            result,
+                        };
+                        let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                        (Some(s), "success", None)
+                    }
+                    Err((code, message)) => {
+                        let resp = JsonRpcErrorResponse {
+                            jsonrpc: "2.0",
+                            id: req_id,
+                            error: JsonRpcErrorObject {
+                                code,
+                                message: &message,
+                                data: None,
+                            },
+                        };
+                        let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
+                        (Some(s), "error", Some(message))
+                    }
+                },
+            };
+
+            let duration_ms = start.elapsed().as_millis() as u64;
+
+            let send_failed = if !is_notification && let Some(resp_str) = response_str {
+                worker_resp_tx.send(resp_str).await.is_err()
+            } else {
+                false
+            };
+
+            if let Some(ctrl) = &worker_controller
+                && config.mcp_audit_log_enabled.unwrap_or(true)
+            {
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_millis() as u64;
+                let entry = McpActivityLogEntry {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    timestamp: now_ms,
+                    method,
+                    category: category.as_str().to_string(),
+                    status: log_status.to_string(),
+                    duration_ms,
+                    params_summary,
+                    error_message: error_msg,
+                };
+                ctrl.record_activity(
+                    entry,
+                    worker_app_handle.as_ref(),
+                    config.mcp_notify_on_mutation.unwrap_or(true),
+                )
+                .await;
+            }
+
+            if send_failed {
+                break;
+            }
+        }
+    });
 
     loop {
-        while task_set.try_join_next().is_some() {}
-
         tokio::select! {
             changed = disconnect_rx.changed() => {
                 match changed {
@@ -392,97 +487,8 @@ where
                             };
                             let resp_str = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
                             let _ = resp_tx.send(resp_str).await;
-                        } else {
-                            let facade_clone = facade.clone();
-                            let controller_clone = controller.clone();
-                            let app_handle_clone = app_handle.clone();
-                            let resp_tx_clone = resp_tx.clone();
-                            let is_notification = rpc_req.id.is_none();
-                            let req_id = rpc_req.id.clone().unwrap_or(serde_json::Value::Null);
-
-                            task_set.spawn(async move {
-                                let start = std::time::Instant::now();
-                                let method = rpc_req.method;
-                                let params = rpc_req.params;
-                                let category = classify_tool(&method, params.as_ref());
-                                let params_summary = summarize_params(params.as_ref());
-
-                                let config = facade_clone.load_app_config();
-                                let perm_result = check_permission(&method, category, &config);
-
-                                let (response_str, log_status, error_msg) = match perm_result {
-                                    Err((code, message)) => {
-                                        let resp = JsonRpcErrorResponse {
-                                            jsonrpc: "2.0",
-                                            id: req_id,
-                                            error: JsonRpcErrorObject {
-                                                code,
-                                                message: &message,
-                                                data: None,
-                                            },
-                                        };
-                                        let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
-                                        (Some(s), "blocked", Some(message))
-                                    }
-                                    Ok(()) => {
-                                        match dispatch_rpc_call(&method, params, &facade_clone).await {
-                                            Ok(result) => {
-                                                let resp = JsonRpcSuccessResponse {
-                                                    jsonrpc: "2.0",
-                                                    id: req_id,
-                                                    result,
-                                                };
-                                                let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
-                                                (Some(s), "success", None)
-                                            }
-                                            Err((code, message)) => {
-                                                let resp = JsonRpcErrorResponse {
-                                                    jsonrpc: "2.0",
-                                                    id: req_id,
-                                                    error: JsonRpcErrorObject {
-                                                        code,
-                                                        message: &message,
-                                                        data: None,
-                                                    },
-                                                };
-                                                let s = serde_json::to_string(&resp).unwrap_or_else(|_| "{}".to_string());
-                                                (Some(s), "error", Some(message))
-                                            }
-                                        }
-                                    }
-                                };
-
-                                let duration_ms = start.elapsed().as_millis() as u64;
-
-                                if !is_notification && let Some(resp_str) = response_str {
-                                    let _ = resp_tx_clone.send(resp_str).await;
-                                }
-
-                                if let Some(ctrl) = controller_clone
-                                    && config.mcp_audit_log_enabled.unwrap_or(true)
-                                {
-                                    let now_ms = std::time::SystemTime::now()
-                                            .duration_since(std::time::UNIX_EPOCH)
-                                            .unwrap_or_default()
-                                            .as_millis() as u64;
-                                        let entry = McpActivityLogEntry {
-                                            id: uuid::Uuid::new_v4().to_string(),
-                                            timestamp: now_ms,
-                                            method,
-                                            category: category.as_str().to_string(),
-                                            status: log_status.to_string(),
-                                            duration_ms,
-                                            params_summary,
-                                            error_message: error_msg,
-                                        };
-                                        ctrl.record_activity(
-                                            entry,
-                                            app_handle_clone.as_ref(),
-                                            config.mcp_notify_on_mutation.unwrap_or(true),
-                                        )
-                                        .await;
-                                }
-                            });
+                        } else if req_tx.send(rpc_req).await.is_err() {
+                            break;
                         }
                     }
                     Err(e) => {
@@ -505,7 +511,17 @@ where
         }
     }
 
-    task_set.abort_all();
+    drop(req_tx);
+    let abort_handle = worker_task.abort_handle();
+    if tokio::time::timeout(std::time::Duration::from_secs(5), worker_task)
+        .await
+        .is_err()
+    {
+        log::warn!(
+            "[AgentControlIPC] Worker task timed out after 5s during graceful shutdown; aborting"
+        );
+        abort_handle.abort();
+    }
     drop(resp_tx);
     let _ = writer_task.await;
 
@@ -1207,6 +1223,14 @@ mod tests {
             ),
             ToolPermissionCategory::Recording
         );
+        assert_eq!(
+            classify_tool("sona_delete_summary", None),
+            ToolPermissionCategory::Destructive
+        );
+        assert_eq!(
+            classify_tool("unknown_dangerous_method", None),
+            ToolPermissionCategory::Destructive
+        );
 
         let mut config = sona_core::config::AppConfig {
             mcp_permission_mode: Some("read_only".to_string()),
@@ -1362,5 +1386,58 @@ mod tests {
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].status, "blocked");
         assert_eq!(logs[0].method, "sona_start_recording");
+    }
+
+    #[tokio::test]
+    async fn test_sequential_fifo_execution_and_graceful_drain() {
+        let (facade, _dir) = create_test_facade().await;
+        let tracker = ActiveConnectionTracker::new();
+        let (client, server) = tokio::io::duplex(8192);
+
+        let facade_clone = facade.clone();
+        let tracker_clone = tracker.clone();
+        let server_handle = tokio::spawn(async move {
+            let _ =
+                handle_connection_tracked(server, facade_clone, tracker_clone, None, None).await;
+        });
+
+        let (client_read, mut client_write) = tokio::io::split(client);
+        let mut buf_reader = tokio::io::BufReader::new(client_read);
+
+        // Send 3 requests in quick succession
+        for id in 1..=3 {
+            let req = serde_json::json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "method": "sona_get_client_state",
+                "params": {}
+            });
+            let mut req_bytes = serde_json::to_vec(&req).unwrap();
+            req_bytes.push(b'\n');
+            client_write.write_all(&req_bytes).await.unwrap();
+        }
+        client_write.flush().await.unwrap();
+        client_write.shutdown().await.unwrap();
+        drop(client_write);
+
+        // All 3 responses should be received in FIFO order even after client_write was closed
+        for expected_id in 1..=3 {
+            let mut line = String::new();
+            let n = buf_reader.read_line(&mut line).await.unwrap();
+            assert!(n > 0, "expected response for request {expected_id}");
+            let resp: serde_json::Value = serde_json::from_str(&line).unwrap();
+            assert_eq!(
+                resp.get("id").and_then(|v| v.as_i64()),
+                Some(expected_id),
+                "response id must match request id in FIFO order"
+            );
+        }
+
+        // Now reader should see EOF
+        let mut line = String::new();
+        let n = buf_reader.read_line(&mut line).await.unwrap();
+        assert_eq!(n, 0, "server should close stream after draining responses");
+
+        server_handle.await.unwrap();
     }
 }

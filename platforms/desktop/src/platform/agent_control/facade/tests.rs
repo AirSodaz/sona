@@ -5,7 +5,8 @@ use sona_core::history::TranscriptSnapshotReason;
 use sona_core::ports::asr::AsrMode;
 use sona_core::transcription::transcript::{SpeakerTag, TranscriptSegment};
 
-async fn create_test_facade() -> (AgentControlFacade, tempfile::TempDir) {
+async fn create_test_facade_with_emitter()
+-> (AgentControlFacade, Arc<MockEventEmitter>, tempfile::TempDir) {
     let temp = tempfile::tempdir().unwrap();
     let ctx = Arc::new(sona_sqlite::SqliteApplicationContext::open(temp.path()).unwrap());
     let sqlite = DesktopSqliteState::new(ctx);
@@ -13,12 +14,17 @@ async fn create_test_facade() -> (AgentControlFacade, tempfile::TempDir) {
 
     let services = DesktopServices::builder()
         .sqlite(sqlite)
-        .event_emitter(emitter)
+        .event_emitter(emitter.clone())
         .sync_config_path(temp.path().join("sync.json"))
         .build()
         .unwrap();
 
     let facade = AgentControlFacade::new(services, None);
+    (facade, emitter, temp)
+}
+
+async fn create_test_facade() -> (AgentControlFacade, tempfile::TempDir) {
+    let (facade, _emitter, temp) = create_test_facade_with_emitter().await;
     (facade, temp)
 }
 
@@ -89,7 +95,7 @@ async fn test_resolve_live_asr_config() {
 
 #[tokio::test]
 async fn test_projects_and_settings() {
-    let (facade, _dir) = create_test_facade().await;
+    let (facade, emitter, _dir) = create_test_facade_with_emitter().await;
 
     let projects = facade.list_projects().await.unwrap();
     assert!(projects.is_empty());
@@ -109,6 +115,14 @@ async fn test_projects_and_settings() {
         .unwrap();
     let updated_cfg = facade.get_settings(Some("theme".to_string())).unwrap();
     assert_eq!(updated_cfg, serde_json::json!("dark"));
+
+    let emitted = emitter.emitted.lock().unwrap();
+    let setting_event = emitted
+        .iter()
+        .find(|(ev, _)| ev == "app-setting-updated")
+        .expect("app-setting-updated event must be emitted");
+    assert_eq!(setting_event.1["key"], "theme");
+    assert_eq!(setting_event.1["value"], "dark");
 }
 
 #[tokio::test]
@@ -1002,6 +1016,17 @@ async fn test_snapshot_revert() {
     // Verify text was reverted back
     let current_reverted = facade.read_transcript(history_id.clone()).await.unwrap();
     assert_eq!(current_reverted.segments[0].text, "Version 1 text");
+
+    // Verify snapshot reason is Restore
+    let snaps = facade
+        .list_transcript_snapshots(history_id.clone())
+        .await
+        .unwrap();
+    let restore_snap = snaps
+        .iter()
+        .find(|s| s.id == revert_res.snapshot_id)
+        .expect("revert snapshot should exist in snapshots list");
+    assert_eq!(restore_snap.reason, TranscriptSnapshotReason::Restore);
 }
 
 #[tokio::test]

@@ -304,11 +304,11 @@ pub type CliResult<T> = Result<T, CliError>;
 pub(crate) fn map_runtime_fs_error(error: sona_runtime_fs::RuntimeFsError) -> CliError {
     let message = error.to_string();
     match error {
-        sona_runtime_fs::RuntimeFsError::FileSystem(_) => CliError::Io(message),
+        sona_runtime_fs::RuntimeFsError::FileSystem(_)
+        | sona_runtime_fs::RuntimeFsError::AlreadyExists { .. } => CliError::Io(message),
         sona_runtime_fs::RuntimeFsError::Serialization { .. } => CliError::Serialize(message),
         sona_runtime_fs::RuntimeFsError::Config(_)
-        | sona_runtime_fs::RuntimeFsError::Validation(_)
-        | sona_runtime_fs::RuntimeFsError::AlreadyExists { .. } => CliError::Validation(message),
+        | sona_runtime_fs::RuntimeFsError::Validation(_) => CliError::Validation(message),
     }
 }
 
@@ -779,9 +779,15 @@ mod tests {
         let validation = map_runtime_fs_error(sona_runtime_fs::RuntimeFsError::Validation(
             sona_core::runtime::error::RuntimeValidationError::new("input", "invalid input"),
         ));
-
+        let already_exists = map_runtime_fs_error(sona_runtime_fs::RuntimeFsError::AlreadyExists {
+            context: "Output file",
+            path: "output.txt".into(),
+            hint: "Use --force to overwrite.",
+        });
         assert!(matches!(filesystem, CliError::Io(_)));
         assert_eq!(filesystem.exit_code(), 5);
+        assert!(matches!(already_exists, CliError::Io(_)));
+        assert_eq!(already_exists.exit_code(), 5);
         assert!(matches!(serialization, CliError::Serialize(_)));
         assert_eq!(serialization.exit_code(), 1);
         assert!(matches!(validation, CliError::Validation(_)));

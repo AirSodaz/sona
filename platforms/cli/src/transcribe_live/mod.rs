@@ -13,7 +13,6 @@ use config::{
 };
 use session::{CliStreamingObserver, spawn_stop_signal};
 
-use std::io::Write;
 use std::sync::Arc;
 
 use sona_core::ports::asr::AsrRuntimeObserver;
@@ -57,11 +56,7 @@ pub(crate) async fn run_transcribe_live(
     let config = load_config(args.config.as_ref())?;
     let stdin_is_terminal = io.stdin_is_terminal();
     let resolved = resolve_live_command(args, config, stdin_is_terminal)?;
-    let stdout_is_terminal = io.stdout_is_terminal();
-    let (status, saved_audio) = {
-        let stdout = io.stdout();
-        run_resolved_live_command(resolved, stdout_is_terminal, stdout).await?
-    };
+    let (status, saved_audio) = run_resolved_live_command(resolved, io).await?;
     if let Some(path) = saved_audio {
         writeln!(
             io.stderr(),
@@ -79,8 +74,7 @@ pub(crate) async fn run_transcribe_live(
 
 async fn run_resolved_live_command(
     resolved: ResolvedLiveCommand,
-    stdout_is_terminal: bool,
-    stdout: &mut (dyn Write + Send),
+    io: &mut dyn CliIo,
 ) -> CliResult<(Option<String>, Option<std::path::PathBuf>)> {
     let session_id = uuid::Uuid::new_v4().to_string();
     let (update_sender, mut update_receiver) = tokio::sync::mpsc::unbounded_channel();
@@ -121,6 +115,7 @@ async fn run_resolved_live_command(
         device_name: input.device_name.clone(),
         model_id,
     };
+    let stdout_is_terminal = io.stdout_is_terminal();
     let mut renderer =
         LiveOutputRenderer::new(resolved.output_format, stdout_is_terminal, &session_id);
     let session_result = run_live_session_with_save_audio(
@@ -128,7 +123,7 @@ async fn run_resolved_live_command(
         &mut input,
         &mut update_receiver,
         &mut renderer,
-        stdout,
+        io.stdout(),
         stop_receiver,
         metadata,
         resolved.save_audio.as_deref(),
@@ -154,7 +149,7 @@ async fn run_resolved_live_command(
         ) {
             Ok(status) => Some(status),
             Err(error) => {
-                let _ = renderer.write_error(stdout, &error.to_string());
+                let _ = renderer.write_error(io.stdout(), &error.to_string());
                 return Err(error);
             }
         }
@@ -164,13 +159,12 @@ async fn run_resolved_live_command(
 
     if let Some(error) = session_err {
         if let Some(saved) = status.as_ref() {
-            let mut stderr = std::io::stderr();
-            let _ = writeln!(stderr, "{saved}");
+            let _ = writeln!(io.stderr(), "{saved}");
         }
         return Err(error);
     }
     renderer
-        .write_stopped(stdout, reason)
+        .write_stopped(io.stdout(), reason)
         .map_err(CliError::Io)?;
     Ok((status, resolved.save_audio))
 }

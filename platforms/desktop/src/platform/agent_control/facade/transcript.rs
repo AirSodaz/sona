@@ -431,7 +431,7 @@ pub async fn revert_transcript_snapshot(
         edit_session_id,
         base_segments,
         edited_segments,
-        reason: Some(TranscriptSnapshotReason::ManualEdit),
+        reason: Some(TranscriptSnapshotReason::Restore),
     };
 
     let result = services

@@ -72,7 +72,7 @@ pub fn classify_tool(method: &str, params: Option<&serde_json::Value>) -> ToolPe
         "start_recording" | "pause_recording" | "resume_recording" => {
             ToolPermissionCategory::Recording
         }
-        "delete_history" | "delete_project" | "delete_preset_model" => {
+        "delete_history" | "delete_project" | "delete_preset_model" | "delete_summary" => {
             ToolPermissionCategory::Destructive
         }
         "update_setting" => ToolPermissionCategory::SettingsUpdate,
@@ -85,7 +85,6 @@ pub fn classify_tool(method: &str, params: Option<&serde_json::Value>) -> ToolPe
         | "update_history_meta"
         | "save_summary"
         | "edit_summary"
-        | "delete_summary"
         | "restore_history"
         | "transcribe_file"
         | "cancel_batch_task"
@@ -95,7 +94,24 @@ pub fn classify_tool(method: &str, params: Option<&serde_json::Value>) -> ToolPe
         | "set_active_project"
         | "trigger_sync"
         | "resolve_sync_conflict" => ToolPermissionCategory::TranscriptEdit,
-        _ => ToolPermissionCategory::ReadOnly,
+        "get_client_state"
+        | "launch_desktop"
+        | "focus_window"
+        | "list_audio_devices"
+        | "list_transcript_snapshots"
+        | "read_transcript"
+        | "query_history"
+        | "get_history_detail"
+        | "query_trash"
+        | "load_summary"
+        | "list_projects"
+        | "get_project"
+        | "list_preset_models"
+        | "get_model_catalog"
+        | "get_settings"
+        | "get_sync_status"
+        | "list_sync_conflicts" => ToolPermissionCategory::ReadOnly,
+        _ => ToolPermissionCategory::Destructive,
     }
 }
 
@@ -382,7 +398,7 @@ pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
         "sona_delete_summary",
         "Delete Summary",
         "Delete persisted AI summary for a specific history record and refresh desktop UI.",
-        ToolPermissionCategory::TranscriptEdit,
+        ToolPermissionCategory::Destructive,
     ),
     (
         "sona_get_settings",

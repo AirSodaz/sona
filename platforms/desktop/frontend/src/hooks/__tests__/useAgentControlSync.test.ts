@@ -1,6 +1,8 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, type Mock, vi } from 'vitest';
 import { historyService } from '../../services/historyService';
+import { APP_SETTING_UPDATED_EVENT, STORE_KEY_CONFIG } from '../../services/storageService';
+import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTaskLedgerStore } from '../../stores/taskLedgerStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
@@ -62,6 +64,9 @@ describe('useAgentControlSync', () => {
     });
     useTaskLedgerStore.setState({
       tasks: [],
+    });
+    useConfigStore.setState({
+      config: DEFAULT_CONFIG,
     });
   });
 
@@ -313,11 +318,61 @@ describe('useAgentControlSync', () => {
     });
   });
 
+  it('updates useConfigStore when app-setting-updated event is received with single key-value', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has(APP_SETTING_UPDATED_EVENT)).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get(APP_SETTING_UPDATED_EVENT)?.({
+        payload: { key: 'theme', value: 'dark' },
+      });
+    });
+
+    expect(useConfigStore.getState().config.theme).toBe('dark');
+  });
+
+  it('updates useConfigStore when app-setting-updated event is received with STORE_KEY_CONFIG', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has(APP_SETTING_UPDATED_EVENT)).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get(APP_SETTING_UPDATED_EVENT)?.({
+        payload: { key: STORE_KEY_CONFIG, value: { theme: 'light', appLanguage: 'fr' } },
+      });
+    });
+
+    expect(useConfigStore.getState().config.theme).toBe('light');
+    expect(useConfigStore.getState().config.appLanguage).toBe('fr');
+  });
+
+  it('ignores non-config keys such as sona- prefixed storage keys', async () => {
+    renderHook(() => useAgentControlSync());
+
+    await waitFor(() => {
+      expect(listeners.has(APP_SETTING_UPDATED_EVENT)).toBe(true);
+    });
+
+    await act(async () => {
+      await listeners.get(APP_SETTING_UPDATED_EVENT)?.({
+        payload: { key: 'sona-active-project-id', value: 'proj-123' },
+      });
+    });
+
+    const config = useConfigStore.getState().config as Record<string, unknown>;
+    expect(config['sona-active-project-id']).toBeUndefined();
+  });
+
   it('unregisters all listeners on unmount', async () => {
     const { unmount } = renderHook(() => useAgentControlSync());
 
     await waitFor(() => {
-      expect(listeners.size).toBe(7);
+      expect(listeners.size).toBe(8);
     });
 
     unmount();

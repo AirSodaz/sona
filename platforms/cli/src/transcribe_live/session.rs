@@ -152,13 +152,22 @@ pub async fn run_live_session_with_save_audio<W: Write + ?Sized + Send>(
                     let reason = stop.unwrap_or(LiveStopReason::CtrlC);
                     input.request_stop();
                     if input.should_drain_on_stop() {
-                        drain_stopped_input(
-                            session.as_ref(),
-                            input,
-                            &mut frame_cursor,
-                            &mut wav_writer,
-                        )
-                        .await?;
+                        tokio::select! {
+                            drain_res = drain_stopped_input(
+                                session.as_ref(),
+                                input,
+                                &mut frame_cursor,
+                                &mut wav_writer,
+                            ) => {
+                                drain_res?;
+                            }
+                            _ = tokio::signal::ctrl_c() => {
+                                input.request_stop();
+                                return Err(CliError::Cancelled(
+                                    "Live transcription cancelled during teardown".to_string(),
+                                ));
+                            }
+                        }
                     }
                     break Ok(reason);
                 }
@@ -178,39 +187,57 @@ pub async fn run_live_session_with_save_audio<W: Write + ?Sized + Send>(
             return Err(error);
         }
     };
-
     input.request_stop();
-    if let Err(error) = session.flush().await {
-        let error =
-            finalize_wav_writer_on_error(wav_writer.take(), CliError::Model(error.to_string()));
-        let _ = session.stop().await;
-        renderer
-            .write_error(output, &error.to_string())
-            .map_err(CliError::Io)?;
-        return Err(error);
+    let session_cancel = session.clone();
+    tokio::select! {
+        teardown_res = async {
+            if let Err(error) = session.flush().await {
+                let error =
+                    finalize_wav_writer_on_error(wav_writer.take(), CliError::Model(error.to_string()));
+                let _ = session.stop().await;
+                renderer
+                    .write_error(output, &error.to_string())
+                    .map_err(CliError::Io)?;
+                return Err(error);
+            }
+            if let Err(error) = session.stop().await {
+                let error =
+                    finalize_wav_writer_on_error(wav_writer.take(), CliError::Model(error.to_string()));
+                renderer
+                    .write_error(output, &error.to_string())
+                    .map_err(CliError::Io)?;
+                return Err(error);
+            }
+            drop(session);
+            if let Some(writer) = wav_writer.take() {
+                writer.finalize().map_err(|error| {
+                    CliError::Io(format!(
+                        "Failed to finalize audio recording WAV file: {error}"
+                    ))
+                })?;
+            }
+            while let Ok(Some(event)) = tokio::time::timeout(FINAL_DRAIN_TIMEOUT, updates.recv()).await {
+                renderer
+                    .write_update(output, &event.stage, event.update)
+                    .map_err(CliError::Io)?;
+            }
+            Ok(reason)
+        } => teardown_res,
+        _ = tokio::signal::ctrl_c() => {
+            input.request_stop();
+            let _ = session_cancel.stop().await;
+            let error = finalize_wav_writer_on_error(
+                wav_writer.take(),
+                CliError::Cancelled(
+                    "Live transcription cancelled during teardown".to_string(),
+                ),
+            );
+            renderer
+                .write_error(output, &error.to_string())
+                .map_err(CliError::Io)?;
+            Err(error)
+        }
     }
-    if let Err(error) = session.stop().await {
-        let error =
-            finalize_wav_writer_on_error(wav_writer.take(), CliError::Model(error.to_string()));
-        renderer
-            .write_error(output, &error.to_string())
-            .map_err(CliError::Io)?;
-        return Err(error);
-    }
-    drop(session);
-    if let Some(writer) = wav_writer.take() {
-        writer.finalize().map_err(|error| {
-            CliError::Io(format!(
-                "Failed to finalize audio recording WAV file: {error}"
-            ))
-        })?;
-    }
-    while let Ok(Some(event)) = tokio::time::timeout(FINAL_DRAIN_TIMEOUT, updates.recv()).await {
-        renderer
-            .write_update(output, &event.stage, event.update)
-            .map_err(CliError::Io)?;
-    }
-    Ok(reason)
 }
 
 fn record_chunk(

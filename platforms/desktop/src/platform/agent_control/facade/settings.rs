@@ -23,5 +23,12 @@ pub fn update_setting(
     value: serde_json::Value,
 ) -> Result<bool, String> {
     services.config.set_setting(&key, &value)?;
+    let _ = services.emitter.emit(
+        "app-setting-updated",
+        serde_json::json!({
+            "key": &key,
+            "value": &value,
+        }),
+    );
     Ok(true)
 }
