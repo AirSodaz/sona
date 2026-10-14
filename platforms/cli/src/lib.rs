@@ -1,4 +1,5 @@
 mod asr_adapter;
+pub(crate) mod asr_args;
 mod config_cmd;
 mod config_template;
 mod desktop_paths;
@@ -161,7 +162,7 @@ struct StdinPromptWorkerHandle {
 }
 
 impl StdinPromptWorkerHandle {
-    fn new() -> Self {
+    fn try_new() -> io::Result<Self> {
         let (request_tx, mut request_rx) = tokio::sync::mpsc::channel::<StdinPromptRequest>(1);
         std::thread::Builder::new()
             .name("cli-stdin-prompt-worker".into())
@@ -175,10 +176,9 @@ impl StdinPromptWorkerHandle {
                     };
                     let _ = req.response_tx.send(res);
                 }
-            })
-            .expect("Failed to spawn CLI stdin prompt worker");
+            })?;
 
-        Self { request_tx }
+        Ok(Self { request_tx })
     }
 }
 
@@ -242,11 +242,18 @@ impl CliIo for StdCliIo {
     fn prompt_line_async<'a>(
         &'a mut self,
     ) -> Pin<Box<dyn Future<Output = io::Result<Option<String>>> + Send + 'a>> {
-        let worker = self
-            .worker
-            .get_or_insert_with(StdinPromptWorkerHandle::new)
-            .clone();
+        let worker_res = match &self.worker {
+            Some(w) => Ok(w.clone()),
+            None => match StdinPromptWorkerHandle::try_new() {
+                Ok(w) => {
+                    self.worker = Some(w.clone());
+                    Ok(w)
+                }
+                Err(err) => Err(err),
+            },
+        };
         Box::pin(async move {
+            let worker = worker_res?;
             let (response_tx, response_rx) = tokio::sync::oneshot::channel();
             if worker
                 .request_tx

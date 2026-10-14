@@ -74,50 +74,8 @@ pub struct TranscribeArgs {
     )]
     continue_on_error: bool,
 
-    /// Preset model id to use, or online model name when an online provider is selected.
-    #[arg(
-        short = 'm',
-        long = "model",
-        alias = "model-id",
-        help_heading = "Model Options"
-    )]
-    model_id: Option<String>,
-    /// Models directory containing installed presets.
-    #[arg(long = "models-dir", help_heading = "Model Options")]
-    models_dir: Option<PathBuf>,
-    /// Override the language setting.
-    #[arg(short = 'l', long, help_heading = "Model Options")]
-    language: Option<String>,
-    /// VAD model id override.
-    #[arg(long = "vad-model-id", help_heading = "Model Options")]
-    vad_model_id: Option<String>,
-    /// Punctuation model id override.
-    #[arg(long = "punctuation-model-id", help_heading = "Model Options")]
-    punctuation_model_id: Option<String>,
-
     #[command(flatten)]
-    online: crate::online_asr::OnlineAsrArgs,
-
-    /// Number of recognition threads (default: system auto-configured).
-    #[arg(long, help_heading = "Audio & Performance")]
-    threads: Option<i32>,
-    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
-    #[arg(long, default_value_t = false, help_heading = "Audio & Performance")]
-    enable_itn: bool,
-    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
-    #[arg(long, help_heading = "Audio & Performance")]
-    hotwords: Option<String>,
-    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
-    #[arg(
-        long = "gpu-acceleration",
-        value_name = "MODE",
-        value_parser = crate::runtime::gpu_acceleration_value_parser(),
-        help_heading = "Audio & Performance"
-    )]
-    gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds, for example 0.5.
-    #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
-    vad_buffer: Option<f32>,
+    pub asr: crate::asr_args::CommonAsrArgs,
     /// Save the resampled WAV to a file.
     #[arg(
         long = "save-wav",
@@ -157,23 +115,13 @@ pub async fn run_transcribe(
         ));
     }
     let config = load_config(args.config.as_ref())?;
-    let mut resolved_online = args.online.resolve_with_config(
+    let mut resolved_online = args.asr.online.resolve_with_config(
         config.as_ref().and_then(|c| c.online_provider.clone()),
         config.as_ref().and_then(|c| c.api_key_env.clone()),
         config.as_ref().and_then(|c| c.online_config.clone()),
     )?;
 
-    if let (true, Some(cli_model)) = (resolved_online.is_online(), &args.model_id) {
-        if let Some(existing_online_model) = &resolved_online.online_model {
-            if existing_online_model != cli_model {
-                return Err(CliError::Validation(format!(
-                    "Conflicting model names specified: -m/--model '{cli_model}' vs --online-model '{existing_online_model}'."
-                )));
-            }
-        } else {
-            resolved_online.online_model = Some(cli_model.clone());
-        }
-    }
+    crate::asr_args::reconcile_online_model(&mut resolved_online, args.asr.model_id.as_deref())?;
     let resolved_jobs = sona_core::transcription::runtime::resolve_batch_jobs(
         args.jobs.or_else(|| config.as_ref().and_then(|c| c.jobs)),
     )
@@ -181,12 +129,12 @@ pub async fn run_transcribe(
     let export_mode = sona_core::export::ExportMode::parse(&args.mode)
         .map_err(|error| CliError::Validation(error.to_string()))?;
 
-    let mut resolved_model_id = args.model_id.clone();
+    let mut resolved_model_id = args.asr.model_id.clone();
     if !resolved_online.is_online()
         && resolved_model_id.is_none()
         && config.as_ref().and_then(|c| c.model_id.as_ref()).is_none()
     {
-        match infer_batch_model(args.models_dir.as_ref()) {
+        match infer_batch_model(args.asr.models_dir.as_ref()) {
             BatchModelInference::AutoSelected(inferred) => {
                 if !args.quiet {
                     writeln!(
@@ -303,17 +251,21 @@ pub async fn run_transcribe(
         input: actual_single_input,
         output: args.output,
         format: single_format,
-        language: args.language,
+        language: args.asr.language,
         model_id: resolved_model_id,
-        models_dir: args.models_dir,
+        models_dir: args.asr.models_dir,
         default_models_dir: crate::desktop_paths::default_models_dir(),
-        vad_model_id: args.vad_model_id,
-        punctuation_model_id: args.punctuation_model_id,
-        threads: args.threads,
-        enable_itn: if args.enable_itn { Some(true) } else { None },
-        hotwords: args.hotwords,
-        gpu_acceleration: args.gpu_acceleration,
-        vad_buffer: args.vad_buffer,
+        vad_model_id: args.asr.vad_model_id,
+        punctuation_model_id: args.asr.punctuation_model_id,
+        threads: args.asr.threads,
+        enable_itn: if args.asr.enable_itn {
+            Some(true)
+        } else {
+            None
+        },
+        hotwords: args.asr.hotwords,
+        gpu_acceleration: args.asr.gpu_acceleration,
+        vad_buffer: args.asr.vad_buffer,
         save_wav: args.save_wav,
         quiet: args.quiet,
         force: args.force,
@@ -577,12 +529,14 @@ async fn run_batch_transcribe(
     if resolved_online.is_online() {
         reject_online_local_options(args)?;
         let language = args
+            .asr
             .language
             .clone()
             .or_else(|| config.and_then(|c| c.language.clone()))
             .unwrap_or_else(|| sona_core::transcription::runtime::DEFAULT_LANGUAGE.to_string());
-        let enable_itn = args.enable_itn || config.and_then(|c| c.enable_itn).unwrap_or(false);
+        let enable_itn = args.asr.enable_itn || config.and_then(|c| c.enable_itn).unwrap_or(false);
         let hotwords = args
+            .asr
             .hotwords
             .clone()
             .or_else(|| config.and_then(|c| c.hotwords.clone()));
@@ -631,15 +585,19 @@ async fn run_batch_transcribe(
 
         let resolved_model_id = resolved_model_id.clone();
         let config_clone = config.cloned();
-        let args_language = args.language.clone();
-        let args_models_dir = args.models_dir.clone();
-        let args_vad_model_id = args.vad_model_id.clone();
-        let args_punctuation_model_id = args.punctuation_model_id.clone();
-        let args_threads = args.threads;
-        let args_enable_itn = if args.enable_itn { Some(true) } else { None };
-        let args_hotwords = args.hotwords.clone();
-        let args_gpu_acceleration = args.gpu_acceleration.clone();
-        let args_vad_buffer = args.vad_buffer;
+        let args_language = args.asr.language.clone();
+        let args_models_dir = args.asr.models_dir.clone();
+        let args_vad_model_id = args.asr.vad_model_id.clone();
+        let args_punctuation_model_id = args.asr.punctuation_model_id.clone();
+        let args_threads = args.asr.threads;
+        let args_enable_itn = if args.asr.enable_itn {
+            Some(true)
+        } else {
+            None
+        };
+        let args_hotwords = args.asr.hotwords.clone();
+        let args_gpu_acceleration = args.asr.gpu_acceleration.clone();
+        let args_vad_buffer = args.asr.vad_buffer;
         let args_quiet = args.quiet;
         let args_force = args.force;
         let args_ffmpeg_path = args.ffmpeg_path.clone();
@@ -715,13 +673,15 @@ async fn run_online_transcribe(
     reject_online_local_options(args)?;
     validate_online_paths(input, args.output.as_ref(), args.force)?;
     let language = args
+        .asr
         .language
         .clone()
         .or_else(|| config.and_then(|config| config.language.clone()))
         .unwrap_or_else(|| sona_core::transcription::runtime::DEFAULT_LANGUAGE.to_string());
     let enable_itn =
-        args.enable_itn || config.and_then(|config| config.enable_itn).unwrap_or(false);
+        args.asr.enable_itn || config.and_then(|config| config.enable_itn).unwrap_or(false);
     let hotwords = args
+        .asr
         .hotwords
         .clone()
         .or_else(|| config.and_then(|config| config.hotwords.clone()));
@@ -748,26 +708,10 @@ async fn run_online_transcribe(
 }
 
 fn reject_online_local_options(args: &TranscribeArgs) -> CliResult<()> {
-    let local_option = [
-        (args.models_dir.is_some(), "--models-dir"),
-        (args.vad_model_id.is_some(), "--vad-model-id"),
-        (
-            args.punctuation_model_id.is_some(),
-            "--punctuation-model-id",
-        ),
-        (args.threads.is_some(), "--threads"),
-        (args.gpu_acceleration.is_some(), "--gpu-acceleration"),
-        (args.vad_buffer.is_some(), "--vad-buffer"),
-        (args.save_wav.is_some(), "--save-wav"),
-    ]
-    .into_iter()
-    .find_map(|(present, option)| present.then_some(option));
-    if let Some(option) = local_option {
-        return Err(CliError::Validation(format!(
-            "{option} can only be used with local ASR."
-        )));
-    }
-    Ok(())
+    crate::asr_args::reject_online_local_options(
+        &args.asr,
+        &[(args.save_wav.is_some(), "--save-wav")],
+    )
 }
 
 fn validate_online_paths(
@@ -1002,23 +946,13 @@ mod tests {
             recursive: false,
             output: None,
             format: None,
-            language: None,
             mode: "source".to_string(),
-            model_id: None,
-            models_dir: None,
-            vad_model_id: None,
-            punctuation_model_id: None,
-            threads: None,
-            enable_itn: false,
-            hotwords: None,
-            gpu_acceleration: None,
-            vad_buffer: None,
+            asr: crate::asr_args::CommonAsrArgs::default(),
             save_wav: None,
             quiet: false,
             force: true,
             continue_on_error: false,
             ffmpeg_path: None,
-            online: crate::online_asr::OnlineAsrArgs::default(),
             config: None,
             list_providers: false,
             jobs: Some(2),
@@ -1111,23 +1045,13 @@ mod tests {
             recursive: false,
             output: None,
             format: None,
-            language: None,
             mode: "source".to_string(),
-            model_id: None,
-            models_dir: None,
-            vad_model_id: None,
-            punctuation_model_id: None,
-            threads: None,
-            enable_itn: false,
-            hotwords: None,
-            gpu_acceleration: None,
-            vad_buffer: None,
+            asr: crate::asr_args::CommonAsrArgs::default(),
             save_wav: None,
             quiet: false,
             force: true,
             continue_on_error: false,
             ffmpeg_path: None,
-            online: crate::online_asr::OnlineAsrArgs::default(),
             config: None,
             list_providers: false,
             jobs: Some(1),
@@ -1185,23 +1109,13 @@ mod tests {
             recursive: false,
             output: None,
             format: None,
-            language: None,
             mode: "source".to_string(),
-            model_id: None,
-            models_dir: None,
-            vad_model_id: None,
-            punctuation_model_id: None,
-            threads: None,
-            enable_itn: false,
-            hotwords: None,
-            gpu_acceleration: None,
-            vad_buffer: None,
+            asr: crate::asr_args::CommonAsrArgs::default(),
             save_wav: None,
             quiet: false,
             force: true,
             continue_on_error: true,
             ffmpeg_path: None,
-            online: crate::online_asr::OnlineAsrArgs::default(),
             config: None,
             list_providers: false,
             jobs: Some(1),

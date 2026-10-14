@@ -133,50 +133,8 @@ pub struct TranscribeLiveArgs {
     )]
     pub(crate) force: bool,
 
-    /// Streaming preset model id to use, or online model name when an online provider is selected.
-    #[arg(
-        short = 'm',
-        long = "model",
-        alias = "model-id",
-        help_heading = "Model Options"
-    )]
-    pub(crate) model_id: Option<String>,
-    /// Models directory containing installed presets.
-    #[arg(long = "models-dir", help_heading = "Model Options")]
-    pub(crate) models_dir: Option<PathBuf>,
-    /// Override the language setting.
-    #[arg(short = 'l', long, help_heading = "Model Options")]
-    pub(crate) language: Option<String>,
-    /// VAD model id override.
-    #[arg(long = "vad-model-id", help_heading = "Model Options")]
-    pub(crate) vad_model_id: Option<String>,
-    /// Punctuation model id override.
-    #[arg(long = "punctuation-model-id", help_heading = "Model Options")]
-    pub(crate) punctuation_model_id: Option<String>,
-
     #[command(flatten)]
-    pub(crate) online: crate::online_asr::OnlineAsrArgs,
-
-    /// Number of recognition threads (default: system auto-configured).
-    #[arg(long, help_heading = "Audio & Performance")]
-    pub(crate) threads: Option<i32>,
-    /// Enable inverse text normalization (convert spoken numbers/dates to digits, e.g. "一百二十" -> "120").
-    #[arg(long, default_value_t = false, help_heading = "Audio & Performance")]
-    pub(crate) enable_itn: bool,
-    /// Optional hotwords string to enhance recognition, separated by newlines or commas.
-    #[arg(long, help_heading = "Audio & Performance")]
-    pub(crate) hotwords: Option<String>,
-    /// GPU acceleration mode: auto, cpu, vulkan, metal, or cuda.
-    #[arg(
-        long = "gpu-acceleration",
-        value_name = "MODE",
-        value_parser = crate::runtime::gpu_acceleration_value_parser(),
-        help_heading = "Audio & Performance"
-    )]
-    pub(crate) gpu_acceleration: Option<String>,
-    /// VAD buffer size in seconds, for example 0.5.
-    #[arg(long = "vad-buffer", help_heading = "Audio & Performance")]
-    pub(crate) vad_buffer: Option<f32>,
+    pub(crate) asr: crate::asr_args::CommonAsrArgs,
     /// Only transcribe complete sentences upon VAD truncation (reduces compute/battery load).
     #[arg(
         long = "sentence-only",
@@ -296,33 +254,28 @@ pub(crate) fn resolve_live_command(
             .transpose()?
             .unwrap_or(LiveOutputFormatArg::Text),
     };
-    let mut resolved_online = args.online.resolve_with_config(
+    let mut resolved_online = args.asr.online.resolve_with_config(
         config.online_provider.clone(),
         config.api_key_env.clone(),
         config.online_config.clone(),
     )?;
 
-    if let (true, Some(cli_model)) = (resolved_online.is_online(), &args.model_id) {
-        if let Some(existing_online_model) = &resolved_online.online_model {
-            if existing_online_model != cli_model {
-                return Err(CliError::Validation(format!(
-                    "Conflicting model names specified: -m/--model '{cli_model}' vs --online-model '{existing_online_model}'."
-                )));
-            }
-        } else {
-            resolved_online.online_model = Some(cli_model.clone());
-        }
-    }
+    crate::asr_args::reconcile_online_model(&mut resolved_online, args.asr.model_id.as_deref())?;
     let asr = if resolved_online.is_online() {
         reject_online_local_options(&args)?;
         validate_online_output(args.output.as_ref(), args.format.as_deref(), args.force)?;
         let language = args
+            .asr
             .language
             .clone()
             .or_else(|| config.language.clone())
             .unwrap_or_else(|| sona_core::transcription::runtime::DEFAULT_LANGUAGE.to_string());
-        let enable_itn = args.enable_itn || config.enable_itn.unwrap_or(false);
-        let hotwords = args.hotwords.clone().or_else(|| config.hotwords.clone());
+        let enable_itn = args.asr.enable_itn || config.enable_itn.unwrap_or(false);
+        let hotwords = args
+            .asr
+            .hotwords
+            .clone()
+            .or_else(|| config.hotwords.clone());
         let request =
             resolved_online.build_request(AsrMode::Streaming, language, enable_itn, hotwords)?;
         let format_choice = args.format.as_deref().or(config.format.as_deref());
@@ -341,9 +294,9 @@ pub(crate) fn resolve_live_command(
             output_path: args.output,
         }))
     } else {
-        let mut resolved_model_id = args.model_id.clone();
+        let mut resolved_model_id = args.asr.model_id.clone();
         if resolved_model_id.is_none() && config.model_id.is_none() {
-            match infer_streaming_model(args.models_dir.as_ref()) {
+            match infer_streaming_model(args.asr.models_dir.as_ref()) {
                 StreamingModelInference::AutoSelected(inferred) => {
                     log::info!(
                         "Note: Automatically selected installed streaming model '{inferred}'"
@@ -364,16 +317,16 @@ pub(crate) fn resolve_live_command(
                 output: args.output,
                 format: args.format.or(config.format.clone()),
                 model_id: resolved_model_id,
-                models_dir: args.models_dir,
+                models_dir: args.asr.models_dir,
                 default_models_dir: crate::desktop_paths::default_models_dir(),
-                vad_model_id: args.vad_model_id,
-                punctuation_model_id: args.punctuation_model_id,
-                threads: args.threads,
-                enable_itn: args.enable_itn.then_some(true),
-                language: args.language,
-                hotwords: args.hotwords,
-                gpu_acceleration: args.gpu_acceleration,
-                vad_buffer: args.vad_buffer,
+                vad_model_id: args.asr.vad_model_id,
+                punctuation_model_id: args.asr.punctuation_model_id,
+                threads: args.asr.threads,
+                enable_itn: args.asr.enable_itn.then_some(true),
+                language: args.asr.language,
+                hotwords: args.asr.hotwords,
+                gpu_acceleration: args.asr.gpu_acceleration,
+                vad_buffer: args.asr.vad_buffer,
                 force: args.force,
                 enable_partial_decoding: args.sentence_only.then_some(false),
             },
@@ -394,25 +347,7 @@ pub(crate) fn resolve_live_command(
 }
 
 fn reject_online_local_options(args: &TranscribeLiveArgs) -> CliResult<()> {
-    let local_option = [
-        (args.models_dir.is_some(), "--models-dir"),
-        (args.vad_model_id.is_some(), "--vad-model-id"),
-        (
-            args.punctuation_model_id.is_some(),
-            "--punctuation-model-id",
-        ),
-        (args.threads.is_some(), "--threads"),
-        (args.gpu_acceleration.is_some(), "--gpu-acceleration"),
-        (args.vad_buffer.is_some(), "--vad-buffer"),
-    ]
-    .into_iter()
-    .find_map(|(present, option)| present.then_some(option));
-    if let Some(option) = local_option {
-        return Err(CliError::Validation(format!(
-            "{option} can only be used with local ASR."
-        )));
-    }
-    Ok(())
+    crate::asr_args::reject_online_local_options(&args.asr, &[])
 }
 
 fn validate_online_output(

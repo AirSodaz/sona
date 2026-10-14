@@ -235,6 +235,18 @@ describe('tauri boundary wrappers', () => {
     });
   });
 
+  it('normalizes structured error objects rejected by invoke into standard Error instances', async () => {
+    const rawError = { kind: 'DeviceBusy', message: 'Audio hardware locked' };
+    vi.mocked(invoke).mockRejectedValueOnce(rawError);
+
+    await expect(invokeTauri(TauriCommand.app.hasActiveDownloads)).rejects.toMatchObject({
+      name: 'Error',
+      message: 'Audio hardware locked',
+      code: 'DeviceBusy',
+      cause: rawError,
+    });
+  });
+
   it('forwards pure pass-through wrappers to their centralized command ids', async () => {
     const segment = {
       id: 'segment-1',

@@ -33,7 +33,7 @@ type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
 
 const UNKNOWN_ERROR_MESSAGE = 'Unknown error';
 const MESSAGE_KEYS = ['message', 'error', 'reason', 'details', 'detail', 'cause'] as const;
-const CODE_KEYS = ['code', 'errorCode', 'status', 'statusCode'] as const;
+const CODE_KEYS = ['code', 'errorCode', 'kind', 'status', 'statusCode'] as const;
 
 export function normalizeError(error: unknown): NormalizedError {
   const message = extractMessageCandidate(error) ?? UNKNOWN_ERROR_MESSAGE;

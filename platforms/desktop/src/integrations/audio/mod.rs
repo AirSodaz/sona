@@ -44,7 +44,11 @@ impl AudioState {
     }
 
     pub fn get_device_start_lock(&self, key: &types::CaptureKey) -> Arc<tokio::sync::Mutex<()>> {
-        let mut locks = self.device_start_locks.lock().unwrap();
+        let mut locks = self
+            .device_start_locks
+            .lock()
+            .unwrap_or_else(|p| p.into_inner());
+        locks.retain(|_, lock| Arc::strong_count(lock) > 1);
         locks
             .entry(key.clone())
             .or_insert_with(|| Arc::new(tokio::sync::Mutex::new(())))

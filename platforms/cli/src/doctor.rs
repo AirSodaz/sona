@@ -339,11 +339,9 @@ fn inspect_audio() -> DoctorAudioStatus {
 fn inspect_models(models_dir_override: Option<&Path>) -> DoctorModelsStatus {
     let resolved_dir = match models_dir_override {
         Some(dir) => dir.to_path_buf(),
-        None => match std::env::var_os("SONA_MODELS_DIR") {
-            Some(env_dir) if !env_dir.is_empty() => PathBuf::from(env_dir),
-            _ => crate::desktop_paths::default_models_dir()
-                .unwrap_or_else(|| PathBuf::from("./models")),
-        },
+        None => {
+            crate::desktop_paths::default_models_dir().unwrap_or_else(|| PathBuf::from("./models"))
+        }
     };
 
     let exists = resolved_dir.is_dir();

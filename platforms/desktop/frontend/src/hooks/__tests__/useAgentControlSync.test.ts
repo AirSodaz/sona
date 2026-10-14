@@ -364,8 +364,8 @@ describe('useAgentControlSync', () => {
       });
     });
 
-    const config = useConfigStore.getState().config as Record<string, unknown>;
-    expect(config['sona-active-project-id']).toBeUndefined();
+    const config = useConfigStore.getState().config;
+    expect('sona-active-project-id' in config).toBe(false);
   });
 
   it('unregisters all listeners on unmount', async () => {

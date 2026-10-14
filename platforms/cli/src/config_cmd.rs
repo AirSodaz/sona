@@ -430,7 +430,11 @@ fn set_in_document(
         if !current_table.contains_key(part) {
             current_table.insert(part, toml_edit::Item::Table(toml_edit::Table::new()));
         }
-        let next_item = current_table.get_mut(part).unwrap();
+        let next_item = current_table.get_mut(part).ok_or_else(|| {
+            CliError::Validation(format!(
+                "Cannot set '{key_path}': failed to access table '{part}'."
+            ))
+        })?;
         match next_item {
             toml_edit::Item::Table(table) => {
                 current_table = table;
@@ -443,7 +447,9 @@ fn set_in_document(
         }
     }
 
-    let last_key = parts.last().unwrap();
+    let last_key = parts
+        .last()
+        .ok_or_else(|| CliError::Validation(format!("Invalid key path '{key_path}'.")))?;
     let existing = current_table.get(last_key);
     current_table.insert(last_key, resolve_item_for_leaf(existing, raw_value));
     Ok(())
@@ -554,7 +560,9 @@ fn unset_in_document(doc: &mut toml_edit::DocumentMut, key_path: &str) -> CliRes
         }
     }
 
-    let last_key = parts.last().unwrap();
+    let last_key = parts
+        .last()
+        .ok_or_else(|| CliError::Validation(format!("Invalid key path '{key_path}'.")))?;
     if current_table.remove(last_key).is_some() {
         Ok(())
     } else {

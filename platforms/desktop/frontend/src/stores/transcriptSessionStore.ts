@@ -99,10 +99,6 @@ export const {
 } = sessionActions;
 
 export {
-  registerActiveRecorderStopHandler,
-  stopActiveRecording,
-} from './transcriptStore';
-export {
   clearSegments as clearTranscriptSegmentsLegacy,
   deleteSegment as deleteTranscriptSegment,
   finalizeLastSegment as finalizeLastTranscriptSegment,
@@ -132,27 +128,27 @@ export function hasSessionContentChanged(a: SessionData, b: SessionData): boolea
   return false;
 }
 
-let cachedSession: {
+let sessionCacheState: {
   sessionId: string;
   session: SessionData;
   state: SessionStoreState;
 } | null = null;
 
 export function resetSessionStoreCache(): void {
-  cachedSession = null;
+  sessionCacheState = null;
 }
 
 export function getSessionStoreState(state: TranscriptStore): SessionStoreState {
   const activeSession = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
   if (
-    cachedSession &&
-    cachedSession.sessionId === state.activeSessionId &&
-    !hasSessionContentChanged(cachedSession.session, activeSession)
+    sessionCacheState &&
+    sessionCacheState.sessionId === state.activeSessionId &&
+    !hasSessionContentChanged(sessionCacheState.session, activeSession)
   ) {
-    return cachedSession.state;
+    return sessionCacheState.state;
   }
   const nextState: SessionStoreState = Object.assign(Object.create(sessionActions), activeSession);
-  cachedSession = {
+  sessionCacheState = {
     sessionId: state.activeSessionId,
     session: activeSession,
     state: nextState,

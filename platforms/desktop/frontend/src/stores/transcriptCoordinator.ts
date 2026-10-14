@@ -28,8 +28,29 @@ export {
 
 export {
   applyTranscriptUpdateToSession,
-  registerActiveRecorderStopHandler,
   setRecordingSessionId,
-  stopActiveRecording,
   updateTranscriptSegmentForSession,
 } from './transcriptStore';
+
+type ActiveRecorderStopHandler = (options?: { discard?: boolean }) => Promise<unknown>;
+let activeRecorderStopHandler: ActiveRecorderStopHandler | null = null;
+
+export const registerActiveRecorderStopHandler = (
+  handler: ActiveRecorderStopHandler | null
+): void => {
+  activeRecorderStopHandler = handler;
+};
+
+export const stopActiveRecording = async (options?: { discard?: boolean }): Promise<boolean> => {
+  const handler = activeRecorderStopHandler;
+  if (handler) {
+    activeRecorderStopHandler = null;
+    try {
+      await handler(options);
+      return true;
+    } catch (error) {
+      console.error('Failed to cleanly stop active recording:', error);
+    }
+  }
+  return false;
+};

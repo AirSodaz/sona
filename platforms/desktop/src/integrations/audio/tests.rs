@@ -550,3 +550,40 @@ async fn stop_shared_capture_times_out_on_stalled_hardware_join_and_clears_stopp
     );
     running.store(false, std::sync::atomic::Ordering::Relaxed);
 }
+
+#[test]
+fn device_start_lock_eviction_and_poison_recovery() {
+    let state = AudioState::new();
+    let key1 = CaptureKey {
+        kind: CaptureKind::Microphone,
+        device_name: "dev1".to_string(),
+    };
+    let key2 = CaptureKey {
+        kind: CaptureKind::Microphone,
+        device_name: "dev2".to_string(),
+    };
+
+    let held_lock1 = state.get_device_start_lock(&key1);
+    let _ = state.get_device_start_lock(&key2);
+
+    let locks_clone = state.device_start_locks.clone();
+    let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _guard = locks_clone.lock().unwrap();
+        panic!("poison intentional");
+    }));
+
+    let key3 = CaptureKey {
+        kind: CaptureKind::Microphone,
+        device_name: "dev3".to_string(),
+    };
+    let _held_lock3 = state.get_device_start_lock(&key3);
+
+    let locks = state
+        .device_start_locks
+        .lock()
+        .unwrap_or_else(|p| p.into_inner());
+    assert!(locks.contains_key(&key1), "held_lock1 must be retained");
+    assert!(!locks.contains_key(&key2), "dropped lock2 must be evicted");
+    assert!(locks.contains_key(&key3), "held_lock3 must be present");
+    drop(held_lock1);
+}

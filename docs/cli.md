@@ -369,7 +369,7 @@ Transcribe live audio using local or online ASR
 | `--format` | `-f` | - | Final transcript export format (json, txt, srt, vtt, md). Requires --output |
 | `--mode` | - | `original` | Text selection mode for final transcript: original, translation, or bilingual |
 | `--force` | `-F` | `false` | Overwrite an existing final transcript file |
-| `--model` | `-m` | - | Streaming preset model id to use, or online model name when an online provider is selected |
+| `--model` | `-m` | - | Preset model id to use, or online model name when an online provider is selected |
 | `--models-dir` | - | - | Models directory containing installed presets |
 | `--language` | `-l` | - | Override the language setting |
 | `--vad-model-id` | - | - | VAD model id override |

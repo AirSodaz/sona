@@ -48,7 +48,7 @@ const CONFIG_TEMPLATE: &str = r#"# Sona CLI config template
 # hotwords = "Sona,offline ASR"
 # format = "srt"
 # quiet = false
-# jobs = 1 # Note: Concurrent batch jobs (>1) are not yet supported
+# jobs = 1 # Number of concurrent batch transcription jobs
 
 [transcribe_live] # (alias: [live])
 # Input source: microphone or stdin. stdin must be 16 kHz mono signed 16-bit little-endian PCM.
