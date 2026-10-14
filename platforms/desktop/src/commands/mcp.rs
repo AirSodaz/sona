@@ -40,12 +40,30 @@ pub struct McpClientConfigMap {
 }
 
 pub fn resolve_sona_mcp_binary_path() -> (Option<String>, bool) {
+    resolve_sona_mcp_binary_path_with_env(|k| std::env::var(k).ok())
+}
+
+pub(crate) fn resolve_sona_mcp_binary_path_with_env<F: Fn(&str) -> Option<String>>(
+    env_lookup: F,
+) -> (Option<String>, bool) {
     let binary_name = if cfg!(windows) {
         "sona-mcp.exe"
     } else {
         "sona-mcp"
     };
 
+    if let Some(env_path) = env_lookup("SONA_MCP_PATH") {
+        let p = std::path::PathBuf::from(env_path);
+        if p.is_file() {
+            return (Some(p.to_string_lossy().to_string()), true);
+        }
+        if p.is_dir() {
+            let candidate = p.join(binary_name);
+            if candidate.is_file() {
+                return (Some(candidate.to_string_lossy().to_string()), true);
+            }
+        }
+    }
     if let Some(parent) = std::env::current_exe()
         .ok()
         .as_deref()
@@ -68,7 +86,7 @@ pub fn resolve_sona_mcp_binary_path() -> (Option<String>, bool) {
         }
     }
 
-    if let Ok(path_var) = std::env::var("PATH") {
+    if let Some(path_var) = env_lookup("PATH") {
         for dir in std::env::split_paths(&path_var) {
             let candidate = dir.join(binary_name);
             if candidate.exists() {
@@ -289,5 +307,43 @@ mod tests {
             .unwrap();
         assert!(claude_desktop.config_content.contains("mcpServers"));
         assert!(claude_desktop.config_content.contains("sona"));
+    }
+
+    #[test]
+    fn test_resolve_sona_mcp_binary_path_with_env_var() {
+        let current_exe = std::env::current_exe().expect("current exe should exist");
+        let (resolved, exists) = resolve_sona_mcp_binary_path_with_env(|k| match k {
+            "SONA_MCP_PATH" => Some(current_exe.to_string_lossy().to_string()),
+            _ => None,
+        });
+
+        assert_eq!(resolved, Some(current_exe.to_string_lossy().to_string()));
+        assert!(exists);
+    }
+
+    #[test]
+    fn test_resolve_sona_mcp_binary_path_with_nonexistent_env_var() {
+        let (resolved, _exists) = resolve_sona_mcp_binary_path_with_env(|k| match k {
+            "SONA_MCP_PATH" => Some("nonexistent/path/to/sona-mcp".to_string()),
+            _ => None,
+        });
+
+        if let Some(path) = resolved {
+            assert_ne!(path, "nonexistent/path/to/sona-mcp");
+        }
+    }
+
+    #[test]
+    fn test_resolve_sona_mcp_binary_path_with_dir_env_var() {
+        let temp_dir = std::env::temp_dir();
+        let (resolved, _exists) = resolve_sona_mcp_binary_path_with_env(|k| match k {
+            "SONA_MCP_PATH" => Some(temp_dir.to_string_lossy().to_string()),
+            _ => None,
+        });
+
+        // Should not treat temp_dir itself as a binary file
+        if let Some(path) = resolved {
+            assert_ne!(path, temp_dir.to_string_lossy().to_string());
+        }
     }
 }

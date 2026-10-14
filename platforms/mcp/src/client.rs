@@ -117,6 +117,7 @@ pub fn is_idempotent_method(method: &str) -> bool {
             | "get_model_catalog"
             | "get_settings"
             | "load_summary"
+            | "focus_window"
     )
 }
 
@@ -472,10 +473,7 @@ impl IpcClient {
             exe_path.display(),
             if silent { " (--silent)" } else { "" }
         );
-        let mut cmd = std::process::Command::new(&exe_path);
-        if silent {
-            cmd.arg("--silent");
-        }
+        let mut cmd = build_desktop_command(&exe_path, self.custom_endpoint.as_deref(), silent);
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -496,6 +494,21 @@ impl IpcClient {
             "Timed out after {timeout_seconds}s waiting for Sona desktop client to respond on IPC"
         ))
     }
+}
+
+pub(crate) fn build_desktop_command(
+    exe_path: &std::path::Path,
+    custom_endpoint: Option<&str>,
+    silent: bool,
+) -> std::process::Command {
+    let mut cmd = std::process::Command::new(exe_path);
+    if let Some(endpoint) = custom_endpoint {
+        cmd.env("SONA_IPC_ENDPOINT", endpoint);
+    }
+    if silent {
+        cmd.arg("--silent");
+    }
+    cmd
 }
 
 pub fn find_desktop_binary() -> Option<PathBuf> {
@@ -800,6 +813,9 @@ mod tests {
             "get_model_catalog",
             "get_settings",
             "load_summary",
+            "focus_window",
+            "sona_focus_window",
+            "agent_focus_window",
         ];
         for method in idempotent {
             assert!(
@@ -830,6 +846,56 @@ mod tests {
                 "Method {method} should NOT be classified as idempotent"
             );
         }
+    }
+
+    #[test]
+    fn test_build_desktop_command_custom_endpoint_and_silent() {
+        let exe = std::path::Path::new("dummy-sona.exe");
+        let cmd = build_desktop_command(exe, Some("custom_endpoint_value"), true);
+        let envs: Vec<_> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().to_string(),
+                    v.map(|s| s.to_string_lossy().to_string()),
+                )
+            })
+            .collect();
+        assert!(
+            envs.iter()
+                .any(|(k, v)| k == "SONA_IPC_ENDPOINT"
+                    && v.as_deref() == Some("custom_endpoint_value")),
+            "SONA_IPC_ENDPOINT should be set to custom_endpoint_value"
+        );
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert!(args.contains(&"--silent".to_string()));
+    }
+
+    #[test]
+    fn test_build_desktop_command_no_custom_endpoint() {
+        let exe = std::path::Path::new("dummy-sona.exe");
+        let cmd = build_desktop_command(exe, None, false);
+        let envs: Vec<_> = cmd
+            .get_envs()
+            .map(|(k, v)| {
+                (
+                    k.to_string_lossy().to_string(),
+                    v.map(|s| s.to_string_lossy().to_string()),
+                )
+            })
+            .collect();
+        assert!(
+            !envs.iter().any(|(k, _)| k == "SONA_IPC_ENDPOINT"),
+            "SONA_IPC_ENDPOINT should not be set when custom_endpoint is None"
+        );
+        let args: Vec<_> = cmd
+            .get_args()
+            .map(|a| a.to_string_lossy().to_string())
+            .collect();
+        assert!(!args.contains(&"--silent".to_string()));
     }
 
     #[cfg(windows)]

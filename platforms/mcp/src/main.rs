@@ -330,34 +330,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 let id = req.id.clone().unwrap();
                 let mut req = req;
-                let mut batch_instance_id = None;
-                if req.method == "tools/call"
-                    && let Some(params_obj) = req.params.as_mut().and_then(|p| p.as_object_mut())
-                    && params_obj.get("name").and_then(|n| n.as_str())
-                        == Some("sona_transcribe_file")
-                {
-                    let args_val = params_obj
-                        .entry("arguments")
-                        .or_insert_with(|| serde_json::json!({}));
-                    if !args_val.is_object() {
-                        *args_val = serde_json::json!({});
-                    }
-                    if let Some(args_obj) = args_val.as_object_mut() {
-                        let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str())
-                        {
-                            Some(id) if !id.trim().is_empty() => id.to_string(),
-                            _ => {
-                                let id = format!("mcp-transcribe-{}", uuid::Uuid::new_v4());
-                                args_obj.insert(
-                                    "instance_id".to_string(),
-                                    serde_json::Value::String(id.clone()),
-                                );
-                                id
-                            }
-                        };
-                        batch_instance_id = Some(instance_id);
-                    }
-                }
+                let batch_instance_id = maybe_inject_transcribe_instance_id(&mut req);
 
                 let client_clone = client.clone();
                 let tx_clone = resp_tx.clone();
@@ -400,6 +373,39 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let _ = writer_handle.await;
     eprintln!("[sona-mcp] Stdio loop finished.");
     Ok(())
+}
+
+pub(crate) fn maybe_inject_transcribe_instance_id(req: &mut JsonRpcRequest) -> Option<String> {
+    if req.method == "tools/call"
+        && let Some(params_obj) = req.params.as_mut().and_then(|p| p.as_object_mut())
+        && params_obj
+            .get("name")
+            .and_then(|n| n.as_str())
+            .and_then(tools::canonical_tool_name)
+            == Some("sona_transcribe_file")
+    {
+        let args_val = params_obj
+            .entry("arguments")
+            .or_insert_with(|| serde_json::json!({}));
+        if !args_val.is_object() {
+            *args_val = serde_json::json!({});
+        }
+        if let Some(args_obj) = args_val.as_object_mut() {
+            let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str()) {
+                Some(id) if !id.trim().is_empty() => id.to_string(),
+                _ => {
+                    let id = format!("mcp-transcribe-{}", uuid::Uuid::new_v4());
+                    args_obj.insert(
+                        "instance_id".to_string(),
+                        serde_json::Value::String(id.clone()),
+                    );
+                    id
+                }
+            };
+            return Some(instance_id);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -926,45 +932,33 @@ mod tests {
 
     #[test]
     fn test_batch_instance_id_injection() {
-        let mut req: JsonRpcRequest = serde_json::from_str(
-            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sona_transcribe_file","arguments":{"file_path":"test.wav"}}}"#,
-        )
-        .unwrap();
+        for tool_name in [
+            "sona_transcribe_file",
+            "transcribe_file",
+            "agent_transcribe_file",
+        ] {
+            let mut req: JsonRpcRequest = serde_json::from_str(&format!(
+                r#"{{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{{"name":"{tool_name}","arguments":{{"file_path":"test.wav"}}}}}}"#
+            ))
+            .unwrap();
 
-        let mut batch_instance_id = None;
-        if req.method == "tools/call"
-            && let Some(params_obj) = req.params.as_mut().and_then(|p| p.as_object_mut())
-            && params_obj.get("name").and_then(|n| n.as_str()) == Some("sona_transcribe_file")
-        {
-            let args_val = params_obj
-                .entry("arguments")
-                .or_insert_with(|| serde_json::json!({}));
-            if !args_val.is_object() {
-                *args_val = serde_json::json!({});
-            }
-            if let Some(args_obj) = args_val.as_object_mut() {
-                let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str()) {
-                    Some(id) if !id.trim().is_empty() => id.to_string(),
-                    _ => {
-                        let id = format!("mcp-transcribe-{}", uuid::Uuid::new_v4());
-                        args_obj.insert(
-                            "instance_id".to_string(),
-                            serde_json::Value::String(id.clone()),
-                        );
-                        id
-                    }
-                };
-                batch_instance_id = Some(instance_id);
-            }
+            let batch_instance_id = maybe_inject_transcribe_instance_id(&mut req);
+
+            assert!(batch_instance_id.is_some(), "Should inject for {tool_name}");
+            let id = batch_instance_id.unwrap();
+            assert!(id.starts_with("mcp-transcribe-"));
+            let injected = req.params.unwrap()["arguments"]["instance_id"]
+                .as_str()
+                .unwrap()
+                .to_string();
+            assert_eq!(injected, id);
         }
 
-        assert!(batch_instance_id.is_some());
-        let id = batch_instance_id.unwrap();
-        assert!(id.starts_with("mcp-transcribe-"));
-        let injected = req.params.unwrap()["arguments"]["instance_id"]
-            .as_str()
-            .unwrap()
-            .to_string();
-        assert_eq!(injected, id);
+        // Verify non-transcribe tool does not get injected
+        let mut non_transcribe: JsonRpcRequest = serde_json::from_str(
+            r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"query_history","arguments":{}}}"#,
+        )
+        .unwrap();
+        assert!(maybe_inject_transcribe_instance_id(&mut non_transcribe).is_none());
     }
 }

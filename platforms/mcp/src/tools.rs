@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::LazyLock;
 
 use crate::client::IpcClient;
@@ -6,11 +5,23 @@ use crate::protocol::{ToolCallResult, ToolDefinition};
 
 static TOOL_DEFINITIONS: LazyLock<Vec<ToolDefinition>> = LazyLock::new(build_tool_definitions);
 
-static KNOWN_TOOL_NAMES: LazyLock<HashSet<&'static str>> =
-    LazyLock::new(|| TOOL_DEFINITIONS.iter().map(|t| t.name).collect());
+pub fn canonical_tool_name(name: &str) -> Option<&'static str> {
+    let clean = name
+        .strip_prefix("sona_")
+        .or_else(|| name.strip_prefix("agent_"))
+        .unwrap_or(name);
+    TOOL_DEFINITIONS
+        .iter()
+        .find(|t| {
+            t.name == name
+                || t.name.strip_prefix("sona_") == Some(clean)
+                || t.name.strip_prefix("agent_") == Some(clean)
+        })
+        .map(|t| t.name)
+}
 
 pub fn is_known_tool(name: &str) -> bool {
-    KNOWN_TOOL_NAMES.contains(name)
+    canonical_tool_name(name).is_some()
 }
 
 pub fn list_tools() -> Vec<ToolDefinition> {
@@ -787,7 +798,11 @@ pub async fn call_tool(
     arguments: serde_json::Value,
     client: &IpcClient,
 ) -> ToolCallResult {
-    match name {
+    let Some(canonical) = canonical_tool_name(name) else {
+        return ToolCallResult::error(format!("Unknown tool: {name}"));
+    };
+
+    match canonical {
         "sona_get_client_state" => match client.call("sona_get_client_state", arguments).await {
             Ok(val) => ToolCallResult::json(&val),
             Err(_) => ToolCallResult::json(&serde_json::json!({
@@ -888,16 +903,10 @@ pub async fn call_tool(
                 )),
             }
         }
-        _ => {
-            if is_known_tool(name) {
-                match client.call(name, arguments).await {
-                    Ok(val) => ToolCallResult::json(&val),
-                    Err(err) => ToolCallResult::error(err),
-                }
-            } else {
-                ToolCallResult::error(format!("Unknown tool: {name}"))
-            }
-        }
+        _ => match client.call(canonical, arguments).await {
+            Ok(val) => ToolCallResult::json(&val),
+            Err(err) => ToolCallResult::error(err),
+        },
     }
 }
 
@@ -942,10 +951,49 @@ mod tests {
     }
 
     #[test]
+    fn test_canonical_tool_name_resolution() {
+        assert_eq!(
+            canonical_tool_name("query_history"),
+            Some("sona_query_history")
+        );
+        assert_eq!(
+            canonical_tool_name("sona_query_history"),
+            Some("sona_query_history")
+        );
+        assert_eq!(
+            canonical_tool_name("agent_query_history"),
+            Some("sona_query_history")
+        );
+        assert_eq!(
+            canonical_tool_name("launch_desktop"),
+            Some("sona_launch_desktop")
+        );
+        assert_eq!(
+            canonical_tool_name("sona_launch_desktop"),
+            Some("sona_launch_desktop")
+        );
+        assert_eq!(
+            canonical_tool_name("agent_launch_desktop"),
+            Some("sona_launch_desktop")
+        );
+        assert_eq!(
+            canonical_tool_name("transcribe_file"),
+            Some("sona_transcribe_file")
+        );
+        assert_eq!(canonical_tool_name("unknown_tool"), None);
+        assert_eq!(canonical_tool_name("sona_nonexistent"), None);
+    }
+
+    #[test]
     fn test_is_known_tool() {
         assert!(is_known_tool("sona_focus_window"));
+        assert!(is_known_tool("focus_window"));
+        assert!(is_known_tool("agent_focus_window"));
         assert!(is_known_tool("sona_query_history"));
+        assert!(is_known_tool("query_history"));
+        assert!(is_known_tool("agent_query_history"));
         assert!(!is_known_tool("sona_nonexistent_tool"));
+        assert!(!is_known_tool("nonexistent_tool"));
     }
 
     #[test]

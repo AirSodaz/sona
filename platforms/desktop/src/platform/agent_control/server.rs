@@ -1208,8 +1208,10 @@ mod tests {
             ToolPermissionCategory::Recording
         );
 
-        let mut config = sona_core::config::AppConfig::default();
-        config.mcp_permission_mode = Some("read_only".to_string());
+        let mut config = sona_core::config::AppConfig {
+            mcp_permission_mode: Some("read_only".to_string()),
+            ..Default::default()
+        };
         assert!(
             check_permission(
                 "get_client_state",
