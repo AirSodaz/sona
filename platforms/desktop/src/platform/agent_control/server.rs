@@ -9,59 +9,14 @@ pub use tracker::*;
 use super::facade::AgentControlFacade;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, watch};
-pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
-
-pub fn get_unix_socket_path() -> PathBuf {
-    if let Some(runtime_dir) = std::env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|d| !d.trim().is_empty())
-    {
-        return PathBuf::from(runtime_dir).join("sona-agent.sock");
-    }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home)
-        .join(".local")
-        .join("share")
-        .join("sona")
-        .join("agent.sock")
-}
-
-pub fn get_ipc_endpoint() -> String {
-    resolve_ipc_endpoint(|k| std::env::var(k).ok())
-}
-
-pub(crate) fn resolve_ipc_endpoint<F: Fn(&str) -> Option<String>>(env_lookup: F) -> String {
-    if let Some(endpoint) = env_lookup("SONA_IPC_ENDPOINT") {
-        let trimmed = endpoint.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    if let Some(pipe) = env_lookup("SONA_IPC_PIPE") {
-        let trimmed = pipe.trim();
-        if !trimmed.is_empty() {
-            return trimmed.to_string();
-        }
-    }
-    #[cfg(windows)]
-    {
-        WINDOWS_PIPE_NAME.to_string()
-    }
-    #[cfg(unix)]
-    {
-        get_unix_socket_path().to_string_lossy().to_string()
-    }
-    #[cfg(not(any(windows, unix)))]
-    {
-        "unsupported".to_string()
-    }
-}
+pub use sona_core::runtime::ipc::{
+    WINDOWS_PIPE_NAME, get_ipc_endpoint, get_unix_socket_path, resolve_ipc_endpoint,
+};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {

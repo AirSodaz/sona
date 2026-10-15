@@ -3,22 +3,7 @@ use std::sync::Arc;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 
-pub const WINDOWS_PIPE_NAME: &str = r"\\.\pipe\sona-agent-ipc";
-
-pub fn get_unix_socket_path() -> PathBuf {
-    if let Some(runtime_dir) = std::env::var("XDG_RUNTIME_DIR")
-        .ok()
-        .filter(|d| !d.trim().is_empty())
-    {
-        return PathBuf::from(runtime_dir).join("sona-agent.sock");
-    }
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-    PathBuf::from(home)
-        .join(".local")
-        .join("share")
-        .join("sona")
-        .join("agent.sock")
-}
+pub use sona_core::runtime::ipc::{WINDOWS_PIPE_NAME, get_unix_socket_path};
 
 #[cfg(windows)]
 pub type IpcReadHalf = tokio::io::ReadHalf<tokio::net::windows::named_pipe::NamedPipeClient>;

@@ -24,6 +24,7 @@ const APPLICATION_SERVICE_PATHS = [
   ['history', 'query_service.rs'],
   ['llm', 'tasks', 'service.rs'],
   ['llm', 'runtime_service.rs'],
+  ['project', 'service.rs'],
   ['recovery', 'service.rs'],
   ['storage_usage', 'service.rs'],
   ['tag', 'service.rs'],
