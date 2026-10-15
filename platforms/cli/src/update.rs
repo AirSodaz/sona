@@ -28,8 +28,8 @@ impl From<UpdateChannelArg> for UpdateChannel {
 
 #[derive(Debug, Clone, Args)]
 #[command(
-    about = "Check for updates and upgrade Sona (Desktop and CLI) to the latest version",
-    after_help = "Examples:\n  sona-cli update\n  sona-cli update --check\n  sona-cli update --check --json\n  sona-cli update --channel nightly\n  sona-cli update --download-only -o ./setup.exe\n  sona-cli update --force -y"
+    about = "Check for updates and download Sona Desktop installation packages (CLI self-update is not packaged; update CLI via cargo or package manager)",
+    after_help = "Note: Sona release updater manifests package Sona Desktop installers (.exe, .AppImage, .tar.gz).\nTo update the sona-cli binary itself, rebuild from source via 'cargo install --path platforms/cli' or use your package manager.\n\nExamples:\n  sona-cli update\n  sona-cli update --check\n  sona-cli update --check --json\n  sona-cli update --channel nightly\n  sona-cli update --download-only -o ./setup.exe\n  sona-cli update --force -y"
 )]
 pub struct UpdateArgs {
     /// Only check for updates without downloading or installing.
@@ -161,7 +161,7 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
 
         let mut out = String::new();
         if check_result.update_available {
-            out.push_str("An update is available!\n");
+            out.push_str("An update is available! (Sona Desktop)\n");
             out.push_str(&format!(
                 "  Current version: {}\n",
                 check_result.current_version
@@ -179,11 +179,13 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
                     out.push_str(&format!("    {line}\n"));
                 }
             }
+            out.push_str(&format!("  Asset URL:       {}\n", check_result.asset_url));
             out.push_str(&format!(
                 "  Release URL:     {}\n\n",
                 check_result.release_url
             ));
-            out.push_str("Run 'sona-cli update' to upgrade.\n");
+            out.push_str("  (Note: CLI self-update is not packaged in updater.json; update sona-cli via cargo or package manager)\n");
+            out.push_str("Run 'sona-cli update' to download and run the Desktop installer.\n");
         } else {
             out.push_str(&format!(
                 "Sona is already up to date (v{}, channel: {}).\n",
@@ -222,8 +224,8 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     // If full install and not --yes, ask for confirmation
     if !args.download_only && !args.yes {
         let prompt = format!(
-            "Update Sona (Desktop & CLI) from v{} to v{}? [y/N]: ",
-            check_result.current_version, check_result.latest_version
+            "Download and launch Sona Desktop installer v{}? [y/N]: ",
+            check_result.latest_version
         );
         write!(io.stderr(), "{prompt}").map_err(|e| CliError::Io(e.to_string()))?;
         let _ = io.stderr().flush();
@@ -343,7 +345,7 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     }
 
     Ok(CliOutput::stdout(format!(
-        "Successfully updated Sona to v{}.\n",
+        "Successfully updated Sona Desktop to v{}.\n",
         check_result.latest_version
     )))
 }

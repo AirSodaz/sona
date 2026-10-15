@@ -274,6 +274,14 @@ UniFFI renders a `Record` as a Kotlin `data class`, and its generated `toString(
 
 `scripts/multisurface-contracts.test.js` enforces this: any `uniffi::Record` field whose name looks like a credential must be an opaque handle.
 
+### Multi-surface client update strategy
+
+Each client platform owns an update mechanism tailored to its operating environment and security boundary:
+
+- **Desktop (Tauri):** Employs `tauri-plugin-updater` with Minisign public key verification against `updater.json`. Handles channel switching (Stable and Nightly) and directs manual fallback downloads to channel-specific release pages.
+- **CLI (`sona-cli update`):** Checks and downloads verified Sona Desktop installer packages (`.exe`, `.AppImage`, `.tar.gz`) from `updater.json`. CLI self-update is intentionally out of scope because CI release workflows only package desktop installers; CLI binaries are updated via `cargo install --path platforms/cli` or system package managers.
+- **Android:** Pure Kotlin implementation (`AndroidAppUpdateAdapter.kt`) checking `android-update.json` against integer `versionCode` and routing users to the GitHub release page via browser intent. Android update avoids UniFFI bridging, preserving zero-permission installation security and store compliance.
+
 ### Other reviewed debt
 
 - Resolved outbound edges: `model-downloads` and `recovery-fs` no longer depend on `runtime-fs`; completeness rules live in Core and I/O stays local to each adapter.

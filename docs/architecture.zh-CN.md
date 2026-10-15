@@ -260,6 +260,14 @@ UniFFI 把 `Record` 生成为 Kotlin `data class`，其自动派生的 `toString
 
 `scripts/multisurface-contracts.test.js` 强制这一约束：`uniffi::Record` 中任何名字看起来像凭据的字段都必须是不透明句柄。
 
+### 多端客户端更新策略
+
+各客户端根据其运行环境与安全边界分别管理更新机制：
+
+- **桌面端（Tauri）：** 使用 `tauri-plugin-updater` 配合 Minisign 公钥签名对 `updater.json` 进行校验。支持稳定版（Stable）与每日构建（Nightly）通道切换，并在手动下载 fallback 时跳转对应通道的发布页面。
+- **CLI（`sona-cli update`）：** 仅负责检查并下载校验过的 Sona Desktop 安装包（`.exe`、`.AppImage`、`.tar.gz`）。CLI 自身的在线自更新有意保持 out of scope，因为 CI 发布流水线在 `updater.json` 中仅打包桌面端安装包；CLI 工具自身通过 `cargo install --path platforms/cli` 或系统包管理器进行升级。
+- **Android：** 纯 Kotlin 实现（`AndroidAppUpdateAdapter.kt`），基于整数 `versionCode` 检查 `android-update.json` 并通过系统浏览器 Intent 引导用户下载。Android 更新机制不经过 UniFFI 桥接，保持零权限与应用商店合规性。
+
 ### 其他已评审债务
 
 - 已消除的 outbound 互依：`model-downloads` 与 `recovery-fs` 不再依赖 `runtime-fs`；完整性规则在 Core，I/O 由各适配器本地完成。

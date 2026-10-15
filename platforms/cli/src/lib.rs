@@ -342,7 +342,7 @@ Configuration & Service:
 
 System & Diagnostics:
   doctor      Checks system dependencies, audio devices, and models directory
-  update      Check for updates and upgrade Sona (Desktop and CLI) to the latest version
+  update      Check for updates and download Sona Desktop installation packages
   completion  Generates shell auto-completion scripts
 
 Options:
@@ -404,7 +404,7 @@ enum Commands {
     Devices(DevicesArgs),
     /// Lists supported online ASR providers.
     Providers(ProvidersArgs),
-    /// Check for updates and upgrade Sona (Desktop and CLI) to the latest version.
+    /// Check for updates and download Sona Desktop installation packages (CLI self-update is not packaged; update CLI via cargo or package manager).
     Update(update::UpdateArgs),
 }
 

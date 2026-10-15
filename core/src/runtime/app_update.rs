@@ -26,16 +26,22 @@ impl fmt::Display for UpdateChannel {
     }
 }
 
+#[derive(Debug, Clone, thiserror::Error, PartialEq, Eq)]
+pub enum AppUpdateError {
+    #[error("Unsupported platform: {os}-{arch}")]
+    UnsupportedPlatform { os: String, arch: String },
+    #[error("Unknown update channel: '{0}'. Expected 'stable' or 'nightly'")]
+    UnknownChannel(String),
+}
+
 impl FromStr for UpdateChannel {
-    type Err = String;
+    type Err = AppUpdateError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.trim().to_ascii_lowercase().as_str() {
             "stable" => Ok(Self::Stable),
             "nightly" => Ok(Self::Nightly),
-            other => Err(format!(
-                "Unknown update channel: '{other}'. Expected 'stable' or 'nightly'"
-            )),
+            other => Err(AppUpdateError::UnknownChannel(other.to_string())),
         }
     }
 }
@@ -109,7 +115,7 @@ pub fn release_url_for_version(version: &str, channel: UpdateChannel) -> String 
     }
 }
 
-pub fn platform_key(os: &str, arch: &str) -> Result<&'static str, String> {
+pub fn platform_key(os: &str, arch: &str) -> Result<&'static str, AppUpdateError> {
     match (os, arch) {
         ("macos" | "darwin", "aarch64") => Ok("darwin-aarch64"),
         ("macos" | "darwin", "x86_64") => Ok("darwin-x86_64"),
@@ -117,62 +123,146 @@ pub fn platform_key(os: &str, arch: &str) -> Result<&'static str, String> {
         ("windows", "aarch64") => Ok("windows-aarch64"),
         ("linux", "x86_64") => Ok("linux-x86_64"),
         ("linux", "aarch64") => Ok("linux-aarch64"),
-        _ => Err(format!("Unsupported platform: {os}-{arch}")),
+        _ => Err(AppUpdateError::UnsupportedPlatform {
+            os: os.to_string(),
+            arch: arch.to_string(),
+        }),
     }
 }
 
-pub fn current_platform_key() -> Result<&'static str, String> {
+pub fn current_platform_key() -> Result<&'static str, AppUpdateError> {
     platform_key(std::env::consts::OS, std::env::consts::ARCH)
 }
 
 #[must_use]
-pub fn parse_semver(s: &str) -> Option<(u64, u64, u64)> {
+pub fn parse_version_lenient(s: &str) -> Option<semver::Version> {
     let s = s.trim().trim_start_matches(['v', 'V']);
-    let core = s.split(['-', '+']).next()?;
-    let mut parts = core.split('.');
-    let major = parts.next()?.parse::<u64>().ok()?;
-    let minor = parts.next().unwrap_or("0").parse::<u64>().ok()?;
-    let patch = parts.next().unwrap_or("0").parse::<u64>().ok()?;
-    if parts.next().is_some() {
+    if s.is_empty() {
         return None;
     }
-    Some((major, minor, patch))
+    if let Ok(v) = semver::Version::parse(s) {
+        return Some(v);
+    }
+    let (core, rest) = match s.find(['-', '+']) {
+        Some(idx) => (&s[..idx], &s[idx..]),
+        None => (s, ""),
+    };
+    let parts: Vec<&str> = core.split('.').collect();
+    let normalized = match parts.as_slice() {
+        [major] => {
+            major.parse::<u64>().ok()?;
+            format!("{major}.0.0{rest}")
+        }
+        [major, minor] => {
+            major.parse::<u64>().ok()?;
+            minor.parse::<u64>().ok()?;
+            format!("{major}.{minor}.0{rest}")
+        }
+        _ => return None,
+    };
+    semver::Version::parse(&normalized).ok()
+}
+
+#[must_use]
+pub fn parse_semver(s: &str) -> Option<(u64, u64, u64)> {
+    parse_version_lenient(s).map(|v| (v.major, v.minor, v.patch))
+}
+
+fn extract_date_components(s: &str) -> Option<(u32, u32, u32)> {
+    for window in s.as_bytes().windows(10) {
+        let is_sep1 = window[4] == b'-' || window[4] == b'.';
+        let is_sep2 = window[7] == b'-' || window[7] == b'.';
+        if is_sep1 && is_sep2 {
+            let y_digits = window[0..4].iter().all(|b| b.is_ascii_digit());
+            let m_digits = window[5..7].iter().all(|b| b.is_ascii_digit());
+            let d_digits = window[8..10].iter().all(|b| b.is_ascii_digit());
+            if y_digits && m_digits && d_digits {
+                let y = std::str::from_utf8(&window[0..4])
+                    .ok()?
+                    .parse::<u32>()
+                    .ok()?;
+                let m = std::str::from_utf8(&window[5..7])
+                    .ok()?
+                    .parse::<u32>()
+                    .ok()?;
+                let d = std::str::from_utf8(&window[8..10])
+                    .ok()?
+                    .parse::<u32>()
+                    .ok()?;
+                if (1..=12).contains(&m) && (1..=31).contains(&d) {
+                    return Some((y, m, d));
+                }
+            }
+        }
+    }
+    None
 }
 
 #[must_use]
 pub fn compare_versions(current: &str, target: &str, channel: UpdateChannel) -> VersionComparison {
+    if current.trim() == target.trim() {
+        return VersionComparison::Same;
+    }
+
     match channel {
-        UpdateChannel::Nightly => {
-            if current.trim() == target.trim() {
-                VersionComparison::Same
-            } else {
-                VersionComparison::Newer
+        UpdateChannel::Stable => {
+            match (
+                parse_version_lenient(current),
+                parse_version_lenient(target),
+            ) {
+                (Some(c), Some(t)) => match t.cmp(&c) {
+                    std::cmp::Ordering::Greater => VersionComparison::Newer,
+                    std::cmp::Ordering::Less => VersionComparison::Older,
+                    std::cmp::Ordering::Equal => VersionComparison::Same,
+                },
+                _ => match target.trim().cmp(current.trim()) {
+                    std::cmp::Ordering::Greater => VersionComparison::Newer,
+                    std::cmp::Ordering::Less => VersionComparison::Older,
+                    std::cmp::Ordering::Equal => VersionComparison::Same,
+                },
             }
         }
-        UpdateChannel::Stable => match (parse_semver(current), parse_semver(target)) {
-            (Some(c), Some(t)) => match t.cmp(&c) {
-                std::cmp::Ordering::Greater => VersionComparison::Newer,
-                std::cmp::Ordering::Less => VersionComparison::Older,
-                std::cmp::Ordering::Equal => {
-                    let cur_has_pre = current.contains('-');
-                    let tgt_has_pre = target.contains('-');
-                    if cur_has_pre && !tgt_has_pre {
-                        VersionComparison::Newer
-                    } else if !cur_has_pre && tgt_has_pre {
-                        VersionComparison::Older
-                    } else {
-                        VersionComparison::Same
+        UpdateChannel::Nightly => {
+            let cur_date = extract_date_components(current);
+            let tgt_date = extract_date_components(target);
+            match (cur_date, tgt_date) {
+                (Some(c), Some(t)) => match t.cmp(&c) {
+                    std::cmp::Ordering::Greater => VersionComparison::Newer,
+                    std::cmp::Ordering::Less => VersionComparison::Older,
+                    std::cmp::Ordering::Equal => VersionComparison::Same,
+                },
+                (None, Some(_)) => VersionComparison::Newer,
+                (Some(_), None) => VersionComparison::Older,
+                (None, None) => {
+                    match (
+                        parse_version_lenient(current),
+                        parse_version_lenient(target),
+                    ) {
+                        (Some(c), Some(t)) => {
+                            if c.pre.is_empty()
+                                && !t.pre.is_empty()
+                                && c.major == t.major
+                                && c.minor == t.minor
+                                && c.patch == t.patch
+                            {
+                                VersionComparison::Newer
+                            } else {
+                                match t.cmp(&c) {
+                                    std::cmp::Ordering::Greater => VersionComparison::Newer,
+                                    std::cmp::Ordering::Less => VersionComparison::Older,
+                                    std::cmp::Ordering::Equal => VersionComparison::Same,
+                                }
+                            }
+                        }
+                        _ => match target.trim().cmp(current.trim()) {
+                            std::cmp::Ordering::Greater => VersionComparison::Newer,
+                            std::cmp::Ordering::Less => VersionComparison::Older,
+                            std::cmp::Ordering::Equal => VersionComparison::Same,
+                        },
                     }
                 }
-            },
-            _ => {
-                if current.trim() == target.trim() {
-                    VersionComparison::Same
-                } else {
-                    VersionComparison::Older
-                }
             }
-        },
+        }
     }
 }
 
@@ -235,6 +325,22 @@ mod tests {
             compare_versions("0.9.6", "0.9.6-beta", UpdateChannel::Stable),
             VersionComparison::Older
         );
+        assert_eq!(
+            compare_versions("1.0.0-rc.1", "1.0.0-rc.2", UpdateChannel::Stable),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("1.0.0-rc.2", "1.0.0", UpdateChannel::Stable),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("1.0.0", "1.0.0-rc.2", UpdateChannel::Stable),
+            VersionComparison::Older
+        );
+        assert_eq!(
+            compare_versions("1.0.0-rc.2", "1.0.0-rc.1", UpdateChannel::Stable),
+            VersionComparison::Older
+        );
     }
 
     #[test]
@@ -250,6 +356,34 @@ mod tests {
                 UpdateChannel::Nightly
             ),
             VersionComparison::Same
+        );
+        assert_eq!(
+            compare_versions("0.9.6-45", "0.9.6-46", UpdateChannel::Nightly),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("0.9.6-46", "0.9.6-45", UpdateChannel::Nightly),
+            VersionComparison::Older
+        );
+        assert_eq!(
+            compare_versions("0.9.6-45", "0.9.6-45", UpdateChannel::Nightly),
+            VersionComparison::Same
+        );
+        assert_eq!(
+            compare_versions(
+                "nightly-2026-04-10",
+                "nightly-2026-04-11",
+                UpdateChannel::Nightly
+            ),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions(
+                "nightly-2026-04-11",
+                "nightly-2026-04-10",
+                UpdateChannel::Nightly
+            ),
+            VersionComparison::Older
         );
     }
 
@@ -302,6 +436,44 @@ mod tests {
         assert_eq!(
             release_url_for_version("any", UpdateChannel::Nightly),
             "https://github.com/AirSodaz/sona/releases/tag/nightly"
+        );
+    }
+    #[test]
+    fn parse_version_lenient_handles_formats() {
+        assert_eq!(
+            parse_version_lenient("1.0.0-rc.1"),
+            Some(semver::Version::parse("1.0.0-rc.1").unwrap())
+        );
+        assert_eq!(
+            parse_version_lenient("v1.0.0-rc.2"),
+            Some(semver::Version::parse("1.0.0-rc.2").unwrap())
+        );
+        assert_eq!(
+            parse_version_lenient("0.8.2-45"),
+            Some(semver::Version::parse("0.8.2-45").unwrap())
+        );
+        assert_eq!(
+            parse_version_lenient("1.0"),
+            Some(semver::Version::parse("1.0.0").unwrap())
+        );
+        assert_eq!(
+            parse_version_lenient("1.0-beta"),
+            Some(semver::Version::parse("1.0.0-beta").unwrap())
+        );
+        assert_eq!(parse_version_lenient("invalid"), None);
+    }
+
+    #[test]
+    fn app_update_error_display() {
+        let err1 = AppUpdateError::UnsupportedPlatform {
+            os: "solaris".to_string(),
+            arch: "sparc".to_string(),
+        };
+        assert_eq!(err1.to_string(), "Unsupported platform: solaris-sparc");
+        let err2 = AppUpdateError::UnknownChannel("canary".to_string());
+        assert_eq!(
+            err2.to_string(),
+            "Unknown update channel: 'canary'. Expected 'stable' or 'nightly'"
         );
     }
 }

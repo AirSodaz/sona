@@ -695,7 +695,7 @@ Examples:
 
 #### `sona-cli update`
 
-Check for updates and upgrade Sona (Desktop and CLI) to the latest version
+Check for updates and download Sona Desktop installation packages (CLI self-update is not packaged; update CLI via cargo or package manager)
 
 **Options & Arguments:**
 
@@ -714,6 +714,9 @@ Check for updates and upgrade Sona (Desktop and CLI) to the latest version
 **Usage & Examples:**
 
 ```text
+Note: Sona release updater manifests package Sona Desktop installers (.exe, .AppImage, .tar.gz).
+To update the sona-cli binary itself, rebuild from source via 'cargo install --path platforms/cli' or use your package manager.
+
 Examples:
   sona-cli update
   sona-cli update --check

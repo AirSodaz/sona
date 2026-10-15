@@ -136,7 +136,7 @@ pub async fn check_app_update_with_version(
 ) -> Result<AppUpdateCheckResult, DownloadError> {
     let endpoint = endpoint_override.unwrap_or_else(|| updater_endpoint_for_channel(channel));
     let manifest = fetch_updater_manifest(client, endpoint, mirror).await?;
-    let platform = current_platform_key().map_err(DownloadError::Validation)?;
+    let platform = current_platform_key().map_err(|e| DownloadError::Validation(e.to_string()))?;
 
     let asset = manifest.platforms.get(platform).ok_or_else(|| {
         DownloadError::Validation(format!(
@@ -250,7 +250,7 @@ pub async fn download_update_package(
 #[cfg(target_os = "windows")]
 pub fn install_update_package(
     package_path: &Path,
-    running_exe: &Path,
+    _running_exe: &Path,
     silent: bool,
 ) -> Result<PathBuf, DownloadError> {
     if !package_path.is_file() {
@@ -258,12 +258,6 @@ pub fn install_update_package(
             "Update installer does not exist at {}",
             package_path.display()
         )));
-    }
-
-    if running_exe.is_file() {
-        let unique_id = uuid::Uuid::new_v4().to_string();
-        let old_exe = running_exe.with_extension(format!("old.{unique_id}.exe"));
-        let _ = std::fs::rename(running_exe, &old_exe);
     }
 
     let mut cmd = std::process::Command::new(package_path);
@@ -349,23 +343,37 @@ pub fn install_update_package(
         DownloadError::Validation("No .app bundle found in unpacked macOS update".to_string())
     })?;
 
-    if target_app.exists() {
-        let unique_id = uuid::Uuid::new_v4().to_string();
-        let old_app = target_app.with_extension(format!("old.{unique_id}.app"));
-        let _ = std::fs::rename(&target_app, &old_app);
-        let _ = std::fs::remove_dir_all(&old_app);
-    }
-
     if let Some(parent) = target_app.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
 
-    std::fs::rename(&extracted_app, &target_app).map_err(|e| {
-        DownloadError::Validation(format!(
+    let backup_app = if target_app.exists() {
+        let unique_id = uuid::Uuid::new_v4().to_string();
+        let old_app = target_app.with_extension(format!("old.{unique_id}.app"));
+        if let Err(e) = std::fs::rename(&target_app, &old_app) {
+            return Err(DownloadError::Validation(format!(
+                "Failed to backup existing app bundle at {}: {e}",
+                target_app.display()
+            )));
+        }
+        Some(old_app)
+    } else {
+        None
+    };
+
+    if let Err(e) = std::fs::rename(&extracted_app, &target_app) {
+        if let Some(old_app) = &backup_app {
+            let _ = std::fs::rename(old_app, &target_app);
+        }
+        return Err(DownloadError::Validation(format!(
             "Failed to install Sona.app into {}: {e}",
             target_app.display()
-        ))
-    })?;
+        )));
+    }
+
+    if let Some(old_app) = &backup_app {
+        let _ = std::fs::remove_dir_all(old_app);
+    }
 
     Ok(target_app)
 }
@@ -373,7 +381,7 @@ pub fn install_update_package(
 #[cfg(target_os = "linux")]
 pub fn install_update_package(
     package_path: &Path,
-    running_exe: &Path,
+    _running_exe: &Path,
     _silent: bool,
 ) -> Result<PathBuf, DownloadError> {
     use std::os::unix::fs::PermissionsExt;
@@ -387,26 +395,56 @@ pub fn install_update_package(
 
     let target_appimage = if let Ok(appimage_env) = std::env::var("APPIMAGE") {
         PathBuf::from(appimage_env)
+    } else if let Ok(home) = std::env::var("HOME") {
+        let app_dir = PathBuf::from(&home).join("Applications");
+        if app_dir.is_dir() {
+            app_dir.join("Sona.AppImage")
+        } else {
+            let local_bin = PathBuf::from(&home).join(".local/bin");
+            if local_bin.is_dir() {
+                local_bin.join("Sona.AppImage")
+            } else {
+                app_dir.join("Sona.AppImage")
+            }
+        }
     } else {
-        running_exe.to_path_buf()
+        PathBuf::from("/usr/local/bin/Sona.AppImage")
     };
 
-    if target_appimage.exists() {
-        let unique_id = uuid::Uuid::new_v4().to_string();
-        let old_path = target_appimage.with_extension(format!("old.{unique_id}.AppImage"));
-        let _ = std::fs::rename(&target_appimage, &old_path);
-        let _ = std::fs::remove_file(&old_path);
+    if let Some(parent) = target_appimage.parent() {
+        let _ = std::fs::create_dir_all(parent);
     }
 
-    std::fs::copy(package_path, &target_appimage).map_err(|e| {
-        DownloadError::Validation(format!(
+    let backup_appimage = if target_appimage.exists() {
+        let unique_id = uuid::Uuid::new_v4().to_string();
+        let old_path = target_appimage.with_extension(format!("old.{unique_id}.AppImage"));
+        if let Err(e) = std::fs::rename(&target_appimage, &old_path) {
+            return Err(DownloadError::Validation(format!(
+                "Failed to backup existing AppImage at {}: {e}",
+                target_appimage.display()
+            )));
+        }
+        Some(old_path)
+    } else {
+        None
+    };
+
+    if let Err(e) = std::fs::copy(package_path, &target_appimage) {
+        if let Some(old_path) = &backup_appimage {
+            let _ = std::fs::rename(old_path, &target_appimage);
+        }
+        return Err(DownloadError::Validation(format!(
             "Failed to copy AppImage to {}: {e}",
             target_appimage.display()
-        ))
-    })?;
+        )));
+    }
 
     let perms = std::fs::Permissions::from_mode(0o755);
     let _ = std::fs::set_permissions(&target_appimage, perms);
+
+    if let Some(old_path) = &backup_appimage {
+        let _ = std::fs::remove_file(old_path);
+    }
 
     Ok(target_appimage)
 }
