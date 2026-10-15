@@ -529,10 +529,10 @@ fn diagnostics_adapter_entrypoint_builds_snapshot_and_preserves_typed_errors() {
                 "streamingModelPath": "",
                 "batchModelPath": ""
             },
-            "permissionState": "unknown",
+            "permissionState": "prompt",
             "microphoneProbe": {"options": [], "available": false, "errorMessage": null},
             "systemAudioProbe": {"options": [], "available": false, "errorMessage": null},
-            "voiceTypingReadiness": {"state": "unknown", "lastErrorMessage": null}
+            "voiceTypingReadiness": {"state": "off", "lastErrorMessage": null}
         }))
         .unwrap()
     };
