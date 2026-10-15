@@ -61,10 +61,10 @@ pub struct UpdateArgs {
         short = 'o',
         long = "output",
         value_name = "FILE",
+        requires = "download_only",
         help = "Target output path for downloaded package"
     )]
     pub output: Option<PathBuf>,
-
     /// Download mirror strategy: auto, direct, ghproxy, or ghnet.
     #[arg(
         long,
@@ -113,17 +113,31 @@ fn map_download_error(error: DownloadError) -> CliError {
 }
 
 fn filename_from_url(url: &str) -> String {
+    let default_name = match std::env::consts::OS {
+        "windows" => "sona-setup.exe",
+        "macos" => "Sona.app.tar.gz",
+        _ => "Sona.AppImage",
+    };
+
     let clean = url.split(['?', '#']).next().unwrap_or(url);
-    if let Some(name) = clean.rsplit('/').next()
-        && !name.is_empty()
+    let raw_name = clean.rsplit(['/', '\\']).next().unwrap_or("");
+    let trimmed = raw_name.trim();
+
+    if trimmed.is_empty() || trimmed == "." || trimmed == ".." {
+        return default_name.to_string();
+    }
+
+    if let Some(file_name) = std::path::Path::new(trimmed)
+        .file_name()
+        .and_then(|n| n.to_str())
+        && !file_name.is_empty()
+        && file_name != "."
+        && file_name != ".."
     {
-        return name.to_string();
+        return file_name.to_string();
     }
-    match std::env::consts::OS {
-        "windows" => "sona-setup.exe".to_string(),
-        "macos" => "Sona.app.tar.gz".to_string(),
-        _ => "Sona.AppImage".to_string(),
-    }
+
+    default_name.to_string()
 }
 
 pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliResult<CliOutput> {
@@ -212,13 +226,19 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     }
 
     // Determine target package download path
-    let temp_dir;
+    let mut _temp_dir_guard = None;
     let target_file = if let Some(out_path) = args.output.clone() {
         out_path
-    } else {
-        temp_dir = tempfile::tempdir().map_err(|e| CliError::Io(e.to_string()))?;
+    } else if args.download_only {
         let filename = filename_from_url(&check_result.asset_url);
-        temp_dir.path().join(filename)
+        let cwd = std::env::current_dir().map_err(|e| CliError::Io(e.to_string()))?;
+        cwd.join(filename)
+    } else {
+        let temp_dir = tempfile::tempdir().map_err(|e| CliError::Io(e.to_string()))?;
+        let filename = filename_from_url(&check_result.asset_url);
+        let path = temp_dir.path().join(filename);
+        _temp_dir_guard = Some(temp_dir);
+        path
     };
 
     // If full install and not --yes, ask for confirmation
@@ -243,14 +263,18 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
         }
 
         if !matches!(answer.trim().to_ascii_lowercase().as_str(), "y" | "yes") {
-            return Err(CliError::Validation(
-                "Update cancelled by user.".to_string(),
-            ));
+            return Ok(CliOutput::stderr("Update cancelled by user.\n".to_string()));
         }
     }
 
     // Setup cancellation and progress
     let cancel_notify = Arc::new(Notify::new());
+    let signal_notify = cancel_notify.clone();
+    let signal_task = tokio::spawn(async move {
+        if tokio::signal::ctrl_c().await.is_ok() {
+            signal_notify.notify_one();
+        }
+    });
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
     let quiet = args.quiet;
     let stderr_is_terminal = io.stderr_is_terminal();
@@ -282,6 +306,7 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     loop {
         tokio::select! {
             res = &mut download_fut => {
+                signal_task.abort();
                 res.map_err(map_download_error)?;
                 break;
             }
@@ -328,9 +353,9 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
 
     // Full install
     let running_exe = std::env::current_exe().map_err(|e| CliError::Io(e.to_string()))?;
+    let silent = args.quiet || args.yes;
     let installed_path =
-        install_update_package(&target_file, &running_exe, true).map_err(map_download_error)?;
-
+        install_update_package(&target_file, &running_exe, silent).map_err(map_download_error)?;
     if args.json {
         let info = serde_json::json!({
             "status": "installed",
@@ -375,6 +400,29 @@ mod tests {
         assert_eq!(
             filename_from_url("https://example.com/downloads/Sona.app.tar.gz?token=abc"),
             "Sona.app.tar.gz"
+        );
+    }
+
+    #[test]
+    fn filename_from_url_sanitizes_traversal_paths() {
+        let default_name = match std::env::consts::OS {
+            "windows" => "sona-setup.exe",
+            "macos" => "Sona.app.tar.gz",
+            _ => "Sona.AppImage",
+        };
+        assert_eq!(filename_from_url("https://example.com/.."), default_name);
+        assert_eq!(filename_from_url("https://example.com/."), default_name);
+        assert_eq!(
+            filename_from_url("https://example.com/foo/../"),
+            default_name
+        );
+        assert_eq!(
+            filename_from_url("https://example.com/a/b/../../"),
+            default_name
+        );
+        assert_eq!(
+            filename_from_url("https://example.com/path/to/Sona-v1.0.exe?query=1#frag"),
+            "Sona-v1.0.exe"
         );
     }
 }

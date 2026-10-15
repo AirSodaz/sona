@@ -251,11 +251,7 @@ describe('appUpdaterStore', () => {
     const downloadAndInstall = vi.fn().mockRejectedValue(new Error('install error'));
     useAppUpdaterStore.setState({
       status: 'available',
-      updateInfo: makeUpdate('1.2.3', { downloadAndInstall }) as unknown as Parameters<
-        typeof useAppUpdaterStore.setState
-      >[0] extends { updateInfo?: infer U }
-        ? U
-        : never,
+      updateInfo: makeUpdate('1.2.3', { downloadAndInstall }) as any,
       notificationVisible: true,
     });
     showErrorMock.mockResolvedValueOnce('primary');

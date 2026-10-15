@@ -1,9 +1,9 @@
 use axum::routing::get;
 use axum::{Json, Router};
+use sona_core::runtime::app_update::{AppPlatformAsset, AppUpdateManifest, current_platform_key};
 use std::collections::HashMap;
 use std::net::SocketAddr;
-
-use sona_core::runtime::app_update::{AppPlatformAsset, AppUpdateManifest, current_platform_key};
+use std::path::PathBuf;
 
 const TEST_PUBKEY: &str = "RWQf6LRCGA9i53mlYecO4IzT51TGPpvWucNSCh1CBM0QTaLn73Y7GFO3";
 const TEST_SIGNATURE: &str = "untrusted comment: signature from minisign secret key\nRUQf6LRCGA9i559r3g7V1qNyJDApGip8MfqcadIgT9CuhV3EMhHoN1mGTkUidF/z7SrlQgXdy8ofjb7bNJJylDOocrCo8KLzZwo=\ntrusted comment: timestamp:1633700835\tfile:test\tprehashed\nwLMDjy9FLAuxZ3q4NlEvkgtyhrr0gtTu6KC4KBJdITbbOeAi1zBIYo0v4iTgt8jJpIidRJnp94ABQkJAgAooBQ==";
@@ -312,4 +312,124 @@ async fn update_non_interactive_without_yes_aborts() {
     let err = res.err().unwrap();
     assert_eq!(err.exit_code(), 2);
     assert!(err.to_string().contains("confirmation required"));
+}
+
+struct DirGuard(PathBuf);
+impl Drop for DirGuard {
+    fn drop(&mut self) {
+        let _ = std::env::set_current_dir(&self.0);
+    }
+}
+
+#[tokio::test]
+async fn update_download_only_without_output_persists_in_cwd() {
+    let orig_dir = std::env::current_dir().unwrap();
+    let temp = tempfile::tempdir().unwrap();
+    std::env::set_current_dir(temp.path()).unwrap();
+    let _guard = DirGuard(orig_dir);
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = listener.local_addr().unwrap();
+
+    let asset_url = format!("http://{addr}/asset.bin");
+    let mut platforms = HashMap::new();
+    platforms.insert(
+        current_platform_key().unwrap().to_string(),
+        AppPlatformAsset {
+            url: asset_url,
+            signature: TEST_SIGNATURE.to_string(),
+        },
+    );
+
+    let manifest = AppUpdateManifest {
+        version: "99.0.0".to_string(),
+        notes: None,
+        pub_date: None,
+        platforms,
+    };
+
+    let app = Router::new()
+        .route("/updater.json", get(|| async move { Json(manifest) }))
+        .route("/asset.bin", get(|| async move { "test" }));
+
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+
+    let endpoint = format!("http://{addr}/updater.json");
+
+    let output = sona_cli::run_cli_from_args_async([
+        "sona-cli",
+        "update",
+        "--download-only",
+        "--endpoint",
+        &endpoint,
+        "--pubkey",
+        TEST_PUBKEY,
+        "--current-version-override",
+        "0.9.6",
+        "--quiet",
+    ])
+    .await
+    .unwrap();
+
+    assert!(
+        output
+            .stdout
+            .contains("Successfully downloaded and verified")
+    );
+    let downloaded_file = temp.path().join("asset.bin");
+    assert!(
+        downloaded_file.is_file(),
+        "Downloaded file must persist in current working directory"
+    );
+    assert_eq!(std::fs::read(&downloaded_file).unwrap(), b"test");
+}
+
+#[tokio::test]
+async fn update_interactive_decline_exits_cleanly() {
+    let mut platforms = HashMap::new();
+    platforms.insert(
+        current_platform_key().unwrap().to_string(),
+        AppPlatformAsset {
+            url: "https://example.com/asset.exe".to_string(),
+            signature: "sig".to_string(),
+        },
+    );
+    let manifest = AppUpdateManifest {
+        version: "99.0.0".to_string(),
+        notes: None,
+        pub_date: None,
+        platforms,
+    };
+    let app = Router::new().route("/updater.json", get(|| async move { Json(manifest) }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let endpoint = format!("http://{addr}/updater.json");
+
+    let mut io = sona_cli::MemoryCliIo::default();
+    io.stdin_lines.push_back("n\n".to_string());
+
+    let res = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "update",
+            "--endpoint",
+            &endpoint,
+            "--current-version-override",
+            "0.9.6",
+        ],
+        &mut io,
+    )
+    .await;
+
+    assert!(
+        res.is_ok(),
+        "Interactive decline should exit cleanly (code 0)"
+    );
+    let output = res.unwrap().unwrap_or_else(|| io.into_output());
+    assert!(output.stderr.contains("Update cancelled by user."));
 }

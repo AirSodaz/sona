@@ -9,7 +9,9 @@ use sona_core::runtime::app_update::{
     compare_versions, current_platform_key, release_url_for_version, updater_endpoint_for_channel,
 };
 
-use crate::downloads::{DownloadClient, DownloadError, temporary_download_path};
+use crate::downloads::{
+    DownloadClient, DownloadError, publish_download_file, temporary_download_path,
+};
 use crate::mirror::{DownloadMirror, download_candidates};
 
 pub fn decode_pubkey(key_str: &str) -> Result<minisign_verify::PublicKey, DownloadError> {
@@ -210,6 +212,10 @@ pub async fn download_update_package(
                 downloaded = true;
                 break;
             }
+            Err(DownloadError::Cancelled) => {
+                let _ = tokio::fs::remove_file(&temp_path).await;
+                return Err(DownloadError::Cancelled);
+            }
             Err(e) => {
                 let _ = tokio::fs::remove_file(&temp_path).await;
                 last_err = Some(e);
@@ -240,17 +246,59 @@ pub async fn download_update_package(
         return Err(e);
     }
 
-    tokio::fs::rename(&temp_path, target_file)
-        .await
-        .map_err(DownloadError::Io)?;
+    publish_download_file(&temp_path, target_file).await?;
 
     Ok(())
 }
 
 #[cfg(target_os = "windows")]
+pub fn locate_windows_app_exe(running_exe: &Path) -> Option<PathBuf> {
+    let running_name = running_exe
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    if running_name == "sona.exe" && running_exe.is_file() {
+        return Some(running_exe.to_path_buf());
+    }
+
+    if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+        let nsis_app = PathBuf::from(local_appdata)
+            .join("Programs")
+            .join("Sona")
+            .join("Sona.exe");
+        if nsis_app.is_file() {
+            return Some(nsis_app);
+        }
+    }
+
+    if let Ok(program_files) = std::env::var("ProgramFiles") {
+        let pf_app = PathBuf::from(program_files).join("Sona").join("Sona.exe");
+        if pf_app.is_file() {
+            return Some(pf_app);
+        }
+    }
+
+    if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+        return Some(
+            PathBuf::from(local_appdata)
+                .join("Programs")
+                .join("Sona")
+                .join("Sona.exe"),
+        );
+    }
+
+    if running_name == "sona.exe" {
+        return Some(running_exe.to_path_buf());
+    }
+
+    Some(PathBuf::from("Sona.exe"))
+}
+
+#[cfg(target_os = "windows")]
 pub fn install_update_package(
     package_path: &Path,
-    _running_exe: &Path,
+    running_exe: &Path,
     silent: bool,
 ) -> Result<PathBuf, DownloadError> {
     if !package_path.is_file() {
@@ -278,7 +326,10 @@ pub fn install_update_package(
         )));
     }
 
-    Ok(package_path.to_path_buf())
+    let installed_exe =
+        locate_windows_app_exe(running_exe).unwrap_or_else(|| PathBuf::from("Sona.exe"));
+
+    Ok(installed_exe)
 }
 
 #[cfg(target_os = "macos")]
@@ -319,7 +370,14 @@ pub fn install_update_package(
     let target_app = locate_macos_app_bundle(running_exe)
         .unwrap_or_else(|| PathBuf::from("/Applications/Sona.app"));
 
-    let temp_dir = tempfile::tempdir().map_err(DownloadError::Io)?;
+    let parent = target_app
+        .parent()
+        .unwrap_or_else(|| Path::new("/Applications"));
+    let _ = std::fs::create_dir_all(parent);
+    let temp_dir = tempfile::Builder::new()
+        .prefix(".sona_update_")
+        .tempdir_in(parent)
+        .map_err(DownloadError::Io)?;
     let temp_dir_path = temp_dir.path();
 
     let tar_gz = std::fs::File::open(package_path).map_err(DownloadError::Io)?;
@@ -333,7 +391,7 @@ pub fn install_update_package(
     for entry in std::fs::read_dir(temp_dir_path).map_err(DownloadError::Io)? {
         let entry = entry.map_err(DownloadError::Io)?;
         let path = entry.path();
-        if path.extension().and_then(|ext| ext.to_str()) == Some("app") {
+        if path.is_dir() && path.extension().and_then(|ext| ext.to_str()) == Some("app") {
             extracted_app = Some(path);
             break;
         }
@@ -415,10 +473,29 @@ pub fn install_update_package(
         let _ = std::fs::create_dir_all(parent);
     }
 
+    let unique_id = uuid::Uuid::new_v4().to_string();
+    let staging_path = target_appimage.with_extension(format!("tmp.{unique_id}"));
+    if let Err(e) = std::fs::copy(package_path, &staging_path) {
+        let _ = std::fs::remove_file(&staging_path);
+        return Err(DownloadError::Validation(format!(
+            "Failed to copy AppImage to staging path {}: {e}",
+            staging_path.display()
+        )));
+    }
+
+    let perms = std::fs::Permissions::from_mode(0o755);
+    if let Err(e) = std::fs::set_permissions(&staging_path, perms) {
+        let _ = std::fs::remove_file(&staging_path);
+        return Err(DownloadError::Validation(format!(
+            "Failed to set executable permissions on {}: {e}",
+            staging_path.display()
+        )));
+    }
+
     let backup_appimage = if target_appimage.exists() {
-        let unique_id = uuid::Uuid::new_v4().to_string();
         let old_path = target_appimage.with_extension(format!("old.{unique_id}.AppImage"));
         if let Err(e) = std::fs::rename(&target_appimage, &old_path) {
+            let _ = std::fs::remove_file(&staging_path);
             return Err(DownloadError::Validation(format!(
                 "Failed to backup existing AppImage at {}: {e}",
                 target_appimage.display()
@@ -429,18 +506,16 @@ pub fn install_update_package(
         None
     };
 
-    if let Err(e) = std::fs::copy(package_path, &target_appimage) {
+    if let Err(e) = std::fs::rename(&staging_path, &target_appimage) {
+        let _ = std::fs::remove_file(&staging_path);
         if let Some(old_path) = &backup_appimage {
             let _ = std::fs::rename(old_path, &target_appimage);
         }
         return Err(DownloadError::Validation(format!(
-            "Failed to copy AppImage to {}: {e}",
+            "Failed to install AppImage to {}: {e}",
             target_appimage.display()
         )));
     }
-
-    let perms = std::fs::Permissions::from_mode(0o755);
-    let _ = std::fs::set_permissions(&target_appimage, perms);
 
     if let Some(old_path) = &backup_appimage {
         let _ = std::fs::remove_file(old_path);
@@ -534,5 +609,43 @@ mod tests {
         assert_eq!(result.current_version, "0.9.6");
         assert_eq!(result.notes.as_deref(), Some("Big update"));
         assert_eq!(result.asset_url, "https://example.com/asset.exe");
+    }
+
+    #[tokio::test]
+    async fn test_download_update_package_cancellation() {
+        let client = DownloadClient::new();
+        let cancel_notify = Arc::new(Notify::new());
+        cancel_notify.notify_one();
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let target = temp_dir.path().join("update.bin");
+
+        let res = download_update_package(
+            &client,
+            "https://example.com/fake.bin",
+            &target,
+            "sig",
+            None,
+            DownloadMirror::Direct,
+            cancel_notify,
+            None,
+        )
+        .await;
+
+        assert!(matches!(res, Err(DownloadError::Cancelled)));
+        assert!(!target.exists());
+    }
+
+    #[cfg(target_os = "windows")]
+    #[test]
+    fn test_locate_windows_app_exe_resolution() {
+        let cli_exe = PathBuf::from("C:\\fake\\path\\sona-cli.exe");
+        let resolved = locate_windows_app_exe(&cli_exe);
+        assert!(resolved.is_some());
+
+        let app_exe = PathBuf::from("C:\\fake\\path\\Sona.exe");
+        // If the path does not exist on disk, fallback kicks in
+        let resolved2 = locate_windows_app_exe(&app_exe);
+        assert!(resolved2.is_some());
     }
 }

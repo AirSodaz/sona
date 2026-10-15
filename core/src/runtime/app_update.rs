@@ -74,6 +74,7 @@ pub struct AppUpdateManifest {
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct AppPlatformAsset {
     pub url: String,
+    #[serde(default)]
     pub signature: String,
 }
 
@@ -116,7 +117,9 @@ pub fn release_url_for_version(version: &str, channel: UpdateChannel) -> String 
 }
 
 pub fn platform_key(os: &str, arch: &str) -> Result<&'static str, AppUpdateError> {
-    match (os, arch) {
+    let os_norm = os.trim().to_ascii_lowercase();
+    let arch_norm = arch.trim().to_ascii_lowercase();
+    match (os_norm.as_str(), arch_norm.as_str()) {
         ("macos" | "darwin", "aarch64") => Ok("darwin-aarch64"),
         ("macos" | "darwin", "x86_64") => Ok("darwin-x86_64"),
         ("windows", "x86_64") => Ok("windows-x86_64"),
@@ -210,57 +213,59 @@ pub fn compare_versions(current: &str, target: &str, channel: UpdateChannel) -> 
                 parse_version_lenient(current),
                 parse_version_lenient(target),
             ) {
-                (Some(c), Some(t)) => match t.cmp(&c) {
-                    std::cmp::Ordering::Greater => VersionComparison::Newer,
-                    std::cmp::Ordering::Less => VersionComparison::Older,
-                    std::cmp::Ordering::Equal => VersionComparison::Same,
-                },
-                _ => match target.trim().cmp(current.trim()) {
-                    std::cmp::Ordering::Greater => VersionComparison::Newer,
-                    std::cmp::Ordering::Less => VersionComparison::Older,
-                    std::cmp::Ordering::Equal => VersionComparison::Same,
-                },
+                (Some(c), Some(t)) => {
+                    if c.pre.is_empty() && !t.pre.is_empty() {
+                        VersionComparison::Older
+                    } else {
+                        match t.cmp(&c) {
+                            std::cmp::Ordering::Greater => VersionComparison::Newer,
+                            std::cmp::Ordering::Less => VersionComparison::Older,
+                            std::cmp::Ordering::Equal => VersionComparison::Same,
+                        }
+                    }
+                }
+                _ => {
+                    if current.trim() == target.trim() {
+                        VersionComparison::Same
+                    } else {
+                        VersionComparison::Older
+                    }
+                }
             }
         }
         UpdateChannel::Nightly => {
             let cur_date = extract_date_components(current);
             let tgt_date = extract_date_components(target);
-            match (cur_date, tgt_date) {
-                (Some(c), Some(t)) => match t.cmp(&c) {
+            let cur_semver = parse_version_lenient(current);
+            let tgt_semver = parse_version_lenient(target);
+
+            if let (Some(c), Some(t)) = (cur_date, tgt_date) {
+                match t.cmp(&c) {
                     std::cmp::Ordering::Greater => VersionComparison::Newer,
                     std::cmp::Ordering::Less => VersionComparison::Older,
                     std::cmp::Ordering::Equal => VersionComparison::Same,
-                },
-                (None, Some(_)) => VersionComparison::Newer,
-                (Some(_), None) => VersionComparison::Older,
-                (None, None) => {
-                    match (
-                        parse_version_lenient(current),
-                        parse_version_lenient(target),
-                    ) {
-                        (Some(c), Some(t)) => {
-                            if c.pre.is_empty()
-                                && !t.pre.is_empty()
-                                && c.major == t.major
-                                && c.minor == t.minor
-                                && c.patch == t.patch
-                            {
-                                VersionComparison::Newer
-                            } else {
-                                match t.cmp(&c) {
-                                    std::cmp::Ordering::Greater => VersionComparison::Newer,
-                                    std::cmp::Ordering::Less => VersionComparison::Older,
-                                    std::cmp::Ordering::Equal => VersionComparison::Same,
-                                }
-                            }
-                        }
-                        _ => match target.trim().cmp(current.trim()) {
-                            std::cmp::Ordering::Greater => VersionComparison::Newer,
-                            std::cmp::Ordering::Less => VersionComparison::Older,
-                            std::cmp::Ordering::Equal => VersionComparison::Same,
-                        },
+                }
+            } else if let (Some(c), Some(t)) = (cur_semver.as_ref(), tgt_semver.as_ref()) {
+                if c.pre.is_empty()
+                    && !t.pre.is_empty()
+                    && c.major == t.major
+                    && c.minor == t.minor
+                    && c.patch == t.patch
+                {
+                    VersionComparison::Newer
+                } else {
+                    match t.cmp(c) {
+                        std::cmp::Ordering::Greater => VersionComparison::Newer,
+                        std::cmp::Ordering::Less => VersionComparison::Older,
+                        std::cmp::Ordering::Equal => VersionComparison::Same,
                     }
                 }
+            } else if (cur_date.is_some() && tgt_semver.is_some())
+                || (cur_semver.as_ref().is_some_and(|c| c.pre.is_empty()) && tgt_date.is_some())
+            {
+                VersionComparison::Newer
+            } else {
+                VersionComparison::Older
             }
         }
     }
@@ -281,6 +286,15 @@ mod tests {
         assert_eq!(platform_key("darwin", "x86_64").unwrap(), "darwin-x86_64");
         assert_eq!(platform_key("linux", "x86_64").unwrap(), "linux-x86_64");
         assert_eq!(platform_key("linux", "aarch64").unwrap(), "linux-aarch64");
+        assert_eq!(
+            platform_key(" Windows ", "X86_64").unwrap(),
+            "windows-x86_64"
+        );
+        assert_eq!(
+            platform_key("MacOS\n", "AARCH64").unwrap(),
+            "darwin-aarch64"
+        );
+        assert_eq!(platform_key("Linux ", " x86_64 ").unwrap(), "linux-x86_64");
         assert!(platform_key("freebsd", "x86_64").is_err());
     }
 
@@ -334,12 +348,28 @@ mod tests {
             VersionComparison::Newer
         );
         assert_eq!(
-            compare_versions("1.0.0", "1.0.0-rc.2", UpdateChannel::Stable),
+            compare_versions("1.0.0-rc.2", "1.0.0-rc.1", UpdateChannel::Stable),
             VersionComparison::Older
         );
         assert_eq!(
-            compare_versions("1.0.0-rc.2", "1.0.0-rc.1", UpdateChannel::Stable),
+            compare_versions("0.9.6", "0.9.7-rc.1", UpdateChannel::Stable),
             VersionComparison::Older
+        );
+        assert_eq!(
+            compare_versions("0.9.7-rc.1", "0.9.7-rc.2", UpdateChannel::Stable),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("0.9.7-rc.2", "0.9.7", UpdateChannel::Stable),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("invalid_a", "invalid_b", UpdateChannel::Stable),
+            VersionComparison::Older
+        );
+        assert_eq!(
+            compare_versions("invalid_a", "invalid_a", UpdateChannel::Stable),
+            VersionComparison::Same
         );
     }
 
@@ -385,8 +415,19 @@ mod tests {
             ),
             VersionComparison::Older
         );
+        assert_eq!(
+            compare_versions("nightly-2026-04-10", "0.9.6-46", UpdateChannel::Nightly),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("0.9.6", "0.9.6-46", UpdateChannel::Nightly),
+            VersionComparison::Newer
+        );
+        assert_eq!(
+            compare_versions("0.9.6-46", "nightly-2026-04-10", UpdateChannel::Nightly),
+            VersionComparison::Older
+        );
     }
-
     #[test]
     fn manifest_serialization_round_trip() {
         let mut platforms = HashMap::new();
@@ -408,6 +449,22 @@ mod tests {
         assert_eq!(manifest, parsed);
     }
 
+    #[test]
+    fn manifest_deserialization_without_signature() {
+        let json = r#"{
+            "version": "0.9.7",
+            "platforms": {
+                "windows-x86_64": {
+                    "url": "https://example.com/sona.exe"
+                }
+            }
+        }"#;
+        let parsed: AppUpdateManifest = serde_json::from_str(json).unwrap();
+        assert_eq!(
+            parsed.platforms.get("windows-x86_64").unwrap().signature,
+            ""
+        );
+    }
     #[test]
     fn channel_parsing_and_display() {
         assert_eq!(
