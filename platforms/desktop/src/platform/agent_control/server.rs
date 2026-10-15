@@ -8,15 +8,15 @@ pub use tracker::*;
 
 use super::facade::AgentControlFacade;
 use serde::{Deserialize, Serialize};
+pub use sona_core::runtime::ipc::{
+    WINDOWS_PIPE_NAME, get_ipc_endpoint, get_unix_socket_path, resolve_ipc_endpoint,
+};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::Emitter;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt};
 use tokio::sync::{RwLock, watch};
-pub use sona_core::runtime::ipc::{
-    WINDOWS_PIPE_NAME, get_ipc_endpoint, get_unix_socket_path, resolve_ipc_endpoint,
-};
 
 #[derive(Debug, Deserialize)]
 pub struct JsonRpcRequest {

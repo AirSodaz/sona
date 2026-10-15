@@ -36,12 +36,12 @@ impl ProjectService {
                 "Project id cannot be empty".to_string(),
             ));
         }
-        if let Some(name) = &updates.name {
-            if name.trim().is_empty() {
-                return Err(ProjectError::InvalidInput(
-                    "Project name cannot be empty".to_string(),
-                ));
-            }
+        if let Some(name) = &updates.name
+            && name.trim().is_empty()
+        {
+            return Err(ProjectError::InvalidInput(
+                "Project name cannot be empty".to_string(),
+            ));
         }
         self.repository.update_project(project_id, updates)
     }

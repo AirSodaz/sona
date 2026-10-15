@@ -716,7 +716,10 @@ where
             .map_err(|e| ProjectError::Repository(e.to_string()))
     }
 
-    fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, ProjectError> {
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
         let tags = self
             .reorder_tags(project_ids)
             .map_err(|e| ProjectError::Repository(e.to_string()))?;

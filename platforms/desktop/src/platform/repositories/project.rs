@@ -26,7 +26,8 @@ impl ProjectService {
         F: FnOnce(&ApplicationProjectService) -> Result<T, ProjectError> + Send + 'static,
     {
         run_sqlite_task(&self.sqlite, move |context| {
-            let adapter = Arc::new(context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
+            let adapter =
+                Arc::new(context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
             let service = ApplicationProjectService::new(adapter);
             task(&service).map_err(|error| error.to_string())
         })
@@ -60,10 +61,8 @@ impl ProjectService {
         project_id: String,
         cascade_action: String,
     ) -> Result<(), String> {
-        self.run_service(move |service| {
-            service.delete_with_cascade(&project_id, &cascade_action)
-        })
-        .await
+        self.run_service(move |service| service.delete_with_cascade(&project_id, &cascade_action))
+            .await
     }
 
     pub async fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {

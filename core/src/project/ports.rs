@@ -15,7 +15,10 @@ pub trait ProjectRepository: Send + Sync {
         project_id: &str,
         cascade_action: &str,
     ) -> Result<(), ProjectError>;
-    fn reorder_projects(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, ProjectError>;
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError>;
     fn get_active_project_id(&self) -> Result<Option<String>, ProjectError>;
     fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), ProjectError>;
 }
