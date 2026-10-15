@@ -19,6 +19,7 @@ pub mod ports;
 pub mod project;
 pub mod recovery;
 pub mod runtime;
+pub use runtime::app_update;
 pub mod storage_usage;
 pub mod sync;
 pub mod tag;

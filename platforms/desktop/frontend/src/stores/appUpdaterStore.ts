@@ -4,6 +4,7 @@ import { runGuardedQuit } from '../services/quitGuard';
 import { openUrl } from '../services/tauri/platform/opener';
 import { relaunch } from '../services/tauri/platform/process';
 import { check, type Update } from '../services/tauri/platform/updater';
+import { getAppReleaseChannel } from '../utils/channel';
 import { buildErrorDialogViewModel, extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useErrorDialogStore } from './errorDialogStore';
@@ -43,9 +44,14 @@ interface AppUpdaterState {
   relaunchToUpdate: () => Promise<void>;
 }
 
-async function openLatestReleasePage() {
+export async function openLatestReleasePage() {
+  const channel = getAppReleaseChannel();
+  const url =
+    channel === 'nightly'
+      ? 'https://github.com/AirSodaz/sona/releases/tag/nightly'
+      : 'https://github.com/AirSodaz/sona/releases/latest';
   try {
-    await openUrl('https://github.com/AirSodaz/sona/releases/latest');
+    await openUrl(url);
   } catch (openErr) {
     logger.error('Failed to open URL:', openErr);
   }

@@ -16,6 +16,7 @@ fn top_level_help_exposes_only_stateless_cli_commands() {
         "serve",
         "transcribe",
         "transcribe-live",
+        "update",
     ] {
         assert!(help.contains(command), "help must expose {command}");
     }

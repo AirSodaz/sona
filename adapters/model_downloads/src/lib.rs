@@ -1,8 +1,13 @@
+pub mod app_update;
 pub mod cuda_addon;
 pub mod downloads;
 pub mod mirror;
 mod models;
 
+pub use app_update::{
+    check_app_update, check_app_update_with_version, download_update_package,
+    fetch_updater_manifest, install_update_package, verify_update_signature,
+};
 pub use cuda_addon::{default_cuda_addon_download_url, download_and_install_cuda_addon};
 pub use downloads::{
     DownloadClient, DownloadError, DownloadFileOperation, DownloadFileSystemError,

@@ -43,6 +43,7 @@ unicode-width = "0.2"
 uuid = { workspace = true }
 
 [dev-dependencies]
+axum = { workspace = true, features = ["macros"] }
 async-trait = { workspace = true }
 hex = { workspace = true }
 sha2 = { workspace = true }

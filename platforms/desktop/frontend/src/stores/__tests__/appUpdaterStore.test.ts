@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearUptodateResetTimer,
+  openLatestReleasePage,
   UPTODATE_RESET_DELAY_MS,
   useAppUpdaterStore,
 } from '../appUpdaterStore';
@@ -10,6 +11,11 @@ const relaunchMock = vi.fn();
 const openUrlMock = vi.fn();
 const showErrorMock = vi.fn();
 const runGuardedQuitMock = vi.fn();
+const getAppReleaseChannelMock = vi.fn(() => 'stable');
+
+vi.mock('../../utils/channel', () => ({
+  getAppReleaseChannel: () => getAppReleaseChannelMock(),
+}));
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: (...args: unknown[]) => checkMock(...args),
@@ -72,6 +78,7 @@ describe('appUpdaterStore', () => {
       await onExit();
       return true;
     });
+    getAppReleaseChannelMock.mockReturnValue('stable');
   });
   afterEach(() => {
     clearUptodateResetTimer();
@@ -223,5 +230,36 @@ describe('appUpdaterStore', () => {
 
     expect(runGuardedQuitMock).toHaveBeenCalledTimes(1);
     expect(relaunchMock).not.toHaveBeenCalled();
+  });
+
+  it('opens latest release URL when channel is stable', async () => {
+    getAppReleaseChannelMock.mockReturnValue('stable');
+    await openLatestReleasePage();
+    expect(openUrlMock).toHaveBeenCalledWith('https://github.com/AirSodaz/sona/releases/latest');
+  });
+
+  it('opens nightly release URL when channel is nightly', async () => {
+    getAppReleaseChannelMock.mockReturnValue('nightly');
+    await openLatestReleasePage();
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'https://github.com/AirSodaz/sona/releases/tag/nightly'
+    );
+  });
+
+  it('navigates to nightly release page when manual download is chosen on nightly channel error', async () => {
+    getAppReleaseChannelMock.mockReturnValue('nightly');
+    const downloadAndInstall = vi.fn().mockRejectedValue(new Error('install error'));
+    useAppUpdaterStore.setState({
+      status: 'available',
+      updateInfo: makeUpdate('1.2.3', { downloadAndInstall }) as any,
+      notificationVisible: true,
+    });
+    showErrorMock.mockResolvedValueOnce('primary');
+
+    await useAppUpdaterStore.getState().installUpdate();
+
+    expect(openUrlMock).toHaveBeenCalledWith(
+      'https://github.com/AirSodaz/sona/releases/tag/nightly'
+    );
   });
 });
