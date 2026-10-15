@@ -593,7 +593,7 @@ pub async fn run_ipc_server(
     mut shutdown_rx: watch::Receiver<bool>,
     controller: Option<AgentControlServerController>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-    let socket_path = PathBuf::from(get_ipc_endpoint());
+    let socket_path = std::path::PathBuf::from(get_ipc_endpoint());
     if let Some(parent) = socket_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }

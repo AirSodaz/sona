@@ -36,6 +36,13 @@ impl ProjectService {
                 "Project id cannot be empty".to_string(),
             ));
         }
+        if let Some(name) = &updates.name {
+            if name.trim().is_empty() {
+                return Err(ProjectError::InvalidInput(
+                    "Project name cannot be empty".to_string(),
+                ));
+            }
+        }
         self.repository.update_project(project_id, updates)
     }
 
@@ -134,6 +141,27 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(updated.name, "Work Updated");
+
+        let empty_update = service.update(
+            &created.id,
+            ProjectUpdateInput {
+                name: Some("   ".to_string()),
+                description: None,
+                icon: None,
+                color: None,
+                pipeline: None,
+            },
+        );
+        assert!(empty_update.is_err());
+
+        let reordered = service.reorder(vec![created.id.clone()]).unwrap();
+        assert_eq!(reordered.len(), 1);
+
+        service.set_active_project_id(None).unwrap();
+        assert_eq!(service.get_active_project_id().unwrap(), None);
+
+        assert!(service.delete("   ").is_err());
+        assert!(service.delete_with_cascade("   ", "moveToInbox").is_err());
 
         service
             .delete_with_cascade(&created.id, "moveToInbox")
