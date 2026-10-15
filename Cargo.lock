@@ -6443,6 +6443,7 @@ name = "sona-cli"
 version = "0.9.6"
 dependencies = [
  "async-trait",
+ "axum",
  "clap",
  "clap_complete",
  "cpal",
@@ -6556,18 +6557,22 @@ name = "sona-model-downloads"
 version = "0.9.6"
 dependencies = [
  "axum",
+ "base64 0.22.1",
  "bzip2 0.5.2",
  "flate2",
  "fs3",
  "futures-util",
  "hex",
+ "minisign-verify",
  "reqwest 0.13.5",
+ "serde_json",
  "sha2 0.11.1",
  "sona-core",
  "tar",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+ "uuid",
 ]
 
 [[package]]

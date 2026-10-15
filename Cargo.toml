@@ -92,6 +92,7 @@ hmac = "0.13"
 infer = "0.19"
 jsonschema = { version = "0.37", default-features = false }
 log = "0.4.22"
+minisign-verify = "0.3"
 notify = "8.2"
 parking_lot = "0.12"
 rand = "0.10"

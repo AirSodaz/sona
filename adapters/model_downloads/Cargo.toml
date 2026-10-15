@@ -10,17 +10,22 @@ license.workspace = true
 role = "outbound-adapter"
 
 [dependencies]
+base64 = { workspace = true }
 bzip2 = { workspace = true }
 flate2 = { workspace = true }
 fs3 = { workspace = true }
 futures-util = { workspace = true }
 hex = { workspace = true }
+minisign-verify = { workspace = true }
 reqwest = { workspace = true }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 sona-core = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "sync", "macros", "signal"] }
 tar = { workspace = true }
+tempfile = { workspace = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 axum = { workspace = true, features = ["macros"] }

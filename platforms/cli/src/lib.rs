@@ -17,6 +17,7 @@ mod serve;
 mod table;
 mod transcribe;
 pub mod transcribe_live;
+pub mod update;
 
 use clap::{Parser, Subcommand};
 use std::collections::VecDeque;
@@ -341,6 +342,7 @@ Configuration & Service:
 
 System & Diagnostics:
   doctor      Checks system dependencies, audio devices, and models directory
+  update      Check for updates and upgrade Sona (Desktop and CLI) to the latest version
   completion  Generates shell auto-completion scripts
 
 Options:
@@ -402,6 +404,8 @@ enum Commands {
     Devices(DevicesArgs),
     /// Lists supported online ASR providers.
     Providers(ProvidersArgs),
+    /// Check for updates and upgrade Sona (Desktop and CLI) to the latest version.
+    Update(update::UpdateArgs),
 }
 
 #[derive(Debug, clap::Args)]
@@ -644,6 +648,7 @@ async fn dispatch(
         Commands::Doctor(args) => doctor::run_doctor(args, io).await,
         Commands::Devices(args) => run_devices(args),
         Commands::Providers(args) => run_providers(args),
+        Commands::Update(args) => update::run_update(args, io).await,
     }?;
     Ok(Some(output))
 }

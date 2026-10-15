@@ -186,6 +186,9 @@ impl DownloadClient {
     ) -> Result<(), DownloadError> {
         download_file(&self.client, url, temp_path, notify, on_progress).await
     }
+    pub fn http_client(&self) -> &reqwest::Client {
+        &self.client
+    }
 }
 
 pub async fn remove_download_file(temp_path: &Path) {

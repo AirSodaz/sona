@@ -693,6 +693,36 @@ Examples:
   sona-cli transcribe ./sample.wav --online-provider volcengine-doubao --api-key-env MY_ASR_KEY
 ```
 
+#### `sona-cli update`
+
+Check for updates and upgrade Sona (Desktop and CLI) to the latest version
+
+**Options & Arguments:**
+
+| Option / Argument | Short | Default | Description |
+| --- | --- | --- | --- |
+| `--check` | - | - | Only check for updates without installing |
+| `--force` | `-f` | - | Force reinstall even if already up to date |
+| `--channel` | - | `stable` | Update channel: stable or nightly |
+| `--download-only` | - | - | Download and verify the update package without installing |
+| `--output` | `-o` | - | Target output path for downloaded package |
+| `--mirror` | - | - | Download mirror strategy: auto, direct, ghproxy, or ghnet |
+| `--yes` | `-y` | - | Skip confirmation prompt |
+| `--quiet` | `-q` | - | Hide per-download progress output |
+| `--json` | `-j` | - | Print machine-readable JSON |
+
+**Usage & Examples:**
+
+```text
+Examples:
+  sona-cli update
+  sona-cli update --check
+  sona-cli update --check --json
+  sona-cli update --channel nightly
+  sona-cli update --download-only -o ./setup.exe
+  sona-cli update --force -y
+```
+
 ## Internal Integration Contracts (Hidden Commands)
 
 The following commands are hidden from `--help` by default and are intended for host/desktop integration, facts snapshot construction, and automated path contract inspection:
