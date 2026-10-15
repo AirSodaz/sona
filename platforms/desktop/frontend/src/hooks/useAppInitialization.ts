@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { effectiveConfigRuntime } from '../services/effectiveConfigRuntime';
 import { hydrateAppStartupState } from '../services/startup/hydration';
 import { startAppRuntimeServices } from '../services/startup/runtime';
 import { logger } from '../utils/logger';
@@ -31,12 +30,10 @@ export function useAppInitialization() {
   // Initialize config and onboarding state
   useEffect(() => {
     let cancelled = false;
-    effectiveConfigRuntime.init();
 
     async function initialize() {
       try {
         await hydrateAppStartupState();
-        effectiveConfigRuntime.init();
       } catch (e) {
         logger.error('[Startup] Failed to initialize app state:', e);
       } finally {
@@ -53,7 +50,6 @@ export function useAppInitialization() {
 
     return () => {
       cancelled = true;
-      effectiveConfigRuntime.stop();
     };
   }, []); // Run once on mount
 

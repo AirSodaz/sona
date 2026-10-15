@@ -170,3 +170,7 @@ test('workspace crate paths match their reviewed role roots', () => {
     );
   }
 });
+
+test('legacy or detached web platform directory is not reintroduced', () => {
+  assert.equal(fs.existsSync(path.join(repoRoot, 'platforms', 'web')), false);
+});
