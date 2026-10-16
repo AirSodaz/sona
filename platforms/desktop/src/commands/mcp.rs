@@ -211,6 +211,24 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         "~/.cursor/mcp.json".to_string()
     };
 
+    let codex_config_path = if cfg!(windows) {
+        r"%USERPROFILE%\.codex\config.toml".to_string()
+    } else {
+        "~/.codex/config.toml".to_string()
+    };
+
+    let antigravity_config_path = if cfg!(windows) {
+        r"%USERPROFILE%\.gemini\antigravity\mcp_config.json".to_string()
+    } else {
+        "~/.gemini/antigravity/mcp_config.json".to_string()
+    };
+
+    let pi_omp_config_path = if cfg!(windows) {
+        r"%USERPROFILE%\.omp\agent\mcp.json".to_string()
+    } else {
+        "~/.omp/agent/mcp.json".to_string()
+    };
+
     let windsurf_config_path = if cfg!(windows) {
         r"%USERPROFILE%\.codeium\windsurf\mcp_config.json".to_string()
     } else {
@@ -226,6 +244,22 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         }
     });
     let stdio_json_str = serde_json::to_string_pretty(&stdio_snippet).unwrap_or_default();
+
+    let codex_command =
+        serde_json::to_string(&binary_path).unwrap_or_else(|_| format!("\"{}\"", binary_path));
+    let codex_config_content =
+        format!("[mcp_servers.sona]\ncommand = {codex_command}\nargs = []\n");
+
+    let pi_omp_snippet = serde_json::json!({
+        "mcpServers": {
+            "sona": {
+                "type": "stdio",
+                "command": &binary_path,
+                "args": []
+            }
+        }
+    });
+    let pi_omp_json_str = serde_json::to_string_pretty(&pi_omp_snippet).unwrap_or_default();
 
     let claude_code_cli = format!("claude mcp add sona \"{binary_path}\"");
 
@@ -245,9 +279,16 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
             format: "json".to_string(),
         },
         McpClientGuide {
-            id: "windsurf".to_string(),
-            name: "Windsurf".to_string(),
-            config_path: windsurf_config_path,
+            id: "codex".to_string(),
+            name: "Codex".to_string(),
+            config_path: codex_config_path,
+            config_content: codex_config_content,
+            format: "toml".to_string(),
+        },
+        McpClientGuide {
+            id: "antigravity".to_string(),
+            name: "Antigravity".to_string(),
+            config_path: antigravity_config_path,
             config_content: stdio_json_str.clone(),
             format: "json".to_string(),
         },
@@ -257,6 +298,20 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
             config_path: "Terminal CLI Command".to_string(),
             config_content: claude_code_cli,
             format: "bash".to_string(),
+        },
+        McpClientGuide {
+            id: "pi-omp".to_string(),
+            name: "pi / omp".to_string(),
+            config_path: pi_omp_config_path,
+            config_content: pi_omp_json_str,
+            format: "json".to_string(),
+        },
+        McpClientGuide {
+            id: "windsurf".to_string(),
+            name: "Windsurf".to_string(),
+            config_path: windsurf_config_path,
+            config_content: stdio_json_str.clone(),
+            format: "json".to_string(),
         },
         McpClientGuide {
             id: "generic".to_string(),
@@ -293,12 +348,25 @@ mod tests {
     async fn test_mcp_get_client_configs_structure() {
         let configs = mcp_get_client_configs().await.unwrap();
         assert!(!configs.binary_path.is_empty());
-        assert_eq!(configs.guides.len(), 5);
+        assert_eq!(configs.guides.len(), 8);
         assert!(configs.guides.iter().any(|g| g.id == "claude-desktop"));
         assert!(configs.guides.iter().any(|g| g.id == "cursor"));
-        assert!(configs.guides.iter().any(|g| g.id == "windsurf"));
+        assert!(configs.guides.iter().any(|g| g.id == "codex"));
+        assert!(configs.guides.iter().any(|g| g.id == "antigravity"));
         assert!(configs.guides.iter().any(|g| g.id == "claude-code"));
+        assert!(configs.guides.iter().any(|g| g.id == "pi-omp"));
+        assert!(configs.guides.iter().any(|g| g.id == "windsurf"));
         assert!(configs.guides.iter().any(|g| g.id == "generic"));
+
+        assert_eq!(configs.guides[6].id, "windsurf");
+        assert_eq!(configs.guides[7].id, "generic");
+
+        let codex = configs.guides.iter().find(|g| g.id == "codex").unwrap();
+        assert_eq!(codex.format, "toml");
+        assert!(codex.config_content.contains("[mcp_servers.sona]"));
+
+        let pi_omp = configs.guides.iter().find(|g| g.id == "pi-omp").unwrap();
+        assert!(pi_omp.config_content.contains("\"type\": \"stdio\""));
 
         let claude_desktop = configs
             .guides

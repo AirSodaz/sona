@@ -46,45 +46,238 @@
   flex-wrap: wrap;
 }
 
-/* Client tabs in integration guide */
-.mcp-client-tabs {
+/* --- Target Client Configuration Redesign --- */
+
+.mcp-guide-container {
   display: flex;
-  align-items: center;
-  gap: var(--spacing-xs, 6px);
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--spacing-sm, 12px);
   width: 100%;
 }
 
+/* 8-client responsive catalog grid */
+.mcp-client-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
+@media (max-width: 860px) {
+  .mcp-client-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.mcp-client-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background-color var(--transition-fast, 0.15s) ease,
+    border-color var(--transition-fast, 0.15s) ease,
+    box-shadow var(--transition-fast, 0.15s) ease;
+  user-select: none;
+  min-width: 0;
+  outline: none;
+}
+
+.mcp-client-card:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-hover, var(--color-bg-secondary));
+}
+
+.mcp-client-card:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.mcp-client-card.active {
+  border-color: var(--color-accent);
+  background: color-mix(in srgb, var(--color-accent) 8%, var(--color-bg-primary));
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.mcp-client-card-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  min-width: 32px;
+  border-radius: var(--radius-sm, 6px);
+  background: var(--color-bg-secondary);
+  border: none;
+  flex-shrink: 0;
+  transition: background-color var(--transition-fast, 0.15s) ease;
+}
+
+.mcp-client-card:hover .mcp-client-card-icon {
+  background: color-mix(in srgb, var(--color-bg-secondary) 70%, var(--color-border));
+}
+
+.mcp-client-card.active .mcp-client-card-icon {
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-bg-secondary));
+}
+.mcp-client-logo {
+  display: block;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+/* Monochrome client logo handling in dark mode */
+html[data-theme="dark"] .mcp-client-logo-monochrome {
+  filter: invert(1);
+}
+
+@media (prefers-color-scheme: dark) {
+  html:not([data-theme="light"]) .mcp-client-logo-monochrome {
+    filter: invert(1);
+  }
+}
+
+.mcp-client-card-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.mcp-client-card-name {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-client-card.active .mcp-client-card-name {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.mcp-client-card-badge {
+  display: inline-block;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.mcp-client-card.active .mcp-client-card-badge {
+  color: var(--color-accent);
+}
+
+/* Integration Card Stage */
+.mcp-guide-stage {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  background: var(--color-bg-primary);
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.mcp-stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  gap: var(--spacing-sm, 8px);
+}
+
+.mcp-stage-header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.mcp-stage-format-pill {
+  font-family: var(--font-mono, monospace);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--color-accent) 14%, transparent);
+  color: var(--color-accent);
+  letter-spacing: 0.03em;
+}
+
+/* Path row within stage */
 .mcp-guide-path-row {
   display: flex;
   align-items: center;
   gap: var(--spacing-sm, 8px);
-  flex-wrap: wrap;
   width: 100%;
-  padding-bottom: var(--spacing-xs, 6px);
+  min-width: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--color-border);
+  background: color-mix(in srgb, var(--color-bg-secondary) 40%, var(--color-bg-primary));
+  flex-wrap: nowrap;
 }
 
 .mcp-guide-path-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-size: 0.8125rem;
   color: var(--color-text-muted);
   white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* Code container */
+.mcp-guide-path-code {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-icon-only {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+/* Code container within stage */
 .mcp-code-container {
   width: 100%;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md, 10px);
-  background: color-mix(in srgb, var(--color-bg-secondary) 85%, var(--color-bg-primary));
+  border: none;
+  border-radius: 0;
+  background: transparent;
   overflow: hidden;
-  margin-top: var(--spacing-xs, 6px);
+  margin-top: 0;
 }
 
 .mcp-code-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px;
+  padding: 6px 14px;
   background: var(--color-bg-secondary);
   border-bottom: 1px solid var(--color-border);
 }
@@ -99,17 +292,35 @@
 
 .mcp-code-body {
   margin: 0;
-  padding: 12px 14px;
+  padding: 14px 16px;
   font-family: var(--font-mono, monospace);
   font-size: 0.8125rem;
-  line-height: 1.5;
+  line-height: 1.6;
   color: var(--color-text-primary);
+  background: color-mix(in srgb, var(--color-bg-secondary) 25%, var(--color-bg-primary));
   white-space: pre-wrap;
   word-break: break-all;
   max-height: 280px;
   overflow-y: auto;
 }
 
+/* Contextual tip footer */
+.mcp-stage-tip {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 14px;
+  font-size: 0.775rem;
+  color: var(--color-text-muted);
+  background: var(--color-bg-secondary);
+  border-top: 1px solid var(--color-border);
+  line-height: 1.4;
+}
+
+.mcp-stage-tip-icon {
+  flex-shrink: 0;
+  color: var(--color-accent);
+}
 /* Audit log toolbar */
 .mcp-log-toolbar {
   display: flex;
@@ -119,12 +330,6 @@
   flex-wrap: wrap;
   width: 100%;
   padding-bottom: var(--spacing-xs, 6px);
-}
-
-.mcp-log-pills {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .mcp-log-search-box {

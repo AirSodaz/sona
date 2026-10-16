@@ -6,12 +6,15 @@ import {
   CheckCircle2,
   Copy,
   ExternalLink,
+  Folder,
+  Lightbulb,
   Power,
   RefreshCw,
   Search,
   Shield,
   ShieldAlert,
   ShieldCheck,
+  Terminal,
   Trash2,
   XCircle,
   Zap,
@@ -23,8 +26,10 @@ import { persistConfigImmediately } from '../../services/configPersistenceServic
 import { useMcpConfig, useSetConfig } from '../../stores/configStore';
 import { useMcpStore } from '../../stores/mcpStore';
 import type { AppConfig, McpPermissionMode } from '../../types/config';
+import { ClientLogo } from '../icons/ClientLogos';
 import { Switch } from '../Switch';
 import {
+  SegmentedSubTabs,
   SettingsAccordion,
   SettingsItem,
   SettingsPageHeader,
@@ -32,6 +37,16 @@ import {
   SettingsTabContainer,
 } from './SettingsLayout';
 import './SettingsMcpTab.css';
+
+function getClientTip(
+  id: string,
+  t: (key: string, opts?: Record<string, unknown>) => string
+): string {
+  const key = `settings.mcp.tip_${id.replace(/-/g, '_')}`;
+  return t(key, {
+    defaultValue: '将生成的配置复制到对应智能体客户端的配置文件中，即可直接使用 Sona MCP 工具。',
+  });
+}
 
 export function SettingsMcpTab(): React.JSX.Element {
   const { t } = useTranslation();
@@ -141,6 +156,35 @@ export function SettingsMcpTab(): React.JSX.Element {
       clientConfigs.guides.find((g) => g.id === selectedGuideId) ?? clientConfigs.guides[0] ?? null
     );
   }, [clientConfigs, selectedGuideId]);
+
+  const handleClientKeyDown = useCallback(
+    (e: React.KeyboardEvent, index: number) => {
+      const guides = clientConfigs?.guides ?? [];
+      if (guides.length === 0) return;
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        const next = (index + 1) % guides.length;
+        setSelectedGuideId(guides[next].id);
+        document.getElementById(`mcp-tab-${guides[next].id}`)?.focus();
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        const prev = (index - 1 + guides.length) % guides.length;
+        setSelectedGuideId(guides[prev].id);
+        document.getElementById(`mcp-tab-${guides[prev].id}`)?.focus();
+      }
+    },
+    [clientConfigs?.guides]
+  );
+
+  const logFilterItems = useMemo(
+    () => [
+      { value: 'all', label: t('settings.mcp.filter_all', { defaultValue: 'All' }) },
+      { value: 'success', label: t('settings.mcp.filter_success', { defaultValue: 'Success' }) },
+      { value: 'blocked', label: t('settings.mcp.filter_blocked', { defaultValue: 'Blocked' }) },
+      { value: 'error', label: t('settings.mcp.filter_error', { defaultValue: 'Error' }) },
+    ],
+    [t]
+  );
 
   const currentMode = config.mcpPermissionMode ?? status?.permissionMode ?? 'full';
 
@@ -490,58 +534,150 @@ export function SettingsMcpTab(): React.JSX.Element {
             defaultValue: 'Target Client Configuration',
           })}
         >
-          <div className="mcp-client-tabs">
-            {clientConfigs?.guides.map((guide) => (
-              <button
-                key={guide.id}
-                type="button"
-                className={`btn btn-sm ${selectedGuideId === guide.id ? 'btn-primary' : 'btn-secondary'}`}
-                onClick={() => setSelectedGuideId(guide.id)}
+          <div className="mcp-guide-container">
+            {/* 8-client responsive catalog grid */}
+            <div
+              className="mcp-client-grid"
+              role="tablist"
+              aria-label={t('settings.mcp.select_client', {
+                defaultValue: 'Target Client Configuration',
+              })}
+            >
+              {(clientConfigs?.guides ?? []).map((guide, idx) => {
+                const isSelected = selectedGuideId === guide.id;
+                return (
+                  <button
+                    key={guide.id}
+                    type="button"
+                    role="tab"
+                    id={`mcp-tab-${guide.id}`}
+                    aria-label={t(`settings.mcp.tab_${guide.id.replace(/-/g, '_')}`, {
+                      defaultValue: guide.name,
+                    })}
+                    aria-selected={isSelected}
+                    aria-controls={`mcp-panel-${guide.id}`}
+                    tabIndex={isSelected ? 0 : -1}
+                    className={`mcp-client-card ${isSelected ? 'active' : ''}`}
+                    onClick={() => setSelectedGuideId(guide.id)}
+                    onKeyDown={(e) => handleClientKeyDown(e, idx)}
+                  >
+                    <div className="mcp-client-card-icon">
+                      <ClientLogo clientId={guide.id} label={guide.name} size={18} />
+                    </div>
+                    <div className="mcp-client-card-content">
+                      <span className="mcp-client-card-name">
+                        {t(`settings.mcp.tab_${guide.id.replace(/-/g, '_')}`, {
+                          defaultValue: guide.name,
+                        })}
+                      </span>
+                      <span className="mcp-client-card-badge">{guide.format.toUpperCase()}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {activeGuide && (
+              <div
+                className="mcp-guide-stage"
+                id={`mcp-panel-${activeGuide.id}`}
+                role="tabpanel"
+                aria-labelledby={`mcp-tab-${activeGuide.id}`}
               >
-                {guide.name}
-              </button>
-            ))}
-          </div>
+                <div className="mcp-stage-header">
+                  <div className="mcp-stage-header-title">
+                    <div className="mcp-client-card-icon">
+                      <ClientLogo clientId={activeGuide.id} label={activeGuide.name} size={18} />
+                    </div>
+                    <span>
+                      {t(`settings.mcp.tab_${activeGuide.id.replace(/-/g, '_')}`, {
+                        defaultValue: activeGuide.name,
+                      })}
+                    </span>
+                    <span className="mcp-stage-format-pill">
+                      {activeGuide.format.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
 
-          {activeGuide && (
-            <div style={{ width: '100%', marginTop: 'var(--spacing-sm)' }}>
-              <div className="mcp-guide-path-row">
-                <span className="mcp-guide-path-label">
-                  {t('settings.mcp.config_file_path', { defaultValue: 'Config File Path' })}:
-                </span>
-                <code className="settings-code-inline">{activeGuide.configPath}</code>
-                <button
-                  type="button"
-                  className="btn btn-secondary btn-xs"
-                  onClick={() => handleCopy(activeGuide.configPath, 'guide-path')}
-                >
-                  {copiedKey === 'guide-path' ? <Check size={12} /> : <Copy size={12} />}
-                  {copiedKey === 'guide-path'
-                    ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                    : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })}
-                </button>
-              </div>
-
-              <div className="mcp-code-container">
-                <div className="mcp-code-header">
-                  <span className="mcp-code-lang">{activeGuide.format.toUpperCase()}</span>
+                <div className="mcp-guide-path-row">
+                  <span className="mcp-guide-path-label">
+                    {activeGuide.format === 'bash' ? <Terminal size={14} /> : <Folder size={14} />}
+                    {activeGuide.format === 'bash'
+                      ? t('settings.mcp.cli_command', { defaultValue: 'Terminal Command' })
+                      : t('settings.mcp.config_file_path', {
+                          defaultValue: 'Config File Path',
+                        })}
+                    :
+                  </span>
+                  <code
+                    className="settings-code-inline mcp-guide-path-code"
+                    title={activeGuide.configPath}
+                  >
+                    {activeGuide.configPath}
+                  </code>
                   <button
                     type="button"
-                    className="btn btn-secondary btn-xs"
-                    onClick={() => handleCopy(activeGuide.configContent, 'guide-content')}
+                    className="btn btn-secondary btn-xs btn-icon-only"
+                    onClick={() => handleCopy(activeGuide.configPath, 'guide-path')}
+                    aria-label={
+                      copiedKey === 'guide-path'
+                        ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
+                        : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })
+                    }
+                    data-tooltip={
+                      copiedKey === 'guide-path'
+                        ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
+                        : t('settings.mcp.btn_copy', { defaultValue: 'Copy' })
+                    }
                   >
-                    {copiedKey === 'guide-content' ? <Check size={12} /> : <Copy size={12} />}
-                    {copiedKey === 'guide-content'
-                      ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
-                      : t('settings.mcp.btn_copy_config', {
-                          defaultValue: 'Copy Configuration',
-                        })}
+                    {copiedKey === 'guide-path' ? (
+                      <Check size={13} style={{ color: 'var(--color-success)' }} />
+                    ) : (
+                      <Copy size={13} />
+                    )}
                   </button>
                 </div>
-                <pre className="mcp-code-body">{activeGuide.configContent}</pre>
+
+                <div className="mcp-code-container">
+                  <div className="mcp-code-header">
+                    <span className="mcp-code-lang">{activeGuide.format.toUpperCase()}</span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary btn-xs btn-icon-only"
+                      onClick={() => handleCopy(activeGuide.configContent, 'guide-content')}
+                      aria-label={
+                        copiedKey === 'guide-content'
+                          ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
+                          : t('settings.mcp.btn_copy_config', {
+                              defaultValue: 'Copy Configuration',
+                            })
+                      }
+                      data-tooltip={
+                        copiedKey === 'guide-content'
+                          ? t('settings.mcp.copied', { defaultValue: 'Copied!' })
+                          : t('settings.mcp.btn_copy_config', {
+                              defaultValue: 'Copy Configuration',
+                            })
+                      }
+                    >
+                      {copiedKey === 'guide-content' ? (
+                        <Check size={13} style={{ color: 'var(--color-success)' }} />
+                      ) : (
+                        <Copy size={13} />
+                      )}
+                    </button>
+                  </div>
+                  <pre className="mcp-code-body">{activeGuide.configContent}</pre>
+                </div>
+
+                <div className="mcp-stage-tip">
+                  <Lightbulb size={14} className="mcp-stage-tip-icon" />
+                  <span>{getClientTip(activeGuide.id, t)}</span>
+                </div>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </SettingsItem>
       </SettingsSection>
 
@@ -569,18 +705,16 @@ export function SettingsMcpTab(): React.JSX.Element {
       >
         <SettingsItem layout="vertical" title="">
           <div className="mcp-log-toolbar">
-            <div className="mcp-log-pills">
-              {(['all', 'success', 'blocked', 'error'] as const).map((st) => (
-                <button
-                  key={st}
-                  type="button"
-                  className={`btn btn-xs ${filter?.status === st ? 'btn-primary' : 'btn-secondary'}`}
-                  onClick={() => setFilterStatus(st)}
-                >
-                  {t(`settings.mcp.filter_${st}`, { defaultValue: st })}
-                </button>
-              ))}
-            </div>
+            <SegmentedSubTabs<string>
+              id="mcp-log-filter-tabs"
+              size="sm"
+              ariaLabel={t('settings.mcp.filter_label', {
+                defaultValue: 'Filter logs by status',
+              })}
+              items={logFilterItems}
+              activeTab={filter?.status ?? 'all'}
+              onChange={(val) => setFilterStatus(val as 'all' | 'success' | 'blocked' | 'error')}
+            />
 
             <div className="mcp-log-search-box">
               <Search size={14} color="var(--color-text-muted)" />

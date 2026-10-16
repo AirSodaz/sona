@@ -156,25 +156,75 @@ describe('SettingsMcpTab', () => {
     ).toBeDefined();
   });
 
-  it('renders client integration guide tabs and code snippet', async () => {
+  it('renders client integration guide tabs as SegmentedSubTabs and icon-only copy buttons', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
     await act(async () => {
       render(<SettingsMcpTab />);
     });
 
     expect(screen.getByText('Client Integration Guide')).toBeDefined();
-    expect(screen.getByText('Claude Desktop')).toBeDefined();
-    expect(screen.getByText('Cursor')).toBeDefined();
-    expect(screen.getByText('%APPDATA%\\Claude\\claude_desktop_config.json')).toBeDefined();
-  });
 
+    const clientTabsContainer = screen.getByRole('tablist', {
+      name: 'Target Client Configuration',
+    });
+    expect(clientTabsContainer).toBeDefined();
+
+    const claudeTab = screen.getByRole('tab', { name: 'Claude Desktop' });
+    const cursorTab = screen.getByRole('tab', { name: 'Cursor' });
+    expect(claudeTab.getAttribute('aria-selected')).toBe('true');
+    expect(cursorTab.getAttribute('aria-selected')).toBe('false');
+
+    expect(screen.getByText('%APPDATA%\\Claude\\claude_desktop_config.json')).toBeDefined();
+
+    // Verify icon-only copy buttons
+    const pathRow = document.querySelector('.mcp-guide-path-row');
+    expect(pathRow).toBeDefined();
+    const copyPathBtn = pathRow?.querySelector('button') as HTMLButtonElement;
+    expect(copyPathBtn).toBeDefined();
+    expect(copyPathBtn.className).toContain('btn-icon-only');
+    expect(copyPathBtn.getAttribute('aria-label')).toBe('Copy');
+    expect(copyPathBtn.getAttribute('data-tooltip')).toBe('Copy');
+
+    const copyConfigBtn = screen.getByRole('button', { name: 'Copy Configuration' });
+    expect(copyConfigBtn.className).toContain('btn-icon-only');
+    expect(copyConfigBtn.getAttribute('data-tooltip')).toBe('Copy Configuration');
+
+    // Copy path
+    await act(async () => {
+      fireEvent.click(copyPathBtn);
+    });
+    expect(writeTextMock).toHaveBeenCalledWith('%APPDATA%\\Claude\\claude_desktop_config.json');
+    expect(copyPathBtn.getAttribute('aria-label')).toBe('Copied!');
+    // Switch to Cursor tab
+    await act(async () => {
+      fireEvent.click(cursorTab);
+    });
+    expect(cursorTab.getAttribute('aria-selected')).toBe('true');
+    expect(screen.getByText('%USERPROFILE%\\.cursor\\mcp.json')).toBeDefined();
+  });
   it('renders activity audit logs and allows clearing logs', async () => {
     mockInvokeTauri.mockResolvedValueOnce(undefined as never);
 
     await act(async () => {
       render(<SettingsMcpTab />);
     });
-
     expect(screen.getByText('Live Activity & Audit Stream')).toBeDefined();
+
+    const filterTabsContainer = screen.getByRole('tablist', {
+      name: 'Filter logs by status',
+    });
+    expect(filterTabsContainer).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'All' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Success' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Blocked' })).toBeDefined();
+    expect(screen.getByRole('tab', { name: 'Error' })).toBeDefined();
+
     expect(screen.getByText('sona_query_history')).toBeDefined();
     expect(screen.getByText('limit: 20')).toBeDefined();
 

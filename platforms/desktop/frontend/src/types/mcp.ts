@@ -32,7 +32,7 @@ export interface McpClientGuide {
   name: string;
   configPath: string;
   configContent: string;
-  format: 'json' | 'bash';
+  format: 'json' | 'bash' | 'toml';
 }
 
 export interface McpClientConfigMap {

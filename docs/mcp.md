@@ -506,6 +506,9 @@ Add `sona-mcp` to your Claude Desktop configuration file:
 
 Create or update `.cursor/mcp.json` in your project or global Cursor settings:
 
+- **macOS / Linux**: `~/.cursor/mcp.json`
+- **Windows**: `%USERPROFILE%\.cursor\mcp.json`
+
 ```json
 {
   "mcpServers": {
@@ -516,9 +519,25 @@ Create or update `.cursor/mcp.json` in your project or global Cursor settings:
 }
 ```
 
-### Windsurf & VS Code
+### Codex
 
-In `~/.codeium/windsurf/mcp_config.json` or your MCP client configuration:
+In your Codex configuration file:
+
+- **macOS / Linux**: `~/.codex/config.toml`
+- **Windows**: `%USERPROFILE%\.codex\config.toml`
+
+```toml
+[mcp_servers.sona]
+command = "sona-mcp"
+args = []
+```
+
+### Antigravity
+
+In your Antigravity MCP configuration file:
+
+- **macOS / Linux**: `~/.gemini/antigravity/mcp_config.json`
+- **Windows**: `%USERPROFILE%\.gemini\antigravity\mcp_config.json`
 
 ```json
 {
@@ -531,6 +550,50 @@ In `~/.codeium/windsurf/mcp_config.json` or your MCP client configuration:
 }
 ```
 
+### Claude Code CLI
+
+Add `sona-mcp` via the Claude Code CLI:
+
+```bash
+claude mcp add sona "sona-mcp"
+```
+
+### pi / omp
+
+In your oh-my-pi / omp MCP configuration file:
+
+- **macOS / Linux**: `~/.omp/agent/mcp.json`
+- **Windows**: `%USERPROFILE%\.omp\agent\mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "sona": {
+      "type": "stdio",
+      "command": "sona-mcp",
+      "args": []
+    }
+  }
+}
+```
+
+### Windsurf & VS Code
+
+In your Windsurf configuration file:
+
+- **macOS / Linux**: `~/.codeium/windsurf/mcp_config.json`
+- **Windows**: `%USERPROFILE%\.codeium\windsurf\mcp_config.json`
+
+```json
+{
+  "mcpServers": {
+    "sona": {
+      "command": "sona-mcp",
+      "args": []
+    }
+  }
+}
+```
 ### Command-Line Verification & Testing
 
 To test the MCP server manually over standard I/O:
