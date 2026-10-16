@@ -535,9 +535,9 @@ fn seed_sync_baseline_in_transaction(
     preset: SyncPresetV1,
     now_ms: u64,
 ) -> Result<(), DatabaseError> {
-    for tag in crate::tag::load_tags_in_transaction(transaction)? {
+    for tag in crate::project::load_tags_in_transaction(transaction)? {
         let sort_order = tag.sort_order;
-        crate::tag::record_tag_sync_fields(transaction, &tag, Some(sort_order))?;
+        crate::project::record_project_sync_fields(transaction, &tag, Some(sort_order))?;
     }
     seed_history_baseline_in_transaction(transaction, now_ms)?;
     if preset != SyncPresetV1::Content {
@@ -556,19 +556,8 @@ fn seed_history_baseline_in_transaction(
     let items = {
         let mut statement = transaction.prepare_cached(
             "SELECT h.id, h.timestamp, h.duration, h.title, h.preview_text, h.icon, h.kind,
-                    COALESCE((
-                        SELECT json_group_array(tag_id)
-                        FROM (
-                            SELECT hit.tag_id
-                            FROM history_item_tags hit
-                            JOIN tags tag ON tag.id = hit.tag_id
-                            WHERE hit.history_id = h.id
-                            ORDER BY tag.sort_order, tag.id
-                        )
-                    ), '[]'),
-                    h.deleted_at
-             FROM history_items
-             AS h
+                    h.project_id, h.deleted_at
+             FROM history_items AS h
              WHERE status = 'complete'
              ORDER BY id",
         )?;
@@ -582,17 +571,16 @@ fn seed_history_baseline_in_transaction(
                     row.get::<_, String>(4)?,
                     row.get::<_, Option<String>>(5)?,
                     row.get::<_, String>(6)?,
-                    row.get::<_, String>(7)?,
+                    row.get::<_, Option<String>>(7)?,
                     row.get::<_, Option<i64>>(8)?,
                 ))
             })?
             .collect::<Result<Vec<_>, _>>()?
     };
-    for (id, timestamp, duration, title, preview_text, icon, kind, tag_ids_json, deleted_at) in
-        items
+    for (id, timestamp, duration, title, preview_text, icon, kind, project_id, deleted_at) in items
     {
         let now_ms = u64::try_from(timestamp).unwrap_or(0);
-        let tag_ids: Vec<String> = serde_json::from_str(&tag_ids_json)?;
+        let tag_ids: Vec<String> = project_id.clone().into_iter().collect();
         for (field, value) in [
             ("timestamp", serde_json::json!(timestamp)),
             ("duration", serde_json::json!(duration)),
@@ -600,6 +588,7 @@ fn seed_history_baseline_in_transaction(
             ("previewText", serde_json::json!(preview_text)),
             ("icon", serde_json::json!(icon)),
             ("kind", serde_json::json!(kind)),
+            ("projectId", serde_json::json!(project_id)),
             ("tagIds", serde_json::json!(tag_ids)),
             ("deletedAt", serde_json::json!(deleted_at)),
         ] {
@@ -1695,7 +1684,7 @@ fn apply_domain_delete(
                 "DELETE FROM project_pipelines WHERE project_id = ?1",
                 [entity_id],
             );
-            execute_delete(transaction, "tags", "id", entity_id)
+            execute_delete(transaction, "projects", "id", entity_id)
         }
         SyncEntityKind::HistoryItem => {
             execute_delete(transaction, "history_items", "id", entity_id)
@@ -1761,7 +1750,7 @@ fn apply_domain_field(
 ) -> Result<(), DatabaseError> {
     match kind {
         SyncEntityKind::Tag | SyncEntityKind::Project => {
-            apply_tag_field(transaction, entity_id, field, value, kind)
+            apply_project_field(transaction, entity_id, field, value, kind)
         }
         SyncEntityKind::HistoryItem => {
             apply_history_item_field(transaction, entity_id, field, value)
@@ -1850,7 +1839,7 @@ fn apply_domain_field(
     }
 }
 
-fn apply_tag_field(
+fn apply_project_field(
     transaction: &Transaction<'_>,
     entity_id: &str,
     field: &str,
@@ -1858,7 +1847,7 @@ fn apply_tag_field(
     kind: SyncEntityKind,
 ) -> Result<(), DatabaseError> {
     transaction.execute(
-        "INSERT OR IGNORE INTO tags (id, created_at, updated_at) VALUES (?1, 0, 0)",
+        "INSERT OR IGNORE INTO projects (id, created_at, updated_at) VALUES (?1, 0, 0)",
         [entity_id],
     )?;
     if field == "pipeline" {
@@ -1880,7 +1869,7 @@ fn apply_tag_field(
         "updatedAt" => "updated_at",
         _ => return unsupported_field(kind, field),
     };
-    update_json_column(transaction, "tags", "id", entity_id, column, value)
+    update_json_column(transaction, "projects", "id", entity_id, column, value)
 }
 
 fn apply_history_item_field(
@@ -1895,29 +1884,19 @@ fn apply_history_item_field(
     )?;
     if field == "tagIds" {
         let tag_ids = json_string_array(value, field)?;
+        let project_id = tag_ids.first();
         transaction.execute(
-            "DELETE FROM history_item_tags WHERE history_id = ?1",
-            [entity_id],
+            "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
+            params![project_id, entity_id],
         )?;
-        for tag_id in tag_ids {
-            transaction.execute(
-                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
-                params![entity_id, tag_id],
-            )?;
-        }
         return Ok(());
     }
     if field == "projectId" {
+        let project_id = value.as_str().filter(|pid| !pid.is_empty());
         transaction.execute(
-            "DELETE FROM history_item_tags WHERE history_id = ?1",
-            [entity_id],
+            "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
+            params![project_id, entity_id],
         )?;
-        if let Some(tag_id) = value.as_str().filter(|tag_id| !tag_id.is_empty()) {
-            transaction.execute(
-                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
-                params![entity_id, tag_id],
-            )?;
-        }
         return Ok(());
     }
     let column = match field {
@@ -2139,12 +2118,12 @@ fn apply_automation_rule_field(
     if field == "tagIds" {
         let tag_ids = json_string_array(value, field)?;
         transaction.execute(
-            "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+            "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
             [entity_id],
         )?;
         for tag_id in tag_ids {
             transaction.execute(
-                "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)",
+                "INSERT OR IGNORE INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
                 params![entity_id, tag_id],
             )?;
         }
@@ -2153,7 +2132,7 @@ fn apply_automation_rule_field(
     if field == "projectId" {
         let project_id = value.as_str().unwrap_or_default();
         transaction.execute(
-            "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+            "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
             [entity_id],
         )?;
         transaction.execute(
@@ -2162,7 +2141,7 @@ fn apply_automation_rule_field(
         )?;
         if !matches!(project_id, "" | "inbox" | "none") {
             transaction.execute(
-                "INSERT OR IGNORE INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)",
+                "INSERT OR IGNORE INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
                 params![entity_id, project_id],
             )?;
         }

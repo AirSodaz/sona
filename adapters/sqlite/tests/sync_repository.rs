@@ -1,4 +1,4 @@
-﻿use std::collections::BTreeMap;
+use std::collections::BTreeMap;
 use std::sync::Arc;
 
 use serde_json::json;
@@ -303,7 +303,7 @@ fn remote_project_winner_is_projected_without_creating_an_outbox_echo() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO tags (id, name, created_at, updated_at)
+            "INSERT INTO projects (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -336,7 +336,7 @@ fn remote_project_winner_is_projected_without_creating_an_outbox_echo() {
         .with_connection(|connection| {
             Ok((
                 connection.query_row(
-                    "SELECT name FROM tags WHERE id = 'project-1'",
+                    "SELECT name FROM projects WHERE id = 'project-1'",
                     [],
                     |row| row.get::<_, String>(0),
                 )?,
@@ -416,7 +416,7 @@ fn excluded_remote_field_rolls_back_the_entire_batch_and_cursor() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO tags (id, name, created_at, updated_at)
+            "INSERT INTO projects (id, name, created_at, updated_at)
              VALUES ('project-1', 'Before', 1, 1)",
             [],
         )?;
@@ -460,7 +460,7 @@ fn excluded_remote_field_rolls_back_the_entire_batch_and_cursor() {
         .with_connection(|connection| {
             Ok((
                 connection.query_row(
-                    "SELECT name FROM tags WHERE id = 'project-1'",
+                    "SELECT name FROM projects WHERE id = 'project-1'",
                     [],
                     |row| row.get::<_, String>(0),
                 )?,
@@ -970,7 +970,7 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO tags (id, name, created_at, updated_at)
+            "INSERT INTO projects (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -1018,7 +1018,7 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
         .with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT EXISTS(SELECT 1 FROM tags WHERE id = 'project-1')",
+                    "SELECT EXISTS(SELECT 1 FROM projects WHERE id = 'project-1')",
                     [],
                     |row| row.get::<_, bool>(0),
                 )
@@ -1051,9 +1051,11 @@ fn entity_tombstone_wins_concurrent_fields_but_allows_a_causally_later_restore()
     let restored_name = db
         .with_connection(|connection| {
             connection
-                .query_row("SELECT name FROM tags WHERE id = 'project-1'", [], |row| {
-                    row.get::<_, String>(0)
-                })
+                .query_row(
+                    "SELECT name FROM projects WHERE id = 'project-1'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
                 .map_err(DatabaseError::QueryError)
         })
         .unwrap();
@@ -1072,7 +1074,7 @@ fn conflict_can_be_listed_viewed_and_resolved_with_the_conflicting_value() {
     .unwrap();
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO tags (id, name, created_at, updated_at)
+            "INSERT INTO projects (id, name, created_at, updated_at)
              VALUES ('project-1', 'Local', 1, 1)",
             [],
         )?;
@@ -1120,9 +1122,11 @@ fn conflict_can_be_listed_viewed_and_resolved_with_the_conflicting_value() {
     let name = db
         .with_connection(|connection| {
             connection
-                .query_row("SELECT name FROM tags WHERE id = 'project-1'", [], |row| {
-                    row.get::<_, String>(0)
-                })
+                .query_row(
+                    "SELECT name FROM projects WHERE id = 'project-1'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )
                 .map_err(DatabaseError::QueryError)
         })
         .unwrap();
@@ -1141,7 +1145,7 @@ fn initializing_sync_seeds_existing_domain_state_and_requires_an_initial_checkpo
     let db = Arc::new(Database::open_in_memory().unwrap());
     db.with_rw_transaction(|transaction| {
         transaction.execute(
-            "INSERT INTO tags (id, name, icon, color, created_at, updated_at)
+            "INSERT INTO projects (id, name, icon, color, created_at, updated_at)
              VALUES ('existing-project', 'Existing', '', '', 10, 20)",
             [],
         )?;

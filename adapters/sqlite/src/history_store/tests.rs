@@ -119,24 +119,20 @@ fn history_row_mapper_reads_columns_by_name() {
     let db = Database::open_in_memory().unwrap();
     db.with_connection(|conn| {
             conn.execute(
-                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
+                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
                  VALUES ('project-name-map', 'Mapped Tag', 'folder', '', 0, 1000, 1000)",
                 [],
             )?;
             conn.execute(
                 "INSERT INTO history_items (
                     id, timestamp, duration, audio_path, audio_status, transcript_path,
-                    title, preview_text, icon, kind, search_content, deleted_at, status, draft_source
+                    title, preview_text, icon, kind, search_content, project_id, deleted_at, status, draft_source
                 )
                 VALUES (
                     'history-name-map', 1234, 42.5, 'audio.wav', 'removed', 'history-name-map.json',
                     'Mapped title', 'Mapped preview', 'sparkles', 'batch', 'Mapped search',
-                    NULL, 'draft', 'live_record'
+                    'project-name-map', NULL, 'draft', 'live_record'
                 )",
-                [],
-            )?;
-            conn.execute(
-                "INSERT INTO history_item_tags (history_id, tag_id) VALUES ('history-name-map', 'project-name-map')",
                 [],
             )?;
 
@@ -595,7 +591,7 @@ fn test_sqlite_store_crud() {
         .unwrap()
         .with_connection(|conn| {
             conn.execute(
-                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
+                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                 [],
             )?;
@@ -1166,7 +1162,7 @@ fn test_sqlite_store_workspace_query() {
         .unwrap()
         .with_connection(|conn| {
             conn.execute(
-                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
+                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                 [],
             )?;
@@ -1476,7 +1472,7 @@ fn test_workspace_query_with_reconciliation() {
         .unwrap()
         .with_connection(|conn| {
             conn.execute(
-                "INSERT INTO tags (id, name, icon, color, sort_order, created_at, updated_at)
+                "INSERT INTO projects (id, name, icon, color, sort_order, created_at, updated_at)
                      VALUES ('project-1', 'Project One', 'folder', '', 0, 1000, 1000)",
                 [],
             )?;

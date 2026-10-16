@@ -90,8 +90,11 @@ pub(super) fn map_row_to_item(row: &rusqlite::Row) -> rusqlite::Result<HistoryIt
         })
         .transpose()?;
 
-    let tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
+    let mut tag_ids = serde_json::from_str::<Vec<String>>(&tag_ids_json)
         .map_err(|error| invalid_history_column(row, "tag_ids", Type::Text, error.to_string()))?;
+    if tag_ids.is_empty() {
+        tag_ids = project_id.clone().into_iter().collect();
+    }
     let deleted_at = deleted_at_value
         .map(|value| checked_history_u64_column(row, "deleted_at", value))
         .transpose()?;

@@ -10,8 +10,9 @@ use sona_core::tag::TagIdGenerator;
 use crate::{
     Database, DatabaseError, SqliteAppConfigAdapter, SqliteAutomationAdapter,
     SqliteAutomationRepository, SqliteBackupStateRepository, SqliteDashboardService,
-    SqliteHistoryStore, SqliteLedgerRepository, SqliteSyncRepositoryFactory, SqliteTagAdapter,
-    SqliteTagRepository, SqliteTaskLedgerAdapter, create_dashboard_service,
+    SqliteHistoryStore, SqliteLedgerRepository, SqliteProjectAdapter, SqliteProjectRepository,
+    SqliteSyncRepositoryFactory, SqliteTagAdapter, SqliteTagRepository, SqliteTaskLedgerAdapter,
+    create_dashboard_service,
 };
 
 /// Shared SQLite composition root for one application-data directory.
@@ -96,16 +97,28 @@ impl SqliteApplicationContext {
         SqliteAutomationRepository::new(self.database())
     }
 
+    pub fn project_adapter(
+        &self,
+        ids: Arc<dyn TagIdGenerator>,
+        clock: Arc<dyn ClockPort>,
+    ) -> SqliteProjectAdapter {
+        SqliteProjectAdapter::new(self.database(), ids, clock)
+    }
+
+    pub fn project_repository(&self) -> SqliteProjectRepository {
+        SqliteProjectRepository::new(self.database())
+    }
+
     pub fn tag_adapter(
         &self,
         ids: Arc<dyn TagIdGenerator>,
         clock: Arc<dyn ClockPort>,
     ) -> SqliteTagAdapter {
-        SqliteTagAdapter::new(self.database(), ids, clock)
+        self.project_adapter(ids, clock)
     }
 
     pub fn tag_repository(&self) -> SqliteTagRepository {
-        SqliteTagRepository::new(self.database())
+        self.project_repository()
     }
 
     pub fn task_ledger_adapter(&self, clock: Arc<dyn ClockPort>) -> SqliteTaskLedgerAdapter {

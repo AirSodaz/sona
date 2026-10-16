@@ -7,9 +7,10 @@ use serde_json::Value;
 #[cfg(test)]
 use sona_core::ports::time::ClockError;
 use sona_core::ports::time::ClockPort;
-use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator};
+use sona_core::project::ports::{ProjectIdGenerator, ProjectRepository};
+use sona_core::project::{ProjectCreateInput, ProjectError, ProjectRecord, ProjectUpdateInput};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::SqliteTagAdapter;
+use sona_sqlite::SqliteProjectAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_project_repository_state_json(
@@ -19,7 +20,7 @@ pub(crate) fn load_project_repository_state_json(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.load_state(),
+        |adapter| adapter.load_project_state(),
     )
     .and_then(serialize_project)
 }
@@ -31,7 +32,7 @@ pub(crate) fn load_project_repository_v1(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.load_state(),
+        |adapter| adapter.load_project_state(),
     )
     .map(Into::into)
 }
@@ -41,11 +42,11 @@ pub(crate) fn replace_projects_json(
     projects_json: String,
 ) -> SonaCoreBindingResult<()> {
     let projects = parse_json_array("projects", &projects_json)?;
-    with_project_input_adapter(
+    with_project_adapter(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.replace_tags_json(projects),
+        |adapter| adapter.replace_projects_json(projects),
     )
 }
 
@@ -61,12 +62,12 @@ pub(crate) fn replace_projects_v1(
                 invalid_input(format!("Invalid project at index {index}: {reason}"))
             })
         })
-        .collect::<SonaCoreBindingResult<Vec<_>>>()?;
+        .collect::<SonaCoreBindingResult<Vec<ProjectRecord>>>()?;
     with_project_adapter(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.replace_tags(projects),
+        |adapter| adapter.replace_projects(projects),
     )
 }
 
@@ -119,7 +120,9 @@ pub(crate) fn delete_project(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.delete_project_with_cascade(&project_id, "moveToInbox"),
+        |adapter| {
+            ProjectRepository::delete_project_with_cascade(adapter, &project_id, "moveToInbox")
+        },
     )
 }
 
@@ -139,7 +142,7 @@ pub(crate) fn reorder_projects_json(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.reorder_tags(project_ids),
+        |adapter| adapter.reorder_projects(project_ids),
     )
     .and_then(serialize_project)
 }
@@ -153,9 +156,9 @@ pub(crate) fn reorder_projects_v1(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.reorder_tags(project_ids),
+        |adapter| adapter.reorder_projects(project_ids),
     )
-    .map(|tags| tags.into_iter().map(Into::into).collect())
+    .map(|projects| projects.into_iter().map(Into::into).collect())
 }
 
 pub(crate) fn set_active_project_id(
@@ -169,7 +172,7 @@ pub(crate) fn set_active_project_id(
         context,
         Arc::new(UuidGenerator),
         Arc::new(SystemClock),
-        |adapter| adapter.set_active_tag_id(project_id),
+        |adapter| adapter.set_active_project_id(project_id),
     )
 }
 
@@ -183,22 +186,25 @@ pub(crate) fn set_active_project_id_v1(
 fn create_project_json_with_runtime(
     context: impl Into<ContextSource>,
     input_json: String,
-    ids: Arc<dyn TagIdGenerator>,
+    ids: Arc<dyn ProjectIdGenerator>,
     clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
-    let input = parse_json_object_as::<TagCreateInput>("project input", &input_json)?;
-    with_project_adapter(context, ids, clock, |adapter| adapter.create_tag(input))
+    let input = parse_json_object_as::<ProjectCreateInput>("project input", &input_json)?;
+    if input.name.trim().is_empty() {
+        return Err(invalid_input("Project name is required"));
+    }
+    with_project_adapter(context, ids, clock, |adapter| adapter.create_project(input))
         .and_then(serialize_project)
 }
 
 fn create_project_v1_with_runtime(
     context: impl Into<ContextSource>,
     input: FfiProjectCreateInputV1,
-    ids: Arc<dyn TagIdGenerator>,
+    ids: Arc<dyn ProjectIdGenerator>,
     clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<FfiProjectRecordV1> {
     with_project_adapter(context, ids, clock, |adapter| {
-        adapter.create_tag(input.into())
+        adapter.create_project(input.into())
     })
     .map(Into::into)
 }
@@ -210,9 +216,9 @@ fn update_project_json_with_clock(
     clock: Arc<dyn ClockPort>,
 ) -> SonaCoreBindingResult<String> {
     let project_id = parse_project_id("project ID", &project_id)?;
-    let updates = parse_json_object("project updates", &updates_json)?;
-    with_project_input_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
-        adapter.update_tag_json(&project_id, updates)
+    let updates = parse_json_object_as::<ProjectUpdateInput>("project updates", &updates_json)?;
+    with_project_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
+        adapter.update_project(&project_id, updates)
     })
     .and_then(serialize_project)
 }
@@ -225,37 +231,28 @@ fn update_project_v1_with_clock(
 ) -> SonaCoreBindingResult<Option<FfiProjectRecordV1>> {
     let project_id = parse_project_id("project ID", &project_id)?;
     with_project_adapter(context, Arc::new(UuidGenerator), clock, |adapter| {
-        adapter.update_tag(&project_id, updates.into())
+        adapter.update_project(&project_id, updates.into())
     })
     .map(|project| project.map(Into::into))
 }
 
 fn with_project_adapter<T, F>(
     context: impl Into<ContextSource>,
-    ids: Arc<dyn TagIdGenerator>,
+    ids: Arc<dyn ProjectIdGenerator>,
     clock: Arc<dyn ClockPort>,
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, ProjectError>,
 {
-    let context = context.into().resolve().map_err(project_error)?;
-    let adapter = context.sqlite().tag_adapter(ids, clock);
+    let context = context
+        .into()
+        .resolve()
+        .map_err(|e| SonaCoreBindingError::Project {
+            reason: e.to_string(),
+        })?;
+    let adapter = context.sqlite().project_adapter(ids, clock);
     operation(&adapter).map_err(project_error)
-}
-
-fn with_project_input_adapter<T, F>(
-    context: impl Into<ContextSource>,
-    ids: Arc<dyn TagIdGenerator>,
-    clock: Arc<dyn ClockPort>,
-    operation: F,
-) -> SonaCoreBindingResult<T>
-where
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
-{
-    let context = context.into().resolve().map_err(project_error)?;
-    let adapter = context.sqlite().tag_adapter(ids, clock);
-    operation(&adapter).map_err(project_input_error)
 }
 
 fn parse_json_array(label: &str, input: &str) -> SonaCoreBindingResult<Vec<Value>> {
@@ -327,7 +324,9 @@ fn parse_json(label: &str, input: &str) -> SonaCoreBindingResult<Value> {
 }
 
 fn serialize_project<T: serde::Serialize>(value: T) -> SonaCoreBindingResult<String> {
-    serde_json::to_string(&value).map_err(project_error)
+    serde_json::to_string(&value).map_err(|e| SonaCoreBindingError::Project {
+        reason: e.to_string(),
+    })
 }
 
 fn invalid_input(reason: impl ToString) -> SonaCoreBindingError {
@@ -336,16 +335,13 @@ fn invalid_input(reason: impl ToString) -> SonaCoreBindingError {
     }
 }
 
-fn project_error(reason: impl ToString) -> SonaCoreBindingError {
-    SonaCoreBindingError::Project {
-        reason: reason.to_string(),
-    }
-}
-
-fn project_input_error(error: TagError) -> SonaCoreBindingError {
+fn project_error(error: ProjectError) -> SonaCoreBindingError {
     match error {
-        TagError::Serialization(source) => invalid_input(format!("Invalid project JSON: {source}")),
-        error => project_error(error),
+        ProjectError::Serialization(source) => {
+            invalid_input(format!("Invalid project JSON: {source}"))
+        }
+        ProjectError::InvalidInput(reason) => invalid_input(reason),
+        ProjectError::Repository(reason) => SonaCoreBindingError::Project { reason },
     }
 }
 
@@ -357,7 +353,7 @@ fn create_project_json_at(
     now_ms: u64,
 ) -> SonaCoreBindingResult<String> {
     struct FixedId(&'static str);
-    impl TagIdGenerator for FixedId {
+    impl ProjectIdGenerator for FixedId {
         fn generate_id(&self) -> String {
             self.0.to_string()
         }
@@ -379,7 +375,7 @@ fn create_project_v1_at(
     now_ms: u64,
 ) -> SonaCoreBindingResult<FfiProjectRecordV1> {
     struct FixedId(&'static str);
-    impl TagIdGenerator for FixedId {
+    impl ProjectIdGenerator for FixedId {
         fn generate_id(&self) -> String {
             self.0.to_string()
         }
@@ -432,7 +428,7 @@ mod tests {
     fn load_state_returns_empty_canonical_state() {
         let dir = tempfile::tempdir().unwrap();
         let output = load_project_repository_state_json(context(&dir)).unwrap();
-        assert_eq!(output, r#"{"tags":[],"activeTagId":null}"#);
+        assert_eq!(output, r#"{"projects":[],"activeProjectId":null}"#);
     }
 
     #[test]
@@ -450,10 +446,10 @@ mod tests {
             &load_project_repository_state_json(context(&dir)).unwrap(),
         )
         .unwrap();
-        assert_eq!(state["tags"][0]["id"], "second");
-        assert_eq!(state["tags"][1]["id"], "first");
-        assert!(state["tags"][0].get("defaults").is_none());
-        assert!(state["tags"][1].get("defaults").is_none());
+        assert_eq!(state["projects"][0]["id"], "second");
+        assert_eq!(state["projects"][1]["id"], "first");
+        assert!(state["projects"][0].get("defaults").is_none());
+        assert!(state["projects"][1].get("defaults").is_none());
     }
 
     #[test]
@@ -476,7 +472,7 @@ mod tests {
                 "state",
                 &load_project_repository_state_json(context(&dir)).unwrap()
             )
-            .unwrap()["tags"][0],
+            .unwrap()["projects"][0],
             project
         );
     }
@@ -580,7 +576,7 @@ mod tests {
         delete_project(context(&dir), " project-1 ".to_string()).unwrap();
 
         let output = load_project_repository_state_json(context(&dir)).unwrap();
-        assert_eq!(output, r#"{"tags":[],"activeTagId":null}"#);
+        assert_eq!(output, r#"{"projects":[],"activeProjectId":null}"#);
     }
 
     #[test]
@@ -620,8 +616,8 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(active["activeTagId"], "project-1");
-        assert_eq!(cleared["activeTagId"], Value::Null);
+        assert_eq!(active["activeProjectId"], "project-1");
+        assert_eq!(cleared["activeProjectId"], Value::Null);
     }
 
     #[test]

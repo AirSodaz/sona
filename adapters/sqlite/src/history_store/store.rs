@@ -6,6 +6,7 @@ use crate::ports::Database as DatabasePort;
 use crate::sync_repository::{
     record_local_delete_in_transaction, record_local_field_change_in_transaction,
 };
+use rusqlite::OptionalExtension;
 use rusqlite::types::ToSql;
 use serde_json::Value;
 use sona_core::dashboard::error::DashboardError;
@@ -53,8 +54,8 @@ use super::row_map::{
     apply_history_item_updates, history_store_mutation_error, map_row_to_item, validate_id,
 };
 use super::sql::{
-    history_select_columns, insert_history_item_row, load_tag_ids,
-    new_history_item_generated_values, replace_history_item_tags, require_history_source_file,
+    history_select_columns, insert_history_item_row, new_history_item_generated_values,
+    require_history_source_file,
 };
 use super::util::{
     HISTORY_DIR_NAME, MILLIS_PER_DAY, STAGED_AUDIO_MARKER, TRANSCRIPT_SNAPSHOT_RETENTION_LIMIT,
@@ -1817,28 +1818,32 @@ where
 
         let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
-            let mut add = tx.prepare_cached(
-                "INSERT OR IGNORE INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
-            )?;
-            let mut remove = tx.prepare_cached(
-                "DELETE FROM history_item_tags WHERE history_id = ?1 AND tag_id = ?2",
-            )?;
             for id in ids {
-                for tag_id in add_tag_ids {
-                    add.execute(rusqlite::params![id, tag_id])?;
+                let current_project: Option<String> = tx
+                    .query_row(
+                        "SELECT project_id FROM history_items WHERE id = ?1",
+                        [id],
+                        |row| row.get(0),
+                    )
+                    .optional()?
+                    .flatten();
+
+                let mut project_id = current_project;
+                if let Some(add_id) = add_tag_ids.first() {
+                    project_id = Some(add_id.clone());
+                } else if project_id
+                    .as_ref()
+                    .is_some_and(|current| remove_tag_ids.contains(current))
+                {
+                    project_id = None;
                 }
-                for tag_id in remove_tag_ids {
-                    remove.execute(rusqlite::params![id, tag_id])?;
-                }
-            }
-            drop(add);
-            drop(remove);
-            for id in ids {
-                let tag_ids = load_tag_ids(tx, id)?;
+
                 tx.execute(
                     "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
-                    rusqlite::params![tag_ids.first(), id],
+                    rusqlite::params![project_id, id],
                 )?;
+
+                let tag_ids: Vec<String> = project_id.clone().into_iter().collect();
                 record_local_field_change_in_transaction(
                     tx,
                     SyncEntityKind::HistoryItem,
@@ -1860,7 +1865,6 @@ where
         let now_ms = self.mutation_now_ms()?;
         Ok(self.get_db()?.with_transaction(|tx| {
             for id in ids {
-                replace_history_item_tags(tx, id, tag_ids)?;
                 tx.execute(
                     "UPDATE history_items SET project_id = ?1 WHERE id = ?2",
                     rusqlite::params![tag_ids.first(), id],

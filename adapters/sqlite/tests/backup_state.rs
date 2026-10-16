@@ -231,8 +231,8 @@ fn seed_history(db: &Database, label: &str) {
             tx.execute(
                 "INSERT INTO history_items (
                     id, timestamp, duration, audio_path, audio_status, transcript_path,
-                    title, preview_text, icon, kind, search_content, status, draft_source
-                 ) VALUES (?1, 500, ?2, ?3, 'removed', ?4, ?5, ?6, ?7, ?8, ?9, 'complete', NULL)",
+                    title, preview_text, icon, kind, search_content, project_id, status, draft_source
+                 ) VALUES (?1, 500, ?2, ?3, 'removed', ?4, ?5, ?6, ?7, ?8, ?9, ?10, 'complete', NULL)",
                 rusqlite::params![
                     id,
                     if suffix == "a" { 1.5 } else { 2.5 },
@@ -243,11 +243,8 @@ fn seed_history(db: &Database, label: &str) {
                     Some(format!("icon-{suffix}")),
                     if suffix == "a" { "recording" } else { "batch" },
                     format!("Search {label} {suffix}"),
+                    format!("{label}-tag-{suffix}"),
                 ],
-            )?;
-            tx.execute(
-                "INSERT INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)",
-                rusqlite::params![id, format!("{label}-tag-{suffix}")],
             )?;
             tx.execute(
                 "INSERT INTO history_transcripts (history_id, segments) VALUES (?1, ?2)",
@@ -614,7 +611,7 @@ fn every_replacement_phase_rolls_back_the_complete_pre_import_state() {
         ),
         (
             "tags",
-            "CREATE TRIGGER fail_tags BEFORE INSERT ON tags BEGIN SELECT RAISE(ABORT, 'forced tags failure'); END;",
+            "CREATE TRIGGER fail_tags BEFORE INSERT ON projects BEGIN SELECT RAISE(ABORT, 'forced tags failure'); END;",
             "DROP TRIGGER fail_tags;",
         ),
         (
@@ -715,8 +712,8 @@ fn malformed_analytics_rows_are_rejected_before_any_replacement() {
 #[test]
 fn snapshot_rejects_corrupt_tag_and_history_storage() {
     let cases = [
-        "UPDATE tags SET created_at = -1 WHERE id = 'before-tag-b'",
-        "UPDATE tags SET updated_at = -1 WHERE id = 'before-tag-b'",
+        "UPDATE projects SET created_at = -1 WHERE id = 'before-tag-b'",
+        "UPDATE projects SET updated_at = -1 WHERE id = 'before-tag-b'",
         "UPDATE history_items SET timestamp = -1 WHERE id = 'before-history-b'",
         "UPDATE history_items SET duration = -1 WHERE id = 'before-history-b'",
         "UPDATE history_items SET kind = 'unknown' WHERE id = 'before-history-b'",

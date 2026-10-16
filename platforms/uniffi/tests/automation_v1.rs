@@ -18,7 +18,7 @@ fn rule(id: Option<&str>, name: &str) -> FfiAutomationRuleInputV1 {
         profile_id: None,
         profile_source: "tag_match".to_string(),
         save_history: false,
-        tag_ids: Vec::new(),
+        project_ids: Vec::new(),
         preset_id: "custom".to_string(),
         watch_directory: "C:\\watch".to_string(),
         recursive: true,
@@ -124,7 +124,7 @@ fn automation_v1_validation_uses_typed_rule_and_tags() {
     let rule = FfiAutomationValidationRuleV1 {
         name: "Rule".to_string(),
         save_history: true,
-        tag_ids: vec!["tag-1".to_string()],
+        project_ids: vec!["tag-1".to_string()],
         watch_directory: watch_directory.to_string_lossy().into_owned(),
         stage_config: FfiAutomationValidationStageConfigV1 {
             auto_polish: false,

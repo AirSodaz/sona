@@ -109,8 +109,8 @@ pub(crate) fn validate_automation_rule_activation_json(
         .as_deref()
         .map(|json| parse_json_object("project", json))
         .transpose()?;
-    let tags = project.into_iter().collect::<Vec<_>>();
-    let result = validate_native_automation_rule_activation(&rule, &global_config, &tags)
+    let projects = project.into_iter().collect::<Vec<_>>();
+    let result = validate_native_automation_rule_activation(&rule, &global_config, &projects)
         .map_err(automation_error)?;
     serialize_automation(result)
 }
@@ -207,13 +207,15 @@ fn legacy_rule_input(value: &Value) -> AutomationRuleInput {
             .get("saveHistory")
             .and_then(Value::as_bool)
             .unwrap_or(legacy_project_id != "none"),
-        tag_ids: string_array_field(value, "tagIds").unwrap_or_else(|| {
-            if matches!(legacy_project_id.as_str(), "" | "inbox" | "none") {
-                Vec::new()
-            } else {
-                vec![legacy_project_id]
-            }
-        }),
+        tag_ids: string_array_field(value, "projectIds")
+            .or_else(|| string_array_field(value, "tagIds"))
+            .unwrap_or_else(|| {
+                if matches!(legacy_project_id.as_str(), "" | "inbox" | "none") {
+                    Vec::new()
+                } else {
+                    vec![legacy_project_id]
+                }
+            }),
         preset_id: string_field(value, "presetId", "custom"),
         watch_directory: string_field(value, "watchDirectory", ""),
         recursive: bool_field(value, "recursive"),

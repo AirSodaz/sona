@@ -90,7 +90,6 @@ pub struct FfiRecoveryItemInputV1 {
     pub status: Option<FfiRecoveryQueueStatusV1>,
     pub progress: Option<f64>,
     pub segments: Vec<FfiRecoveredTranscriptSegmentV1>,
-    pub tag_ids: Vec<String>,
     pub project_id: Option<String>,
     pub history_id: Option<String>,
     pub history_title: Option<String>,
@@ -128,7 +127,7 @@ pub struct FfiRecoveredQueueItemV1 {
     pub resolution: FfiRecoveryResolutionV1,
     pub progress: f64,
     pub segments: Vec<FfiRecoveredTranscriptSegmentV1>,
-    pub tag_ids: Vec<String>,
+    pub project_id: Option<String>,
     pub history_id: Option<String>,
     pub history_title: Option<String>,
     pub last_known_stage: FfiRecoveryItemStageV1,
@@ -281,7 +280,6 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
             status,
             progress,
             segments,
-            tag_ids,
             project_id,
             history_id,
             history_title,
@@ -326,7 +324,10 @@ impl TryFrom<FfiRecoveryItemInputV1> for RecoveryItemInput {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
-            tag_ids,
+            tag_ids: project_id
+                .as_ref()
+                .map(|id| vec![id.clone()])
+                .unwrap_or_default(),
             project_id,
             history_id,
             history_title,
@@ -588,7 +589,7 @@ impl TryFrom<RecoveredQueueItem> for FfiRecoveredQueueItemV1 {
                 .into_iter()
                 .map(TryInto::try_into)
                 .collect::<Result<_, _>>()?,
-            tag_ids: value.tag_ids,
+            project_id: value.tag_ids.first().cloned(),
             history_id: value.history_id,
             history_title: value.history_title,
             last_known_stage: value.last_known_stage.into(),

@@ -1,6 +1,8 @@
 use super::error::ProjectError;
 use super::{ProjectCreateInput, ProjectRecord, ProjectUpdateInput};
 
+pub use crate::tag::TagIdGenerator as ProjectIdGenerator;
+
 pub trait ProjectRepository: Send + Sync {
     fn list_projects(&self) -> Result<Vec<ProjectRecord>, ProjectError>;
     fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, ProjectError>;

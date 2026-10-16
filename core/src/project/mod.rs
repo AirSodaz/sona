@@ -90,6 +90,14 @@ pub struct ProjectUpdateInput {
     pub pipeline: Option<ProjectPipelineConfig>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, Eq, Serialize)]
+#[cfg_attr(feature = "specta", derive(specta::Type))]
+#[serde(default, rename_all = "camelCase")]
+pub struct ProjectRepositorySnapshot {
+    pub projects: Vec<ProjectRecord>,
+    pub active_project_id: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 #[cfg_attr(feature = "specta", derive(specta::Type))]
 #[serde(rename_all = "camelCase")]

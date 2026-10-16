@@ -25,7 +25,7 @@ pub struct FfiBackupManifestScopesV1 {
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiBackupManifestCountsV1 {
-    pub tags: u64,
+    pub projects: u64,
     pub history_items: u64,
     pub transcript_files: u64,
     pub summary_files: u64,
@@ -50,7 +50,7 @@ pub struct FfiPreparedBackupImportV1 {
     pub archive_path: String,
     pub manifest: FfiBackupManifestV1,
     pub config_json: String,
-    pub tags_json: Vec<String>,
+    pub projects_json: Vec<String>,
     pub automation_profiles_json: Vec<String>,
     pub automation_rules_json: Vec<String>,
     pub automation_processed_entries_json: Vec<String>,
@@ -72,7 +72,7 @@ impl From<BackupManifestScopes> for FfiBackupManifestScopesV1 {
 impl From<BackupManifestCounts> for FfiBackupManifestCountsV1 {
     fn from(value: BackupManifestCounts) -> Self {
         Self {
-            tags: value.tags,
+            projects: value.tags,
             history_items: value.history_items,
             transcript_files: value.transcript_files,
             summary_files: value.summary_files,
@@ -114,7 +114,7 @@ pub(crate) fn prepared_backup_import_to_ffi(
         archive_path: value.archive_path,
         manifest: value.manifest.into(),
         config_json: serde_json::to_string(&value.config)?,
-        tags_json: values_to_json(value.tags)?,
+        projects_json: values_to_json(value.tags)?,
         automation_profiles_json: values_to_json(value.automation_profiles)?,
         automation_rules_json: values_to_json(value.automation_rules)?,
         automation_processed_entries_json: values_to_json(value.automation_processed_entries)?,
