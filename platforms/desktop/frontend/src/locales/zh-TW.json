@@ -2473,6 +2473,7 @@
       "no_configured_providers": "尚未設定服務。",
       "add_custom_provider_cancel": "取消",
       "close_add_custom_provider": "關閉新增供應商",
+      "search_providers": "搜尋供應商…",
       "status_ready": "就緒",
       "status_missing_api_key": "缺少 API 金鑰",
       "status_missing_model": "未指定模型",

@@ -2444,6 +2444,7 @@
       "no_configured_providers": "No providers configured yet.",
       "add_custom_provider_cancel": "Cancel",
       "close_add_custom_provider": "Close add provider",
+      "search_providers": "Search providers…",
       "status_ready": "Ready",
       "status_missing_api_key": "Missing API Key",
       "status_missing_model": "Missing model",

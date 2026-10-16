@@ -2444,6 +2444,7 @@
       "no_configured_providers": "尚未配置服务。",
       "add_custom_provider_cancel": "取消",
       "close_add_custom_provider": "关闭添加供应商",
+      "search_providers": "搜索供应商…",
       "status_ready": "就绪",
       "status_missing_api_key": "缺少 API 密钥",
       "status_missing_model": "未指定模型",

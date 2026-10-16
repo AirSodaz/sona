@@ -2473,6 +2473,7 @@
       "no_configured_providers": "設定済みのプロバイダーはありません。",
       "add_custom_provider_cancel": "キャンセル",
       "close_add_custom_provider": "プロバイダーの追加を閉じる",
+      "search_providers": "プロバイダーを検索…",
       "status_ready": "準備完了",
       "status_missing_api_key": "API Key がありません",
       "status_missing_model": "モデルがありません",

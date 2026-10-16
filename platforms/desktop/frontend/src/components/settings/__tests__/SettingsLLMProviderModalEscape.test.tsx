@@ -69,11 +69,8 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
   it('clicking the backdrop of Add Provider modal closes only the Add Provider modal, not Settings', async () => {
     const onSettingsClose = vi.fn();
 
-    let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(
-        <Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />
-      ));
+      render(<Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />);
       await Promise.resolve();
     });
     // Click "Add model provider" button
@@ -84,7 +81,7 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
     const addProviderModal = screen.getByRole('dialog', {
       name: 'settings.llm.add_custom_provider',
     });
-    const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
+    const backdrop = addProviderModal.closest('.shared-modal-overlay') as HTMLElement;
     expect(backdrop).toBeTruthy();
 
     // Clicking inside the modal card does not close it or settings

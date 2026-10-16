@@ -1339,9 +1339,8 @@ describe('SettingsLLMServiceTab', () => {
   });
 
   it('closes add provider modal when clicking the backdrop and not when clicking inside', async () => {
-    let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(<SettingsLLMServiceTab />));
+      render(<SettingsLLMServiceTab />);
     });
 
     await act(async () => {
@@ -1349,7 +1348,7 @@ describe('SettingsLLMServiceTab', () => {
     });
 
     const dialog = screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' });
-    const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
+    const backdrop = dialog.closest('.shared-modal-overlay') as HTMLElement;
     expect(backdrop).toBeTruthy();
 
     // Clicking inside the modal dialog should not close it
@@ -1381,9 +1380,8 @@ describe('SettingsLLMServiceTab', () => {
     };
     currentConfig = conf;
 
-    let container!: HTMLElement;
     await act(async () => {
-      ({ container } = render(<SettingsLLMServiceTab />));
+      render(<SettingsLLMServiceTab />);
     });
 
     // Click edit provider button
@@ -1404,7 +1402,8 @@ describe('SettingsLLMServiceTab', () => {
       fireEvent.click(screen.getByRole('button', { name: 'settings.llm.edit_provider' }));
     });
 
-    const backdrop = container.querySelector('.provider-modal-backdrop') as HTMLElement;
+    const dialog = screen.getByRole('dialog', { name: 'settings.llm.edit_provider' });
+    const backdrop = dialog.closest('.shared-modal-overlay') as HTMLElement;
     expect(backdrop).toBeTruthy();
 
     await act(async () => {

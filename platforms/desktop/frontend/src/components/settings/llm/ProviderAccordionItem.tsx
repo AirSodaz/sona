@@ -10,6 +10,7 @@ import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
+import { ProviderLogo } from '../../icons/ProviderLogos';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 import {
   getCurrentLlmSettings,
@@ -121,9 +122,22 @@ export function ProviderAccordionItem({
       </div>
     ) : undefined;
 
+  const providerLabel = t(def.labelKey, { defaultValue: def.labelDefault });
+
   return (
     <SettingsAccordion
-      title={t(def.labelKey, { defaultValue: def.labelDefault })}
+      title={
+        <span className="provider-accordion-title">
+          <ProviderLogo
+            provider={provider}
+            label={providerLabel}
+            alt=""
+            size={18}
+            aria-hidden="true"
+          />
+          <span>{providerLabel}</span>
+        </span>
+      }
       status={<span className={`status-badge ${status.type}`}>{status.text}</span>}
       actions={actions}
       isOpen={isOpen}

@@ -1,8 +1,7 @@
-import { AlignLeft, Globe, Plus, Settings2, Sparkles, X } from 'lucide-react';
+import { AlignLeft, Globe, Plus, Settings2, Sparkles } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useFocusTrap } from '../../hooks/useFocusTrap';
 import {
   createProviderSetting,
   getProviderDefinition,
@@ -26,6 +25,8 @@ import type {
   LlmProviderSetting,
 } from '../../types/transcript';
 import { RobotIcon } from '../Icons';
+import { ProviderLogo } from '../icons/ProviderLogos';
+import { Modal } from '../Modal';
 import { FeatureCard } from './llm/FeatureCard';
 import {
   getCurrentLlmSettings,
@@ -42,6 +43,43 @@ import {
   SettingsTabContainer,
 } from './SettingsLayout';
 import './SettingsLLMServiceTab.css';
+
+const CUSTOM_PROVIDER_MODES: Array<{
+  strategy: CustomLlmProviderStrategy;
+  labelKey: string;
+  defaultLabel: string;
+  providerLogo: string;
+  endpointHint: string;
+}> = [
+  {
+    strategy: 'openai_compatible',
+    labelKey: 'settings.llm.api_mode_openai_compatible',
+    defaultLabel: 'OpenAI API compatible',
+    providerLogo: 'open_ai',
+    endpointHint: '/v1/chat/completions',
+  },
+  {
+    strategy: 'openai_responses',
+    labelKey: 'settings.llm.api_mode_openai_responses',
+    defaultLabel: 'OpenAI Responses API compatible',
+    providerLogo: 'open_ai_responses',
+    endpointHint: '/v1/responses',
+  },
+  {
+    strategy: 'anthropic',
+    labelKey: 'settings.llm.api_mode_claude',
+    defaultLabel: 'Claude API compatible',
+    providerLogo: 'anthropic',
+    endpointHint: '/v1/messages',
+  },
+  {
+    strategy: 'gemini',
+    labelKey: 'settings.llm.api_mode_gemini',
+    defaultLabel: 'Google Gemini API compatible',
+    providerLogo: 'gemini',
+    endpointHint: 'v1beta/models',
+  },
+];
 
 interface SettingsLLMServiceTabProps {
   isActive?: boolean;
@@ -68,21 +106,19 @@ export function SettingsLLMServiceTab({
   const [customProviderName, setCustomProviderName] = useState('');
   const [customProviderStrategy, setCustomProviderStrategy] =
     useState<CustomLlmProviderStrategy>('openai_compatible');
-  const addProviderModalRef = useRef<HTMLDivElement>(null);
-  const editProviderModalRef = useRef<HTMLDivElement>(null);
-
+  const [providerSearch, setProviderSearch] = useState('');
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const editNameInputRef = useRef<HTMLInputElement>(null);
   const handleCloseAddProvider = useCallback(() => {
     setIsAddProviderOpen(false);
     setProviderToAdd(null);
     setCustomProviderName('');
+    setProviderSearch('');
   }, []);
 
   const handleCloseEditProvider = useCallback(() => {
     setEditingProvider(null);
   }, []);
-
-  useFocusTrap(isAddProviderOpen, handleCloseAddProvider, addProviderModalRef);
-  useFocusTrap(Boolean(editingProvider), handleCloseEditProvider, editProviderModalRef);
 
   const applyLlmSettings = useCallback(
     (nextLlmSettings: LlmAssistantConfig['llmSettings']) => {
@@ -152,6 +188,7 @@ export function SettingsLLMServiceTab({
     setSetupApiHost('');
     setSetupApiKey('');
     setCustomProviderName('');
+    setProviderSearch('');
     setIsAddProviderOpen(true);
   };
 
@@ -173,12 +210,13 @@ export function SettingsLLMServiceTab({
         : setupApiHost.trim() || selectedProviderDefinition?.defaultApiHost || '';
     const nextLlmSettings = updateProviderSetting(seeded, providerToAdd, {
       apiHost: effectiveHost,
-      apiKey: setupApiKey,
+      apiKey: setupApiKey.trim(),
     });
     updateConfig(buildLlmConfigPatch(nextLlmSettings));
     setExpandedProvider(providerToAdd);
     setIsAddProviderOpen(false);
     setProviderToAdd(null);
+    setProviderSearch('');
   };
 
   const openEditProvider = (provider: LlmProvider) => {
@@ -411,260 +449,333 @@ export function SettingsLLMServiceTab({
         </SettingsItem>
       </SettingsSection>
 
-      {isAddProviderOpen && (
-        <div
-          className="provider-modal-backdrop"
-          data-focus-trap-overlay="true"
-          onClick={handleCloseAddProvider}
-        >
-          <div
-            ref={addProviderModalRef}
-            className="provider-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('settings.llm.add_custom_provider')}
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="provider-modal-header">
-              <h3>
-                {providerToAdd
-                  ? t('settings.llm.configure_provider', { defaultValue: 'Configure provider' })
-                  : t('settings.llm.add_provider', { defaultValue: 'Add provider' })}
-              </h3>
-              <button
-                type="button"
-                className="btn btn-icon btn-secondary-soft"
-                aria-label={t('settings.llm.close_add_custom_provider')}
-                onClick={handleCloseAddProvider}
-              >
-                <X size={16} />
-              </button>
+      <Modal
+        isOpen={isAddProviderOpen}
+        onClose={handleCloseAddProvider}
+        title={
+          providerToAdd
+            ? t('settings.llm.configure_provider', { defaultValue: 'Configure provider' })
+            : t('settings.llm.add_custom_provider')
+        }
+        size="lg"
+        autoFocus={!providerToAdd}
+        initialFocusRef={searchInputRef}
+        className="add-provider-modal"
+        footer={
+          <>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => (providerToAdd ? setProviderToAdd(null) : handleCloseAddProvider())}
+            >
+              {providerToAdd
+                ? t('common.back', { defaultValue: 'Back' })
+                : t('settings.llm.add_custom_provider_cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => (providerToAdd ? handleAddProvider() : handleAddCustomProvider())}
+              disabled={
+                providerToAdd
+                  ? (selectedProviderDefinition?.editableApiHost !== false &&
+                      !setupApiHost.trim() &&
+                      !selectedProviderDefinition?.defaultApiHost) ||
+                    (selectedProviderDefinition?.requiresApiKey && !setupApiKey.trim())
+                  : !customProviderName.trim()
+              }
+            >
+              {providerToAdd
+                ? t('settings.llm.save_provider', { defaultValue: 'Save provider' })
+                : t('settings.llm.add_custom_provider_confirm')}
+            </button>
+          </>
+        }
+      >
+        {!providerToAdd ? (
+          <>
+            <div className="add-provider-search">
+              <input
+                ref={searchInputRef}
+                aria-label={t('settings.llm.search_providers', {
+                  defaultValue: 'Search providers…',
+                })}
+                className="settings-input"
+                type="text"
+                value={providerSearch}
+                onChange={(e) => setProviderSearch(e.target.value)}
+                placeholder={t('settings.llm.search_providers', {
+                  defaultValue: 'Search providers…',
+                })}
+              />
             </div>
-
-            <div className="provider-modal-body">
-              {!providerToAdd ? (
-                <>
-                  {(['llm', 'translation'] as const).map((category) => {
-                    const providers = availableProviderDefinitions.filter((def) =>
-                      category === 'translation'
-                        ? def.id === 'google_translate' || def.id === 'google_translate_free'
-                        : def.id !== 'google_translate' && def.id !== 'google_translate_free'
-                    );
-                    if (providers.length === 0) return null;
+            {(() => {
+              const query = providerSearch.trim().toLowerCase();
+              const filteredCategories = (['llm', 'translation'] as const).map((category) => {
+                const providers = availableProviderDefinitions
+                  .filter((def) =>
+                    category === 'translation'
+                      ? def.id === 'google_translate' || def.id === 'google_translate_free'
+                      : def.id !== 'google_translate' && def.id !== 'google_translate_free'
+                  )
+                  .filter((def) => {
+                    if (!query) return true;
+                    const label = t(def.labelKey, { defaultValue: def.labelDefault });
                     return (
-                      <div className="provider-picker-group" key={category}>
-                        <div className="settings-label">
-                          {category === 'llm'
-                            ? t('settings.llm.provider_category_llm', { defaultValue: 'LLM' })
-                            : t('settings.llm.provider_category_translation', {
-                                defaultValue: 'Translation model / API',
-                              })}
-                        </div>
-                        <div className="provider-picker-grid">
-                          {providers.map((def) => (
-                            <button
-                              key={def.id}
-                              type="button"
-                              className="provider-picker-option"
-                              onClick={() => selectProviderToAdd(def.id)}
-                            >
-                              <span>{t(def.labelKey, { defaultValue: def.labelDefault })}</span>
-                              <span className="provider-picker-meta">
-                                {def.requiresApiKey
-                                  ? t('settings.llm.requires_api_key', { defaultValue: 'API key' })
-                                  : t('settings.llm.no_api_key_required', {
-                                      defaultValue: 'No key required',
-                                    })}
-                              </span>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
+                      label.toLowerCase().includes(query) ||
+                      def.id.toLowerCase().includes(query) ||
+                      def.labelDefault.toLowerCase().includes(query)
                     );
-                  })}
-                  <div className="provider-picker-group">
+                  });
+                return { category, providers };
+              });
+
+              const totalMatches = filteredCategories.reduce(
+                (acc, c) => acc + c.providers.length,
+                0
+              );
+
+              if (query && totalMatches === 0) {
+                return (
+                  <div className="provider-picker-empty" role="status" aria-live="polite">
+                    {t('common.no_results', { defaultValue: 'No matching providers found' })}
+                  </div>
+                );
+              }
+
+              return filteredCategories.map(({ category, providers }) => {
+                if (providers.length === 0) return null;
+                return (
+                  <div className="provider-picker-group" key={category}>
                     <div className="settings-label">
-                      {t('settings.llm.custom_provider', { defaultValue: 'Custom provider' })}
+                      {category === 'llm'
+                        ? t('settings.llm.provider_category_llm', { defaultValue: 'LLM' })
+                        : t('settings.llm.provider_category_translation', {
+                            defaultValue: 'Translation model / API',
+                          })}
                     </div>
-                    <input
-                      id="custom-provider-name"
-                      aria-label={t('settings.llm.custom_provider_name')}
-                      className="settings-input"
-                      type="text"
-                      value={customProviderName}
-                      onChange={(event) => setCustomProviderName(event.target.value)}
-                      placeholder={t('settings.llm.custom_provider_name')}
-                    />
-                    <div className="provider-mode-options">
-                      {[
-                        ['openai_compatible', t('settings.llm.api_mode_openai_compatible')],
-                        ['openai_responses', t('settings.llm.api_mode_openai_responses')],
-                        ['anthropic', t('settings.llm.api_mode_claude')],
-                        ['gemini', t('settings.llm.api_mode_gemini')],
-                      ].map(([strategy, label]) => (
-                        <button
-                          key={strategy}
-                          type="button"
-                          className={`provider-mode-option ${customProviderStrategy === strategy ? 'selected' : ''}`}
-                          aria-pressed={customProviderStrategy === strategy}
-                          onClick={() =>
-                            setCustomProviderStrategy(strategy as CustomLlmProviderStrategy)
-                          }
-                        >
-                          {label}
-                        </button>
-                      ))}
+                    <div className="provider-picker-grid">
+                      {providers.map((def) => {
+                        const label = t(def.labelKey, { defaultValue: def.labelDefault });
+                        return (
+                          <button
+                            key={def.id}
+                            type="button"
+                            className="provider-picker-option"
+                            onClick={() => selectProviderToAdd(def.id)}
+                          >
+                            <ProviderLogo
+                              provider={def.id}
+                              label={label}
+                              size={28}
+                              aria-hidden="true"
+                            />
+                            <span className="provider-picker-name">{label}</span>
+                            <span
+                              className={`provider-picker-meta${!def.requiresApiKey ? ' no-key' : ''}`}
+                            >
+                              {def.requiresApiKey
+                                ? t('settings.llm.requires_api_key', { defaultValue: 'API key' })
+                                : t('settings.llm.no_api_key_required', {
+                                    defaultValue: 'No key required',
+                                  })}
+                            </span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
-                </>
-              ) : (
-                <>
-                  {selectedProviderDefinition?.editableApiHost !== false ? (
-                    <div className="settings-item">
-                      <label className="settings-label" htmlFor="setup-provider-host">
-                        {t('settings.llm.base_url')}
-                      </label>
-                      <input
-                        id="setup-provider-host"
-                        className="settings-input"
-                        value={setupApiHost}
-                        onChange={(event) => setSetupApiHost(event.target.value)}
-                        autoFocus
-                      />
-                    </div>
-                  ) : null}
-                  {getProviderDefinition(providerToAdd, currentLlmState.customProviders)
-                    .requiresApiKey && (
-                    <div className="settings-item">
-                      <label className="settings-label" htmlFor="setup-provider-key">
-                        {t('settings.llm.api_key')}
-                      </label>
-                      <input
-                        id="setup-provider-key"
-                        className="settings-input"
-                        type="password"
-                        value={setupApiKey}
-                        onChange={(event) => setSetupApiKey(event.target.value)}
-                        autoFocus={selectedProviderDefinition?.editableApiHost === false}
-                      />
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-
-            <div className="provider-modal-footer">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => (providerToAdd ? setProviderToAdd(null) : handleCloseAddProvider())}
-              >
-                {providerToAdd
-                  ? t('common.back', { defaultValue: 'Back' })
-                  : t('settings.llm.add_custom_provider_cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => (providerToAdd ? handleAddProvider() : handleAddCustomProvider())}
-                disabled={
-                  providerToAdd
-                    ? (selectedProviderDefinition?.editableApiHost !== false &&
-                        !setupApiHost.trim() &&
-                        !selectedProviderDefinition?.defaultApiHost) ||
-                      (selectedProviderDefinition?.requiresApiKey && !setupApiKey.trim())
-                    : !customProviderName.trim()
-                }
-              >
-                {providerToAdd
-                  ? t('settings.llm.save_provider', { defaultValue: 'Save provider' })
-                  : t('settings.llm.add_custom_provider_confirm')}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {editingProvider && (
-        <div
-          className="provider-modal-backdrop"
-          data-focus-trap-overlay="true"
-          onClick={handleCloseEditProvider}
-        >
-          <div
-            ref={editProviderModalRef}
-            className="provider-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
-            tabIndex={-1}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="provider-modal-header">
-              <h3>{t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}</h3>
-              <button
-                type="button"
-                className="btn btn-icon btn-secondary-soft"
-                aria-label={t('settings.llm.close_edit_provider', {
-                  defaultValue: 'Close edit provider',
+                );
+              });
+            })()}
+            <div className="provider-picker-group provider-picker-group-custom">
+              <div className="settings-label">
+                {t('settings.llm.custom_provider', { defaultValue: 'Custom provider' })}
+              </div>
+              <input
+                id="custom-provider-name"
+                aria-label={t('settings.llm.custom_provider_name')}
+                className="settings-input"
+                type="text"
+                value={customProviderName}
+                onChange={(event) => setCustomProviderName(event.target.value)}
+                placeholder={t('settings.llm.custom_provider_name')}
+              />
+              <span className="provider-custom-mode-label">
+                {t('settings.llm.custom_provider_api_mode', { defaultValue: 'API mode' })}
+              </span>
+              <div
+                className="provider-mode-options"
+                role="radiogroup"
+                aria-label={t('settings.llm.custom_provider_api_mode', {
+                  defaultValue: 'API mode',
                 })}
-                onClick={handleCloseEditProvider}
               >
-                <X size={16} />
-              </button>
-            </div>
-            <div className="provider-modal-body">
-              <div className="settings-item">
-                <label className="settings-label" htmlFor="edit-provider-name">
-                  {t('settings.llm.custom_provider_name')}
-                </label>
-                <input
-                  id="edit-provider-name"
-                  className="settings-input"
-                  value={editProviderName}
-                  onChange={(event) => setEditProviderName(event.target.value)}
-                  autoFocus
-                />
+                {CUSTOM_PROVIDER_MODES.map(
+                  ({ strategy, labelKey, defaultLabel, providerLogo, endpointHint }) => {
+                    const isSelected = customProviderStrategy === strategy;
+                    const label = t(labelKey, { defaultValue: defaultLabel });
+                    return (
+                      <button
+                        key={strategy}
+                        type="button"
+                        className={`provider-mode-option ${isSelected ? 'selected' : ''}`}
+                        aria-pressed={isSelected}
+                        aria-label={label}
+                        onClick={() =>
+                          setCustomProviderStrategy(strategy as CustomLlmProviderStrategy)
+                        }
+                      >
+                        <span className="provider-mode-option-icon" aria-hidden="true">
+                          <ProviderLogo provider={providerLogo} size={20} alt="" />
+                        </span>
+                        <span className="provider-mode-option-content" aria-hidden="true">
+                          <span className="provider-mode-option-title">{label}</span>
+                          <span className="provider-mode-option-endpoint">{endpointHint}</span>
+                        </span>
+                        <span className="provider-mode-option-radio" aria-hidden="true">
+                          <span
+                            className={`provider-mode-radio-dot ${isSelected ? 'is-active' : ''}`}
+                          />
+                        </span>
+                      </button>
+                    );
+                  }
+                )}
               </div>
-              <div className="settings-item">
-                <span className="settings-label">{t('settings.llm.custom_provider_api_mode')}</span>
-                <div className="provider-mode-options">
-                  {[
-                    ['openai_compatible', t('settings.llm.api_mode_openai_compatible')],
-                    ['openai_responses', t('settings.llm.api_mode_openai_responses')],
-                    ['anthropic', t('settings.llm.api_mode_claude')],
-                    ['gemini', t('settings.llm.api_mode_gemini')],
-                  ].map(([strategy, label]) => (
-                    <button
-                      key={strategy}
-                      type="button"
-                      className={`provider-mode-option ${editProviderStrategy === strategy ? 'selected' : ''}`}
-                      aria-pressed={editProviderStrategy === strategy}
-                      onClick={() => setEditProviderStrategy(strategy as CustomLlmProviderStrategy)}
-                    >
-                      {label}
-                    </button>
-                  ))}
+            </div>
+          </>
+        ) : (
+          (() => {
+            const selectedProviderLabel = selectedProviderDefinition
+              ? t(selectedProviderDefinition.labelKey, {
+                  defaultValue: selectedProviderDefinition.labelDefault,
+                })
+              : providerToAdd;
+
+            return (
+              <>
+                <div className="add-provider-selected-header">
+                  <ProviderLogo
+                    provider={providerToAdd}
+                    label={selectedProviderLabel}
+                    size={24}
+                    aria-hidden="true"
+                  />
+                  <span>{selectedProviderLabel}</span>
                 </div>
-              </div>
-            </div>
-            <div className="provider-modal-footer">
-              <button type="button" className="btn btn-secondary" onClick={handleCloseEditProvider}>
-                {t('common.cancel')}
-              </button>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={handleSaveProviderEdit}
-                disabled={!editProviderName.trim()}
-              >
-                {t('common.save')}
-              </button>
-            </div>
+                {selectedProviderDefinition?.editableApiHost !== false ? (
+                  <div className="shared-form-field layout-vertical">
+                    <label className="shared-form-field-label" htmlFor="setup-provider-host">
+                      {t('settings.llm.base_url')}
+                    </label>
+                    <input
+                      id="setup-provider-host"
+                      className="settings-input"
+                      value={setupApiHost}
+                      onChange={(event) => setSetupApiHost(event.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                ) : null}
+                {selectedProviderDefinition?.requiresApiKey && (
+                  <div className="shared-form-field layout-vertical">
+                    <label className="shared-form-field-label" htmlFor="setup-provider-key">
+                      {t('settings.llm.api_key')}
+                    </label>
+                    <input
+                      id="setup-provider-key"
+                      className="settings-input"
+                      type="password"
+                      value={setupApiKey}
+                      onChange={(event) => setSetupApiKey(event.target.value)}
+                      autoFocus={selectedProviderDefinition?.editableApiHost === false}
+                    />
+                  </div>
+                )}
+              </>
+            );
+          })()
+        )}
+      </Modal>
+
+      <Modal
+        isOpen={!!editingProvider}
+        onClose={handleCloseEditProvider}
+        title={t('settings.llm.edit_provider', { defaultValue: 'Edit provider' })}
+        size="sm"
+        className="edit-provider-modal"
+        initialFocusRef={editNameInputRef}
+        footer={
+          <>
+            <button type="button" className="btn btn-secondary" onClick={handleCloseEditProvider}>
+              {t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={handleSaveProviderEdit}
+              disabled={!editProviderName.trim()}
+            >
+              {t('common.save')}
+            </button>
+          </>
+        }
+      >
+        <div className="shared-form-field layout-vertical">
+          <label className="shared-form-field-label" htmlFor="edit-provider-name">
+            {t('settings.llm.custom_provider_name')}
+          </label>
+          <input
+            ref={editNameInputRef}
+            id="edit-provider-name"
+            className="settings-input"
+            value={editProviderName}
+            onChange={(event) => setEditProviderName(event.target.value)}
+            autoFocus
+          />
+        </div>
+        <div className="shared-form-field layout-vertical">
+          <span className="shared-form-field-label">
+            {t('settings.llm.custom_provider_api_mode')}
+          </span>
+          <div
+            className="provider-mode-options"
+            role="radiogroup"
+            aria-label={t('settings.llm.custom_provider_api_mode', { defaultValue: 'API mode' })}
+          >
+            {CUSTOM_PROVIDER_MODES.map(
+              ({ strategy, labelKey, defaultLabel, providerLogo, endpointHint }) => {
+                const isSelected = editProviderStrategy === strategy;
+                const label = t(labelKey, { defaultValue: defaultLabel });
+                return (
+                  <button
+                    key={strategy}
+                    type="button"
+                    className={`provider-mode-option ${isSelected ? 'selected' : ''}`}
+                    aria-pressed={isSelected}
+                    aria-label={label}
+                    onClick={() => setEditProviderStrategy(strategy as CustomLlmProviderStrategy)}
+                  >
+                    <span className="provider-mode-option-icon" aria-hidden="true">
+                      <ProviderLogo provider={providerLogo} size={20} alt="" />
+                    </span>
+                    <span className="provider-mode-option-content" aria-hidden="true">
+                      <span className="provider-mode-option-title">{label}</span>
+                      <span className="provider-mode-option-endpoint">{endpointHint}</span>
+                    </span>
+                    <span className="provider-mode-option-radio" aria-hidden="true">
+                      <span
+                        className={`provider-mode-radio-dot ${isSelected ? 'is-active' : ''}`}
+                      />
+                    </span>
+                  </button>
+                );
+              }
+            )}
           </div>
         </div>
-      )}
+      </Modal>
     </SettingsTabContainer>
   );
 }

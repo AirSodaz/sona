@@ -2473,6 +2473,7 @@
       "no_configured_providers": "구성된 공급자가 없습니다.",
       "add_custom_provider_cancel": "취소",
       "close_add_custom_provider": "Provider 추가 닫기",
+      "search_providers": "공급자 검색…",
       "status_ready": "준비됨",
       "status_missing_api_key": "API Key 없음",
       "status_missing_model": "모델 없음",
