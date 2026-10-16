@@ -1,8 +1,6 @@
-use sona_core::project::{ProjectCreateInput, ProjectRecord, ProjectUpdateInput};
-use sona_core::tag::TagError;
-use sona_core::tag::{TagCreateInput, TagListOptions, TagUpdateInput};
+use sona_application::project::ProjectService as ApplicationProjectService;
+use sona_core::project::{ProjectCreateInput, ProjectError, ProjectRecord, ProjectUpdateInput};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::SqliteTagAdapter;
 use std::sync::Arc;
 
 use crate::platform::database::DesktopSqliteState;
@@ -22,47 +20,26 @@ impl ProjectService {
         &self.sqlite
     }
 
-    async fn run_adapter<T, F>(&self, task: F) -> Result<T, String>
+    async fn run_service<T, F>(&self, task: F) -> Result<T, String>
     where
         T: Send + 'static,
-        F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError> + Send + 'static,
+        F: FnOnce(&ApplicationProjectService) -> Result<T, ProjectError> + Send + 'static,
     {
         run_sqlite_task(&self.sqlite, move |context| {
-            let adapter = context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock));
-            task(&adapter)
+            let adapter =
+                Arc::new(context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
+            let service = ApplicationProjectService::new(adapter);
+            task(&service).map_err(|error| error.to_string())
         })
         .await
     }
 
     pub async fn list(&self) -> Result<Vec<ProjectRecord>, String> {
-        self.run_adapter(|adapter| {
-            adapter
-                .list_tags(TagListOptions::default())?
-                .into_iter()
-                .map(|tag| {
-                    let pipeline = adapter.get_project_pipeline(&tag.id)?;
-                    Ok(ProjectRecord::from_tag(tag, pipeline))
-                })
-                .collect()
-        })
-        .await
+        self.run_service(|service| service.list()).await
     }
 
     pub async fn create(&self, input: ProjectCreateInput) -> Result<ProjectRecord, String> {
-        self.run_adapter(move |adapter| {
-            let pipeline = input.pipeline;
-            let tag = adapter.create_tag(TagCreateInput {
-                name: input.name,
-                description: input.description,
-                icon: input.icon,
-                color: input.color,
-            })?;
-            if let Some(value) = pipeline.as_ref() {
-                adapter.set_project_pipeline(&tag.id, value)?;
-            }
-            Ok(ProjectRecord::from_tag(tag, pipeline))
-        })
-        .await
+        self.run_service(move |service| service.create(input)).await
     }
 
     pub async fn update(
@@ -70,35 +47,12 @@ impl ProjectService {
         project_id: String,
         updates: ProjectUpdateInput,
     ) -> Result<Option<ProjectRecord>, String> {
-        self.run_adapter(move |adapter| {
-            let pipeline_update = updates.pipeline;
-            let tag = adapter.update_tag(
-                &project_id,
-                TagUpdateInput {
-                    name: updates.name,
-                    description: updates.description,
-                    icon: updates.icon,
-                    color: updates.color,
-                },
-            )?;
-            let Some(tag) = tag else {
-                return Ok(None);
-            };
-            if let Some(value) = pipeline_update.as_ref() {
-                adapter.set_project_pipeline(&project_id, value)?;
-            }
-            let pipeline = if pipeline_update.is_some() {
-                pipeline_update
-            } else {
-                adapter.get_project_pipeline(&project_id)?
-            };
-            Ok(Some(ProjectRecord::from_tag(tag, pipeline)))
-        })
-        .await
+        self.run_service(move |service| service.update(&project_id, updates))
+            .await
     }
 
     pub async fn delete(&self, project_id: String) -> Result<(), String> {
-        self.run_adapter(move |adapter| adapter.delete_tag(&project_id))
+        self.run_service(move |service| service.delete(&project_id))
             .await
     }
 
@@ -107,35 +61,22 @@ impl ProjectService {
         project_id: String,
         cascade_action: String,
     ) -> Result<(), String> {
-        self.run_adapter(move |adapter| {
-            adapter.delete_project_with_cascade(&project_id, &cascade_action)
-        })
-        .await
+        self.run_service(move |service| service.delete_with_cascade(&project_id, &cascade_action))
+            .await
     }
 
     pub async fn reorder(&self, project_ids: Vec<String>) -> Result<Vec<ProjectRecord>, String> {
-        self.run_adapter(move |adapter| {
-            adapter
-                .reorder_tags(project_ids)?
-                .into_iter()
-                .map(|tag| {
-                    let pipeline = adapter.get_project_pipeline(&tag.id)?;
-                    Ok(ProjectRecord::from_tag(tag, pipeline))
-                })
-                .collect()
-        })
-        .await
+        self.run_service(move |service| service.reorder(project_ids))
+            .await
     }
 
     pub async fn get_active_project_id(&self) -> Result<Option<String>, String> {
-        Ok(self
-            .run_adapter(|adapter| adapter.get_active_tag_selection())
-            .await?
-            .tag_id)
+        self.run_service(|service| service.get_active_project_id())
+            .await
     }
 
     pub async fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), String> {
-        self.run_adapter(move |adapter| adapter.set_active_tag_id(project_id))
+        self.run_service(move |service| service.set_active_project_id(project_id))
             .await
     }
 

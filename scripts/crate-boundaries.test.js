@@ -24,6 +24,7 @@ const APPLICATION_SERVICE_PATHS = [
   ['history', 'query_service.rs'],
   ['llm', 'tasks', 'service.rs'],
   ['llm', 'runtime_service.rs'],
+  ['project', 'service.rs'],
   ['recovery', 'service.rs'],
   ['storage_usage', 'service.rs'],
   ['tag', 'service.rs'],
@@ -169,4 +170,8 @@ test('workspace crate paths match their reviewed role roots', () => {
       `${packageName} (${role}) must live under ${expectedRoot}/, found ${memberPath}`,
     );
   }
+});
+
+test('legacy or detached web platform directory is not reintroduced', () => {
+  assert.equal(fs.existsSync(path.join(repoRoot, 'platforms', 'web')), false);
 });

@@ -1,3 +1,9 @@
+pub mod error;
+pub mod ports;
+
+pub use error::ProjectError;
+pub use ports::ProjectRepository;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 

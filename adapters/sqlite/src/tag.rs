@@ -7,7 +7,10 @@ use sona_application::tag::TagRepositoryService;
 use sona_core::dashboard::error::DashboardError;
 use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::ClockPort;
-use sona_core::project::ProjectPipelineConfig;
+use sona_core::project::ports::ProjectRepository;
+use sona_core::project::{
+    ProjectCreateInput, ProjectError, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput,
+};
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
     ACTIVE_TAG_SETTINGS_KEY, ActiveTagSelection, TagCreateInput, TagError, TagIdGenerator,
@@ -628,5 +631,117 @@ where
         let state = TagStore::load_state(self)
             .map_err(|error| DashboardError::TagRepository(error.to_string()))?;
         Ok(state.tags.len() as u64)
+    }
+}
+
+impl<D> ProjectRepository for SqliteTagAdapter<D>
+where
+    D: DatabasePort + 'static,
+{
+    fn list_projects(&self) -> Result<Vec<ProjectRecord>, ProjectError> {
+        let tags = self
+            .list_tags(TagListOptions::default())
+            .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        tags.into_iter()
+            .map(|tag| {
+                let pipeline = self
+                    .get_project_pipeline(&tag.id)
+                    .map_err(|e| ProjectError::Repository(e.to_string()))?;
+                Ok(ProjectRecord::from_tag(tag, pipeline))
+            })
+            .collect()
+    }
+
+    fn create_project(&self, input: ProjectCreateInput) -> Result<ProjectRecord, ProjectError> {
+        let pipeline = input.pipeline;
+        let tag = self
+            .create_tag(TagCreateInput {
+                name: input.name,
+                description: input.description,
+                icon: input.icon,
+                color: input.color,
+            })
+            .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        if let Some(value) = pipeline.as_ref() {
+            self.set_project_pipeline(&tag.id, value)
+                .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        }
+        Ok(ProjectRecord::from_tag(tag, pipeline))
+    }
+
+    fn update_project(
+        &self,
+        project_id: &str,
+        updates: ProjectUpdateInput,
+    ) -> Result<Option<ProjectRecord>, ProjectError> {
+        let pipeline_update = updates.pipeline;
+        let tag = self
+            .update_tag(
+                project_id,
+                TagUpdateInput {
+                    name: updates.name,
+                    description: updates.description,
+                    icon: updates.icon,
+                    color: updates.color,
+                },
+            )
+            .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        let Some(tag) = tag else {
+            return Ok(None);
+        };
+        if let Some(value) = pipeline_update.as_ref() {
+            self.set_project_pipeline(project_id, value)
+                .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        }
+        let pipeline = if pipeline_update.is_some() {
+            pipeline_update
+        } else {
+            self.get_project_pipeline(project_id)
+                .map_err(|e| ProjectError::Repository(e.to_string()))?
+        };
+        Ok(Some(ProjectRecord::from_tag(tag, pipeline)))
+    }
+
+    fn delete_project(&self, project_id: &str) -> Result<(), ProjectError> {
+        self.delete_tag(project_id)
+            .map_err(|e| ProjectError::Repository(e.to_string()))
+    }
+
+    fn delete_project_with_cascade(
+        &self,
+        project_id: &str,
+        cascade_action: &str,
+    ) -> Result<(), ProjectError> {
+        self.delete_project_with_cascade(project_id, cascade_action)
+            .map_err(|e| ProjectError::Repository(e.to_string()))
+    }
+
+    fn reorder_projects(
+        &self,
+        project_ids: Vec<String>,
+    ) -> Result<Vec<ProjectRecord>, ProjectError> {
+        let tags = self
+            .reorder_tags(project_ids)
+            .map_err(|e| ProjectError::Repository(e.to_string()))?;
+        tags.into_iter()
+            .map(|tag| {
+                let pipeline = self
+                    .get_project_pipeline(&tag.id)
+                    .map_err(|e| ProjectError::Repository(e.to_string()))?;
+                Ok(ProjectRecord::from_tag(tag, pipeline))
+            })
+            .collect()
+    }
+
+    fn get_active_project_id(&self) -> Result<Option<String>, ProjectError> {
+        Ok(self
+            .get_active_tag_selection()
+            .map_err(|e| ProjectError::Repository(e.to_string()))?
+            .tag_id)
+    }
+
+    fn set_active_project_id(&self, project_id: Option<String>) -> Result<(), ProjectError> {
+        self.set_active_tag_id(project_id)
+            .map_err(|e| ProjectError::Repository(e.to_string()))
     }
 }
