@@ -268,4 +268,154 @@ describe('LocalModelCard', () => {
     expect(screen.getByText('-')).toBeTruthy();
     expect(screen.queryByText('Q4_K_M')).toBeNull();
   });
+
+  it('disables test button when model is not installed', () => {
+    const onTest = vi.fn();
+    render(
+      <LocalModelCard
+        card={mockCard}
+        onTest={onTest}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const testBtn = screen.getByRole('button', {
+      name: /测试连接 Qwen3.5 4B/i,
+    }) as HTMLButtonElement;
+    expect(testBtn.disabled).toBe(true);
+    expect(testBtn.getAttribute('data-tooltip')).toBe('需先下载安装模型后方可测试');
+    fireEvent.click(testBtn);
+    expect(onTest).not.toHaveBeenCalled();
+  });
+
+  it('enables test button when model is installed and triggers onTest on click', () => {
+    const onTest = vi.fn();
+    const installedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: true,
+      installedPath: '/models/qwen3.5-4b.gguf',
+    };
+    render(
+      <LocalModelCard
+        card={installedCard}
+        onTest={onTest}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const testBtn = screen.getByRole('button', {
+      name: /测试连接 Qwen3.5 4B/i,
+    }) as HTMLButtonElement;
+    expect(testBtn.disabled).toBe(false);
+    expect(testBtn.getAttribute('data-tooltip')).toBe('测试连接');
+    fireEvent.click(testBtn);
+    expect(onTest).toHaveBeenCalledWith(installedCard);
+  });
+
+  it('renders loading state when model test is in progress', () => {
+    const installedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: true,
+      installedPath: '/models/qwen3.5-4b.gguf',
+    };
+    render(
+      <LocalModelCard
+        card={installedCard}
+        testState={{ status: 'loading' }}
+        onTest={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const testBtn = screen.getByRole('button', {
+      name: /测试连接 Qwen3.5 4B/i,
+    }) as HTMLButtonElement;
+    expect(testBtn.disabled).toBe(true);
+    expect(testBtn.classList.contains('loading')).toBe(true);
+    expect(testBtn.getAttribute('data-tooltip')).toBe('正在生成...');
+  });
+
+  it('renders speed badge and checkmark tooltip on test success', () => {
+    const installedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: true,
+      installedPath: '/models/qwen3.5-4b.gguf',
+    };
+    render(
+      <LocalModelCard
+        card={installedCard}
+        testState={{ status: 'success', speed: 28.5 }}
+        onTest={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const speedBadge = screen.getByTestId('local-model-speed-qwen3.5-4b');
+    expect(speedBadge.textContent).toBe('28.5 t/s');
+
+    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    expect(testBtn.classList.contains('success')).toBe(true);
+    expect(testBtn.getAttribute('data-tooltip')).toBe('✓ 推理成功 (28.5 t/s)');
+  });
+
+  it('renders error state and error tooltip on test failure without speed badge', () => {
+    const installedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: true,
+      installedPath: '/models/qwen3.5-4b.gguf',
+    };
+    render(
+      <LocalModelCard
+        card={installedCard}
+        testState={{ status: 'error', error: 'llama.cpp out of memory' }}
+        onTest={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
+    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    expect(testBtn.classList.contains('error')).toBe(true);
+    expect(testBtn.getAttribute('data-tooltip')).toBe('✕ llama.cpp out of memory');
+  });
+
+  it('disables test button when another model is testing', () => {
+    const installedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: true,
+      installedPath: '/models/qwen3.5-4b.gguf',
+    };
+    render(
+      <LocalModelCard
+        card={installedCard}
+        isAnyTesting={true}
+        testState={{ status: 'idle' }}
+        onTest={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const testBtn = screen.getByRole('button', {
+      name: /测试连接 Qwen3.5 4B/i,
+    }) as HTMLButtonElement;
+    expect(testBtn.disabled).toBe(true);
+  });
 });

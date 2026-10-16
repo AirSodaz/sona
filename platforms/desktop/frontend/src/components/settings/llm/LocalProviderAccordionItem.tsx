@@ -1,4 +1,4 @@
-import { Check, Cpu, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { Check, Loader2, Plus, RefreshCw } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
@@ -12,20 +12,19 @@ import {
   downloadPresetModel,
 } from '../../../services/tauri/app';
 import { TauriEvent } from '../../../services/tauri/events';
-import {
-  generateLlmText,
-  importLocalLlmFile,
-  listLocalLlmCards,
-} from '../../../services/tauri/llm';
+import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
 import type { LlmAssistantConfig } from '../../../types/config';
-import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import { normalizeError } from '../../../utils/errorUtils';
-import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
-import { type LocalDownloadProgressState, LocalModelCard } from './LocalModelCard';
+import { SettingsAccordion } from '../SettingsLayout';
+import {
+  type LocalDownloadProgressState,
+  LocalModelCard,
+  type LocalModelTestState,
+} from './LocalModelCard';
 import './LocalModelCard.css';
 
 interface LocalProviderAccordionItemProps {
@@ -47,8 +46,7 @@ export function LocalProviderAccordionItem({
   const [data, setData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [downloads, setDownloads] = useState<Record<string, LocalDownloadProgressState>>({});
-  const [testStatus, setTestStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
-  const [testMessage, setTestMessage] = useState('');
+  const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
 
@@ -170,6 +168,11 @@ export function LocalProviderAccordionItem({
       try {
         await deletePresetModel(card.id);
         await fetchCards();
+        setModelTestStates((prev) => {
+          const next = { ...prev };
+          delete next[card.id];
+          return next;
+        });
       } catch (err) {
         console.error(`Failed to delete model ${card.id}:`, err);
       }
@@ -225,7 +228,10 @@ export function LocalProviderAccordionItem({
   const installedCards = useMemo(() => cards.filter((c) => c.isInstalled), [cards]);
   const hasInstalled = installedCards.length > 0;
   const isAnyDownloading = Object.keys(downloads).length > 0;
-
+  const isAnyTesting = useMemo(
+    () => Object.values(modelTestStates).some((s) => s.status === 'loading'),
+    [modelTestStates]
+  );
   const statusBadge = useMemo(() => {
     if (isAnyDownloading) {
       return (
@@ -254,34 +260,68 @@ export function LocalProviderAccordionItem({
     );
   }, [hasInstalled, installedCards.length, isAnyDownloading, t]);
 
-  const handleTestInference = async () => {
-    const firstModel = installedCards[0]?.model ?? 'Qwen/Qwen3.5-4B';
-    setTestStatus('loading');
-    setTestMessage('');
+  const handleTestModel = useCallback(async (card: LocalLlmModelCardType) => {
+    setModelTestStates((prev) => ({
+      ...prev,
+      [card.id]: {
+        ...prev[card.id],
+        status: 'loading',
+        error: undefined,
+      },
+    }));
+
+    const startTime = performance.now();
     try {
-      const res = await generateLlmText({
+      const res = await completeLlm({
         config: {
           provider: 'local',
           strategy: 'local',
-          model: firstModel,
+          model: card.model || card.id,
           baseUrl: '',
           apiKey: '',
           temperature: 0.7,
         },
         input: '你好，请用一句话做自我介绍。',
         source: 'connection_test',
-      } satisfies LlmGenerateCommandRequest);
-      setTestStatus('success');
-      setTestMessage(res.trim());
+      });
+
+      const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
+      const tokens =
+        res.usage?.completionTokens ??
+        (res.text ? Math.max(1, Math.round(res.text.length * 0.75)) : 0);
+      const speed = Math.round((tokens / durationSec) * 10) / 10;
+
+      setModelTestStates((prev) => ({
+        ...prev,
+        [card.id]: {
+          status: 'success',
+          speed,
+        },
+      }));
+
       setTimeout(() => {
-        setTestStatus('idle');
-        setTestMessage('');
-      }, 5000);
-    } catch (error) {
-      setTestStatus('error');
-      setTestMessage(normalizeError(error).message);
+        setModelTestStates((prev) => {
+          if (prev[card.id]?.status !== 'success') return prev;
+          return {
+            ...prev,
+            [card.id]: {
+              ...prev[card.id],
+              status: 'idle',
+            },
+          };
+        });
+      }, 3500);
+    } catch (err) {
+      const message = normalizeError(err).message;
+      setModelTestStates((prev) => ({
+        ...prev,
+        [card.id]: {
+          status: 'error',
+          error: message,
+        },
+      }));
     }
-  };
+  }, []);
 
   return (
     <SettingsAccordion
@@ -340,6 +380,9 @@ export function LocalProviderAccordionItem({
               key={card.id}
               card={card}
               downloadState={downloads[card.id]}
+              testState={modelTestStates[card.id]}
+              onTest={handleTestModel}
+              isAnyTesting={isAnyTesting}
               onDownload={handleDownload}
               onCancelDownload={handleCancelDownload}
               onDelete={handleDelete}
@@ -347,83 +390,6 @@ export function LocalProviderAccordionItem({
             />
           ))}
         </div>
-
-        {/* Inference Connection Test */}
-        {hasInstalled && (
-          <SettingsItem
-            title={t('settings.llm.test_connection_title', { defaultValue: '推理测试' })}
-            hint={t('settings.llm.test_connection_hint', {
-              defaultValue: '向本地模型发送测试请求以验证引擎生成状态',
-            })}
-          >
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                gap: '8px',
-              }}
-            >
-              <button
-                type="button"
-                className={`btn ${
-                  testStatus === 'success'
-                    ? 'btn-success-flash'
-                    : testStatus === 'error'
-                      ? 'btn-error-flash'
-                      : 'btn-secondary'
-                } btn-loading-wrapper`}
-                style={{ width: 'fit-content', minWidth: '130px' }}
-                onClick={handleTestInference}
-                disabled={testStatus === 'loading'}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: '8px',
-                  }}
-                >
-                  {testStatus === 'loading' ? (
-                    <Loader2 className="animate-spin" size={16} />
-                  ) : testStatus === 'success' ? (
-                    <Check size={16} />
-                  ) : testStatus === 'error' ? (
-                    <X size={16} />
-                  ) : (
-                    <Cpu size={16} />
-                  )}
-                  <span>
-                    {testStatus === 'loading'
-                      ? t('settings.llm.testing', { defaultValue: '正在生成...' })
-                      : testStatus === 'success'
-                        ? t('settings.llm.connection_success', { defaultValue: '推理成功' })
-                        : testStatus === 'error'
-                          ? t('settings.llm.connection_failed', { defaultValue: '测试失败' })
-                          : t('settings.llm.test_connection', { defaultValue: '运行推理测试' })}
-                  </span>
-                </div>
-              </button>
-
-              {testMessage && (
-                <div
-                  className={
-                    testStatus === 'error' ? 'connection-error-detail' : 'connection-success-detail'
-                  }
-                  style={{
-                    fontSize: '0.8rem',
-                    color: testStatus === 'error' ? 'var(--color-error)' : 'var(--color-success)',
-                    maxWidth: '400px',
-                    textAlign: 'right',
-                  }}
-                >
-                  <span>{testMessage}</span>
-                </div>
-              )}
-            </div>
-          </SettingsItem>
-        )}
       </div>
     </SettingsAccordion>
   );

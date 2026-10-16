@@ -2381,6 +2381,8 @@
       "models_management_hint": "이 공급자에서 사용 가능한 모델을 관리하고 테스트합니다",
       "test_connection_title": "연결 테스트",
       "test_connection": "연결 테스트",
+      "test_model": "연결 테스트",
+      "install_required_to_test": "테스트하려면 먼저 모델을 다운로드하여 설치해야 합니다",
       "testing": "테스트 중...",
       "free_service_hint": "무료 서비스이며 API key가 필요하지 않습니다.",
       "connection_success": "연결 성공",

@@ -1,4 +1,15 @@
-import { BrainCircuit, Check, Cpu, FileText, Image, Loader2, Mic, Video } from 'lucide-react';
+import {
+  AlertCircle,
+  BrainCircuit,
+  Check,
+  Cpu,
+  FileText,
+  Image,
+  Loader2,
+  Mic,
+  Video,
+  Zap,
+} from 'lucide-react';
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
 import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
@@ -12,6 +23,12 @@ export interface LocalDownloadProgressState {
   totalBytes?: number;
 }
 
+export interface LocalModelTestState {
+  status: 'idle' | 'loading' | 'success' | 'error';
+  speed?: number;
+  error?: string;
+}
+
 interface LocalModelCardProps {
   card: LocalLlmModelCardType;
   downloadState?: LocalDownloadProgressState;
@@ -20,6 +37,9 @@ interface LocalModelCardProps {
     translation?: boolean;
     summary?: boolean;
   };
+  testState?: LocalModelTestState;
+  onTest?: (card: LocalLlmModelCardType) => void;
+  isAnyTesting?: boolean;
   onDownload: (card: LocalLlmModelCardType) => void;
   onCancelDownload: (cardId: string) => void;
   onDelete: (card: LocalLlmModelCardType) => void;
@@ -118,6 +138,9 @@ export function resolveModelModalities(card: LocalLlmModelCardType): SupportedMo
 export function LocalModelCard({
   card,
   downloadState,
+  testState,
+  onTest,
+  isAnyTesting = false,
   onDownload,
   onCancelDownload,
   onDelete,
@@ -125,7 +148,17 @@ export function LocalModelCard({
 }: LocalModelCardProps): React.JSX.Element {
   const isDownloading = Boolean(downloadState);
   const isInstalled = card.isInstalled;
+  const isTesting = testState?.status === 'loading';
   const modalities = resolveModelModalities(card);
+  const testTooltip = !isInstalled
+    ? t('settings.llm.install_required_to_test', { defaultValue: '需先下载安装模型后方可测试' })
+    : isTesting
+      ? t('settings.llm.testing', { defaultValue: '正在生成...' })
+      : testState?.status === 'success'
+        ? `✓ ${t('settings.llm.connection_success', { defaultValue: '推理成功' })}${testState.speed != null ? ` (${testState.speed} t/s)` : ''}`
+        : testState?.status === 'error'
+          ? `✕ ${testState.error || t('settings.llm.connection_failed', { defaultValue: '测试失败' })}`
+          : t('settings.llm.test_model', { defaultValue: '测试连接' });
 
   const isQwen = card.id.toLowerCase().includes('qwen') || card.name.toLowerCase().includes('qwen');
   const isGemma =
@@ -298,6 +331,30 @@ export function LocalModelCard({
       <div className="local-model-footer model-card-footer">
         <span className="model-size local-model-filename-hint">{card.filename}</span>
         <div className="model-card-side">
+          {testState?.speed != null && (
+            <span className="local-model-speed-badge" data-testid={`local-model-speed-${card.id}`}>
+              {testState.speed} t/s
+            </span>
+          )}
+          <button
+            type="button"
+            className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
+            onClick={() => onTest?.(card)}
+            disabled={isTesting || !isInstalled || isDownloading || (isAnyTesting && !isTesting)}
+            aria-label={`${t('settings.llm.test_model', { defaultValue: '测试连接' })} ${card.name}`}
+            data-tooltip={testTooltip}
+            data-tooltip-pos="top"
+          >
+            {isTesting ? (
+              <Loader2 size={15} className="animate-spin" />
+            ) : testState?.status === 'success' ? (
+              <Check size={15} />
+            ) : testState?.status === 'error' ? (
+              <AlertCircle size={15} />
+            ) : (
+              <Zap size={15} />
+            )}
+          </button>
           {isDownloading ? (
             <button
               type="button"

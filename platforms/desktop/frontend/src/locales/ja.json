@@ -2381,6 +2381,8 @@
       "models_management_hint": "このプロバイダーで利用可能なモデルを管理およびテストします",
       "test_connection_title": "接続テスト",
       "test_connection": "テスト接続",
+      "test_model": "接続テスト",
+      "install_required_to_test": "テストするには先にモデルをダウンロードしてインストールしてください",
       "testing": "テスト中...",
       "free_service_hint": "これは無料のサービスであり、API key は必要ありません。",
       "connection_success": "接続成功",

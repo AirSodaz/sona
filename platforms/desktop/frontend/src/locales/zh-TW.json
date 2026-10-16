@@ -2381,6 +2381,8 @@
       "models_management_hint": "管理並測試該供應商底下的模型清單",
       "test_connection_title": "連線測試",
       "test_connection": "測試連接",
+      "test_model": "測試連線",
+      "install_required_to_test": "需先下載安裝模型後方可測試",
       "testing": "正在測試...",
       "free_service_hint": "此為免費服務，無需 API 金鑰。",
       "connection_success": "連線成功",

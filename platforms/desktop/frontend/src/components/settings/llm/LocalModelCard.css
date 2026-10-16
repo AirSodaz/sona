@@ -207,3 +207,24 @@
   font-family: var(--font-mono, monospace);
   color: var(--color-text-muted);
 }
+
+.local-model-speed-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  line-height: 1.4;
+  border-radius: var(--radius-full, 9999px);
+  background: color-mix(in srgb, var(--color-success, #4ea067) 12%, var(--color-bg-secondary));
+  color: var(--color-success, #4ea067);
+  border: 1px solid color-mix(in srgb, var(--color-success, #4ea067) 30%, transparent);
+  user-select: none;
+}
+
+.local-model-footer .model-action-icon[data-tooltip]:hover,
+.local-model-footer .model-action-icon[data-tooltip]:focus-visible {
+  position: relative;
+  z-index: 10;
+}
