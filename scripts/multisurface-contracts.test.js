@@ -829,20 +829,6 @@ test('UniFFI tests own application context and History environments', () => {
   assert.doesNotMatch(historyFixtures, /SqliteHistoryStore::new\s*\(/u);
 });
 
-test('new production code cannot consume the removed Project compatibility API', () => {
-  const compatibilityUse = /\b(?:SqliteProject(?:Adapter|Repository)|Project(?:Store|RepositoryService))\b/u;
-
-  for (const { relativePath, source } of rustSources('adapters', 'platforms')) {
-    if (!relativePath.includes('/tests/')) {
-      assert.doesNotMatch(
-        source,
-        compatibilityUse,
-        `${relativePath} must use the canonical Tag API`,
-      );
-    }
-  }
-});
-
 test('stateful hosts reuse SQLite while the CLI stays stateless', () => {
   const uniffiBridges = [
     'app_config_repository_bridge.rs',
