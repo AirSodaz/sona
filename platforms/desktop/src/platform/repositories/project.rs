@@ -27,7 +27,7 @@ impl ProjectService {
     {
         run_sqlite_task(&self.sqlite, move |context| {
             let adapter =
-                Arc::new(context.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
+                Arc::new(context.project_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
             let service = ApplicationProjectService::new(adapter);
             task(&service).map_err(|error| error.to_string())
         })

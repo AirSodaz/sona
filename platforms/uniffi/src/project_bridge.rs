@@ -9,7 +9,7 @@ use sona_core::ports::time::ClockError;
 use sona_core::ports::time::ClockPort;
 use sona_core::tag::{TagCreateInput, TagError, TagIdGenerator};
 use sona_runtime_fs::{SystemClock, UuidGenerator};
-use sona_sqlite::SqliteTagAdapter;
+use sona_sqlite::SqliteProjectAdapter;
 use std::sync::Arc;
 
 pub(crate) fn load_project_repository_state_json(
@@ -237,10 +237,10 @@ fn with_project_adapter<T, F>(
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, TagError>,
 {
     let context = context.into().resolve().map_err(project_error)?;
-    let adapter = context.sqlite().tag_adapter(ids, clock);
+    let adapter = context.sqlite().project_adapter(ids, clock);
     operation(&adapter).map_err(project_error)
 }
 
@@ -251,10 +251,10 @@ fn with_project_input_adapter<T, F>(
     operation: F,
 ) -> SonaCoreBindingResult<T>
 where
-    F: FnOnce(&SqliteTagAdapter) -> Result<T, TagError>,
+    F: FnOnce(&SqliteProjectAdapter) -> Result<T, TagError>,
 {
     let context = context.into().resolve().map_err(project_error)?;
-    let adapter = context.sqlite().tag_adapter(ids, clock);
+    let adapter = context.sqlite().project_adapter(ids, clock);
     operation(&adapter).map_err(project_input_error)
 }
 

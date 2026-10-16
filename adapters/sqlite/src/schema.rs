@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 9;
+pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 10;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
 
 /// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
@@ -31,10 +31,14 @@ pub fn run_migrations(db: &Database) -> Result<(), DatabaseError> {
             )?;
         } else {
             // Legacy v7 and earlier schemas (the tag era) are deprecated and no longer
-            // auto-migrated. Only v8 -> v9 migration remains active.
+            // auto-migrated. Only v8 -> v9 -> v10 migrations remain active.
             if applied_version < 9 {
                 migrate_v9(tx)?;
                 tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [9])?;
+            }
+            if applied_version < 10 {
+                migrate_v10(tx)?;
+                tx.execute("INSERT INTO schema_version (version) VALUES (?1)", [10])?;
             }
         }
         Ok(())
@@ -83,9 +87,9 @@ fn initialize_current_schema(tx: &rusqlite::Transaction) -> Result<(), rusqlite:
     migrate_v6(tx)?;
     migrate_v7(tx)?;
     migrate_v8(tx)?;
-    migrate_v9(tx)
+    migrate_v9(tx)?;
+    migrate_v10(tx)
 }
-
 fn bootstrap_schema_version(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
         "CREATE TABLE IF NOT EXISTS schema_version (
@@ -697,6 +701,40 @@ fn migrate_v9(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     Ok(())
 }
 
+fn migrate_v10(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
+    if has_table(tx, "tags")? && !has_table(tx, "projects")? {
+        tx.execute("ALTER TABLE tags RENAME TO projects;", [])?;
+    }
+    if has_table(tx, "automation_rule_tags")? && !has_table(tx, "automation_rule_projects")? {
+        tx.execute(
+            "ALTER TABLE automation_rule_tags RENAME TO automation_rule_projects;",
+            [],
+        )?;
+        if has_column(tx, "automation_rule_projects", "tag_id")?
+            && !has_column(tx, "automation_rule_projects", "project_id")?
+        {
+            tx.execute(
+                "ALTER TABLE automation_rule_projects RENAME COLUMN tag_id TO project_id;",
+                [],
+            )?;
+        }
+    }
+    tx.execute_batch(
+        "DROP TABLE IF EXISTS history_item_tags;
+         DROP TABLE IF EXISTS tag_default_links;
+         DROP INDEX IF EXISTS idx_history_item_tags_tag_history;
+         UPDATE app_settings
+            SET key = 'sona-active-project-id'
+          WHERE key = 'sona-active-tag-id'
+            AND NOT EXISTS (SELECT 1 FROM app_settings WHERE key = 'sona-active-project-id');
+         DELETE FROM app_settings WHERE key = 'sona-active-tag-id';
+         CREATE INDEX IF NOT EXISTS idx_projects_sort_order ON projects(sort_order, id);
+         CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
+         CREATE INDEX IF NOT EXISTS idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);",
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -772,16 +810,16 @@ mod tests {
         // Migrations already ran during open_in_memory. Running again should be a no-op.
         run_migrations(&db).unwrap();
 
-        assert_eq!(schema_versions(&db), vec![9]);
+        assert_eq!(schema_versions(&db), vec![10]);
     }
 
     #[test]
-    fn schema_v4_replaces_projects_with_tags_and_adds_trash_state() {
+    fn schema_v10_replaces_tags_with_projects_and_cleans_legacy_tables() {
         let db = Database::open_in_memory().unwrap();
 
         db.with_connection(|conn| {
             assert_eq!(
-                table_columns(conn, "tags"),
+                table_columns(conn, "projects"),
                 vec![
                     "id",
                     "name",
@@ -794,18 +832,20 @@ mod tests {
                 ]
             );
             assert_eq!(
-                table_columns(conn, "history_item_tags"),
-                vec!["history_id", "tag_id"]
+                table_columns(conn, "automation_rule_projects"),
+                vec!["rule_id", "project_id"]
             );
             assert!(table_columns(conn, "history_items").contains(&"deleted_at".to_string()));
             assert!(table_columns(conn, "history_items").contains(&"project_id".to_string()));
 
-            let projects_exist: i64 = conn.query_row(
-                "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'projects'",
-                [],
-                |row| row.get(0),
-            )?;
-            assert_eq!(projects_exist, 0);
+            for table in ["tags", "history_item_tags", "automation_rule_tags"] {
+                let exists: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [table],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(exists, 0, "Table {table} should not exist in v10");
+            }
             Ok(())
         })
         .unwrap();
@@ -948,7 +988,7 @@ mod tests {
     fn test_future_schema_version_is_rejected() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            conn.execute("INSERT INTO schema_version (version) VALUES (10)", [])?;
+            conn.execute("INSERT INTO schema_version (version) VALUES (11)", [])?;
             Ok(())
         })
         .unwrap();
@@ -957,11 +997,11 @@ mod tests {
         assert!(matches!(
             err,
             DatabaseError::UnsupportedSchemaVersion {
-                found: 10,
-                current: 9
+                found: 11,
+                current: 10
             }
         ));
-        assert_eq!(schema_versions(&db), vec![9, 10]);
+        assert_eq!(schema_versions(&db), vec![10, 11]);
     }
 
     #[test]
@@ -985,7 +1025,7 @@ mod tests {
     }
 
     #[test]
-    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v9() {
+    fn test_v7_schema_is_rejected_as_legacy_and_v8_migrates_to_v10() {
         let mut connection = rusqlite::Connection::open_in_memory().unwrap();
         connection
             .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
@@ -1028,7 +1068,7 @@ mod tests {
             }
         ));
 
-        // v8 database must be auto-migrated to v9
+        // v8 database must be auto-migrated to v10
         let tx = connection.transaction().unwrap();
         migrate_v8(&tx).unwrap();
         tx.execute("INSERT INTO schema_version (version) VALUES (8)", [])
@@ -1046,7 +1086,128 @@ mod tests {
         drop(disk_conn_v8);
 
         let db_v8 = Database::open(temp_v8.path()).unwrap();
-        assert_eq!(schema_versions(&db_v8), vec![7, 8, 9]);
+        assert_eq!(schema_versions(&db_v8), vec![7, 8, 9, 10]);
+    }
+
+    #[test]
+    fn test_schema_v9_migrates_to_v10_and_renames_tags_to_projects() {
+        let mut connection = rusqlite::Connection::open_in_memory().unwrap();
+        connection
+            .execute_batch("ATTACH DATABASE ':memory:' AS analytics; PRAGMA foreign_keys = ON;")
+            .unwrap();
+        let tx = connection.transaction().unwrap();
+        migrate_v1(&tx).unwrap();
+        migrate_v2(&tx).unwrap();
+        migrate_v3(&tx).unwrap();
+        migrate_v4(&tx).unwrap();
+        migrate_v5(&tx).unwrap();
+        migrate_v6(&tx).unwrap();
+        migrate_v7(&tx).unwrap();
+        migrate_v8(&tx).unwrap();
+        migrate_v9(&tx).unwrap();
+
+        tx.execute(
+            "INSERT INTO tags (id, name, description, icon, color, sort_order, created_at, updated_at)
+             VALUES ('tag-1', 'Tag One', 'desc', 'icon', '#2563EB', 10, 100, 200)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rules (id, name) VALUES ('rule-1', 'Rule One')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO automation_rule_tags (rule_id, tag_id) VALUES ('rule-1', 'tag-1')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO history_items (id, timestamp, project_id) VALUES ('hist-1', 1000, 'tag-1')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO history_item_tags (history_id, tag_id) VALUES ('hist-1', 'tag-1')",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO project_pipelines (project_id, pipeline_json, updated_at) VALUES ('tag-1', '{\"stages\":[]}', 500)",
+            [],
+        )
+        .unwrap();
+        tx.execute(
+            "INSERT INTO app_settings (key, value) VALUES ('sona-active-tag-id', '\"tag-1\"')",
+            [],
+        )
+        .unwrap();
+
+        migrate_v10(&tx).unwrap();
+
+        assert!(has_table(&tx, "projects").unwrap());
+        assert!(!has_table(&tx, "tags").unwrap());
+        assert!(has_table(&tx, "automation_rule_projects").unwrap());
+        assert!(!has_table(&tx, "automation_rule_tags").unwrap());
+        assert!(!has_table(&tx, "history_item_tags").unwrap());
+
+        let (name, sort_order): (String, i64) = tx
+            .query_row(
+                "SELECT name, sort_order FROM projects WHERE id = 'tag-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(name, "Tag One");
+        assert_eq!(sort_order, 10);
+
+        let (rule_id, project_id): (String, String) = tx
+            .query_row(
+                "SELECT rule_id, project_id FROM automation_rule_projects WHERE rule_id = 'rule-1'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(rule_id, "rule-1");
+        assert_eq!(project_id, "tag-1");
+
+        let active_project: String = tx
+            .query_row(
+                "SELECT value FROM app_settings WHERE key = 'sona-active-project-id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(active_project, "\"tag-1\"");
+
+        let legacy_key_count: i64 = tx
+            .query_row(
+                "SELECT COUNT(*) FROM app_settings WHERE key = 'sona-active-tag-id'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(legacy_key_count, 0);
+
+        let pipeline_project: String = tx
+            .query_row(
+                "SELECT project_id FROM project_pipelines WHERE project_id = 'tag-1'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(pipeline_project, "tag-1");
+
+        let index_exists: bool = tx
+            .query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'index' AND name = 'idx_projects_sort_order'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert!(index_exists);
+
+        tx.commit().unwrap();
     }
 
     #[test]
@@ -1058,8 +1219,7 @@ mod tests {
             "history_transcripts",
             "history_summaries",
             "transcript_snapshots",
-            "tags",
-            "history_item_tags",
+            "projects",
             "app_settings",
             "app_config",
             "summary_templates",
@@ -1071,7 +1231,7 @@ mod tests {
             "automation_profiles",
             "automation_profile_links",
             "automation_rules",
-            "automation_rule_tags",
+            "automation_rule_projects",
             "automation_processed",
             "task_ledger",
             "history_items_fts",
@@ -1084,6 +1244,14 @@ mod tests {
                         row.get(0)
                     })?;
                 assert!(count >= 0, "Table {table} should exist");
+            }
+            for dead_table in ["tags", "history_item_tags", "automation_rule_tags"] {
+                let exists: i64 = conn.query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?1",
+                    [dead_table],
+                    |row| row.get(0),
+                )?;
+                assert_eq!(exists, 0, "Table {dead_table} should not exist in v10");
             }
             // Verify analytics.llm_usage table exists in attached database
             let count: i64 =
@@ -1101,7 +1269,7 @@ mod tests {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
             assert_eq!(
-                table_columns(conn, "tags"),
+                table_columns(conn, "projects"),
                 vec![
                     "id",
                     "name",
@@ -1195,7 +1363,7 @@ mod tests {
             );
 
             for (table, removed_column) in [
-                ("tags", "settings"),
+                ("projects", "settings"),
                 ("automation_rules", "data"),
                 ("automation_processed", "data"),
                 ("task_ledger", "data"),
@@ -1523,17 +1691,28 @@ mod tests {
     }
 
     #[test]
-    fn test_tag_relationship_index_exists() {
+    fn test_project_indexes_exist() {
         let db = Database::open_in_memory().unwrap();
         db.with_connection(|conn| {
-            let exists: bool = conn.query_row(
-                "SELECT COUNT(*) > 0 FROM sqlite_master
-                 WHERE type = 'index'
-                   AND name = 'idx_history_item_tags_tag_history'",
+            for index_name in [
+                "idx_projects_sort_order",
+                "idx_history_items_project_id",
+                "idx_history_items_project_timestamp",
+            ] {
+                let exists: bool = conn.query_row(
+                    "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'index' AND name = ?1",
+                    [index_name],
+                    |row| row.get(0),
+                )?;
+                assert!(exists, "Index {index_name} must exist");
+            }
+
+            let legacy_exists: bool = conn.query_row(
+                "SELECT COUNT(*) > 0 FROM sqlite_master WHERE type = 'index' AND name = 'idx_history_item_tags_tag_history'",
                 [],
                 |row| row.get(0),
             )?;
-            assert!(exists);
+            assert!(!legacy_exists, "idx_history_item_tags_tag_history should be dropped");
             Ok(())
         })
         .unwrap();

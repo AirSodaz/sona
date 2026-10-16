@@ -141,6 +141,7 @@ fn apply_backup_restore(
 
     replace_state_in_transaction(tx, &dataset.config_state)?;
     clear_setting_in_transaction(tx, ACTIVE_TAG_SETTINGS_KEY)?;
+    clear_setting_in_transaction(tx, crate::project::ACTIVE_PROJECT_SETTINGS_KEY)?;
     insert_tags_in_transaction(tx, &dataset.tags)?;
     insert_history_in_transaction(tx, &prepared.history)?;
     insert_automation_in_transaction(tx, &dataset.automation)?;

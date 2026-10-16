@@ -148,7 +148,7 @@ fn load_rules(conn: &rusqlite::Connection) -> Result<Vec<AutomationRuleRecord>, 
         .collect::<Result<Vec<_>, _>>()
         .map_err(DatabaseError::QueryError)?;
     for rule in &mut rules {
-        hydrate_rule_tags(conn, rule)?;
+        hydrate_rule_projects(conn, rule)?;
     }
     Ok(rules)
 }
@@ -448,7 +448,7 @@ fn insert_rules(
             rule.updated_at,
             &rule.migration_notice,
         ])?;
-        replace_rule_tags(tx, &rule.id, &rule.tag_ids)?;
+        replace_rule_projects(tx, &rule.id, &rule.tag_ids)?;
     }
     Ok(())
 }
@@ -619,33 +619,34 @@ fn hydrate_profile_links(
     Ok(())
 }
 
-fn replace_rule_tags(
+fn replace_rule_projects(
     tx: &rusqlite::Transaction<'_>,
     rule_id: &str,
-    tag_ids: &[String],
+    project_ids: &[String],
 ) -> Result<(), DatabaseError> {
     tx.execute(
-        "DELETE FROM automation_rule_tags WHERE rule_id = ?1",
+        "DELETE FROM automation_rule_projects WHERE rule_id = ?1",
         [rule_id],
     )?;
-    let mut stmt =
-        tx.prepare_cached("INSERT INTO automation_rule_tags (rule_id, tag_id) VALUES (?1, ?2)")?;
-    for tag_id in tag_ids {
-        stmt.execute(rusqlite::params![rule_id, tag_id])?;
+    let mut stmt = tx.prepare_cached(
+        "INSERT INTO automation_rule_projects (rule_id, project_id) VALUES (?1, ?2)",
+    )?;
+    for project_id in project_ids {
+        stmt.execute(rusqlite::params![rule_id, project_id])?;
     }
     Ok(())
 }
 
-fn hydrate_rule_tags(
+fn hydrate_rule_projects(
     conn: &rusqlite::Connection,
     rule: &mut AutomationRuleRecord,
 ) -> Result<(), DatabaseError> {
     let mut stmt = conn.prepare_cached(
-        "SELECT art.tag_id
-         FROM automation_rule_tags art
-         JOIN tags tag ON tag.id = art.tag_id
-         WHERE art.rule_id = ?1
-         ORDER BY tag.sort_order, tag.id",
+        "SELECT arp.project_id
+         FROM automation_rule_projects arp
+         JOIN projects project ON project.id = arp.project_id
+         WHERE arp.rule_id = ?1
+         ORDER BY project.sort_order, project.id",
     )?;
     rule.tag_ids = stmt
         .query_map([rule.id.as_str()], |row| row.get::<_, String>(0))?
@@ -925,6 +926,34 @@ mod tests {
         ));
 
         assert_eq!(AutomationStore::load_state(&repo).unwrap(), initial);
+    }
+    #[test]
+    fn rule_projects_round_trip_with_projects_table() {
+        let (db, repo) = repository();
+        db.with_write_connection(|conn| {
+            conn.execute(
+                "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('project-1', 'Project One', 1, 1)",
+                [],
+            )?;
+            conn.execute(
+                "INSERT INTO projects (id, name, created_at, updated_at) VALUES ('project-2', 'Project Two', 2, 2)",
+                [],
+            )?;
+            Ok(())
+        })
+        .unwrap();
+
+        let mut rule = rule_record("rule-1", "Rule with Projects");
+        rule.tag_ids = vec!["project-1".to_string(), "project-2".to_string()];
+
+        AutomationStore::replace_rules(&repo, &[rule.clone()]).unwrap();
+
+        let state = AutomationStore::load_state(&repo).unwrap();
+        assert_eq!(state.rules.len(), 1);
+        assert_eq!(
+            state.rules[0].tag_ids,
+            vec!["project-1".to_string(), "project-2".to_string()]
+        );
     }
 
     #[test]

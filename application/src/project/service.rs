@@ -92,7 +92,7 @@ mod tests {
     fn test_project_service_lifecycle() {
         let temp = tempfile::tempdir().unwrap();
         let ctx = Arc::new(SqliteApplicationContext::open(temp.path()).unwrap());
-        let adapter = Arc::new(ctx.tag_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
+        let adapter = Arc::new(ctx.project_adapter(Arc::new(UuidGenerator), Arc::new(SystemClock)));
         let service = ProjectService::new(adapter);
 
         let projects = service.list().unwrap();

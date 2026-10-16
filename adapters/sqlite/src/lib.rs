@@ -15,6 +15,7 @@ pub mod history_store;
 mod legacy_change_time;
 pub mod llm_usage;
 pub mod ports;
+pub mod project;
 pub mod schema;
 pub mod storage_usage;
 mod storage_usage_repository;
@@ -38,6 +39,9 @@ pub use history_mutation_repository::DeferredSqliteHistoryMutationRepository;
 #[cfg(any(test, feature = "test-support"))]
 pub use history_query_repository::LazySqliteHistoryQueryRepository;
 pub use history_store::SqliteHistoryStore;
+pub use project::{
+    SqliteProjectAdapter, SqliteProjectRepository, SqliteTagAdapter, SqliteTagRepository,
+};
 #[cfg(any(test, feature = "test-support"))]
 pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use storage_usage_repository::{
@@ -47,7 +51,6 @@ pub use storage_usage_repository::{
 pub use sync_repository::{
     SqliteSyncRepository, SqliteSyncRepositoryFactory, record_sync_operation_in_transaction,
 };
-pub use tag::{SqliteTagAdapter, SqliteTagRepository};
 pub use task_ledger::{SqliteLedgerRepository, SqliteTaskLedgerAdapter};
 
 use rusqlite::functions::FunctionFlags;

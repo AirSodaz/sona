@@ -1,4 +1,4 @@
-﻿use chrono::Local;
+use chrono::Local;
 use sona_core::history::item_factory::HistoryItemGeneratedValues;
 use sona_core::history::mutation_repository::HistoryMutationError;
 use sona_core::history::{HistoryIdGenerator, HistoryItemRecord};
@@ -164,36 +164,5 @@ pub(crate) fn insert_history_item_row(
             ":draft_source": draft_source_str.as_deref(),
         },
     )?;
-
-    replace_history_item_tags(tx, &item.id, &item.tag_ids)
-}
-
-pub(super) fn replace_history_item_tags(
-    tx: &rusqlite::Transaction<'_>,
-    history_id: &str,
-    tag_ids: &[String],
-) -> Result<(), DatabaseError> {
-    tx.execute(
-        "DELETE FROM history_item_tags WHERE history_id = ?1",
-        [history_id],
-    )?;
-    let mut insert =
-        tx.prepare_cached("INSERT INTO history_item_tags (history_id, tag_id) VALUES (?1, ?2)")?;
-    for tag_id in tag_ids {
-        insert.execute(rusqlite::params![history_id, tag_id])?;
-    }
     Ok(())
-}
-
-pub(super) fn load_tag_ids(
-    conn: &rusqlite::Connection,
-    history_id: &str,
-) -> Result<Vec<String>, DatabaseError> {
-    let mut statement = conn.prepare_cached(
-        "SELECT hit.tag_id FROM history_item_tags hit JOIN tags t ON t.id = hit.tag_id WHERE hit.history_id = ?1 ORDER BY t.sort_order, t.id",
-    )?;
-    statement
-        .query_map([history_id], |row| row.get::<_, String>(0))?
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(DatabaseError::QueryError)
 }
