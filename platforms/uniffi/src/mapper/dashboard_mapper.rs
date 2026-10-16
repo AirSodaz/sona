@@ -70,8 +70,8 @@ pub struct FfiContentTrendPointV1 {
 pub struct FfiOverviewStatsV1 {
     pub item_count: u64,
     pub item_count_display: String,
-    pub tag_count: u64,
-    pub tag_count_display: String,
+    pub project_count: u64,
+    pub project_count_display: String,
     pub total_duration_seconds: f64,
     pub total_duration_display: String,
     pub transcript_character_count: Option<u64>,
@@ -80,10 +80,10 @@ pub struct FfiOverviewStatsV1 {
     pub recording_count_display: String,
     pub batch_count: u64,
     pub batch_count_display: String,
-    pub untagged_count: u64,
-    pub untagged_count_display: String,
-    pub tagged_count: u64,
-    pub tagged_count_display: String,
+    pub unassigned_count: u64,
+    pub unassigned_count_display: String,
+    pub assigned_count: u64,
+    pub assigned_count_display: String,
     pub recent_daily_items: Vec<FfiContentTrendPointV1>,
     pub is_deep_loaded: bool,
 }
@@ -231,8 +231,8 @@ impl From<OverviewStats> for FfiOverviewStatsV1 {
         Self {
             item_count: value.item_count,
             item_count_display: value.item_count_display,
-            tag_count: value.tag_count,
-            tag_count_display: value.tag_count_display,
+            project_count: value.tag_count,
+            project_count_display: value.tag_count_display,
             total_duration_seconds: value.total_duration_seconds,
             total_duration_display: value.total_duration_display,
             transcript_character_count: value.transcript_character_count,
@@ -241,10 +241,10 @@ impl From<OverviewStats> for FfiOverviewStatsV1 {
             recording_count_display: value.recording_count_display,
             batch_count: value.batch_count,
             batch_count_display: value.batch_count_display,
-            untagged_count: value.untagged_count,
-            untagged_count_display: value.untagged_count_display,
-            tagged_count: value.tagged_count,
-            tagged_count_display: value.tagged_count_display,
+            unassigned_count: value.untagged_count,
+            unassigned_count_display: value.untagged_count_display,
+            assigned_count: value.tagged_count,
+            assigned_count_display: value.tagged_count_display,
             recent_daily_items: value
                 .recent_daily_items
                 .into_iter()

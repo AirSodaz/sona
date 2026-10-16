@@ -46,7 +46,6 @@ internal fun RecoveryItemInput.toFfi() = FfiRecoveryItemInputV1(
     status = FfiRecoveryQueueStatusV1.PENDING,
     progress = progress,
     segments = emptyList(),
-    tagIds = emptyList(),
     projectId = null,
     historyId = historyId,
     historyTitle = historyTitle,

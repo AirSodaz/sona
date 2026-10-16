@@ -61,8 +61,7 @@ fn saved_item(id: &str) -> FfiRecoveryItemInputV1 {
         status: None,
         progress: Some(25.0),
         segments: vec![segment()],
-        tag_ids: vec!["tag-1".to_string()],
-        project_id: None,
+        project_id: Some("project-1".to_string()),
         history_id: Some("history-1".to_string()),
         history_title: Some("History".to_string()),
         last_known_stage: Some(FfiRecoveryItemStageV1::Transcribing),
@@ -103,6 +102,7 @@ fn recovery_v1_round_trips_typed_snapshot_and_canonical_dynamic_json_leaves() {
     assert_eq!(item.source, FfiRecoverySourceV1::BatchImport);
     assert_eq!(item.resolution, FfiRecoveryResolutionV1::Pending);
     assert_eq!(item.last_known_stage, FfiRecoveryItemStageV1::Transcribing);
+    assert_eq!(item.project_id.as_deref(), Some("project-1"));
     assert_eq!(
         item.resolved_config_snapshot_json.as_deref(),
         Some(r#"{"a":2,"z":1}"#)

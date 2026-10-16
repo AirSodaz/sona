@@ -9,7 +9,8 @@ use sona_core::dashboard::ports::TagRepository;
 use sona_core::ports::time::ClockPort;
 use sona_core::project::ports::ProjectRepository;
 use sona_core::project::{
-    ProjectCreateInput, ProjectError, ProjectPipelineConfig, ProjectRecord, ProjectUpdateInput,
+    ProjectCreateInput, ProjectError, ProjectPipelineConfig, ProjectRecord,
+    ProjectRepositorySnapshot, ProjectUpdateInput,
 };
 use sona_core::sync::SyncEntityKind;
 use sona_core::tag::{
@@ -62,6 +63,43 @@ where
 
     pub fn load_state(&self) -> Result<TagRepositorySnapshot, TagError> {
         self.service().load_state()
+    }
+    pub fn load_project_state(&self) -> Result<ProjectRepositorySnapshot, ProjectError>
+    where
+        D: 'static,
+    {
+        let projects = self.list_projects()?;
+        let active_project_id = self.get_active_project_id()?;
+        Ok(ProjectRepositorySnapshot {
+            projects,
+            active_project_id,
+        })
+    }
+
+    pub fn replace_projects(&self, projects: Vec<ProjectRecord>) -> Result<(), ProjectError> {
+        let tags = projects
+            .into_iter()
+            .map(|p| TagRecord {
+                id: p.id,
+                name: p.name,
+                description: p.description,
+                icon: p.icon.unwrap_or_default(),
+                color: p.color.unwrap_or_default(),
+                sort_order: p.sort_order,
+                created_at: p.created_at,
+                updated_at: p.updated_at,
+            })
+            .collect();
+        self.replace_tags(tags)
+            .map_err(|e| ProjectError::Repository(e.to_string()))
+    }
+
+    pub fn replace_projects_json(
+        &self,
+        projects: Vec<serde_json::Value>,
+    ) -> Result<(), ProjectError> {
+        self.replace_tags_json(projects)
+            .map_err(|e| ProjectError::Repository(e.to_string()))
     }
 
     pub fn list_tags(&self, options: TagListOptions) -> Result<Vec<TagRecord>, TagError> {

@@ -33,6 +33,7 @@ class UniffiDataTransferMappingTest {
         assertEquals(3, mapped.schemaVersion)
         assertEquals("1.2.3", mapped.appVersion)
         assertEquals(8, mapped.counts.analyticsFiles)
+        assertEquals(1, mapped.counts.projects)
         assertEquals(true, mapped.scopes.history)
     }
 

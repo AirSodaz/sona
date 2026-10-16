@@ -275,6 +275,9 @@ mod tests {
             overview["totalDurationSeconds"].as_f64().unwrap()
         );
         assert!(typed.content.overview.is_deep_loaded);
+        assert_eq!(typed.content.overview.project_count, 0);
+        assert_eq!(typed.content.overview.assigned_count, 0);
+        assert_eq!(typed.content.overview.unassigned_count, 1);
         assert_eq!(typed.llm_usage.totals.total_tokens, 18);
         assert_eq!(
             typed.llm_usage.totals.total_tokens,

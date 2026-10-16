@@ -41,8 +41,6 @@ pub enum FfiSyncConflictKindV1 {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, uniffi::Enum)]
 pub enum FfiSyncEntityKindV1 {
-    Tag,
-    /// Compatibility only: persisted v3 queues may still contain project rows.
     Project,
     HistoryItem,
     HistoryTranscript,
@@ -280,8 +278,7 @@ impl From<SyncConflictKind> for FfiSyncConflictKindV1 {
 impl From<SyncEntityKind> for FfiSyncEntityKindV1 {
     fn from(value: SyncEntityKind) -> Self {
         match value {
-            SyncEntityKind::Tag => Self::Tag,
-            SyncEntityKind::Project => Self::Project,
+            SyncEntityKind::Tag | SyncEntityKind::Project => Self::Project,
             SyncEntityKind::HistoryItem => Self::HistoryItem,
             SyncEntityKind::HistoryTranscript => Self::HistoryTranscript,
             SyncEntityKind::HistorySummary => Self::HistorySummary,
@@ -500,8 +497,8 @@ mod tests {
                 operation_id: "op-1".to_string(),
             },
             entity: SyncEntityKey {
-                kind: SyncEntityKind::Tag,
-                id: "tag-1".to_string(),
+                kind: SyncEntityKind::Project,
+                id: "project-1".to_string(),
             },
             kind,
         }
@@ -550,7 +547,7 @@ mod tests {
 
         assert_eq!(ffi.source_sequence, 7);
         assert_eq!(ffi.version.clock.logical, 2);
-        assert_eq!(ffi.entity.kind, FfiSyncEntityKindV1::Tag);
+        assert_eq!(ffi.entity.kind, FfiSyncEntityKindV1::Project);
         assert_eq!(
             ffi.causal_context.observed_sequences.get("device-b"),
             Some(&3)

@@ -1,5 +1,6 @@
-use sona_core::project::ProjectRecord;
-use sona_core::tag::{TagCreateInput, TagRecord, TagRepositorySnapshot, TagUpdateInput};
+use sona_core::project::{
+    ProjectCreateInput, ProjectRecord, ProjectRepositorySnapshot, ProjectUpdateInput,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq, uniffi::Record)]
 pub struct FfiProjectCreateInputV1 {
@@ -35,28 +36,14 @@ pub struct FfiProjectRepositorySnapshotV1 {
     pub active_project_id: Option<String>,
 }
 
-impl From<FfiProjectCreateInputV1> for TagCreateInput {
+impl From<FfiProjectCreateInputV1> for ProjectCreateInput {
     fn from(value: FfiProjectCreateInputV1) -> Self {
         Self {
             name: value.name,
             description: value.description,
             icon: value.icon,
             color: value.color,
-        }
-    }
-}
-
-impl From<TagRecord> for FfiProjectRecordV1 {
-    fn from(value: TagRecord) -> Self {
-        Self {
-            id: value.id,
-            name: value.name,
-            description: value.description,
-            icon: value.icon,
-            color: value.color,
-            sort_order: value.sort_order as u64,
-            created_at: value.created_at,
-            updated_at: value.updated_at,
+            pipeline: None,
         }
     }
 }
@@ -76,7 +63,7 @@ impl From<ProjectRecord> for FfiProjectRecordV1 {
     }
 }
 
-impl TryFrom<FfiProjectRecordV1> for TagRecord {
+impl TryFrom<FfiProjectRecordV1> for ProjectRecord {
     type Error = String;
 
     fn try_from(value: FfiProjectRecordV1) -> Result<Self, Self::Error> {
@@ -84,32 +71,34 @@ impl TryFrom<FfiProjectRecordV1> for TagRecord {
             id: value.id,
             name: value.name,
             description: value.description,
-            icon: value.icon,
-            color: value.color,
+            icon: (!value.icon.is_empty()).then_some(value.icon),
+            color: (!value.color.is_empty()).then_some(value.color),
             sort_order: usize::try_from(value.sort_order)
                 .map_err(|_| format!("project sort order {} is too large", value.sort_order))?,
             created_at: value.created_at,
             updated_at: value.updated_at,
+            pipeline: None,
         })
     }
 }
 
-impl From<FfiProjectUpdateInputV1> for TagUpdateInput {
+impl From<FfiProjectUpdateInputV1> for ProjectUpdateInput {
     fn from(value: FfiProjectUpdateInputV1) -> Self {
         Self {
             name: value.name,
+            description: value.description,
             icon: value.icon,
             color: value.color,
-            description: value.description,
+            pipeline: None,
         }
     }
 }
 
-impl From<TagRepositorySnapshot> for FfiProjectRepositorySnapshotV1 {
-    fn from(value: TagRepositorySnapshot) -> Self {
+impl From<ProjectRepositorySnapshot> for FfiProjectRepositorySnapshotV1 {
+    fn from(value: ProjectRepositorySnapshot) -> Self {
         Self {
-            projects: value.tags.into_iter().map(Into::into).collect(),
-            active_project_id: value.active_tag_id,
+            projects: value.projects.into_iter().map(Into::into).collect(),
+            active_project_id: value.active_project_id,
         }
     }
 }

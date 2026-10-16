@@ -623,7 +623,7 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(typed_manifest.app_version, TEST_APP_VERSION);
-        assert_eq!(typed_manifest.counts.tags, 1);
+        assert_eq!(typed_manifest.counts.projects, 1);
         assert_eq!(typed_manifest.counts.history_items, 1);
         assert!(typed_manifest.scopes.config && typed_manifest.scopes.analytics);
 
@@ -634,7 +634,7 @@ mod tests {
                 .unwrap(),
         );
         assert_eq!(typed_preview.manifest, typed_manifest);
-        assert_eq!(typed_preview.tags_json.len(), json_preview.tags.len());
+        assert_eq!(typed_preview.projects_json.len(), json_preview.tags.len());
         assert_eq!(
             typed_preview.automation_rules_json.len(),
             json_preview.automation_rules.len()
@@ -644,7 +644,7 @@ mod tests {
             serde_json::from_str::<Value>(&typed_preview.config_json).unwrap(),
             json_preview.config
         );
-        for (typed, expected) in typed_preview.tags_json.iter().zip(&json_preview.tags) {
+        for (typed, expected) in typed_preview.projects_json.iter().zip(&json_preview.tags) {
             assert_eq!(&serde_json::from_str::<Value>(typed).unwrap(), expected);
         }
 
