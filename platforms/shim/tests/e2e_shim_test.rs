@@ -245,7 +245,7 @@ fn test_reference_counting_uninstallation() {
     let report2 = uninstall_shims(Some(Channel::Nightly), false).unwrap();
     assert_eq!(report2.removed_channel, Some("nightly".to_string()));
     assert_eq!(report2.active_remaining_channel, None);
-
+    assert!(report2.path_removed);
     // Clean up
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);

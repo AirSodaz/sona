@@ -56,6 +56,7 @@ export function SettingsGeneralTab({
     try {
       const status = await shimService.getStatus();
       setShimStatus(status);
+      setShimActionError(null);
     } catch (err) {
       console.warn('Failed to fetch shim status:', err);
       setShimActionError(err instanceof Error ? err.message : String(err));
@@ -348,7 +349,16 @@ export function SettingsGeneralTab({
                 </>
               )}
             </span>
-            {shimStatus?.isConfigured ? (
+            {shimStatus === null && shimActionError ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void loadShimStatus()}
+                disabled={isShimLoading}
+              >
+                {t('common.retry')}
+              </button>
+            ) : shimStatus?.isConfigured ? (
               <button
                 type="button"
                 className="btn btn-secondary"
@@ -375,13 +385,14 @@ export function SettingsGeneralTab({
         </SettingsItem>
 
         {shimStatus && (
-          <SettingsItem title={t('settings.cli_tools.bin_dir_title')} hint={shimStatus.shimDir}>
+          <SettingsItem title={t('settings.cli_tools.bin_dir_title')}>
             <code
               style={{
                 fontSize: '12px',
                 padding: '4px 8px',
                 background: 'var(--color-bg-secondary, rgba(0,0,0,0.05))',
                 borderRadius: '4px',
+                wordBreak: 'break-all',
               }}
             >
               {shimStatus.shimDir}

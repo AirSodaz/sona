@@ -133,11 +133,11 @@ pub fn install_shims(
         use std::os::unix::fs::symlink;
         let main_shim = shim_dir.join("sona-shim");
         let need_copy = if main_shim.is_file() {
-            should_update_file(source_shim, &main_shim)
+            source_shim != &main_shim && should_update_file(source_shim, &main_shim)
         } else {
             true
         };
-        if need_copy {
+        if need_copy && source_shim != &main_shim {
             let _ = std::fs::remove_file(&main_shim);
             std::fs::copy(source_shim, &main_shim)
                 .map_err(|e| format!("Failed to copy to {}: {}", main_shim.display(), e))?;
@@ -155,10 +155,10 @@ pub fn install_shims(
                 continue;
             }
             let link_path = shim_dir.join(name);
-            if !link_path.exists() {
-                let _ = symlink("sona-shim", &link_path);
+            let _ = std::fs::remove_file(&link_path);
+            if symlink("sona-shim", &link_path).is_ok() {
+                created_shims.push(name.to_string());
             }
-            created_shims.push(name.to_string());
         }
     }
 
@@ -212,6 +212,14 @@ pub fn uninstall_shims(
                 });
             }
         }
+    } else if !force {
+        let stable_exists = get_registered_channel(Channel::Stable).is_some()
+            || is_channel_installed(Channel::Stable);
+        let nightly_exists = get_registered_channel(Channel::Nightly).is_some()
+            || is_channel_installed(Channel::Nightly);
+        if stable_exists || nightly_exists {
+            return Err("Cannot remove shims while channels remain installed. Specify --channel <name> or use --force.".to_string());
+        }
     }
 
     // Completely remove shims and PATH entry
@@ -224,8 +232,7 @@ pub fn uninstall_shims(
                 name.to_string()
             };
             let p = shim_dir.join(&exe_name);
-            if p.is_symlink() || p.exists() {
-                let _ = std::fs::remove_file(&p);
+            if (p.is_symlink() || p.exists()) && std::fs::remove_file(&p).is_ok() {
                 shims_removed = true;
             }
         }
@@ -247,9 +254,15 @@ pub fn uninstall_shims(
 // Helpers
 // ---------------------------------------------------------------------------
 
-fn normalize_path(p: &Path) -> String {
-    let s = p.to_string_lossy().to_lowercase();
-    s.trim_end_matches(['\\', '/']).to_string()
+pub fn normalize_path(p: &Path) -> String {
+    let s = p.to_string_lossy().trim().trim_matches('"').to_lowercase();
+    if cfg!(windows) {
+        let unified = s.replace('/', "\\");
+        unified.trim_end_matches('\\').to_string()
+    } else {
+        let unified = s.replace('\\', "/");
+        unified.trim_end_matches('/').to_string()
+    }
 }
 
 fn should_update_file(source: &Path, dest: &Path) -> bool {
@@ -294,30 +307,28 @@ fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
         )
     })?;
 
-    let res = (|| {
-        if dest.exists() {
-            let old_name = format!(
-                "{}.old.{}.{}",
-                dest.file_name().unwrap_or_default().to_string_lossy(),
-                std::process::id(),
-                std::time::SystemTime::now()
-                    .duration_since(std::time::UNIX_EPOCH)
-                    .map(|d| d.as_nanos())
-                    .unwrap_or(0)
-            );
-            let old_path = dest.with_file_name(old_name);
-            if std::fs::rename(dest, &old_path).is_ok() {
-                let _ = std::fs::remove_file(&old_path);
-            } else {
-                let _ = std::fs::remove_file(dest);
-            }
+    if dest.exists() {
+        let old_name = format!(
+            "{}.old.{}.{}",
+            dest.file_name().unwrap_or_default().to_string_lossy(),
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        );
+        let old_path = dest.with_file_name(old_name);
+        if std::fs::rename(dest, &old_path).is_ok() {
+            let _ = std::fs::remove_file(&old_path);
+        } else {
+            let _ = std::fs::remove_file(dest);
         }
-        std::fs::rename(&temp_path, dest).or_else(|_| {
-            std::fs::copy(&temp_path, dest)
-                .map(|_| ())
-                .map_err(|e| format!("Copy failed: {}", e))
-        })
-    })();
+    }
+    let res = std::fs::rename(&temp_path, dest).or_else(|_| {
+        std::fs::copy(&temp_path, dest)
+            .map(|_| ())
+            .map_err(|e| format!("Copy failed: {}", e))
+    });
 
     let _ = std::fs::remove_file(&temp_path);
     res
@@ -410,19 +421,19 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     }
     #[cfg(unix)]
     {
-        if let Ok(home) = std::env::var("HOME") {
-            let rc_path = PathBuf::from(&home).join(".profile");
-            let line = "\nexport PATH=\"$HOME/.sona/bin:$PATH\"\n";
-            use std::io::Write;
-            let mut file = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&rc_path)
-                .map_err(|e| format!("Failed to open {}: {}", rc_path.display(), e))?;
-            file.write_all(line.as_bytes())
-                .map_err(|e| format!("Failed to write {}: {}", rc_path.display(), e))?;
-            return Ok(true);
-        }
+        let home = std::env::var("HOME")
+            .map_err(|_| "HOME environment variable is not set".to_string())?;
+        let rc_path = PathBuf::from(&home).join(".profile");
+        let line = "\nexport PATH=\"$HOME/.sona/bin:$PATH\"\n";
+        use std::io::Write;
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&rc_path)
+            .map_err(|e| format!("Failed to open {}: {}", rc_path.display(), e))?;
+        file.write_all(line.as_bytes())
+            .map_err(|e| format!("Failed to write {}: {}", rc_path.display(), e))?;
+        Ok(true)
     }
     #[cfg(not(any(windows, unix)))]
     {

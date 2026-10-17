@@ -185,7 +185,13 @@ pub async fn mcp_get_tools_catalog(
 }
 
 #[tauri::command]
-pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
+pub async fn mcp_get_client_configs(app: AppHandle) -> Result<McpClientConfigMap, String> {
+    let is_nightly =
+        crate::commands::system::detect_app_channel(&app) == sona_shim::registry::Channel::Nightly;
+    build_mcp_client_configs(is_nightly)
+}
+
+pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, String> {
     let (binary_path_opt, binary_exists) = resolve_sona_mcp_binary_path();
     let binary_path = binary_path_opt.unwrap_or_else(|| {
         if cfg!(windows) {
@@ -234,9 +240,6 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
     } else {
         "~/.codeium/windsurf/mcp_config.json".to_string()
     };
-    let is_nightly = std::env::var("SONA_CHANNEL")
-        .map(|v| v.eq_ignore_ascii_case("nightly"))
-        .unwrap_or(false);
 
     let path_status = sona_shim::installer::check_path_status();
     let target_mcp_name = if is_nightly {
@@ -375,7 +378,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_mcp_get_client_configs_structure() {
-        let configs = mcp_get_client_configs().await.unwrap();
+        let configs = build_mcp_client_configs(false).unwrap();
         assert!(!configs.binary_path.is_empty());
         assert_eq!(configs.guides.len(), 8);
         assert!(configs.guides.iter().any(|g| g.id == "claude-desktop"));

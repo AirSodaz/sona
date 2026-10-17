@@ -33,6 +33,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-mcp` | host |
+| `sona-shim` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -203,8 +204,8 @@ current SQLite payload and applies post-v0.8.0 field upgrades.
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
 
-There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync` and `sona-sync-s3 -> sona-sync`).
-
+The following architectural dependency exceptions are registered and reviewed:
+- `sona -> sona-shim`: Desktop host integrates channel registration and universal command shims directly.
 <a id="native-window-chrome"></a>
 ## Native window chrome follows the application theme
 

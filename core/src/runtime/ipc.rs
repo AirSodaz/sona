@@ -147,6 +147,7 @@ mod tests {
             }
         });
 
+        #[cfg(any(windows, unix))]
         assert_ne!(stable_ep, nightly_ep);
         #[cfg(windows)]
         {

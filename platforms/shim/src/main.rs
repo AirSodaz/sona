@@ -1,6 +1,6 @@
 use sona_shim::dispatcher::{detect_role, resolve_target_channel, resolve_target_executable};
 use sona_shim::executor::execute;
-use sona_shim::installer::{check_path_status, install_shims, uninstall_shims};
+use sona_shim::installer::{check_path_status, install_shims, normalize_path, uninstall_shims};
 use sona_shim::registry::{
     Channel, TargetRole, find_executable, get_default_channel, get_registered_channel,
     set_default_channel,
@@ -231,8 +231,22 @@ fn handle_install(args: &[String]) {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
+            "--help" | "-h" => {
+                println!(
+                    "Usage: sona-shim install [--channel <stable|nightly>] [--path <PATH>] [--version <VERSION>]"
+                );
+                return;
+            }
             "--channel" if i + 1 < args.len() => {
-                channel_opt = Channel::parse(&args[i + 1]);
+                let parsed = Channel::parse(&args[i + 1]);
+                if parsed.is_none() {
+                    eprintln!(
+                        "Invalid channel '{}'. Use 'stable' or 'nightly'.",
+                        args[i + 1]
+                    );
+                    std::process::exit(1);
+                }
+                channel_opt = parsed;
                 i += 2;
             }
             "--path" if i + 1 < args.len() => {
@@ -243,8 +257,12 @@ fn handle_install(args: &[String]) {
                 ver_opt = Some(args[i + 1].clone());
                 i += 2;
             }
-            _ => {
-                i += 1;
+            unknown => {
+                eprintln!(
+                    "Unknown option '{}'. Run 'sona-shim install --help' for usage.",
+                    unknown
+                );
+                std::process::exit(1);
             }
         }
     }
@@ -305,8 +323,22 @@ fn handle_uninstall(args: &[String]) {
     let mut i = 1;
     while i < args.len() {
         match args[i].as_str() {
+            "--help" | "-h" => {
+                println!(
+                    "Usage: sona-shim uninstall [--channel <stable|nightly>] [--path <PATH>] [--force]"
+                );
+                return;
+            }
             "--channel" if i + 1 < args.len() => {
-                channel_opt = Channel::parse(&args[i + 1]);
+                let parsed = Channel::parse(&args[i + 1]);
+                if parsed.is_none() {
+                    eprintln!(
+                        "Invalid channel '{}'. Use 'stable' or 'nightly'.",
+                        args[i + 1]
+                    );
+                    std::process::exit(1);
+                }
+                channel_opt = parsed;
                 i += 2;
             }
             "--path" if i + 1 < args.len() => {
@@ -317,44 +349,47 @@ fn handle_uninstall(args: &[String]) {
                 force = true;
                 i += 1;
             }
-            _ => {
-                i += 1;
+            unknown => {
+                eprintln!(
+                    "Unknown option '{}'. Run 'sona-shim uninstall --help' for usage.",
+                    unknown
+                );
+                std::process::exit(1);
             }
         }
     }
     if channel_opt.is_none() && !force {
         if let Some(target_path) = path_opt {
-            let target_norm = target_path.to_string_lossy().to_lowercase();
-            if let Some(stable) = get_registered_channel(Channel::Stable) {
-                if stable.install_path.to_string_lossy().to_lowercase() == target_norm {
-                    channel_opt = Some(Channel::Stable);
-                }
+            let target_norm = normalize_path(&target_path);
+            if let Some(stable) = get_registered_channel(Channel::Stable)
+                && normalize_path(&stable.install_path) == target_norm
+            {
+                channel_opt = Some(Channel::Stable);
             }
-            if let Some(nightly) = get_registered_channel(Channel::Nightly) {
-                if nightly.install_path.to_string_lossy().to_lowercase() == target_norm {
-                    channel_opt = Some(Channel::Nightly);
-                }
+            if let Some(nightly) = get_registered_channel(Channel::Nightly)
+                && normalize_path(&nightly.install_path) == target_norm
+            {
+                channel_opt = Some(Channel::Nightly);
             }
         }
-        if channel_opt.is_none() {
-            if let Ok(current_exe) = std::env::current_exe() {
-                let shim_dir = sona_shim::installer::get_shim_dir();
-                let is_in_shim_dir = current_exe.starts_with(&shim_dir)
-                    || current_exe.parent().map_or(false, |p| p == shim_dir);
-
-                if !is_in_shim_dir {
-                    let exe_str = current_exe.to_string_lossy().to_lowercase();
-                    if exe_str.contains("nightly") {
-                        channel_opt = Some(Channel::Nightly);
-                    } else if let Some(parent) = current_exe.parent() {
-                        let parent_name = parent
-                            .file_name()
-                            .and_then(|n| n.to_str())
-                            .unwrap_or("")
-                            .to_lowercase();
-                        if parent_name == "sona" || parent_name == "com.asoda.sona" {
-                            channel_opt = Some(Channel::Stable);
-                        }
+        if channel_opt.is_none()
+            && let Ok(current_exe) = std::env::current_exe()
+        {
+            let shim_dir = sona_shim::installer::get_shim_dir();
+            let is_in_shim_dir = current_exe.starts_with(&shim_dir)
+                || current_exe.parent().is_some_and(|p| p == shim_dir);
+            if !is_in_shim_dir {
+                let exe_str = current_exe.to_string_lossy().to_lowercase();
+                if exe_str.contains("nightly") {
+                    channel_opt = Some(Channel::Nightly);
+                } else if let Some(parent) = current_exe.parent() {
+                    let parent_name = parent
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .unwrap_or("")
+                        .to_lowercase();
+                    if parent_name == "sona" || parent_name == "com.asoda.sona" {
+                        channel_opt = Some(Channel::Stable);
                     }
                 }
             }

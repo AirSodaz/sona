@@ -33,6 +33,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-mcp` | host |
+| `sona-shim` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -201,8 +202,8 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 <a id="reviewed-exceptions"></a>
 ## 已评审例外
 
-当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync` 与 `sona-sync-s3 -> sona-sync`）。
-
+当前已登记并经过评审的架构依赖例外：
+- `sona -> sona-shim`：桌面端 Host 直接集成通道注册与通用命令分发。
 <a id="native-window-chrome"></a>
 ## 原生窗口边框跟随应用主题
 

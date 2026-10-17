@@ -222,27 +222,24 @@ pub fn detect_app_channel_from_config(
     product_name: Option<&str>,
     version: Option<&str>,
 ) -> sona_shim::registry::Channel {
-    let env_channel = std::env::var("SONA_CHANNEL")
-        .unwrap_or_default()
-        .trim()
-        .to_lowercase();
+    let id = identifier.to_lowercase();
+    let prod = product_name.unwrap_or("").to_lowercase();
+    let ver = version.unwrap_or("").to_lowercase();
 
-    let is_nightly = match env_channel.as_str() {
-        "nightly" => true,
-        "stable" => false,
-        _ => {
-            let id = identifier.to_lowercase();
-            let prod = product_name.unwrap_or("").to_lowercase();
-            let ver = version.unwrap_or("").to_lowercase();
-            id.ends_with(".nightly") || prod.contains("nightly") || ver.contains("nightly")
-        }
-    };
-
-    if is_nightly {
-        sona_shim::registry::Channel::Nightly
-    } else {
-        sona_shim::registry::Channel::Stable
+    if id.ends_with(".nightly") || prod.contains("nightly") || ver.contains("nightly") {
+        return sona_shim::registry::Channel::Nightly;
     }
+
+    if let Ok(env_channel) = std::env::var("SONA_CHANNEL") {
+        let trimmed = env_channel.trim().to_lowercase();
+        if trimmed == "nightly" {
+            return sona_shim::registry::Channel::Nightly;
+        } else if trimmed == "stable" {
+            return sona_shim::registry::Channel::Stable;
+        }
+    }
+
+    sona_shim::registry::Channel::Stable
 }
 
 pub fn detect_app_channel(app: &AppHandle) -> sona_shim::registry::Channel {
@@ -321,7 +318,7 @@ pub async fn install_shim(app: AppHandle) -> Result<(), String> {
 
         let version_str = app.config().version.as_deref();
         let exe_name = current_exe.file_name().and_then(|n| n.to_str());
-        let install_dir = source_shim.parent().unwrap_or(parent);
+        let install_dir = parent;
         let reg_tuple = Some((channel, install_dir, version_str, exe_name));
 
         sona_shim::installer::install_shims(&source_shim, reg_tuple).map(|_| ())

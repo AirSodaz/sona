@@ -37,7 +37,7 @@ function normalizePlatform(platform = process.platform) {
 
 function resolveLocalCudaRuntimeDir(platform = process.platform, env = process.env) {
   if (platform === 'win32') {
-    const home = env.USERPROFILE || os.homedir();
+    const home = env.USERPROFILE || env.HOME || os.homedir();
     const localAppData = env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
     const primary = path.join(localAppData, 'com.asoda.sona', 'runtimes', 'cuda');
     const nightly = path.join(localAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');

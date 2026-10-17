@@ -483,7 +483,9 @@ fn is_non_empty_dir(path: &Path) -> bool {
                 entries.filter_map(Result::ok).any(|entry| {
                     let name = entry.file_name();
                     let s = name.to_string_lossy();
-                    !s.starts_with('.') && s != "desktop.ini" && s != "Thumbs.db"
+                    !s.starts_with('.')
+                        && !s.eq_ignore_ascii_case("desktop.ini")
+                        && !s.eq_ignore_ascii_case("thumbs.db")
                 })
             })
             .unwrap_or(false)
@@ -595,9 +597,11 @@ pub fn resolve_active_models_dir(
     }
 
     let legacy_models_dir = active_data_dir.join("models");
-    if is_non_empty_dir(&legacy_models_dir)
-        || (config.custom_data_dir.is_some() && legacy_models_dir.exists())
-    {
+    let has_custom_data = config
+        .custom_data_dir
+        .as_ref()
+        .map_or(false, |p| !p.as_os_str().is_empty());
+    if is_non_empty_dir(&legacy_models_dir) || (has_custom_data && legacy_models_dir.exists()) {
         return legacy_models_dir;
     }
 
@@ -627,9 +631,11 @@ where
             }
             let active_data = resolve_active_data_dir(root);
             let legacy_models = active_data.join("models");
-            if is_non_empty_dir(&legacy_models)
-                || (config.custom_data_dir.is_some() && legacy_models.exists())
-            {
+            let has_custom_data = config
+                .custom_data_dir
+                .as_ref()
+                .map_or(false, |p| !p.as_os_str().is_empty());
+            if is_non_empty_dir(&legacy_models) || (has_custom_data && legacy_models.exists()) {
                 return Some(legacy_models);
             }
         }

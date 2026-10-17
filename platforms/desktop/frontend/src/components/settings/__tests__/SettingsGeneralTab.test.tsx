@@ -183,4 +183,36 @@ describe('SettingsGeneralTab - Command Line Tools', () => {
     expect(screen.getByText('settings.cli_tools.uninstall_btn')).toBeDefined();
     expect(screen.queryByText('settings.cli_tools.uninstalling')).toBeNull();
   });
+
+  it('renders a retry button when initial getStatus fails, and clears error on successful retry', async () => {
+    mockShimService.getStatus.mockRejectedValueOnce(new Error('Backend offline'));
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    expect(screen.getByRole('alert')).toBeDefined();
+    expect(screen.getByText('Backend offline')).toBeDefined();
+    const retryBtn = screen.getByText('common.retry');
+    expect(retryBtn).toBeDefined();
+
+    mockShimService.getStatus.mockResolvedValueOnce({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: true,
+      inUserPath: true,
+      isConfigured: true,
+      installedShims: ['sona-cli.exe', 'sona-mcp.exe'],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: false,
+    });
+
+    await act(async () => {
+      fireEvent.click(retryBtn);
+    });
+
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByText('settings.cli_tools.uninstall_btn')).toBeDefined();
+  });
 });

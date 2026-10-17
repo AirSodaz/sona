@@ -27,16 +27,8 @@ pub fn execute(target_path: &Path, args: &[String], channel: Channel) -> ! {
     {
         use windows_sys::Win32::Foundation::TRUE;
         use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
-
-        // Disable Ctrl+C handling in parent so the child console receives it natively
-        unsafe {
-            SetConsoleCtrlHandler(None, TRUE);
-        }
-
-        match std::process::Command::new(target_path).args(args).status() {
-            Ok(status) => {
-                std::process::exit(status.code().unwrap_or(1));
-            }
+        let mut child = match std::process::Command::new(target_path).args(args).spawn() {
+            Ok(child) => child,
             Err(err) => {
                 eprintln!(
                     "sona-shim: Failed to launch {} ({})",
@@ -45,7 +37,15 @@ pub fn execute(target_path: &Path, args: &[String], channel: Channel) -> ! {
                 );
                 std::process::exit(1);
             }
+        };
+
+        // Disable Ctrl+C handling in parent while waiting so child handles signals directly
+        unsafe {
+            SetConsoleCtrlHandler(None, TRUE);
         }
+
+        let status = child.wait().unwrap_or_else(|_| std::process::exit(1));
+        std::process::exit(status.code().unwrap_or(1));
     }
 
     #[cfg(not(any(windows, unix)))]

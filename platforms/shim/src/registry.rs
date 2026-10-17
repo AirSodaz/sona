@@ -58,7 +58,10 @@ impl Channel {
                     .to_string_lossy()
                     .to_string();
             }
-            let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
+            let home = std::env::var("HOME")
+                .ok()
+                .filter(|h| !h.trim().is_empty())
+                .unwrap_or_else(|| ".".to_string());
             let dir_name = match self {
                 Channel::Stable => "sona",
                 Channel::Nightly => "sona-nightly",
@@ -127,7 +130,9 @@ pub struct ChannelInfo {
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RegistryFile {
+    #[serde(default)]
     pub channels: HashMap<String, RegistryChannelEntry>,
+    #[serde(default)]
     pub default_channel: Option<String>,
 }
 
@@ -149,9 +154,15 @@ pub fn get_sona_dir() -> PathBuf {
     }
     #[cfg(windows)]
     {
-        if let Ok(profile) = std::env::var("USERPROFILE") {
+        if let Some(profile) = std::env::var("USERPROFILE")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
             PathBuf::from(profile).join(".sona")
-        } else if let Ok(appdata) = std::env::var("LOCALAPPDATA") {
+        } else if let Some(appdata) = std::env::var("LOCALAPPDATA")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+        {
             PathBuf::from(appdata).join("sona")
         } else {
             PathBuf::from(r"C:\Users\Default\.sona")
@@ -379,6 +390,9 @@ fn read_registry_file() -> Result<RegistryFile, String> {
     }
     let content = std::fs::read_to_string(&path)
         .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+    if content.trim().is_empty() {
+        return Ok(RegistryFile::default());
+    }
     serde_json::from_str(&content).map_err(|e| format!("Failed to parse {}: {}", path.display(), e))
 }
 
@@ -400,6 +414,8 @@ fn write_registry_file(file: &RegistryFile) -> Result<(), String> {
     );
     let temp_path = path.with_file_name(temp_name);
     std::fs::write(&temp_path, &content)
+        .map_err(|e| format!("Failed to write {}: {}", temp_path.display(), e))?;
+    std::fs::rename(&temp_path, &path)
         .or_else(|_| {
             let _ = std::fs::remove_file(&path);
             std::fs::rename(&temp_path, &path)
@@ -659,8 +675,9 @@ pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String
             return None;
         }
 
-        let u16_count = (byte_count as usize) / 2;
+        let u16_count = (byte_count as usize).div_ceil(2);
         let mut buffer: Vec<u16> = vec![0; u16_count];
+        let mut buffer_bytes = (u16_count * 2) as u32;
 
         let status = RegQueryValueExW(
             hkey,
@@ -668,7 +685,7 @@ pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String
             std::ptr::null_mut(),
             &mut val_type,
             buffer.as_mut_ptr() as *mut u8,
-            &mut byte_count,
+            &mut buffer_bytes,
         );
         RegCloseKey(hkey);
 
@@ -680,7 +697,12 @@ pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String
             buffer.pop();
         }
 
-        String::from_utf16(&buffer).ok()
+        let raw_str = String::from_utf16(&buffer).ok()?;
+        if val_type == REG_EXPAND_SZ {
+            Some(win_expand_environment_strings(&raw_str))
+        } else {
+            Some(raw_str)
+        }
     }
 }
 #[cfg(windows)]
@@ -842,7 +864,8 @@ pub fn win_delete_registry_value(subkey: &str, value_name: &str) -> Result<(), S
         let status = RegDeleteValueW(hkey, value_w.as_ptr());
         RegCloseKey(hkey);
 
-        if status != ERROR_SUCCESS {
+        if status != ERROR_SUCCESS && status != 2 {
+            // 2 = ERROR_FILE_NOT_FOUND
             return Err(format!("RegDeleteValueW failed with code {}", status));
         }
 

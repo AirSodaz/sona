@@ -1,6 +1,5 @@
 use crate::registry::{
     Channel, TargetRole, detect_active_ipc_channel, find_executable, get_default_channel,
-    is_channel_installed,
 };
 use std::path::{Path, PathBuf};
 
@@ -97,10 +96,10 @@ pub fn resolve_target_channel(
         Channel::Nightly => Channel::Stable,
     };
 
-    let default_installed = is_channel_installed(default_channel);
-    let other_installed = is_channel_installed(other_channel);
+    let default_has_role = find_executable(default_channel, role).is_some();
+    let other_has_role = find_executable(other_channel, role).is_some();
 
-    if !default_installed && other_installed {
+    if !default_has_role && other_has_role {
         return other_channel;
     }
 
@@ -109,7 +108,17 @@ pub fn resolve_target_channel(
 
 /// Locates a `.sona-channel` file in `dir` or any parent directory.
 pub fn find_channel_in_ancestors(dir: &Path) -> Option<Channel> {
-    let mut current = dir;
+    let abs_dir;
+    let mut current = if dir.is_relative() {
+        if let Ok(cwd) = std::env::current_dir() {
+            abs_dir = cwd.join(dir);
+            &abs_dir
+        } else {
+            dir
+        }
+    } else {
+        dir
+    };
     loop {
         let candidate = current.join(".sona-channel");
         if candidate.is_file()

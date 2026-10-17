@@ -903,8 +903,8 @@ pub async fn reset_models_directory(app: &AppHandle) -> Result<StorageDirectorie
     } else {
         bootstrap.custom_models_dir = None;
     }
+    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
     restart_guard.commit_and_restart();
-
     get_storage_directories_info(app)
 }
 

@@ -53,6 +53,14 @@ test('resolveLocalCudaRuntimeDir probes nightly and shared runtime directories w
       USERPROFILE: path.join(tempDir, 'home'),
     });
     assert.equal(winDir, nightlyCudaDir);
+    // Fresh installation probing: only nightly app root exists without runtimes/cuda
+    const freshNightlyAppData = path.join(tempDir, 'fresh-nightly-appdata');
+    fs.mkdirSync(path.join(freshNightlyAppData, 'com.asoda.sona.nightly'), { recursive: true });
+    const freshNightlyDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: freshNightlyAppData,
+      USERPROFILE: path.join(tempDir, 'empty-home'),
+    });
+    assert.equal(freshNightlyDir, path.join(freshNightlyAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda'));
 
     const mockSharedHome = path.join(tempDir, 'shared-home');
     const sharedCudaDir = path.join(mockSharedHome, '.sona', 'runtimes', 'cuda');
