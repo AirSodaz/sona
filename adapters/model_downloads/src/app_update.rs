@@ -253,46 +253,96 @@ pub async fn download_update_package(
 
 #[cfg(target_os = "windows")]
 pub fn locate_windows_app_exe(running_exe: &Path) -> Option<PathBuf> {
+    let running_str = running_exe.to_string_lossy().to_ascii_lowercase();
+    let is_nightly = running_str.contains("nightly");
+
     let running_name = running_exe
         .file_name()
         .and_then(|n| n.to_str())
         .unwrap_or("")
         .to_ascii_lowercase();
-    if running_name == "sona.exe" && running_exe.is_file() {
+    if (running_name == "sona.exe" || running_name == "sona-nightly.exe") && running_exe.is_file() {
         return Some(running_exe.to_path_buf());
     }
 
+    if let Some(parent) = running_exe.parent() {
+        let sibling_candidates = if is_nightly {
+            ["Sona-Nightly.exe", "Sona.exe"]
+        } else {
+            ["Sona.exe", "Sona-Nightly.exe"]
+        };
+        for candidate in sibling_candidates {
+            let sibling = parent.join(candidate);
+            if sibling.is_file() {
+                return Some(sibling);
+            }
+        }
+    }
+
     if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
-        let nsis_app = PathBuf::from(local_appdata)
-            .join("Programs")
-            .join("Sona")
-            .join("Sona.exe");
-        if nsis_app.is_file() {
-            return Some(nsis_app);
+        let base = PathBuf::from(&local_appdata);
+        let candidates: &[PathBuf] = if is_nightly {
+            &[
+                base.join("Sona-Nightly").join("Sona-Nightly.exe"),
+                base.join("Sona-Nightly").join("Sona.exe"),
+                base.join("Programs")
+                    .join("Sona-Nightly")
+                    .join("Sona-Nightly.exe"),
+                base.join("Programs").join("Sona-Nightly").join("Sona.exe"),
+            ]
+        } else {
+            &[
+                base.join("Sona").join("Sona.exe"),
+                base.join("Programs").join("Sona").join("Sona.exe"),
+            ]
+        };
+        for candidate in candidates {
+            if candidate.is_file() {
+                return Some(candidate.clone());
+            }
         }
     }
 
     if let Ok(program_files) = std::env::var("ProgramFiles") {
-        let pf_app = PathBuf::from(program_files).join("Sona").join("Sona.exe");
-        if pf_app.is_file() {
-            return Some(pf_app);
+        let base = PathBuf::from(&program_files);
+        let candidates: &[PathBuf] = if is_nightly {
+            &[
+                base.join("Sona-Nightly").join("Sona-Nightly.exe"),
+                base.join("Sona-Nightly").join("Sona.exe"),
+            ]
+        } else {
+            &[base.join("Sona").join("Sona.exe")]
+        };
+        for candidate in candidates {
+            if candidate.is_file() {
+                return Some(candidate.clone());
+            }
         }
     }
 
     if let Ok(local_appdata) = std::env::var("LOCALAPPDATA") {
+        let (folder, exe_name) = if is_nightly {
+            ("Sona-Nightly", "Sona-Nightly.exe")
+        } else {
+            ("Sona", "Sona.exe")
+        };
         return Some(
             PathBuf::from(local_appdata)
                 .join("Programs")
-                .join("Sona")
-                .join("Sona.exe"),
+                .join(folder)
+                .join(exe_name),
         );
     }
 
-    if running_name == "sona.exe" {
+    if running_name == "sona.exe" || running_name == "sona-nightly.exe" {
         return Some(running_exe.to_path_buf());
     }
 
-    Some(PathBuf::from("Sona.exe"))
+    if is_nightly {
+        Some(PathBuf::from("Sona-Nightly.exe"))
+    } else {
+        Some(PathBuf::from("Sona.exe"))
+    }
 }
 
 #[cfg(target_os = "windows")]
@@ -312,19 +362,16 @@ pub fn install_update_package(
     if silent {
         cmd.arg("/S");
     }
-    let status = cmd.status().map_err(|e| {
+    cmd.stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null());
+
+    cmd.spawn().map_err(|e| {
         DownloadError::Validation(format!(
             "Failed to execute installer {}: {e}",
             package_path.display()
         ))
     })?;
-
-    if !status.success() {
-        return Err(DownloadError::Validation(format!(
-            "Installer exited with code: {:?}",
-            status.code()
-        )));
-    }
 
     let installed_exe =
         locate_windows_app_exe(running_exe).unwrap_or_else(|| PathBuf::from("Sona.exe"));
@@ -647,5 +694,31 @@ mod tests {
         // If the path does not exist on disk, fallback kicks in
         let resolved2 = locate_windows_app_exe(&app_exe);
         assert!(resolved2.is_some());
+
+        // Sibling Sona.exe / Sona-Nightly.exe detection when present
+        let temp_dir = tempfile::tempdir().unwrap();
+        let sibling_sona = temp_dir.path().join("Sona.exe");
+        std::fs::write(&sibling_sona, b"MZ").unwrap();
+        let running_cli = temp_dir.path().join("sona-cli.exe");
+        let resolved_sibling = locate_windows_app_exe(&running_cli);
+        assert_eq!(resolved_sibling, Some(sibling_sona));
+
+        let temp_dir_nightly = tempfile::tempdir().unwrap();
+        let sibling_nightly = temp_dir_nightly.path().join("Sona-Nightly.exe");
+        std::fs::write(&sibling_nightly, b"MZ").unwrap();
+        let running_cli_nightly = temp_dir_nightly.path().join("sona-cli.exe");
+        let resolved_sibling_nightly = locate_windows_app_exe(&running_cli_nightly);
+        assert_eq!(resolved_sibling_nightly, Some(sibling_nightly));
+
+        // Fallback with "nightly" in running path
+        let nightly_cli = PathBuf::from("C:\\fake\\Sona-Nightly\\sona-cli.exe");
+        let resolved_nightly = locate_windows_app_exe(&nightly_cli);
+        assert!(resolved_nightly.is_some());
+        let path_str = resolved_nightly
+            .unwrap()
+            .to_string_lossy()
+            .to_ascii_lowercase();
+        assert!(path_str.contains("nightly"));
+        assert!(path_str.ends_with("sona.exe") || path_str.ends_with("sona-nightly.exe"));
     }
 }

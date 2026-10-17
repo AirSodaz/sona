@@ -703,7 +703,8 @@ Check for updates and download Sona Desktop installation packages (CLI self-upda
 | --- | --- | --- | --- |
 | `--check` | - | - | Only check for updates without installing |
 | `--force` | `-f` | - | Force reinstall even if already up to date |
-| `--channel` | - | `stable` | Update channel: stable or nightly |
+| `--channel` | - | - | Update channel: stable or nightly (defaults to detected client channel) |
+| `--gui` | - | - | Run installer with graphical interface instead of silent mode (Windows only) |
 | `--download-only` | - | - | Download and verify the update package without installing |
 | `--output` | `-o` | - | Target output path for downloaded package |
 | `--mirror` | - | - | Download mirror strategy: auto, direct, ghproxy, or ghnet |

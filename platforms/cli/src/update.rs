@@ -1,11 +1,11 @@
 use clap::{Args, ValueEnum};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::Notify;
 
 use sona_core::runtime::app_update::{DEFAULT_UPDATER_PUBKEY, UpdateChannel};
 use sona_model_downloads::{
-    DownloadClient, DownloadError, DownloadMirror, check_app_update, check_app_update_with_version,
+    DownloadClient, DownloadError, DownloadMirror, check_app_update_with_version,
     download_update_package, install_update_package, parse_download_mirror,
 };
 
@@ -40,14 +40,20 @@ pub struct UpdateArgs {
     #[arg(short = 'f', long, help = "Force reinstall even if already up to date")]
     pub force: bool,
 
-    /// Update channel: stable or nightly.
+    /// Update channel: stable or nightly (defaults to detected client channel).
     #[arg(
         long,
-        default_value = "stable",
         value_name = "CHANNEL",
-        help = "Update channel: stable or nightly"
+        help = "Update channel: stable or nightly (defaults to detected client channel)"
     )]
-    pub channel: UpdateChannelArg,
+    pub channel: Option<UpdateChannelArg>,
+
+    /// Run installer with graphical interface instead of silent background installation (Windows only).
+    #[arg(
+        long,
+        help = "Run installer with graphical interface instead of silent mode"
+    )]
+    pub gui: bool,
 
     /// Download and verify the update package without installing.
     #[arg(
@@ -140,6 +146,41 @@ fn filename_from_url(url: &str) -> String {
     default_name.to_string()
 }
 
+pub fn resolve_update_channel(
+    explicit: Option<UpdateChannelArg>,
+    version: &str,
+    current_exe: Option<&Path>,
+) -> UpdateChannel {
+    if let Some(channel) = explicit {
+        return channel.into();
+    }
+
+    for var in ["SONA_CHANNEL", "SONA_UPDATE_CHANNEL"] {
+        if let Ok(val) = std::env::var(var) {
+            let trimmed = val.trim().to_ascii_lowercase();
+            if trimmed == "nightly" {
+                return UpdateChannel::Nightly;
+            } else if trimmed == "stable" {
+                return UpdateChannel::Stable;
+            }
+        }
+    }
+
+    if let Some(exe_path) = current_exe {
+        let path_str = exe_path.to_string_lossy().to_ascii_lowercase();
+        if path_str.contains("nightly") {
+            return UpdateChannel::Nightly;
+        }
+    }
+
+    let version_lower = version.to_ascii_lowercase();
+    if version.contains('-') || version_lower.contains("nightly") {
+        return UpdateChannel::Nightly;
+    }
+
+    UpdateChannel::Stable
+}
+
 pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliResult<CliOutput> {
     let client = DownloadClient::try_new().map_err(map_download_error)?;
     let mirror = args
@@ -147,23 +188,22 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
         .as_deref()
         .map(parse_download_mirror)
         .unwrap_or(DownloadMirror::Auto);
-    let channel: UpdateChannel = args.channel.into();
+    let current_version = args
+        .current_version_override
+        .clone()
+        .unwrap_or_else(|| env!("CARGO_PKG_VERSION").to_string());
+    let current_exe = std::env::current_exe().ok();
+    let channel = resolve_update_channel(args.channel, &current_version, current_exe.as_deref());
 
-    let check_result = if let Some(v_override) = &args.current_version_override {
-        check_app_update_with_version(
-            &client,
-            args.endpoint.as_deref(),
-            channel,
-            mirror,
-            v_override,
-        )
-        .await
-        .map_err(map_download_error)?
-    } else {
-        check_app_update(&client, args.endpoint.as_deref(), channel, mirror)
-            .await
-            .map_err(map_download_error)?
-    };
+    let check_result = check_app_update_with_version(
+        &client,
+        args.endpoint.as_deref(),
+        channel,
+        mirror,
+        &current_version,
+    )
+    .await
+    .map_err(map_download_error)?;
 
     // Mode: --check
     if args.check {
@@ -244,7 +284,7 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     // If full install and not --yes, ask for confirmation
     if !args.download_only && !args.yes {
         let prompt = format!(
-            "Download and launch Sona Desktop installer v{}? [y/N]: ",
+            "Download and install Sona Desktop v{}? [y/N]: ",
             check_result.latest_version
         );
         write!(io.stderr(), "{prompt}").map_err(|e| CliError::Io(e.to_string()))?;
@@ -352,13 +392,23 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
     }
 
     // Full install
+    if cfg!(target_os = "windows")
+        && let Some(guard) = _temp_dir_guard.take()
+    {
+        let _ = guard.keep();
+    }
     let running_exe = std::env::current_exe().map_err(|e| CliError::Io(e.to_string()))?;
-    let silent = args.quiet || args.yes;
+    let silent = !args.gui;
     let installed_path =
         install_update_package(&target_file, &running_exe, silent).map_err(map_download_error)?;
     if args.json {
+        let status = if cfg!(target_os = "windows") {
+            "launched"
+        } else {
+            "installed"
+        };
         let info = serde_json::json!({
-            "status": "installed",
+            "status": status,
             "previous_version": check_result.current_version,
             "installed_version": check_result.latest_version,
             "channel": check_result.channel,
@@ -369,10 +419,18 @@ pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliRes
         return Ok(CliOutput::stdout(json));
     }
 
-    Ok(CliOutput::stdout(format!(
-        "Successfully updated Sona Desktop to v{}.\n",
-        check_result.latest_version
-    )))
+    if cfg!(target_os = "windows") {
+        Ok(CliOutput::stdout(format!(
+            "Launched Sona Desktop installer v{} ({} mode). Exiting to allow installation to complete.\n",
+            check_result.latest_version,
+            if silent { "silent" } else { "graphical" }
+        )))
+    } else {
+        Ok(CliOutput::stdout(format!(
+            "Successfully updated Sona Desktop to v{}.\n",
+            check_result.latest_version
+        )))
+    }
 }
 
 #[cfg(test)]
@@ -424,5 +482,134 @@ mod tests {
             filename_from_url("https://example.com/path/to/Sona-v1.0.exe?query=1#frag"),
             "Sona-v1.0.exe"
         );
+    }
+
+    static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn resolve_update_channel_precedence() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let orig_channel = std::env::var("SONA_CHANNEL").ok();
+        let orig_update_channel = std::env::var("SONA_UPDATE_CHANNEL").ok();
+        unsafe {
+            std::env::remove_var("SONA_CHANNEL");
+            std::env::remove_var("SONA_UPDATE_CHANNEL");
+        }
+
+        // 1. Explicit override wins over everything
+        assert_eq!(
+            resolve_update_channel(
+                Some(UpdateChannelArg::Stable),
+                "0.9.6-45",
+                Some(Path::new(
+                    "C:\\Users\\test\\AppData\\Local\\Sona-Nightly\\sona-cli.exe"
+                ))
+            ),
+            UpdateChannel::Stable
+        );
+        assert_eq!(
+            resolve_update_channel(
+                Some(UpdateChannelArg::Nightly),
+                "0.9.6",
+                Some(Path::new("C:\\Program Files\\Sona\\sona-cli.exe"))
+            ),
+            UpdateChannel::Nightly
+        );
+
+        // 2. Exe path containing "nightly"
+        assert_eq!(
+            resolve_update_channel(
+                None,
+                "0.9.6",
+                Some(Path::new(
+                    "C:\\Users\\test\\AppData\\Local\\Sona-Nightly\\sona-cli.exe"
+                ))
+            ),
+            UpdateChannel::Nightly
+        );
+
+        // 3. Version containing '-' or "nightly"
+        assert_eq!(
+            resolve_update_channel(
+                None,
+                "0.9.6-45",
+                Some(Path::new("C:\\Program Files\\Sona\\sona-cli.exe"))
+            ),
+            UpdateChannel::Nightly
+        );
+        assert_eq!(
+            resolve_update_channel(None, "0.9.6-nightly.1", None),
+            UpdateChannel::Nightly
+        );
+
+        // 4. Fallback to stable for clean semver
+        assert_eq!(
+            resolve_update_channel(
+                None,
+                "0.9.6",
+                Some(Path::new("C:\\Program Files\\Sona\\sona-cli.exe"))
+            ),
+            UpdateChannel::Stable
+        );
+        assert_eq!(
+            resolve_update_channel(None, "1.0.0", None),
+            UpdateChannel::Stable
+        );
+
+        if let Some(v) = orig_channel {
+            unsafe {
+                std::env::set_var("SONA_CHANNEL", v);
+            }
+        }
+        if let Some(v) = orig_update_channel {
+            unsafe {
+                std::env::set_var("SONA_UPDATE_CHANNEL", v);
+            }
+        }
+    }
+
+    #[test]
+    fn resolve_update_channel_env_var() {
+        let _guard = ENV_LOCK.lock().unwrap();
+        let orig_channel = std::env::var("SONA_CHANNEL").ok();
+        let orig_update_channel = std::env::var("SONA_UPDATE_CHANNEL").ok();
+        unsafe {
+            std::env::remove_var("SONA_UPDATE_CHANNEL");
+            std::env::set_var("SONA_CHANNEL", "nightly");
+        }
+        assert_eq!(
+            resolve_update_channel(None, "0.9.6", None),
+            UpdateChannel::Nightly
+        );
+        unsafe {
+            std::env::set_var("SONA_CHANNEL", "stable");
+        }
+        assert_eq!(
+            resolve_update_channel(None, "0.9.6-45", None),
+            UpdateChannel::Stable
+        );
+        unsafe {
+            std::env::remove_var("SONA_CHANNEL");
+            std::env::set_var("SONA_UPDATE_CHANNEL", "nightly");
+        }
+        assert_eq!(
+            resolve_update_channel(None, "0.9.6", None),
+            UpdateChannel::Nightly
+        );
+
+        unsafe {
+            std::env::remove_var("SONA_CHANNEL");
+            std::env::remove_var("SONA_UPDATE_CHANNEL");
+        }
+        if let Some(v) = orig_channel {
+            unsafe {
+                std::env::set_var("SONA_CHANNEL", v);
+            }
+        }
+        if let Some(v) = orig_update_channel {
+            unsafe {
+                std::env::set_var("SONA_UPDATE_CHANNEL", v);
+            }
+        }
     }
 }

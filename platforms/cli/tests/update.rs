@@ -17,6 +17,8 @@ fn update_help_succeeds_and_displays_options() {
     assert!(help.contains("--check"));
     assert!(help.contains("--force"));
     assert!(help.contains("--channel"));
+    assert!(help.contains("--gui"));
+    assert!(help.contains("defaults to detected client channel"));
     assert!(help.contains("--download-only"));
     assert!(help.contains("--output"));
     assert!(help.contains("--mirror"));
@@ -432,4 +434,90 @@ async fn update_interactive_decline_exits_cleanly() {
     );
     let output = res.unwrap().unwrap_or_else(|| io.into_output());
     assert!(output.stderr.contains("Update cancelled by user."));
+}
+
+#[tokio::test]
+async fn update_check_auto_detects_nightly_channel_from_hyphenated_version() {
+    let mut platforms = HashMap::new();
+    platforms.insert(
+        current_platform_key().unwrap().to_string(),
+        AppPlatformAsset {
+            url: "https://example.com/asset.exe".to_string(),
+            signature: "sig".to_string(),
+        },
+    );
+    let manifest = AppUpdateManifest {
+        version: "99.0.0".to_string(),
+        notes: Some("Nightly build notes".to_string()),
+        pub_date: Some("2026-04-10T12:00:00Z".to_string()),
+        platforms,
+    };
+    let app = Router::new().route("/updater.json", get(|| async move { Json(manifest) }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let endpoint = format!("http://{addr}/updater.json");
+
+    let output = sona_cli::run_cli_from_args_async([
+        "sona-cli",
+        "update",
+        "--check",
+        "--json",
+        "--endpoint",
+        &endpoint,
+        "--current-version-override",
+        "0.9.6-45",
+    ])
+    .await
+    .unwrap();
+
+    let val: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(val["channel"], "nightly");
+    assert_eq!(val["current_version"], "0.9.6-45");
+}
+
+#[tokio::test]
+async fn update_check_explicit_channel_overrides_hyphenated_version() {
+    let mut platforms = HashMap::new();
+    platforms.insert(
+        current_platform_key().unwrap().to_string(),
+        AppPlatformAsset {
+            url: "https://example.com/asset.exe".to_string(),
+            signature: "sig".to_string(),
+        },
+    );
+    let manifest = AppUpdateManifest {
+        version: "99.0.0".to_string(),
+        notes: Some("Notes".to_string()),
+        pub_date: Some("2026-04-10T12:00:00Z".to_string()),
+        platforms,
+    };
+    let app = Router::new().route("/updater.json", get(|| async move { Json(manifest) }));
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr: SocketAddr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        axum::serve(listener, app).await.unwrap();
+    });
+    let endpoint = format!("http://{addr}/updater.json");
+
+    let output = sona_cli::run_cli_from_args_async([
+        "sona-cli",
+        "update",
+        "--check",
+        "--json",
+        "--channel",
+        "stable",
+        "--endpoint",
+        &endpoint,
+        "--current-version-override",
+        "0.9.6-45",
+    ])
+    .await
+    .unwrap();
+
+    let val: serde_json::Value = serde_json::from_str(&output.stdout).unwrap();
+    assert_eq!(val["channel"], "stable");
+    assert_eq!(val["current_version"], "0.9.6-45");
 }
