@@ -106,6 +106,7 @@ pub fn install_shims(
         )
     })?;
 
+    cleanup_orphan_shims(&shim_dir);
     let mut created_shims = Vec::new();
 
     #[cfg(windows)]
@@ -232,10 +233,24 @@ pub fn uninstall_shims(
                 name.to_string()
             };
             let p = shim_dir.join(&exe_name);
-            if (p.is_symlink() || p.exists()) && std::fs::remove_file(&p).is_ok() {
-                shims_removed = true;
+            if p.is_symlink() || p.exists() {
+                if std::fs::remove_file(&p).is_ok() {
+                    shims_removed = true;
+                } else {
+                    #[cfg(windows)]
+                    {
+                        // Running/locked binary on Windows: rename to .old to vacate active name
+                        let old_name = format!("{}.old.{}", exe_name, std::process::id());
+                        let old_path = shim_dir.join(old_name);
+                        if std::fs::rename(&p, &old_path).is_ok() {
+                            let _ = std::fs::remove_file(&old_path);
+                            shims_removed = true;
+                        }
+                    }
+                }
             }
         }
+        cleanup_orphan_shims(&shim_dir);
         // Remove shim_dir if empty
         let _ = std::fs::remove_dir(&shim_dir);
     }
@@ -265,6 +280,19 @@ pub fn normalize_path(p: &Path) -> String {
     }
 }
 
+pub fn cleanup_orphan_shims(shim_dir: &Path) {
+    if let Ok(entries) = std::fs::read_dir(shim_dir) {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            if let Some(file_name) = path.file_name().and_then(|n| n.to_str())
+                && (file_name.contains(".old.") || file_name.contains(".tmp."))
+            {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    }
+}
+
 fn should_update_file(source: &Path, dest: &Path) -> bool {
     let Ok(src_meta) = source.metadata() else {
         return false;
@@ -277,16 +305,24 @@ fn should_update_file(source: &Path, dest: &Path) -> bool {
         return true;
     }
 
-    match (src_meta.modified(), dst_meta.modified()) {
-        (Ok(s_mod), Ok(d_mod)) => s_mod > d_mod,
-        _ => false,
-    }
+    // Direct byte comparison: shims are compact binaries (~1-2MB), byte check takes <1ms and avoids mtime drift
+    let Ok(src_bytes) = std::fs::read(source) else {
+        return false;
+    };
+    let Ok(dst_bytes) = std::fs::read(dest) else {
+        return true;
+    };
+
+    src_bytes != dst_bytes
 }
 
 #[cfg(windows)]
 fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
     if source == dest {
         return Ok(());
+    }
+    if let Some(parent) = dest.parent() {
+        cleanup_orphan_shims(parent);
     }
     let temp_name = format!(
         "{}.tmp.{}.{}",
@@ -339,8 +375,8 @@ fn check_user_env_has_path(dir: &Path) -> bool {
 
     #[cfg(windows)]
     {
-        use crate::registry::{win_expand_environment_strings, win_read_registry_string};
-        if let Some(user_path) = win_read_registry_string("Environment", "Path") {
+        use crate::registry::{win_expand_environment_strings, win_read_registry_string_raw};
+        if let Some(user_path) = win_read_registry_string_raw("Environment", "Path") {
             let expanded_path = win_expand_environment_strings(&user_path);
             for entry in expanded_path.split(';') {
                 let trimmed = entry.trim();
@@ -354,9 +390,8 @@ fn check_user_env_has_path(dir: &Path) -> bool {
     #[cfg(unix)]
     {
         if let Ok(home) = std::env::var("HOME") {
-            let files = [".bashrc", ".zshrc", ".profile"];
-            for f in &files {
-                let p = PathBuf::from(&home).join(f);
+            let home_path = PathBuf::from(&home);
+            for p in get_unix_shell_rc_paths(&home_path) {
                 if let Ok(content) = std::fs::read_to_string(&p) {
                     if content.contains(".sona/bin") {
                         return true;
@@ -369,6 +404,44 @@ fn check_user_env_has_path(dir: &Path) -> bool {
     false
 }
 
+#[cfg(unix)]
+fn get_unix_shell_rc_paths(home: &Path) -> Vec<PathBuf> {
+    let mut targets = Vec::new();
+    let zshrc = home.join(".zshrc");
+    let zprofile = home.join(".zprofile");
+    let bashrc = home.join(".bashrc");
+    let profile = home.join(".profile");
+
+    let is_zsh = std::env::var("SHELL")
+        .map(|s| s.ends_with("zsh"))
+        .unwrap_or(cfg!(target_os = "macos"));
+
+    if is_zsh {
+        if zshrc.exists() {
+            targets.push(zshrc);
+        }
+        if cfg!(target_os = "macos") && zprofile.exists() {
+            targets.push(zprofile);
+        }
+    }
+    if bashrc.exists() {
+        targets.push(bashrc);
+    }
+    if profile.exists() {
+        targets.push(profile);
+    }
+
+    if targets.is_empty() {
+        if cfg!(target_os = "macos") {
+            targets.push(home.join(".zshrc"));
+        } else {
+            targets.push(home.join(".profile"));
+        }
+    }
+
+    targets
+}
+
 fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
         return Ok(true);
@@ -379,12 +452,13 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
 
     #[cfg(windows)]
     {
-        use crate::registry::{win_read_registry_string, win_write_registry_expand_string};
+        use crate::registry::{win_read_registry_string_raw, win_write_registry_expand_string};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
 
-        let current_path = match win_read_registry_string("Environment", "Path") {
+        // Read RAW unexpanded string to preserve dynamic variables like %USERPROFILE% or %JAVA_HOME%
+        let current_raw_path = match win_read_registry_string_raw("Environment", "Path") {
             Some(p) => p,
             None => {
                 if crate::registry::win_registry_value_exists("Environment", "Path") {
@@ -393,12 +467,12 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
                 String::new()
             }
         };
-        let new_path = if current_path.trim().is_empty() {
+        let new_path = if current_raw_path.trim().is_empty() {
             dir.to_string_lossy().to_string()
         } else {
             format!(
                 "{};{}",
-                current_path.trim_end_matches(';'),
+                current_raw_path.trim_end_matches(';'),
                 dir.to_string_lossy()
             )
         };
@@ -423,17 +497,29 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     {
         let home = std::env::var("HOME")
             .map_err(|_| "HOME environment variable is not set".to_string())?;
-        let rc_path = PathBuf::from(&home).join(".profile");
-        let line = "\nexport PATH=\"$HOME/.sona/bin:$PATH\"\n";
+        let home_path = PathBuf::from(&home);
+        let targets = get_unix_shell_rc_paths(&home_path);
+        let export_block = "\n# Sona CLI tools\nexport PATH=\"$HOME/.sona/bin:$PATH\"\n";
         use std::io::Write;
-        let mut file = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&rc_path)
-            .map_err(|e| format!("Failed to open {}: {}", rc_path.display(), e))?;
-        file.write_all(line.as_bytes())
-            .map_err(|e| format!("Failed to write {}: {}", rc_path.display(), e))?;
-        Ok(true)
+        let mut modified = false;
+
+        for rc_path in targets {
+            let already_has = std::fs::read_to_string(&rc_path)
+                .map(|c| c.contains(".sona/bin"))
+                .unwrap_or(false);
+            if !already_has {
+                if let Ok(mut file) = std::fs::OpenOptions::new()
+                    .create(true)
+                    .append(true)
+                    .open(&rc_path)
+                {
+                    if file.write_all(export_block.as_bytes()).is_ok() {
+                        modified = true;
+                    }
+                }
+            }
+        }
+        Ok(modified)
     }
     #[cfg(not(any(windows, unix)))]
     {
@@ -449,31 +535,33 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
     #[cfg(windows)]
     {
         use crate::registry::{
-            win_expand_environment_strings, win_read_registry_string,
+            win_expand_environment_strings, win_read_registry_string_raw,
             win_write_registry_expand_string,
         };
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
 
-        let Some(current_path) = win_read_registry_string("Environment", "Path") else {
+        let Some(current_raw_path) = win_read_registry_string_raw("Environment", "Path") else {
             return Ok(false);
         };
 
         let mut changed = false;
         let mut new_entries = Vec::new();
 
-        for entry in current_path.split(';') {
+        for entry in current_raw_path.split(';') {
             let trimmed = entry.trim();
             if trimmed.is_empty() {
                 continue;
             }
+            // Expand entry ONLY for comparison with target
             let expanded = win_expand_environment_strings(trimmed);
             if normalize_path(Path::new(trimmed)) == target
                 || normalize_path(Path::new(&expanded)) == target
             {
                 changed = true;
             } else {
+                // Retain raw unexpanded entry to protect %USERPROFILE%, %JAVA_HOME%, etc.
                 new_entries.push(trimmed);
             }
         }
@@ -501,8 +589,110 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
 
     #[cfg(unix)]
     {
-        // For Unix, removing from shell profiles is best-effort
         let _ = target;
-        Ok(true)
+        let mut modified = false;
+        if let Ok(home) = std::env::var("HOME") {
+            let home_path = PathBuf::from(&home);
+            let candidates = [
+                home_path.join(".bashrc"),
+                home_path.join(".zshrc"),
+                home_path.join(".zprofile"),
+                home_path.join(".profile"),
+            ];
+            for path in &candidates {
+                if let Ok(content) = std::fs::read_to_string(path) {
+                    if content.contains(".sona/bin") {
+                        let cleaned_lines: Vec<&str> = content
+                            .lines()
+                            .filter(|line| {
+                                !line.contains(".sona/bin") && !line.contains("# Sona CLI tools")
+                            })
+                            .collect();
+                        let mut new_content = cleaned_lines.join("\n");
+                        if !new_content.is_empty() && content.ends_with('\n') {
+                            new_content.push('\n');
+                        }
+                        if std::fs::write(path, new_content).is_ok() {
+                            modified = true;
+                        }
+                    }
+                }
+            }
+        }
+        Ok(modified)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_normalize_path() {
+        if cfg!(windows) {
+            assert_eq!(
+                normalize_path(Path::new("C:/Users/test/bin/")),
+                "c:\\users\\test\\bin"
+            );
+            assert_eq!(
+                normalize_path(Path::new("\"C:\\Users\\test\\bin\\\\\"")),
+                "c:\\users\\test\\bin"
+            );
+        } else {
+            assert_eq!(
+                normalize_path(Path::new("/home/test/bin/")),
+                "/home/test/bin"
+            );
+        }
+    }
+
+    #[test]
+    fn test_cleanup_orphan_shims() {
+        let temp_dir = std::env::temp_dir().join(format!("sona_gc_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let live_file = temp_dir.join("sona-cli.exe");
+        let old_file = temp_dir.join("sona-cli.exe.old.12345");
+        let tmp_file = temp_dir.join("sona-mcp.exe.tmp.67890");
+        let doc_file = temp_dir.join("readme.txt");
+
+        std::fs::write(&live_file, b"live").unwrap();
+        std::fs::write(&old_file, b"old").unwrap();
+        std::fs::write(&tmp_file, b"tmp").unwrap();
+        std::fs::write(&doc_file, b"doc").unwrap();
+
+        cleanup_orphan_shims(&temp_dir);
+
+        assert!(live_file.exists());
+        assert!(doc_file.exists());
+        assert!(!old_file.exists());
+        assert!(!tmp_file.exists());
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_should_update_file_byte_comparison() {
+        let temp_dir =
+            std::env::temp_dir().join(format!("sona_update_test_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&temp_dir);
+        std::fs::create_dir_all(&temp_dir).unwrap();
+
+        let file_a = temp_dir.join("a.bin");
+        let file_b = temp_dir.join("b.bin");
+        let file_c = temp_dir.join("c.bin");
+
+        std::fs::write(&file_a, b"identical content").unwrap();
+        std::fs::write(&file_b, b"identical content").unwrap();
+        std::fs::write(&file_c, b"different content").unwrap();
+
+        // Identical content -> should NOT update
+        assert!(!should_update_file(&file_a, &file_b));
+
+        // Same length, different content -> SHOULD update
+        assert!(should_update_file(&file_a, &file_c));
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

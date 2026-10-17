@@ -55,6 +55,9 @@ pub fn execute(target_path: &Path, args: &[String], channel: Channel) -> ! {
     }
 }
 
+/// Formats an individual argument according to MSVC CRT command-line escaping rules.
+/// Note: `execute()` delegates argument quoting directly to `std::process::Command::args`,
+/// while this function is available for CLI string rendering and external script generation.
 pub fn quote_windows_arg(arg: &str) -> String {
     if arg.is_empty() {
         return "\"\"".to_string();

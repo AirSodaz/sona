@@ -46,7 +46,8 @@
     ],
     "windows": {
       "nsis": {
-        "installerHooks": "packaging/windows/nsis-hooks.nsh"
+        "installerHooks": "packaging/windows/nsis-hooks.nsh",
+        "installMode": "currentUser"
       }
     },
     "macOS": {

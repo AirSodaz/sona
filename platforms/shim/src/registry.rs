@@ -639,7 +639,7 @@ fn to_wide_null(s: &str) -> Vec<u16> {
 }
 
 #[cfg(windows)]
-pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String> {
+pub fn win_read_registry_raw(subkey: &str, value_name: &str) -> Option<(String, u32)> {
     use windows_sys::Win32::Foundation::ERROR_SUCCESS;
     use windows_sys::Win32::System::Registry::{
         HKEY, HKEY_CURRENT_USER, KEY_READ, REG_EXPAND_SZ, REG_SZ, RegCloseKey, RegOpenKeyExW,
@@ -698,11 +698,23 @@ pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String
         }
 
         let raw_str = String::from_utf16(&buffer).ok()?;
-        if val_type == REG_EXPAND_SZ {
-            Some(win_expand_environment_strings(&raw_str))
-        } else {
-            Some(raw_str)
-        }
+        Some((raw_str, val_type))
+    }
+}
+
+#[cfg(windows)]
+pub fn win_read_registry_string_raw(subkey: &str, value_name: &str) -> Option<String> {
+    win_read_registry_raw(subkey, value_name).map(|(s, _)| s)
+}
+
+#[cfg(windows)]
+pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String> {
+    use windows_sys::Win32::System::Registry::REG_EXPAND_SZ;
+    let (raw_str, val_type) = win_read_registry_raw(subkey, value_name)?;
+    if val_type == REG_EXPAND_SZ {
+        Some(win_expand_environment_strings(&raw_str))
+    } else {
+        Some(raw_str)
     }
 }
 #[cfg(windows)]
@@ -935,5 +947,27 @@ mod tests {
             assert_eq!(TargetRole::Mcp.binary_name(), "sona-mcp");
             assert_eq!(TargetRole::Shim.binary_name(), "sona-shim");
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn test_win_registry_raw_preserves_expand_sz() {
+        let test_subkey = r"Software\SonaTestRegistryRaw";
+        let _ = win_delete_registry_key(test_subkey);
+
+        let unexpanded = r"%USERPROFILE%\test_sona_path";
+        win_write_registry_expand_string(test_subkey, "RawTest", unexpanded).unwrap();
+
+        let raw = win_read_registry_string_raw(test_subkey, "RawTest");
+        assert_eq!(raw.as_deref(), Some(unexpanded));
+
+        let expanded = win_read_registry_string(test_subkey, "RawTest");
+        assert!(expanded.is_some());
+        let expanded_val = expanded.unwrap();
+        assert_ne!(expanded_val, unexpanded);
+        assert!(!expanded_val.contains("%USERPROFILE%"));
+        assert!(expanded_val.ends_with(r"\test_sona_path"));
+
+        let _ = win_delete_registry_key(test_subkey);
     }
 }
