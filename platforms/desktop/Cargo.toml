@@ -40,6 +40,7 @@ sona-online-llm = { workspace = true }
 sona-online-asr = { workspace = true }
 sona-recovery-fs = { workspace = true }
 sona-runtime-fs = { workspace = true }
+sona-shim = { workspace = true }
 sona-sqlite = { workspace = true }
 sona-sync = { workspace = true }
 sona-sync-webdav = { workspace = true }

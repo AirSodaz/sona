@@ -26,6 +26,7 @@ members = [
     "platforms/desktop",
     "platforms/uniffi",
     "platforms/mcp",
+    "platforms/shim",
     "tools/uniffi_bindgen",
 ]
 
@@ -59,6 +60,7 @@ sona-punct = { path = "providers/asr/local/punct" }
 sona-recovery-fs = { path = "adapters/recovery_fs" }
 sona-runtime-fs = { path = "adapters/runtime_fs" }
 sona-sherpa-onnx = { path = "providers/asr/local/sherpa_onnx" }
+sona-shim = { path = "platforms/shim" }
 sona-sqlite = { path = "adapters/sqlite" }
 sona-sync = { path = "application/sync" }
 sona-sync-webdav = { path = "adapters/sync_webdav" }

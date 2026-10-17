@@ -234,19 +234,35 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
     } else {
         "~/.codeium/windsurf/mcp_config.json".to_string()
     };
+    let is_nightly = std::env::var("SONA_CHANNEL")
+        .map(|v| v.eq_ignore_ascii_case("nightly"))
+        .unwrap_or(false);
+
+    let path_status = sona_shim::installer::check_path_status();
+    let command_to_run = if (path_status.in_current_path || path_status.in_user_path)
+        && !path_status.installed_shims.is_empty()
+    {
+        if is_nightly {
+            "sona-mcp-nightly".to_string()
+        } else {
+            "sona-mcp".to_string()
+        }
+    } else {
+        binary_path.clone()
+    };
 
     let stdio_snippet = serde_json::json!({
         "mcpServers": {
             "sona": {
-                "command": &binary_path,
+                "command": &command_to_run,
                 "args": []
             }
         }
     });
     let stdio_json_str = serde_json::to_string_pretty(&stdio_snippet).unwrap_or_default();
 
-    let codex_command =
-        serde_json::to_string(&binary_path).unwrap_or_else(|_| format!("\"{}\"", binary_path));
+    let codex_command = serde_json::to_string(&command_to_run)
+        .unwrap_or_else(|_| format!("\"{}\"", command_to_run));
     let codex_config_content =
         format!("[mcp_servers.sona]\ncommand = {codex_command}\nargs = []\n");
 
@@ -254,15 +270,14 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         "mcpServers": {
             "sona": {
                 "type": "stdio",
-                "command": &binary_path,
+                "command": &command_to_run,
                 "args": []
             }
         }
     });
     let pi_omp_json_str = serde_json::to_string_pretty(&pi_omp_snippet).unwrap_or_default();
 
-    let claude_code_cli = format!("claude mcp add sona \"{binary_path}\"");
-
+    let claude_code_cli = format!("claude mcp add sona \"{command_to_run}\"");
     let guides = vec![
         McpClientGuide {
             id: "claude-desktop".to_string(),

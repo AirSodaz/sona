@@ -44,6 +44,11 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "packaging/windows/nsis-hooks.nsh"
+      }
+    },
     "macOS": {
       "minimumSystemVersion": "10.15",
       "dmg": {

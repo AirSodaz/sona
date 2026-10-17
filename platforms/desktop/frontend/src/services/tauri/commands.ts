@@ -211,6 +211,10 @@ export const TauriCommand = {
     getFocusedSelectionText: 'get_focused_selection_text',
     getForegroundWindowInfo: 'get_foreground_window_info',
     focusWindow: 'focus_window',
+    getShimStatus: 'get_shim_status',
+    installShim: 'install_shim',
+    uninstallShim: 'uninstall_shim',
+    setDefaultChannel: 'set_default_channel',
   },
   apiServer: {
     start: 'start_api_server',

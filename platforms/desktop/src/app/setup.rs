@@ -3,11 +3,52 @@ use tauri::{Listener, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let is_nightly = {
+        let identifier = app.config().identifier.to_lowercase();
+        let product_name = app
+            .config()
+            .product_name
+            .as_deref()
+            .unwrap_or("")
+            .to_lowercase();
+        let version = app.config().version.as_deref().unwrap_or("");
+        let env_channel = std::env::var("SONA_CHANNEL")
+            .unwrap_or_default()
+            .to_lowercase();
+
+        match env_channel.as_str() {
+            "nightly" => true,
+            "stable" => false,
+            _ => {
+                identifier.ends_with(".nightly")
+                    || product_name.contains("nightly")
+                    || version.contains('-')
+            }
+        }
+    };
+
+    let channel = if is_nightly {
+        sona_shim::registry::Channel::Nightly
+    } else {
+        sona_shim::registry::Channel::Stable
+    };
+
+    unsafe {
+        std::env::set_var("SONA_CHANNEL", channel.as_str());
+    }
+
+    if let Ok(current_exe) = std::env::current_exe()
+        && let Some(install_dir) = current_exe.parent()
+    {
+        let version_str = app.config().version.as_deref();
+        let exe_name = current_exe.file_name().and_then(|n| n.to_str());
+        let _ = sona_shim::registry::register_channel(channel, install_dir, version_str, exe_name);
+    }
+
     let app_handle_for_listener = app.handle().clone();
     crate::platform::storage_location::cleanup_pending_storage_locations_for_app(
         &app_handle_for_listener,
     );
-
     let (db, app_local_data_dir) =
         crate::platform::database::open_and_migrate_sqlite_for_app(&app_handle_for_listener)?;
 
