@@ -415,15 +415,10 @@ fn write_registry_file(file: &RegistryFile) -> Result<(), String> {
     let temp_path = path.with_file_name(temp_name);
     std::fs::write(&temp_path, &content)
         .map_err(|e| format!("Failed to write {}: {}", temp_path.display(), e))?;
-    std::fs::rename(&temp_path, &path)
-        .or_else(|_| {
-            let _ = std::fs::remove_file(&path);
-            std::fs::rename(&temp_path, &path)
-        })
-        .map_err(|e| {
-            let _ = std::fs::remove_file(&temp_path);
-            format!("Failed to commit {}: {}", path.display(), e)
-        })
+    std::fs::rename(&temp_path, &path).map_err(|e| {
+        let _ = std::fs::remove_file(&temp_path);
+        format!("Failed to commit {}: {}", path.display(), e)
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -35,6 +35,20 @@ pub fn get_ipc_endpoint() -> String {
     resolve_ipc_endpoint(|k| std::env::var(k).ok())
 }
 
+pub fn get_ipc_endpoint_for_channel(is_nightly: bool) -> String {
+    resolve_ipc_endpoint(|k| {
+        if k == "SONA_CHANNEL" {
+            Some(if is_nightly {
+                "nightly".to_string()
+            } else {
+                "stable".to_string()
+            })
+        } else {
+            std::env::var(k).ok()
+        }
+    })
+}
+
 pub fn resolve_ipc_endpoint<F: Fn(&str) -> Option<String>>(env_lookup: F) -> String {
     if let Some(endpoint) = env_lookup("SONA_IPC_ENDPOINT") {
         let trimmed = endpoint.trim();

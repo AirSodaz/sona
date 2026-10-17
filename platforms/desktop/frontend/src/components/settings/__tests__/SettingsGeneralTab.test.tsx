@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { shimService } from '../../../services/shimService';
+import type { DesktopShimStatus } from '../../../types/shim';
 import { SettingsGeneralTab } from '../SettingsGeneralTab';
 
 vi.mock('../../../services/shimService', () => ({
@@ -214,5 +215,25 @@ describe('SettingsGeneralTab - Command Line Tools', () => {
 
     expect(screen.queryByRole('alert')).toBeNull();
     expect(screen.getByText('settings.cli_tools.uninstall_btn')).toBeDefined();
+  });
+
+  it('disables the retry button while retry status query is in flight', async () => {
+    mockShimService.getStatus.mockRejectedValueOnce(new Error('Backend offline'));
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    const retryBtn = screen.getByText('common.retry');
+    expect(retryBtn.hasAttribute('disabled')).toBe(false);
+
+    const { promise } = Promise.withResolvers<DesktopShimStatus>();
+    mockShimService.getStatus.mockReturnValueOnce(promise);
+
+    await act(async () => {
+      fireEvent.click(retryBtn);
+    });
+
+    expect(retryBtn.hasAttribute('disabled')).toBe(true);
   });
 });

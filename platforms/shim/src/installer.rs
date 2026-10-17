@@ -391,9 +391,20 @@ fn check_user_env_has_path(dir: &Path) -> bool {
     {
         if let Ok(home) = std::env::var("HOME") {
             let home_path = PathBuf::from(&home);
+            let dir_str = dir.to_string_lossy();
+            let export_path = dir
+                .strip_prefix(&home_path)
+                .ok()
+                .map(|rel| format!("$HOME/{}", rel.display()));
             for p in get_unix_shell_rc_paths(&home_path) {
                 if let Ok(content) = std::fs::read_to_string(&p) {
-                    if content.contains(".sona/bin") {
+                    if content.contains(".sona/bin")
+                        || content.contains(&*dir_str)
+                        || export_path
+                            .as_deref()
+                            .map(|ep| content.contains(ep))
+                            .unwrap_or(false)
+                    {
                         return true;
                     }
                 }
@@ -417,9 +428,7 @@ fn get_unix_shell_rc_paths(home: &Path) -> Vec<PathBuf> {
         .unwrap_or(cfg!(target_os = "macos"));
 
     if is_zsh {
-        if zshrc.exists() {
-            targets.push(zshrc);
-        }
+        targets.push(zshrc);
         if cfg!(target_os = "macos") && zprofile.exists() {
             targets.push(zprofile);
         }
@@ -446,6 +455,7 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
         return Ok(true);
     }
+    #[cfg(windows)]
     if check_user_env_has_path(dir) {
         return Ok(false);
     }
@@ -499,13 +509,24 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
             .map_err(|_| "HOME environment variable is not set".to_string())?;
         let home_path = PathBuf::from(&home);
         let targets = get_unix_shell_rc_paths(&home_path);
-        let export_block = "\n# Sona CLI tools\nexport PATH=\"$HOME/.sona/bin:$PATH\"\n";
+        let export_path = if let Ok(rel) = dir.strip_prefix(&home_path) {
+            format!("$HOME/{}", rel.display())
+        } else {
+            dir.display().to_string()
+        };
+        let export_block = format!(
+            "\n# Sona CLI tools\nexport PATH=\"{}:$PATH\"\n",
+            export_path
+        );
+        let dir_str = dir.to_string_lossy();
         use std::io::Write;
         let mut modified = false;
 
         for rc_path in targets {
             let already_has = std::fs::read_to_string(&rc_path)
-                .map(|c| c.contains(".sona/bin"))
+                .map(|c| {
+                    c.contains(&export_path) || c.contains(&*dir_str) || c.contains(".sona/bin")
+                })
                 .unwrap_or(false);
             if !already_has {
                 if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -567,8 +588,13 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
         }
 
         if changed {
-            let new_path = new_entries.join(";");
-            win_write_registry_expand_string("Environment", "Path", &new_path)?;
+            if new_entries.is_empty() {
+                use crate::registry::win_delete_registry_value;
+                let _ = win_delete_registry_value("Environment", "Path");
+            } else {
+                let new_path = new_entries.join(";");
+                win_write_registry_expand_string("Environment", "Path", &new_path)?;
+            }
             let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
             let mut result: usize = 0;
             unsafe {
@@ -593,6 +619,11 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
         let mut modified = false;
         if let Ok(home) = std::env::var("HOME") {
             let home_path = PathBuf::from(&home);
+            let dir_str = dir.to_string_lossy();
+            let export_path = dir
+                .strip_prefix(&home_path)
+                .ok()
+                .map(|rel| format!("$HOME/{}", rel.display()));
             let candidates = [
                 home_path.join(".bashrc"),
                 home_path.join(".zshrc"),
@@ -601,11 +632,19 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
             ];
             for path in &candidates {
                 if let Ok(content) = std::fs::read_to_string(path) {
-                    if content.contains(".sona/bin") {
+                    let matches_path = |line: &str| {
+                        line.contains(".sona/bin")
+                            || line.contains(&*dir_str)
+                            || export_path
+                                .as_deref()
+                                .map(|ep| line.contains(ep))
+                                .unwrap_or(false)
+                    };
+                    if content.lines().any(matches_path) {
                         let cleaned_lines: Vec<&str> = content
                             .lines()
                             .filter(|line| {
-                                !line.contains(".sona/bin") && !line.contains("# Sona CLI tools")
+                                !matches_path(line) && !line.contains("# Sona CLI tools")
                             })
                             .collect();
                         let mut new_content = cleaned_lines.join("\n");

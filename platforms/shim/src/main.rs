@@ -173,11 +173,14 @@ fn handle_list(args: &[String]) {
 }
 
 fn handle_which(args: &[String]) {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("Usage: sona-shim which <sona-cli|sona-mcp|cli|mcp> [+stable|+nightly]");
+        return;
+    }
     if args.len() < 2 {
         eprintln!("Usage: sona-shim which <sona-cli|sona-mcp|cli|mcp> [+stable|+nightly]");
         std::process::exit(1);
     }
-
     let target_arg = &args[1];
     let role = if target_arg.contains("mcp") {
         TargetRole::Mcp
@@ -205,11 +208,14 @@ fn handle_which(args: &[String]) {
 }
 
 fn handle_default(args: &[String]) {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("Usage: sona-shim default <stable|nightly>");
+        return;
+    }
     if args.len() < 2 {
         eprintln!("Usage: sona-shim default <stable|nightly>");
         std::process::exit(1);
     }
-
     let Some(channel) = Channel::parse(&args[1]) else {
         eprintln!("Invalid channel '{}'. Use 'stable' or 'nightly'.", args[1]);
         std::process::exit(1);
@@ -424,6 +430,10 @@ fn handle_uninstall(args: &[String]) {
 }
 
 fn handle_status(args: &[String]) {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("Usage: sona-shim status [--json]");
+        return;
+    }
     let json_output = args.iter().any(|a| a == "--json");
     let status = check_path_status();
     let default_ch = get_default_channel();

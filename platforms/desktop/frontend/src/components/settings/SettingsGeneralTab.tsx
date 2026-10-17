@@ -49,20 +49,37 @@ export function SettingsGeneralTab({
   const [activeAction, setActiveAction] = React.useState<
     'install' | 'uninstall' | 'channel' | null
   >(null);
-  const isShimLoading = activeAction !== null;
+  const [isStatusLoading, setIsStatusLoading] = React.useState(false);
+  const isShimLoading = activeAction !== null || isStatusLoading;
   const [shimActionError, setShimActionError] = React.useState<string | null>(null);
+  const fetchSeqRef = React.useRef(0);
 
   const loadShimStatus = React.useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    setIsStatusLoading(true);
     try {
       const status = await shimService.getStatus();
-      setShimStatus(status);
-      setShimActionError(null);
+      if (seq === fetchSeqRef.current) {
+        setShimStatus(status);
+        setShimActionError(null);
+      }
     } catch (err) {
-      console.warn('Failed to fetch shim status:', err);
-      setShimActionError(err instanceof Error ? err.message : String(err));
+      if (seq === fetchSeqRef.current) {
+        console.warn('Failed to fetch shim status:', err);
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (seq === fetchSeqRef.current) {
+        setIsStatusLoading(false);
+      }
     }
   }, []);
 
+  React.useEffect(() => {
+    return () => {
+      fetchSeqRef.current++;
+    };
+  }, []);
   React.useEffect(() => {
     if (isVisible) {
       void loadShimStatus();

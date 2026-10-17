@@ -6,7 +6,7 @@ use crate::platform::agent_control::{
     get_tools_catalog,
 };
 
-pub use crate::platform::agent_control::get_ipc_endpoint;
+pub use crate::platform::agent_control::{get_ipc_endpoint, get_ipc_endpoint_for_channel};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -201,7 +201,7 @@ pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, 
         }
     });
 
-    let endpoint = get_ipc_endpoint();
+    let endpoint = get_ipc_endpoint_for_channel(is_nightly);
 
     let claude_desktop_config_path = if cfg!(windows) {
         r"%APPDATA%\Claude\claude_desktop_config.json".to_string()
@@ -252,19 +252,27 @@ pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, 
         .iter()
         .any(|name| name.strip_suffix(".exe").unwrap_or(name) == target_mcp_name);
 
-    let command_to_run =
+    let (command_to_run, args_to_run) =
         if (path_status.in_current_path || path_status.in_user_path) && target_installed {
-            if cfg!(unix) && !path_status.in_current_path {
-                path_status
-                    .shim_dir
-                    .join(target_mcp_name)
-                    .to_string_lossy()
-                    .to_string()
+            let exe_name = if cfg!(windows) {
+                format!("{}.exe", target_mcp_name)
             } else {
                 target_mcp_name.to_string()
-            }
+            };
+            let shim_exe_path = path_status.shim_dir.join(exe_name);
+            let cmd = if shim_exe_path.exists() {
+                shim_exe_path.to_string_lossy().to_string()
+            } else {
+                target_mcp_name.to_string()
+            };
+            (cmd, vec![])
         } else {
-            binary_path.clone()
+            let args = if is_nightly {
+                vec!["--endpoint".to_string(), endpoint.clone()]
+            } else {
+                vec![]
+            };
+            (binary_path.clone(), args)
         };
     let server_key = if is_nightly { "sona-nightly" } else { "sona" };
 
@@ -272,7 +280,7 @@ pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, 
         "mcpServers": {
             server_key: {
                 "command": &command_to_run,
-                "args": []
+                "args": &args_to_run
             }
         }
     });
@@ -280,21 +288,31 @@ pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, 
 
     let codex_command = serde_json::to_string(&command_to_run)
         .unwrap_or_else(|_| format!("\"{}\"", command_to_run));
+    let codex_args = serde_json::to_string(&args_to_run).unwrap_or_else(|_| "[]".to_string());
     let codex_config_content =
-        format!("[mcp_servers.{server_key}]\ncommand = {codex_command}\nargs = []\n");
+        format!("[mcp_servers.{server_key}]\ncommand = {codex_command}\nargs = {codex_args}\n");
 
     let pi_omp_snippet = serde_json::json!({
         "mcpServers": {
             server_key: {
                 "type": "stdio",
                 "command": &command_to_run,
-                "args": []
+                "args": &args_to_run
             }
         }
     });
     let pi_omp_json_str = serde_json::to_string_pretty(&pi_omp_snippet).unwrap_or_default();
 
-    let claude_code_cli = format!("claude mcp add {server_key} \"{command_to_run}\"");
+    let claude_code_cli = if args_to_run.is_empty() {
+        format!("claude mcp add {server_key} \"{command_to_run}\"")
+    } else {
+        let args_str = args_to_run
+            .iter()
+            .map(|a| format!("\"{}\"", a))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("claude mcp add {server_key} \"{command_to_run}\" -- {args_str}")
+    };
     let guides = vec![
         McpClientGuide {
             id: "claude-desktop".to_string(),
@@ -407,6 +425,19 @@ mod tests {
             .unwrap();
         assert!(claude_desktop.config_content.contains("mcpServers"));
         assert!(claude_desktop.config_content.contains("sona"));
+    }
+    #[tokio::test]
+    async fn test_mcp_get_client_configs_nightly() {
+        let configs = build_mcp_client_configs(true).unwrap();
+        assert!(!configs.binary_path.is_empty());
+        assert_eq!(configs.guides.len(), 8);
+        if cfg!(windows) {
+            assert!(configs.endpoint.contains("sona-agent-ipc-nightly"));
+        } else if cfg!(unix) {
+            assert!(configs.endpoint.contains("nightly"));
+        }
+        let codex = configs.guides.iter().find(|g| g.id == "codex").unwrap();
+        assert!(codex.config_content.contains("[mcp_servers.sona-nightly]"));
     }
 
     #[test]
