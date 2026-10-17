@@ -38,22 +38,34 @@ pub fn resolve_target_channel(
         .to_lowercase();
 
     // Rule 1: Command name contains -nightly or -stable
-    if stem.contains("-nightly") {
-        return Channel::Nightly;
-    }
-    if stem.contains("-stable") {
-        return Channel::Stable;
-    }
+    let name_channel = if stem.contains("-nightly") {
+        Some(Channel::Nightly)
+    } else if stem.contains("-stable") {
+        Some(Channel::Stable)
+    } else {
+        None
+    };
 
     // Rule 2: First CLI argument is +nightly or +stable
-    if let Some(first_arg) = args.first() {
+    let flag_channel = if let Some(first_arg) = args.first() {
         if first_arg.eq_ignore_ascii_case("+nightly") {
             args.remove(0);
-            return Channel::Nightly;
+            Some(Channel::Nightly)
         } else if first_arg.eq_ignore_ascii_case("+stable") {
             args.remove(0);
-            return Channel::Stable;
+            Some(Channel::Stable)
+        } else {
+            None
         }
+    } else {
+        None
+    };
+
+    if let Some(c) = name_channel {
+        return c;
+    }
+    if let Some(c) = flag_channel {
+        return c;
     }
 
     // Rule 3: Environment variable SONA_CHANNEL
@@ -164,11 +176,12 @@ mod tests {
 
     #[test]
     fn test_channel_resolution_precedence() {
-        // Name takes precedence over +flag
+        // Name takes precedence over +flag, but +flag is still consumed
         let mut args = vec!["+stable".to_string(), "run".to_string()];
         let cwd = Path::new(".");
         let ch = resolve_target_channel("sona-cli-nightly", &mut args, cwd, TargetRole::Cli);
         assert_eq!(ch, Channel::Nightly);
+        assert_eq!(args, vec!["run".to_string()]);
     }
 
     #[test]

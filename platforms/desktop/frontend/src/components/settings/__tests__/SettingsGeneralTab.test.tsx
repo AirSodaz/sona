@@ -127,4 +127,60 @@ describe('SettingsGeneralTab - Command Line Tools', () => {
     const installBtn = screen.getByText('settings.cli_tools.install_btn');
     expect(installBtn.hasAttribute('disabled')).toBe(true);
   });
+
+  it('displays an error message when installation fails', async () => {
+    mockShimService.getStatus.mockResolvedValue({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: false,
+      inUserPath: false,
+      isConfigured: false,
+      installedShims: [],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: false,
+    });
+    mockShimService.install.mockRejectedValue(new Error('Permission denied'));
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    const installBtn = screen.getByText('settings.cli_tools.install_btn');
+    await act(async () => {
+      fireEvent.click(installBtn);
+    });
+
+    expect(screen.getByRole('alert')).toBeDefined();
+    expect(screen.getByText('Permission denied')).toBeDefined();
+  });
+
+  it('does not change uninstall button text to removing when switching channels', async () => {
+    mockShimService.getStatus.mockResolvedValue({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: true,
+      inUserPath: true,
+      isConfigured: true,
+      installedShims: ['sona-cli.exe', 'sona-mcp.exe'],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: true,
+    });
+    const { promise } = Promise.withResolvers<void>();
+    mockShimService.setDefaultChannel.mockReturnValue(promise);
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    const nightlyRadio = screen.getByLabelText('settings.cli_tools.channel_nightly');
+    await act(async () => {
+      fireEvent.click(nightlyRadio);
+    });
+
+    // Button should still say uninstall_btn, NOT uninstalling
+    expect(screen.getByText('settings.cli_tools.uninstall_btn')).toBeDefined();
+    expect(screen.queryByText('settings.cli_tools.uninstalling')).toBeNull();
+  });
 });

@@ -224,8 +224,8 @@ pub fn uninstall_shims(
                 name.to_string()
             };
             let p = shim_dir.join(&exe_name);
-            if p.exists() {
-                let _ = std::fs::remove_file(p);
+            if p.is_symlink() || p.exists() {
+                let _ = std::fs::remove_file(&p);
                 shims_removed = true;
             }
         }
@@ -272,10 +272,17 @@ fn should_update_file(source: &Path, dest: &Path) -> bool {
 
 #[cfg(windows)]
 fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
+    if source == dest {
+        return Ok(());
+    }
     let temp_name = format!(
-        "{}.tmp.{}",
+        "{}.tmp.{}.{}",
         dest.file_name().unwrap_or_default().to_string_lossy(),
-        std::process::id()
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
     );
     let temp_path = dest.with_file_name(temp_name);
 
@@ -287,19 +294,33 @@ fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
         )
     })?;
 
-    // Rename atomically or replace
-    if dest.exists() {
-        let _ = std::fs::remove_file(dest);
-    }
-    std::fs::rename(&temp_path, dest).or_else(|_| {
-        // Fallback to direct copy if rename across volumes fails
-        std::fs::copy(source, dest)
-            .map(|_| ())
-            .map_err(|e| format!("Copy failed: {}", e))
-    })?;
+    let res = (|| {
+        if dest.exists() {
+            let old_name = format!(
+                "{}.old.{}.{}",
+                dest.file_name().unwrap_or_default().to_string_lossy(),
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_nanos())
+                    .unwrap_or(0)
+            );
+            let old_path = dest.with_file_name(old_name);
+            if std::fs::rename(dest, &old_path).is_ok() {
+                let _ = std::fs::remove_file(&old_path);
+            } else {
+                let _ = std::fs::remove_file(dest);
+            }
+        }
+        std::fs::rename(&temp_path, dest).or_else(|_| {
+            std::fs::copy(&temp_path, dest)
+                .map(|_| ())
+                .map_err(|e| format!("Copy failed: {}", e))
+        })
+    })();
 
     let _ = std::fs::remove_file(&temp_path);
-    Ok(())
+    res
 }
 
 fn check_user_env_has_path(dir: &Path) -> bool {
@@ -307,9 +328,10 @@ fn check_user_env_has_path(dir: &Path) -> bool {
 
     #[cfg(windows)]
     {
-        use crate::registry::win_read_registry_string;
+        use crate::registry::{win_expand_environment_strings, win_read_registry_string};
         if let Some(user_path) = win_read_registry_string("Environment", "Path") {
-            for entry in user_path.split(';') {
+            let expanded_path = win_expand_environment_strings(&user_path);
+            for entry in expanded_path.split(';') {
                 let trimmed = entry.trim();
                 if !trimmed.is_empty() && normalize_path(Path::new(trimmed)) == target {
                     return true;
@@ -351,7 +373,15 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
 
-        let current_path = win_read_registry_string("Environment", "Path").unwrap_or_default();
+        let current_path = match win_read_registry_string("Environment", "Path") {
+            Some(p) => p,
+            None => {
+                if crate::registry::win_registry_value_exists("Environment", "Path") {
+                    return Err("Failed to read user PATH from Windows registry".to_string());
+                }
+                String::new()
+            }
+        };
         let new_path = if current_path.trim().is_empty() {
             dir.to_string_lossy().to_string()
         } else {
@@ -361,7 +391,6 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
                 dir.to_string_lossy()
             )
         };
-
         win_write_registry_expand_string("Environment", "Path", &new_path)?;
         // Broadcast environment change notification
         let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
@@ -408,7 +437,10 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
 
     #[cfg(windows)]
     {
-        use crate::registry::{win_read_registry_string, win_write_registry_expand_string};
+        use crate::registry::{
+            win_expand_environment_strings, win_read_registry_string,
+            win_write_registry_expand_string,
+        };
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
@@ -425,7 +457,10 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
             if trimmed.is_empty() {
                 continue;
             }
-            if normalize_path(Path::new(trimmed)) == target {
+            let expanded = win_expand_environment_strings(trimmed);
+            if normalize_path(Path::new(trimmed)) == target
+                || normalize_path(Path::new(&expanded)) == target
+            {
                 changed = true;
             } else {
                 new_entries.push(trimmed);

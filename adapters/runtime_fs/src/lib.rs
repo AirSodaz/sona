@@ -479,7 +479,13 @@ pub fn default_shared_models_dir() -> Option<PathBuf> {
 fn is_non_empty_dir(path: &Path) -> bool {
     path.is_dir()
         && std::fs::read_dir(path)
-            .map(|mut entries| entries.next().is_some())
+            .map(|entries| {
+                entries.filter_map(Result::ok).any(|entry| {
+                    let name = entry.file_name();
+                    let s = name.to_string_lossy();
+                    !s.starts_with('.') && s != "desktop.ini" && s != "Thumbs.db"
+                })
+            })
             .unwrap_or(false)
 }
 
@@ -643,16 +649,16 @@ where
         return Some(shared);
     }
 
-    // 4. Fallback to default shared models dir if available
-    if let Some(shared) = default_shared_models_dir() {
-        return Some(shared);
-    }
-
-    // 5. Final fallback to active models dir of first root
-    app_roots.into_iter().next().map(|root| {
+    // 4. Fallback to active models dir of first root
+    if let Some(first) = app_roots.into_iter().next().map(|root| {
         let active_data = resolve_active_data_dir(&root);
         resolve_active_models_dir(&root, &active_data)
-    })
+    }) {
+        return Some(first);
+    }
+
+    // 5. Final fallback to default shared models dir
+    default_shared_models_dir()
 }
 
 pub fn default_desktop_models_dir() -> Option<PathBuf> {

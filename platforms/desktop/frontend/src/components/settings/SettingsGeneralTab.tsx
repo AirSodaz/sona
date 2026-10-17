@@ -46,7 +46,10 @@ export function SettingsGeneralTab({
   const config = useUIConfig();
   const updateConfig = useSetConfig();
   const [shimStatus, setShimStatus] = React.useState<DesktopShimStatus | null>(null);
-  const [isShimLoading, setIsShimLoading] = React.useState(false);
+  const [activeAction, setActiveAction] = React.useState<
+    'install' | 'uninstall' | 'channel' | null
+  >(null);
+  const isShimLoading = activeAction !== null;
   const [shimActionError, setShimActionError] = React.useState<string | null>(null);
 
   const loadShimStatus = React.useCallback(async () => {
@@ -55,6 +58,7 @@ export function SettingsGeneralTab({
       setShimStatus(status);
     } catch (err) {
       console.warn('Failed to fetch shim status:', err);
+      setShimActionError(err instanceof Error ? err.message : String(err));
     }
   }, []);
 
@@ -65,7 +69,7 @@ export function SettingsGeneralTab({
   }, [isVisible, loadShimStatus]);
 
   const handleInstallShim = async () => {
-    setIsShimLoading(true);
+    setActiveAction('install');
     setShimActionError(null);
     try {
       await shimService.install();
@@ -73,12 +77,12 @@ export function SettingsGeneralTab({
     } catch (err) {
       setShimActionError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsShimLoading(false);
+      setActiveAction(null);
     }
   };
 
   const handleUninstallShim = async () => {
-    setIsShimLoading(true);
+    setActiveAction('uninstall');
     setShimActionError(null);
     try {
       await shimService.uninstall();
@@ -86,12 +90,12 @@ export function SettingsGeneralTab({
     } catch (err) {
       setShimActionError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsShimLoading(false);
+      setActiveAction(null);
     }
   };
 
   const handleSetDefaultChannel = async (channel: 'stable' | 'nightly') => {
-    setIsShimLoading(true);
+    setActiveAction('channel');
     setShimActionError(null);
     try {
       await shimService.setDefaultChannel(channel);
@@ -99,7 +103,7 @@ export function SettingsGeneralTab({
     } catch (err) {
       setShimActionError(err instanceof Error ? err.message : String(err));
     } finally {
-      setIsShimLoading(false);
+      setActiveAction(null);
     }
   };
 
@@ -310,9 +314,11 @@ export function SettingsGeneralTab({
         <SettingsItem
           title={t('settings.cli_tools.status_title')}
           hint={
-            shimStatus?.isConfigured
-              ? t('settings.cli_tools.configured_hint')
-              : t('settings.cli_tools.not_configured_hint')
+            shimStatus === null
+              ? ''
+              : shimStatus.isConfigured
+                ? t('settings.cli_tools.configured_hint')
+                : t('settings.cli_tools.not_configured_hint')
           }
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
@@ -328,7 +334,9 @@ export function SettingsGeneralTab({
                   : 'var(--color-text-muted, #888)',
               }}
             >
-              {shimStatus?.isConfigured ? (
+              {shimStatus === null ? (
+                <span style={{ opacity: 0.6 }}>...</span>
+              ) : shimStatus.isConfigured ? (
                 <>
                   <CheckCircle2 size={16} />
                   {t('settings.cli_tools.status_configured')}
@@ -347,7 +355,7 @@ export function SettingsGeneralTab({
                 onClick={handleUninstallShim}
                 disabled={isShimLoading || shimStatus === null}
               >
-                {isShimLoading
+                {activeAction === 'uninstall'
                   ? t('settings.cli_tools.uninstalling')
                   : t('settings.cli_tools.uninstall_btn')}
               </button>
@@ -358,7 +366,7 @@ export function SettingsGeneralTab({
                 onClick={handleInstallShim}
                 disabled={isShimLoading || shimStatus === null}
               >
-                {isShimLoading
+                {activeAction === 'install'
                   ? t('settings.cli_tools.installing')
                   : t('settings.cli_tools.install_btn')}
               </button>
@@ -393,7 +401,11 @@ export function SettingsGeneralTab({
               </div>
             }
           >
-            <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
+            <div
+              role="radiogroup"
+              aria-label={t('settings.cli_tools.default_channel_title')}
+              style={{ display: 'flex', gap: '16px', alignItems: 'center' }}
+            >
               <label
                 style={{
                   display: 'inline-flex',
@@ -438,6 +450,7 @@ export function SettingsGeneralTab({
 
         {shimActionError && (
           <div
+            role="alert"
             style={{
               padding: '8px 12px',
               color: 'var(--color-danger, #ef4444)',

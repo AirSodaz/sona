@@ -239,18 +239,30 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         .unwrap_or(false);
 
     let path_status = sona_shim::installer::check_path_status();
-    let command_to_run = if (path_status.in_current_path || path_status.in_user_path)
-        && !path_status.installed_shims.is_empty()
-    {
-        if is_nightly {
-            "sona-mcp-nightly".to_string()
-        } else {
-            "sona-mcp".to_string()
-        }
+    let target_mcp_name = if is_nightly {
+        "sona-mcp-nightly"
     } else {
-        binary_path.clone()
+        "sona-mcp"
     };
+    let target_installed = path_status
+        .installed_shims
+        .iter()
+        .any(|name| name.strip_suffix(".exe").unwrap_or(name) == target_mcp_name);
 
+    let command_to_run =
+        if (path_status.in_current_path || path_status.in_user_path) && target_installed {
+            if cfg!(unix) && !path_status.in_current_path {
+                path_status
+                    .shim_dir
+                    .join(target_mcp_name)
+                    .to_string_lossy()
+                    .to_string()
+            } else {
+                target_mcp_name.to_string()
+            }
+        } else {
+            binary_path.clone()
+        };
     let server_key = if is_nightly { "sona-nightly" } else { "sona" };
 
     let stdio_snippet = serde_json::json!({

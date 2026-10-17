@@ -133,7 +133,7 @@ test('desktop bundle preparer stages target inputs and generates a replacement T
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `sona-shim-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.sidecarsDir, `ffmpeg-${target}.exe`)), true);
   assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'llama.dll')), true);
-
+  assert.equal(fs.existsSync(path.join(prepared.runtimeLibDir, 'optional-runtime.dll')), true);
   const generatedConfig = JSON.parse(fs.readFileSync(prepared.configPath, 'utf8'));
   assert.deepEqual(generatedConfig.bundle.externalBin, [
     path.join(prepared.sidecarsDir, 'sona-cli'),

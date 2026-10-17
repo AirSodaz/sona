@@ -29,6 +29,32 @@ impl Drop for TempDir {
         let _ = fs::remove_dir_all(&self.path);
     }
 }
+struct EnvGuard {
+    vars: Vec<&'static str>,
+}
+
+impl EnvGuard {
+    fn new(vars: &[(&'static str, &str)]) -> Self {
+        let mut tracked = Vec::new();
+        unsafe {
+            for (k, v) in vars {
+                std::env::set_var(k, v);
+                tracked.push(*k);
+            }
+        }
+        Self { vars: tracked }
+    }
+}
+
+impl Drop for EnvGuard {
+    fn drop(&mut self) {
+        unsafe {
+            for k in &self.vars {
+                std::env::remove_var(k);
+            }
+        }
+    }
+}
 
 #[test]
 fn test_role_detection_all_variants() {
@@ -94,11 +120,12 @@ fn test_channel_resolution_logic() {
 fn test_dual_channel_registration_and_discovery() {
     let _guard = REG_LOCK.lock().unwrap();
     let reg_dir = TempDir::new("dual-reg");
-    unsafe {
-        std::env::set_var("SONA_DIR", &reg_dir.path);
-        std::env::set_var("SONA_REGISTRY_SUBKEY", r"Software\SonaTest");
-        std::env::set_var("SONA_TEST_ISOLATED", "1");
-    }
+    let reg_dir_str = reg_dir.path.to_string_lossy().to_string();
+    let _env = EnvGuard::new(&[
+        ("SONA_DIR", &reg_dir_str),
+        ("SONA_REGISTRY_SUBKEY", r"Software\SonaTest"),
+        ("SONA_TEST_ISOLATED", "1"),
+    ]);
     let stable_dir = TempDir::new("stable-install");
     let nightly_dir = TempDir::new("nightly-install");
     let exe_name = if cfg!(windows) {
@@ -172,11 +199,12 @@ fn test_dual_channel_registration_and_discovery() {
 fn test_reference_counting_uninstallation() {
     let _guard = REG_LOCK.lock().unwrap();
     let reg_dir = TempDir::new("rc-reg");
-    unsafe {
-        std::env::set_var("SONA_DIR", &reg_dir.path);
-        std::env::set_var("SONA_REGISTRY_SUBKEY", r"Software\SonaTest");
-        std::env::set_var("SONA_TEST_ISOLATED", "1");
-    }
+    let reg_dir_str = reg_dir.path.to_string_lossy().to_string();
+    let _env = EnvGuard::new(&[
+        ("SONA_DIR", &reg_dir_str),
+        ("SONA_REGISTRY_SUBKEY", r"Software\SonaTest"),
+        ("SONA_TEST_ISOLATED", "1"),
+    ]);
     let stable_dir = TempDir::new("rc-stable");
     let nightly_dir = TempDir::new("rc-nightly");
     let exe_name = if cfg!(windows) {

@@ -79,8 +79,9 @@ pub fn get_storage_directories_info<R: Runtime>(
     let config = load_bootstrap_config(&default_data_dir);
     let is_custom_data_dir = config.custom_data_dir.is_some()
         && config.custom_data_dir.as_ref() != Some(&default_data_dir);
-    let is_custom_models_dir = config.custom_models_dir.is_some()
-        && config.custom_models_dir.as_ref() != Some(&default_models_dir);
+    let is_custom_models_dir = (config.custom_models_dir.is_some()
+        && config.custom_models_dir.as_ref() != Some(&default_models_dir))
+        || active_models_dir != default_models_dir;
 
     Ok(StorageDirectoriesInfo {
         data_dir: active_data_dir.to_string_lossy().into_owned(),
@@ -856,7 +857,12 @@ pub async fn set_models_directory(
     let default_models_dir = resolve_default_models_dir(&default_data_dir);
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     if target_path == default_models_dir {
-        bootstrap.custom_models_dir = None;
+        let legacy_models_dir = active_data_dir.join("models");
+        if legacy_models_dir.exists() && active_models_dir != default_models_dir {
+            bootstrap.custom_models_dir = Some(target_path);
+        } else {
+            bootstrap.custom_models_dir = None;
+        }
     } else {
         bootstrap.custom_models_dir = Some(target_path);
     }
@@ -888,9 +894,15 @@ pub async fn reset_models_directory(app: &AppHandle) -> Result<StorageDirectorie
     let restart_guard = ServerRestartGuard::new(app, server_was_running);
 
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
+    let active_data_dir = resolve_active_data_dir(&default_data_dir);
+    let legacy_models_dir = active_data_dir.join("models");
+    let default_models_dir = resolve_default_models_dir(&default_data_dir);
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
-    bootstrap.custom_models_dir = None;
-    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    if legacy_models_dir.exists() && legacy_models_dir != default_models_dir {
+        bootstrap.custom_models_dir = Some(default_models_dir);
+    } else {
+        bootstrap.custom_models_dir = None;
+    }
     restart_guard.commit_and_restart();
 
     get_storage_directories_info(app)

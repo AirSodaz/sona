@@ -159,10 +159,12 @@ pub fn get_sona_dir() -> PathBuf {
     }
     #[cfg(unix)]
     {
-        if let Ok(home) = std::env::var("HOME") {
+        if let Ok(home) = std::env::var("HOME").filter(|h| !h.trim().is_empty()) {
             PathBuf::from(home).join(".sona")
+        } else if let Ok(xdg) = std::env::var("XDG_DATA_HOME").filter(|x| !x.trim().is_empty()) {
+            PathBuf::from(xdg).join("sona")
         } else {
-            PathBuf::from("/tmp/.sona")
+            PathBuf::from(".sona")
         }
     }
     #[cfg(not(any(windows, unix)))]
@@ -218,8 +220,7 @@ pub fn set_default_channel(channel: Channel) -> Result<(), String> {
         let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
         win_write_registry_string(&settings_key, "DefaultChannel", channel.as_str())?;
     }
-
-    let mut file = read_registry_file().unwrap_or_default();
+    let mut file = read_registry_file()?;
     file.default_channel = Some(channel.as_str().to_string());
     write_registry_file(&file)
 }
@@ -304,7 +305,7 @@ pub fn register_channel(
         }
     }
 
-    let mut file = read_registry_file().unwrap_or_default();
+    let mut file = read_registry_file()?;
     let cli = resolve_executable_in_dir(install_path, TargetRole::Cli)
         .map(|p| p.to_string_lossy().to_string());
     let mcp = resolve_executable_in_dir(install_path, TargetRole::Mcp)
@@ -335,16 +336,20 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
         let _ = win_delete_registry_key(&subkey);
     }
 
-    let mut file = read_registry_file().unwrap_or_default();
+    let mut file = read_registry_file()?;
     file.channels.remove(channel.as_str());
 
-    // If default channel was the one unregistered, fallback or clear
-    if file.default_channel.as_deref() == Some(channel.as_str()) {
+    let is_current_default = get_default_channel() == channel
+        || file.default_channel.as_deref() == Some(channel.as_str());
+
+    if is_current_default {
         let other = match channel {
             Channel::Stable => Channel::Nightly,
             Channel::Nightly => Channel::Stable,
         };
-        if file.channels.contains_key(other.as_str()) {
+        let other_still_registered =
+            file.channels.contains_key(other.as_str()) || is_channel_installed(other);
+        if other_still_registered {
             file.default_channel = Some(other.as_str().to_string());
             #[cfg(windows)]
             {
@@ -360,7 +365,6 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
             }
         }
     }
-
     write_registry_file(&file)
 }
 
@@ -386,10 +390,16 @@ fn write_registry_file(file: &RegistryFile) -> Result<(), String> {
     }
     let content = serde_json::to_string_pretty(file)
         .map_err(|e| format!("Failed to serialize registry: {}", e))?;
-    let temp_path = path.with_extension(format!("json.tmp.{}", std::process::id()));
+    let temp_name = format!(
+        "registry.json.tmp.{}.{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    );
+    let temp_path = path.with_file_name(temp_name);
     std::fs::write(&temp_path, &content)
-        .map_err(|e| format!("Failed to write {}: {}", temp_path.display(), e))?;
-    std::fs::rename(&temp_path, &path)
         .or_else(|_| {
             let _ = std::fs::remove_file(&path);
             std::fs::rename(&temp_path, &path)
@@ -671,6 +681,56 @@ pub fn win_read_registry_string(subkey: &str, value_name: &str) -> Option<String
         }
 
         String::from_utf16(&buffer).ok()
+    }
+}
+#[cfg(windows)]
+pub fn win_registry_value_exists(subkey: &str, value_name: &str) -> bool {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, RegCloseKey, RegOpenKeyExW, RegQueryValueExW,
+    };
+
+    let subkey_w = to_wide_null(subkey);
+    let value_w = to_wide_null(value_name);
+    let mut hkey: HKEY = std::ptr::null_mut();
+
+    unsafe {
+        let status = RegOpenKeyExW(HKEY_CURRENT_USER, subkey_w.as_ptr(), 0, KEY_READ, &mut hkey);
+        if status != ERROR_SUCCESS {
+            return false;
+        }
+
+        let status = RegQueryValueExW(
+            hkey,
+            value_w.as_ptr(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        );
+        RegCloseKey(hkey);
+        status == ERROR_SUCCESS
+    }
+}
+
+#[cfg(windows)]
+pub fn win_expand_environment_strings(s: &str) -> String {
+    use windows_sys::Win32::System::Environment::ExpandEnvironmentStringsW;
+    let wide_in = to_wide_null(s);
+    unsafe {
+        let req_size = ExpandEnvironmentStringsW(wide_in.as_ptr(), std::ptr::null_mut(), 0);
+        if req_size == 0 {
+            return s.to_string();
+        }
+        let mut buffer: Vec<u16> = vec![0; req_size as usize];
+        let res = ExpandEnvironmentStringsW(wide_in.as_ptr(), buffer.as_mut_ptr(), req_size);
+        if res == 0 {
+            return s.to_string();
+        }
+        while buffer.last() == Some(&0) {
+            buffer.pop();
+        }
+        String::from_utf16(&buffer).unwrap_or_else(|_| s.to_string())
     }
 }
 

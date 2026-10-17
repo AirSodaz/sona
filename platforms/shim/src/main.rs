@@ -299,6 +299,7 @@ fn handle_install(args: &[String]) {
 
 fn handle_uninstall(args: &[String]) {
     let mut channel_opt = None;
+    let mut path_opt = None;
     let mut force = false;
 
     let mut i = 1;
@@ -306,6 +307,10 @@ fn handle_uninstall(args: &[String]) {
         match args[i].as_str() {
             "--channel" if i + 1 < args.len() => {
                 channel_opt = Channel::parse(&args[i + 1]);
+                i += 2;
+            }
+            "--path" if i + 1 < args.len() => {
+                path_opt = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
             "--force" => {
@@ -317,21 +322,42 @@ fn handle_uninstall(args: &[String]) {
             }
         }
     }
-
     if channel_opt.is_none() && !force {
-        let current_exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("sona-shim"));
-        if current_exe
-            .to_string_lossy()
-            .to_lowercase()
-            .contains("nightly")
-        {
-            channel_opt = Some(Channel::Nightly);
-        } else if current_exe
-            .to_string_lossy()
-            .to_lowercase()
-            .contains("sona")
-        {
-            channel_opt = Some(Channel::Stable);
+        if let Some(target_path) = path_opt {
+            let target_norm = target_path.to_string_lossy().to_lowercase();
+            if let Some(stable) = get_registered_channel(Channel::Stable) {
+                if stable.install_path.to_string_lossy().to_lowercase() == target_norm {
+                    channel_opt = Some(Channel::Stable);
+                }
+            }
+            if let Some(nightly) = get_registered_channel(Channel::Nightly) {
+                if nightly.install_path.to_string_lossy().to_lowercase() == target_norm {
+                    channel_opt = Some(Channel::Nightly);
+                }
+            }
+        }
+        if channel_opt.is_none() {
+            if let Ok(current_exe) = std::env::current_exe() {
+                let shim_dir = sona_shim::installer::get_shim_dir();
+                let is_in_shim_dir = current_exe.starts_with(&shim_dir)
+                    || current_exe.parent().map_or(false, |p| p == shim_dir);
+
+                if !is_in_shim_dir {
+                    let exe_str = current_exe.to_string_lossy().to_lowercase();
+                    if exe_str.contains("nightly") {
+                        channel_opt = Some(Channel::Nightly);
+                    } else if let Some(parent) = current_exe.parent() {
+                        let parent_name = parent
+                            .file_name()
+                            .and_then(|n| n.to_str())
+                            .unwrap_or("")
+                            .to_lowercase();
+                        if parent_name == "sona" || parent_name == "com.asoda.sona" {
+                            channel_opt = Some(Channel::Stable);
+                        }
+                    }
+                }
+            }
         }
     }
 

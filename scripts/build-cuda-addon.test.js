@@ -22,11 +22,19 @@ test('normalizePlatform handles win32 and linux correctly', () => {
 
 test('resolveLocalCudaRuntimeDir resolves platform-specific paths', () => {
   const mockWinAppData = path.join(repoRoot, 'target', 'mock-appdata');
-  const winDir = resolveLocalCudaRuntimeDir('win32', { LOCALAPPDATA: mockWinAppData });
+  const mockWinHome = path.join(repoRoot, 'target', 'mock-win-home');
+  const winDir = resolveLocalCudaRuntimeDir('win32', {
+    LOCALAPPDATA: mockWinAppData,
+    USERPROFILE: mockWinHome,
+  });
   assert.equal(winDir, path.join(mockWinAppData, 'com.asoda.sona', 'runtimes', 'cuda'));
 
   const mockLinuxData = path.join(repoRoot, 'target', 'mock-xdg-data');
-  const linuxDir = resolveLocalCudaRuntimeDir('linux', { XDG_DATA_HOME: mockLinuxData });
+  const mockLinuxHome = path.join(repoRoot, 'target', 'mock-linux-home');
+  const linuxDir = resolveLocalCudaRuntimeDir('linux', {
+    XDG_DATA_HOME: mockLinuxData,
+    HOME: mockLinuxHome,
+  });
   assert.equal(linuxDir, path.join(mockLinuxData, 'com.asoda.sona', 'runtimes', 'cuda'));
 
   assert.equal(resolveLocalCudaRuntimeDir('darwin'), null);
@@ -55,6 +63,22 @@ test('resolveLocalCudaRuntimeDir probes nightly and shared runtime directories w
       USERPROFILE: mockSharedHome,
     });
     assert.equal(sharedDir, sharedCudaDir);
+
+    // Linux probing coverage
+    const mockLinuxData = path.join(tempDir, 'linux-xdg');
+    const nightlyLinuxDir = path.join(mockLinuxData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    fs.mkdirSync(nightlyLinuxDir, { recursive: true });
+    const linuxDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: mockLinuxData,
+      HOME: path.join(tempDir, 'linux-home'),
+    });
+    assert.equal(linuxDir, nightlyLinuxDir);
+
+    const linuxSharedDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: path.join(tempDir, 'empty-linux-data'),
+      HOME: mockSharedHome,
+    });
+    assert.equal(linuxSharedDir, sharedCudaDir);
   } finally {
     fs.rmSync(tempDir, { recursive: true, force: true });
   }
