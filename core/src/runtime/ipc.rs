@@ -36,16 +36,14 @@ pub fn get_ipc_endpoint() -> String {
 }
 
 pub fn get_ipc_endpoint_for_channel(is_nightly: bool) -> String {
-    resolve_ipc_endpoint(|k| {
-        if k == "SONA_CHANNEL" {
-            Some(if is_nightly {
-                "nightly".to_string()
-            } else {
-                "stable".to_string()
-            })
+    resolve_ipc_endpoint(|k| match k {
+        "SONA_CHANNEL" => Some(if is_nightly {
+            "nightly".to_string()
         } else {
-            std::env::var(k).ok()
-        }
+            "stable".to_string()
+        }),
+        "SONA_IPC_ENDPOINT" | "SONA_IPC_PIPE" => None,
+        _ => std::env::var(k).ok(),
     })
 }
 
@@ -172,6 +170,23 @@ mod tests {
         {
             assert!(stable_ep.contains("sona"));
             assert!(nightly_ep.contains("sona-nightly") || nightly_ep.contains("nightly"));
+        }
+    }
+
+    #[test]
+    fn test_get_ipc_endpoint_for_channel_ignores_ambient_endpoint() {
+        let stable_ep = get_ipc_endpoint_for_channel(false);
+        let nightly_ep = get_ipc_endpoint_for_channel(true);
+        assert_ne!(stable_ep, nightly_ep);
+        #[cfg(windows)]
+        {
+            assert_eq!(stable_ep, WINDOWS_PIPE_NAME);
+            assert_eq!(nightly_ep, WINDOWS_PIPE_NAME_NIGHTLY);
+        }
+        #[cfg(unix)]
+        {
+            assert!(stable_ep.contains("sona"));
+            assert!(nightly_ep.contains("nightly"));
         }
     }
 }

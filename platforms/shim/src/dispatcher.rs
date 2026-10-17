@@ -108,17 +108,28 @@ pub fn resolve_target_channel(
 
 /// Locates a `.sona-channel` file in `dir` or any parent directory.
 pub fn find_channel_in_ancestors(dir: &Path) -> Option<Channel> {
-    let abs_dir;
-    let mut current = if dir.is_relative() {
+    let base_path = if dir.is_relative() {
         if let Ok(cwd) = std::env::current_dir() {
-            abs_dir = cwd.join(dir);
-            &abs_dir
+            cwd.join(dir)
         } else {
-            dir
+            dir.to_path_buf()
         }
     } else {
-        dir
+        dir.to_path_buf()
     };
+
+    let mut normalized = PathBuf::new();
+    for comp in base_path.components() {
+        match comp {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            c => normalized.push(c.as_os_str()),
+        }
+    }
+
+    let mut current: &Path = &normalized;
     loop {
         let candidate = current.join(".sona-channel");
         if candidate.is_file()
@@ -205,6 +216,10 @@ mod tests {
 
         let found = find_channel_in_ancestors(&nested);
         assert_eq!(found, Some(Channel::Nightly));
+        // Also verify relative path with CurDir '.' component resolves ancestors
+        let nested_dot = nested.join(".");
+        let found_dot = find_channel_in_ancestors(&nested_dot);
+        assert_eq!(found_dot, Some(Channel::Nightly));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }

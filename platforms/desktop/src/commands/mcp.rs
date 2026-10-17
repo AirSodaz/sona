@@ -311,7 +311,7 @@ pub fn build_mcp_client_configs(is_nightly: bool) -> Result<McpClientConfigMap, 
             .map(|a| format!("\"{}\"", a))
             .collect::<Vec<_>>()
             .join(" ");
-        format!("claude mcp add {server_key} \"{command_to_run}\" -- {args_str}")
+        format!("claude mcp add {server_key} -- \"{command_to_run}\" {args_str}")
     };
     let guides = vec![
         McpClientGuide {

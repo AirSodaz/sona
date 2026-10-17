@@ -55,6 +55,39 @@ impl Drop for EnvGuard {
         }
     }
 }
+struct RegistryGuard {
+    subkey: String,
+}
+
+impl RegistryGuard {
+    fn new(name: &str) -> Self {
+        let subkey = format!(r"Software\SonaTest_{}_{}", name, std::process::id());
+        Self { subkey }
+    }
+}
+
+impl Drop for RegistryGuard {
+    fn drop(&mut self) {
+        let _ = unregister_channel(Channel::Stable);
+        let _ = unregister_channel(Channel::Nightly);
+        #[cfg(windows)]
+        {
+            let _ = sona_shim::registry::win_delete_registry_key(&format!(
+                r"{}\Channels\stable",
+                self.subkey
+            ));
+            let _ = sona_shim::registry::win_delete_registry_key(&format!(
+                r"{}\Channels\nightly",
+                self.subkey
+            ));
+            let _ =
+                sona_shim::registry::win_delete_registry_key(&format!(r"{}\Channels", self.subkey));
+            let _ =
+                sona_shim::registry::win_delete_registry_key(&format!(r"{}\Settings", self.subkey));
+            let _ = sona_shim::registry::win_delete_registry_key(&self.subkey);
+        }
+    }
+}
 
 #[test]
 fn test_role_detection_all_variants() {
@@ -119,11 +152,12 @@ fn test_channel_resolution_logic() {
 #[test]
 fn test_dual_channel_registration_and_discovery() {
     let _guard = REG_LOCK.lock().unwrap();
+    let reg_guard = RegistryGuard::new("dual");
     let reg_dir = TempDir::new("dual-reg");
     let reg_dir_str = reg_dir.path.to_string_lossy().to_string();
     let _env = EnvGuard::new(&[
         ("SONA_DIR", &reg_dir_str),
-        ("SONA_REGISTRY_SUBKEY", r"Software\SonaTest"),
+        ("SONA_REGISTRY_SUBKEY", &reg_guard.subkey),
         ("SONA_TEST_ISOLATED", "1"),
     ]);
     let stable_dir = TempDir::new("stable-install");
@@ -182,27 +216,20 @@ fn test_dual_channel_registration_and_discovery() {
     let resolved_nightly_mcp = resolve_target_executable(TargetRole::Mcp, Channel::Nightly);
     assert_eq!(resolved_nightly_mcp, Some(nightly_dir.path.join(mcp_name)));
 
-    // Clean up registry
+    // Clean up registry via unregister
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
-    #[cfg(windows)]
-    {
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\stable");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\nightly");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Settings");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest");
-    }
 }
 
 #[test]
 fn test_reference_counting_uninstallation() {
     let _guard = REG_LOCK.lock().unwrap();
+    let reg_guard = RegistryGuard::new("rc");
     let reg_dir = TempDir::new("rc-reg");
     let reg_dir_str = reg_dir.path.to_string_lossy().to_string();
     let _env = EnvGuard::new(&[
         ("SONA_DIR", &reg_dir_str),
-        ("SONA_REGISTRY_SUBKEY", r"Software\SonaTest"),
+        ("SONA_REGISTRY_SUBKEY", &reg_guard.subkey),
         ("SONA_TEST_ISOLATED", "1"),
     ]);
     let stable_dir = TempDir::new("rc-stable");
@@ -249,12 +276,4 @@ fn test_reference_counting_uninstallation() {
     // Clean up
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
-    #[cfg(windows)]
-    {
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\stable");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\nightly");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Settings");
-        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest");
-    }
 }

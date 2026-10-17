@@ -182,10 +182,16 @@ fn handle_which(args: &[String]) {
         std::process::exit(1);
     }
     let target_arg = &args[1];
-    let role = if target_arg.contains("mcp") {
-        TargetRole::Mcp
-    } else {
-        TargetRole::Cli
+    let role = match target_arg.to_lowercase().as_str() {
+        "sona-cli" | "cli" => TargetRole::Cli,
+        "sona-mcp" | "mcp" => TargetRole::Mcp,
+        _ => {
+            eprintln!(
+                "Invalid target '{}'. Expected <sona-cli|sona-mcp|cli|mcp>.",
+                target_arg
+            );
+            std::process::exit(1);
+        }
     };
 
     let mut remaining: Vec<String> = args[2..].to_vec();
@@ -243,7 +249,11 @@ fn handle_install(args: &[String]) {
                 );
                 return;
             }
-            "--channel" if i + 1 < args.len() => {
+            "--channel" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: Option '--channel' requires an argument.");
+                    std::process::exit(1);
+                }
                 let parsed = Channel::parse(&args[i + 1]);
                 if parsed.is_none() {
                     eprintln!(
@@ -255,11 +265,19 @@ fn handle_install(args: &[String]) {
                 channel_opt = parsed;
                 i += 2;
             }
-            "--path" if i + 1 < args.len() => {
+            "--path" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: Option '--path' requires an argument.");
+                    std::process::exit(1);
+                }
                 path_opt = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
-            "--version" if i + 1 < args.len() => {
+            "--version" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: Option '--version' requires an argument.");
+                    std::process::exit(1);
+                }
                 ver_opt = Some(args[i + 1].clone());
                 i += 2;
             }
@@ -335,7 +353,11 @@ fn handle_uninstall(args: &[String]) {
                 );
                 return;
             }
-            "--channel" if i + 1 < args.len() => {
+            "--channel" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: Option '--channel' requires an argument.");
+                    std::process::exit(1);
+                }
                 let parsed = Channel::parse(&args[i + 1]);
                 if parsed.is_none() {
                     eprintln!(
@@ -347,7 +369,11 @@ fn handle_uninstall(args: &[String]) {
                 channel_opt = parsed;
                 i += 2;
             }
-            "--path" if i + 1 < args.len() => {
+            "--path" => {
+                if i + 1 >= args.len() {
+                    eprintln!("Error: Option '--path' requires an argument.");
+                    std::process::exit(1);
+                }
                 path_opt = Some(PathBuf::from(&args[i + 1]));
                 i += 2;
             }
