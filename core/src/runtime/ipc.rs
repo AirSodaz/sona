@@ -18,15 +18,11 @@ pub fn get_unix_socket_path_with_env<F: Fn(&str) -> Option<String>>(env_lookup: 
         "sona-agent.sock"
     };
 
-    let xdg_dir = env_lookup("XDG_RUNTIME_DIR")
-        .or_else(|| std::env::var("XDG_RUNTIME_DIR").ok())
-        .filter(|d| !d.trim().is_empty());
+    let xdg_dir = env_lookup("XDG_RUNTIME_DIR").filter(|d| !d.trim().is_empty());
     if let Some(runtime_dir) = xdg_dir {
         return PathBuf::from(runtime_dir).join(socket_name);
     }
-    let home = env_lookup("HOME")
-        .or_else(|| std::env::var("HOME").ok())
-        .unwrap_or_else(|| ".".to_string());
+    let home = env_lookup("HOME").unwrap_or_else(|| ".".to_string());
     let dir_name = if is_nightly { "sona-nightly" } else { "sona" };
     PathBuf::from(home)
         .join(".local")

@@ -5,7 +5,7 @@
   ; Register current installation and install universal shims to %USERPROFILE%\.sona\bin
   DetailPrint "Configuring Sona universal command-line shims..."
   IfFileExists "$INSTDIR\sona-shim.exe" 0 +3
-    ExecWait '"$INSTDIR\sona-shim.exe" install --path "$INSTDIR"'
+    nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" install --path "$INSTDIR"'
     Goto +2
   DetailPrint "Notice: sona-shim.exe not found in $INSTDIR"
 !macroend
@@ -15,7 +15,7 @@
   ; If another channel (Stable or Nightly) remains, shims and PATH are preserved
   DetailPrint "Unregistering Sona channel and updating shims..."
   IfFileExists "$INSTDIR\sona-shim.exe" 0 +3
-    ExecWait '"$INSTDIR\sona-shim.exe" uninstall'
+    nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" uninstall'
     Goto +2
   DetailPrint "Notice: sona-shim.exe not found during uninstall"
 !macroend

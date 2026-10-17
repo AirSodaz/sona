@@ -251,9 +251,11 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
         binary_path.clone()
     };
 
+    let server_key = if is_nightly { "sona-nightly" } else { "sona" };
+
     let stdio_snippet = serde_json::json!({
         "mcpServers": {
-            "sona": {
+            server_key: {
                 "command": &command_to_run,
                 "args": []
             }
@@ -264,11 +266,11 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
     let codex_command = serde_json::to_string(&command_to_run)
         .unwrap_or_else(|_| format!("\"{}\"", command_to_run));
     let codex_config_content =
-        format!("[mcp_servers.sona]\ncommand = {codex_command}\nargs = []\n");
+        format!("[mcp_servers.{server_key}]\ncommand = {codex_command}\nargs = []\n");
 
     let pi_omp_snippet = serde_json::json!({
         "mcpServers": {
-            "sona": {
+            server_key: {
                 "type": "stdio",
                 "command": &command_to_run,
                 "args": []
@@ -277,7 +279,7 @@ pub async fn mcp_get_client_configs() -> Result<McpClientConfigMap, String> {
     });
     let pi_omp_json_str = serde_json::to_string_pretty(&pi_omp_snippet).unwrap_or_default();
 
-    let claude_code_cli = format!("claude mcp add sona \"{command_to_run}\"");
+    let claude_code_cli = format!("claude mcp add {server_key} \"{command_to_run}\"");
     let guides = vec![
         McpClientGuide {
             id: "claude-desktop".to_string(),

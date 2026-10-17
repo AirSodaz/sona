@@ -3,35 +3,11 @@ use tauri::{Listener, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
-    let is_nightly = {
-        let identifier = app.config().identifier.to_lowercase();
-        let product_name = app
-            .config()
-            .product_name
-            .as_deref()
-            .unwrap_or("")
-            .to_lowercase();
-        let version = app.config().version.as_deref().unwrap_or("");
-        let env_channel = std::env::var("SONA_CHANNEL")
-            .unwrap_or_default()
-            .to_lowercase();
-
-        match env_channel.as_str() {
-            "nightly" => true,
-            "stable" => false,
-            _ => {
-                identifier.ends_with(".nightly")
-                    || product_name.contains("nightly")
-                    || version.contains('-')
-            }
-        }
-    };
-
-    let channel = if is_nightly {
-        sona_shim::registry::Channel::Nightly
-    } else {
-        sona_shim::registry::Channel::Stable
-    };
+    let channel = crate::commands::system::detect_app_channel_from_config(
+        &app.config().identifier,
+        app.config().product_name.as_deref(),
+        app.config().version.as_deref(),
+    );
 
     unsafe {
         std::env::set_var("SONA_CHANNEL", channel.as_str());

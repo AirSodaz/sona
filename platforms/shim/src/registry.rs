@@ -141,6 +141,12 @@ pub struct RegistryChannelEntry {
 }
 
 pub fn get_sona_dir() -> PathBuf {
+    if let Some(custom) = std::env::var("SONA_DIR")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        return PathBuf::from(custom);
+    }
     #[cfg(windows)]
     {
         if let Ok(profile) = std::env::var("USERPROFILE") {
@@ -173,10 +179,22 @@ pub fn get_registry_json_path() -> PathBuf {
 // Channel Registry: Reading and Writing
 // ---------------------------------------------------------------------------
 
+#[cfg(windows)]
+pub fn get_registry_base_subkey() -> String {
+    if let Some(custom) = std::env::var("SONA_REGISTRY_SUBKEY")
+        .ok()
+        .filter(|s| !s.trim().is_empty())
+    {
+        return custom;
+    }
+    r"Software\Sona".to_string()
+}
+
 pub fn get_default_channel() -> Channel {
     #[cfg(windows)]
     {
-        if let Some(c) = win_read_registry_string(r"Software\Sona\Settings", "DefaultChannel")
+        let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
+        if let Some(c) = win_read_registry_string(&settings_key, "DefaultChannel")
             .and_then(|val| Channel::parse(&val))
         {
             return c;
@@ -197,11 +215,8 @@ pub fn get_default_channel() -> Channel {
 pub fn set_default_channel(channel: Channel) -> Result<(), String> {
     #[cfg(windows)]
     {
-        win_write_registry_string(
-            r"Software\Sona\Settings",
-            "DefaultChannel",
-            channel.as_str(),
-        )?;
+        let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
+        win_write_registry_string(&settings_key, "DefaultChannel", channel.as_str())?;
     }
 
     let mut file = read_registry_file().unwrap_or_default();
@@ -212,7 +227,11 @@ pub fn set_default_channel(channel: Channel) -> Result<(), String> {
 pub fn get_registered_channel(channel: Channel) -> Option<ChannelInfo> {
     #[cfg(windows)]
     {
-        let subkey = format!(r"Software\Sona\Channels\{}", channel.as_str());
+        let subkey = format!(
+            r"{}\Channels\{}",
+            get_registry_base_subkey(),
+            channel.as_str()
+        );
         if let Some(install_path_str) = win_read_registry_string(&subkey, "InstallPath") {
             let install_path = PathBuf::from(install_path_str);
             let version = win_read_registry_string(&subkey, "Version");
@@ -271,7 +290,11 @@ pub fn register_channel(
 
     #[cfg(windows)]
     {
-        let subkey = format!(r"Software\Sona\Channels\{}", channel.as_str());
+        let subkey = format!(
+            r"{}\Channels\{}",
+            get_registry_base_subkey(),
+            channel.as_str()
+        );
         win_write_registry_string(&subkey, "InstallPath", &install_path_str)?;
         if let Some(ver) = version {
             win_write_registry_string(&subkey, "Version", ver)?;
@@ -304,7 +327,11 @@ pub fn register_channel(
 pub fn unregister_channel(channel: Channel) -> Result<(), String> {
     #[cfg(windows)]
     {
-        let subkey = format!(r"Software\Sona\Channels\{}", channel.as_str());
+        let subkey = format!(
+            r"{}\Channels\{}",
+            get_registry_base_subkey(),
+            channel.as_str()
+        );
         let _ = win_delete_registry_key(&subkey);
     }
 
@@ -321,17 +348,15 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
             file.default_channel = Some(other.as_str().to_string());
             #[cfg(windows)]
             {
-                let _ = win_write_registry_string(
-                    r"Software\Sona\Settings",
-                    "DefaultChannel",
-                    other.as_str(),
-                );
+                let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
+                let _ = win_write_registry_string(&settings_key, "DefaultChannel", other.as_str());
             }
         } else {
             file.default_channel = None;
             #[cfg(windows)]
             {
-                let _ = win_delete_registry_value(r"Software\Sona\Settings", "DefaultChannel");
+                let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
+                let _ = win_delete_registry_value(&settings_key, "DefaultChannel");
             }
         }
     }
@@ -361,7 +386,18 @@ fn write_registry_file(file: &RegistryFile) -> Result<(), String> {
     }
     let content = serde_json::to_string_pretty(file)
         .map_err(|e| format!("Failed to serialize registry: {}", e))?;
-    std::fs::write(&path, content).map_err(|e| format!("Failed to write {}: {}", path.display(), e))
+    let temp_path = path.with_extension(format!("json.tmp.{}", std::process::id()));
+    std::fs::write(&temp_path, &content)
+        .map_err(|e| format!("Failed to write {}: {}", temp_path.display(), e))?;
+    std::fs::rename(&temp_path, &path)
+        .or_else(|_| {
+            let _ = std::fs::remove_file(&path);
+            std::fs::rename(&temp_path, &path)
+        })
+        .map_err(|e| {
+            let _ = std::fs::remove_file(&temp_path);
+            format!("Failed to commit {}: {}", path.display(), e)
+        })
 }
 
 // ---------------------------------------------------------------------------
@@ -521,7 +557,8 @@ pub fn is_channel_ipc_alive(channel: Channel) -> bool {
         let wide: Vec<u16> = pipe_name.encode_utf16().chain(std::iter::once(0)).collect();
 
         unsafe {
-            let res = WaitNamedPipeW(wide.as_ptr(), 0);
+            const NMPWAIT_NOWAIT: u32 = 1;
+            let res = WaitNamedPipeW(wide.as_ptr(), NMPWAIT_NOWAIT);
             if res != 0 {
                 return true;
             }
@@ -643,9 +680,38 @@ pub fn win_write_registry_string(
     value_name: &str,
     value: &str,
 ) -> Result<(), String> {
+    win_write_registry_value(
+        subkey,
+        value_name,
+        value,
+        windows_sys::Win32::System::Registry::REG_SZ,
+    )
+}
+
+#[cfg(windows)]
+pub fn win_write_registry_expand_string(
+    subkey: &str,
+    value_name: &str,
+    value: &str,
+) -> Result<(), String> {
+    win_write_registry_value(
+        subkey,
+        value_name,
+        value,
+        windows_sys::Win32::System::Registry::REG_EXPAND_SZ,
+    )
+}
+
+#[cfg(windows)]
+fn win_write_registry_value(
+    subkey: &str,
+    value_name: &str,
+    value: &str,
+    reg_type: u32,
+) -> Result<(), String> {
     use windows_sys::Win32::Foundation::ERROR_SUCCESS;
     use windows_sys::Win32::System::Registry::{
-        HKEY, HKEY_CURRENT_USER, KEY_WRITE, REG_SZ, RegCloseKey, RegCreateKeyExW, RegSetValueExW,
+        HKEY, HKEY_CURRENT_USER, KEY_WRITE, RegCloseKey, RegCreateKeyExW, RegSetValueExW,
     };
 
     let subkey_w = to_wide_null(subkey);
@@ -676,7 +742,7 @@ pub fn win_write_registry_string(
             hkey,
             value_w.as_ptr(),
             0,
-            REG_SZ,
+            reg_type,
             val_data_w.as_ptr() as *const u8,
             byte_count,
         );

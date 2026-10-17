@@ -25,70 +25,26 @@ pub fn execute(target_path: &Path, args: &[String], channel: Channel) -> ! {
 
     #[cfg(windows)]
     {
-        use windows_sys::Win32::Foundation::{CloseHandle, FALSE, TRUE};
+        use windows_sys::Win32::Foundation::TRUE;
         use windows_sys::Win32::System::Console::SetConsoleCtrlHandler;
-        use windows_sys::Win32::System::Threading::{
-            CreateProcessW, GetExitCodeProcess, INFINITE, PROCESS_INFORMATION, STARTUPINFOW,
-            WaitForSingleObject,
-        };
-
-        let app_name_w: Vec<u16> = target_path
-            .to_string_lossy()
-            .encode_utf16()
-            .chain(std::iter::once(0))
-            .collect();
-
-        // Build command line: program name followed by arguments
-        let mut cmdline = format!("\"{}\"", target_path.to_string_lossy());
-        for arg in args {
-            cmdline.push(' ');
-            cmdline.push_str(&quote_windows_arg(arg));
-        }
-
-        let mut cmdline_w: Vec<u16> = cmdline.encode_utf16().chain(std::iter::once(0)).collect();
-
-        let mut si: STARTUPINFOW = unsafe { std::mem::zeroed() };
-        si.cb = std::mem::size_of::<STARTUPINFOW>() as u32;
-
-        let mut pi: PROCESS_INFORMATION = unsafe { std::mem::zeroed() };
 
         // Disable Ctrl+C handling in parent so the child console receives it natively
         unsafe {
             SetConsoleCtrlHandler(None, TRUE);
         }
 
-        let created = unsafe {
-            CreateProcessW(
-                app_name_w.as_ptr(),
-                cmdline_w.as_mut_ptr(),
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-                TRUE,
-                0,
-                std::ptr::null_mut(),
-                std::ptr::null(), // Inherit current directory
-                &si,
-                &mut pi,
-            )
-        };
-
-        if created == FALSE {
-            let err = unsafe { windows_sys::Win32::Foundation::GetLastError() };
-            eprintln!(
-                "sona-shim: Failed to launch {} (error code {})",
-                target_path.display(),
-                err
-            );
-            std::process::exit(1);
-        }
-
-        unsafe {
-            WaitForSingleObject(pi.hProcess, INFINITE);
-            let mut exit_code: u32 = 0;
-            GetExitCodeProcess(pi.hProcess, &mut exit_code);
-            CloseHandle(pi.hProcess);
-            CloseHandle(pi.hThread);
-            std::process::exit(exit_code as i32);
+        match std::process::Command::new(target_path).args(args).status() {
+            Ok(status) => {
+                std::process::exit(status.code().unwrap_or(1));
+            }
+            Err(err) => {
+                eprintln!(
+                    "sona-shim: Failed to launch {} ({})",
+                    target_path.display(),
+                    err
+                );
+                std::process::exit(1);
+            }
         }
     }
 

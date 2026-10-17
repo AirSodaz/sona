@@ -93,9 +93,14 @@ fn test_channel_resolution_logic() {
 #[test]
 fn test_dual_channel_registration_and_discovery() {
     let _guard = REG_LOCK.lock().unwrap();
+    let reg_dir = TempDir::new("dual-reg");
+    unsafe {
+        std::env::set_var("SONA_DIR", &reg_dir.path);
+        std::env::set_var("SONA_REGISTRY_SUBKEY", r"Software\SonaTest");
+        std::env::set_var("SONA_TEST_ISOLATED", "1");
+    }
     let stable_dir = TempDir::new("stable-install");
     let nightly_dir = TempDir::new("nightly-install");
-
     let exe_name = if cfg!(windows) {
         "sona-cli.exe"
     } else {
@@ -153,14 +158,27 @@ fn test_dual_channel_registration_and_discovery() {
     // Clean up registry
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
+    #[cfg(windows)]
+    {
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\stable");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\nightly");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Settings");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest");
+    }
 }
 
 #[test]
 fn test_reference_counting_uninstallation() {
     let _guard = REG_LOCK.lock().unwrap();
+    let reg_dir = TempDir::new("rc-reg");
+    unsafe {
+        std::env::set_var("SONA_DIR", &reg_dir.path);
+        std::env::set_var("SONA_REGISTRY_SUBKEY", r"Software\SonaTest");
+        std::env::set_var("SONA_TEST_ISOLATED", "1");
+    }
     let stable_dir = TempDir::new("rc-stable");
     let nightly_dir = TempDir::new("rc-nightly");
-
     let exe_name = if cfg!(windows) {
         "sona-cli.exe"
     } else {
@@ -203,4 +221,12 @@ fn test_reference_counting_uninstallation() {
     // Clean up
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
+    #[cfg(windows)]
+    {
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\stable");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels\nightly");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Channels");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest\Settings");
+        let _ = sona_shim::registry::win_delete_registry_key(r"Software\SonaTest");
+    }
 }

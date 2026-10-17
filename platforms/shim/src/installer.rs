@@ -337,13 +337,16 @@ fn check_user_env_has_path(dir: &Path) -> bool {
 }
 
 fn add_to_user_path(dir: &Path) -> Result<bool, String> {
+    if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
+        return Ok(true);
+    }
     if check_user_env_has_path(dir) {
         return Ok(false);
     }
 
     #[cfg(windows)]
     {
-        use crate::registry::{win_read_registry_string, win_write_registry_string};
+        use crate::registry::{win_read_registry_string, win_write_registry_expand_string};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
@@ -359,8 +362,7 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
             )
         };
 
-        win_write_registry_string("Environment", "Path", &new_path)?;
-
+        win_write_registry_expand_string("Environment", "Path", &new_path)?;
         // Broadcast environment change notification
         let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
         let mut result: usize = 0;
@@ -399,11 +401,14 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     }
 }
 fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
+    if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
+        return Ok(true);
+    }
     let target = normalize_path(dir);
 
     #[cfg(windows)]
     {
-        use crate::registry::{win_read_registry_string, win_write_registry_string};
+        use crate::registry::{win_read_registry_string, win_write_registry_expand_string};
         use windows_sys::Win32::UI::WindowsAndMessaging::{
             HWND_BROADCAST, SMTO_ABORTIFHUNG, SendMessageTimeoutW, WM_SETTINGCHANGE,
         };
@@ -429,8 +434,7 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
 
         if changed {
             let new_path = new_entries.join(";");
-            win_write_registry_string("Environment", "Path", &new_path)?;
-
+            win_write_registry_expand_string("Environment", "Path", &new_path)?;
             let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
             let mut result: usize = 0;
             unsafe {

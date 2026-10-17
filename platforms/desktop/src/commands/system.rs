@@ -217,6 +217,41 @@ pub struct DesktopShimStatus {
     pub nightly_installed: bool,
 }
 
+pub fn detect_app_channel_from_config(
+    identifier: &str,
+    product_name: Option<&str>,
+    version: Option<&str>,
+) -> sona_shim::registry::Channel {
+    let env_channel = std::env::var("SONA_CHANNEL")
+        .unwrap_or_default()
+        .to_lowercase();
+
+    let is_nightly = match env_channel.as_str() {
+        "nightly" => true,
+        "stable" => false,
+        _ => {
+            let id = identifier.to_lowercase();
+            let prod = product_name.unwrap_or("").to_lowercase();
+            let ver = version.unwrap_or("");
+            id.ends_with(".nightly") || prod.contains("nightly") || ver.contains('-')
+        }
+    };
+
+    if is_nightly {
+        sona_shim::registry::Channel::Nightly
+    } else {
+        sona_shim::registry::Channel::Stable
+    }
+}
+
+pub fn detect_app_channel(app: &AppHandle) -> sona_shim::registry::Channel {
+    detect_app_channel_from_config(
+        &app.config().identifier,
+        app.config().product_name.as_deref(),
+        app.config().version.as_deref(),
+    )
+}
+
 #[tauri::command]
 pub async fn get_shim_status(app: AppHandle) -> Result<DesktopShimStatus, String> {
     let status = sona_shim::installer::check_path_status();
@@ -226,26 +261,8 @@ pub async fn get_shim_status(app: AppHandle) -> Result<DesktopShimStatus, String
     let nightly_installed =
         sona_shim::registry::is_channel_installed(sona_shim::registry::Channel::Nightly);
 
-    let is_nightly = {
-        let identifier = app.config().identifier.to_lowercase();
-        let product_name = app
-            .config()
-            .product_name
-            .as_deref()
-            .unwrap_or("")
-            .to_lowercase();
-        let version = app.config().version.as_deref().unwrap_or("");
-        let env_channel = std::env::var("SONA_CHANNEL")
-            .unwrap_or_default()
-            .to_lowercase();
-
-        env_channel == "nightly"
-            || identifier.ends_with(".nightly")
-            || product_name.contains("nightly")
-            || version.contains('-')
-    };
-
-    let current_channel = if is_nightly { "nightly" } else { "stable" };
+    let channel = detect_app_channel(&app);
+    let current_channel = channel.as_str();
     let is_configured =
         (status.in_current_path || status.in_user_path) && !status.installed_shims.is_empty();
 
@@ -265,29 +282,7 @@ pub async fn get_shim_status(app: AppHandle) -> Result<DesktopShimStatus, String
 #[tauri::command]
 pub async fn install_shim(app: AppHandle) -> Result<(), String> {
     let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let is_nightly = {
-        let identifier = app.config().identifier.to_lowercase();
-        let product_name = app
-            .config()
-            .product_name
-            .as_deref()
-            .unwrap_or("")
-            .to_lowercase();
-        let version = app.config().version.as_deref().unwrap_or("");
-        let env_channel = std::env::var("SONA_CHANNEL")
-            .unwrap_or_default()
-            .to_lowercase();
-
-        env_channel == "nightly"
-            || identifier.ends_with(".nightly")
-            || product_name.contains("nightly")
-            || version.contains('-')
-    };
-    let channel = if is_nightly {
-        sona_shim::registry::Channel::Nightly
-    } else {
-        sona_shim::registry::Channel::Stable
-    };
+    let channel = detect_app_channel(&app);
 
     let parent = current_exe
         .parent()
