@@ -1,7 +1,7 @@
 {
   "name": "sona",
   "private": true,
-  "version": "0.9.6",
+  "version": "0.9.7",
   "license": "MIT",
   "type": "module",
   "packageManager": "pnpm@12.11.2",

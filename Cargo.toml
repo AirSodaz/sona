@@ -30,7 +30,7 @@ members = [
 ]
 
 [workspace.package]
-version = "0.9.6"
+version = "0.9.7"
 authors = ["AirSodaz"]
 edition = "2024"
 license = "MIT"
