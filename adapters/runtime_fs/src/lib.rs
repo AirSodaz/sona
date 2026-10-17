@@ -396,7 +396,11 @@ pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
         let Some(base) = std::env::var_os("LOCALAPPDATA").map(PathBuf::from) else {
             return Vec::new();
         };
-        vec![base.join("com.asoda.sona"), base.join("Sona")]
+        vec![
+            base.join("com.asoda.sona"),
+            base.join("com.asoda.sona.nightly"),
+            base.join("Sona"),
+        ]
     }
 
     #[cfg(target_os = "macos")]
@@ -405,24 +409,104 @@ pub fn default_desktop_app_data_roots() -> Vec<PathBuf> {
             return Vec::new();
         };
         let base = home.join("Library").join("Application Support");
-        vec![base.join("com.asoda.sona"), base.join("Sona")]
+        vec![
+            base.join("com.asoda.sona"),
+            base.join("com.asoda.sona.nightly"),
+            base.join("Sona"),
+        ]
     }
 
     #[cfg(target_os = "linux")]
     {
         if let Some(data_home) = std::env::var_os("XDG_DATA_HOME").map(PathBuf::from) {
-            return vec![data_home.join("com.asoda.sona"), data_home.join("Sona")];
+            return vec![
+                data_home.join("com.asoda.sona"),
+                data_home.join("com.asoda.sona.nightly"),
+                data_home.join("Sona"),
+            ];
         }
         let Some(home) = std::env::var_os("HOME").map(PathBuf::from) else {
             return Vec::new();
         };
         let base = home.join(".local").join("share");
-        vec![base.join("com.asoda.sona"), base.join("Sona")]
+        vec![
+            base.join("com.asoda.sona"),
+            base.join("com.asoda.sona.nightly"),
+            base.join("Sona"),
+        ]
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos", target_os = "linux")))]
     {
         Vec::new()
+    }
+}
+
+pub fn default_shared_models_dir() -> Option<PathBuf> {
+    if let Some(custom) = std::env::var_os("SONA_MODELS_DIR")
+        .map(PathBuf::from)
+        .filter(|p| !p.as_os_str().is_empty())
+    {
+        return Some(custom);
+    }
+
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(profile) = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())
+        {
+            return Some(profile.join(".sona").join("models"));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())
+        {
+            return Some(local.join("sona").join("models"));
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())?;
+        Some(home.join(".sona").join("models"))
+    }
+}
+
+fn is_non_empty_dir(path: &Path) -> bool {
+    path.is_dir()
+        && std::fs::read_dir(path)
+            .map(|mut entries| entries.next().is_some())
+            .unwrap_or(false)
+}
+
+pub fn default_shared_cuda_addon_dir() -> Option<PathBuf> {
+    #[cfg(target_os = "windows")]
+    {
+        if let Some(profile) = std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())
+        {
+            return Some(profile.join(".sona").join("runtimes").join("cuda"));
+        }
+        if let Some(local) = std::env::var_os("LOCALAPPDATA")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())
+        {
+            return Some(local.join("sona").join("runtimes").join("cuda"));
+        }
+        None
+    }
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        let home = std::env::var_os("HOME")
+            .map(PathBuf::from)
+            .filter(|p| !p.as_os_str().is_empty())?;
+        Some(home.join(".sona").join("runtimes").join("cuda"))
     }
 }
 
@@ -503,7 +587,19 @@ pub fn resolve_active_models_dir(
             custom.display()
         );
     }
-    active_data_dir.join("models")
+
+    let legacy_models_dir = active_data_dir.join("models");
+    if is_non_empty_dir(&legacy_models_dir)
+        || (config.custom_data_dir.is_some() && legacy_models_dir.exists())
+    {
+        return legacy_models_dir;
+    }
+
+    if let Some(shared) = default_shared_models_dir() {
+        return shared;
+    }
+
+    legacy_models_dir
 }
 
 pub fn select_desktop_models_dir_from_app_roots<I>(app_roots: I) -> Option<PathBuf>
@@ -517,26 +613,42 @@ where
         let bootstrap_path = root.join(STORAGE_BOOTSTRAP_FILE_NAME);
         if bootstrap_path.exists() {
             let config = load_bootstrap_config(root);
-            let has_explicit_custom =
-                config.custom_models_dir.is_some() || config.custom_data_dir.is_some();
+            if let Some(custom) = config
+                .custom_models_dir
+                .filter(|p| !p.as_os_str().is_empty())
+            {
+                return Some(custom);
+            }
             let active_data = resolve_active_data_dir(root);
-            let active_models = resolve_active_models_dir(root, &active_data);
-            if has_explicit_custom || active_models.exists() {
-                return Some(active_models);
+            let legacy_models = active_data.join("models");
+            if is_non_empty_dir(&legacy_models)
+                || (config.custom_data_dir.is_some() && legacy_models.exists())
+            {
+                return Some(legacy_models);
             }
         }
     }
 
-    // 2. Check for standard "models" subdirectory in existing roots
+    // 2. Check for standard "models" subdirectory in existing roots (must contain models)
     if let Some(existing) = app_roots
         .iter()
         .map(|path| path.join("models"))
-        .find(|path| path.exists())
+        .find(|path| is_non_empty_dir(path))
     {
         return Some(existing);
     }
 
-    // 3. Fallback to active models dir of first root (if configured) or first root/models
+    // 3. Check for existing default shared models directory
+    if let Some(shared) = default_shared_models_dir().filter(|path| path.exists()) {
+        return Some(shared);
+    }
+
+    // 4. Fallback to default shared models dir if available
+    if let Some(shared) = default_shared_models_dir() {
+        return Some(shared);
+    }
+
+    // 5. Final fallback to active models dir of first root
     app_roots.into_iter().next().map(|root| {
         let active_data = resolve_active_data_dir(&root);
         resolve_active_models_dir(&root, &active_data)
@@ -557,6 +669,7 @@ where
         .iter()
         .map(|path| path.join(CUDA_ADDON_SUBPATH))
         .find(|path| path.exists())
+        .or_else(|| default_shared_cuda_addon_dir().filter(|path| path.exists()))
         .or_else(|| {
             app_roots
                 .into_iter()

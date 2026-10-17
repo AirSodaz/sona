@@ -32,6 +32,34 @@ test('resolveLocalCudaRuntimeDir resolves platform-specific paths', () => {
   assert.equal(resolveLocalCudaRuntimeDir('darwin'), null);
 });
 
+test('resolveLocalCudaRuntimeDir probes nightly and shared runtime directories when present', () => {
+  const tempDir = path.join(repoRoot, 'target', 'test-cuda-probing');
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  try {
+    const mockNightlyAppData = path.join(tempDir, 'appdata');
+    const nightlyCudaDir = path.join(mockNightlyAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    fs.mkdirSync(nightlyCudaDir, { recursive: true });
+
+    const winDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: mockNightlyAppData,
+      USERPROFILE: path.join(tempDir, 'home'),
+    });
+    assert.equal(winDir, nightlyCudaDir);
+
+    const mockSharedHome = path.join(tempDir, 'shared-home');
+    const sharedCudaDir = path.join(mockSharedHome, '.sona', 'runtimes', 'cuda');
+    fs.mkdirSync(sharedCudaDir, { recursive: true });
+
+    const sharedDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: path.join(tempDir, 'empty-appdata'),
+      USERPROFILE: mockSharedHome,
+    });
+    assert.equal(sharedDir, sharedCudaDir);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
+});
+
 test('detectCudaEnvironment inspects mock environment without crashing', () => {
   const env = detectCudaEnvironment({ CUDA_PATH: '/mock/cuda' }, 'win32');
   assert.equal(env.platform, 'windows-x86_64');

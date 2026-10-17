@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Settings } from '../../Settings';
+import { preloadSettingsTab } from '../settingsLoaders';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -26,6 +27,10 @@ vi.mock('../../../services/modelService', () => ({
 }));
 
 describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', () => {
+  beforeAll(async () => {
+    await preloadSettingsTab('llm_service');
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

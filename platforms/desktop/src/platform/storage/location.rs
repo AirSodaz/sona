@@ -64,14 +64,18 @@ pub fn resolve_active_models_dir_for_app<R: Runtime>(
     Ok(resolve_active_models_dir(&default_dir, &active_data_dir))
 }
 
+pub fn resolve_default_models_dir(default_app_local_data_dir: &Path) -> PathBuf {
+    sona_runtime_fs::default_shared_models_dir()
+        .unwrap_or_else(|| default_app_local_data_dir.join("models"))
+}
+
 pub fn get_storage_directories_info<R: Runtime>(
     app: &AppHandle<R>,
 ) -> Result<StorageDirectoriesInfo, String> {
     let default_data_dir = default_app_local_data_dir_for_app(app)?;
     let active_data_dir = resolve_active_data_dir(&default_data_dir);
     let active_models_dir = resolve_active_models_dir(&default_data_dir, &active_data_dir);
-    let default_models_dir = default_data_dir.join("models");
-
+    let default_models_dir = resolve_default_models_dir(&default_data_dir);
     let config = load_bootstrap_config(&default_data_dir);
     let is_custom_data_dir = config.custom_data_dir.is_some()
         && config.custom_data_dir.as_ref() != Some(&default_data_dir);
@@ -849,7 +853,7 @@ pub async fn set_models_directory(
         }
     }
 
-    let default_models_dir = default_data_dir.join("models");
+    let default_models_dir = resolve_default_models_dir(&default_data_dir);
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     if target_path == default_models_dir {
         bootstrap.custom_models_dir = None;
@@ -1002,8 +1006,21 @@ mod tests {
         assert_eq!(resolve_active_data_dir(default_dir), default_dir);
         assert_eq!(
             resolve_active_models_dir(default_dir, default_dir),
-            default_dir.join("models")
+            resolve_default_models_dir(default_dir)
         );
+    }
+
+    #[test]
+    fn resolve_default_models_dir_resolves_shared_or_fallback() {
+        let temp = TempDir::new().unwrap();
+        let default_dir = temp.path();
+
+        let resolved = resolve_default_models_dir(default_dir);
+        if let Some(shared) = sona_runtime_fs::default_shared_models_dir() {
+            assert_eq!(resolved, shared);
+        } else {
+            assert_eq!(resolved, default_dir.join("models"));
+        }
     }
 
     #[test]

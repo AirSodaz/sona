@@ -82,6 +82,7 @@ Core <- Outbound Adapter <------------- Host
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) 服务端 Host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
+| `platforms/shim/` | `sona-shim` | host | 通用命令 Shim 与通道分发 Host |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
 角色根目录分别为 `core/`、`application/`、`adapters/`、`providers/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分；`providers/` 下的 Provider crate 在 Core 端口之后实现特定引擎的 ASR 后端。

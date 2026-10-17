@@ -37,19 +37,43 @@ function normalizePlatform(platform = process.platform) {
 
 function resolveLocalCudaRuntimeDir(platform = process.platform, env = process.env) {
   if (platform === 'win32') {
-    const localAppData = env.LOCALAPPDATA || path.join(os.homedir(), 'AppData', 'Local');
+    const home = env.USERPROFILE || os.homedir();
+    const localAppData = env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
     const primary = path.join(localAppData, 'com.asoda.sona', 'runtimes', 'cuda');
-    if (fs.existsSync(path.dirname(primary))) return primary;
+    const nightly = path.join(localAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    const shared = path.join(home, '.sona', 'runtimes', 'cuda');
     const fallback = path.join(localAppData, 'Sona', 'runtimes', 'cuda');
-    if (fs.existsSync(path.dirname(fallback))) return fallback;
+
+    if (fs.existsSync(primary)) return primary;
+    if (fs.existsSync(nightly)) return nightly;
+    if (fs.existsSync(shared)) return shared;
+    if (fs.existsSync(path.dirname(primary))) return primary;
+    if (fs.existsSync(path.dirname(nightly))) return nightly;
+    if (fs.existsSync(path.dirname(shared))) return shared;
+    if (fs.existsSync(path.dirname(path.dirname(nightly))) && !fs.existsSync(path.dirname(path.dirname(primary)))) {
+      return nightly;
+    }
+    if (fs.existsSync(fallback) || fs.existsSync(path.dirname(fallback))) return fallback;
     return primary;
   }
   if (platform === 'linux') {
-    const dataHome = env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share');
+    const home = env.HOME || os.homedir();
+    const dataHome = env.XDG_DATA_HOME || path.join(home, '.local', 'share');
     const primary = path.join(dataHome, 'com.asoda.sona', 'runtimes', 'cuda');
-    if (fs.existsSync(path.dirname(primary))) return primary;
+    const nightly = path.join(dataHome, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    const shared = path.join(home, '.sona', 'runtimes', 'cuda');
     const fallback = path.join(dataHome, 'Sona', 'runtimes', 'cuda');
-    if (fs.existsSync(path.dirname(fallback))) return fallback;
+
+    if (fs.existsSync(primary)) return primary;
+    if (fs.existsSync(nightly)) return nightly;
+    if (fs.existsSync(shared)) return shared;
+    if (fs.existsSync(path.dirname(primary))) return primary;
+    if (fs.existsSync(path.dirname(nightly))) return nightly;
+    if (fs.existsSync(path.dirname(shared))) return shared;
+    if (fs.existsSync(path.dirname(path.dirname(nightly))) && !fs.existsSync(path.dirname(path.dirname(primary)))) {
+      return nightly;
+    }
+    if (fs.existsSync(fallback) || fs.existsSync(path.dirname(fallback))) return fallback;
     return primary;
   }
   return null;

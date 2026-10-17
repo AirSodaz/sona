@@ -25,11 +25,12 @@ use sona_runtime_fs::{
     FsDiagnosticsEnrichmentRepository, FsSourcePathStatusProvider, NativeAutomationFileSystem,
     RealFileSystem, RuntimeBatchTranscribePlanResolver, RuntimeFsError,
     RuntimeModelCatalogProvider, StorageBootstrapConfig, SystemClock, UuidGenerator,
-    collect_automation_runtime_candidate_paths, ensure_directory_exists,
-    is_preset_model_installed_at, load_transcribe_config_file, load_transcribe_live_config_file,
-    path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
-    resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
-    save_bootstrap_config, select_desktop_models_dir_from_app_roots,
+    collect_automation_runtime_candidate_paths, default_desktop_app_data_roots,
+    default_shared_models_dir, ensure_directory_exists, is_preset_model_installed_at,
+    load_transcribe_config_file, load_transcribe_live_config_file, path_exists,
+    plan_batch_output_files, remove_path_if_exists, resolve_active_models_dir,
+    resolve_batch_input_source, resolve_live_transcribe_plan_with_runtime_paths,
+    resolve_runtime_path_status, save_bootstrap_config, select_desktop_models_dir_from_app_roots,
     validate_native_automation_rule_activation, write_cli_config_template_file,
     write_json_pretty_atomic, write_transcript_output_file,
 };
@@ -670,17 +671,54 @@ fn multi_file_preset_requires_every_non_empty_artifact() {
     std::fs::write(install_path.join(&artifacts[1].filename), []).unwrap();
     assert!(!is_preset_model_installed_at(model, models_dir));
 }
+static ENV_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+struct EnvVarGuard {
+    key: &'static str,
+    original: Option<std::ffi::OsString>,
+    _lock: std::sync::MutexGuard<'static, ()>,
+}
+
+impl EnvVarGuard {
+    fn set(key: &'static str, value: &Path) -> Self {
+        let lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let original = std::env::var_os(key);
+        unsafe {
+            std::env::set_var(key, value);
+        }
+        Self {
+            key,
+            original,
+            _lock: lock,
+        }
+    }
+}
+
+impl Drop for EnvVarGuard {
+    fn drop(&mut self) {
+        unsafe {
+            if let Some(ref val) = self.original {
+                std::env::set_var(self.key, val);
+            } else {
+                std::env::remove_var(self.key);
+            }
+        }
+    }
+}
 
 #[test]
 fn selects_existing_models_dir_from_candidate_roots() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let first_root = dir.path().join("Sona");
     let preferred_root = dir.path().join("com.asoda.sona");
-    std::fs::create_dir_all(preferred_root.join("models")).unwrap();
+    let models_dir = preferred_root.join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+    std::fs::write(models_dir.join("model.bin"), b"existing").unwrap();
 
     let result = select_desktop_models_dir_from_app_roots([first_root, preferred_root.clone()]);
 
-    assert_eq!(result, Some(preferred_root.join("models")));
+    assert_eq!(result, Some(models_dir));
 }
 
 #[test]
@@ -794,6 +832,7 @@ fn real_file_system_remove_path_if_exists_handles_files_and_missing_paths() {
 
 #[test]
 fn select_desktop_models_dir_honors_storage_location_custom_models_dir() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("app_root");
     std::fs::create_dir_all(&root).unwrap();
@@ -813,6 +852,7 @@ fn select_desktop_models_dir_honors_storage_location_custom_models_dir() {
 
 #[test]
 fn select_desktop_models_dir_honors_storage_location_custom_data_dir() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root = dir.path().join("app_root");
     std::fs::create_dir_all(&root).unwrap();
@@ -833,6 +873,7 @@ fn select_desktop_models_dir_honors_storage_location_custom_data_dir() {
 
 #[test]
 fn select_desktop_models_dir_honors_custom_models_dir_even_when_not_yet_created() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
     let dir = tempfile::tempdir().unwrap();
     let root1 = dir.path().join("app_root_configured");
     std::fs::create_dir_all(&root1).unwrap();
@@ -851,4 +892,82 @@ fn select_desktop_models_dir_honors_custom_models_dir_even_when_not_yet_created(
 
     let selected = select_desktop_models_dir_from_app_roots(vec![root1, root2]);
     assert_eq!(selected, Some(custom_models));
+}
+
+#[test]
+fn default_desktop_app_data_roots_includes_nightly_identifier() {
+    let roots = default_desktop_app_data_roots();
+    assert!(
+        roots
+            .iter()
+            .any(|r| r.to_string_lossy().contains("com.asoda.sona.nightly")),
+        "Candidate roots must include nightly app data root: {roots:?}"
+    );
+}
+
+#[test]
+fn default_shared_models_dir_honors_env_override() {
+    let dir = tempfile::tempdir().unwrap();
+    let override_dir = dir.path().join("custom_shared_models");
+    let _guard = EnvVarGuard::set("SONA_MODELS_DIR", &override_dir);
+    let resolved = default_shared_models_dir();
+    assert_eq!(resolved, Some(override_dir));
+}
+
+#[test]
+fn resolve_active_models_dir_prefers_legacy_non_empty_models() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let app_dir = dir.path().join("app_root");
+    std::fs::create_dir_all(&app_dir).unwrap();
+    let legacy_models = app_dir.join("models");
+    std::fs::create_dir_all(&legacy_models).unwrap();
+    std::fs::write(legacy_models.join("model.bin"), b"existing-model").unwrap();
+
+    let resolved = resolve_active_models_dir(&app_dir, &app_dir);
+    assert_eq!(resolved, legacy_models);
+}
+
+#[test]
+fn resolve_active_models_dir_falls_back_to_shared_when_legacy_is_empty() {
+    let _lock = ENV_LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let dir = tempfile::tempdir().unwrap();
+    let app_dir = dir.path().join("app_root_fresh");
+    std::fs::create_dir_all(&app_dir).unwrap();
+    let empty_models = app_dir.join("models");
+    std::fs::create_dir_all(&empty_models).unwrap();
+
+    let resolved = resolve_active_models_dir(&app_dir, &app_dir);
+    if let Some(shared) = default_shared_models_dir() {
+        assert_eq!(resolved, shared);
+    }
+}
+
+#[test]
+fn select_desktop_models_dir_scans_shared_models_when_roots_have_no_models() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app_root_empty");
+    std::fs::create_dir_all(&root).unwrap();
+
+    let shared_temp = dir.path().join("shared_models_scanned");
+    std::fs::create_dir_all(&shared_temp).unwrap();
+    let _guard = EnvVarGuard::set("SONA_MODELS_DIR", &shared_temp);
+    let selected = select_desktop_models_dir_from_app_roots(vec![root]);
+    assert_eq!(selected, Some(shared_temp));
+}
+
+#[test]
+fn select_desktop_models_dir_prefers_shared_models_over_empty_candidate_roots() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("app_root_with_empty_models");
+    let empty_models = root.join("models");
+    std::fs::create_dir_all(&empty_models).unwrap();
+
+    let shared_temp = dir.path().join("shared_models_populated");
+    std::fs::create_dir_all(&shared_temp).unwrap();
+    std::fs::write(shared_temp.join("model.onnx"), b"populated").unwrap();
+    let _guard = EnvVarGuard::set("SONA_MODELS_DIR", &shared_temp);
+
+    let selected = select_desktop_models_dir_from_app_roots(vec![root]);
+    assert_eq!(selected, Some(shared_temp));
 }

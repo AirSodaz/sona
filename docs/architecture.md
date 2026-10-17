@@ -82,6 +82,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) server host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
+| `platforms/shim/` | `sona-shim` | host | Universal command shim and channel router host |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
 Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata. Provider crates under `providers/` implement engine-specific ASR backends behind Core ports.
