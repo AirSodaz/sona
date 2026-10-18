@@ -68,8 +68,6 @@ impl RegistryGuard {
 
 impl Drop for RegistryGuard {
     fn drop(&mut self) {
-        let _ = unregister_channel(Channel::Stable);
-        let _ = unregister_channel(Channel::Nightly);
         #[cfg(windows)]
         {
             let _ = sona_shim::registry::win_delete_registry_key(&format!(

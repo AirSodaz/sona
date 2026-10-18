@@ -206,6 +206,7 @@ current SQLite payload and applies post-v0.8.0 field upgrades.
 
 The following architectural dependency exceptions are registered and reviewed:
 - `sona -> sona-shim`: Desktop host integrates channel registration and universal command shims directly.
+
 <a id="native-window-chrome"></a>
 ## Native window chrome follows the application theme
 

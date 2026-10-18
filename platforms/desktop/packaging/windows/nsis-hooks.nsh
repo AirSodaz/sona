@@ -15,11 +15,14 @@
 !macro NSIS_HOOK_PREUNINSTALL
   ; Safe uninstallation: decrements reference count in channel registry
   ; If another channel (Stable or Nightly) remains, shims and PATH are preserved
-  DetailPrint "Unregistering Sona channel and updating shims..."
-  ${If} ${FileExists} "$INSTDIR\sona-shim.exe"
-    nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" uninstall --path "$INSTDIR"'
-    Pop $0
-  ${Else}
-    DetailPrint "Notice: sona-shim.exe not found during uninstall"
+  ; Only execute on actual uninstallation, not during in-place updater runs ($UpdateMode = 1)
+  ${If} $UpdateMode <> 1
+    DetailPrint "Unregistering Sona channel and updating shims..."
+    ${If} ${FileExists} "$INSTDIR\sona-shim.exe"
+      nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" uninstall --path "$INSTDIR"'
+      Pop $0
+    ${Else}
+      DetailPrint "Notice: sona-shim.exe not found during uninstall"
+    ${EndIf}
   ${EndIf}
 !macroend

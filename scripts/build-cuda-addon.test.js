@@ -81,6 +81,17 @@ test('resolveLocalCudaRuntimeDir probes nightly and shared runtime directories w
       HOME: path.join(tempDir, 'linux-home'),
     });
     assert.equal(linuxDir, nightlyLinuxDir);
+    // Fresh installation probing on Linux: only nightly app root exists without runtimes/cuda
+    const freshLinuxData = path.join(tempDir, 'fresh-linux-xdg');
+    fs.mkdirSync(path.join(freshLinuxData, 'com.asoda.sona.nightly'), { recursive: true });
+    const freshLinuxDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: freshLinuxData,
+      HOME: path.join(tempDir, 'empty-linux-home'),
+    });
+    assert.equal(
+      freshLinuxDir,
+      path.join(freshLinuxData, 'com.asoda.sona.nightly', 'runtimes', 'cuda')
+    );
 
     const linuxSharedDir = resolveLocalCudaRuntimeDir('linux', {
       XDG_DATA_HOME: path.join(tempDir, 'empty-linux-data'),

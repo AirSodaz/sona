@@ -600,7 +600,7 @@ pub fn resolve_active_models_dir(
     let has_custom_data = config
         .custom_data_dir
         .as_ref()
-        .map_or(false, |p| !p.as_os_str().is_empty());
+        .is_some_and(|p| !p.as_os_str().is_empty());
     if is_non_empty_dir(&legacy_models_dir) || (has_custom_data && legacy_models_dir.exists()) {
         return legacy_models_dir;
     }
@@ -634,7 +634,7 @@ where
             let has_custom_data = config
                 .custom_data_dir
                 .as_ref()
-                .map_or(false, |p| !p.as_os_str().is_empty());
+                .is_some_and(|p| !p.as_os_str().is_empty());
             if is_non_empty_dir(&legacy_models) || (has_custom_data && legacy_models.exists()) {
                 return Some(legacy_models);
             }

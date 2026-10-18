@@ -18,7 +18,7 @@ impl Channel {
     }
 
     pub fn parse(s: &str) -> Option<Self> {
-        let trimmed = s.trim().to_lowercase();
+        let trimmed = s.trim_start_matches('\u{feff}').trim().to_lowercase();
         if trimmed == "stable" {
             Some(Channel::Stable)
         } else if trimmed == "nightly" {
@@ -175,12 +175,12 @@ pub fn get_sona_dir() -> PathBuf {
         } else if let Ok(xdg) = std::env::var("XDG_DATA_HOME").filter(|x| !x.trim().is_empty()) {
             PathBuf::from(xdg).join("sona")
         } else {
-            PathBuf::from(".sona")
+            PathBuf::from("/etc/sona")
         }
     }
     #[cfg(not(any(windows, unix)))]
     {
-        PathBuf::from(".sona")
+        PathBuf::from("/etc/sona")
     }
 }
 
@@ -226,6 +226,7 @@ pub fn get_default_channel() -> Channel {
 }
 
 pub fn set_default_channel(channel: Channel) -> Result<(), String> {
+    let _lock = acquire_registry_lock();
     #[cfg(windows)]
     {
         let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
@@ -298,7 +299,15 @@ pub fn register_channel(
     version: Option<&str>,
     executable: Option<&str>,
 ) -> Result<(), String> {
-    let install_path_str = install_path.to_string_lossy().to_string();
+    let _lock = acquire_registry_lock();
+    let abs_install_path = if install_path.is_relative() {
+        std::env::current_dir()
+            .map_err(|e| format!("Failed to get current directory: {}", e))?
+            .join(install_path)
+    } else {
+        install_path.to_path_buf()
+    };
+    let install_path_str = abs_install_path.to_string_lossy().to_string();
 
     #[cfg(windows)]
     {
@@ -317,9 +326,9 @@ pub fn register_channel(
     }
 
     let mut file = read_registry_file()?;
-    let cli = resolve_executable_in_dir(install_path, TargetRole::Cli)
+    let cli = resolve_executable_in_dir(&abs_install_path, TargetRole::Cli)
         .map(|p| p.to_string_lossy().to_string());
-    let mcp = resolve_executable_in_dir(install_path, TargetRole::Mcp)
+    let mcp = resolve_executable_in_dir(&abs_install_path, TargetRole::Mcp)
         .map(|p| p.to_string_lossy().to_string());
 
     file.channels.insert(
@@ -337,6 +346,7 @@ pub fn register_channel(
 }
 
 pub fn unregister_channel(channel: Channel) -> Result<(), String> {
+    let _lock = acquire_registry_lock();
     #[cfg(windows)]
     {
         let subkey = format!(
@@ -382,6 +392,45 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 // JSON File Helpers
 // ---------------------------------------------------------------------------
+struct RegistryLockGuard {
+    lock_path: PathBuf,
+}
+
+impl Drop for RegistryLockGuard {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.lock_path);
+    }
+}
+
+fn acquire_registry_lock() -> Option<RegistryLockGuard> {
+    let lock_path = get_registry_json_path().with_extension("lock");
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    let start = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(3);
+    while start.elapsed() < timeout {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&lock_path)
+        {
+            Ok(_) => return Some(RegistryLockGuard { lock_path }),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                if let Ok(meta) = std::fs::metadata(&lock_path)
+                    && let Ok(modified) = meta.modified()
+                    && let Ok(elapsed) = modified.elapsed()
+                    && elapsed > std::time::Duration::from_secs(10)
+                {
+                    let _ = std::fs::remove_file(&lock_path);
+                }
+                std::thread::sleep(std::time::Duration::from_millis(25));
+            }
+            Err(_) => break,
+        }
+    }
+    None
+}
 
 fn read_registry_file() -> Result<RegistryFile, String> {
     let path = get_registry_json_path();
@@ -514,7 +563,14 @@ pub fn find_executable(channel: Channel, role: TargetRole) -> Option<PathBuf> {
             TargetRole::Mcp => info.mcp_path,
             TargetRole::Shim => None,
         };
-        if let Some(path) = candidate.filter(|p| p.is_file()) {
+        let expected_name = role.binary_name();
+        if let Some(path) = candidate.filter(|p| {
+            p.is_absolute()
+                && p.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.eq_ignore_ascii_case(expected_name))
+                && p.is_file()
+        }) {
             return Some(path);
         }
         if let Some(path) = resolve_executable_in_dir(&info.install_path, role) {
@@ -905,9 +961,11 @@ mod tests {
         assert_eq!(Channel::parse("stable"), Some(Channel::Stable));
         assert_eq!(Channel::parse("STABLE"), Some(Channel::Stable));
         assert_eq!(Channel::parse("  stable  "), Some(Channel::Stable));
+        assert_eq!(Channel::parse("\u{feff}stable"), Some(Channel::Stable));
         assert_eq!(Channel::parse("nightly"), Some(Channel::Nightly));
         assert_eq!(Channel::parse("NIGHTLY"), Some(Channel::Nightly));
         assert_eq!(Channel::parse("  nightly\n"), Some(Channel::Nightly));
+        assert_eq!(Channel::parse("\u{feff}nightly"), Some(Channel::Nightly));
         assert_eq!(Channel::parse("beta"), None);
         assert_eq!(Channel::parse(""), None);
     }

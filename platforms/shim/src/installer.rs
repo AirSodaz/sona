@@ -468,15 +468,8 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
         };
 
         // Read RAW unexpanded string to preserve dynamic variables like %USERPROFILE% or %JAVA_HOME%
-        let current_raw_path = match win_read_registry_string_raw("Environment", "Path") {
-            Some(p) => p,
-            None => {
-                if crate::registry::win_registry_value_exists("Environment", "Path") {
-                    return Err("Failed to read user PATH from Windows registry".to_string());
-                }
-                String::new()
-            }
-        };
+        let current_raw_path =
+            win_read_registry_string_raw("Environment", "Path").unwrap_or_default();
         let new_path = if current_raw_path.trim().is_empty() {
             dir.to_string_lossy().to_string()
         } else {

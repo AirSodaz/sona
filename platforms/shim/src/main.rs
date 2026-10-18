@@ -408,8 +408,12 @@ fn handle_uninstall(args: &[String]) {
             && let Ok(current_exe) = std::env::current_exe()
         {
             let shim_dir = sona_shim::installer::get_shim_dir();
-            let is_in_shim_dir = current_exe.starts_with(&shim_dir)
-                || current_exe.parent().is_some_and(|p| p == shim_dir);
+            let norm_exe = normalize_path(&current_exe);
+            let norm_shim = normalize_path(&shim_dir);
+            let is_in_shim_dir = norm_exe.starts_with(&norm_shim)
+                || current_exe
+                    .parent()
+                    .is_some_and(|p| normalize_path(p) == norm_shim);
             if !is_in_shim_dir {
                 let exe_str = current_exe.to_string_lossy().to_lowercase();
                 if exe_str.contains("nightly") {

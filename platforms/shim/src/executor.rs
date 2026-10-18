@@ -4,7 +4,7 @@ use std::path::Path;
 pub fn execute(target_path: &Path, args: &[String], channel: Channel) -> ! {
     unsafe {
         std::env::set_var("SONA_CHANNEL", channel.as_str());
-        if std::env::var("SONA_IPC_ENDPOINT").is_err() {
+        if std::env::var("SONA_IPC_ENDPOINT").is_err() && std::env::var("SONA_IPC_PIPE").is_err() {
             std::env::set_var("SONA_IPC_ENDPOINT", channel.default_ipc_endpoint());
         }
     }

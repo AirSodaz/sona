@@ -204,6 +204,7 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 
 当前已登记并经过评审的架构依赖例外：
 - `sona -> sona-shim`：桌面端 Host 直接集成通道注册与通用命令分发。
+
 <a id="native-window-chrome"></a>
 ## 原生窗口边框跟随应用主题
 
