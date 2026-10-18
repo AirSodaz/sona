@@ -7,19 +7,24 @@ on:
   workflow_dispatch:
     inputs:
       addon_version:
-        description: "CUDA addon version (e.g. 0.1.0)"
+        description: "CUDA addon version (e.g. 0.2.0)"
         required: true
-        default: "0.1.0"
+        default: "0.2.0"
         type: string
       cuda_version:
         description: "Target CUDA Toolkit version"
         required: false
         default: "12.4.1"
         type: string
+      sherpa_onnx_version:
+        description: "sherpa-onnx version"
+        required: false
+        default: "1.13.8"
+        type: string
       onnxruntime_version:
         description: "ONNX Runtime GPU version"
         required: false
-        default: "1.20.1"
+        default: "1.28.2"
         type: string
       llama_cpp_ref:
         description: "llama.cpp git ref (branch/tag/commit)"
@@ -61,7 +66,7 @@ jobs:
             echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${{ inputs.addon_version || '0.1.0' }}"
+            VERSION="${{ inputs.addon_version || '0.2.0' }}"
             node scripts/cuda-addon-manifest.js validate-tag --tag "cuda-addon-v${VERSION}" --version "$VERSION"
             echo "addon_version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "release_tag=cuda-addon-v${VERSION}" >> "$GITHUB_OUTPUT"
@@ -80,7 +85,8 @@ jobs:
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
-      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
+      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '1.13.8' }}
+      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.28.2' }}
       LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:
       - name: Checkout repository
@@ -89,8 +95,9 @@ jobs:
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Windows)
         shell: pwsh
         run: |
-          $sherpaVer = "1.13.8"
-          $url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVer}/sherpa-onnx-v${sherpaVer}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-win-x64-cuda.tar.bz2"
+          $sherpaVer = "${{ env.SHERPA_ONNX_VERSION }}"
+          $ortVer = "${{ env.ORT_VERSION }}"
+          $url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/v${sherpaVer}/sherpa-onnx-v${sherpaVer}-cuda-12.x-cudnn-9.x-onnxruntime${ortVer}-win-x64-cuda.tar.bz2"
           Write-Host "Downloading sherpa-onnx CUDA prebuilt from $url"
           curl.exe -sSfL --retry 5 --retry-connrefused "$url" -o "sherpa-onnx-cuda.tar.bz2"
           7z x sherpa-onnx-cuda.tar.bz2 -y
@@ -182,7 +189,8 @@ jobs:
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
-      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.20.1' }}
+      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '1.13.8' }}
+      ORT_VERSION: ${{ inputs.onnxruntime_version || '1.28.2' }}
       LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:
       - name: Checkout repository
@@ -208,8 +216,9 @@ jobs:
 
       - name: Download and Extract sherpa-onnx CUDA Prebuilt (Linux)
         run: |
-          SHERPA_VER="1.13.8"
-          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VER}/sherpa-onnx-v${SHERPA_VER}-cuda-12.x-cudnn-9.x-onnxruntime1.27.1-linux-x64-gpu.tar.bz2"
+          SHERPA_VER="${{ env.SHERPA_ONNX_VERSION }}"
+          ORT_VER="${{ env.ORT_VERSION }}"
+          URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/v${SHERPA_VER}/sherpa-onnx-v${SHERPA_VER}-cuda-12.x-cudnn-9.x-onnxruntime${ORT_VER}-linux-x64-gpu.tar.bz2"
           echo "Downloading sherpa-onnx CUDA prebuilt from $URL"
           curl -sSfL --retry 5 "$URL" -o sherpa-onnx-cuda.tar.bz2
           tar -xjf sherpa-onnx-cuda.tar.bz2

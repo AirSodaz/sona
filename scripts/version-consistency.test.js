@@ -98,3 +98,49 @@ test('Android Gradle dependencies stay aligned across modules and Cargo', () => 
     'Android app rustls-platform-verifier must match Cargo.lock rustls-platform-verifier-android',
   );
 });
+test('CUDA addon dependency versions stay aligned across workflow and scripts', () => {
+  const cargoToml = read('Cargo.toml');
+  const desktopCi = read('.github', 'workflows', 'desktop-client.yml');
+  const cudaAddonCi = read('.github', 'workflows', 'cuda-addon.yml');
+  const setupSherpaAction = read('.github', 'actions', 'setup-sherpa-onnx', 'action.yml');
+  const buildCudaAddonScript = read('scripts', 'build-cuda-addon.js');
+
+  const cargoSherpaVersion = cargoToml.match(/sherpa-onnx\s*=\s*\{\s*version\s*=\s*"=([\d.]+)"/u)?.[1];
+  assert.ok(cargoSherpaVersion, 'Cargo.toml must declare sherpa-onnx version');
+
+  const desktopSherpaVersion = desktopCi.match(/SHERPA_ONNX_VERSION:\s*([\d.]+)/u)?.[1];
+  assert.equal(desktopSherpaVersion, cargoSherpaVersion, 'desktop CI sherpa-onnx version must match Cargo.toml');
+
+  const cudaAddonSherpaVersion = cudaAddonCi.match(/sherpa_onnx_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
+  assert.equal(cudaAddonSherpaVersion, cargoSherpaVersion, 'cuda-addon CI sherpa-onnx version must match Cargo.toml');
+
+  const setupSherpaDefaultVersion = setupSherpaAction.match(/version:[\s\S]*?default:\s*'([\d.]+)'/u)?.[1];
+  assert.equal(setupSherpaDefaultVersion, cargoSherpaVersion, 'setup-sherpa-onnx action default version must match Cargo.toml');
+
+  const scriptSherpaVersion = buildCudaAddonScript.match(/sherpaVersion\s*=\s*options\['sherpa-version'\]\s*\|\|\s*'([\d.]+)'/u)?.[1];
+  assert.equal(scriptSherpaVersion, cargoSherpaVersion, 'build-cuda-addon.js default sherpaVersion must match Cargo.toml');
+
+  const desktopLlamaRef = desktopCi.match(/LLAMA_CPP_REF:\s*([a-zA-Z0-9_-]+)/u)?.[1];
+  assert.ok(desktopLlamaRef, 'desktop CI must declare LLAMA_CPP_REF');
+
+  const cudaAddonLlamaRef = cudaAddonCi.match(/llama_cpp_ref:[\s\S]*?default:\s*"([a-zA-Z0-9_-]+)"/u)?.[1];
+  assert.equal(cudaAddonLlamaRef, desktopLlamaRef, 'cuda-addon CI llama_cpp_ref must match desktop CI');
+
+  const scriptLlamaRef = buildCudaAddonScript.match(/llamaRef\s*=\s*options\['llama-ref'\]\s*\|\|\s*'([a-zA-Z0-9_-]+)'/u)?.[1];
+  assert.equal(scriptLlamaRef, desktopLlamaRef, 'build-cuda-addon.js default llamaRef must match desktop CI');
+
+  const cudaAddonOrtVersion = cudaAddonCi.match(/onnxruntime_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
+  assert.ok(cudaAddonOrtVersion, 'cuda-addon CI must declare default onnxruntime_version');
+
+  const scriptOrtVersion = buildCudaAddonScript.match(/ortVersion\s*=\s*options\['ort-version'\]\s*\|\|\s*'([\d.]+)'/u)?.[1];
+  assert.equal(scriptOrtVersion, cudaAddonOrtVersion, 'build-cuda-addon.js default ortVersion must match cuda-addon CI');
+  const rustAddonVersion = read('adapters', 'model_downloads', 'src', 'cuda_addon.rs')
+    .match(/DEFAULT_CUDA_ADDON_VERSION:\s*&str\s*=\s*"([\d.]+)"/u)?.[1];
+  assert.ok(rustAddonVersion, 'adapters/model_downloads must declare DEFAULT_CUDA_ADDON_VERSION');
+
+  const cudaAddonDefaultVersion = cudaAddonCi.match(/addon_version:[\s\S]*?default:\s*"([\d.]+)"/u)?.[1];
+  assert.equal(cudaAddonDefaultVersion, rustAddonVersion, 'cuda-addon CI default version must match Rust DEFAULT_CUDA_ADDON_VERSION');
+
+  const scriptAddonVersion = buildCudaAddonScript.match(/addonVersion\s*=\s*options\['addon-version'\]\s*\|\|\s*'([\d.]+)'/u)?.[1];
+  assert.equal(scriptAddonVersion, rustAddonVersion, 'build-cuda-addon.js default addonVersion must match Rust DEFAULT_CUDA_ADDON_VERSION');
+});

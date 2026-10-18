@@ -9,6 +9,7 @@ import {
   resolveLocalCudaRuntimeDir,
   detectCudaEnvironment,
   collectCudaToolkitLibraries,
+  downloadSherpaOnnxCuda,
   downloadLlamaCppCuda,
   stageCudaAddonFiles,
   packageCudaAddonArchive,
@@ -128,6 +129,11 @@ test('packageCudaAddonArchive creates package and sha256 checksum', () => {
 test('downloadLlamaCppCuda returns null on unsupported platform', () => {
   const cacheDir = path.join(repoRoot, 'target', 'mock-cache');
   assert.equal(downloadLlamaCppCuda({ cacheDir, platform: 'darwin' }), null);
+});
+
+test('downloadSherpaOnnxCuda returns null on unsupported platform', () => {
+  const cacheDir = path.join(repoRoot, 'target', 'mock-cache');
+  assert.equal(downloadSherpaOnnxCuda({ cacheDir, platform: 'darwin' }), null);
 });
 
 test('stageCudaAddonFiles discovers and copies libraries in nested subdirectories', () => {

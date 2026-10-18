@@ -129,15 +129,20 @@ function collectCudaToolkitLibraries(cudaPath, platform = process.platform) {
 }
 
 function downloadOnnxRuntimeGpu({
-  version = '1.20.1',
+  version = '1.28.2',
+  cudaMajor = '12',
   cacheDir,
   platform = process.platform,
 }) {
   const normPlatform = normalizePlatform(platform);
   fs.mkdirSync(cacheDir, { recursive: true });
 
+  const isNewer = Number(version.split('.')[1] || 0) >= 21;
+
   if (normPlatform === 'windows-x86_64') {
-    const archiveName = `onnxruntime-win-x64-gpu-${version}.zip`;
+    const archiveName = isNewer
+      ? `onnxruntime-win-x64-gpu_cuda${cudaMajor}-${version}.zip`
+      : `onnxruntime-win-x64-gpu-${version}.zip`;
     const archivePath = path.join(cacheDir, archiveName);
     const extractDir = path.join(cacheDir, `ort-gpu-win-${version}`);
     const url = `https://github.com/microsoft/onnxruntime/releases/download/v${version}/${archiveName}`;
@@ -152,8 +157,12 @@ function downloadOnnxRuntimeGpu({
       }
 
       console.log(`[ORT GPU] Extracting ${archiveName}...`);
-      const powershellCmd = `Expand-Archive -Path "${archivePath}" -DestinationPath "${extractDir}" -Force`;
-      spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+      fs.mkdirSync(extractDir, { recursive: true });
+      const tarRes = spawnSync('tar.exe', ['-xf', archivePath, '-C', extractDir], { stdio: 'inherit' });
+      if (tarRes.status !== 0) {
+        const powershellCmd = `Expand-Archive -Path "${archivePath}" -DestinationPath "${extractDir}" -Force`;
+        spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+      }
       fs.rmSync(archivePath, { force: true });
     }
 
@@ -162,7 +171,9 @@ function downloadOnnxRuntimeGpu({
   }
 
   if (normPlatform === 'linux-x86_64') {
-    const archiveName = `onnxruntime-linux-x64-gpu-${version}.tgz`;
+    const archiveName = isNewer
+      ? `onnxruntime-linux-x64-gpu_cuda${cudaMajor}-${version}.tgz`
+      : `onnxruntime-linux-x64-gpu-${version}.tgz`;
     const archivePath = path.join(cacheDir, archiveName);
     const extractDir = path.join(cacheDir, `ort-gpu-linux-${version}`);
     const url = `https://github.com/microsoft/onnxruntime/releases/download/v${version}/${archiveName}`;
@@ -185,6 +196,77 @@ function downloadOnnxRuntimeGpu({
   }
 
   throw new Error(`Unsupported platform for ONNX Runtime GPU: ${platform}`);
+}
+
+function downloadSherpaOnnxCuda({
+  version = '1.13.8',
+  ortVersion = '1.28.2',
+  cudaVersion = '12.4',
+  cacheDir,
+  platform = process.platform,
+}) {
+  const normPlatform = normalizePlatform(platform);
+  if (normPlatform !== 'windows-x86_64' && normPlatform !== 'linux-x86_64') {
+    return null;
+  }
+  fs.mkdirSync(cacheDir, { recursive: true });
+
+  const cuMajor = cudaVersion.startsWith('11') ? '11' : (cudaVersion.startsWith('13') ? '13' : '12');
+
+  if (normPlatform === 'windows-x86_64') {
+    const archiveName = `sherpa-onnx-v${version}-cuda-${cuMajor}.x-cudnn-9.x-onnxruntime${ortVersion}-win-x64-cuda.tar.bz2`;
+    const archivePath = path.join(cacheDir, archiveName);
+    const extractDir = path.join(cacheDir, `sherpa-onnx-win-cuda-${version}`);
+    const url = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${version}/${archiveName}`;
+
+    if (!fs.existsSync(extractDir)) {
+      console.log(`[sherpa-onnx CUDA] Downloading from ${url}...`);
+      const curlRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', url, '-o', archivePath], {
+        stdio: 'inherit',
+      });
+      if (curlRes.status !== 0) {
+        throw new Error(`Failed to download sherpa-onnx CUDA from ${url}`);
+      }
+
+      console.log(`[sherpa-onnx CUDA] Extracting ${archiveName}...`);
+      fs.mkdirSync(extractDir, { recursive: true });
+      const tarRes = spawnSync('tar.exe', ['-xjf', archivePath, '-C', extractDir], { stdio: 'inherit' });
+      if (tarRes.status !== 0) {
+        spawnSync('7z', ['x', archivePath, `-o${extractDir}`, '-y'], { stdio: 'inherit' });
+      }
+      fs.rmSync(archivePath, { force: true });
+    }
+
+    const subdirs = fs.readdirSync(extractDir);
+    const foundSubdir = subdirs.find((dir) => dir.startsWith('sherpa-onnx'));
+    return foundSubdir ? path.join(extractDir, foundSubdir, 'lib') : path.join(extractDir, 'lib');
+  }
+
+  if (normPlatform === 'linux-x86_64') {
+    const archiveName = `sherpa-onnx-v${version}-cuda-${cuMajor}.x-cudnn-9.x-onnxruntime${ortVersion}-linux-x64-gpu.tar.bz2`;
+    const archivePath = path.join(cacheDir, archiveName);
+    const extractDir = path.join(cacheDir, `sherpa-onnx-linux-gpu-${version}`);
+    const url = `https://github.com/k2-fsa/sherpa-onnx/releases/download/v${version}/${archiveName}`;
+
+    if (!fs.existsSync(extractDir)) {
+      console.log(`[sherpa-onnx CUDA] Downloading from ${url}...`);
+      const curlRes = spawnSync('curl', ['-sSfL', '--retry', '3', url, '-o', archivePath], { stdio: 'inherit' });
+      if (curlRes.status !== 0) {
+        throw new Error(`Failed to download sherpa-onnx CUDA from ${url}`);
+      }
+
+      console.log(`[sherpa-onnx CUDA] Extracting ${archiveName}...`);
+      fs.mkdirSync(extractDir, { recursive: true });
+      spawnSync('tar', ['-xjf', archivePath, '-C', extractDir], { stdio: 'inherit' });
+      fs.rmSync(archivePath, { force: true });
+    }
+
+    const subdirs = fs.readdirSync(extractDir);
+    const foundSubdir = subdirs.find((dir) => dir.startsWith('sherpa-onnx'));
+    return foundSubdir ? path.join(extractDir, foundSubdir, 'lib') : path.join(extractDir, 'lib');
+  }
+
+  return null;
 }
 function downloadLlamaCppCuda({
   llamaRef = 'b10405',
@@ -345,7 +427,7 @@ function stageCudaAddonFiles({
   llamaLibDir,
   cudaLibPaths = [],
   platform = process.platform,
-  version = '0.1.0',
+  version = '0.2.0',
   cudaVersion = '12.4',
 }) {
   fs.mkdirSync(stagedDir, { recursive: true });
@@ -473,9 +555,10 @@ function runCli() {
     process.exit(1);
   }
 
-  const addonVersion = options['addon-version'] || '0.1.0';
+  const addonVersion = options['addon-version'] || '0.2.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
-  const ortVersion = options['ort-version'] || '1.20.1';
+  const sherpaVersion = options['sherpa-version'] || '1.13.8';
+  const ortVersion = options['ort-version'] || '1.28.2';
   const llamaRef = options['llama-ref'] || 'b10405';
   const outputDir = path.resolve(options['output-dir'] || path.join(repoRoot, 'dist', 'cuda-addon'));
   const cacheDir = path.join(repoRoot, 'target', 'cuda-addon-cache');
@@ -489,9 +572,12 @@ function runCli() {
 
   let ortLibDir = options['ort-lib-dir'] ? path.resolve(options['ort-lib-dir']) : null;
   if (!ortLibDir && options.download) {
-    ortLibDir = downloadOnnxRuntimeGpu({ version: ortVersion, cacheDir });
+    if (options['download-ort']) {
+      ortLibDir = downloadOnnxRuntimeGpu({ version: ortVersion, cacheDir });
+    } else {
+      ortLibDir = downloadSherpaOnnxCuda({ version: sherpaVersion, ortVersion, cudaVersion, cacheDir });
+    }
   }
-
   let llamaLibDir = options['llama-lib-dir'] ? path.resolve(options['llama-lib-dir']) : null;
   if (!llamaLibDir && options.download && process.platform === 'win32') {
     llamaLibDir = downloadLlamaCppCuda({ llamaRef, cudaVersion, cacheDir });
@@ -553,6 +639,7 @@ export {
   detectCudaEnvironment,
   collectCudaToolkitLibraries,
   downloadOnnxRuntimeGpu,
+  downloadSherpaOnnxCuda,
   downloadLlamaCppCuda,
   buildLlamaCppGgmlCuda,
   stageCudaAddonFiles,
