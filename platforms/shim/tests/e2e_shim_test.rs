@@ -30,7 +30,7 @@ impl Drop for TempDir {
     }
 }
 struct EnvGuard {
-    vars: Vec<&'static str>,
+    vars: Vec<(&'static str, Option<String>)>,
 }
 
 impl EnvGuard {
@@ -38,8 +38,9 @@ impl EnvGuard {
         let mut tracked = Vec::new();
         unsafe {
             for (k, v) in vars {
+                let prev = std::env::var(k).ok();
                 std::env::set_var(k, v);
-                tracked.push(*k);
+                tracked.push((*k, prev));
             }
         }
         Self { vars: tracked }
@@ -49,8 +50,12 @@ impl EnvGuard {
 impl Drop for EnvGuard {
     fn drop(&mut self) {
         unsafe {
-            for k in &self.vars {
-                std::env::remove_var(k);
+            for (k, prev) in &self.vars {
+                if let Some(val) = prev {
+                    std::env::set_var(k, val);
+                } else {
+                    std::env::remove_var(k);
+                }
             }
         }
     }
@@ -292,4 +297,27 @@ fn test_reference_counting_uninstallation() {
     // Clean up
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
+}
+
+#[test]
+fn test_cli_flags_validation() {
+    let shim_bin = env!("CARGO_BIN_EXE_sona-shim");
+
+    // test list --help
+    let output = std::process::Command::new(shim_bin)
+        .args(["list", "--help"])
+        .output()
+        .unwrap();
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Usage: sona-shim list [--json]"));
+
+    // test install --channel stable without --path fails
+    let output = std::process::Command::new(shim_bin)
+        .args(["install", "--channel", "stable"])
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("Option '--channel' requires '--path <PATH>'"));
 }

@@ -407,11 +407,12 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 struct RegistryLockGuard {
     lock_path: PathBuf,
-    _file: std::fs::File,
+    _file: Option<std::fs::File>,
 }
 
 impl Drop for RegistryLockGuard {
     fn drop(&mut self) {
+        self._file.take();
         let _ = std::fs::remove_file(&self.lock_path);
     }
 }
@@ -432,10 +433,13 @@ fn acquire_registry_lock() -> Option<RegistryLockGuard> {
             Ok(file) => {
                 return Some(RegistryLockGuard {
                     lock_path,
-                    _file: file,
+                    _file: Some(file),
                 });
             }
-            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+            Err(e)
+                if e.kind() == std::io::ErrorKind::AlreadyExists
+                    || e.kind() == std::io::ErrorKind::PermissionDenied =>
+            {
                 if let Ok(meta) = std::fs::metadata(&lock_path)
                     && let Ok(modified) = meta.modified()
                     && let Ok(elapsed) = modified.elapsed()

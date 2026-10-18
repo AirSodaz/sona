@@ -6,6 +6,9 @@ export class ShimService {
   constructor(private readonly platform?: PlatformContext) {}
 
   isSupported(): boolean {
+    if (this.platform) {
+      return true;
+    }
     return (
       typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window)
     );
@@ -34,23 +37,31 @@ export class ShimService {
   }
 
   async install(): Promise<void> {
+    if (!this.isSupported()) {
+      throw new UnsupportedCapabilityError(TauriCommand.system.installShim);
+    }
     const platform = this.platform ?? getPlatform();
     await platform.transport.invoke<void>(TauriCommand.system.installShim);
   }
 
   async uninstall(): Promise<void> {
+    if (!this.isSupported()) {
+      throw new UnsupportedCapabilityError(TauriCommand.system.uninstallShim);
+    }
     const platform = this.platform ?? getPlatform();
     await platform.transport.invoke<void>(TauriCommand.system.uninstallShim);
   }
 
   async setDefaultChannel(channel: ShimChannel): Promise<void> {
+    if (!this.isSupported()) {
+      throw new UnsupportedCapabilityError(TauriCommand.system.setDefaultChannel);
+    }
     const platform = this.platform ?? getPlatform();
     await platform.transport.invoke<void>(TauriCommand.system.setDefaultChannel, {
       channel,
     });
   }
 }
-
 export function createShimService(platform?: PlatformContext): ShimService {
   return new ShimService(platform);
 }

@@ -341,9 +341,6 @@ fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
     if source == dest {
         return Ok(());
     }
-    if let Some(parent) = dest.parent() {
-        cleanup_orphan_shims(parent);
-    }
     let temp_name = format!(
         "{}.tmp.{}.{}",
         dest.file_name().unwrap_or_default().to_string_lossy(),

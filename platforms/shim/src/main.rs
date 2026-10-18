@@ -118,6 +118,10 @@ OPTIONS:
 }
 
 fn handle_list(args: &[String]) {
+    if args.iter().any(|a| a == "--help" || a == "-h") {
+        println!("Usage: sona-shim list [--json]");
+        return;
+    }
     let json_output = args.iter().any(|a| a == "--json");
     let default_ch = get_default_channel();
 
@@ -293,6 +297,12 @@ fn handle_install(args: &[String]) {
                 std::process::exit(1);
             }
         }
+    }
+    if channel_opt.is_some() && path_opt.is_none() {
+        eprintln!(
+            "Error: Option '--channel' requires '--path <PATH>' to register an installation."
+        );
+        std::process::exit(1);
     }
     // If channel is not explicitly specified, infer from path or current_exe location
     let current_exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("sona-shim"));
