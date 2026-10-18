@@ -348,12 +348,10 @@ pub fn register_channel(
 pub fn unregister_channel(channel: Channel) -> Result<(), String> {
     let _lock = acquire_registry_lock();
     #[cfg(windows)]
+    let base = get_registry_base_subkey();
+    #[cfg(windows)]
     {
-        let subkey = format!(
-            r"{}\Channels\{}",
-            get_registry_base_subkey(),
-            channel.as_str()
-        );
+        let subkey = format!(r"{}\Channels\{}", base, channel.as_str());
         let _ = win_delete_registry_key(&subkey);
     }
 
@@ -363,27 +361,31 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
     let is_current_default = get_default_channel() == channel
         || file.default_channel.as_deref() == Some(channel.as_str());
 
-    if is_current_default {
-        let other = match channel {
-            Channel::Stable => Channel::Nightly,
-            Channel::Nightly => Channel::Stable,
-        };
-        let other_still_registered =
-            file.channels.contains_key(other.as_str()) || is_channel_installed(other);
-        if other_still_registered {
+    let other = match channel {
+        Channel::Stable => Channel::Nightly,
+        Channel::Nightly => Channel::Stable,
+    };
+    let other_still_registered =
+        file.channels.contains_key(other.as_str()) || is_channel_installed(other);
+
+    if other_still_registered {
+        if is_current_default {
             file.default_channel = Some(other.as_str().to_string());
             #[cfg(windows)]
             {
-                let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
+                let settings_key = format!(r"{}\Settings", base);
                 let _ = win_write_registry_string(&settings_key, "DefaultChannel", other.as_str());
             }
-        } else {
-            file.default_channel = None;
-            #[cfg(windows)]
-            {
-                let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
-                let _ = win_delete_registry_value(&settings_key, "DefaultChannel");
-            }
+        }
+    } else {
+        file.default_channel = None;
+        #[cfg(windows)]
+        {
+            let settings_key = format!(r"{}\Settings", base);
+            let _ = win_delete_registry_value(&settings_key, "DefaultChannel");
+            let _ = win_delete_registry_key(&format!(r"{}\Channels", base));
+            let _ = win_delete_registry_key(&format!(r"{}\Settings", base));
+            let _ = win_delete_registry_key(&base);
         }
     }
     write_registry_file(&file)
@@ -795,6 +797,25 @@ pub fn win_registry_value_exists(subkey: &str, value_name: &str) -> bool {
         );
         RegCloseKey(hkey);
         status == ERROR_SUCCESS
+    }
+}
+#[cfg(windows)]
+pub fn win_registry_key_exists(subkey: &str) -> bool {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, RegCloseKey, RegOpenKeyExW,
+    };
+
+    let subkey_w = to_wide_null(subkey);
+    let mut hkey: HKEY = std::ptr::null_mut();
+
+    unsafe {
+        let status = RegOpenKeyExW(HKEY_CURRENT_USER, subkey_w.as_ptr(), 0, KEY_READ, &mut hkey);
+        if status != ERROR_SUCCESS {
+            return false;
+        }
+        RegCloseKey(hkey);
+        true
     }
 }
 

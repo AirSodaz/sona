@@ -451,6 +451,28 @@ fn get_unix_shell_rc_paths(home: &Path) -> Vec<PathBuf> {
     targets
 }
 
+pub fn format_path_for_user_env(dir: &Path, profile: Option<&str>) -> String {
+    if let Some(profile_str) = profile {
+        let profile_path = PathBuf::from(profile_str);
+        if let Ok(rel) = dir.strip_prefix(&profile_path) {
+            let rel_str = rel.to_string_lossy().replace('/', "\\");
+            return format!(r"%USERPROFILE%\{}", rel_str.trim_start_matches('\\'));
+        }
+        let dir_str = dir.to_string_lossy().replace('/', "\\");
+        let prof_str = profile_str.replace('/', "\\");
+        let prof_normalized = prof_str.trim_end_matches('\\');
+        if dir_str.len() > prof_normalized.len()
+            && dir_str[..prof_normalized.len()].eq_ignore_ascii_case(prof_normalized)
+            && (dir_str.as_bytes()[prof_normalized.len()] == b'\\'
+                || dir_str.as_bytes()[prof_normalized.len()] == b'/')
+        {
+            let rel = &dir_str[prof_normalized.len()..];
+            return format!(r"%USERPROFILE%\{}", rel.trim_start_matches('\\'));
+        }
+    }
+    dir.to_string_lossy().to_string()
+}
+
 fn add_to_user_path(dir: &Path) -> Result<bool, String> {
     if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
         return Ok(true);
@@ -470,15 +492,24 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
         // Read RAW unexpanded string to preserve dynamic variables like %USERPROFILE% or %JAVA_HOME%
         let current_raw_path =
             win_read_registry_string_raw("Environment", "Path").unwrap_or_default();
+        let dir_entry = format_path_for_user_env(dir, std::env::var("USERPROFILE").ok().as_deref());
         let new_path = if current_raw_path.trim().is_empty() {
-            dir.to_string_lossy().to_string()
+            dir_entry
         } else {
-            format!(
-                "{};{}",
-                current_raw_path.trim_end_matches(';'),
-                dir.to_string_lossy()
-            )
+            format!("{};{}", current_raw_path.trim_end_matches(';'), dir_entry)
         };
+        if new_path.len() > 32760 {
+            return Err(
+                "User PATH length exceeds maximum Windows registry limit of 32767 characters"
+                    .to_string(),
+            );
+        }
+        if new_path.len() > 2048 {
+            eprintln!(
+                "Warning: User PATH exceeds 2048 characters (length: {}).",
+                new_path.len()
+            );
+        }
         win_write_registry_expand_string("Environment", "Path", &new_path)?;
         // Broadcast environment change notification
         let env_w: Vec<u16> = "Environment\0".encode_utf16().collect();
@@ -726,5 +757,24 @@ mod tests {
         assert!(should_update_file(&file_a, &file_c));
 
         let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+    #[test]
+    fn test_user_path_profile_tokenization() {
+        let dir = Path::new(r"C:\Users\testuser\.sona\bin");
+        let formatted = format_path_for_user_env(dir, Some(r"C:\Users\testuser"));
+        assert_eq!(formatted, r"%USERPROFILE%\.sona\bin");
+
+        // Case-insensitive match on Windows paths
+        let formatted_ci = format_path_for_user_env(dir, Some(r"c:\users\testuser"));
+        assert_eq!(formatted_ci, r"%USERPROFILE%\.sona\bin");
+
+        // Outside user profile
+        let outside = Path::new(r"D:\tools\bin");
+        let formatted_out = format_path_for_user_env(outside, Some(r"C:\Users\testuser"));
+        assert_eq!(formatted_out, r"D:\tools\bin");
+
+        // No user profile provided
+        let formatted_none = format_path_for_user_env(dir, None);
+        assert_eq!(formatted_none, r"C:\Users\testuser\.sona\bin");
     }
 }

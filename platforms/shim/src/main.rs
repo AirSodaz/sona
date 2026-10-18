@@ -293,8 +293,18 @@ fn handle_install(args: &[String]) {
     // If channel is not explicitly specified, infer from path or current_exe location
     let current_exe = std::env::current_exe().unwrap_or_else(|_| PathBuf::from("sona-shim"));
     if channel_opt.is_none() {
-        if let Some(ref p) = path_opt {
-            if p.to_string_lossy().to_lowercase().contains("nightly") {
+        if let Some(p) = &path_opt {
+            if p.join("Sona-Nightly.exe").is_file()
+                || p.join("sona-nightly.exe").is_file()
+                || p.join("Sona-Nightly.app").exists()
+            {
+                channel_opt = Some(Channel::Nightly);
+            } else if p.join("Sona.exe").is_file()
+                || p.join("sona.exe").is_file()
+                || p.join("Sona.app").exists()
+            {
+                channel_opt = Some(Channel::Stable);
+            } else if p.to_string_lossy().to_lowercase().contains("nightly") {
                 channel_opt = Some(Channel::Nightly);
             } else {
                 channel_opt = Some(Channel::Stable);
@@ -391,8 +401,8 @@ fn handle_uninstall(args: &[String]) {
         }
     }
     if channel_opt.is_none() && !force {
-        if let Some(target_path) = path_opt {
-            let target_norm = normalize_path(&target_path);
+        if let Some(target_path) = &path_opt {
+            let target_norm = normalize_path(target_path);
             if let Some(stable) = get_registered_channel(Channel::Stable)
                 && normalize_path(&stable.install_path) == target_norm
             {
@@ -402,6 +412,23 @@ fn handle_uninstall(args: &[String]) {
                 && normalize_path(&nightly.install_path) == target_norm
             {
                 channel_opt = Some(Channel::Nightly);
+            }
+            if channel_opt.is_none() {
+                if target_path.join("Sona-Nightly.exe").is_file()
+                    || target_path.join("sona-nightly.exe").is_file()
+                    || target_path.join("Sona-Nightly.app").exists()
+                    || target_path
+                        .to_string_lossy()
+                        .to_lowercase()
+                        .contains("nightly")
+                {
+                    channel_opt = Some(Channel::Nightly);
+                } else if target_path.join("Sona.exe").is_file()
+                    || target_path.join("sona.exe").is_file()
+                    || target_path.join("Sona.app").exists()
+                {
+                    channel_opt = Some(Channel::Stable);
+                }
             }
         }
         if channel_opt.is_none()

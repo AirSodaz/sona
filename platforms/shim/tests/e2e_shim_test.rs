@@ -271,6 +271,15 @@ fn test_reference_counting_uninstallation() {
     assert_eq!(report2.removed_channel, Some("nightly".to_string()));
     assert_eq!(report2.active_remaining_channel, None);
     assert!(report2.path_removed);
+
+    #[cfg(windows)]
+    {
+        assert!(
+            !sona_shim::registry::win_registry_key_exists(&reg_guard.subkey),
+            "Registry subkey {} should have been deleted after uninstalling the last channel",
+            reg_guard.subkey
+        );
+    }
     // Clean up
     let _ = unregister_channel(Channel::Stable);
     let _ = unregister_channel(Channel::Nightly);
