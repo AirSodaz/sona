@@ -134,11 +134,11 @@ pub fn install_shims(
         use std::os::unix::fs::symlink;
         let main_shim = shim_dir.join("sona-shim");
         let need_copy = if main_shim.is_file() {
-            source_shim != &main_shim && should_update_file(source_shim, &main_shim)
+            source_shim != main_shim && should_update_file(source_shim, &main_shim)
         } else {
             true
         };
-        if need_copy && source_shim != &main_shim {
+        if need_copy && source_shim != main_shim {
             let temp_shim = shim_dir.join(format!("sona-shim.tmp.{}", std::process::id()));
             std::fs::copy(source_shim, &temp_shim)
                 .map_err(|e| format!("Failed to copy to {}: {}", temp_shim.display(), e))?;
@@ -392,10 +392,9 @@ fn copy_file_atomic(source: &Path, dest: &Path) -> Result<(), String> {
 }
 
 fn check_user_env_has_path(dir: &Path) -> bool {
-    let target = normalize_path(dir);
-
     #[cfg(windows)]
     {
+        let target = normalize_path(dir);
         use crate::registry::{win_expand_environment_strings, win_read_registry_string_raw};
         if let Some(user_path) = win_read_registry_string_raw("Environment", "Path") {
             let expanded_path = win_expand_environment_strings(&user_path);
@@ -418,15 +417,15 @@ fn check_user_env_has_path(dir: &Path) -> bool {
                 .ok()
                 .map(|rel| format!("$HOME/{}", rel.display()));
             for p in get_unix_shell_rc_paths(&home_path) {
-                if let Ok(content) = std::fs::read_to_string(&p) {
-                    if content.contains(&*dir_str)
-                        || export_path
-                            .as_deref()
-                            .map(|ep| content.contains(ep))
-                            .unwrap_or(false)
-                    {
-                        return true;
-                    }
+                let Ok(content) = std::fs::read_to_string(&p) else {
+                    continue;
+                };
+                let has_export = export_path
+                    .as_deref()
+                    .map(|ep| content.contains(ep))
+                    .unwrap_or(false);
+                if content.contains(&*dir_str) || has_export {
+                    return true;
                 }
             }
         }
@@ -575,14 +574,13 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
                 .map(|c| c.contains(&export_path) || c.contains(&*dir_str))
                 .unwrap_or(false);
             if !already_has {
-                if let Ok(mut file) = std::fs::OpenOptions::new()
+                let append_res = std::fs::OpenOptions::new()
                     .create(true)
                     .append(true)
                     .open(&rc_path)
-                {
-                    if file.write_all(export_block.as_bytes()).is_ok() {
-                        modified = true;
-                    }
+                    .and_then(|mut file| file.write_all(export_block.as_bytes()));
+                if append_res.is_ok() {
+                    modified = true;
                 }
             }
         }
@@ -597,10 +595,9 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
     if std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1") {
         return Ok(true);
     }
-    let target = normalize_path(dir);
-
     #[cfg(windows)]
     {
+        let target = normalize_path(dir);
         use crate::registry::{
             win_expand_environment_strings, win_read_registry_string_raw,
             win_write_registry_expand_string,
@@ -661,7 +658,6 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
 
     #[cfg(unix)]
     {
-        let _ = target;
         let mut modified = false;
         if let Ok(home) = std::env::var("HOME") {
             let home_path = PathBuf::from(&home);
