@@ -278,36 +278,58 @@ function downloadLlamaCppCuda({
   fs.mkdirSync(cacheDir, { recursive: true });
 
   if (normPlatform === 'windows-x86_64') {
-    const cuTag = cudaVersion.startsWith('11') ? 'cu11.7' : 'cu12.4';
-    const archiveName = `llama-${llamaRef}-bin-win-cuda-${cuTag}-x64.zip`;
-    const cudartArchiveName = `cudart-llama-bin-win-${cuTag}-x64.zip`;
+    const cuVer = cudaVersion.startsWith('11') ? '11.7' : '12.4';
+    const cuTag = `cuda-${cuVer}`;
+    const legacyCuTag = `cu${cuVer}`;
+    const archiveName = `llama-${llamaRef}-bin-win-cuda-${cuVer}-x64.zip`;
+    const cudartArchiveName = `cudart-llama-bin-win-cuda-${cuVer}-x64.zip`;
     const extractDir = path.join(cacheDir, `llama-win-${llamaRef}-${cuTag}`);
     const archivePath = path.join(cacheDir, archiveName);
     const cudartArchivePath = path.join(cacheDir, cudartArchiveName);
 
     if (!fs.existsSync(extractDir)) {
       fs.mkdirSync(extractDir, { recursive: true });
-      const url = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${archiveName}`;
+      let url = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${archiveName}`;
       console.log(`[llama.cpp CUDA] Downloading from ${url}...`);
-      const curlRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', url, '-o', archivePath], {
+      let curlRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', url, '-o', archivePath], {
         stdio: 'inherit',
       });
-      if (curlRes.status === 0) {
+      if (curlRes.status !== 0) {
+        url = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/llama-${llamaRef}-bin-win-cuda-${legacyCuTag}-x64.zip`;
+        console.log(`[llama.cpp CUDA] Retrying with legacy naming: ${url}...`);
+        curlRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', url, '-o', archivePath], {
+          stdio: 'inherit',
+        });
+      }
+      if (curlRes.status === 0 && fs.existsSync(archivePath)) {
         console.log(`[llama.cpp CUDA] Extracting ${archiveName}...`);
-        const powershellCmd = `Expand-Archive -Path "${archivePath}" -DestinationPath "${extractDir}" -Force`;
-        spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        const tarRes = spawnSync('tar.exe', ['-xf', archivePath, '-C', extractDir], { stdio: 'inherit' });
+        if (tarRes.status !== 0) {
+          const powershellCmd = `Expand-Archive -Path "${archivePath}" -DestinationPath "${extractDir}" -Force`;
+          spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        }
         fs.rmSync(archivePath, { force: true });
       }
 
-      const cudartUrl = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${cudartArchiveName}`;
+      let cudartUrl = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/${cudartArchiveName}`;
       console.log(`[CUDA Runtime] Downloading from ${cudartUrl}...`);
-      const cudartRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', cudartUrl, '-o', cudartArchivePath], {
+      let cudartRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', cudartUrl, '-o', cudartArchivePath], {
         stdio: 'inherit',
       });
-      if (cudartRes.status === 0) {
+      if (cudartRes.status !== 0) {
+        cudartUrl = `https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/cudart-llama-bin-win-${legacyCuTag}-x64.zip`;
+        console.log(`[CUDA Runtime] Retrying with legacy naming: ${cudartUrl}...`);
+        cudartRes = spawnSync('curl.exe', ['-sSfL', '--retry', '3', cudartUrl, '-o', cudartArchivePath], {
+          stdio: 'inherit',
+        });
+      }
+      if (cudartRes.status === 0 && fs.existsSync(cudartArchivePath)) {
         console.log(`[CUDA Runtime] Extracting ${cudartArchiveName}...`);
-        const powershellCmd = `Expand-Archive -Path "${cudartArchivePath}" -DestinationPath "${extractDir}" -Force`;
-        spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        const tarRes = spawnSync('tar.exe', ['-xf', cudartArchivePath, '-C', extractDir], { stdio: 'inherit' });
+        if (tarRes.status !== 0) {
+          const powershellCmd = `Expand-Archive -Path "${cudartArchivePath}" -DestinationPath "${extractDir}" -Force`;
+          spawnSync('powershell', ['-NoProfile', '-Command', powershellCmd], { stdio: 'inherit' });
+        }
         fs.rmSync(cudartArchivePath, { force: true });
       }
     }

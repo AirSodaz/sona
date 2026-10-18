@@ -108,19 +108,29 @@ jobs:
         shell: pwsh
         run: |
           $llamaRef = "${{ env.LLAMA_REF }}"
-          $cuTag = if ("${{ env.CUDA_VERSION }}".StartsWith("11")) { "cu11.7" } else { "cu12.4" }
+          $cuVer = if ("${{ env.CUDA_VERSION }}".StartsWith("11")) { "11.7" } else { "12.4" }
 
           # Download llama.cpp Windows CUDA prebuilt (contains ggml-cuda.dll, ggml.dll, llama.dll, etc.)
-          $llamaUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/llama-${llamaRef}-bin-win-cuda-${cuTag}-x64.zip"
+          $llamaUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/llama-${llamaRef}-bin-win-cuda-${cuVer}-x64.zip"
           Write-Host "Downloading llama.cpp prebuilt from $llamaUrl"
           curl.exe -sSfL --retry 5 --retry-connrefused "$llamaUrl" -o "llama-win.zip"
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path "llama-win.zip")) {
+            $legacyUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/llama-${llamaRef}-bin-win-cuda-cu${cuVer}-x64.zip"
+            Write-Host "Falling back to legacy URL: $legacyUrl"
+            curl.exe -sSfL --retry 5 --retry-connrefused "$legacyUrl" -o "llama-win.zip"
+          }
           Expand-Archive -Path "llama-win.zip" -DestinationPath "llama-win" -Force
           Remove-Item "llama-win.zip"
 
           # Download CUDA Runtime & cuBLAS DLLs (contains cudart64_12.dll, cublas64_12.dll, cublasLt64_12.dll)
-          $cudartUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/cudart-llama-bin-win-${cuTag}-x64.zip"
+          $cudartUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/cudart-llama-bin-win-cuda-${cuVer}-x64.zip"
           Write-Host "Downloading CUDA runtime from $cudartUrl"
           curl.exe -sSfL --retry 5 --retry-connrefused "$cudartUrl" -o "cudart-win.zip"
+          if ($LASTEXITCODE -ne 0 -or !(Test-Path "cudart-win.zip")) {
+            $legacyCudartUrl = "https://github.com/ggerganov/llama.cpp/releases/download/${llamaRef}/cudart-llama-bin-win-cu${cuVer}-x64.zip"
+            Write-Host "Falling back to legacy URL: $legacyCudartUrl"
+            curl.exe -sSfL --retry 5 --retry-connrefused "$legacyCudartUrl" -o "cudart-win.zip"
+          }
           Expand-Archive -Path "cudart-win.zip" -DestinationPath "cudart-win" -Force
           Remove-Item "cudart-win.zip"
 
@@ -185,7 +195,7 @@ jobs:
     name: Build CUDA Addon (Linux x64)
     needs: prepare-version
     runs-on: ubuntu-22.04
-    timeout-minutes: 45
+    timeout-minutes: 90
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
