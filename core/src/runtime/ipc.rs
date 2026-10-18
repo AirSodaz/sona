@@ -22,7 +22,9 @@ pub fn get_unix_socket_path_with_env<F: Fn(&str) -> Option<String>>(env_lookup: 
     if let Some(runtime_dir) = xdg_dir {
         return PathBuf::from(runtime_dir).join(socket_name);
     }
-    let home = env_lookup("HOME").unwrap_or_else(|| ".".to_string());
+    let home = env_lookup("HOME")
+        .filter(|h| !h.trim().is_empty())
+        .unwrap_or_else(|| ".".to_string());
     let dir_name = if is_nightly { "sona-nightly" } else { "sona" };
     PathBuf::from(home)
         .join(".local")

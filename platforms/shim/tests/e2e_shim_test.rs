@@ -1,5 +1,5 @@
 use sona_shim::dispatcher::{detect_role, resolve_target_channel, resolve_target_executable};
-use sona_shim::installer::uninstall_shims;
+use sona_shim::installer::{install_shims, uninstall_shims};
 use sona_shim::registry::{
     Channel, TargetRole, get_default_channel, get_registered_channel, register_channel,
     set_default_channel, unregister_channel,
@@ -232,6 +232,14 @@ fn test_reference_counting_uninstallation() {
     ]);
     let stable_dir = TempDir::new("rc-stable");
     let nightly_dir = TempDir::new("rc-nightly");
+    let mock_shim_dir = TempDir::new("rc-mock-shim");
+    let mock_shim = mock_shim_dir.path.join(if cfg!(windows) {
+        "sona-shim.exe"
+    } else {
+        "sona-shim"
+    });
+    fs::write(&mock_shim, b"mock-shim-binary").unwrap();
+    install_shims(&mock_shim, None).unwrap();
     let exe_name = if cfg!(windows) {
         "sona-cli.exe"
     } else {
@@ -270,6 +278,7 @@ fn test_reference_counting_uninstallation() {
     let report2 = uninstall_shims(Some(Channel::Nightly), false).unwrap();
     assert_eq!(report2.removed_channel, Some("nightly".to_string()));
     assert_eq!(report2.active_remaining_channel, None);
+    assert!(report2.shims_removed);
     assert!(report2.path_removed);
 
     #[cfg(windows)]

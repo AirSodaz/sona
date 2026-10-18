@@ -170,9 +170,12 @@ pub fn get_sona_dir() -> PathBuf {
     }
     #[cfg(unix)]
     {
-        if let Ok(home) = std::env::var("HOME").filter(|h| !h.trim().is_empty()) {
+        if let Some(home) = std::env::var("HOME").ok().filter(|h| !h.trim().is_empty()) {
             PathBuf::from(home).join(".sona")
-        } else if let Ok(xdg) = std::env::var("XDG_DATA_HOME").filter(|x| !x.trim().is_empty()) {
+        } else if let Some(xdg) = std::env::var("XDG_DATA_HOME")
+            .ok()
+            .filter(|x| !x.trim().is_empty())
+        {
             PathBuf::from(xdg).join("sona")
         } else {
             PathBuf::from("/etc/sona")
@@ -222,11 +225,17 @@ pub fn get_default_channel() -> Channel {
     {
         return c;
     }
+    if get_registered_channel(Channel::Stable).is_none()
+        && get_registered_channel(Channel::Nightly).is_some()
+    {
+        return Channel::Nightly;
+    }
     Channel::Stable
 }
 
 pub fn set_default_channel(channel: Channel) -> Result<(), String> {
-    let _lock = acquire_registry_lock();
+    let _lock = acquire_registry_lock()
+        .ok_or_else(|| "Failed to acquire registry lock: operation timed out".to_string())?;
     #[cfg(windows)]
     {
         let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
@@ -299,7 +308,8 @@ pub fn register_channel(
     version: Option<&str>,
     executable: Option<&str>,
 ) -> Result<(), String> {
-    let _lock = acquire_registry_lock();
+    let _lock = acquire_registry_lock()
+        .ok_or_else(|| "Failed to acquire registry lock: operation timed out".to_string())?;
     let abs_install_path = if install_path.is_relative() {
         std::env::current_dir()
             .map_err(|e| format!("Failed to get current directory: {}", e))?
@@ -346,7 +356,8 @@ pub fn register_channel(
 }
 
 pub fn unregister_channel(channel: Channel) -> Result<(), String> {
-    let _lock = acquire_registry_lock();
+    let _lock = acquire_registry_lock()
+        .ok_or_else(|| "Failed to acquire registry lock: operation timed out".to_string())?;
     #[cfg(windows)]
     let base = get_registry_base_subkey();
     #[cfg(windows)]
@@ -366,7 +377,7 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
         Channel::Nightly => Channel::Stable,
     };
     let other_still_registered =
-        file.channels.contains_key(other.as_str()) || is_channel_installed(other);
+        get_registered_channel(other).is_some() || is_channel_installed(other);
 
     if other_still_registered {
         if is_current_default {
@@ -396,6 +407,7 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
 // ---------------------------------------------------------------------------
 struct RegistryLockGuard {
     lock_path: PathBuf,
+    _file: std::fs::File,
 }
 
 impl Drop for RegistryLockGuard {
@@ -417,7 +429,12 @@ fn acquire_registry_lock() -> Option<RegistryLockGuard> {
             .create_new(true)
             .open(&lock_path)
         {
-            Ok(_) => return Some(RegistryLockGuard { lock_path }),
+            Ok(file) => {
+                return Some(RegistryLockGuard {
+                    lock_path,
+                    _file: file,
+                });
+            }
             Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
                 if let Ok(meta) = std::fs::metadata(&lock_path)
                     && let Ok(modified) = meta.modified()
@@ -959,15 +976,14 @@ pub fn win_delete_registry_value(subkey: &str, value_name: &str) -> Result<(), S
 
 #[cfg(windows)]
 pub fn win_delete_registry_key(subkey: &str) -> Result<(), String> {
-    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
-    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteKeyW};
+    use windows_sys::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS};
+    use windows_sys::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
 
     let subkey_w = to_wide_null(subkey);
     unsafe {
-        let status = RegDeleteKeyW(HKEY_CURRENT_USER, subkey_w.as_ptr());
-        if status != ERROR_SUCCESS && status != 2 {
-            // 2 = ERROR_FILE_NOT_FOUND
-            return Err(format!("RegDeleteKeyW failed with code {}", status));
+        let status = RegDeleteTreeW(HKEY_CURRENT_USER, subkey_w.as_ptr());
+        if status != ERROR_SUCCESS && status != ERROR_FILE_NOT_FOUND {
+            return Err(format!("RegDeleteTreeW failed with code {}", status));
         }
         Ok(())
     }

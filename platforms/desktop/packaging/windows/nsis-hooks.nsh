@@ -7,6 +7,9 @@
   ${If} ${FileExists} "$INSTDIR\sona-shim.exe"
     nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" install --path "$INSTDIR"'
     Pop $0
+    ${If} $0 != 0
+      DetailPrint "Notice: sona-shim setup returned exit code $0"
+    ${EndIf}
   ${Else}
     DetailPrint "Notice: sona-shim.exe not found in $INSTDIR"
   ${EndIf}
@@ -21,6 +24,9 @@
     ${If} ${FileExists} "$INSTDIR\sona-shim.exe"
       nsExec::ExecToLog '"$INSTDIR\sona-shim.exe" uninstall --path "$INSTDIR"'
       Pop $0
+      ${If} $0 != 0
+        DetailPrint "Notice: sona-shim setup returned exit code $0"
+      ${EndIf}
     ${Else}
       DetailPrint "Notice: sona-shim.exe not found during uninstall"
     ${EndIf}

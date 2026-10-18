@@ -5,7 +5,7 @@ use sona_shim::registry::{
     Channel, TargetRole, find_executable, get_default_channel, get_registered_channel,
     set_default_channel,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let mut args: Vec<String> = std::env::args().collect();
@@ -178,16 +178,20 @@ fn handle_which(args: &[String]) {
         return;
     }
     if args.len() < 2 {
-        eprintln!("Usage: sona-shim which <sona-cli|sona-mcp|cli|mcp> [+stable|+nightly]");
+        eprintln!("Usage: sona-shim which <sona|sona-cli|sona-mcp|cli|mcp> [+stable|+nightly]");
         std::process::exit(1);
     }
     let target_arg = &args[1];
-    let role = match target_arg.to_lowercase().as_str() {
-        "sona-cli" | "cli" => TargetRole::Cli,
-        "sona-mcp" | "mcp" => TargetRole::Mcp,
+    let stem = Path::new(target_arg)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(target_arg.as_str());
+    let role = match stem.to_lowercase().as_str() {
+        "sona" | "sona-cli" | "cli" | "sona-cli-stable" | "sona-cli-nightly" => TargetRole::Cli,
+        "sona-mcp" | "mcp" | "sona-mcp-stable" | "sona-mcp-nightly" => TargetRole::Mcp,
         _ => {
             eprintln!(
-                "Invalid target '{}'. Expected <sona-cli|sona-mcp|cli|mcp>.",
+                "Invalid target '{}'. Expected <sona|sona-cli|sona-mcp|cli|mcp>.",
                 target_arg
             );
             std::process::exit(1);
@@ -407,8 +411,7 @@ fn handle_uninstall(args: &[String]) {
                 && normalize_path(&stable.install_path) == target_norm
             {
                 channel_opt = Some(Channel::Stable);
-            }
-            if let Some(nightly) = get_registered_channel(Channel::Nightly)
+            } else if let Some(nightly) = get_registered_channel(Channel::Nightly)
                 && normalize_path(&nightly.install_path) == target_norm
             {
                 channel_opt = Some(Channel::Nightly);
@@ -451,7 +454,12 @@ fn handle_uninstall(args: &[String]) {
                         .and_then(|n| n.to_str())
                         .unwrap_or("")
                         .to_lowercase();
-                    if parent_name == "sona" || parent_name == "com.asoda.sona" {
+                    if parent_name == "sona"
+                        || parent_name == "com.asoda.sona"
+                        || parent.join("Sona.exe").is_file()
+                        || parent.join("sona.exe").is_file()
+                        || parent.join("Sona.app").exists()
+                    {
                         channel_opt = Some(Channel::Stable);
                     }
                 }

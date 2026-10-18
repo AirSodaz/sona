@@ -5,7 +5,7 @@ import { APP_LANGUAGE_OPTIONS } from '../../constants/appLanguages';
 import { shimService } from '../../services/shimService';
 import { useSetConfig, useUIConfig } from '../../stores/configStore';
 import type { AppLanguagePreference, AppLogLevel, UIConfig } from '../../types/config';
-import type { DesktopShimStatus } from '../../types/shim';
+import type { DesktopShimStatus, ShimChannel } from '../../types/shim';
 import { APP_LOG_LEVELS, normalizeLogLevel } from '../../utils/logLevel';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
@@ -52,31 +52,35 @@ export function SettingsGeneralTab({
   const [isStatusLoading, setIsStatusLoading] = React.useState(false);
   const isShimLoading = activeAction !== null || isStatusLoading;
   const [shimActionError, setShimActionError] = React.useState<string | null>(null);
+  const isMountedRef = React.useRef(true);
   const fetchSeqRef = React.useRef(0);
 
   const loadShimStatus = React.useCallback(async () => {
     const seq = ++fetchSeqRef.current;
+    if (!isMountedRef.current) return;
     setIsStatusLoading(true);
     try {
       const status = await shimService.getStatus();
-      if (seq === fetchSeqRef.current) {
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
         setShimStatus(status);
         setShimActionError(null);
       }
     } catch (err) {
-      if (seq === fetchSeqRef.current) {
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
         console.warn('Failed to fetch shim status:', err);
         setShimActionError(err instanceof Error ? err.message : String(err));
       }
     } finally {
-      if (seq === fetchSeqRef.current) {
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
         setIsStatusLoading(false);
       }
     }
   }, []);
 
   React.useEffect(() => {
+    isMountedRef.current = true;
     return () => {
+      isMountedRef.current = false;
       fetchSeqRef.current++;
     };
   }, []);
@@ -93,9 +97,13 @@ export function SettingsGeneralTab({
       await shimService.install();
       await loadShimStatus();
     } catch (err) {
-      setShimActionError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current) {
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setActiveAction(null);
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
     }
   };
 
@@ -106,22 +114,42 @@ export function SettingsGeneralTab({
       await shimService.uninstall();
       await loadShimStatus();
     } catch (err) {
-      setShimActionError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current) {
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setActiveAction(null);
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
     }
   };
 
-  const handleSetDefaultChannel = async (channel: 'stable' | 'nightly') => {
+  const handleSetDefaultChannel = async (channel: ShimChannel) => {
+    const previousChannel = shimStatus?.defaultChannel;
     setActiveAction('channel');
     setShimActionError(null);
+    if (shimStatus) {
+      setShimStatus({
+        ...shimStatus,
+        defaultChannel: channel,
+      });
+    }
     try {
       await shimService.setDefaultChannel(channel);
       await loadShimStatus();
     } catch (err) {
-      setShimActionError(err instanceof Error ? err.message : String(err));
+      if (isMountedRef.current) {
+        if (previousChannel) {
+          setShimStatus((current) =>
+            current ? { ...current, defaultChannel: previousChannel } : current
+          );
+        }
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
     } finally {
-      setActiveAction(null);
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
     }
   };
 
@@ -485,9 +513,24 @@ export function SettingsGeneralTab({
               fontSize: '12px',
               borderRadius: '4px',
               background: 'rgba(239, 68, 68, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
             }}
           >
-            {shimActionError}
+            <span>{shimActionError}</span>
+            {shimStatus !== null && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void loadShimStatus()}
+                disabled={isShimLoading}
+                style={{ fontSize: '11px', padding: '2px 8px' }}
+              >
+                {t('common.retry')}
+              </button>
+            )}
           </div>
         )}
       </SettingsSection>

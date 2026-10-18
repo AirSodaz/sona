@@ -83,6 +83,7 @@ pub fn resolve_target_channel(
     // Rule 6a: For MCP (or adaptive dispatching), probe running desktop IPC pipe instances
     if role == TargetRole::Mcp
         && let Some(active) = detect_active_ipc_channel()
+        && find_executable(active, role).is_some()
     {
         return active;
     }

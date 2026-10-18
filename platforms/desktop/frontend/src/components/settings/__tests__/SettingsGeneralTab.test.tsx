@@ -26,7 +26,7 @@ const mockShimService = vi.mocked(shimService);
 
 describe('SettingsGeneralTab - Command Line Tools', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.resetAllMocks();
   });
 
   it('renders unconfigured state and installs to PATH on click', async () => {
@@ -235,5 +235,86 @@ describe('SettingsGeneralTab - Command Line Tools', () => {
     });
 
     expect(retryBtn.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('optimistically updates channel and rolls back on failure', async () => {
+    mockShimService.getStatus.mockResolvedValue({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: true,
+      inUserPath: true,
+      isConfigured: true,
+      installedShims: ['sona-cli.exe', 'sona-mcp.exe'],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: true,
+    });
+    mockShimService.setDefaultChannel.mockRejectedValue(new Error('Network error'));
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    const nightlyRadio = screen.getByLabelText('settings.cli_tools.channel_nightly');
+    const stableRadio = screen.getByLabelText('settings.cli_tools.channel_stable');
+
+    expect(stableRadio.hasAttribute('checked')).toBe(true);
+    expect(nightlyRadio.hasAttribute('checked')).toBe(false);
+
+    await act(async () => {
+      fireEvent.click(nightlyRadio);
+    });
+
+    // Rolled back after rejection
+    expect(stableRadio.hasAttribute('checked')).toBe(true);
+    expect(nightlyRadio.hasAttribute('checked')).toBe(false);
+    expect(screen.getByRole('alert')).toBeDefined();
+    expect(screen.getByText('Network error')).toBeDefined();
+  });
+
+  it('renders retry button in error banner when status is populated and action fails', async () => {
+    mockShimService.getStatus.mockResolvedValue({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: false,
+      inUserPath: false,
+      isConfigured: false,
+      installedShims: [],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: false,
+    });
+    mockShimService.install.mockRejectedValue(new Error('Failed to install'));
+
+    await act(async () => {
+      render(<SettingsGeneralTab isVisible={true} />);
+    });
+
+    const installBtn = screen.getByText('settings.cli_tools.install_btn');
+    await act(async () => {
+      fireEvent.click(installBtn);
+    });
+
+    expect(screen.getByRole('alert')).toBeDefined();
+    const retryBtn = screen.getByText('common.retry');
+    expect(retryBtn).toBeDefined();
+
+    mockShimService.getStatus.mockResolvedValueOnce({
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: true,
+      inUserPath: true,
+      isConfigured: true,
+      installedShims: ['sona-cli.exe'],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: false,
+    });
+
+    await act(async () => {
+      fireEvent.click(retryBtn);
+    });
+
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 });

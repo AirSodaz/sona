@@ -139,15 +139,17 @@ pub fn install_shims(
             true
         };
         if need_copy && source_shim != &main_shim {
-            let _ = std::fs::remove_file(&main_shim);
-            std::fs::copy(source_shim, &main_shim)
-                .map_err(|e| format!("Failed to copy to {}: {}", main_shim.display(), e))?;
+            let temp_shim = shim_dir.join(format!("sona-shim.tmp.{}", std::process::id()));
+            std::fs::copy(source_shim, &temp_shim)
+                .map_err(|e| format!("Failed to copy to {}: {}", temp_shim.display(), e))?;
             #[cfg(target_family = "unix")]
             {
                 use std::os::unix::fs::PermissionsExt;
                 let _ =
-                    std::fs::set_permissions(&main_shim, std::fs::Permissions::from_mode(0o755));
+                    std::fs::set_permissions(&temp_shim, std::fs::Permissions::from_mode(0o755));
             }
+            std::fs::rename(&temp_shim, &main_shim)
+                .map_err(|e| format!("Failed to replace {}: {}", main_shim.display(), e))?;
         }
         created_shims.push("sona-shim".to_string());
 
@@ -157,9 +159,15 @@ pub fn install_shims(
             }
             let link_path = shim_dir.join(name);
             let _ = std::fs::remove_file(&link_path);
-            if symlink("sona-shim", &link_path).is_ok() {
-                created_shims.push(name.to_string());
+            if symlink("sona-shim", &link_path).is_err()
+                && std::fs::hard_link(&main_shim, &link_path).is_err()
+            {
+                return Err(format!(
+                    "Failed to create symlink or hardlink for {}: symlink and hardlink failed",
+                    link_path.display()
+                ));
             }
+            created_shims.push(name.to_string());
         }
     }
 
@@ -167,6 +175,9 @@ pub fn install_shims(
     let mut reg_str = None;
     if let Some((ch, inst_path, ver, exe)) = channel_reg {
         register_channel(ch, inst_path, ver, exe)?;
+        if get_registered_channel(crate::registry::get_default_channel()).is_none() {
+            let _ = set_default_channel(ch);
+        }
         reg_str = Some(ch.as_str().to_string());
     }
 
@@ -186,6 +197,7 @@ pub fn uninstall_shims(
     force: bool,
 ) -> Result<UninstallReport, String> {
     let shim_dir = get_shim_dir();
+    let is_isolated = std::env::var("SONA_TEST_ISOLATED").ok().as_deref() == Some("1");
     let mut removed_channel_name = None;
 
     if let Some(ch) = channel_to_remove {
@@ -199,9 +211,8 @@ pub fn uninstall_shims(
                 Channel::Nightly => Channel::Stable,
             };
 
-            let other_exists =
-                get_registered_channel(other_ch).is_some() || is_channel_installed(other_ch);
-
+            let other_exists = get_registered_channel(other_ch).is_some()
+                || (!is_isolated && is_channel_installed(other_ch));
             if other_exists {
                 // Smoothly switch default to the remaining channel if needed
                 let _ = set_default_channel(other_ch);
@@ -215,9 +226,9 @@ pub fn uninstall_shims(
         }
     } else if !force {
         let stable_exists = get_registered_channel(Channel::Stable).is_some()
-            || is_channel_installed(Channel::Stable);
+            || (!is_isolated && is_channel_installed(Channel::Stable));
         let nightly_exists = get_registered_channel(Channel::Nightly).is_some()
-            || is_channel_installed(Channel::Nightly);
+            || (!is_isolated && is_channel_installed(Channel::Nightly));
         if stable_exists || nightly_exists {
             return Err("Cannot remove shims while channels remain installed. Specify --channel <name> or use --force.".to_string());
         }
@@ -270,13 +281,22 @@ pub fn uninstall_shims(
 // ---------------------------------------------------------------------------
 
 pub fn normalize_path(p: &Path) -> String {
-    let s = p.to_string_lossy().trim().trim_matches('"').to_lowercase();
+    let s = p.to_string_lossy().trim().trim_matches('"').to_string();
     if cfg!(windows) {
-        let unified = s.replace('/', "\\");
-        unified.trim_end_matches('\\').to_string()
+        let unified = s.to_lowercase().replace('/', "\\");
+        let trimmed = unified.trim_end_matches('\\');
+        if trimmed.len() == 2 && trimmed.ends_with(':') {
+            format!("{}\\", trimmed)
+        } else {
+            trimmed.to_string()
+        }
     } else {
         let unified = s.replace('\\', "/");
-        unified.trim_end_matches('/').to_string()
+        if unified.len() > 1 {
+            unified.trim_end_matches('/').to_string()
+        } else {
+            unified
+        }
     }
 }
 
@@ -398,8 +418,7 @@ fn check_user_env_has_path(dir: &Path) -> bool {
                 .map(|rel| format!("$HOME/{}", rel.display()));
             for p in get_unix_shell_rc_paths(&home_path) {
                 if let Ok(content) = std::fs::read_to_string(&p) {
-                    if content.contains(".sona/bin")
-                        || content.contains(&*dir_str)
+                    if content.contains(&*dir_str)
                         || export_path
                             .as_deref()
                             .map(|ep| content.contains(ep))
@@ -548,9 +567,7 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
 
         for rc_path in targets {
             let already_has = std::fs::read_to_string(&rc_path)
-                .map(|c| {
-                    c.contains(&export_path) || c.contains(&*dir_str) || c.contains(".sona/bin")
-                })
+                .map(|c| c.contains(&export_path) || c.contains(&*dir_str))
                 .unwrap_or(false);
             if !already_has {
                 if let Ok(mut file) = std::fs::OpenOptions::new()
@@ -657,8 +674,7 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
             for path in &candidates {
                 if let Ok(content) = std::fs::read_to_string(path) {
                     let matches_path = |line: &str| {
-                        line.contains(".sona/bin")
-                            || line.contains(&*dir_str)
+                        line.contains(&*dir_str)
                             || export_path
                                 .as_deref()
                                 .map(|ep| line.contains(ep))
