@@ -241,7 +241,7 @@ pub fn set_default_channel(channel: Channel) -> Result<(), String> {
         let settings_key = format!(r"{}\Settings", get_registry_base_subkey());
         win_write_registry_string(&settings_key, "DefaultChannel", channel.as_str())?;
     }
-    let mut file = read_registry_file()?;
+    let mut file = read_registry_file().unwrap_or_default();
     file.default_channel = Some(channel.as_str().to_string());
     write_registry_file(&file)
 }
@@ -335,12 +335,11 @@ pub fn register_channel(
         }
     }
 
-    let mut file = read_registry_file()?;
+    let mut file = read_registry_file().unwrap_or_default();
     let cli = resolve_executable_in_dir(&abs_install_path, TargetRole::Cli)
         .map(|p| p.to_string_lossy().to_string());
     let mcp = resolve_executable_in_dir(&abs_install_path, TargetRole::Mcp)
         .map(|p| p.to_string_lossy().to_string());
-
     file.channels.insert(
         channel.as_str().to_string(),
         RegistryChannelEntry {
@@ -358,6 +357,10 @@ pub fn register_channel(
 pub fn unregister_channel(channel: Channel) -> Result<(), String> {
     let _lock = acquire_registry_lock()
         .ok_or_else(|| "Failed to acquire registry lock: operation timed out".to_string())?;
+    let mut file = read_registry_file().unwrap_or_default();
+    let is_current_default = get_default_channel() == channel
+        || file.default_channel.as_deref() == Some(channel.as_str());
+
     #[cfg(windows)]
     let base = get_registry_base_subkey();
     #[cfg(windows)]
@@ -366,12 +369,7 @@ pub fn unregister_channel(channel: Channel) -> Result<(), String> {
         let _ = win_delete_registry_key(&subkey);
     }
 
-    let mut file = read_registry_file()?;
     file.channels.remove(channel.as_str());
-
-    let is_current_default = get_default_channel() == channel
-        || file.default_channel.as_deref() == Some(channel.as_str());
-
     let other = match channel {
         Channel::Stable => Channel::Nightly,
         Channel::Nightly => Channel::Stable,
@@ -423,8 +421,9 @@ fn acquire_registry_lock() -> Option<RegistryLockGuard> {
         let _ = std::fs::create_dir_all(parent);
     }
     let start = std::time::Instant::now();
-    let timeout = std::time::Duration::from_secs(3);
-    while start.elapsed() < timeout {
+    let acquire_timeout = std::time::Duration::from_secs(12);
+    let stale_threshold = std::time::Duration::from_secs(10);
+    while start.elapsed() < acquire_timeout {
         match std::fs::OpenOptions::new()
             .write(true)
             .create_new(true)
@@ -443,7 +442,7 @@ fn acquire_registry_lock() -> Option<RegistryLockGuard> {
                 if let Ok(meta) = std::fs::metadata(&lock_path)
                     && let Ok(modified) = meta.modified()
                     && let Ok(elapsed) = modified.elapsed()
-                    && elapsed > std::time::Duration::from_secs(10)
+                    && elapsed >= stale_threshold
                 {
                     let _ = std::fs::remove_file(&lock_path);
                 }
@@ -596,7 +595,9 @@ pub fn find_executable(channel: Channel, role: TargetRole) -> Option<PathBuf> {
         }) {
             return Some(path);
         }
-        if let Some(path) = resolve_executable_in_dir(&info.install_path, role) {
+        if info.install_path.is_absolute()
+            && let Some(path) = resolve_executable_in_dir(&info.install_path, role)
+        {
             return Some(path);
         }
     }

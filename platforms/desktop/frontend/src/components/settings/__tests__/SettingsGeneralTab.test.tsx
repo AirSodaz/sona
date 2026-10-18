@@ -257,17 +257,15 @@ describe('SettingsGeneralTab - Command Line Tools', () => {
 
     const nightlyRadio = screen.getByLabelText('settings.cli_tools.channel_nightly');
     const stableRadio = screen.getByLabelText('settings.cli_tools.channel_stable');
-
-    expect(stableRadio.hasAttribute('checked')).toBe(true);
-    expect(nightlyRadio.hasAttribute('checked')).toBe(false);
-
+    expect((stableRadio as HTMLInputElement).checked).toBe(true);
+    expect((nightlyRadio as HTMLInputElement).checked).toBe(false);
     await act(async () => {
       fireEvent.click(nightlyRadio);
     });
 
     // Rolled back after rejection
-    expect(stableRadio.hasAttribute('checked')).toBe(true);
-    expect(nightlyRadio.hasAttribute('checked')).toBe(false);
+    expect((stableRadio as HTMLInputElement).checked).toBe(true);
+    expect((nightlyRadio as HTMLInputElement).checked).toBe(false);
     expect(screen.getByRole('alert')).toBeDefined();
     expect(screen.getByText('Network error')).toBeDefined();
   });

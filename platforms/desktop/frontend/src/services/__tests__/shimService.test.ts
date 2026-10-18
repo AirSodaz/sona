@@ -55,5 +55,40 @@ describe('ShimService', () => {
 
     await service.setDefaultChannel('stable');
     expect(invoke).toHaveBeenCalledWith('set_default_channel', { channel: 'stable' });
+
+    const mockStatus = {
+      shimDir: 'C:\\Users\\test\\.sona\\bin',
+      inCurrentPath: true,
+      inUserPath: true,
+      isConfigured: true,
+      installedShims: ['sona', 'sona-cli'],
+      defaultChannel: 'stable',
+      currentChannel: 'stable',
+      stableInstalled: true,
+      nightlyInstalled: false,
+    };
+    invoke.mockResolvedValueOnce(mockStatus);
+    const status = await service.getStatus();
+    expect(invoke).toHaveBeenCalledWith('get_shim_status');
+    expect(status).toEqual(mockStatus);
+  });
+
+  it('getStatus catches UnsupportedCapabilityError and returns null', async () => {
+    const invoke = vi.fn().mockRejectedValue(new UnsupportedCapabilityError('get_shim_status'));
+    const service = createShimService({
+      transport: { invoke, listen: vi.fn(), emit: vi.fn() },
+      ports: createBrowserPlatformPorts(),
+    });
+    const status = await service.getStatus();
+    expect(status).toBeNull();
+  });
+
+  it('getStatus rethrows non-capability errors', async () => {
+    const invoke = vi.fn().mockRejectedValue(new Error('Fatal IPC error'));
+    const service = createShimService({
+      transport: { invoke, listen: vi.fn(), emit: vi.fn() },
+      ports: createBrowserPlatformPorts(),
+    });
+    await expect(service.getStatus()).rejects.toThrow('Fatal IPC error');
   });
 });

@@ -251,7 +251,11 @@ pub fn uninstall_shims(
                     #[cfg(windows)]
                     {
                         // Running/locked binary on Windows: rename to .old to vacate active name
-                        let old_name = format!("{}.old.{}", exe_name, std::process::id());
+                        let nanos = std::time::SystemTime::now()
+                            .duration_since(std::time::UNIX_EPOCH)
+                            .map(|d| d.as_nanos())
+                            .unwrap_or(0);
+                        let old_name = format!("{}.old.{}.{}", exe_name, std::process::id(), nanos);
                         let old_path = shim_dir.join(old_name);
                         if std::fs::rename(&p, &old_path).is_ok() {
                             let _ = std::fs::remove_file(&old_path);
@@ -436,9 +440,9 @@ fn get_unix_shell_rc_paths(home: &Path) -> Vec<PathBuf> {
     let mut targets = Vec::new();
     let zshrc = home.join(".zshrc");
     let zprofile = home.join(".zprofile");
+    let bash_profile = home.join(".bash_profile");
     let bashrc = home.join(".bashrc");
     let profile = home.join(".profile");
-
     let is_zsh = std::env::var("SHELL")
         .map(|s| s.ends_with("zsh"))
         .unwrap_or(cfg!(target_os = "macos"));
@@ -448,6 +452,9 @@ fn get_unix_shell_rc_paths(home: &Path) -> Vec<PathBuf> {
         if cfg!(target_os = "macos") && zprofile.exists() {
             targets.push(zprofile);
         }
+    }
+    if bash_profile.exists() {
+        targets.push(bash_profile);
     }
     if bashrc.exists() {
         targets.push(bashrc);
@@ -477,12 +484,12 @@ pub fn format_path_for_user_env(dir: &Path, profile: Option<&str>) -> String {
         let dir_str = dir.to_string_lossy().replace('/', "\\");
         let prof_str = profile_str.replace('/', "\\");
         let prof_normalized = prof_str.trim_end_matches('\\');
-        if dir_str.len() > prof_normalized.len()
-            && dir_str[..prof_normalized.len()].eq_ignore_ascii_case(prof_normalized)
-            && (dir_str.as_bytes()[prof_normalized.len()] == b'\\'
-                || dir_str.as_bytes()[prof_normalized.len()] == b'/')
+        if let Some(prefix) = dir_str.get(..prof_normalized.len())
+            && prefix.eq_ignore_ascii_case(prof_normalized)
+            && (dir_str.as_bytes().get(prof_normalized.len()) == Some(&b'\\')
+                || dir_str.as_bytes().get(prof_normalized.len()) == Some(&b'/'))
+            && let Some(rel) = dir_str.get(prof_normalized.len()..)
         {
-            let rel = &dir_str[prof_normalized.len()..];
             return format!(r"%USERPROFILE%\{}", rel.trim_start_matches('\\'));
         }
     }
@@ -509,10 +516,11 @@ fn add_to_user_path(dir: &Path) -> Result<bool, String> {
         let current_raw_path =
             win_read_registry_string_raw("Environment", "Path").unwrap_or_default();
         let dir_entry = format_path_for_user_env(dir, std::env::var("USERPROFILE").ok().as_deref());
-        let new_path = if current_raw_path.trim().is_empty() {
+        let trimmed_raw = current_raw_path.trim().trim_end_matches(';').trim();
+        let new_path = if trimmed_raw.is_empty() {
             dir_entry
         } else {
-            format!("{};{}", current_raw_path.trim_end_matches(';'), dir_entry)
+            format!("{};{}", trimmed_raw, dir_entry)
         };
         if new_path.len() > 32760 {
             return Err(
@@ -664,6 +672,7 @@ fn remove_from_user_path(dir: &Path) -> Result<bool, String> {
                 .map(|rel| format!("$HOME/{}", rel.display()));
             let candidates = [
                 home_path.join(".bashrc"),
+                home_path.join(".bash_profile"),
                 home_path.join(".zshrc"),
                 home_path.join(".zprofile"),
                 home_path.join(".profile"),
@@ -789,5 +798,10 @@ mod tests {
         // No user profile provided
         let formatted_none = format_path_for_user_env(dir, None);
         assert_eq!(formatted_none, r"C:\Users\testuser\.sona\bin");
+
+        // Non-ASCII user profile path (UTF-8 multi-byte characters)
+        let non_ascii_dir = Path::new("C:\\Users\\张三\\.sona\\bin");
+        let formatted_non_ascii = format_path_for_user_env(non_ascii_dir, Some("C:\\Users\\张三"));
+        assert_eq!(formatted_non_ascii, r"%USERPROFILE%\.sona\bin");
     }
 }
