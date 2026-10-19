@@ -151,4 +151,55 @@ describe('SettingsSearchResults component', () => {
     expect(marks.length).toBeGreaterThan(0);
     expect(marks[0].textContent).toBe('语');
   });
+
+  it('pressing Enter or Space on an option triggers onSelectResult', () => {
+    const onSelectResult = vi.fn();
+    render(
+      <SettingsSearchResults
+        hits={mockHits}
+        searchQuery="语"
+        activeIndex={0}
+        onSelectResult={onSelectResult}
+      />
+    );
+
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(options[0], { key: 'Enter' });
+    expect(onSelectResult).toHaveBeenCalledWith(mockHits[0]);
+
+    fireEvent.keyDown(options[1], { key: ' ' });
+    expect(onSelectResult).toHaveBeenCalledWith(mockHits[1]);
+  });
+
+  it('suppresses hover updates while in keyboard navigation mode until real mousemove occurs', () => {
+    const onHoverResult = vi.fn();
+    render(
+      <SettingsSearchResults
+        hits={mockHits}
+        searchQuery="语"
+        activeIndex={0}
+        onSelectResult={vi.fn()}
+        onHoverResult={onHoverResult}
+      />
+    );
+
+    const options = screen.getAllByRole('option');
+
+    // Simulate keyboard arrow navigation
+    fireEvent.keyDown(window, { key: 'ArrowDown' });
+
+    // In keyboard nav mode, mouseEnter and mouseMove are suppressed
+    fireEvent.mouseEnter(options[1]);
+    expect(onHoverResult).not.toHaveBeenCalled();
+
+    fireEvent.mouseMove(options[1]);
+    expect(onHoverResult).not.toHaveBeenCalled();
+
+    // Now dispatch real mousemove with movement
+    fireEvent.mouseMove(window, { movementX: 5, movementY: 5 });
+
+    // Hover should now work again
+    fireEvent.mouseMove(options[1]);
+    expect(onHoverResult).toHaveBeenCalledWith(1);
+  });
 });

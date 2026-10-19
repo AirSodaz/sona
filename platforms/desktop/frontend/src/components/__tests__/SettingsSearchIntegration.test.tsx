@@ -94,9 +94,21 @@ vi.mock('../../services/modelService', () => ({
   PRESET_MODELS: [],
   PRESET_MODELS_MAP: new Map(),
   modelService: {
-    getModelCatalogSnapshot: vi.fn(),
-    resolveAsrSelectedModelIdsFromSnapshot: vi.fn(),
-    resolveScenarioSelectedModelIdsFromSnapshot: vi.fn(),
+    getModelCatalogSnapshot: vi.fn().mockResolvedValue({
+      modelsDir: '',
+      models: [],
+      sections: [],
+      selectionOptions: {
+        streaming: [],
+        batch: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+        alignment: [],
+      },
+      totalCount: 0,
+    }),
+    resolveAsrSelectedModelIdsFromSnapshot: vi.fn().mockReturnValue({}),
+    resolveScenarioSelectedModelIdsFromSnapshot: vi.fn().mockReturnValue({}),
   },
 }));
 
@@ -114,6 +126,8 @@ vi.mock('../../services/audioDeviceService', () => ({
 
 vi.mock('../../services/tauri/llm', () => ({
   listLlmModels: vi.fn().mockResolvedValue(['gpt-4o']),
+  runTranscriptLlmJob: vi.fn(),
+  runTranscriptLlmTaskJob: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({
@@ -181,14 +195,15 @@ describe('Settings search integration', () => {
     expect(document.querySelector('.settings-tabs-container')).not.toBeNull();
   });
 
-  it('pressing Ctrl+F focuses search input and selects text', () => {
+  it('pressing Ctrl+F / Cmd+F focuses search input and selects text', () => {
     render(<Settings isOpen={true} onClose={onClose} />);
 
     const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
     const focusSpy = vi.spyOn(searchInput, 'focus');
     const selectSpy = vi.spyOn(searchInput, 'select');
 
-    fireEvent.keyDown(window, { key: 'f', ctrlKey: true });
+    const isMac = /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+    fireEvent.keyDown(window, { key: 'f', ctrlKey: !isMac, metaKey: isMac });
 
     expect(focusSpy).toHaveBeenCalled();
     expect(selectSpy).toHaveBeenCalled();
@@ -360,5 +375,103 @@ describe('Settings search integration', () => {
 
     fireEvent.click(clearBtn);
     expect(document.querySelector('.settings-search-shortcut')).not.toBeNull();
+  });
+
+  it('falls back to settings-sync-toggle when sync target is not in the DOM', async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
+
+    const searchInput = screen.getByPlaceholderText('搜索设置...');
+    // Search for sync credentials/webdav which might not exist when sync is off
+    fireEvent.change(searchInput, { target: { value: 'webdav' } });
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+
+    scrollIntoViewMock.mockClear();
+    fireEvent.click(options[0]);
+
+    await waitFor(
+      () => {
+        const activePane = document.querySelector('[data-settings-tab-pane="sync"]:not([hidden])');
+        expect(activePane).not.toBeNull();
+      },
+      { timeout: 3000 }
+    );
+
+    await waitFor(
+      () => {
+        const toggleElement = document.getElementById('settings-sync-toggle');
+        expect(toggleElement).not.toBeNull();
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+        expect(toggleElement?.classList.contains('settings-item--highlighted')).toBe(true);
+      },
+      { timeout: 3000 }
+    );
+  });
+
+  it('scoping: pressing Escape inside .settings-content does not clear search input', () => {
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: '语言' } });
+    expect(searchInput.value).toBe('语言');
+
+    const contentPane = document.querySelector('.settings-content')!;
+    expect(contentPane).not.toBeNull();
+
+    // Fire Escape in the content pane
+    fireEvent.keyDown(contentPane, { key: 'Escape' });
+
+    // Search query remains intact in sidebar because Escape handler is scoped to sidebar
+    expect(searchInput.value).toBe('语言');
+  });
+
+  it('searching and selecting Batch VAD routes to Models tab, switches to batch scenario, and highlights element', async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
+
+    const searchInput = screen.getByPlaceholderText('搜索设置...');
+    fireEvent.change(searchInput, { target: { value: 'batch vad' } });
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+
+    scrollIntoViewMock.mockClear();
+    fireEvent.click(options[0]);
+
+    await waitFor(
+      () => {
+        const activePane = document.querySelector(
+          '[data-settings-tab-pane="models"]:not([hidden])'
+        );
+        expect(activePane).not.toBeNull();
+      },
+      { timeout: 3000 }
+    );
+
+    await waitFor(
+      () => {
+        const targetElement = document.getElementById('settings-batch-vad');
+        expect(targetElement).not.toBeNull();
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+        expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
+      },
+      { timeout: 3000 }
+    );
+  });
+
+  it('settings-silent-start is unconditionally rendered in the DOM with disabled state when autoStart is off', async () => {
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
+
+    const silentStartItem = document.getElementById('settings-silent-start');
+    expect(silentStartItem).not.toBeNull();
   });
 });

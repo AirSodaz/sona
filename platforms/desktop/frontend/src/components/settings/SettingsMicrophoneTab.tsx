@@ -529,6 +529,7 @@ export function SettingsMicrophoneTab({
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
               id="settings-mic-boost-input"
+              aria-label={t('settings.microphone_boost')}
               type="number"
               min="1.0"
               max="5.0"

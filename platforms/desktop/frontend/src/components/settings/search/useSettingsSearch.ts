@@ -45,14 +45,16 @@ export function calculateItemScore(
   const q = normalizedQuery.trim().toLowerCase();
   if (!q) return 0;
 
+  const isCjk = (str: string) => /[\u4e00-\u9fa5]/.test(str);
+
   const displayTitle = resolveDisplayTitle(item, t);
   const title = (displayTitle || '').toLowerCase();
   const rawHint = item.hintKey ? t(item.hintKey, { defaultValue: '' }) : '';
-  const hint = (rawHint || '').toLowerCase();
+  const hint = (rawHint && rawHint !== item.hintKey ? rawHint : '').toLowerCase();
   const rawSection = item.sectionKey ? t(item.sectionKey, { defaultValue: '' }) : '';
-  const section = (rawSection || '').toLowerCase();
+  const section = (rawSection && rawSection !== item.sectionKey ? rawSection : '').toLowerCase();
   const rawTab = t(item.tabKey, { defaultValue: '' });
-  const tab = (rawTab || '').toLowerCase();
+  const tab = (rawTab && rawTab !== item.tabKey ? rawTab : '').toLowerCase();
 
   let score = 0;
 
@@ -75,14 +77,21 @@ export function calculateItemScore(
   const terms = q.split(/\s+/).filter(Boolean);
 
   const matchesKeyword = (term: string) =>
-    keywords.some((k) => k === term || k.includes(term) || (term.length > 2 && term.includes(k)));
+    keywords.some(
+      (k) =>
+        k === term ||
+        k.includes(term) ||
+        (term.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && term.includes(k))
+    );
 
   const hasExactKeyword = keywords.some((k) => k === q);
   const hasSubKeyword =
     !hasExactKeyword &&
     (terms.length > 1
       ? terms.every(matchesKeyword)
-      : keywords.some((k) => k.includes(q) || (q.length > 2 && q.includes(k))));
+      : keywords.some(
+          (k) => k.includes(q) || (q.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && q.includes(k))
+        ));
   if (hasExactKeyword) {
     score += 50;
   } else if (hasSubKeyword) {
@@ -107,10 +116,15 @@ export function calculateItemScore(
     score += 20;
   }
 
-  // Multi-token match across title + keywords + hint
+  // Multi-token match across title + keywords + hint + section + tab
   if (terms.length > 1 && score === 0) {
     const allTokensMatch = terms.every(
-      (term) => title.includes(term) || matchesKeyword(term) || hint.includes(term)
+      (term) =>
+        title.includes(term) ||
+        matchesKeyword(term) ||
+        hint.includes(term) ||
+        section.includes(term) ||
+        tab.includes(term)
     );
     if (allTokensMatch) {
       score += 45;
@@ -123,11 +137,11 @@ export function calculateItemScore(
 
   // Prefix matches outrank substring matches; substring matches must not exceed prefix threshold
   const hasTitlePrefix =
-    title.startsWith(q) || (terms.length > 1 && terms.some((t) => title.startsWith(t)));
+    title.startsWith(q) || (terms.length > 1 && terms.some((term) => title.startsWith(term)));
   const hasTitleMatch =
     hasTitlePrefix ||
     title.includes(q) ||
-    (terms.length > 1 && terms.some((t) => title.includes(t)));
+    (terms.length > 1 && terms.some((term) => title.includes(term)));
 
   if (hasTitlePrefix) {
     return Math.min(score, 99);
@@ -135,7 +149,7 @@ export function calculateItemScore(
   if (hasTitleMatch) {
     return Math.min(score, 79);
   }
-  return Math.min(score, 69);
+  return Math.min(score, 59);
 }
 /**
  * Splits text by case-insensitive query substring and wraps matches in

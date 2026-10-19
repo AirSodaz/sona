@@ -39,8 +39,8 @@ const SettingsSearchResultItem = React.memo(function SettingsSearchResultItem({
   };
 
   const handleMouseMove = () => {
-    // If user is actively using keyboard navigation, ignore stationary pointer movement
-    if (isKeyboardNavRef.current) {
+    // If user is actively using keyboard navigation or item is already active, ignore movement
+    if (isKeyboardNavRef.current || isActive) {
       return;
     }
     onHoverResult?.(index);
@@ -96,7 +96,13 @@ export function SettingsSearchResults({
 }: SettingsSearchResultsProps): React.JSX.Element {
   const { t } = useTranslation();
   const isKeyboardNavRef = useRef(false);
+  const listboxRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    if (searchQuery !== undefined && listboxRef.current) {
+      listboxRef.current.scrollTop = 0;
+    }
+  }, [searchQuery]);
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
@@ -137,11 +143,11 @@ export function SettingsSearchResults({
         <div className="settings-search-empty" role="status" aria-live="polite">
           <SearchX size={32} className="settings-search-empty-icon" aria-hidden="true" />
           <div className="settings-search-empty-title">
-            {t('settings.search_no_results', { defaultValue: '未找到相关设置' })}
+            {t('settings.search_no_results', { defaultValue: 'No settings found' })}
           </div>
           <div className="settings-search-empty-hint">
             {t('settings.search_no_results_hint', {
-              defaultValue: '请尝试其他关键词，如快捷键、模型或 API',
+              defaultValue: 'Try different keywords, such as shortcuts, models, or API',
             })}
           </div>
         </div>
@@ -155,18 +161,19 @@ export function SettingsSearchResults({
         <span className="settings-search-count">
           {t('settings.search_matches_count', {
             count: hits.length,
-            defaultValue: `匹配项 (${hits.length})`,
+            defaultValue: `Matches (${hits.length})`,
           })}
         </span>
       </div>
 
       <div
         id="settings-search-listbox"
+        ref={listboxRef}
         className="settings-search-listbox"
         role="listbox"
         aria-label={t('settings.search_matches_count', {
           count: hits.length,
-          defaultValue: `匹配项 (${hits.length})`,
+          defaultValue: `Matches (${hits.length})`,
         })}
       >
         {hits.map((hit, index) => (

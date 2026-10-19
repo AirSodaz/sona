@@ -78,11 +78,125 @@ describe('calculateItemScore', () => {
     expect(score).toBeGreaterThan(0);
   });
 
-  it('caps items lacking title matches below title prefix threshold (80)', () => {
+  it('caps items lacking title matches at 59 below title prefix threshold (80)', () => {
     const item = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'llm-providers')!;
     // Query matches keyword + hint + tab but NOT title
     const score = calculateItemScore(item, 'deepseek', mockTranslate);
-    expect(score).toBeLessThanOrEqual(79);
+    expect(score).toBeLessThanOrEqual(59);
+  });
+
+  it('strictly maintains tier hierarchy: title prefix (80-99) > title substring (60-79) > non-title matches (<=59)', () => {
+    const prefixItem = {
+      id: 'test-prefix',
+      titleKey: 'test.prefix',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['foo'],
+    };
+    const substringItem = {
+      id: 'test-substring',
+      titleKey: 'test.substring',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['foo'],
+    };
+    const keywordItem = {
+      id: 'test-keyword',
+      titleKey: 'test.other',
+      hintKey: 'test.hint',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['foobar', 'extra keyword'],
+    };
+
+    const customTranslate = (key: string, options?: { defaultValue?: string }) => {
+      if (key === 'test.prefix') return 'Foobar Setting';
+      if (key === 'test.substring') return 'Special Foobar Setting';
+      if (key === 'test.other') return 'Completely Unrelated';
+      if (key === 'test.hint') return 'Mentions foobar here';
+      if (key === 'test.tab') return 'foobar tab';
+      if (options?.defaultValue !== undefined) return options.defaultValue;
+      return key;
+    };
+
+    const prefixScore = calculateItemScore(prefixItem, 'foobar', customTranslate);
+    const substringScore = calculateItemScore(substringItem, 'foobar', customTranslate);
+    const keywordScore = calculateItemScore(keywordItem, 'foobar', customTranslate);
+
+    expect(prefixScore).toBeGreaterThanOrEqual(80);
+    expect(prefixScore).toBeLessThanOrEqual(99);
+
+    expect(substringScore).toBeGreaterThanOrEqual(60);
+    expect(substringScore).toBeLessThanOrEqual(79);
+
+    expect(keywordScore).toBeLessThanOrEqual(59);
+
+    expect(prefixScore).toBeGreaterThan(substringScore);
+    expect(substringScore).toBeGreaterThan(keywordScore);
+  });
+
+  it('does not match short Latin keyword (<=2 chars like "ai") against English words like "email", "detail", "main"', () => {
+    const aiItem = {
+      id: 'test-ai',
+      titleKey: 'test.title',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'subtitle' as const,
+      subTab: 'voice_typing' as const,
+      keywords: ['ai', 'voice typing'],
+    };
+    const t = (k: string) => (k === 'test.title' ? 'Speech To Text' : '');
+
+    expect(calculateItemScore(aiItem, 'email', t)).toBe(0);
+    expect(calculateItemScore(aiItem, 'detail', t)).toBe(0);
+    expect(calculateItemScore(aiItem, 'main', t)).toBe(0);
+    // But exact match for "ai" still matches
+    expect(calculateItemScore(aiItem, 'ai', t)).toBeGreaterThan(0);
+  });
+
+  it('supports multi-token queries combining tab and title', () => {
+    const item = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'general-language')!;
+    expect(item).toBeDefined();
+
+    const scoreZh = calculateItemScore(item, '常规 语言', mockTranslate);
+    expect(scoreZh).toBeGreaterThan(0);
+
+    const enTranslate = (key: string) => {
+      const map: Record<string, string> = {
+        'settings.language': 'Language',
+        'settings.general': 'General',
+      };
+      return map[key] || '';
+    };
+    const scoreEn = calculateItemScore(item, 'general language', enTranslate);
+    expect(scoreEn).toBeGreaterThan(0);
+  });
+
+  it('handles queries containing regex special characters safely without throwing', () => {
+    const item = SETTINGS_SEARCH_REGISTRY[0];
+    const regexQuery = '[test] (.*)+?^$\\';
+    expect(() => calculateItemScore(item, regexQuery, mockTranslate)).not.toThrow();
+    expect(() => highlightMatches('Some Text [test]', regexQuery)).not.toThrow();
+  });
+
+  it('does not match uninitialized/missing translation keys against "settings"', () => {
+    const uninitializedItem = {
+      id: 'test-item',
+      titleKey: 'settings.untranslated.title',
+      hintKey: 'settings.untranslated.hint',
+      sectionKey: 'settings.untranslated.section',
+      tabKey: 'settings.untranslated.tab',
+      groupKey: 'settings.untranslated.group',
+      tab: 'general' as const,
+    };
+    // When t() returns the key itself as fallback
+    const rawKeyFallbackTranslate = (key: string) => key;
+
+    const score = calculateItemScore(uninitializedItem, 'settings', rawKeyFallbackTranslate);
+    expect(score).toBe(0);
   });
 });
 

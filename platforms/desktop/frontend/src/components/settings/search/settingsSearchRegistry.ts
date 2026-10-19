@@ -1,9 +1,17 @@
 import type { SettingsTab } from '../../../types/settings';
 
+export type SettingsSubTab =
+  | 'subtitles'
+  | 'voice_typing'
+  | 'recognition'
+  | 'prompts'
+  | 'speakers'
+  | 'batch';
+
 export interface SettingsSearchItem {
   id: string;
   tab: SettingsTab;
-  subTab?: string;
+  subTab?: SettingsSubTab;
   promptsSubTab?: 'polish' | 'translation' | 'summary';
   targetId?: string;
   groupKey: string;
@@ -310,7 +318,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     groupKey: 'settings.group.general',
     tabKey: 'settings.about',
     titleKey: 'settings.about_source_code',
-    hintKey: 'settings.about_built_with',
     keywords: [
       'github',
       'website',
@@ -493,6 +500,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-batch-vad',
     tab: 'models',
+    subTab: 'batch',
     targetId: 'settings-batch-vad',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
@@ -730,8 +738,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-vocabulary-dict',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
-    titleKey: 'settings.vocabulary',
-    hintKey: 'settings.vocabulary_description',
+    titleKey: 'settings.unified_dictionary_title',
+    hintKey: 'settings.unified_dictionary_desc',
     keywords: [
       'dictionary',
       'hotwords',
@@ -752,7 +760,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-vocabulary-replacements',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
-    titleKey: 'settings.vocabulary_tab_recognition',
+    titleKey: 'settings.dict_replacements_title',
+    hintKey: 'settings.dict_replacements_desc',
     keywords: [
       'replace',
       'replacement',
@@ -928,7 +937,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     ],
   },
   {
-    id: 'llm-custom-prompts',
+    id: 'llm-custom-provider',
     tab: 'llm_service',
     targetId: 'settings-llm-custom-provider',
     groupKey: 'settings.group.intelligence',
@@ -936,13 +945,12 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     titleKey: 'settings.llm.custom_provider',
     keywords: [
       'custom provider',
-      'prompt',
-      'temperature',
-      'timeout',
+      'add provider',
+      'openai compatible',
+      'custom endpoint',
       '自定义服务商',
-      '系统提示词',
-      '超时时间',
-      '温度',
+      '添加服务商',
+      '第三方服务商',
     ],
   },
 
@@ -1080,7 +1088,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
       '自动清理',
       '保留时间',
       '过期删除',
-      'zhiren',
+      'baoliu',
     ],
   },
 
@@ -1093,8 +1101,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-sync-toggle',
     groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.sync.title',
-    titleKey: 'settings.sync.feature_switch_title',
-    hintKey: 'settings.sync.page_description',
+    titleKey: 'settings.sync.enable_cloud_sync',
+    hintKey: 'settings.sync.enable_cloud_sync_hint',
     keywords: [
       'cloud sync',
       'sync',
@@ -1114,8 +1122,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-sync-webdav',
     groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.sync.title',
-    titleKey: 'settings.sync.server_url',
-    hintKey: 'settings.sync.server_url_hint',
+    titleKey: 'settings.sync.storage_type_label',
+    hintKey: 'settings.sync.storage_type_hint',
     keywords: [
       'webdav',
       's3',

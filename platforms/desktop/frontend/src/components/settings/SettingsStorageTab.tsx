@@ -911,174 +911,173 @@ export function SettingsStorageTab(): React.JSX.Element {
           )}
 
           {usageSnapshot && (
-            <>
-              <div className="settings-storage-usage-grid">
-                <UsageMetric
-                  icon={<Music size={18} />}
-                  title={t('settings.storage.category_audio', { defaultValue: 'Audio' })}
-                  value={formatBytes(usageSnapshot.categories.audio.bytes, i18n.language)}
-                  detail={t('settings.storage.audio_detail', {
-                    defaultValue: 'History {{history}} · Speaker samples {{samples}}',
-                    history: formatBytes(
-                      usageSnapshot.categories.audio.historyAudioBytes,
-                      i18n.language
-                    ),
-                    samples: formatBytes(
-                      usageSnapshot.categories.audio.speakerSampleBytes,
-                      i18n.language
-                    ),
-                  })}
-                />
-                <UsageMetric
-                  icon={<Database size={18} />}
-                  title={t('settings.storage.category_database', { defaultValue: 'Database' })}
-                  value={formatBytes(usageSnapshot.categories.database.bytes, i18n.language)}
-                  detail={t('settings.storage.database_detail', {
-                    defaultValue: 'SQLite data {{data}} · indexes {{indexes}}',
-                    data: sqlite ? formatBytes(sqlite.dataBytes, i18n.language) : '0 B',
-                    indexes: sqlite ? formatBytes(sqlite.indexBytes, i18n.language) : '0 B',
-                  })}
-                />
-                <UsageMetric
-                  icon={<Box size={18} />}
-                  title={t('settings.storage.category_models', { defaultValue: 'Models' })}
-                  value={formatBytes(usageSnapshot.categories.models.bytes, i18n.language)}
-                  detail={formatFileCount(usageSnapshot.categories.models.fileCount, t)}
-                />
-                <UsageMetric
-                  icon={<Clock size={18} />}
-                  title={t('settings.storage.category_temporary', { defaultValue: 'Temporary' })}
-                  value={formatBytes(usageSnapshot.categories.temporary.bytes, i18n.language)}
-                  detail={formatFileCount(usageSnapshot.categories.temporary.fileCount, t)}
-                />
-                <UsageMetric
-                  icon={<Globe2 size={18} />}
-                  title={t('settings.storage.category_webview_cache', {
-                    defaultValue: 'WebView Cache',
-                  })}
-                  value={formatOptionalBytes(
-                    usageSnapshot.categories.webviewCache.bytes,
-                    t,
+            <div className="settings-storage-usage-grid">
+              <UsageMetric
+                icon={<Music size={18} />}
+                title={t('settings.storage.category_audio', { defaultValue: 'Audio' })}
+                value={formatBytes(usageSnapshot.categories.audio.bytes, i18n.language)}
+                detail={t('settings.storage.audio_detail', {
+                  defaultValue: 'History {{history}} · Speaker samples {{samples}}',
+                  history: formatBytes(
+                    usageSnapshot.categories.audio.historyAudioBytes,
                     i18n.language
-                  )}
-                  detail={
-                    usageSnapshot.categories.webviewCache.path
-                      ? t('settings.storage.webview_observed', {
-                          defaultValue: 'Observable cache directory',
-                        })
-                      : t('settings.storage.webview_unobserved', {
-                          defaultValue: 'Size unavailable on this platform',
-                        })
+                  ),
+                  samples: formatBytes(
+                    usageSnapshot.categories.audio.speakerSampleBytes,
+                    i18n.language
+                  ),
+                })}
+              />
+              <UsageMetric
+                icon={<Database size={18} />}
+                title={t('settings.storage.category_database', { defaultValue: 'Database' })}
+                value={formatBytes(usageSnapshot.categories.database.bytes, i18n.language)}
+                detail={t('settings.storage.database_detail', {
+                  defaultValue: 'SQLite data {{data}} · indexes {{indexes}}',
+                  data: sqlite ? formatBytes(sqlite.dataBytes, i18n.language) : '0 B',
+                  indexes: sqlite ? formatBytes(sqlite.indexBytes, i18n.language) : '0 B',
+                })}
+              />
+              <UsageMetric
+                icon={<Box size={18} />}
+                title={t('settings.storage.category_models', { defaultValue: 'Models' })}
+                value={formatBytes(usageSnapshot.categories.models.bytes, i18n.language)}
+                detail={formatFileCount(usageSnapshot.categories.models.fileCount, t)}
+              />
+              <UsageMetric
+                icon={<Clock size={18} />}
+                title={t('settings.storage.category_temporary', { defaultValue: 'Temporary' })}
+                value={formatBytes(usageSnapshot.categories.temporary.bytes, i18n.language)}
+                detail={formatFileCount(usageSnapshot.categories.temporary.fileCount, t)}
+              />
+              <UsageMetric
+                icon={<Globe2 size={18} />}
+                title={t('settings.storage.category_webview_cache', {
+                  defaultValue: 'WebView Cache',
+                })}
+                value={formatOptionalBytes(
+                  usageSnapshot.categories.webviewCache.bytes,
+                  t,
+                  i18n.language
+                )}
+                detail={
+                  usageSnapshot.categories.webviewCache.path
+                    ? t('settings.storage.webview_observed', {
+                        defaultValue: 'Observable cache directory',
+                      })
+                    : t('settings.storage.webview_unobserved', {
+                        defaultValue: 'Size unavailable on this platform',
+                      })
+                }
+              />
+              <UsageMetric
+                icon={<HardDrive size={18} />}
+                title={t('settings.storage.category_other', { defaultValue: 'Other' })}
+                value={formatBytes(usageSnapshot.categories.other.bytes, i18n.language)}
+                detail={formatFileCount(usageSnapshot.categories.other.fileCount, t)}
+              />
+            </div>
+          )}
+
+          <div className="settings-storage-detail-grid">
+            {usageSnapshot && (
+              <div className="settings-storage-detail-block">
+                <div className="settings-storage-detail-heading">
+                  {t('settings.storage.database_breakdown_title', {
+                    defaultValue: 'SQLite breakdown',
+                  })}
+                </div>
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_data_bytes', { defaultValue: 'Table data' })}
+                  value={sqlite ? formatBytes(sqlite.dataBytes, i18n.language) : '0 B'}
+                />
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_index_bytes', {
+                    defaultValue: 'SQLite indexes',
+                  })}
+                  value={sqlite ? formatBytes(sqlite.indexBytes, i18n.language) : '0 B'}
+                />
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_free_page_bytes', {
+                    defaultValue: 'Free pages',
+                  })}
+                  value={sqlite ? formatBytes(sqlite.freePageBytes, i18n.language) : '0 B'}
+                />
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_index_entries', {
+                    defaultValue: 'Indexed structures',
+                  })}
+                  value={t('settings.storage.indexed_structure_count', {
+                    defaultValue: '{{count}} structures',
+                    count: indexedStructureCount,
+                  })}
+                />
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_main_files', {
+                    defaultValue: 'Main DB + WAL/SHM',
+                  })}
+                  value={
+                    sqlite
+                      ? formatBytes(
+                          sqlite.mainDbBytes + sqlite.mainWalBytes + sqlite.mainShmBytes,
+                          i18n.language
+                        )
+                      : '0 B'
                   }
                 />
-                <UsageMetric
-                  icon={<HardDrive size={18} />}
-                  title={t('settings.storage.category_other', { defaultValue: 'Other' })}
-                  value={formatBytes(usageSnapshot.categories.other.bytes, i18n.language)}
-                  detail={formatFileCount(usageSnapshot.categories.other.fileCount, t)}
+                <StorageDetailRow
+                  label={t('settings.storage.sqlite_analytics_files', {
+                    defaultValue: 'Analytics DB + WAL/SHM',
+                  })}
+                  value={
+                    sqlite
+                      ? formatBytes(
+                          sqlite.analyticsDbBytes +
+                            sqlite.analyticsWalBytes +
+                            sqlite.analyticsShmBytes,
+                          i18n.language
+                        )
+                      : '0 B'
+                  }
                 />
               </div>
-
-              <div className="settings-storage-detail-grid">
-                <div className="settings-storage-detail-block">
-                  <div className="settings-storage-detail-heading">
-                    {t('settings.storage.database_breakdown_title', {
-                      defaultValue: 'SQLite breakdown',
-                    })}
-                  </div>
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_data_bytes', { defaultValue: 'Table data' })}
-                    value={sqlite ? formatBytes(sqlite.dataBytes, i18n.language) : '0 B'}
-                  />
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_index_bytes', {
-                      defaultValue: 'SQLite indexes',
-                    })}
-                    value={sqlite ? formatBytes(sqlite.indexBytes, i18n.language) : '0 B'}
-                  />
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_free_page_bytes', {
-                      defaultValue: 'Free pages',
-                    })}
-                    value={sqlite ? formatBytes(sqlite.freePageBytes, i18n.language) : '0 B'}
-                  />
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_index_entries', {
-                      defaultValue: 'Indexed structures',
-                    })}
-                    value={t('settings.storage.indexed_structure_count', {
-                      defaultValue: '{{count}} structures',
-                      count: indexedStructureCount,
-                    })}
-                  />
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_main_files', {
-                      defaultValue: 'Main DB + WAL/SHM',
-                    })}
-                    value={
-                      sqlite
-                        ? formatBytes(
-                            sqlite.mainDbBytes + sqlite.mainWalBytes + sqlite.mainShmBytes,
-                            i18n.language
-                          )
-                        : '0 B'
-                    }
-                  />
-                  <StorageDetailRow
-                    label={t('settings.storage.sqlite_analytics_files', {
-                      defaultValue: 'Analytics DB + WAL/SHM',
-                    })}
-                    value={
-                      sqlite
-                        ? formatBytes(
-                            sqlite.analyticsDbBytes +
-                              sqlite.analyticsWalBytes +
-                              sqlite.analyticsShmBytes,
-                            i18n.language
-                          )
-                        : '0 B'
-                    }
-                  />
-                </div>
-
-                <div id="settings-storage-cleanup" className="settings-storage-detail-block">
-                  <div className="settings-storage-detail-heading">
-                    {t('settings.storage.webview_title', {
-                      defaultValue: 'WebView cache and browsing data',
-                    })}
-                  </div>
-                  <p className="settings-storage-detail-copy">
-                    {t('settings.storage.webview_description', {
-                      defaultValue:
-                        'Clears WebView cache and browsing data through Tauri. Some space may only be released after restarting Sona.',
-                    })}
-                  </p>
-                  <button
-                    type="button"
-                    className="btn btn-secondary settings-storage-clean-button"
-                    onClick={() => {
-                      void handleClearWebviewData();
-                    }}
-                    disabled={webviewClearDisabled}
-                  >
-                    <Trash2 size={16} aria-hidden="true" />
-                    {isClearingWebview
-                      ? t('settings.storage.clearing_webview', { defaultValue: 'Clearing...' })
-                      : t('settings.storage.clear_webview', { defaultValue: 'Clear WebView Data' })}
-                  </button>
-                  {webviewResultMessage && (
-                    <div
-                      className="settings-storage-webview-result"
-                      data-testid="settings-storage-webview-result"
-                      aria-live="polite"
-                    >
-                      {webviewResultMessage}
-                    </div>
-                  )}
-                </div>
+            )}
+            <div id="settings-storage-cleanup" className="settings-storage-detail-block">
+              <div className="settings-storage-detail-heading">
+                {t('settings.storage.webview_title', {
+                  defaultValue: 'WebView cache and browsing data',
+                })}
               </div>
-            </>
-          )}
+              <p className="settings-storage-detail-copy">
+                {t('settings.storage.webview_description', {
+                  defaultValue:
+                    'Clears WebView cache and browsing data through Tauri. Some space may only be released after restarting Sona.',
+                })}
+              </p>
+              <button
+                type="button"
+                className="btn btn-secondary settings-storage-clean-button"
+                onClick={() => {
+                  void handleClearWebviewData();
+                }}
+                disabled={webviewClearDisabled}
+              >
+                <Trash2 size={16} aria-hidden="true" />
+                {isClearingWebview
+                  ? t('settings.storage.clearing_webview', { defaultValue: 'Clearing...' })
+                  : t('settings.storage.clear_webview', { defaultValue: 'Clear WebView Data' })}
+              </button>
+              {webviewResultMessage && (
+                <div
+                  className="settings-storage-webview-result"
+                  data-testid="settings-storage-webview-result"
+                  aria-live="polite"
+                >
+                  {webviewResultMessage}
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </SettingsSection>
 

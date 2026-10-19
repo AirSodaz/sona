@@ -882,22 +882,24 @@ export type SubtitleSubTab = 'voice_typing' | 'subtitles';
 
 export interface SettingsSubtitleTabProps {
   initialSubTab?: SubtitleSubTab;
+  subTabRequestId?: number;
 }
 
 export function SettingsSubtitleTab({
-  initialSubTab = 'voice_typing',
+  initialSubTab,
+  subTabRequestId,
 }: SettingsSubtitleTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const config = useCaptionConfig();
   const updateConfig = useSetConfig();
 
-  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab || 'voice_typing');
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (initialSubTab && subTabRequestId !== undefined) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, subTabRequestId]);
   const lockWindow = config.lockWindow ?? false;
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;

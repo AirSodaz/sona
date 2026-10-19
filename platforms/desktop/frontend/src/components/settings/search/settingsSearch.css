@@ -330,5 +330,6 @@
 @media (prefers-reduced-motion: reduce) {
   .settings-item--highlighted {
     animation: none;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 40%, transparent);
   }
 }

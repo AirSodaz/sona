@@ -30,6 +30,7 @@ import {
 import './settings/Settings.css';
 import type { LlmProvider } from '../types/transcript';
 import { XIcon } from './Icons';
+import type { ModelScenario } from './settings/SettingsModelsTab';
 import type { SubtitleSubTab } from './settings/SettingsSubtitleTab';
 import type { PromptsSubTab, VocabularySubTab } from './settings/SettingsVocabularyTab';
 import { SettingsSearchResults } from './settings/search/SettingsSearchResults';
@@ -40,6 +41,7 @@ type SettingsPendingSubTab = {
   tab: SettingsTab;
   subTab?: string;
   promptsSubTab?: PromptsSubTab;
+  requestId?: number;
 } | null;
 /** Props for the Settings modal. */
 interface SettingsProps {
@@ -99,10 +101,20 @@ function renderSettingsPane(
                 ? 'voice_typing'
                 : undefined
           }
+          subTabRequestId={pendingSubTab?.tab === 'subtitle' ? pendingSubTab.requestId : undefined}
         />
       );
     case 'models':
-      return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
+      return (
+        <SettingsModelsPane
+          isOpen={isOpen}
+          isActive={isActive}
+          initialScenario={
+            pendingSubTab?.tab === 'models' ? (pendingSubTab.subTab as ModelScenario) : undefined
+          }
+          subTabRequestId={pendingSubTab?.tab === 'models' ? pendingSubTab.requestId : undefined}
+        />
+      );
     case 'vocabulary':
       return (
         <SettingsVocabularyTab
@@ -115,6 +127,9 @@ function renderSettingsPane(
           }
           initialPromptsSubTab={
             pendingSubTab?.tab === 'vocabulary' ? pendingSubTab.promptsSubTab : undefined
+          }
+          subTabRequestId={
+            pendingSubTab?.tab === 'vocabulary' ? pendingSubTab.requestId : undefined
           }
         />
       );
@@ -353,6 +368,7 @@ export function Settings({
               tab: hit.tab,
               subTab: hit.subTab,
               promptsSubTab: hit.promptsSubTab,
+              requestId: Date.now(),
             }
           : null
       );
@@ -371,8 +387,14 @@ export function Settings({
       const maxDurationMs = 2000;
 
       const findAndScroll = () => {
-        const el = document.getElementById(targetId);
+        let el = document.getElementById(targetId);
+        const isSyncDisabledCardPresent =
+          hit.tab === 'sync' && Boolean(document.querySelector('.sync-disabled-feature-card'));
+        if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
+          el = document.getElementById('settings-sync-toggle');
+        }
         if (el && !el.closest('[hidden]')) {
+          scrollRafRef.current = null;
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           el.classList.add('settings-item--highlighted');
           highlightedElementRef.current = el;
@@ -386,6 +408,23 @@ export function Settings({
           }, 1600);
         } else if (performance.now() - startTime < maxDurationMs) {
           scrollRafRef.current = requestAnimationFrame(findAndScroll);
+        } else {
+          scrollRafRef.current = null;
+          if (hit.tab === 'sync') {
+            const fallbackEl = document.getElementById('settings-sync-toggle');
+            if (fallbackEl && !fallbackEl.closest('[hidden]')) {
+              fallbackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              fallbackEl.classList.add('settings-item--highlighted');
+              highlightedElementRef.current = fallbackEl;
+              highlightTimeoutRef.current = setTimeout(() => {
+                fallbackEl.classList.remove('settings-item--highlighted');
+                if (highlightedElementRef.current === fallbackEl) {
+                  highlightedElementRef.current = null;
+                }
+                highlightTimeoutRef.current = null;
+              }, 1600);
+            }
+          }
         }
       };
 
@@ -593,19 +632,6 @@ export function Settings({
       ref={modalRef}
       className="settings-modal"
       onClick={isOpen ? (e) => e.stopPropagation() : undefined}
-      onKeyDown={
-        isOpen
-          ? (e) => {
-              if (e.key === 'Escape' && searchQuery.length > 0 && !isAnyDialogOpen()) {
-                e.preventDefault();
-                e.stopPropagation();
-                setSearchQuery('');
-                setActiveIndex(0);
-                searchInputRef.current?.focus();
-              }
-            }
-          : undefined
-      }
       role={isOpen ? 'dialog' : undefined}
       aria-modal={isOpen ? 'true' : undefined}
       aria-labelledby={isOpen ? 'settings-title' : undefined}
@@ -613,7 +639,22 @@ export function Settings({
       style={{ outline: 'none' }}
     >
       {/* Sidebar */}
-      <div className="settings-sidebar">
+      <div
+        className="settings-sidebar"
+        onKeyDown={
+          isOpen
+            ? (e) => {
+                if (e.key === 'Escape' && searchQuery.length > 0 && !isAnyDialogOpen()) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setSearchQuery('');
+                  setActiveIndex(0);
+                  searchInputRef.current?.focus();
+                }
+              }
+            : undefined
+        }
+      >
         <div className={`settings-sidebar-header ${isSidebarScrolled ? 'is-scrolled' : ''}`}>
           <h2 id="settings-title">{t('settings.title')}</h2>
           <div className="settings-search-bar">
@@ -625,6 +666,9 @@ export function Settings({
               className="settings-search-input"
               aria-label={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
               placeholder={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
+              aria-expanded={Boolean(searchQuery.trim() && hits.length > 0)}
+              aria-haspopup="listbox"
+              aria-autocomplete="list"
               aria-controls={
                 searchQuery.trim() && hits.length > 0 ? 'settings-search-listbox' : undefined
               }

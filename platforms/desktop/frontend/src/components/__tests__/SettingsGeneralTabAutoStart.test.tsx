@@ -54,16 +54,17 @@ describe('SettingsGeneralTab AutoStart & SilentStart', () => {
     });
   });
 
-  it('renders auto_start switch with default false and hides silent_start', () => {
+  it('renders auto_start switch with default false and renders disabled silent_start', () => {
     render(<SettingsGeneralTab />);
 
     expect(screen.getByText('Launch on startup')).toBeTruthy();
     expect(screen.getByText('Minimize to tray on exit')).toBeTruthy();
-    // silent_start should NOT be rendered when autoStart is false
-    expect(screen.queryByText('Silent launch')).toBeNull();
+    expect(screen.getByText('Silent launch')).toBeTruthy();
+    const silentSwitch = document.querySelector('#settings-silent-start .switch-container');
+    expect(silentSwitch?.classList.contains('disabled')).toBe(true);
   });
 
-  it('does not show silent_start if autoStart is true but minimizeToTrayOnExit is false', () => {
+  it('renders disabled silent_start if autoStart is true but minimizeToTrayOnExit is false', () => {
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
@@ -74,10 +75,12 @@ describe('SettingsGeneralTab AutoStart & SilentStart', () => {
     });
 
     render(<SettingsGeneralTab />);
-    expect(screen.queryByText('Silent launch')).toBeNull();
+    expect(screen.getByText('Silent launch')).toBeTruthy();
+    const silentSwitch = document.querySelector('#settings-silent-start .switch-container');
+    expect(silentSwitch?.classList.contains('disabled')).toBe(true);
   });
 
-  it('shows silent_start when both autoStart and minimizeToTrayOnExit are true', () => {
+  it('shows enabled silent_start when both autoStart and minimizeToTrayOnExit are true', () => {
     useConfigStore.setState({
       config: {
         ...DEFAULT_CONFIG,
@@ -89,6 +92,8 @@ describe('SettingsGeneralTab AutoStart & SilentStart', () => {
 
     render(<SettingsGeneralTab />);
     expect(screen.getByText('Silent launch')).toBeTruthy();
+    const silentSwitch = document.querySelector('#settings-silent-start .switch-container');
+    expect(silentSwitch?.classList.contains('disabled')).toBe(false);
   });
 
   it('updates autoStart and resets silentStart when autoStart is toggled off', () => {

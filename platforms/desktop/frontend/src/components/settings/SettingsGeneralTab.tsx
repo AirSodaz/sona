@@ -231,18 +231,24 @@ export function SettingsGeneralTab({
           />
         </SettingsItem>
 
-        {autoStart && minimizeToTrayOnExit && (
-          <SettingsItem
-            id="settings-silent-start"
-            title={t('settings.silent_start')}
-            hint={t('settings.silent_start_hint')}
-          >
-            <Switch
-              checked={silentStart}
-              onChange={(enabled) => updateConfig({ silentStart: enabled })}
-            />
-          </SettingsItem>
-        )}
+        <SettingsItem
+          id="settings-silent-start"
+          title={t('settings.silent_start')}
+          hint={
+            !autoStart || !minimizeToTrayOnExit
+              ? t('settings.silent_start_disabled_hint', {
+                  defaultValue:
+                    'Requires "Start at Login" and "Minimize to Tray on Exit" to be enabled.',
+                })
+              : t('settings.silent_start_hint')
+          }
+        >
+          <Switch
+            checked={autoStart && minimizeToTrayOnExit && silentStart}
+            disabled={!autoStart || !minimizeToTrayOnExit}
+            onChange={(enabled) => updateConfig({ silentStart: enabled })}
+          />
+        </SettingsItem>
 
         <SettingsItem id="settings-auto-check-updates" title={t('settings.auto_check_updates')}>
           <Switch

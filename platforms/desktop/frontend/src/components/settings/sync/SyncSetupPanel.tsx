@@ -854,6 +854,7 @@ export function SyncSetupPanel({
 
       {/* Section 2: End-to-End Encryption */}
       <SettingsSection
+        id={unlockMethod !== 'password' ? 'settings-sync-encryption' : undefined}
         title={t('settings.sync.section_encryption', { defaultValue: 'End-to-End Encryption' })}
         description={t('settings.sync.section_encryption_desc', {
           defaultValue:

@@ -407,7 +407,7 @@ export function SyncConnectedPanel({
   return (
     <div className="sync-connected-panel">
       {/* Status Hero Card */}
-      <div className={`sync-status-hero-card is-${status.state}`}>
+      <div id="settings-sync-webdav" className={`sync-status-hero-card is-${status.state}`}>
         <div className="sync-hero-top-row">
           <div className="sync-hero-info">
             <div className="sync-hero-status-pill">
@@ -447,6 +447,7 @@ export function SyncConnectedPanel({
 
           <div className="sync-hero-actions">
             <button
+              id="settings-sync-pairing"
               type="button"
               className="btn btn-secondary btn-sm sync-pair-btn"
               onClick={() => setShowPairingModal(true)}
@@ -741,7 +742,7 @@ export function SyncConnectedPanel({
       </SettingsSection>
 
       {/* Advanced Security & Key Accordion */}
-      <SettingsSection>
+      <SettingsSection id="settings-sync-encryption">
         <SettingsAccordion
           defaultOpen={Boolean(recoveryKey)}
           title={
@@ -763,6 +764,7 @@ export function SyncConnectedPanel({
           <div className="sync-security-panel">
             {/* Recovery Key Management */}
             <SettingsItem
+              id={!recoveryKey ? 'settings-sync-recovery-key' : undefined}
               title={t('settings.sync.recovery_key_manage_title', {
                 defaultValue: 'Emergency Recovery Key',
               })}
@@ -802,7 +804,7 @@ export function SyncConnectedPanel({
             </SettingsItem>
 
             {recoveryKey && (
-              <div className="sync-recovery-output-card">
+              <div id="settings-sync-recovery-key" className="sync-recovery-output-card">
                 <div className="sync-recovery-card-header">
                   <ShieldCheck size={16} />
                   <strong>
