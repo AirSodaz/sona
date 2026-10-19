@@ -18,7 +18,7 @@
 - **🗣️ 实时字幕与语音输入法**：复用同一套离线实时转录能力，既可显示悬浮字幕，也可向其他桌面应用全局听写输入。
 - **📤 智能导出**：支持多种格式（TXT、SRT、VTT、JSON、Markdown）和双语字幕导出，支持一键复制到剪贴板。
 - **🛟 任务恢复、备份与存储管理**：从消息中心恢复或丢弃中断任务，导出轻量备份，配置存储目录与自定义 FFmpeg 路径，设定音频定期保留清理策略。
-- **🤖 先进的语音识别模型**：全面支持 **Qwen3-ASR**（基于 llama.cpp，支持离线批量与流式推理）、**FireRedASR2-AED**、**SenseVoice**、**Whisper**、**Paraformer** 以及默认的 **Silero VAD v5**。
+- **🤖 先进的语音识别模型**：全面支持 **Qwen3-ASR**（基于 llama.cpp，支持离线批量与流式推理）、**Confucius4-R2T2**、**FireRedASR2-AED**、**SenseVoice**、**Whisper**、**Paraformer** 以及默认的 **Silero VAD v5**。
 
 ## 🚀 快速开始
 

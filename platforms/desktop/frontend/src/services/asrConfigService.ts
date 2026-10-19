@@ -73,6 +73,27 @@ export function isLlamaCppBatchRequest(request: AsrTranscriptionRequest): boolea
     request.engine === 'local' && request.mode === 'batch' && request.localEngine === 'llama-cpp'
   );
 }
+const BATCH_VAD_EXEMPT_TYPES: Record<string, true> = {
+  'qwen3-asr': true,
+  'parakeet-tdt': true,
+};
+const BATCH_VAD_EXEMPT_PATTERNS = [
+  /qwen3[-_]asr/i,
+  /parakeet[-_]tdt/i,
+  /(?:[-_]|\b)r2t2(?:[-_]|\b)/i,
+];
+
+export function isBatchVadExemptModel(model: {
+  type?: string | null;
+  id?: string | null;
+  path?: string | null;
+}): boolean {
+  if (model.type && BATCH_VAD_EXEMPT_TYPES[model.type.toLowerCase()]) {
+    return true;
+  }
+  const identifier = `${model.id ?? ''} ${model.path ?? ''}`;
+  return BATCH_VAD_EXEMPT_PATTERNS.some((pattern) => pattern.test(identifier));
+}
 
 const SLOT_MODE: Record<AsrSelectionSlot, AsrMode> = {
   live: 'streaming',
@@ -222,23 +243,7 @@ export class AsrConfigService {
       : { requiresPunctuation: false, requiresVad: false };
 
     const scenario: AsrScenario = slot === 'batch' ? 'batch' : 'live';
-    const modelType = (modelInfo?.type || '').toLowerCase();
-    const idLower = (selection.modelId || '').toLowerCase();
-    const pathLower = (selection.modelPath || '').toLowerCase();
-    const isExempt =
-      modelType === 'qwen3-asr' ||
-      modelType === 'parakeet-tdt' ||
-      idLower.includes('qwen3-asr') ||
-      idLower.includes('qwen3_asr') ||
-      idLower.includes('parakeet-tdt') ||
-      idLower.includes('parakeet_tdt') ||
-      pathLower.includes('qwen3-asr') ||
-      pathLower.includes('qwen3_asr') ||
-      pathLower.includes('parakeet-tdt') ||
-      pathLower.includes('parakeet_tdt');
-    const hasBatchModel = Boolean(selection.modelId || selection.modelPath);
-    const isBatchVadForced =
-      scenario === 'batch' && selection.engine === 'local' && hasBatchModel && !isExempt;
+    const isBatchVadForced = scenario === 'batch' && this.isBatchVadForced(selection, modelInfo);
     const batchVadEnabled =
       isBatchVadForced || scenario !== 'batch' || config.batchVadEnabled !== false;
     const vadModelPath = getScenarioVadModelPath(config, scenario);
@@ -525,7 +530,14 @@ export class AsrConfigService {
       return null;
     }
     if (selection.modelId) {
-      return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
+      if (typeof this.ports.PRESET_MODELS_MAP?.get === 'function') {
+        return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
+      }
+      return (
+        (this.ports.PRESET_MODELS_MAP as unknown as Record<string, ModelInfo>)?.[
+          selection.modelId
+        ] ?? null
+      );
     }
     return findSelectedModelByMode(selection.modelPath, selection.mode);
   };
@@ -605,6 +617,27 @@ export class AsrConfigService {
       config,
     };
   };
+  isBatchVadForced = (
+    selection?: AsrModelSelection | null,
+    cachedModelInfo?: ModelInfo | null
+  ): boolean => {
+    if (selection?.engine !== 'local') {
+      return false;
+    }
+    const hasModel = Boolean(selection.modelId || selection.modelPath);
+    if (!hasModel) {
+      return false;
+    }
+    const modelInfo =
+      cachedModelInfo !== undefined
+        ? cachedModelInfo
+        : this.resolveModelInfo({ ...selection, mode: selection.mode ?? 'batch' });
+    return !isBatchVadExemptModel({
+      type: modelInfo?.type,
+      id: selection.modelId ?? modelInfo?.id,
+      path: selection.modelPath,
+    });
+  };
 }
 
 export function createAsrConfigService(ports: AsrConfigServicePorts): AsrConfigService {
@@ -635,4 +668,5 @@ export const {
   syncStreamingAsrSelectionFields,
   syncLiveAsrSelectionFields,
   syncLiveOnlineAsrSelectionFields,
+  isBatchVadForced,
 } = asrConfigService;

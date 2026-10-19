@@ -305,6 +305,7 @@ pub fn is_non_llm_model_file(name_or_path: &str) -> bool {
         "silero",
         "punct",
         "diariz",
+        "r2t2",
     ];
 
     for indicator in speech_indicators {
@@ -544,6 +545,10 @@ mod tests {
         assert!(is_non_llm_model_file("Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("qwen3-asr-0.6b-q8-gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("mmproj-Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-f16.gguf"));
+        assert!(is_non_llm_model_file("confucius4-r2t2-q8-gguf"));
 
         // General ASR / speech indicators
         assert!(is_non_llm_model_file("custom-asr-model.gguf"));
@@ -558,6 +563,8 @@ mod tests {
         assert!(!is_non_llm_model_file("google/gemma-4-e2b"));
         assert!(!is_non_llm_model_file("Llama-3.2-3B-Instruct.gguf"));
         assert!(!is_non_llm_model_file("DeepSeek-R1-Distill-Qwen-7B.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO-Q8_0.gguf"));
     }
 
     #[test]

@@ -157,6 +157,10 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
     ),
     ("qwen3-asr-0.6b", "qwen3-asr-0.6b-q8-gguf"),
     ("qwen3-asr-1.7b", "qwen3-asr-1.7b-q8-gguf"),
+    ("confucius4-r2t2", "confucius4-r2t2-q8-gguf"),
+    ("confucius4-r2t2-q8", "confucius4-r2t2-q8-gguf"),
+    ("confucius4-r2t2-f16", "confucius4-r2t2-f16-gguf"),
+    ("r2t2", "confucius4-r2t2-q8-gguf"),
     ("firered", "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
     (
         "firered-int8",

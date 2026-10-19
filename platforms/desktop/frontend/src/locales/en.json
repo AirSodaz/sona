@@ -1856,6 +1856,7 @@
       "x_asr": "Developed by SJTU and partners. A bilingual Chinese-English streaming ASR model based on the Zipformer-Transducer architecture with built-in punctuation and multiple latency chunk options.",
       "funasr_nano": "Developed by Alibaba FunASR. A large and highly accurate local model, supporting multiple dialects and complex transcription tasks.",
       "qwen3_asr": "Developed by Alibaba Qwen. A local Qwen3-based ASR model for high-quality batch transcription.",
+      "confucius4_r2t2": "Developed by NetEase Youdao. A low-latency, high-accuracy real-time streaming and batch ASR model supporting Chinese, English, and multiple languages.",
       "firered_asr": "Developed by Xiaohongshu (FireRed Team). An advanced local model delivering strong performance for Chinese and English mixed-language tasks.",
       "dolphin": "Developed by Dataocean AI and Tsinghua University. A multilingual, multitask ASR model supporting 40 Eastern languages and 22 Chinese dialects.",
       "parakeet_tdt": "Developed by NVIDIA. A high-performance multilingual ASR model based on FastConformer and Token-and-Duration Transducer (TDT), featuring ultra-fast batch transcription and built-in punctuation for 25 European languages.",
