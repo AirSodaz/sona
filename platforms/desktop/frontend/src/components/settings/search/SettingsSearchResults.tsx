@@ -87,9 +87,7 @@ export function SettingsSearchResults({
               <span className="settings-search-result-title">
                 {highlightMatches(hit.resolvedTitle, searchQuery)}
               </span>
-              <span className="settings-search-result-breadcrumb" title={breadcrumb}>
-                {breadcrumb}
-              </span>
+              <span className="settings-search-result-breadcrumb">{breadcrumb}</span>
             </div>
           </button>
         );

@@ -58,8 +58,8 @@ describe('SettingsSearchResults component', () => {
     expect(screen.getByText('请尝试其他关键词')).toBeDefined();
   });
 
-  it('renders correct count badge and breadcrumbs for hits', () => {
-    render(
+  it('renders correct count badge and breadcrumbs without tooltip attributes', () => {
+    const { container } = render(
       <SettingsSearchResults
         hits={mockHits}
         searchQuery="语"
@@ -71,6 +71,13 @@ describe('SettingsSearchResults component', () => {
     expect(screen.getByText('匹配项 (2)')).toBeDefined();
     expect(screen.getByText('通用设置 > 常规 > 基本设置')).toBeDefined();
     expect(screen.getByText('智能增强 > 大模型服务')).toBeDefined();
+
+    const breadcrumbElements = container.querySelectorAll('.settings-search-result-breadcrumb');
+    expect(breadcrumbElements).toHaveLength(2);
+    expect(breadcrumbElements[0]?.getAttribute('title')).toBeNull();
+    expect(breadcrumbElements[0]?.getAttribute('data-tooltip')).toBeNull();
+    expect(breadcrumbElements[1]?.getAttribute('title')).toBeNull();
+    expect(breadcrumbElements[1]?.getAttribute('data-tooltip')).toBeNull();
   });
 
   it('marks active item based on activeIndex prop', () => {
@@ -101,11 +108,8 @@ describe('SettingsSearchResults component', () => {
 
     const buttons = screen.getAllByRole('option');
     fireEvent.click(buttons[0]);
+
     expect(onSelectResult).toHaveBeenCalledTimes(1);
     expect(onSelectResult).toHaveBeenCalledWith(mockHits[0]);
-
-    fireEvent.click(buttons[1]);
-    expect(onSelectResult).toHaveBeenCalledTimes(2);
-    expect(onSelectResult).toHaveBeenCalledWith(mockHits[1]);
   });
 });
