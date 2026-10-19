@@ -744,7 +744,7 @@ export function SyncConnectedPanel({
       {/* Advanced Security & Key Accordion */}
       <SettingsSection id="settings-sync-encryption">
         <SettingsAccordion
-          defaultOpen={Boolean(recoveryKey)}
+          defaultOpen={true}
           title={
             <div className="settings-accordion-copy">
               <div className="settings-accordion-copy-title sync-security-title">

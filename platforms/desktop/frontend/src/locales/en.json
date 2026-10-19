@@ -1989,6 +1989,7 @@
     "auto_start_hint": "Automatically launch the application when your computer starts.",
     "silent_start": "Silent launch",
     "silent_start_hint": "Start minimized to the system tray on startup without displaying the main window.",
+    "silent_start_disabled_hint": "Requires \"Launch on startup\" and \"Minimize to tray on exit\" to be enabled.",
     "auto_check_updates": "Automatically check for updates",
     "shortcuts_title": "Keyboard Shortcuts",
     "shortcuts_description": "View application hotkeys.",

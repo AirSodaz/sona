@@ -440,13 +440,13 @@ export function Settings({
       }
 
       if (e.key === 'ArrowDown') {
-        e.preventDefault();
         if (hits.length > 0) {
+          e.preventDefault();
           setActiveIndex((prev) => (prev + 1) % hits.length);
         }
       } else if (e.key === 'ArrowUp') {
-        e.preventDefault();
         if (hits.length > 0) {
+          e.preventDefault();
           setActiveIndex((prev) => (prev - 1 + hits.length) % hits.length);
         }
       } else if (e.key === 'Enter') {

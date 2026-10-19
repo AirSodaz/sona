@@ -45,7 +45,8 @@ export function calculateItemScore(
   const q = normalizedQuery.trim().toLowerCase();
   if (!q) return 0;
 
-  const isCjk = (str: string) => /[\u4e00-\u9fa5]/.test(str);
+  const isCjk = (str: string) => /[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(str);
+  const isSingleLatin = q.length === 1 && !isCjk(q);
 
   const displayTitle = resolveDisplayTitle(item, t);
   const title = (displayTitle || '').toLowerCase();
@@ -56,14 +57,49 @@ export function calculateItemScore(
   const rawTab = t(item.tabKey, { defaultValue: '' });
   const tab = (rawTab && rawTab !== item.tabKey ? rawTab : '').toLowerCase();
 
+  const terms = q.split(/\s+/).filter(Boolean);
+  const keywords = (item.keywords || []).map((k) => k.toLowerCase());
+
+  const matchesKeyword = (term: string) => {
+    const termIsSingleLatin = term.length === 1 && !isCjk(term);
+    return keywords.some(
+      (k) =>
+        k === term ||
+        (!termIsSingleLatin &&
+          (k.includes(term) ||
+            (term.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && term.includes(k))))
+    );
+  };
+
+  // If multi-token query, every token must match at least one attribute of the item
+  if (terms.length > 1) {
+    const allTokensMatch = terms.every(
+      (term) =>
+        title.includes(term) ||
+        matchesKeyword(term) ||
+        hint.includes(term) ||
+        section.includes(term) ||
+        tab.includes(term)
+    );
+    if (!allTokensMatch) {
+      return 0;
+    }
+  }
+
   let score = 0;
 
   // Title matching
   if (title === q) {
     score += 100;
-  } else if (title.startsWith(q)) {
+  } else if (
+    title.startsWith(q) ||
+    (terms.length > 1 && terms.some((term) => title === term || title.startsWith(term)))
+  ) {
     score += 80;
-  } else if (title.includes(q)) {
+  } else if (
+    (!isSingleLatin && title.includes(q)) ||
+    (terms.length > 1 && terms.some((term) => title.includes(term)))
+  ) {
     score += 60;
   }
 
@@ -73,22 +109,14 @@ export function calculateItemScore(
   }
 
   // Keyword / alias matching
-  const keywords = (item.keywords || []).map((k) => k.toLowerCase());
-  const terms = q.split(/\s+/).filter(Boolean);
-
-  const matchesKeyword = (term: string) =>
-    keywords.some(
-      (k) =>
-        k === term ||
-        k.includes(term) ||
-        (term.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && term.includes(k))
-    );
-
-  const hasExactKeyword = keywords.some((k) => k === q);
+  const hasExactKeyword = keywords.some(
+    (k) => k === q || (terms.length > 1 && terms.some((t) => k === t))
+  );
   const hasSubKeyword =
     !hasExactKeyword &&
+    !isSingleLatin &&
     (terms.length > 1
-      ? terms.every(matchesKeyword)
+      ? terms.some(matchesKeyword)
       : keywords.some(
           (k) => k.includes(q) || (q.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && q.includes(k))
         ));
@@ -100,35 +128,26 @@ export function calculateItemScore(
 
   // Hint matching
   if (
+    !isSingleLatin &&
     hint &&
-    (hint.includes(q) || (terms.length > 1 && terms.every((term) => hint.includes(term))))
+    (hint.includes(q) || (terms.length > 1 && terms.some((term) => hint.includes(term))))
   ) {
     score += 30;
   }
 
   // Section or Tab title matching
   if (
-    section?.includes(q) ||
-    tab?.includes(q) ||
-    (terms.length > 1 &&
-      (terms.every((term) => section.includes(term)) || terms.every((term) => tab.includes(term))))
+    !isSingleLatin &&
+    (section?.includes(q) ||
+      tab?.includes(q) ||
+      (terms.length > 1 && terms.some((term) => section.includes(term) || tab.includes(term))))
   ) {
     score += 20;
   }
 
-  // Multi-token match across title + keywords + hint + section + tab
+  // Multi-token fallback when no individual scoring applied but all tokens matched
   if (terms.length > 1 && score === 0) {
-    const allTokensMatch = terms.every(
-      (term) =>
-        title.includes(term) ||
-        matchesKeyword(term) ||
-        hint.includes(term) ||
-        section.includes(term) ||
-        tab.includes(term)
-    );
-    if (allTokensMatch) {
-      score += 45;
-    }
+    score += 45;
   }
 
   if (score === 0) {
@@ -140,7 +159,7 @@ export function calculateItemScore(
     title.startsWith(q) || (terms.length > 1 && terms.some((term) => title.startsWith(term)));
   const hasTitleMatch =
     hasTitlePrefix ||
-    title.includes(q) ||
+    (!isSingleLatin && title.includes(q)) ||
     (terms.length > 1 && terms.some((term) => title.includes(term)));
 
   if (hasTitlePrefix) {
@@ -151,6 +170,7 @@ export function calculateItemScore(
   }
   return Math.min(score, 59);
 }
+
 /**
  * Splits text by case-insensitive query substring and wraps matches in
  * `<mark className="settings-search-highlight">`.
@@ -219,22 +239,38 @@ export function useSettingsSearch(
       if (score > 0) {
         const displayTitle = resolveDisplayTitle(item, t);
 
+        const rawHint = item.hintKey ? t(item.hintKey, { defaultValue: '' }) : undefined;
+        const resolvedHint = rawHint && rawHint !== item.hintKey ? rawHint : undefined;
+
+        const rawSection = item.sectionKey ? t(item.sectionKey, { defaultValue: '' }) : undefined;
+        const resolvedSection =
+          rawSection && rawSection !== item.sectionKey ? rawSection : undefined;
+
+        const rawTab = t(item.tabKey, { defaultValue: '' });
+        const resolvedTab = rawTab && rawTab !== item.tabKey ? rawTab : item.tabKey;
+
+        const rawGroup = t(item.groupKey, { defaultValue: '' });
+        const resolvedGroup = rawGroup && rawGroup !== item.groupKey ? rawGroup : item.groupKey;
+
         matched.push({
           ...item,
           score,
           resolvedTitle: displayTitle,
-          resolvedHint: item.hintKey ? t(item.hintKey, { defaultValue: '' }) : undefined,
-          resolvedSection: item.sectionKey ? t(item.sectionKey, { defaultValue: '' }) : undefined,
-          resolvedTab: t(item.tabKey, { defaultValue: item.tabKey }),
-          resolvedGroup: t(item.groupKey, { defaultValue: item.groupKey }),
+          resolvedHint,
+          resolvedSection,
+          resolvedTab,
+          resolvedGroup,
         });
       }
     }
     return matched.sort((a, b) => b.score - a.score);
   }, [normalizedQuery, registry, t]);
 
-  return {
-    hits,
-    query: trimmed,
-  };
+  return useMemo(
+    () => ({
+      hits,
+      query: trimmed,
+    }),
+    [hits, trimmed]
+  );
 }

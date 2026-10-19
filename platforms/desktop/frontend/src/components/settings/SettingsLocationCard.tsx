@@ -9,6 +9,7 @@ export interface SettingsLocationCardProps {
   id?: string;
   /** Test ID attribute for the card container */
   testId?: string;
+  /** Title of the location setting */
   title: string;
   /** Description or hint text displayed under the title */
   hint?: string;

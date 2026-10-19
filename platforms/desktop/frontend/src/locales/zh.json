@@ -1989,6 +1989,7 @@
     "auto_start_hint": "在计算机启动时自动运行应用程序。",
     "silent_start": "静默启动",
     "silent_start_hint": "开机自启后自动最小化到系统托盘，不显示主窗口。",
+    "silent_start_disabled_hint": "需要同时启用“开机自启”和“退出时最小化到系统托盘”。",
     "auto_check_updates": "自动检查更新",
     "shortcuts_title": "键盘快捷键",
     "shortcuts_description": "查看应用程序快捷键。",

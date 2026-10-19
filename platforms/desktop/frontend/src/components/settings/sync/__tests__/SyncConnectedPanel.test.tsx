@@ -257,10 +257,13 @@ describe('SyncConnectedPanel', () => {
         onDeleteRecoveryKey={onDeleteRecoveryKey}
       />
     );
-
     const titleEl = container.querySelector('.settings-accordion-copy-title.sync-security-title');
     expect(titleEl).not.toBeNull();
     expect(titleEl?.querySelector('svg')).not.toBeNull();
     expect(titleEl?.querySelector('span')?.textContent).toBe('Vault Security & Recovery');
+
+    // Security accordion is open by default so search can deep-link to recovery key
+    const recoveryKeyEl = container.querySelector('#settings-sync-recovery-key');
+    expect(recoveryKeyEl).not.toBeNull();
   });
 });

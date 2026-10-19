@@ -6,6 +6,7 @@ export type SettingsSubTab =
   | 'recognition'
   | 'prompts'
   | 'speakers'
+  | 'live'
   | 'batch';
 
 export interface SettingsSearchItem {
@@ -277,7 +278,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-about-version',
     groupKey: 'settings.group.general',
     tabKey: 'settings.about',
-    titleKey: 'settings.about',
+    titleKey: 'settings.about_version',
     hintKey: 'settings.about_desc',
     keywords: [
       'version',
@@ -479,6 +480,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'models',
+    subTab: 'live',
     targetId: 'settings-vad-path',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
@@ -511,6 +513,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-punctuation',
     tab: 'models',
+    subTab: 'live',
     targetId: 'settings-punctuation-path',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
@@ -524,6 +527,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.model_download_mirror',
+    hintKey: 'settings.model_download_mirror_hint',
     keywords: [
       'mirror',
       'hf',
@@ -546,6 +550,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     keywords: [
       'gpu',
       'cuda',
+      'vulkan',
+      'metal',
       'hardware',
       'acceleration',
       'nvidia',

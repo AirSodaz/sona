@@ -238,7 +238,7 @@ export function SettingsGeneralTab({
             !autoStart || !minimizeToTrayOnExit
               ? t('settings.silent_start_disabled_hint', {
                   defaultValue:
-                    'Requires "Start at Login" and "Minimize to Tray on Exit" to be enabled.',
+                    'Requires "Launch on startup" and "Minimize to tray on exit" to be enabled.',
                 })
               : t('settings.silent_start_hint')
           }

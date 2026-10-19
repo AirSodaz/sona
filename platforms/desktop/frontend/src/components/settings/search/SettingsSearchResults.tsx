@@ -96,11 +96,11 @@ export function SettingsSearchResults({
 }: SettingsSearchResultsProps): React.JSX.Element {
   const { t } = useTranslation();
   const isKeyboardNavRef = useRef(false);
-  const listboxRef = useRef<HTMLDivElement>(null);
+  const resultsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (searchQuery !== undefined && listboxRef.current) {
-      listboxRef.current.scrollTop = 0;
+    if (searchQuery !== undefined && resultsContainerRef.current) {
+      resultsContainerRef.current.scrollTop = 0;
     }
   }, [searchQuery]);
   useEffect(() => {
@@ -139,7 +139,7 @@ export function SettingsSearchResults({
 
   if (hits.length === 0) {
     return (
-      <div className="settings-search-results">
+      <div ref={resultsContainerRef} className="settings-search-results">
         <div className="settings-search-empty" role="status" aria-live="polite">
           <SearchX size={32} className="settings-search-empty-icon" aria-hidden="true" />
           <div className="settings-search-empty-title">
@@ -156,7 +156,7 @@ export function SettingsSearchResults({
   }
 
   return (
-    <div className="settings-search-results">
+    <div ref={resultsContainerRef} className="settings-search-results">
       <div className="settings-search-header" role="presentation" aria-hidden="true">
         <span className="settings-search-count">
           {t('settings.search_matches_count', {
@@ -168,7 +168,6 @@ export function SettingsSearchResults({
 
       <div
         id="settings-search-listbox"
-        ref={listboxRef}
         className="settings-search-listbox"
         role="listbox"
         aria-label={t('settings.search_matches_count', {

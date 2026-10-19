@@ -162,7 +162,7 @@ describe('calculateItemScore', () => {
     expect(item).toBeDefined();
 
     const scoreZh = calculateItemScore(item, '常规 语言', mockTranslate);
-    expect(scoreZh).toBeGreaterThan(0);
+    expect(scoreZh).toBeGreaterThanOrEqual(80);
 
     const enTranslate = (key: string) => {
       const map: Record<string, string> = {
@@ -172,9 +172,8 @@ describe('calculateItemScore', () => {
       return map[key] || '';
     };
     const scoreEn = calculateItemScore(item, 'general language', enTranslate);
-    expect(scoreEn).toBeGreaterThan(0);
+    expect(scoreEn).toBeGreaterThanOrEqual(80);
   });
-
   it('handles queries containing regex special characters safely without throwing', () => {
     const item = SETTINGS_SEARCH_REGISTRY[0];
     const regexQuery = '[test] (.*)+?^$\\';
@@ -197,6 +196,55 @@ describe('calculateItemScore', () => {
 
     const score = calculateItemScore(uninitializedItem, 'settings', rawKeyFallbackTranslate);
     expect(score).toBe(0);
+  });
+
+  it('supports Korean Hangul and Japanese Kana compound matching', () => {
+    const koItem = {
+      id: 'test-ko',
+      titleKey: 'test.ko.title',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['언어'],
+    };
+    const jaItem = {
+      id: 'test-ja',
+      titleKey: 'test.ja.title',
+      tabKey: 'test.tab',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['キー'],
+    };
+
+    const t = () => '';
+    // Compound queries containing 2-char Korean Hangul keyword or Japanese Kana keyword
+    expect(calculateItemScore(koItem, '언어설정', t)).toBeGreaterThan(0);
+    expect(calculateItemScore(jaItem, 'キー設定', t)).toBeGreaterThan(0);
+  });
+
+  it('does not flood matches for single-character Latin queries', () => {
+    const item = {
+      id: 'test-latin',
+      titleKey: 'test.title',
+      hintKey: 'test.hint',
+      tabKey: 'test.tab',
+      sectionKey: 'test.section',
+      groupKey: 'test.group',
+      tab: 'general' as const,
+      keywords: ['automation'],
+    };
+    const t = (k: string) => {
+      if (k === 'test.title') return 'General Settings';
+      if (k === 'test.hint') return 'Manage your audio configurations';
+      if (k === 'test.tab') return 'Appearance';
+      if (k === 'test.section') return 'Advanced';
+      return '';
+    };
+
+    // "a" is present as substring in title ("General"), hint ("Manage"), tab ("Appearance"), section ("Advanced"), keyword ("automation")
+    // But none start with "a" except section/tab which should be ignored for single Latin characters
+    // Title starts with "G", not "a".
+    expect(calculateItemScore(item, 'a', t)).toBe(0);
   });
 });
 
@@ -238,6 +286,28 @@ describe('useSettingsSearch hook', () => {
     for (let i = 1; i < result.current.hits.length; i++) {
       expect(result.current.hits[i].score).toBeLessThanOrEqual(99);
     }
+  });
+
+  it('sanitizes untranslated keys and empty strings to undefined for resolvedHint and resolvedSection', () => {
+    const itemWithMissingKeys = {
+      id: 'test-untranslated',
+      titleKey: 'settings.language',
+      hintKey: 'settings.missing.hint',
+      sectionKey: 'settings.missing.section',
+      tabKey: 'settings.general',
+      groupKey: 'settings.group.general',
+      tab: 'general' as const,
+      keywords: ['lang'],
+    };
+
+    const { result } = renderHook(() =>
+      useSettingsSearch('lang', { registry: [itemWithMissingKeys] })
+    );
+
+    expect(result.current.hits.length).toBe(1);
+    const hit = result.current.hits[0];
+    expect(hit.resolvedHint).toBeUndefined();
+    expect(hit.resolvedSection).toBeUndefined();
   });
 });
 
