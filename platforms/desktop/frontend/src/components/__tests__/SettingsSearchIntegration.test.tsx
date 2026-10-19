@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dashboardService } from '../../services/dashboardService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
@@ -124,6 +124,7 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
 
 describe('Settings search integration', () => {
   const onClose = vi.fn();
+  const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -132,6 +133,10 @@ describe('Settings search integration', () => {
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
     vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
     window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
   });
   it('renders search input in the sidebar header', () => {
     render(<Settings isOpen={true} onClose={onClose} />);

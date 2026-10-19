@@ -522,12 +522,13 @@ export function SettingsMicrophoneTab({
         </SettingsItem>
 
         <SettingsItem
+          id="settings-mic-boost"
           title={t('settings.microphone_boost')}
           hint={t('settings.microphone_boost_hint')}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
-              id="settings-mic-boost"
+              id="settings-mic-boost-input"
               type="number"
               min="1.0"
               max="5.0"

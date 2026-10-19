@@ -516,6 +516,7 @@ export function SyncSetupPanel({
         </div>
 
         <SettingsItem
+          id="settings-sync-webdav"
           title={t('settings.sync.storage_type_label', { defaultValue: 'Storage protocol' })}
           hint={t('settings.sync.storage_type_hint', {
             defaultValue: 'Choose between S3-compatible bucket storage and WebDAV cloud storage',
@@ -756,7 +757,6 @@ export function SyncSetupPanel({
             </SettingsItem>
 
             <SettingsItem
-              id="settings-sync-webdav"
               title={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
               hint={t('settings.sync.server_url_hint', {
                 defaultValue: 'WebDAV endpoint URL (HTTPS or local/LAN HTTP)',
@@ -878,6 +878,7 @@ export function SyncSetupPanel({
               </span>
             </button>
             <button
+              id="settings-sync-recovery-key"
               type="button"
               className={`sync-segmented-btn ${unlockMethod === 'recovery' ? 'is-active' : ''}`}
               onClick={() => setUnlockMethod('recovery')}
@@ -932,7 +933,6 @@ export function SyncSetupPanel({
           </>
         ) : (
           <SettingsItem
-            id="settings-sync-recovery-key"
             title={t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
             hint={t('settings.sync.recovery_key_join_hint', {
               defaultValue:

@@ -91,6 +91,7 @@ export function SettingsContextSection(): React.JSX.Element {
   return (
     <>
       <SettingsSection
+        id="settings-vocabulary-context-presets"
         title={t('settings.context_default_title', { defaultValue: 'Polish Automation & Presets' })}
         description={t('settings.context_default_description', {
           defaultValue:

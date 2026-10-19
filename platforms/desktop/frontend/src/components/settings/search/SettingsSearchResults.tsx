@@ -1,9 +1,83 @@
 import { SearchX } from 'lucide-react';
-import type React from 'react';
-import { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SETTINGS_TAB_META } from '../settingsTabMeta';
 import { highlightMatches, type SettingsSearchHit } from './useSettingsSearch';
+
+interface SettingsSearchResultItemProps {
+  hit: SettingsSearchHit;
+  isActive: boolean;
+  searchQuery: string;
+  index: number;
+  onSelectResult: (hit: SettingsSearchHit) => void;
+  onHoverResult?: (index: number) => void;
+  isKeyboardNavRef: React.MutableRefObject<boolean>;
+}
+
+const SettingsSearchResultItem = React.memo(function SettingsSearchResultItem({
+  hit,
+  isActive,
+  searchQuery,
+  index,
+  onSelectResult,
+  onHoverResult,
+  isKeyboardNavRef,
+}: SettingsSearchResultItemProps) {
+  const meta = SETTINGS_TAB_META[hit.tab];
+  const Icon = meta?.Icon;
+
+  const breadcrumb = [hit.resolvedGroup, hit.resolvedTab, hit.resolvedSection]
+    .filter(Boolean)
+    .join(' > ');
+
+  const handleMouseEnter = () => {
+    // If user is actively using keyboard navigation, ignore stationary pointer enter events
+    if (isKeyboardNavRef.current) {
+      return;
+    }
+    onHoverResult?.(index);
+  };
+
+  const handleMouseMove = () => {
+    // If user is actively using keyboard navigation, ignore stationary pointer movement
+    if (isKeyboardNavRef.current) {
+      return;
+    }
+    onHoverResult?.(index);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onSelectResult(hit);
+    }
+  };
+
+  return (
+    <div
+      id={`settings-search-result-${hit.id}`}
+      className={`settings-search-result-item ${isActive ? 'is-active' : ''}`}
+      data-active={isActive}
+      role="option"
+      aria-selected={isActive}
+      tabIndex={-1}
+      onClick={() => onSelectResult(hit)}
+      onMouseEnter={handleMouseEnter}
+      onMouseMove={handleMouseMove}
+      onKeyDown={handleKeyDown}
+    >
+      <div className="settings-search-result-icon" aria-hidden="true">
+        {Icon ? <Icon /> : null}
+      </div>
+      <div className="settings-search-result-content">
+        <span className="settings-search-result-title">
+          {highlightMatches(hit.resolvedTitle, searchQuery)}
+        </span>
+        <span className="settings-search-result-breadcrumb">{breadcrumb}</span>
+      </div>
+    </div>
+  );
+});
 
 export interface SettingsSearchResultsProps {
   hits: readonly SettingsSearchHit[];
@@ -21,8 +95,34 @@ export function SettingsSearchResults({
   onHoverResult,
 }: SettingsSearchResultsProps): React.JSX.Element {
   const { t } = useTranslation();
+  const isKeyboardNavRef = useRef(false);
 
   useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        isKeyboardNavRef.current = true;
+      }
+    };
+    const handleMouseMove = (e: MouseEvent) => {
+      // Check actual movement to ignore synthetic mousemove events
+      if ((e.movementX ?? 0) !== 0 || (e.movementY ?? 0) !== 0) {
+        isKeyboardNavRef.current = false;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown, { capture: true });
+    window.addEventListener('mousemove', handleMouseMove, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown, { capture: true });
+      window.removeEventListener('mousemove', handleMouseMove, { capture: true });
+    };
+  }, []);
+
+  useEffect(() => {
+    // Only scroll into view when navigating via keyboard, avoiding hover jitter
+    if (!isKeyboardNavRef.current) {
+      return;
+    }
     const activeHit = hits[activeIndex];
     if (activeHit) {
       document
@@ -30,6 +130,7 @@ export function SettingsSearchResults({
         ?.scrollIntoView?.({ block: 'nearest' });
     }
   }, [activeIndex, hits]);
+
   if (hits.length === 0) {
     return (
       <div className="settings-search-results">
@@ -49,15 +150,7 @@ export function SettingsSearchResults({
   }
 
   return (
-    <div
-      id="settings-search-listbox"
-      className="settings-search-results"
-      role="listbox"
-      aria-label={t('settings.search_matches_count', {
-        count: hits.length,
-        defaultValue: `匹配项 (${hits.length})`,
-      })}
-    >
+    <div className="settings-search-results">
       <div className="settings-search-header" role="presentation" aria-hidden="true">
         <span className="settings-search-count">
           {t('settings.search_matches_count', {
@@ -67,42 +160,28 @@ export function SettingsSearchResults({
         </span>
       </div>
 
-      {hits.map((hit, index) => {
-        const meta = SETTINGS_TAB_META[hit.tab];
-        const Icon = meta?.Icon;
-        const isActive = index === activeIndex;
-
-        const breadcrumbParts = [hit.resolvedGroup, hit.resolvedTab];
-        if (hit.resolvedSection) {
-          breadcrumbParts.push(hit.resolvedSection);
-        }
-        const breadcrumb = breadcrumbParts.filter(Boolean).join(' > ');
-
-        return (
-          <button
+      <div
+        id="settings-search-listbox"
+        className="settings-search-listbox"
+        role="listbox"
+        aria-label={t('settings.search_matches_count', {
+          count: hits.length,
+          defaultValue: `匹配项 (${hits.length})`,
+        })}
+      >
+        {hits.map((hit, index) => (
+          <SettingsSearchResultItem
             key={hit.id}
-            id={`settings-search-result-${hit.id}`}
-            type="button"
-            className={`settings-search-result-item ${isActive ? 'is-active' : ''}`}
-            data-active={isActive}
-            role="option"
-            aria-selected={isActive}
-            tabIndex={-1}
-            onClick={() => onSelectResult(hit)}
-            onMouseEnter={() => onHoverResult?.(index)}
-          >
-            <div className="settings-search-result-icon" aria-hidden="true">
-              {Icon ? <Icon /> : null}
-            </div>
-            <div className="settings-search-result-content">
-              <span className="settings-search-result-title">
-                {highlightMatches(hit.resolvedTitle, searchQuery)}
-              </span>
-              <span className="settings-search-result-breadcrumb">{breadcrumb}</span>
-            </div>
-          </button>
-        );
-      })}
+            hit={hit}
+            index={index}
+            isActive={index === activeIndex}
+            searchQuery={searchQuery}
+            onSelectResult={onSelectResult}
+            onHoverResult={onHoverResult}
+            isKeyboardNavRef={isKeyboardNavRef}
+          />
+        ))}
+      </div>
     </div>
   );
 }

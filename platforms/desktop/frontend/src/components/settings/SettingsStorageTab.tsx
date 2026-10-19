@@ -818,6 +818,7 @@ export function SettingsStorageTab(): React.JSX.Element {
       >
         <div className="settings-storage-locations-grid">
           <SettingsLocationCard
+            id="settings-storage-data-dir"
             testId="settings-storage-data-dir-card"
             title={t('settings.storage.data_dir_title', { defaultValue: 'Data Directory' })}
             hint={t('settings.storage.data_dir_hint', {
@@ -835,6 +836,7 @@ export function SettingsStorageTab(): React.JSX.Element {
             onRestoreDefault={directoriesInfo?.isCustomDataDir ? handleResetDataDir : undefined}
           />
           <SettingsLocationCard
+            id="settings-storage-models-dir"
             testId="settings-storage-models-dir-card"
             title={t('settings.storage.models_dir_title', { defaultValue: 'Models Directory' })}
             hint={t('settings.storage.models_dir_hint', {
@@ -1039,7 +1041,7 @@ export function SettingsStorageTab(): React.JSX.Element {
                   />
                 </div>
 
-                <div className="settings-storage-detail-block">
+                <div id="settings-storage-cleanup" className="settings-storage-detail-block">
                   <div className="settings-storage-detail-heading">
                     {t('settings.storage.webview_title', {
                       defaultValue: 'WebView cache and browsing data',

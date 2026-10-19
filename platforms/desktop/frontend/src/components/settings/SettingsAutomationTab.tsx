@@ -409,6 +409,7 @@ export function SettingsAutomationTab(): React.JSX.Element {
       </div>
 
       <SettingsSection
+        id="settings-automation-rules"
         title={t('automation.file_rules', { defaultValue: 'Folder Watchers' })}
         description={t('automation.file_rules_description', {
           defaultValue: 'Auto-ingest dropped audio from watched folders into assigned projects.',
@@ -430,7 +431,12 @@ export function SettingsAutomationTab(): React.JSX.Element {
             </div>
           </div>
           <div className="settings-item-action">
-            <button type="button" className="btn btn-primary" onClick={beginCreateRule}>
+            <button
+              id="settings-automation-new-rule"
+              type="button"
+              className="btn btn-primary"
+              onClick={beginCreateRule}
+            >
               {t('automation.new_rule', { defaultValue: 'New Rule' })}
             </button>
           </div>

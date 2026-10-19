@@ -25,6 +25,7 @@ export function SettingsTranslationSection(): React.JSX.Element {
 
   return (
     <SettingsSection
+      id="settings-vocabulary-translation"
       title={t('settings.translation_automation_title', { defaultValue: 'Translation Automation' })}
       description={t('settings.translation_automation_description', {
         defaultValue:

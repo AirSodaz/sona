@@ -75,14 +75,14 @@ export function calculateItemScore(
   const terms = q.split(/\s+/).filter(Boolean);
 
   const matchesKeyword = (term: string) =>
-    keywords.some((k) => k === term || k.includes(term) || term.includes(k));
+    keywords.some((k) => k === term || k.includes(term) || (term.length > 2 && term.includes(k)));
 
   const hasExactKeyword = keywords.some((k) => k === q);
   const hasSubKeyword =
     !hasExactKeyword &&
-    (keywords.some((k) => k.includes(q) || q.includes(k)) ||
-      (terms.length > 1 && terms.every(matchesKeyword)));
-
+    (terms.length > 1
+      ? terms.every(matchesKeyword)
+      : keywords.some((k) => k.includes(q) || (q.length > 2 && q.includes(k))));
   if (hasExactKeyword) {
     score += 50;
   } else if (hasSubKeyword) {
@@ -121,54 +121,55 @@ export function calculateItemScore(
     return 0;
   }
 
-  // Cap matches lacking a direct title match below title-prefix threshold (80)
-  // so items whose visible title starts with the query always outrank secondary metadata hits
-  const hasTitleMatch = title.startsWith(q) || title.includes(q);
-  return Math.min(score, hasTitleMatch ? 99 : 79);
+  // Prefix matches outrank substring matches; substring matches must not exceed prefix threshold
+  const hasTitlePrefix =
+    title.startsWith(q) || (terms.length > 1 && terms.some((t) => title.startsWith(t)));
+  const hasTitleMatch =
+    hasTitlePrefix ||
+    title.includes(q) ||
+    (terms.length > 1 && terms.some((t) => title.includes(t)));
+
+  if (hasTitlePrefix) {
+    return Math.min(score, 99);
+  }
+  if (hasTitleMatch) {
+    return Math.min(score, 79);
+  }
+  return Math.min(score, 69);
 }
 /**
  * Splits text by case-insensitive query substring and wraps matches in
  * `<mark className="settings-search-highlight">`.
  */
 export function highlightMatches(text: string, query: string): React.ReactNode {
-  const trimmed = query.trim();
-  if (!trimmed || !text) {
+  const terms = query.trim().split(/\s+/).filter(Boolean);
+  if (terms.length === 0 || !text) {
     return text;
   }
 
-  const lowerText = text.toLowerCase();
-  const lowerQuery = trimmed.toLowerCase();
-  const firstIndex = lowerText.indexOf(lowerQuery);
+  // Unique lowercased terms sorted descending by length to prioritize longer phrases
+  const uniqueTerms = Array.from(new Set(terms.map((t) => t.toLowerCase())));
+  const pattern = uniqueTerms
+    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .sort((a, b) => b.length - a.length)
+    .join('|');
 
-  if (firstIndex === -1) {
+  const regex = new RegExp(`(${pattern})`, 'gi');
+  const parts = text.split(regex);
+  if (parts.length === 1) {
     return text;
   }
 
-  const nodes: React.ReactNode[] = [];
-  let currentIndex = 0;
-
-  while (currentIndex < text.length) {
-    const matchIndex = lowerText.indexOf(lowerQuery, currentIndex);
-    if (matchIndex === -1) {
-      nodes.push(text.slice(currentIndex));
-      break;
-    }
-
-    if (matchIndex > currentIndex) {
-      nodes.push(text.slice(currentIndex, matchIndex));
-    }
-
-    const matchEnd = matchIndex + lowerQuery.length;
-    nodes.push(
-      React.createElement(
+  const nodes: React.ReactNode[] = parts.map((part, index) => {
+    if (uniqueTerms.includes(part.toLowerCase())) {
+      return React.createElement(
         'mark',
-        { key: matchIndex, className: 'settings-search-highlight' },
-        text.slice(matchIndex, matchEnd)
-      )
-    );
-
-    currentIndex = matchEnd;
-  }
+        { key: index, className: 'settings-search-highlight' },
+        part
+      );
+    }
+    return part;
+  });
 
   return React.createElement(React.Fragment, null, ...nodes);
 }

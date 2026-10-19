@@ -201,6 +201,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
       {/* 1. Service Lifecycle & Status */}
       <SettingsSection
+        id="settings-mcp-servers"
         title={t('settings.mcp.status_title', { defaultValue: 'Service Lifecycle & Status' })}
         icon={<Activity size={18} />}
       >
@@ -325,6 +326,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
       {/* 2. Security & Permissions Policy */}
       <SettingsSection
+        id="settings-mcp-permission"
         title={t('settings.mcp.security_title', { defaultValue: 'Security & Permissions' })}
         icon={<Shield size={18} />}
       >
@@ -683,6 +685,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
       {/* 4. Live Activity & Audit Stream */}
       <SettingsSection
+        id="settings-mcp-logs"
         title={t('settings.mcp.audit_log_title', {
           defaultValue: 'Live Activity & Audit Stream',
         })}

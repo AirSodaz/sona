@@ -930,7 +930,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'llm-custom-prompts',
     tab: 'llm_service',
-    targetId: 'settings-llm-custom-prompts',
+    targetId: 'settings-llm-custom-provider',
     groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.custom_provider',

@@ -20,23 +20,23 @@ export interface SettingsTabMetaItem {
 }
 
 export const SETTINGS_TAB_META: Record<SettingsTab, SettingsTabMetaItem> = {
-  general: { labelKey: 'settings.general', Icon: GeneralIcon },
+  general: { labelKey: 'settings.general', defaultValue: 'General', Icon: GeneralIcon },
   dashboard: {
     labelKey: 'settings.dashboard.title',
     defaultValue: 'Dashboard',
     Icon: () => <BarChart3 size={18} />,
   },
-  shortcuts: { labelKey: 'shortcuts.title', Icon: KeyboardIcon },
-  about: { labelKey: 'settings.about', Icon: InfoIcon },
+  shortcuts: { labelKey: 'shortcuts.title', defaultValue: 'Shortcuts', Icon: KeyboardIcon },
+  about: { labelKey: 'settings.about', defaultValue: 'About', Icon: InfoIcon },
   microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
-  models: { labelKey: 'settings.model_hub', Icon: ModelIcon },
+  models: { labelKey: 'settings.model_hub', defaultValue: 'Model Settings', Icon: ModelIcon },
   subtitle: {
     labelKey: 'settings.subtitle_voice_typing_title',
     defaultValue: 'Subtitles & Voice Typing',
     Icon: SubtitleIcon,
   },
-  vocabulary: { labelKey: 'settings.vocabulary', Icon: BookIcon },
-  llm_service: { labelKey: 'settings.llm.title', Icon: RobotIcon },
+  vocabulary: { labelKey: 'settings.vocabulary', defaultValue: 'Vocabulary', Icon: BookIcon },
+  llm_service: { labelKey: 'settings.llm.title', defaultValue: 'LLM Service', Icon: RobotIcon },
   automation: { labelKey: 'settings.automation', defaultValue: 'Automation', Icon: AutomationIcon },
   storage: {
     labelKey: 'settings.storage.title',

@@ -148,7 +148,7 @@ export function SettingsAboutTab(): JSX.Element {
             style={{ width: '100%', height: '100%', borderRadius: 'inherit' }}
           />
         </div>
-        <div className="about-title">
+        <div id="settings-about-version" className="about-title">
           <h2>Sona</h2>
           <span className={`about-version-badge channel-${channel}`}>
             <span className="about-version-text">v{packageJson.version}</span>
@@ -162,6 +162,7 @@ export function SettingsAboutTab(): JSX.Element {
       {/* Info Cards */}
       <div className="about-cards">
         <button
+          id="settings-about-homepage"
           className="about-card about-card-clickable"
           onClick={handleOpenHomepage}
           aria-label={t('settings.about_source_code')}
@@ -179,6 +180,7 @@ export function SettingsAboutTab(): JSX.Element {
         </button>
 
         <button
+          id="settings-about-logs"
           className="about-card about-card-clickable"
           onClick={handleOpenLogFolder}
           aria-label={t('settings.about_open_logs')}
@@ -207,7 +209,9 @@ export function SettingsAboutTab(): JSX.Element {
       </div>
 
       {/* Actions */}
-      <div className="about-actions">{renderUpdateContent()}</div>
+      <div id="settings-about-check-updates" className="about-actions">
+        {renderUpdateContent()}
+      </div>
 
       {/* Footer */}
       <div className="about-footer">

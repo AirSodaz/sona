@@ -751,6 +751,7 @@ export function SettingsModelsTab({
         description={t('settings.model_settings_description')}
       />
       <SettingsSection
+        id="settings-model-hub"
         title={t('settings.model_selection')}
         description={t('settings.model_selection_desc')}
         icon={<Settings2 size={20} />}
@@ -1353,6 +1354,7 @@ export function SettingsModelsTab({
 
               {isBatchScenario && (
                 <SettingsItem
+                  id="settings-batch-vad"
                   title={t('settings.batch_vad_enabled')}
                   hint={
                     isBatchVadForced

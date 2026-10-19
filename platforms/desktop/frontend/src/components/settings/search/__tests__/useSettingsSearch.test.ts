@@ -161,4 +161,12 @@ describe('highlightMatches', () => {
     const markElements = children.filter((c) => React.isValidElement(c) && c.type === 'mark');
     expect(markElements.length).toBe(2);
   });
+  it('highlights multiple distinct query terms', () => {
+    const rendered = highlightMatches('API Key Provider', 'api provider');
+    expect(React.isValidElement(rendered)).toBe(true);
+    const fragment = rendered as React.ReactElement<{ children: React.ReactNode[] }>;
+    const children = React.Children.toArray(fragment.props.children);
+    const markElements = children.filter((c) => React.isValidElement(c) && c.type === 'mark');
+    expect(markElements.length).toBe(2);
+  });
 });

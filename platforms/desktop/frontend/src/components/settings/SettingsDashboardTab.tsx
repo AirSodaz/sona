@@ -164,6 +164,7 @@ export function SettingsDashboardTab({
       />
 
       <SettingsSection
+        id="settings-dashboard-overview"
         title={t('settings.dashboard.global_content', { defaultValue: 'Global Content' })}
         description={t('settings.dashboard.global_content_description', {
           defaultValue:
@@ -188,6 +189,7 @@ export function SettingsDashboardTab({
       </SettingsSection>
 
       <SettingsSection
+        id="settings-dashboard-llm"
         title={t('settings.dashboard.llm_usage', { defaultValue: 'LLM Usage' })}
         description={t('settings.dashboard.llm_usage_description', {
           defaultValue:

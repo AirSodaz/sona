@@ -26,10 +26,10 @@
 
 .settings-search-bar:focus-within {
   background: var(--apple-field-focus-surface, var(--color-bg-primary, #ffffff));
-  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #3b82f6));
+  border-color: var(--apple-field-focus-border, var(--color-accent-blue, #3b82f6));
   box-shadow: var(
     --apple-field-focus-shadow,
-    0 0 0 2px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 18%, transparent)
+    0 0 0 2px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 18%, transparent)
   );
 }
 
@@ -41,7 +41,7 @@
 }
 
 .settings-search-bar:focus-within .settings-search-icon {
-  color: var(--color-accent-primary, #3b82f6);
+  color: var(--color-accent-blue, #3b82f6);
 }
 
 /* Specificity overrides to neutralize controls.css global input styles without !important */
@@ -133,7 +133,7 @@
 
 .settings-search-clear:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 42%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 42%, transparent);
   color: var(--color-text-primary, #111827);
 }
 /* --------------------------------------------------------------------------
@@ -173,6 +173,12 @@
   color: var(--color-text-tertiary, #9ca3af);
 }
 
+.settings-search-listbox {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 /* --------------------------------------------------------------------------
    Result Item Card
    -------------------------------------------------------------------------- */
@@ -190,6 +196,8 @@
   cursor: pointer;
   text-align: left;
   font-family: inherit;
+  user-select: none;
+  box-sizing: border-box;
   transition:
     background var(--transition-fast, 0.15s ease),
     color var(--transition-fast, 0.15s ease),
@@ -210,7 +218,7 @@
 
 .settings-search-result-item:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 2px var(--color-accent-primary, #3b82f6);
+  box-shadow: 0 0 0 2px var(--color-accent-blue, #3b82f6);
 }
 
 .settings-search-result-icon {
@@ -257,7 +265,7 @@
    -------------------------------------------------------------------------- */
 
 .settings-search-highlight {
-  background: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 18%, transparent);
+  background: color-mix(in srgb, var(--color-accent-blue, #3b82f6) 18%, transparent);
   color: var(--color-text-primary, #111827);
   font-weight: 600;
   border-radius: 2px;
@@ -303,10 +311,10 @@
 
 @keyframes settings-spotlight-pulse {
   0% {
-    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-primary, #3b82f6) 50%, transparent);
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-blue, #3b82f6) 50%, transparent);
   }
   30% {
-    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 40%, transparent);
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-blue, #3b82f6) 40%, transparent);
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
