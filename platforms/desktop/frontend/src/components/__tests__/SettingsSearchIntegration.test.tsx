@@ -127,11 +127,12 @@ describe('Settings search integration', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useDialogStore.setState({ isOpen: false });
     useTranscriptStore.setState({ config: buildTestConfig() });
     vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
     vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
   });
-
   it('renders search input in the sidebar header', () => {
     render(<Settings isOpen={true} onClose={onClose} />);
     const searchInput = screen.getByPlaceholderText('搜索设置...');
@@ -190,68 +191,58 @@ describe('Settings search integration', () => {
 
   it('clicking a result calls navigateToTab and triggers element scrolling', async () => {
     const scrollIntoViewMock = vi.fn();
-    const targetElement = document.createElement('div');
-    targetElement.id = 'settings-language';
-    targetElement.scrollIntoView = scrollIntoViewMock;
-    document.body.appendChild(targetElement);
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
-    try {
-      render(<Settings isOpen={true} onClose={onClose} />);
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
 
-      const searchInput = screen.getByPlaceholderText('搜索设置...');
-      fireEvent.change(searchInput, { target: { value: '语言' } });
+    const searchInput = screen.getByPlaceholderText('搜索设置...');
+    fireEvent.change(searchInput, { target: { value: '语言' } });
 
-      const options = screen.getAllByRole('option');
-      expect(options.length).toBeGreaterThan(0);
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
 
-      // Click the first result (general-language)
-      fireEvent.click(options[0]);
+    // Click the first result (general-language)
+    fireEvent.click(options[0]);
 
-      // Element should be scrolled and class added
-      await waitFor(() => {
-        expect(scrollIntoViewMock).toHaveBeenCalled();
-      });
-      expect(targetElement.classList.contains('settings-item--highlighted')).toBe(true);
-    } finally {
-      document.body.removeChild(targetElement);
-    }
+    // Real element in DOM should be scrolled and class added
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    });
+    const targetElement = document.getElementById('settings-language');
+    expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
   });
 
   it('navigates results with ArrowDown / ArrowUp and selects with Enter', async () => {
     const scrollIntoViewMock = vi.fn();
-    const targetElement = document.createElement('div');
-    targetElement.id = 'settings-language';
-    targetElement.scrollIntoView = scrollIntoViewMock;
-    document.body.appendChild(targetElement);
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
-    try {
-      render(<Settings isOpen={true} onClose={onClose} />);
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
 
-      const searchInput = screen.getByPlaceholderText('搜索设置...');
-      fireEvent.change(searchInput, { target: { value: '语言' } });
+    const searchInput = screen.getByPlaceholderText('搜索设置...');
+    fireEvent.change(searchInput, { target: { value: '语言' } });
 
-      const options = screen.getAllByRole('option');
-      expect(options[0].getAttribute('data-active')).toBe('true');
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(1);
+    expect(options[0].getAttribute('data-active')).toBe('true');
 
-      // Arrow down
-      fireEvent.keyDown(searchInput, { key: 'ArrowDown', code: 'ArrowDown' });
-      if (options.length > 1) {
-        expect(options[1].getAttribute('data-active')).toBe('true');
-      }
+    // Arrow down
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown', code: 'ArrowDown' });
+    expect(options[1].getAttribute('data-active')).toBe('true');
 
-      // Arrow up back to 0
-      fireEvent.keyDown(searchInput, { key: 'ArrowUp', code: 'ArrowUp' });
-      expect(options[0].getAttribute('data-active')).toBe('true');
+    // Arrow up back to 0
+    fireEvent.keyDown(searchInput, { key: 'ArrowUp', code: 'ArrowUp' });
+    expect(options[0].getAttribute('data-active')).toBe('true');
 
-      // Enter selects active result
-      fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+    scrollIntoViewMock.mockClear();
 
-      await waitFor(() => {
-        expect(scrollIntoViewMock).toHaveBeenCalled();
-      });
-    } finally {
-      document.body.removeChild(targetElement);
-    }
+    // Enter selects active result
+    fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
+
+    await waitFor(() => {
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+    });
   });
 
   it('has accessible aria-label on search input', () => {
@@ -276,34 +267,77 @@ describe('Settings search integration', () => {
       useDialogStore.setState({ isOpen: false });
     }
   });
-  it('does not trigger selection on Enter during IME composition', () => {
+  it('does not trigger selection on Enter during IME composition', async () => {
     const scrollIntoViewMock = vi.fn();
-    const targetElement = document.createElement('div');
-    targetElement.id = 'settings-language';
-    targetElement.scrollIntoView = scrollIntoViewMock;
-    document.body.appendChild(targetElement);
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
-    try {
-      render(<Settings isOpen={true} onClose={onClose} />);
-      const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
-      fireEvent.change(searchInput, { target: { value: '语言' } });
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
 
-      const options = screen.getAllByRole('option');
-      expect(options.length).toBeGreaterThan(0);
+    const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: '语言' } });
 
-      fireEvent.keyDown(searchInput, {
-        key: 'Enter',
-        code: 'Enter',
-        nativeEvent: { isComposing: true } as unknown as KeyboardEvent,
-      });
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
 
-      // Search query remains intact and selection was suppressed
-      expect(searchInput.value).toBe('语言');
-      expect(scrollIntoViewMock).not.toHaveBeenCalled();
-      expect(targetElement.classList.contains('settings-item--highlighted')).toBe(false);
-    } finally {
-      document.body.removeChild(targetElement);
-    }
+    scrollIntoViewMock.mockClear();
+
+    fireEvent.keyDown(searchInput, {
+      key: 'Enter',
+      code: 'Enter',
+      isComposing: true,
+    });
+
+    // Search query remains intact and selection was suppressed
+    expect(searchInput.value).toBe('语言');
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+    const targetElement = document.getElementById('settings-language');
+    expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(false);
+  });
+
+  it('pressing Escape with whitespace in input clears input without closing modal', () => {
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
+    fireEvent.change(searchInput, { target: { value: '   ' } });
+    expect(searchInput.value).toBe('   ');
+
+    fireEvent.keyDown(searchInput, { key: 'Escape', code: 'Escape' });
+
+    expect(searchInput.value).toBe('');
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.querySelector('.settings-tabs-container')).not.toBeNull();
+  });
+
+  it('selecting a result on a different tab switches the active tab and scrolls target', async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
+
+    const searchInput = screen.getByPlaceholderText('搜索设置...');
+    fireEvent.change(searchInput, { target: { value: '模型服务商' } });
+
+    const options = screen.getAllByRole('option');
+    expect(options.length).toBeGreaterThan(0);
+
+    scrollIntoViewMock.mockClear();
+    fireEvent.click(options[0]);
+
+    await waitFor(() => {
+      const activePane = document.querySelector(
+        '[data-settings-tab-pane="llm_service"]:not([hidden])'
+      );
+      expect(activePane).not.toBeNull();
+    });
+
+    await waitFor(() => {
+      const targetElement = document.getElementById('settings-llm-provider-list');
+      expect(targetElement).not.toBeNull();
+      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+      expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
+    });
   });
 
   it('renders shortcut hint when empty and clear button when typing', () => {

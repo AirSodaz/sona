@@ -119,26 +119,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
       'zhenduan',
     ],
   },
-  {
-    id: 'general-backup-export',
-    tab: 'general',
-    targetId: 'settings-backup-export',
-    groupKey: 'settings.group.general',
-    tabKey: 'settings.general',
-    titleKey: 'settings.backup.export_title',
-    hintKey: 'settings.backup.export_hint',
-    keywords: ['backup', 'export', 'archive', 'tar', '备份', '导出', '数据备份', 'beifen'],
-  },
-  {
-    id: 'general-backup-import',
-    tab: 'general',
-    targetId: 'settings-backup-import',
-    groupKey: 'settings.group.general',
-    tabKey: 'settings.general',
-    titleKey: 'settings.backup.import_title',
-    hintKey: 'settings.backup.import_hint',
-    keywords: ['restore', 'import', 'recover', '恢复', '导入', '还原', 'huifu', 'daoru'],
-  },
 
   // ---------------------------------------------------------------------------
   // Dashboard Tab
@@ -908,7 +888,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'llm-api-keys',
     tab: 'llm_service',
-    targetId: 'settings-llm-api-keys',
+    targetId: 'settings-llm-provider-list',
     groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.api_key',

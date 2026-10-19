@@ -31,9 +31,10 @@ export function resolveDisplayTitle(
   t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   const rawTitle = t(item.titleKey, { defaultValue: '' });
-  return rawTitle && rawTitle !== item.titleKey
-    ? rawTitle
-    : t(item.titleKey, { defaultValue: item.id.replace(/-/g, ' ') }) || item.id;
+  if (rawTitle && rawTitle !== item.titleKey) {
+    return rawTitle;
+  }
+  return item.id.replace(/-/g, ' ');
 }
 
 export function calculateItemScore(
@@ -65,15 +66,22 @@ export function calculateItemScore(
   }
 
   // If title is an exact match (+100), it's already the highest relevance match.
-  // Don't add redundant keyword or hint scores for duplicate terms.
   if (title === q) {
     return score;
   }
 
   // Keyword / alias matching
   const keywords = (item.keywords || []).map((k) => k.toLowerCase());
+  const terms = q.split(/\s+/).filter(Boolean);
+
+  const matchesKeyword = (term: string) =>
+    keywords.some((k) => k === term || k.includes(term) || term.includes(k));
+
   const hasExactKeyword = keywords.some((k) => k === q);
-  const hasSubKeyword = !hasExactKeyword && keywords.some((k) => k.includes(q));
+  const hasSubKeyword =
+    !hasExactKeyword &&
+    (keywords.some((k) => k.includes(q) || q.includes(k)) ||
+      (terms.length > 1 && terms.every(matchesKeyword)));
 
   if (hasExactKeyword) {
     score += 50;
@@ -82,17 +90,41 @@ export function calculateItemScore(
   }
 
   // Hint matching
-  if (hint?.includes(q)) {
+  if (
+    hint &&
+    (hint.includes(q) || (terms.length > 1 && terms.every((term) => hint.includes(term))))
+  ) {
     score += 30;
   }
 
   // Section or Tab title matching
-  if (section?.includes(q) || tab?.includes(q)) {
+  if (
+    section?.includes(q) ||
+    tab?.includes(q) ||
+    (terms.length > 1 &&
+      (terms.every((term) => section.includes(term)) || terms.every((term) => tab.includes(term))))
+  ) {
     score += 20;
   }
 
-  // Cap partial/additive matches at 99 so exact title matches always top the list
-  return Math.min(score, 99);
+  // Multi-token match across title + keywords + hint
+  if (terms.length > 1 && score === 0) {
+    const allTokensMatch = terms.every(
+      (term) => title.includes(term) || matchesKeyword(term) || hint.includes(term)
+    );
+    if (allTokensMatch) {
+      score += 45;
+    }
+  }
+
+  if (score === 0) {
+    return 0;
+  }
+
+  // Cap matches lacking a direct title match below title-prefix threshold (80)
+  // so items whose visible title starts with the query always outrank secondary metadata hits
+  const hasTitleMatch = title.startsWith(q) || title.includes(q);
+  return Math.min(score, hasTitleMatch ? 99 : 79);
 }
 /**
  * Splits text by case-insensitive query substring and wraps matches in

@@ -60,6 +60,30 @@ describe('calculateItemScore', () => {
     expect(calculateItemScore(item, '', mockTranslate)).toBe(0);
     expect(calculateItemScore(item, '   ', mockTranslate)).toBe(0);
   });
+
+  it('supports compound CJK queries where query contains keyword', () => {
+    const shortcutItem = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'shortcuts-record')!;
+    expect(shortcutItem).toBeDefined();
+
+    // User searches for "快捷键设置" while keyword is "快捷键"
+    const score = calculateItemScore(shortcutItem, '快捷键设置', mockTranslate);
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it('supports multi-word query tokens', () => {
+    const llmItem = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'llm-api-keys')!;
+    expect(llmItem).toBeDefined();
+
+    const score = calculateItemScore(llmItem, 'api key', mockTranslate);
+    expect(score).toBeGreaterThan(0);
+  });
+
+  it('caps items lacking title matches below title prefix threshold (80)', () => {
+    const item = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'llm-providers')!;
+    // Query matches keyword + hint + tab but NOT title
+    const score = calculateItemScore(item, 'deepseek', mockTranslate);
+    expect(score).toBeLessThanOrEqual(79);
+  });
 });
 
 describe('useSettingsSearch hook', () => {

@@ -421,7 +421,7 @@ export function SettingsLLMServiceTab({
             })}
           </div>
         )}
-        <div className="custom-provider-actions">
+        <div id="settings-llm-custom-prompts" className="custom-provider-actions">
           <button type="button" className="btn btn-secondary" onClick={openAddProvider}>
             <Plus size={16} />
             <span>{t('settings.llm.add_custom_provider')}</span>

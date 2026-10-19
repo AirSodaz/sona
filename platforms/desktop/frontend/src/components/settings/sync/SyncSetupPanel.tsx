@@ -496,7 +496,7 @@ export function SyncSetupPanel({
             'Configure your storage endpoint and credentials for encrypted data synchronization.',
         })}
       >
-        <div className="sync-pairing-banner">
+        <div id="settings-sync-pairing" className="sync-pairing-banner">
           <div className="sync-pairing-banner-text">
             <Link2 size={15} />
             <span>
@@ -893,6 +893,7 @@ export function SyncSetupPanel({
         {unlockMethod === 'password' ? (
           <>
             <SettingsItem
+              id="settings-sync-encryption"
               title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
               hint={t('settings.sync.master_password_hint', {
                 defaultValue:
@@ -931,6 +932,7 @@ export function SyncSetupPanel({
           </>
         ) : (
           <SettingsItem
+            id="settings-sync-recovery-key"
             title={t('settings.sync.use_recovery_key', { defaultValue: 'Emergency recovery key' })}
             hint={t('settings.sync.recovery_key_join_hint', {
               defaultValue:

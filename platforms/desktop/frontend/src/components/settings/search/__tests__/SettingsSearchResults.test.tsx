@@ -72,6 +72,10 @@ describe('SettingsSearchResults component', () => {
     expect(screen.getByText('通用设置 > 常规 > 基本设置')).toBeDefined();
     expect(screen.getByText('智能增强 > 大模型服务')).toBeDefined();
 
+    const header = container.querySelector('.settings-search-header');
+    expect(header?.getAttribute('role')).toBe('presentation');
+    expect(header?.getAttribute('aria-hidden')).toBe('true');
+
     const breadcrumbElements = container.querySelectorAll('.settings-search-result-breadcrumb');
     expect(breadcrumbElements).toHaveLength(2);
     expect(breadcrumbElements[0]?.getAttribute('title')).toBeNull();
@@ -92,9 +96,10 @@ describe('SettingsSearchResults component', () => {
 
     const buttons = screen.getAllByRole('option');
     expect(buttons[0].getAttribute('data-active')).toBe('false');
+    expect(buttons[0].getAttribute('aria-selected')).toBe('false');
     expect(buttons[1].getAttribute('data-active')).toBe('true');
+    expect(buttons[1].getAttribute('aria-selected')).toBe('true');
   });
-
   it('clicking an item triggers onSelectResult callback', () => {
     const onSelectResult = vi.fn();
     render(
@@ -111,5 +116,39 @@ describe('SettingsSearchResults component', () => {
 
     expect(onSelectResult).toHaveBeenCalledTimes(1);
     expect(onSelectResult).toHaveBeenCalledWith(mockHits[0]);
+  });
+
+  it('hovering an item triggers onHoverResult callback', () => {
+    const onHoverResult = vi.fn();
+    render(
+      <SettingsSearchResults
+        hits={mockHits}
+        searchQuery="语"
+        activeIndex={0}
+        onSelectResult={vi.fn()}
+        onHoverResult={onHoverResult}
+      />
+    );
+
+    const buttons = screen.getAllByRole('option');
+    fireEvent.mouseEnter(buttons[1]);
+
+    expect(onHoverResult).toHaveBeenCalledTimes(1);
+    expect(onHoverResult).toHaveBeenCalledWith(1);
+  });
+
+  it('highlights search query matches with mark element', () => {
+    const { container } = render(
+      <SettingsSearchResults
+        hits={mockHits}
+        searchQuery="语"
+        activeIndex={0}
+        onSelectResult={vi.fn()}
+      />
+    );
+
+    const marks = container.querySelectorAll('mark.settings-search-highlight');
+    expect(marks.length).toBeGreaterThan(0);
+    expect(marks[0].textContent).toBe('语');
   });
 });

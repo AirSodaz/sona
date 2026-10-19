@@ -304,19 +304,23 @@
 @keyframes settings-spotlight-pulse {
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-primary, #3b82f6) 50%, transparent);
-    background-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 12%, transparent);
   }
   30% {
     box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 40%, transparent);
-    background-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 10%, transparent);
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
-    background-color: transparent;
   }
 }
 
 .settings-item--highlighted {
+  position: relative;
+  z-index: 1;
   animation: settings-spotlight-pulse 1.6s ease-out;
-  border-radius: var(--radius-md, 6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-item--highlighted {
+    animation: none;
+  }
 }

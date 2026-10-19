@@ -1,5 +1,6 @@
 import { SearchX } from 'lucide-react';
 import type React from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SETTINGS_TAB_META } from '../settingsTabMeta';
 import { highlightMatches, type SettingsSearchHit } from './useSettingsSearch';
@@ -21,6 +22,14 @@ export function SettingsSearchResults({
 }: SettingsSearchResultsProps): React.JSX.Element {
   const { t } = useTranslation();
 
+  useEffect(() => {
+    const activeHit = hits[activeIndex];
+    if (activeHit) {
+      document
+        .getElementById(`settings-search-result-${activeHit.id}`)
+        ?.scrollIntoView?.({ block: 'nearest' });
+    }
+  }, [activeIndex, hits]);
   if (hits.length === 0) {
     return (
       <div className="settings-search-results">
@@ -49,7 +58,7 @@ export function SettingsSearchResults({
         defaultValue: `匹配项 (${hits.length})`,
       })}
     >
-      <div className="settings-search-header" role="presentation">
+      <div className="settings-search-header" role="presentation" aria-hidden="true">
         <span className="settings-search-count">
           {t('settings.search_matches_count', {
             count: hits.length,
@@ -67,7 +76,7 @@ export function SettingsSearchResults({
         if (hit.resolvedSection) {
           breadcrumbParts.push(hit.resolvedSection);
         }
-        const breadcrumb = breadcrumbParts.join(' > ');
+        const breadcrumb = breadcrumbParts.filter(Boolean).join(' > ');
 
         return (
           <button

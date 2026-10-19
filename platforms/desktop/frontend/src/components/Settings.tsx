@@ -270,27 +270,6 @@ export function Settings({
     [mountedTabs, renderedTab, shouldRender]
   );
 
-  const navigateToTab = useCallback(
-    (nextTab: (typeof SETTINGS_TABS)[number]) => {
-      markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
-      setActiveTab(nextTab);
-      setPendingSubTab(null);
-      requestAnimationFrame(() => {
-        const btn = document.getElementById(`settings-tab-${nextTab}`);
-        btn?.focus();
-      });
-    },
-    [renderedTab, setActiveTab]
-  );
-
-  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
-    const scrolled = e.currentTarget.scrollTop > 4;
-    setIsSidebarScrolled((prev) => (prev !== scrolled ? scrolled : prev));
-  }, []);
-  const navigationContextValue = {
-    activeTab: renderedTab,
-    navigateToTab,
-  };
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -317,6 +296,33 @@ export function Settings({
     });
   }, []);
 
+  const navigateToTab = useCallback(
+    (nextTab: (typeof SETTINGS_TABS)[number]) => {
+      markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
+      setActiveTab(nextTab);
+      setPendingSubTab(null);
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+        scrollRafRef.current = null;
+      }
+      clearHighlight();
+      requestAnimationFrame(() => {
+        const btn = document.getElementById(`settings-tab-${nextTab}`);
+        btn?.focus();
+      });
+    },
+    [clearHighlight, renderedTab, setActiveTab]
+  );
+
+  const handleSidebarScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    const scrolled = e.currentTarget.scrollTop > 4;
+    setIsSidebarScrolled((prev) => (prev !== scrolled ? scrolled : prev));
+  }, []);
+  const navigationContextValue = {
+    activeTab: renderedTab,
+    navigateToTab,
+  };
+
   useEffect(() => {
     return () => {
       if (scrollRafRef.current !== null) {
@@ -325,7 +331,6 @@ export function Settings({
       clearHighlight();
     };
   }, [clearHighlight]);
-
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery('');
@@ -367,7 +372,7 @@ export function Settings({
 
       const findAndScroll = () => {
         const el = document.getElementById(targetId);
-        if (el) {
+        if (el && !el.closest('[hidden]')) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
           el.classList.add('settings-item--highlighted');
           highlightedElementRef.current = el;
@@ -414,7 +419,7 @@ export function Settings({
         if (isAnyDialogOpen()) {
           return;
         }
-        if (searchQuery.trim().length > 0) {
+        if (searchQuery.length > 0) {
           e.preventDefault();
           e.stopPropagation();
           setSearchQuery('');
@@ -525,7 +530,8 @@ export function Settings({
         return;
       }
 
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+      const isSearchShortcut = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (isSearchShortcut && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         e.stopPropagation();
         searchInputRef.current?.focus();
@@ -547,7 +553,7 @@ export function Settings({
 
     window.addEventListener('keydown', handleGlobalKeyDown);
     return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [isOpen, renderedTab, navigateToTab]);
+  }, [isMac, isOpen, navigateToTab, renderedTab]);
 
   const handleTabKeyDown = (e: React.KeyboardEvent) => {
     const currentIndex = SETTINGS_TABS.indexOf(renderedTab as (typeof SETTINGS_TABS)[number]);
@@ -590,7 +596,7 @@ export function Settings({
       onKeyDown={
         isOpen
           ? (e) => {
-              if (e.key === 'Escape' && searchQuery.trim().length > 0 && !isAnyDialogOpen()) {
+              if (e.key === 'Escape' && searchQuery.length > 0 && !isAnyDialogOpen()) {
                 e.preventDefault();
                 e.stopPropagation();
                 setSearchQuery('');
