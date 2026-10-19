@@ -4,6 +4,7 @@ export interface SettingsSearchItem {
   id: string;
   tab: SettingsTab;
   subTab?: string;
+  promptsSubTab?: 'polish' | 'translation' | 'summary';
   targetId?: string;
   groupKey: string;
   tabKey: string;
@@ -18,7 +19,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   // General Tab
   // ---------------------------------------------------------------------------
   {
-    id: 'general.language',
+    id: 'general-language',
     tab: 'general',
     targetId: 'settings-language',
     groupKey: 'settings.group.general',
@@ -222,6 +223,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'shortcuts-pause',
     tab: 'shortcuts',
+    targetId: 'settings-shortcut-pause',
     groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     sectionKey: 'shortcuts.section_live',
@@ -234,7 +236,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-shortcut-playback',
     groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
-    sectionKey: 'shortcuts.section_playback',
     titleKey: 'shortcuts.section_playback',
     keywords: [
       'play',
@@ -256,7 +257,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-shortcut-search',
     groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
-    sectionKey: 'shortcuts.section_search',
     titleKey: 'shortcuts.section_search',
     keywords: ['search', 'find', 'navigate', 'ctrl+f', 'cmd+f', '搜索快捷键', '查找', '匹配'],
   },
@@ -266,7 +266,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-shortcut-editor',
     groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
-    sectionKey: 'shortcuts.section_editor',
     titleKey: 'shortcuts.section_editor',
     keywords: [
       'editor',
@@ -493,7 +492,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'models',
-    targetId: 'settings-vad-model',
+    targetId: 'settings-vad-path',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.vad_models',
@@ -524,7 +523,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-punctuation',
     tab: 'models',
-    targetId: 'settings-punctuation-model',
+    targetId: 'settings-punctuation-path',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.punctuation_models',
@@ -533,7 +532,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-mirror',
     tab: 'models',
-    targetId: 'settings-mirror-picker',
+    targetId: 'settings-download-mirror',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.model_download_mirror',
@@ -602,7 +601,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-subtitle-appearance',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
-    sectionKey: 'settings.subtitle_appearance_title',
     titleKey: 'settings.subtitle_appearance_title',
     hintKey: 'settings.subtitle_appearance_desc',
     keywords: [
@@ -791,6 +789,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'vocabulary-context-presets',
     tab: 'vocabulary',
     subTab: 'prompts',
+    promptsSubTab: 'polish',
     targetId: 'settings-vocabulary-context-presets',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
@@ -812,6 +811,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'vocabulary-translation',
     tab: 'vocabulary',
     subTab: 'prompts',
+    promptsSubTab: 'translation',
     targetId: 'settings-vocabulary-translation',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
@@ -832,6 +832,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'vocabulary-summary-templates',
     tab: 'vocabulary',
     subTab: 'prompts',
+    promptsSubTab: 'summary',
     targetId: 'settings-vocabulary-summary-templates',
     groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
@@ -879,7 +880,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-llm-provider-list',
     groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
-    sectionKey: 'settings.llm.credentials_section',
     titleKey: 'settings.llm.credentials_section',
     hintKey: 'settings.llm.credentials_hint',
     keywords: [
@@ -932,7 +932,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     targetId: 'settings-llm-models-config',
     groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
-    sectionKey: 'settings.llm.feature_models',
     titleKey: 'settings.llm.feature_models',
     hintKey: 'settings.llm.feature_models_runtime_hint',
     keywords: [
@@ -1087,7 +1086,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'storage-retention',
     tab: 'storage',
-    targetId: 'settings-storage-retention',
+    targetId: 'settings-history-audio-retention',
     groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.storage.title',
     titleKey: 'settings.storage.retention_label',

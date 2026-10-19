@@ -16,7 +16,7 @@ vi.mock('react-i18next', () => ({
 
 const mockHits: SettingsSearchHit[] = [
   {
-    id: 'general.language',
+    id: 'general-language',
     tab: 'general',
     targetId: 'settings-language',
     groupKey: 'settings.group.general',

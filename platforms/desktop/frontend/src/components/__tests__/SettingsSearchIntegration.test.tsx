@@ -204,7 +204,7 @@ describe('Settings search integration', () => {
       const options = screen.getAllByRole('option');
       expect(options.length).toBeGreaterThan(0);
 
-      // Click the first result (general.language)
+      // Click the first result (general-language)
       fireEvent.click(options[0]);
 
       // Element should be scrolled and class added
@@ -268,14 +268,41 @@ describe('Settings search integration', () => {
 
     useDialogStore.setState({ isOpen: true });
     try {
-      const modal = document.querySelector('.settings-modal');
-      expect(modal).not.toBeNull();
-      fireEvent.keyDown(modal!, { key: 'Escape', code: 'Escape' });
+      fireEvent.keyDown(searchInput, { key: 'Escape', code: 'Escape' });
 
       // Search query is NOT cleared because a dialog is open
       expect(searchInput.value).toBe('语言');
     } finally {
       useDialogStore.setState({ isOpen: false });
+    }
+  });
+  it('does not trigger selection on Enter during IME composition', () => {
+    const scrollIntoViewMock = vi.fn();
+    const targetElement = document.createElement('div');
+    targetElement.id = 'settings-language';
+    targetElement.scrollIntoView = scrollIntoViewMock;
+    document.body.appendChild(targetElement);
+
+    try {
+      render(<Settings isOpen={true} onClose={onClose} />);
+      const searchInput = screen.getByPlaceholderText('搜索设置...') as HTMLInputElement;
+      fireEvent.change(searchInput, { target: { value: '语言' } });
+
+      const options = screen.getAllByRole('option');
+      expect(options.length).toBeGreaterThan(0);
+
+      fireEvent.keyDown(searchInput, {
+        key: 'Enter',
+        code: 'Enter',
+        nativeEvent: { isComposing: true } as unknown as KeyboardEvent,
+      });
+
+      // Search query remains intact and selection was suppressed
+      expect(searchInput.value).toBe('语言');
+      expect(scrollIntoViewMock).not.toHaveBeenCalled();
+      expect(targetElement.classList.contains('settings-item--highlighted')).toBe(false);
+    } finally {
+      document.body.removeChild(targetElement);
     }
   });
 

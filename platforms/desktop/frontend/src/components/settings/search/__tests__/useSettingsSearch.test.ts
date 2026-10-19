@@ -6,7 +6,7 @@ import { calculateItemScore, highlightMatches, useSettingsSearch } from '../useS
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => {
+    t: (key: string, options?: { defaultValue?: string }) => {
       const translations: Record<string, string> = {
         'settings.language': '语言',
         'settings.language_hint': '修改界面显示语言',
@@ -18,13 +18,15 @@ vi.mock('react-i18next', () => ({
         'settings.llm.api_key': 'API 密钥',
         'settings.llm.base_url': '基础 URL',
       };
-      return translations[key] ?? key;
+      if (key in translations) return translations[key];
+      if (options?.defaultValue !== undefined) return options.defaultValue;
+      return key;
     },
   }),
 }));
 
 describe('calculateItemScore', () => {
-  const mockTranslate = (key: string) => {
+  const mockTranslate = (key: string, options?: { defaultValue?: string }) => {
     const map: Record<string, string> = {
       'settings.language': '语言',
       'settings.language_hint': '修改界面显示语言',
@@ -32,11 +34,13 @@ describe('calculateItemScore', () => {
       'settings.llm.title': '大模型服务',
       'settings.llm.credentials_section': '供应商凭据',
     };
-    return map[key] ?? key;
+    if (key in map) return map[key];
+    if (options?.defaultValue !== undefined) return options.defaultValue;
+    return key;
   };
 
-  it('exact query matches: "语言" returns general.language as top hit with score 100', () => {
-    const item = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'general.language')!;
+  it('exact query matches: "语言" returns general-language as top hit with score 100', () => {
+    const item = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'general-language')!;
     expect(item).toBeDefined();
 
     const score = calculateItemScore(item, '语言', mockTranslate);
@@ -65,11 +69,11 @@ describe('useSettingsSearch hook', () => {
     expect(result.current.query).toBe('');
   });
 
-  it('exact query matches: "语言" returns general.language as top hit with score 100', () => {
+  it('exact query matches: "语言" returns general-language as top hit with score 100', () => {
     const { result } = renderHook(() => useSettingsSearch('语言'));
     expect(result.current.hits.length).toBeGreaterThan(0);
     const topHit = result.current.hits[0];
-    expect(topHit.id).toBe('general.language');
+    expect(topHit.id).toBe('general-language');
     expect(topHit.score).toBe(100);
   });
 
@@ -86,6 +90,15 @@ describe('useSettingsSearch hook', () => {
     const hits = result.current.hits;
     for (let i = 1; i < hits.length; i++) {
       expect(hits[i - 1].score).toBeGreaterThanOrEqual(hits[i].score);
+    }
+  });
+
+  it('ranks exact title matches higher than multiple partial/additive matches', () => {
+    const { result } = renderHook(() => useSettingsSearch('语言'));
+    expect(result.current.hits[0].id).toBe('general-language');
+    expect(result.current.hits[0].score).toBe(100);
+    for (let i = 1; i < result.current.hits.length; i++) {
+      expect(result.current.hits[i].score).toBeLessThanOrEqual(99);
     }
   });
 });

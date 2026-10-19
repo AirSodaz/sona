@@ -26,6 +26,16 @@ export interface SettingsSearchHit extends SettingsSearchItem {
  * When title is an exact match (+100), redundant keyword/hint bonuses are not added
  * so exact title match has a clean, definitive top score of 100.
  */
+export function resolveDisplayTitle(
+  item: SettingsSearchItem,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  const rawTitle = t(item.titleKey, { defaultValue: '' });
+  return rawTitle && rawTitle !== item.titleKey
+    ? rawTitle
+    : t(item.titleKey, { defaultValue: item.id.replace(/-/g, ' ') }) || item.id;
+}
+
 export function calculateItemScore(
   item: SettingsSearchItem,
   normalizedQuery: string,
@@ -34,8 +44,8 @@ export function calculateItemScore(
   const q = normalizedQuery.trim().toLowerCase();
   if (!q) return 0;
 
-  const rawTitle = t(item.titleKey, { defaultValue: '' });
-  const title = (rawTitle || '').toLowerCase();
+  const displayTitle = resolveDisplayTitle(item, t);
+  const title = (displayTitle || '').toLowerCase();
   const rawHint = item.hintKey ? t(item.hintKey, { defaultValue: '' }) : '';
   const hint = (rawHint || '').toLowerCase();
   const rawSection = item.sectionKey ? t(item.sectionKey, { defaultValue: '' }) : '';
@@ -81,9 +91,9 @@ export function calculateItemScore(
     score += 20;
   }
 
-  return score;
+  // Cap partial/additive matches at 99 so exact title matches always top the list
+  return Math.min(score, 99);
 }
-
 /**
  * Splits text by case-insensitive query substring and wraps matches in
  * `<mark className="settings-search-highlight">`.
@@ -160,11 +170,7 @@ export function useSettingsSearch(
     for (const item of registry) {
       const score = calculateItemScore(item, normalizedQuery, t);
       if (score > 0) {
-        const rawTitle = t(item.titleKey, { defaultValue: '' });
-        const displayTitle =
-          rawTitle && rawTitle !== item.titleKey
-            ? rawTitle
-            : t(item.titleKey, { defaultValue: item.id.replace(/-/g, ' ') }) || item.id;
+        const displayTitle = resolveDisplayTitle(item, t);
 
         matched.push({
           ...item,

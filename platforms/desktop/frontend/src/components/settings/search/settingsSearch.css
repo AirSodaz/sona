@@ -130,6 +130,12 @@
   color: var(--color-text-primary, #111827);
   transform: scale(1.08);
 }
+
+.settings-search-clear:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 42%, transparent);
+  color: var(--color-text-primary, #111827);
+}
 /* --------------------------------------------------------------------------
    Search Results Container
    -------------------------------------------------------------------------- */
@@ -144,6 +150,12 @@
   overflow-x: hidden;
   padding: 2px var(--spacing-md, 12px) var(--spacing-md, 12px);
   overscroll-behavior: contain;
+}
+
+@media (max-width: 720px) {
+  .settings-search-results {
+    max-height: min(280px, 40vh);
+  }
 }
 
 .settings-search-header {

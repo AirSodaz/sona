@@ -41,6 +41,7 @@ export function SettingsSearchResults({
 
   return (
     <div
+      id="settings-search-listbox"
       className="settings-search-results"
       role="listbox"
       aria-label={t('settings.search_matches_count', {
@@ -48,7 +49,7 @@ export function SettingsSearchResults({
         defaultValue: `匹配项 (${hits.length})`,
       })}
     >
-      <div className="settings-search-header">
+      <div className="settings-search-header" role="presentation">
         <span className="settings-search-count">
           {t('settings.search_matches_count', {
             count: hits.length,
@@ -71,6 +72,7 @@ export function SettingsSearchResults({
         return (
           <button
             key={hit.id}
+            id={`settings-search-result-${hit.id}`}
             type="button"
             className={`settings-search-result-item ${isActive ? 'is-active' : ''}`}
             data-active={isActive}
