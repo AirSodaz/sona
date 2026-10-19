@@ -284,6 +284,7 @@ export function SettingsLLMServiceTab({
       />
 
       <SettingsSection
+        id="settings-llm-models-config"
         title={t('settings.llm.feature_models')}
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
@@ -374,6 +375,7 @@ export function SettingsLLMServiceTab({
       </SettingsSection>
 
       <SettingsSection
+        id="settings-llm-provider-list"
         title={t('settings.llm.credentials_section')}
         description={t('settings.llm.credentials_hint')}
         icon={<Settings2 size={20} />}

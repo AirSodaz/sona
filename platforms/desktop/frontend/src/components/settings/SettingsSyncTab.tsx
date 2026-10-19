@@ -264,6 +264,7 @@ export function SettingsSyncTab({
       {/* Feature Switch Section */}
       <SettingsSection>
         <SettingsItem
+          id="settings-sync-toggle"
           title={t('settings.sync.enable_cloud_sync', { defaultValue: 'Enable Cloud Sync' })}
           hint={t('settings.sync.enable_cloud_sync_hint', {
             defaultValue:

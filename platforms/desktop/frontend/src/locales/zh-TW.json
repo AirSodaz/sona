@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "設定",
+    "search_placeholder": "搜尋設定...",
+    "search_no_results": "未找到相關設定",
+    "search_no_results_hint": "請嘗試其他關鍵字，如快捷鍵、模型或 API",
+    "search_matches_count": "相符項目 ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",

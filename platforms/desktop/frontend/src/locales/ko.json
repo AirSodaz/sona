@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "설정",
+    "search_placeholder": "설정 검색...",
+    "search_no_results": "관련 설정을 찾을 수 없습니다",
+    "search_no_results_hint": "단축키, 모델 또는 API와 같은 다른 검색어를 입력해 보세요",
+    "search_matches_count": "일치 항목 ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",

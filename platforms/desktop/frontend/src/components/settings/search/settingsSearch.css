@@ -1,0 +1,311 @@
+/* ==========================================================================
+   Settings Search Styles
+   ========================================================================== */
+
+.settings-search-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 0 8px 0 10px;
+  height: 30px;
+  background: var(--color-bg-tertiary, rgba(0, 0, 0, 0.04));
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm, 6px);
+  box-shadow: var(--apple-control-shadow-flat);
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    border-color var(--transition-fast, 0.15s ease),
+    box-shadow var(--transition-fast, 0.15s ease);
+}
+
+.settings-search-bar:hover {
+  border-color: var(--color-border-hover, var(--color-border));
+}
+
+.settings-search-bar:focus-within {
+  background: var(--apple-field-focus-surface, var(--color-bg-primary, #ffffff));
+  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #3b82f6));
+  box-shadow: var(
+    --apple-field-focus-shadow,
+    0 0 0 2px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 18%, transparent)
+  );
+}
+
+.settings-search-icon {
+  flex-shrink: 0;
+  color: var(--color-text-muted, #9ca3af);
+  pointer-events: none;
+  transition: color var(--transition-fast, 0.15s ease);
+}
+
+.settings-search-bar:focus-within .settings-search-icon {
+  color: var(--color-accent-primary, #3b82f6);
+}
+
+/* Specificity overrides to neutralize controls.css global input styles without !important */
+.settings-modal .settings-search-bar input.settings-search-input,
+.settings-modal .settings-search-bar input[type="text"].settings-search-input,
+.settings-modal .settings-search-bar input[type="search"].settings-search-input {
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+  outline: none;
+  color: var(--color-text-primary, #111827);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  line-height: normal;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.settings-modal .settings-search-bar input.settings-search-input:focus,
+.settings-modal .settings-search-bar input[type="text"].settings-search-input:focus,
+.settings-modal .settings-search-bar input[type="search"].settings-search-input:focus {
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.settings-search-input::placeholder {
+  color: var(--color-text-muted, #9ca3af);
+  font-size: 0.8125rem;
+}
+
+.settings-search-input::-webkit-search-decoration,
+.settings-search-input::-webkit-search-cancel-button,
+.settings-search-input::-webkit-search-results-button,
+.settings-search-input::-webkit-search-results-decoration {
+  display: none;
+  -webkit-appearance: none;
+}
+
+.settings-search-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px 5px;
+  font-size: 0.6875rem;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1;
+  color: var(--color-text-muted, #9ca3af);
+  background: color-mix(in srgb, var(--color-text-primary) 6%, transparent);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  pointer-events: none;
+  user-select: none;
+  flex-shrink: 0;
+}
+
+.settings-search-clear {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--color-text-primary) 12%, transparent);
+  color: var(--color-text-secondary, #6b7280);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    color var(--transition-fast, 0.15s ease),
+    transform var(--transition-fast, 0.15s ease);
+}
+
+.settings-search-clear:hover {
+  background: color-mix(in srgb, var(--color-text-primary) 20%, transparent);
+  color: var(--color-text-primary, #111827);
+  transform: scale(1.08);
+}
+/* --------------------------------------------------------------------------
+   Search Results Container
+   -------------------------------------------------------------------------- */
+
+.settings-search-results {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px var(--spacing-md, 12px) var(--spacing-md, 12px);
+  overscroll-behavior: contain;
+}
+
+.settings-search-header {
+  padding: 4px 8px 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.settings-search-count {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+/* --------------------------------------------------------------------------
+   Result Item Card
+   -------------------------------------------------------------------------- */
+
+.settings-search-result-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary, #6b7280);
+  border-radius: var(--radius-md, 6px);
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  transition:
+    background var(--transition-fast, 0.15s ease),
+    color var(--transition-fast, 0.15s ease),
+    box-shadow var(--transition-fast, 0.15s ease);
+}
+
+.settings-search-result-item:hover {
+  background: var(--color-bg-hover, rgba(0, 0, 0, 0.05));
+  color: var(--color-text-primary, #111827);
+}
+
+.settings-search-result-item[data-active="true"],
+.settings-search-result-item.is-active {
+  background: var(--color-bg-elevated, #ffffff);
+  color: var(--color-text-primary, #111827);
+  box-shadow: var(--shadow-sm, 0 1px 2px rgba(0, 0, 0, 0.05));
+}
+
+.settings-search-result-item:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-accent-primary, #3b82f6);
+}
+
+.settings-search-result-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-bg-secondary, rgba(0, 0, 0, 0.04));
+  color: var(--color-text-primary, #111827);
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.settings-search-result-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.settings-search-result-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-text-primary, #111827);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-search-result-breadcrumb {
+  font-size: 0.6875rem;
+  color: var(--color-text-tertiary, #9ca3af);
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Highlighted Substrings
+   -------------------------------------------------------------------------- */
+
+.settings-search-highlight {
+  background: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 18%, transparent);
+  color: var(--color-text-primary, #111827);
+  font-weight: 600;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+/* --------------------------------------------------------------------------
+   Empty State
+   -------------------------------------------------------------------------- */
+
+.settings-search-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 40px 16px;
+  gap: 8px;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+.settings-search-empty-icon {
+  margin-bottom: 4px;
+  opacity: 0.5;
+}
+
+.settings-search-empty-title {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-text-primary, #111827);
+}
+
+.settings-search-empty-hint {
+  font-size: 0.75rem;
+  line-height: 1.4;
+  max-width: 200px;
+  color: var(--color-text-tertiary, #9ca3af);
+}
+
+/* --------------------------------------------------------------------------
+   Main Pane Target Spotlight Highlight
+   -------------------------------------------------------------------------- */
+
+@keyframes settings-spotlight-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--color-accent-primary, #3b82f6) 50%, transparent);
+    background-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 12%, transparent);
+  }
+  30% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-accent-primary, #3b82f6) 40%, transparent);
+    background-color: color-mix(in srgb, var(--color-accent-primary, #3b82f6) 10%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+    background-color: transparent;
+  }
+}
+
+.settings-item--highlighted {
+  animation: settings-spotlight-pulse 1.6s ease-out;
+  border-radius: var(--radius-md, 6px);
+}

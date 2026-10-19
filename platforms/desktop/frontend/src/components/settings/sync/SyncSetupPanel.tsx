@@ -756,6 +756,7 @@ export function SyncSetupPanel({
             </SettingsItem>
 
             <SettingsItem
+              id="settings-sync-webdav"
               title={t('settings.sync.server_url', { defaultValue: 'Server URL' })}
               hint={t('settings.sync.server_url_hint', {
                 defaultValue: 'WebDAV endpoint URL (HTTPS or local/LAN HTTP)',

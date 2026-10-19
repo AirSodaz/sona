@@ -1,4 +1,4 @@
-import { BarChart3, Bot, Cloud, HardDrive, Server } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import type React from 'react';
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -29,18 +29,12 @@ import {
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
 import type { LlmProvider } from '../types/transcript';
-import {
-  AutomationIcon,
-  BookIcon,
-  GeneralIcon,
-  InfoIcon,
-  KeyboardIcon,
-  MicIcon,
-  ModelIcon,
-  RobotIcon,
-  SubtitleIcon,
-  XIcon,
-} from './Icons';
+import { XIcon } from './Icons';
+import type { SubtitleSubTab } from './settings/SettingsSubtitleTab';
+import type { VocabularySubTab } from './settings/SettingsVocabularyTab';
+import { SettingsSearchResults } from './settings/search/SettingsSearchResults';
+import { type SettingsSearchHit, useSettingsSearch } from './settings/search/useSettingsSearch';
+import { SETTINGS_TAB_META } from './settings/settingsTabMeta';
 
 /** Props for the Settings modal. */
 interface SettingsProps {
@@ -67,50 +61,6 @@ const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);
 
-const SETTINGS_TAB_META: Record<
-  SettingsTab,
-  { labelKey: string; defaultValue?: string; Icon: () => React.JSX.Element }
-> = {
-  general: { labelKey: 'settings.general', Icon: GeneralIcon },
-  dashboard: {
-    labelKey: 'settings.dashboard.title',
-    defaultValue: 'Dashboard',
-    Icon: () => <BarChart3 size={18} />,
-  },
-  shortcuts: { labelKey: 'shortcuts.title', Icon: KeyboardIcon },
-  about: { labelKey: 'settings.about', Icon: InfoIcon },
-  microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
-  models: { labelKey: 'settings.model_hub', Icon: ModelIcon },
-  subtitle: {
-    labelKey: 'settings.subtitle_voice_typing_title',
-    defaultValue: 'Subtitles & Voice Typing',
-    Icon: SubtitleIcon,
-  },
-  vocabulary: { labelKey: 'settings.vocabulary', Icon: BookIcon },
-  llm_service: { labelKey: 'settings.llm.title', Icon: RobotIcon },
-  automation: { labelKey: 'settings.automation', defaultValue: 'Automation', Icon: AutomationIcon },
-  storage: {
-    labelKey: 'settings.storage.title',
-    defaultValue: 'Storage',
-    Icon: () => <HardDrive size={18} />,
-  },
-  sync: {
-    labelKey: 'settings.sync.title',
-    defaultValue: 'Cloud Sync',
-    Icon: () => <Cloud size={18} />,
-  },
-  api_server: {
-    labelKey: 'settings.api_server.title',
-    defaultValue: 'API Server',
-    Icon: () => <Server size={18} />,
-  },
-  mcp: {
-    labelKey: 'settings.mcp.title',
-    defaultValue: 'MCP Agents',
-    Icon: () => <Bot size={18} />,
-  },
-};
-
 function renderSettingsPane(
   activeTab: SettingsTab,
   isOpen: boolean,
@@ -118,7 +68,8 @@ function renderSettingsPane(
   isPrewarming = false,
   onOpenDiagnostics?: () => void,
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
-  initialTab?: SettingsTabInput
+  initialTab?: SettingsTabInput,
+  pendingSubTab?: { tab: SettingsTab; subTab: string } | null
 ): React.JSX.Element | null {
   switch (activeTab) {
     case 'general':
@@ -136,14 +87,28 @@ function renderSettingsPane(
     case 'subtitle':
       return (
         <SettingsSubtitleTab
-          initialSubTab={initialTab === 'voice_typing' ? 'voice_typing' : undefined}
+          initialSubTab={
+            pendingSubTab?.tab === 'subtitle'
+              ? (pendingSubTab.subTab as SubtitleSubTab)
+              : initialTab === 'voice_typing'
+                ? 'voice_typing'
+                : undefined
+          }
         />
       );
     case 'models':
       return <SettingsModelsPane isOpen={isOpen} isActive={isActive} />;
     case 'vocabulary':
       return (
-        <SettingsVocabularyTab initialSubTab={initialTab === 'context' ? 'prompts' : undefined} />
+        <SettingsVocabularyTab
+          initialSubTab={
+            pendingSubTab?.tab === 'vocabulary'
+              ? (pendingSubTab.subTab as VocabularySubTab)
+              : initialTab === 'context'
+                ? 'prompts'
+                : undefined
+          }
+        />
       );
     case 'automation':
       return <SettingsAutomationTab />;
@@ -238,6 +203,7 @@ function SettingsPaneContent({
   onOpenDiagnostics,
   onOpenLlmProviderDetails,
   initialTab,
+  pendingSubTab,
 }: {
   tab: SettingsTab;
   isOpen: boolean;
@@ -246,6 +212,7 @@ function SettingsPaneContent({
   onOpenDiagnostics?: () => void;
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
   initialTab?: SettingsTabInput;
+  pendingSubTab?: { tab: SettingsTab; subTab: string } | null;
 }): React.JSX.Element {
   return (
     <Suspense fallback={null}>
@@ -256,7 +223,8 @@ function SettingsPaneContent({
         isPrewarming,
         onOpenDiagnostics,
         onOpenLlmProviderDetails,
-        initialTab
+        initialTab,
+        pendingSubTab
       )}
     </Suspense>
   );
@@ -298,6 +266,7 @@ export function Settings({
     (nextTab: (typeof SETTINGS_TABS)[number]) => {
       markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
       setActiveTab(nextTab);
+      setPendingSubTab(null);
       requestAnimationFrame(() => {
         const btn = document.getElementById(`settings-tab-${nextTab}`);
         btn?.focus();
@@ -314,6 +283,103 @@ export function Settings({
     activeTab: renderedTab,
     navigateToTab,
   };
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [activeIndex, setActiveIndex] = useState(0);
+  const [pendingSubTab, setPendingSubTab] = useState<{ tab: SettingsTab; subTab: string } | null>(
+    null
+  );
+  const isMac =
+    typeof navigator !== 'undefined' &&
+    /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
+  const { hits } = useSettingsSearch(searchQuery);
+  const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const scrollRafRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+      if (highlightTimeoutRef.current) {
+        clearTimeout(highlightTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setSearchQuery('');
+      setActiveIndex(0);
+      setPendingSubTab(null);
+    }
+  }, [isOpen]);
+
+  const handleSelectResult = useCallback(
+    (hit: SettingsSearchHit) => {
+      navigateToTab(hit.tab);
+      setPendingSubTab(hit.subTab ? { tab: hit.tab, subTab: hit.subTab } : null);
+
+      const targetId = hit.targetId;
+      if (!targetId) return;
+
+      if (scrollRafRef.current !== null) {
+        cancelAnimationFrame(scrollRafRef.current);
+      }
+
+      const startTime = performance.now();
+      const maxDurationMs = 2000;
+
+      const findAndScroll = () => {
+        const el = document.getElementById(targetId);
+        if (el) {
+          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          el.classList.add('settings-item--highlighted');
+
+          if (highlightTimeoutRef.current) {
+            clearTimeout(highlightTimeoutRef.current);
+          }
+          highlightTimeoutRef.current = setTimeout(() => {
+            el.classList.remove('settings-item--highlighted');
+          }, 1600);
+        } else if (performance.now() - startTime < maxDurationMs) {
+          scrollRafRef.current = requestAnimationFrame(findAndScroll);
+        }
+      };
+
+      scrollRafRef.current = requestAnimationFrame(findAndScroll);
+    },
+    [navigateToTab]
+  );
+
+  const handleSearchInputKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (hits.length > 0) {
+          setActiveIndex((prev) => (prev + 1) % hits.length);
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (hits.length > 0) {
+          setActiveIndex((prev) => (prev - 1 + hits.length) % hits.length);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (hits.length > 0 && hits[activeIndex]) {
+          handleSelectResult(hits[activeIndex]);
+        }
+      } else if (e.key === 'Escape') {
+        if (searchQuery.trim().length > 0) {
+          e.preventDefault();
+          e.stopPropagation();
+          setSearchQuery('');
+          setActiveIndex(0);
+        }
+      }
+    },
+    [activeIndex, handleSelectResult, hits, searchQuery]
+  );
 
   // Focus management
   useFocusTrap(isOpen, onClose, modalRef);
@@ -410,12 +476,20 @@ export function Settings({
     if (!isOpen) return;
 
     const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && e.key === 'Tab') {
-        // If a dialog is open on top of settings, don't switch tabs
-        if (isAnyDialogOpen()) {
-          return;
-        }
+      // If a dialog is open on top of settings, don't handle shortcuts
+      if (isAnyDialogOpen()) {
+        return;
+      }
 
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
+
+      if (e.ctrlKey && e.key === 'Tab') {
         e.preventDefault();
         const currentIndex = SETTINGS_TABS.indexOf(renderedTab as (typeof SETTINGS_TABS)[number]);
         const nextIndex = e.shiftKey
@@ -469,6 +543,19 @@ export function Settings({
       ref={modalRef}
       className="settings-modal"
       onClick={isOpen ? (e) => e.stopPropagation() : undefined}
+      onKeyDown={
+        isOpen
+          ? (e) => {
+              if (e.key === 'Escape' && searchQuery.trim().length > 0 && !isAnyDialogOpen()) {
+                e.preventDefault();
+                e.stopPropagation();
+                setSearchQuery('');
+                setActiveIndex(0);
+                searchInputRef.current?.focus();
+              }
+            }
+          : undefined
+      }
       role={isOpen ? 'dialog' : undefined}
       aria-modal={isOpen ? 'true' : undefined}
       aria-labelledby={isOpen ? 'settings-title' : undefined}
@@ -479,37 +566,79 @@ export function Settings({
       <div className="settings-sidebar">
         <div className={`settings-sidebar-header ${isSidebarScrolled ? 'is-scrolled' : ''}`}>
           <h2 id="settings-title">{t('settings.title')}</h2>
+          <div className="settings-search-bar">
+            <Search size={14} className="settings-search-icon" aria-hidden="true" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              role="searchbox"
+              className="settings-search-input"
+              aria-label={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
+              placeholder={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setActiveIndex(0);
+              }}
+              onKeyDown={handleSearchInputKeyDown}
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                className="settings-search-clear"
+                onClick={() => {
+                  setSearchQuery('');
+                  setActiveIndex(0);
+                  searchInputRef.current?.focus();
+                }}
+                aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
+              >
+                <X size={12} />
+              </button>
+            ) : (
+              <kbd className="settings-search-shortcut">{isMac ? '⌘F' : 'Ctrl F'}</kbd>
+            )}
+          </div>
         </div>
 
-        <div
-          className="settings-tabs-container"
-          role="tablist"
-          aria-orientation="vertical"
-          onKeyDown={handleTabKeyDown}
-          onScroll={handleSidebarScroll}
-        >
-          {SETTINGS_TAB_GROUPS.map((group, gi) => (
-            <Fragment key={group.labelKey}>
-              <SettingsSidebarGroupHeader label={t(group.labelKey)} first={gi === 0} />
-              {group.tabs.map((tabId) => {
-                const meta = SETTINGS_TAB_META[tabId];
-                return (
-                  <SettingsTabButton
-                    key={tabId}
-                    id={tabId}
-                    label={t(meta.labelKey, { defaultValue: meta.defaultValue ?? meta.labelKey })}
-                    Icon={meta.Icon}
-                    activeTab={renderedTab}
-                    setActiveTab={navigateToTab}
-                    tabIndex={renderedTab === tabId ? 0 : -1}
-                  />
-                );
-              })}
-            </Fragment>
-          ))}
-        </div>
+        {searchQuery.trim().length > 0 ? (
+          <SettingsSearchResults
+            hits={hits}
+            searchQuery={searchQuery}
+            activeIndex={activeIndex}
+            onSelectResult={handleSelectResult}
+            onHoverResult={setActiveIndex}
+          />
+        ) : (
+          <div
+            className="settings-tabs-container"
+            role="tablist"
+            aria-orientation="vertical"
+            onKeyDown={handleTabKeyDown}
+            onScroll={handleSidebarScroll}
+          >
+            {SETTINGS_TAB_GROUPS.map((group, gi) => (
+              <Fragment key={group.labelKey}>
+                <SettingsSidebarGroupHeader label={t(group.labelKey)} first={gi === 0} />
+                {group.tabs.map((tabId) => {
+                  const meta = SETTINGS_TAB_META[tabId];
+                  return (
+                    <SettingsTabButton
+                      key={tabId}
+                      id={tabId}
+                      label={t(meta.labelKey, { defaultValue: meta.defaultValue ?? meta.labelKey })}
+                      Icon={meta.Icon}
+                      activeTab={renderedTab}
+                      setActiveTab={navigateToTab}
+                      tabIndex={renderedTab === tabId ? 0 : -1}
+                    />
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        )}
       </div>
-
       {/* Main Content */}
       <div className="settings-content">
         {/* Header with close button */}
@@ -547,6 +676,7 @@ export function Settings({
                       onOpenDiagnostics={paneDiagnosticsHandler}
                       onOpenLlmProviderDetails={onOpenLlmProviderDetails}
                       initialTab={initialTab}
+                      pendingSubTab={pendingSubTab}
                     />
                   </SettingsPaneFrame>
                 );

@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "Settings",
+    "search_placeholder": "Search settings...",
+    "search_no_results": "No settings found",
+    "search_no_results_hint": "Try different keywords, such as shortcuts, models, or API",
+    "search_matches_count": "Matches ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",

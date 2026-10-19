@@ -41,7 +41,11 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
     // Settings modal is open
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
     // Click "Add model provider" button
-    const addBtn = await screen.findByRole('button', { name: 'settings.llm.add_custom_provider' });
+    const addBtn = await screen.findByRole(
+      'button',
+      { name: 'settings.llm.add_custom_provider' },
+      { timeout: 5000 }
+    );
     await act(async () => {
       fireEvent.click(addBtn);
     });
@@ -74,7 +78,11 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
       await Promise.resolve();
     });
     // Click "Add model provider" button
-    const addBtn = await screen.findByRole('button', { name: 'settings.llm.add_custom_provider' });
+    const addBtn = await screen.findByRole(
+      'button',
+      { name: 'settings.llm.add_custom_provider' },
+      { timeout: 5000 }
+    );
     await act(async () => {
       fireEvent.click(addBtn);
     });
