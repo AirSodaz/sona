@@ -53,6 +53,23 @@ const mocks = vi.hoisted(() => {
       },
       filename: 'local-batch',
     },
+    {
+      id: 'confucius4-r2t2-q8-gguf',
+      name: 'Confucius4-R2T2',
+      description: '',
+      url: '',
+      type: 'qwen3-asr',
+      modes: ['streaming', 'batch'],
+      language: 'zh',
+      size: '2 GB',
+      engine: 'llama-cpp',
+      rules: { requiresVad: true, requiresPunctuation: false },
+      fileConfig: {
+        model: 'Confucius4-R2T2-Q8_0.gguf',
+        mmproj: 'mmproj-Confucius4-R2T2-Q8_0.gguf',
+      },
+      filename: 'confucius4-r2t2-q8-gguf',
+    },
   ] as any[];
   return { presetModels };
 });
@@ -64,10 +81,14 @@ vi.mock('../modelService', async (importOriginal) => {
     PRESET_MODELS: mocks.presetModels,
     PRESET_MODELS_MAP: new Map(mocks.presetModels.map((model) => [model.id, model])),
     modelService: {
-      getModelRules: vi.fn((modelId: string) => ({
-        requiresVad: true,
-        requiresPunctuation: modelId === 'local-batch',
-      })),
+      getModelRules: vi.fn((modelId: string) => {
+        const found = mocks.presetModels.find((m) => m.id === modelId);
+        if (found?.rules) return found.rules;
+        return {
+          requiresVad: true,
+          requiresPunctuation: modelId === 'local-batch',
+        };
+      }),
     },
   };
 });
@@ -284,13 +305,50 @@ describe('asrConfigService', () => {
 
     expect(request).toMatchObject({
       engine: 'local',
+      localEngine: 'llama-cpp',
       mode: 'batch',
       modelId: 'confucius4-r2t2-q8-gguf',
       modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+      modelType: 'qwen3-asr',
       vadModel: null,
       punctuationModel: null,
       vadBuffer: 8,
       batchSegmentationMode: 'whole',
+    });
+  });
+
+  it('resolves a local batch request with VAD when batch VAD is enabled for Confucius4-R2T2', () => {
+    const base = buildAsrConfig({ batchVadEnabled: true });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+              modelId: 'confucius4-r2t2-q8-gguf',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      localEngine: 'llama-cpp',
+      mode: 'batch',
+      modelId: 'confucius4-r2t2-q8-gguf',
+      modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+      modelType: 'qwen3-asr',
+      vadModel: 'C:/models/silero_vad.onnx',
+      punctuationModel: null,
+      vadBuffer: 8,
+      batchSegmentationMode: 'vad',
     });
   });
   it('evaluates isBatchVadExemptModel cleanly for exempt and non-exempt models', () => {
@@ -302,8 +360,10 @@ describe('asrConfigService', () => {
     expect(isBatchVadExemptModel({ path: 'C:/models/qwen3_asr.gguf' })).toBe(true);
     expect(isBatchVadExemptModel({ id: 'sherpa-onnx-sense-voice-zh-en' })).toBe(false);
     expect(isBatchVadExemptModel({ id: 'confucius4-t3po' })).toBe(false);
+    expect(isBatchVadExemptModel({ path: 'C:/models/Confucius4_R2T2_Q8_0.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/confucius4_r2t2.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: '/models/confucius4_r2t2/model.gguf' })).toBe(true);
   });
-
   it('evaluates isBatchVadForced correctly on AsrModelSelection', () => {
     expect(
       isBatchVadForced({
@@ -332,11 +392,27 @@ describe('asrConfigService', () => {
     expect(
       isBatchVadForced({
         engine: 'online',
+        modelPath: '',
         mode: 'batch',
       })
     ).toBe(false);
+    expect(isBatchVadForced(null)).toBe(false);
+    expect(isBatchVadForced(undefined)).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: null,
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelPath: 'C:/models/Confucius4_R2T2_Q8_0.gguf',
+      } as unknown as Parameters<typeof isBatchVadForced>[0])
+    ).toBe(false);
   });
-
   it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled in config', () => {
     const request = resolveAsrTranscriptionRequest(
       buildAsrConfig({

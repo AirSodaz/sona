@@ -80,6 +80,7 @@ fn confucius4_r2t2_presets_are_verified_bundles() {
         ),
     ] {
         let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "qwen3-asr");
         assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
         assert!(model.supports_mode("batch"));
         assert!(model.supports_mode("streaming"));
@@ -1063,6 +1064,14 @@ fn resolves_canonical_aliases_and_suggestions() {
     assert_eq!(
         canonical_preset_model_id("r2t2"),
         Some("confucius4-r2t2-q8-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("confucius4-r2t2-q8"),
+        Some("confucius4-r2t2-q8-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("confucius4-r2t2-f16"),
+        Some("confucius4-r2t2-f16-gguf")
     );
 
     let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");

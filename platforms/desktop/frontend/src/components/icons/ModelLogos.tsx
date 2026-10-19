@@ -486,6 +486,7 @@ export const ASR_MODEL_TYPES = new Set([
   'fire-red-asr',
   'dolphin',
   'qwen3-asr',
+  'confucius4-r2t2',
   'parakeet-tdt',
   'moonshine',
   'omnilingual',

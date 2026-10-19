@@ -77,7 +77,11 @@ const BATCH_VAD_EXEMPT_TYPES: Record<string, true> = {
   'qwen3-asr': true,
   'parakeet-tdt': true,
 };
-const BATCH_VAD_EXEMPT_PATTERNS = [/qwen3[-_]asr/i, /parakeet[-_]tdt/i, /\br2t2\b/i];
+const BATCH_VAD_EXEMPT_PATTERNS = [
+  /qwen3[-_]asr/i,
+  /parakeet[-_]tdt/i,
+  /(?:[-_]|\b)r2t2(?:[-_]|\b)/i,
+];
 
 export function isBatchVadExemptModel(model: {
   type?: string | null;
@@ -526,7 +530,14 @@ export class AsrConfigService {
       return null;
     }
     if (selection.modelId) {
-      return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
+      if (typeof this.ports.PRESET_MODELS_MAP?.get === 'function') {
+        return this.ports.PRESET_MODELS_MAP.get(selection.modelId) ?? null;
+      }
+      return (
+        (this.ports.PRESET_MODELS_MAP as unknown as Record<string, ModelInfo>)?.[
+          selection.modelId
+        ] ?? null
+      );
     }
     return findSelectedModelByMode(selection.modelPath, selection.mode);
   };
@@ -618,7 +629,9 @@ export class AsrConfigService {
       return false;
     }
     const modelInfo =
-      cachedModelInfo !== undefined ? cachedModelInfo : this.resolveModelInfo(selection);
+      cachedModelInfo !== undefined
+        ? cachedModelInfo
+        : this.resolveModelInfo({ ...selection, mode: selection.mode ?? 'batch' });
     return !isBatchVadExemptModel({
       type: modelInfo?.type,
       id: selection.modelId ?? modelInfo?.id,

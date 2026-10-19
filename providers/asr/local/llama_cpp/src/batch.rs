@@ -1179,11 +1179,11 @@ fn is_qwen3_asr_language_name(candidate: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::{
-        GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_QWEN3_ASR, audio_ingest_progress,
-        llama_generation_progress, normalize_hotwords, parse_qwen3_asr_output,
-        parse_qwen3_asr_partial_output, qwen3_asr_language, resolve_auto_gpu_offload,
-        resolve_gpu_offload, segment_bounds, segment_completed_progress, truncate_hotwords,
-        validate_supported_options,
+        GpuOffload, LlamaBatchTranscriptionJob, MODEL_TYPE_CONFUCIUS4_R2T2, MODEL_TYPE_QWEN3_ASR,
+        audio_ingest_progress, llama_generation_progress, normalize_hotwords,
+        parse_qwen3_asr_output, parse_qwen3_asr_partial_output, qwen3_asr_language,
+        resolve_auto_gpu_offload, resolve_gpu_offload, segment_bounds, segment_completed_progress,
+        truncate_hotwords, validate_supported_options,
     };
     use sona_core::export::ExportFormat;
     use sona_core::ports::asr::{AsrPortErrorKind, LocalAsrEngine};
@@ -1324,6 +1324,30 @@ mod tests {
 
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
         assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
+        assert!(error.message.contains(MODEL_TYPE_CONFUCIUS4_R2T2));
+    }
+
+    #[test]
+    fn confucius4_r2t2_model_type_is_accepted_for_batch_runs() {
+        let mut plan = plan();
+        let input = std::env::temp_dir().join(format!(
+            "sona-llama-r2t2-accept-{}.wav",
+            uuid::Uuid::new_v4()
+        ));
+        std::fs::write(&input, b"not-a-real-wav").unwrap();
+        plan.input_path = input.clone();
+        plan.model_type = MODEL_TYPE_CONFUCIUS4_R2T2.to_string();
+
+        let error = LlamaBatchTranscriptionJob::from_plan(
+            plan,
+            &empty_vad_engines(),
+            &empty_punct_engines(),
+        )
+        .unwrap_err();
+
+        assert_eq!(error.kind, AsrPortErrorKind::Model);
+        assert!(error.message.contains("file configuration"));
+        std::fs::remove_file(input).unwrap();
     }
 
     #[test]

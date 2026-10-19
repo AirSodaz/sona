@@ -40,6 +40,13 @@ describe('ModelLogos - resolveModelBrand', () => {
       })
     ).toBe('r2t2');
   });
+
+  it('correctly classifies Confucius4-R2T2 as ASR even without an explicit ASR type', () => {
+    expect(isAsrModel({ id: 'confucius4-r2t2' })).toBe(true);
+    expect(isAsrModel({ id: 'Confucius4-R2T2-Q8_0.gguf' })).toBe(true);
+    expect(isAsrModel({ type: 'confucius4-r2t2' })).toBe(true);
+    expect(resolveModelBrand({ id: 'confucius4-r2t2' })).toBe('r2t2');
+  });
   it('does not falsely classify non-R2T2 Confucius models as ASR or R2T2 brand', () => {
     expect(
       isAsrModel({
@@ -289,6 +296,14 @@ describe('ModelLogos - Component Rendering', () => {
     expect(img).toBeTruthy();
     expect(img?.getAttribute('width')).toBe('40');
     expect(img?.getAttribute('class')).toContain('test-badge');
+
+    const { container: r2t2Container } = render(
+      <ModelBrandLogo model={{ id: 'confucius4-r2t2-q8-gguf', type: 'qwen3-asr' }} size={36} />
+    );
+    const r2t2Img = r2t2Container.querySelector('img');
+    expect(r2t2Img).toBeTruthy();
+    expect(r2t2Img?.getAttribute('width')).toBe('36');
+    expect(r2t2Img?.getAttribute('alt')).toBe('Confucius4-R2T2');
   });
 
   it('renders via unified ModelBrandLogo with brand prop', () => {
