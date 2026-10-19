@@ -370,6 +370,166 @@
     ]
   },
   {
+    "id": "confucius4-r2t2-q8-gguf",
+    "name": "Confucius4-R2T2",
+    "description": "settings.descriptions.confucius4_r2t2",
+    "type": "qwen3-asr",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fil",
+      "fr",
+      "hi",
+      "hu",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "mk",
+      "ms",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sv",
+      "th",
+      "tr",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~2.18 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "isRecommended": false,
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-Q8_0.gguf?download=true",
+        "filename": "Confucius4-R2T2-Q8_0.gguf",
+        "sha256": "151097e43957a19984ea7de66e8144ce69b95039eb31c93da4f58db367e455c3",
+        "sizeBytes": 1834422208
+      },
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-Q8_0.gguf?download=true",
+        "filename": "mmproj-Confucius4-R2T2-Q8_0.gguf",
+        "sha256": "8dc2c67e6a0484114928142d098db7ad94ae9f34c78948ef9d37a9678418cb65",
+        "sizeBytes": 348336544
+      }
+    ],
+    "fileConfig": {
+      "model": "Confucius4-R2T2-Q8_0.gguf",
+      "mmproj": "mmproj-Confucius4-R2T2-Q8_0.gguf"
+    },
+    "groupId": "confucius4-r2t2",
+    "versionLabel": "Q8_0",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
+    "id": "confucius4-r2t2-f16-gguf",
+    "name": "Confucius4-R2T2",
+    "description": "settings.descriptions.confucius4_r2t2",
+    "type": "qwen3-asr",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fil",
+      "fr",
+      "hi",
+      "hu",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "mk",
+      "ms",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sv",
+      "th",
+      "tr",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~4.09 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
+    "isRecommended": false,
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-f16.gguf?download=true",
+        "filename": "Confucius4-R2T2-f16.gguf",
+        "sha256": "4fa26b8f2d6db9122752d3e28694c26083bad95f6263d2f7619c7f98f2480b97",
+        "sizeBytes": 3447345088
+      },
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-f16.gguf?download=true",
+        "filename": "mmproj-Confucius4-R2T2-f16.gguf",
+        "sha256": "0057b28b8814e431a28e3d1002343eef2d1676bbf8b0625351ae4550ac4e595d",
+        "sizeBytes": 641773984
+      }
+    ],
+    "fileConfig": {
+      "model": "Confucius4-R2T2-f16.gguf",
+      "mmproj": "mmproj-Confucius4-R2T2-f16.gguf"
+    },
+    "groupId": "confucius4-r2t2",
+    "versionLabel": "F16",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
     "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
     "name": "FireRedASR2-AED",
     "description": "settings.descriptions.firered_asr",

@@ -232,10 +232,14 @@ export class AsrConfigService {
       idLower.includes('qwen3_asr') ||
       idLower.includes('parakeet-tdt') ||
       idLower.includes('parakeet_tdt') ||
+      idLower.includes('confucius') ||
+      idLower.includes('r2t2') ||
       pathLower.includes('qwen3-asr') ||
       pathLower.includes('qwen3_asr') ||
       pathLower.includes('parakeet-tdt') ||
-      pathLower.includes('parakeet_tdt');
+      pathLower.includes('parakeet_tdt') ||
+      pathLower.includes('confucius') ||
+      pathLower.includes('r2t2');
     const hasBatchModel = Boolean(selection.modelId || selection.modelPath);
     const isBatchVadForced =
       scenario === 'batch' && selection.engine === 'local' && hasBatchModel && !isExempt;

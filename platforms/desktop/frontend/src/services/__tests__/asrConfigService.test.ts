@@ -259,6 +259,38 @@ describe('asrConfigService', () => {
       batchSegmentationMode: 'whole',
     });
   });
+  it('resolves a local batch request without VAD when batch VAD is disabled for Confucius4-R2T2', () => {
+    const base = buildAsrConfig({ batchVadEnabled: false });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+              modelId: 'confucius4-r2t2-q8-gguf',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      mode: 'batch',
+      modelId: 'confucius4-r2t2-q8-gguf',
+      modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+      vadModel: null,
+      punctuationModel: null,
+      vadBuffer: 8,
+      batchSegmentationMode: 'whole',
+    });
+  });
 
   it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled in config', () => {
     const request = resolveAsrTranscriptionRequest(

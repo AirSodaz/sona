@@ -34,6 +34,7 @@ use sona_core::transcription::transcript::{
 };
 
 pub(crate) const MODEL_TYPE_QWEN3_ASR: &str = "qwen3-asr";
+pub(crate) const MODEL_TYPE_CONFUCIUS4_R2T2: &str = "confucius4-r2t2";
 pub(crate) const N_BATCH: i32 = 512;
 pub(crate) const MAX_GENERATED_TOKENS: usize = 4096;
 /// Qwen3-ASR GGUFs ship a 65536-token context, so a generous hotword budget
@@ -133,11 +134,12 @@ impl LlamaBatchTranscriptionJob {
                 plan.engine,
             ));
         }
-        if plan.model_type != MODEL_TYPE_QWEN3_ASR {
+        if plan.model_type != MODEL_TYPE_QWEN3_ASR && plan.model_type != MODEL_TYPE_CONFUCIUS4_R2T2
+        {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,
                 format!(
-                    "llama.cpp batch ASR supports model type '{MODEL_TYPE_QWEN3_ASR}', got '{}'.",
+                    "llama.cpp batch ASR supports model types '{MODEL_TYPE_QWEN3_ASR}' and '{MODEL_TYPE_CONFUCIUS4_R2T2}', got '{}'.",
                     plan.model_type
                 ),
             ));
@@ -789,7 +791,7 @@ fn validate_supported_options(
     }
 
     let language_prefill = match plan.model_type.as_str() {
-        MODEL_TYPE_QWEN3_ASR => qwen3_asr_language(&plan.language)?,
+        MODEL_TYPE_QWEN3_ASR | MODEL_TYPE_CONFUCIUS4_R2T2 => qwen3_asr_language(&plan.language)?,
         other => {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Unsupported,

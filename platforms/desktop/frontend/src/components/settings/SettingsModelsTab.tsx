@@ -170,10 +170,14 @@ export function SettingsModelsTab({
       idLower.includes('qwen3_asr') ||
       idLower.includes('parakeet-tdt') ||
       idLower.includes('parakeet_tdt') ||
+      idLower.includes('confucius') ||
+      idLower.includes('r2t2') ||
       pathLower.includes('qwen3-asr') ||
       pathLower.includes('qwen3_asr') ||
       pathLower.includes('parakeet-tdt') ||
-      pathLower.includes('parakeet_tdt');
+      pathLower.includes('parakeet_tdt') ||
+      pathLower.includes('confucius') ||
+      pathLower.includes('r2t2');
 
     return !isExempt;
   }, [isBatchScenario, modelConfig.asr?.selections.batch]);

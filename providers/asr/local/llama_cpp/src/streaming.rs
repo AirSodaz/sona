@@ -23,10 +23,10 @@ use sona_core::transcription::pseudo_streaming::{
 };
 
 use crate::batch::{
-    GpuOffload, MAX_GENERATED_TOKENS, MODEL_TYPE_QWEN3_ASR, N_BATCH, QWEN3_ASR_HOTWORDS_MAX_CHARS,
-    backend, gpu_backend_available, init_inference, normalize_hotwords, parse_qwen3_asr_output,
-    parse_qwen3_asr_partial_output, qwen3_asr_language, qwen3_asr_prompt, resolve_auto_gpu_offload,
-    resolve_gpu_offload, resolve_required_model_file,
+    GpuOffload, MAX_GENERATED_TOKENS, MODEL_TYPE_CONFUCIUS4_R2T2, MODEL_TYPE_QWEN3_ASR, N_BATCH,
+    QWEN3_ASR_HOTWORDS_MAX_CHARS, backend, gpu_backend_available, init_inference,
+    normalize_hotwords, parse_qwen3_asr_output, parse_qwen3_asr_partial_output, qwen3_asr_language,
+    qwen3_asr_prompt, resolve_auto_gpu_offload, resolve_gpu_offload, resolve_required_model_file,
 };
 
 const MAX_PARTIAL_GENERATED_TOKENS: usize = 256;
@@ -110,7 +110,7 @@ pub(crate) fn validate_streaming_request(
         ));
     }
 
-    if model_type != MODEL_TYPE_QWEN3_ASR {
+    if model_type != MODEL_TYPE_QWEN3_ASR && model_type != MODEL_TYPE_CONFUCIUS4_R2T2 {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             format!("Unknown llama.cpp streaming ASR model type '{model_type}'."),

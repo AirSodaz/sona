@@ -17,6 +17,7 @@ import {
   OpenAILogo,
   ParaformerLogo,
   QwenLogo,
+  R2t2Logo,
   resolveModelBrand,
   SenseVoiceLogo,
   VolcengineLogo,
@@ -28,6 +29,15 @@ describe('ModelLogos - resolveModelBrand', () => {
   it('correctly resolves Qwen ASR models', () => {
     expect(resolveModelBrand({ id: 'qwen3-asr-0.6b-q8-gguf', groupId: 'qwen3-asr' })).toBe('qwen');
     expect(resolveModelBrand({ id: 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25' })).toBe('qwen');
+  });
+  it('correctly resolves Confucius4-R2T2 models', () => {
+    expect(
+      resolveModelBrand({
+        id: 'confucius4-r2t2-q8-gguf',
+        groupId: 'confucius4-r2t2',
+        type: 'qwen3-asr',
+      })
+    ).toBe('r2t2');
   });
 
   it('correctly resolves SenseVoice models', () => {
@@ -270,6 +280,13 @@ describe('ModelLogos - Component Rendering', () => {
     expect(img).toBeTruthy();
     expect(img?.getAttribute('width')).toBe('24');
   });
+  it('renders R2T2 logo image', () => {
+    const { container } = render(<R2t2Logo size={36} />);
+    const img = container.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute('width')).toBe('36');
+    expect(img?.getAttribute('alt')).toBe('Confucius4-R2T2');
+  });
 
   it('renders null via ModelBrandLogo for non-ASR models', () => {
     const { container } = render(
@@ -296,6 +313,7 @@ describe('ModelLogos - Component Rendering', () => {
       'deepgram',
       'assemblyai',
       'elevenlabs',
+      'r2t2',
     ] as const;
 
     for (const brand of brands) {

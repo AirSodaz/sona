@@ -305,6 +305,8 @@ pub fn is_non_llm_model_file(name_or_path: &str) -> bool {
         "silero",
         "punct",
         "diariz",
+        "confucius",
+        "r2t2",
     ];
 
     for indicator in speech_indicators {
@@ -544,6 +546,10 @@ mod tests {
         assert!(is_non_llm_model_file("Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("qwen3-asr-0.6b-q8-gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("mmproj-Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-f16.gguf"));
+        assert!(is_non_llm_model_file("confucius4-r2t2-q8-gguf"));
 
         // General ASR / speech indicators
         assert!(is_non_llm_model_file("custom-asr-model.gguf"));
