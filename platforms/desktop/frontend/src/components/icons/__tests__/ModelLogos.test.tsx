@@ -9,6 +9,7 @@ import {
   FunAsrNanoLogo,
   GenericModelLogo,
   GroqLogo,
+  isAsrModel,
   MetaLogo,
   MistralLogo,
   ModelBrandLogo,
@@ -38,6 +39,22 @@ describe('ModelLogos - resolveModelBrand', () => {
         type: 'qwen3-asr',
       })
     ).toBe('r2t2');
+  });
+  it('does not falsely classify non-R2T2 Confucius models as ASR or R2T2 brand', () => {
+    expect(
+      isAsrModel({
+        id: 'confucius4-t3po',
+        name: 'Confucius4-T3PO',
+        type: 'custom',
+      })
+    ).toBe(false);
+    expect(
+      resolveModelBrand({
+        id: 'confucius4-t3po',
+        name: 'Confucius4-T3PO',
+        type: 'custom',
+      })
+    ).toBeNull();
   });
 
   it('correctly resolves SenseVoice models', () => {

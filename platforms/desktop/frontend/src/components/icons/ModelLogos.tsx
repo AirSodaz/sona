@@ -566,7 +566,6 @@ export function isAsrModel(model: {
     token.includes('assemblyai') ||
     token.includes('assembly') ||
     token.includes('elevenlabs') ||
-    token.includes('confucius') ||
     token.includes('r2t2')
   ) {
     return true;
@@ -612,7 +611,7 @@ export function resolveModelBrand(model: {
   if (token.includes('elevenlabs')) {
     return 'elevenlabs';
   }
-  if (token.includes('confucius') || token.includes('r2t2')) {
+  if (token.includes('r2t2')) {
     return 'r2t2';
   }
   if (token.includes('qwen')) {

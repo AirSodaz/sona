@@ -305,7 +305,6 @@ pub fn is_non_llm_model_file(name_or_path: &str) -> bool {
         "silero",
         "punct",
         "diariz",
-        "confucius",
         "r2t2",
     ];
 
@@ -564,6 +563,8 @@ mod tests {
         assert!(!is_non_llm_model_file("google/gemma-4-e2b"));
         assert!(!is_non_llm_model_file("Llama-3.2-3B-Instruct.gguf"));
         assert!(!is_non_llm_model_file("DeepSeek-R1-Distill-Qwen-7B.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO-Q8_0.gguf"));
     }
 
     #[test]

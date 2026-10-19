@@ -1064,10 +1064,6 @@ fn resolves_canonical_aliases_and_suggestions() {
         canonical_preset_model_id("r2t2"),
         Some("confucius4-r2t2-q8-gguf")
     );
-    assert_eq!(
-        canonical_preset_model_id("confucius"),
-        Some("confucius4-r2t2-q8-gguf")
-    );
 
     let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");
     assert_eq!(whisper.id, "sherpa-onnx-whisper-turbo");
