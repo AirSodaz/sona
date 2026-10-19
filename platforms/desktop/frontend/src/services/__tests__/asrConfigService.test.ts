@@ -6,6 +6,8 @@ import {
   createVolcengineDoubaoSelection,
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   isAsrRequestConfigured,
+  isBatchVadExemptModel,
+  isBatchVadForced,
   isVolcengineFlashBatchMode,
   resolveAsrTranscriptionRequest,
   syncLegacyAsrSelectionFields,
@@ -290,6 +292,49 @@ describe('asrConfigService', () => {
       vadBuffer: 8,
       batchSegmentationMode: 'whole',
     });
+  });
+  it('evaluates isBatchVadExemptModel cleanly for exempt and non-exempt models', () => {
+    expect(isBatchVadExemptModel({ type: 'qwen3-asr' })).toBe(true);
+    expect(isBatchVadExemptModel({ type: 'parakeet-tdt' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'confucius4-r2t2-q8-gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/Confucius4-R2T2-Q8_0.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'qwen3-asr-0.6b-q8-gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/qwen3_asr.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'sherpa-onnx-sense-voice-zh-en' })).toBe(false);
+    expect(isBatchVadExemptModel({ id: 'confucius4-t3po' })).toBe(false);
+  });
+
+  it('evaluates isBatchVadForced correctly on AsrModelSelection', () => {
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'qwen3-asr-0.6b-q8-gguf',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'confucius4-r2t2-q8-gguf',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'local-batch',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(true);
+    expect(
+      isBatchVadForced({
+        engine: 'online',
+        mode: 'batch',
+      })
+    ).toBe(false);
   });
 
   it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled in config', () => {

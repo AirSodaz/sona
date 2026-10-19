@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import type { CudaAddonInspection } from '../../bindings';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import {
+  isBatchVadForced as checkBatchVadForced,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
   syncLegacyAsrSelectionFields,
   syncLiveAsrSelectionFields,
@@ -35,7 +36,6 @@ import type {
   ModelCatalogSectionType,
   ModelSelectionOption,
 } from '../../types/modelCatalog';
-import { PRESET_MODELS_MAP } from '../../types/modelCatalog';
 import { findSelectedModelByMode } from '../../utils/modelSelection';
 import {
   getScenarioVadBufferSize,
@@ -146,38 +146,7 @@ export function SettingsModelsTab({
     if (!isBatchScenario) {
       return false;
     }
-    const selection = modelConfig.asr?.selections.batch;
-    if (selection?.engine !== 'local') {
-      return false;
-    }
-    const modelInfo = selection.modelId
-      ? undefined
-      : findSelectedModelByMode(selection.modelPath, 'batch');
-    const modelId = selection.modelId ?? modelInfo?.id;
-    const preset = modelId ? PRESET_MODELS_MAP.get(modelId) : undefined;
-    const modelType = (preset?.type || modelInfo?.type || '').toLowerCase();
-    const idLower = (modelId || '').toLowerCase();
-    const pathLower = (selection.modelPath || '').toLowerCase();
-
-    if (!modelId && !pathLower) {
-      return false;
-    }
-
-    const isExempt =
-      modelType === 'qwen3-asr' ||
-      modelType === 'parakeet-tdt' ||
-      idLower.includes('qwen3-asr') ||
-      idLower.includes('qwen3_asr') ||
-      idLower.includes('parakeet-tdt') ||
-      idLower.includes('parakeet_tdt') ||
-      idLower.includes('r2t2') ||
-      pathLower.includes('qwen3-asr') ||
-      pathLower.includes('qwen3_asr') ||
-      pathLower.includes('parakeet-tdt') ||
-      pathLower.includes('parakeet_tdt') ||
-      pathLower.includes('r2t2');
-
-    return !isExempt;
+    return checkBatchVadForced(modelConfig.asr?.selections.batch);
   }, [isBatchScenario, modelConfig.asr?.selections.batch]);
 
   const [cudaStatus, setCudaStatus] = useState<CudaAddonInspection | null>(null);
