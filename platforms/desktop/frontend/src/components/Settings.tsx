@@ -356,7 +356,11 @@ export function Settings({
       clearTimeout(highlightTimeoutRef.current);
       highlightTimeoutRef.current = null;
     }
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const prefersReducedMotion =
+      typeof window !== 'undefined' &&
+      typeof window.matchMedia === 'function' &&
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    el.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'center' });
     el.classList.add('settings-item--highlighted');
     highlightedElementRef.current = el;
     highlightTimeoutRef.current = setTimeout(() => {

@@ -223,8 +223,8 @@ export function highlightMatches(text: string, query: string): React.ReactNode {
     return text;
   }
   const pattern = uniqueTerms
-    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .sort((a, b) => b.length - a.length)
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('|');
   const regex = new RegExp(`(${pattern})`, 'gi');
   const nodes: React.ReactNode[] = [];
