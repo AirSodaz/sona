@@ -1,26 +1,39 @@
 import type { SettingsTab } from '../../../types/settings';
+import type { ModelScenario } from '../SettingsModelsTab';
+import type { SubtitleSubTab } from '../SettingsSubtitleTab';
+import type { PromptsSubTab, VocabularySubTab } from '../SettingsVocabularyTab';
+import { SETTINGS_TAB_GROUPS } from '../settingsLoaders';
 
-export type SettingsSubTab =
-  | 'subtitles'
-  | 'voice_typing'
-  | 'recognition'
-  | 'prompts'
-  | 'speakers'
-  | 'live'
-  | 'batch';
-
-export interface SettingsSearchItem {
+type SearchItemBase = {
   id: string;
-  tab: SettingsTab;
-  subTab?: SettingsSubTab;
-  promptsSubTab?: 'polish' | 'translation' | 'summary';
-  targetId?: string;
-  groupKey: string;
   tabKey: string;
   sectionKey?: string;
   titleKey: string;
   hintKey?: string;
   keywords?: readonly string[];
+  targetId?: string;
+  fallbackTargetId?: string;
+};
+
+export type SettingsSearchItem =
+  | (SearchItemBase & { tab: 'subtitle'; subTab?: SubtitleSubTab })
+  | (SearchItemBase & { tab: 'models'; subTab?: ModelScenario })
+  | (SearchItemBase & {
+      tab: 'vocabulary';
+      subTab?: VocabularySubTab;
+      promptsSubTab?: PromptsSubTab;
+    })
+  | (SearchItemBase & {
+      tab: Exclude<SettingsTab, 'subtitle' | 'models' | 'vocabulary'>;
+      subTab?: never;
+      promptsSubTab?: never;
+    });
+
+export function groupKeyForTab(tab: SettingsTab): string {
+  return (
+    SETTINGS_TAB_GROUPS.find((group) => group.tabs.includes(tab))?.labelKey ??
+    'settings.group.general'
+  );
 }
 
 export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
@@ -31,7 +44,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-language',
     tab: 'general',
     targetId: 'settings-language',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     sectionKey: 'settings.general_title',
     titleKey: 'settings.language',
@@ -42,7 +54,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-theme',
     tab: 'general',
     targetId: 'settings-theme',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     sectionKey: 'settings.general_title',
     titleKey: 'settings.theme',
@@ -52,7 +63,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-font',
     tab: 'general',
     targetId: 'settings-font',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     sectionKey: 'settings.general_title',
     titleKey: 'settings.font',
@@ -62,7 +72,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-tray-exit',
     tab: 'general',
     targetId: 'settings-tray-exit',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     titleKey: 'settings.minimize_to_tray',
     hintKey: 'settings.minimize_to_tray_hint',
@@ -72,7 +81,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-auto-start',
     tab: 'general',
     targetId: 'settings-auto-start',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     titleKey: 'settings.auto_start',
     hintKey: 'settings.auto_start_hint',
@@ -82,7 +90,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-silent-start',
     tab: 'general',
     targetId: 'settings-silent-start',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     titleKey: 'settings.silent_start',
     hintKey: 'settings.silent_start_hint',
@@ -92,7 +99,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-auto-check-updates',
     tab: 'general',
     targetId: 'settings-auto-check-updates',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     titleKey: 'settings.auto_check_updates',
     keywords: ['update', 'upgrade', 'check', '自动更新', '版本检查', '更新', 'gengxin'],
@@ -101,7 +107,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-log-level',
     tab: 'general',
     targetId: 'settings-log-level',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     titleKey: 'settings.log_level',
     hintKey: 'settings.log_level_hint',
@@ -111,7 +116,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'general-diagnostics',
     tab: 'general',
     targetId: 'settings-diagnostics',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     sectionKey: 'settings.diagnostics.title',
     titleKey: 'settings.diagnostics.entry_title',
@@ -136,7 +140,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'dashboard-overview',
     tab: 'dashboard',
     targetId: 'settings-dashboard-overview',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.dashboard.title',
     titleKey: 'settings.dashboard.global_content',
     hintKey: 'settings.dashboard.global_content_description',
@@ -165,7 +168,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'dashboard-llm-usage',
     tab: 'dashboard',
     targetId: 'settings-dashboard-llm',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.dashboard.title',
     titleKey: 'settings.dashboard.llm_usage',
     hintKey: 'settings.dashboard.llm_usage_description',
@@ -192,7 +194,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'shortcuts-record',
     tab: 'shortcuts',
     targetId: 'settings-shortcut-record',
-    groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     sectionKey: 'shortcuts.section_live',
     titleKey: 'shortcuts.record_start_stop',
@@ -213,7 +214,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'shortcuts-pause',
     tab: 'shortcuts',
     targetId: 'settings-shortcut-pause',
-    groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     sectionKey: 'shortcuts.section_live',
     titleKey: 'shortcuts.record_pause_resume',
@@ -223,7 +223,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'shortcuts-playback',
     tab: 'shortcuts',
     targetId: 'settings-shortcut-playback',
-    groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     titleKey: 'shortcuts.section_playback',
     keywords: [
@@ -244,7 +243,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'shortcuts-search',
     tab: 'shortcuts',
     targetId: 'settings-shortcut-search',
-    groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     titleKey: 'shortcuts.section_search',
     keywords: ['search', 'find', 'navigate', 'ctrl+f', 'cmd+f', '搜索快捷键', '查找', '匹配'],
@@ -253,7 +251,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'shortcuts-editor',
     tab: 'shortcuts',
     targetId: 'settings-shortcut-editor',
-    groupKey: 'settings.group.general',
     tabKey: 'shortcuts.title',
     titleKey: 'shortcuts.section_editor',
     keywords: [
@@ -276,7 +273,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'about-version',
     tab: 'about',
     targetId: 'settings-about-version',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.about',
     titleKey: 'settings.about_version',
     hintKey: 'settings.about_desc',
@@ -297,7 +293,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'about-check-updates',
     tab: 'about',
     targetId: 'settings-about-check-updates',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.about',
     titleKey: 'settings.about_check_updates',
     keywords: ['update', 'upgrade', 'check', 'download', '检查更新', '新版本', '升级'],
@@ -306,7 +301,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'about-logs',
     tab: 'about',
     targetId: 'settings-about-logs',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.about',
     titleKey: 'settings.about_open_logs',
     hintKey: 'settings.about_open_logs_desc',
@@ -316,7 +310,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'about-homepage',
     tab: 'about',
     targetId: 'settings-about-homepage',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.about',
     titleKey: 'settings.about_source_code',
     keywords: [
@@ -339,7 +332,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-device',
     tab: 'microphone',
     targetId: 'settings-input-device',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.microphone_title',
     titleKey: 'settings.microphone_selection',
@@ -361,7 +353,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-boost',
     tab: 'microphone',
     targetId: 'settings-mic-boost',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.microphone_title',
     titleKey: 'settings.microphone_boost',
@@ -382,7 +373,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-keep-active',
     tab: 'microphone',
     targetId: 'settings-keep-mic-active',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.microphone_title',
     titleKey: 'settings.keep_microphone_active',
@@ -402,7 +392,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-system-audio',
     tab: 'microphone',
     targetId: 'settings-system-audio',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.system_audio_title',
     titleKey: 'settings.system_audio_selection',
@@ -423,7 +412,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-mute-recording',
     tab: 'microphone',
     targetId: 'settings-mute-recording',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.system_audio_title',
     titleKey: 'settings.mute_during_recording',
@@ -434,7 +422,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'microphone-ffmpeg',
     tab: 'microphone',
     targetId: 'settings-ffmpeg',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.input_device',
     sectionKey: 'settings.ffmpeg_title',
     titleKey: 'settings.enable_ffmpeg',
@@ -459,7 +446,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'models-hub',
     tab: 'models',
     targetId: 'settings-model-hub',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.model_hub',
     hintKey: 'settings.model_settings_description',
@@ -482,7 +468,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'models',
     subTab: 'live',
     targetId: 'settings-vad-path',
-    groupKey: 'settings.group.audio',
+    fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.vad_models',
     hintKey: 'settings.vad_rule_hint',
@@ -504,7 +490,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'models',
     subTab: 'batch',
     targetId: 'settings-batch-vad',
-    groupKey: 'settings.group.audio',
+    fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.batch_vad_enabled',
     hintKey: 'settings.batch_vad_enabled_hint',
@@ -515,7 +501,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'models',
     subTab: 'live',
     targetId: 'settings-punctuation-path',
-    groupKey: 'settings.group.audio',
+    fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.punctuation_models',
     keywords: ['punct', 'punctuation', 'punc', '标点', '标点模型', '标点符号', 'biaodian'],
@@ -524,7 +510,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'models-mirror',
     tab: 'models',
     targetId: 'settings-download-mirror',
-    groupKey: 'settings.group.audio',
+    fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.model_download_mirror',
     hintKey: 'settings.model_download_mirror_hint',
@@ -543,7 +529,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'models-gpu',
     tab: 'models',
     targetId: 'settings-gpu-acceleration',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.gpu_acceleration_label',
     hintKey: 'settings.gpu_acceleration_hint',
@@ -569,7 +554,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'subtitles',
     targetId: 'settings-subtitle-window',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.subtitle_behavior_title',
     titleKey: 'live.subtitle_settings',
@@ -593,7 +577,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'subtitles',
     targetId: 'settings-subtitle-appearance',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     titleKey: 'settings.subtitle_appearance_title',
     hintKey: 'settings.subtitle_appearance_desc',
@@ -615,7 +598,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-enable',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     titleKey: 'settings.enable_voice_typing',
     hintKey: 'settings.enable_voice_typing_hint',
@@ -635,7 +617,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-shortcut',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.voice_typing_section_interaction',
     titleKey: 'settings.voice_typing_shortcut',
@@ -647,7 +628,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-mode',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.voice_typing_section_interaction',
     titleKey: 'settings.voice_typing_mode',
@@ -659,7 +639,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-processing',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.voice_typing_section_processing',
     titleKey: 'settings.voice_typing_processing_mode',
@@ -671,7 +650,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-cjk',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.voice_typing_section_typography_sound',
     titleKey: 'settings.voice_typing_cjk_spacing_enabled',
@@ -694,7 +672,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-context',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     sectionKey: 'settings.voice_typing_section_context',
     titleKey: 'settings.voice_typing_context_awareness_enabled',
@@ -717,7 +694,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'subtitle',
     subTab: 'voice_typing',
     targetId: 'settings-voice-typing-history',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.subtitle_voice_typing_title',
     titleKey: 'settings.voice_typing_history',
     hintKey: 'settings.voice_typing_history_hint',
@@ -742,7 +718,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'vocabulary',
     subTab: 'recognition',
     targetId: 'settings-vocabulary-dict',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.unified_dictionary_title',
     hintKey: 'settings.unified_dictionary_desc',
@@ -764,7 +739,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'vocabulary',
     subTab: 'recognition',
     targetId: 'settings-vocabulary-replacements',
-    groupKey: 'settings.group.audio',
+    fallbackTargetId: 'settings-vocabulary-dict',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.dict_replacements_title',
     hintKey: 'settings.dict_replacements_desc',
@@ -786,7 +761,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     subTab: 'prompts',
     promptsSubTab: 'polish',
     targetId: 'settings-vocabulary-context-presets',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.context_default_title',
     hintKey: 'settings.context_default_description',
@@ -808,7 +782,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     subTab: 'prompts',
     promptsSubTab: 'translation',
     targetId: 'settings-vocabulary-translation',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.translation_automation_title',
     hintKey: 'settings.translation_automation_description',
@@ -829,7 +802,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     subTab: 'prompts',
     promptsSubTab: 'summary',
     targetId: 'settings-vocabulary-summary-templates',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.summary_templates_default_title',
     hintKey: 'settings.summary_templates_default_description',
@@ -850,7 +822,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'vocabulary',
     subTab: 'speakers',
     targetId: 'settings-vocabulary-speaker-profiles',
-    groupKey: 'settings.group.audio',
     tabKey: 'settings.vocabulary',
     titleKey: 'settings.speaker_profiles_title',
     hintKey: 'settings.speaker_profiles_description',
@@ -873,7 +844,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-providers',
     tab: 'llm_service',
     targetId: 'settings-llm-provider-list',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.credentials_section',
     hintKey: 'settings.llm.credentials_hint',
@@ -904,10 +874,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-api-keys',
     tab: 'llm_service',
     targetId: 'settings-llm-provider-list',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.api_key',
-    hintKey: 'settings.llm.base_url',
     keywords: [
       'api key',
       'base url',
@@ -925,7 +893,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-models-config',
     tab: 'llm_service',
     targetId: 'settings-llm-models-config',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.feature_models',
     hintKey: 'settings.llm.feature_models_runtime_hint',
@@ -946,7 +913,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'llm-custom-provider',
     tab: 'llm_service',
     targetId: 'settings-llm-custom-provider',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.custom_provider',
     keywords: [
@@ -967,7 +933,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'automation-rules',
     tab: 'automation',
     targetId: 'settings-automation-rules',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.automation',
     titleKey: 'automation.file_rules',
     hintKey: 'automation.file_rules_description',
@@ -993,7 +958,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'automation-new-rule',
     tab: 'automation',
     targetId: 'settings-automation-new-rule',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.automation',
     titleKey: 'automation.new_rule',
     hintKey: 'automation.file_list_hint',
@@ -1015,7 +979,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'storage-data-dir',
     tab: 'storage',
     targetId: 'settings-storage-data-dir',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.storage.title',
     sectionKey: 'settings.storage.locations_title',
     titleKey: 'settings.storage.data_dir_title',
@@ -1041,7 +1004,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'storage-models-dir',
     tab: 'storage',
     targetId: 'settings-storage-models-dir',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.storage.title',
     sectionKey: 'settings.storage.locations_title',
     titleKey: 'settings.storage.models_dir_title',
@@ -1061,7 +1023,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'storage-cleanup',
     tab: 'storage',
     targetId: 'settings-storage-cleanup',
-    groupKey: 'settings.group.infrastructure',
+    fallbackTargetId: 'settings-panel-storage',
     tabKey: 'settings.storage.title',
     titleKey: 'settings.storage.clear_webview',
     hintKey: 'settings.storage.webview_description',
@@ -1081,7 +1043,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'storage-retention',
     tab: 'storage',
     targetId: 'settings-history-audio-retention',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.storage.title',
     titleKey: 'settings.storage.retention_label',
     hintKey: 'settings.storage.retention_hint',
@@ -1105,7 +1066,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'sync-toggle',
     tab: 'sync',
     targetId: 'settings-sync-toggle',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.sync.title',
     titleKey: 'settings.sync.enable_cloud_sync',
     hintKey: 'settings.sync.enable_cloud_sync_hint',
@@ -1126,7 +1086,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'sync-credentials',
     tab: 'sync',
     targetId: 'settings-sync-webdav',
-    groupKey: 'settings.group.infrastructure',
+    fallbackTargetId: 'settings-sync-toggle',
     tabKey: 'settings.sync.title',
     titleKey: 'settings.sync.storage_type_label',
     hintKey: 'settings.sync.storage_type_hint',
@@ -1150,7 +1110,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'sync-encryption',
     tab: 'sync',
     targetId: 'settings-sync-encryption',
-    groupKey: 'settings.group.infrastructure',
+    fallbackTargetId: 'settings-sync-toggle',
     tabKey: 'settings.sync.title',
     titleKey: 'settings.sync.master_password',
     hintKey: 'settings.sync.master_password_hint',
@@ -1170,7 +1130,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'sync-recovery-key',
     tab: 'sync',
     targetId: 'settings-sync-recovery-key',
-    groupKey: 'settings.group.infrastructure',
+    fallbackTargetId: 'settings-sync-toggle',
     tabKey: 'settings.sync.title',
     titleKey: 'settings.sync.recovery_key',
     hintKey: 'settings.sync.recovery_key_hint',
@@ -1180,7 +1140,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'sync-pairing',
     tab: 'sync',
     targetId: 'settings-sync-pairing',
-    groupKey: 'settings.group.infrastructure',
+    fallbackTargetId: 'settings-sync-toggle',
     tabKey: 'settings.sync.title',
     titleKey: 'settings.sync.pairing_token_label',
     hintKey: 'settings.sync.pairing_token_hint',
@@ -1194,7 +1154,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'api-server-switch',
     tab: 'api_server',
     targetId: 'settings-api-server-switch',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.api_server.title',
     titleKey: 'settings.api_server.enable_label',
     hintKey: 'settings.api_server.enable_hint',
@@ -1215,7 +1174,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'api-server-auth',
     tab: 'api_server',
     targetId: 'settings-api-server-auth',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.api_server.title',
     titleKey: 'settings.api_server.api_key_label',
     hintKey: 'settings.api_server.api_key_hint',
@@ -1238,7 +1196,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'mcp-switch',
     tab: 'mcp',
     targetId: 'settings-mcp-servers',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.mcp.title',
     titleKey: 'settings.mcp.enable_label',
     hintKey: 'settings.mcp.enable_hint',
@@ -1258,7 +1215,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'mcp-permission',
     tab: 'mcp',
     targetId: 'settings-mcp-permission',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.mcp.title',
     titleKey: 'settings.mcp.mode_title',
     hintKey: 'settings.mcp.mode_hint',
@@ -1277,7 +1233,6 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     id: 'mcp-audit-log',
     tab: 'mcp',
     targetId: 'settings-mcp-logs',
-    groupKey: 'settings.group.infrastructure',
     tabKey: 'settings.mcp.title',
     titleKey: 'settings.mcp.audit_log_title',
     hintKey: 'settings.mcp.audit_log_desc',

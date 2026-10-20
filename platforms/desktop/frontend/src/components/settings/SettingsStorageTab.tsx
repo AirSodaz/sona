@@ -980,7 +980,7 @@ export function SettingsStorageTab(): React.JSX.Element {
           )}
 
           <div className="settings-storage-detail-grid">
-            {usageSnapshot && (
+            {usageSnapshot ? (
               <div className="settings-storage-detail-block">
                 <div className="settings-storage-detail-heading">
                   {t('settings.storage.database_breakdown_title', {
@@ -1041,6 +1041,11 @@ export function SettingsStorageTab(): React.JSX.Element {
                   }
                 />
               </div>
+            ) : (
+              <div
+                className="settings-storage-detail-block settings-storage-detail-block--loading"
+                aria-hidden="true"
+              />
             )}
             <div id="settings-storage-cleanup" className="settings-storage-detail-block">
               <div className="settings-storage-detail-heading">

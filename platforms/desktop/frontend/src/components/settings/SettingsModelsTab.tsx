@@ -70,6 +70,7 @@ const MODEL_DROPDOWN_CONTAINER_STYLE: React.CSSProperties = {
 
 export interface SettingsModelsTabProps {
   isActive?: boolean;
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialScenario?: ModelScenario;
   subTabRequestId?: number;
 }

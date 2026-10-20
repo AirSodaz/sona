@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
+import { deriveSearchTerms } from '../../../../utils/segmentUtils';
 import { SETTINGS_SEARCH_REGISTRY } from '../settingsSearchRegistry';
 import { calculateItemScore, highlightMatches, useSettingsSearch } from '../useSettingsSearch';
 
@@ -246,6 +247,161 @@ describe('calculateItemScore', () => {
     // Title starts with "G", not "a".
     expect(calculateItemScore(item, 'a', t)).toBe(0);
   });
+
+  it('matches multi-concept CJK queries through bigrams', () => {
+    const languageItem = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'general-language')!;
+    const themeItem = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'general-theme')!;
+
+    expect(calculateItemScore(languageItem, '语言主题', mockTranslate)).toBeGreaterThan(0);
+    expect(calculateItemScore(themeItem, '语言主题', mockTranslate)).toBeGreaterThan(0);
+  });
+
+  it('matches Japanese Kana bigrams against translated tab and hint text', () => {
+    const syncItem = SETTINGS_SEARCH_REGISTRY.find((i) => i.id === 'sync-credentials')!;
+    const jaTranslate = (key: string) => {
+      const map: Record<string, string> = {
+        'settings.sync.title': 'クラウド同期',
+        'settings.sync.storage_type_label': 'ストレージタイプ',
+        'settings.sync.storage_type_hint': 'パスワードとサーバーを設定',
+      };
+      return map[key] ?? '';
+    };
+
+    expect(calculateItemScore(syncItem, '同期パスワード', jaTranslate)).toBeGreaterThan(0);
+  });
+
+  it('folds diacritics and full-width characters', () => {
+    const cafeItem = {
+      id: 'test-cafe',
+      titleKey: 'test.title',
+      tabKey: 'test.tab',
+      tab: 'general' as const,
+    };
+    const apiItem = {
+      id: 'test-api',
+      titleKey: 'test.title',
+      tabKey: 'test.tab',
+      tab: 'general' as const,
+    };
+    const cafeTranslate = (key: string) => (key === 'test.title' ? 'Café Settings' : '');
+    const apiTranslate = (key: string) => (key === 'test.title' ? 'API Settings' : '');
+
+    expect(calculateItemScore(cafeItem, 'cafe', cafeTranslate)).toBeGreaterThan(0);
+    expect(calculateItemScore(apiItem, 'ＡＰＩ', apiTranslate)).toBeGreaterThan(0);
+  });
+
+  it('searching Japanese Katakana words with ー matches expected items and does not score unrelated items', () => {
+    const serverItem = {
+      id: 'server-config',
+      titleKey: 'settings.server',
+      tabKey: 'settings.general',
+      tab: 'general' as const,
+    };
+    const unrelatedItem = {
+      id: 'unrelated',
+      titleKey: 'settings.other',
+      tabKey: 'settings.general',
+      tab: 'general' as const,
+    };
+    const jaTranslate = (key: string) => {
+      const map: Record<string, string> = {
+        'settings.server': 'サーバー設定',
+        'settings.other': 'ログ-管理 (詳細)',
+      };
+      return map[key] ?? '';
+    };
+
+    expect(calculateItemScore(serverItem, 'サーバー', jaTranslate)).toBeGreaterThan(0);
+    expect(calculateItemScore(unrelatedItem, 'サーバー', jaTranslate)).toBe(0);
+  });
+
+  it('prevents CJK bigram splitting from causing prefix scoring inversion', () => {
+    const fullPrefixItem = {
+      id: 'full-prefix',
+      titleKey: 'title.full_prefix',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+    };
+    const fullSubstringItem = {
+      id: 'full-substring',
+      titleKey: 'title.full_substring',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+    };
+    const bigramPrefixItem = {
+      id: 'bigram-prefix',
+      titleKey: 'title.bigram_prefix',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+      keywords: ['快捷'], // extra keyword matching the sub-bigram
+    };
+    const exactTitleItem = {
+      id: 'exact-title',
+      titleKey: 'title.exact',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+    };
+
+    const t = (key: string) => {
+      const map: Record<string, string> = {
+        'title.exact': '快捷键',
+        'title.full_prefix': '快捷键设置',
+        'title.full_substring': '自定义快捷键',
+        'title.bigram_prefix': '快捷方式管理',
+        'tab.key': '常规',
+      };
+      return map[key] ?? '';
+    };
+
+    const exactScore = calculateItemScore(exactTitleItem, '快捷键', t);
+    const prefixScore = calculateItemScore(fullPrefixItem, '快捷键', t);
+    const substringScore = calculateItemScore(fullSubstringItem, '快捷键', t);
+    const bigramScore = calculateItemScore(bigramPrefixItem, '快捷键', t);
+
+    // Exact title is definitive 100
+    expect(exactScore).toBe(100);
+
+    // Full query prefix match belongs to Tier 1 [80, 99]
+    expect(prefixScore).toBeGreaterThanOrEqual(80);
+    expect(prefixScore).toBeLessThanOrEqual(99);
+
+    // Full query substring match belongs to Tier 2 [60, 79]
+    expect(substringScore).toBeGreaterThanOrEqual(60);
+    expect(substringScore).toBeLessThanOrEqual(79);
+
+    // Sub-bigram prefix match must NEVER enter Tier 1 or Tier 2; strictly capped in Tier 3 (<= 59)
+    expect(bigramScore).toBeLessThanOrEqual(59);
+
+    // Clean monotonic tier hierarchy: Exact (100) > Full Prefix (80..99) > Full Substring (60..79) > Sub-bigram (<=59)
+    expect(exactScore).toBeGreaterThan(prefixScore);
+    expect(prefixScore).toBeGreaterThan(substringScore);
+    expect(substringScore).toBeGreaterThan(bigramScore);
+  });
+
+  it('does not treat partial CJK bigrams as exact keyword matches', () => {
+    const exactKeywordItem = {
+      id: 'item-exact-keyword',
+      titleKey: 'title.other',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+      keywords: ['快捷键设置'],
+    };
+    const subBigramKeywordItem = {
+      id: 'item-sub-keyword',
+      titleKey: 'title.other',
+      tabKey: 'tab.key',
+      tab: 'general' as const,
+      keywords: ['快捷'],
+    };
+
+    const t = () => '';
+    const exactScore = calculateItemScore(exactKeywordItem, '快捷键设置', t);
+    const subScore = calculateItemScore(subBigramKeywordItem, '快捷键设置', t);
+
+    expect(exactScore).toBe(50); // Exact keyword match (+50)
+    expect(subScore).toBe(40); // Sub-keyword match (+40)
+    expect(exactScore).toBeGreaterThan(subScore);
+  });
 });
 
 describe('useSettingsSearch hook', () => {
@@ -309,6 +465,32 @@ describe('useSettingsSearch hook', () => {
     expect(hit.resolvedHint).toBeUndefined();
     expect(hit.resolvedSection).toBeUndefined();
   });
+
+  it('ranks full query substring matches strictly above sub-bigram prefix matches in search results', () => {
+    // In mock translation:
+    // 'settings.theme' -> '外观主题' (contains full query '主题')
+    // 'test.bigram' -> defaults to '主卧模式' (starts with bigram '主', but does NOT contain '主题')
+    const fullSubstringItem = {
+      id: 'theme-setting',
+      titleKey: 'settings.theme', // '外观主题'
+      tabKey: 'settings.general',
+      tab: 'general' as const,
+    };
+    const subBigramItem = {
+      id: 'master-mode',
+      titleKey: 'test.bigram',
+      tabKey: 'settings.general',
+      tab: 'general' as const,
+      keywords: ['主题'], // extra keyword
+    };
+
+    const { result } = renderHook(() =>
+      useSettingsSearch('主题', { registry: [subBigramItem, fullSubstringItem] })
+    );
+
+    expect(result.current.hits.length).toBeGreaterThanOrEqual(1);
+    expect(result.current.hits[0].id).toBe('theme-setting');
+  });
 });
 
 describe('highlightMatches', () => {
@@ -352,5 +534,38 @@ describe('highlightMatches', () => {
     const children = React.Children.toArray(fragment.props.children);
     const markElements = children.filter((c) => React.isValidElement(c) && c.type === 'mark');
     expect(markElements.length).toBe(2);
+  });
+
+  it('highlights full-width query variants using the original text', () => {
+    const rendered = highlightMatches('API Settings', 'ＡＰＩ');
+    const fragment = rendered as React.ReactElement<{ children: React.ReactNode[] }>;
+    const children = React.Children.toArray(fragment.props.children);
+
+    expect(children.length).toBe(2);
+    const mark = children[0] as React.ReactElement<{ children: string }>;
+    expect(mark.type).toBe('mark');
+    expect(mark.props.children).toBe('API');
+    expect(children[1]).toBe(' Settings');
+  });
+
+  it('CJK compound search "语言主题" renders highlight when matching "应用语言"', () => {
+    const rendered = highlightMatches('应用语言', '语言主题');
+    expect(React.isValidElement(rendered)).toBe(true);
+    const fragment = rendered as React.ReactElement<{ children: React.ReactNode[] }>;
+    const children = React.Children.toArray(fragment.props.children);
+    const markElements = children.filter((c) => React.isValidElement(c) && c.type === 'mark');
+    expect(markElements.length).toBe(1);
+    const mark = markElements[0] as React.ReactElement<{ className: string; children: string }>;
+    expect(mark.props.className).toBe('settings-search-highlight');
+    expect(mark.props.children).toBe('语言');
+  });
+});
+
+describe('deriveSearchTerms', () => {
+  it('strips punctuation and brackets from search terms', () => {
+    expect(deriveSearchTerms('(语言)')).toEqual(['语言']);
+    expect(deriveSearchTerms('【快捷键】')).toEqual(['快捷键', '快捷', '捷键']);
+    expect(deriveSearchTerms('(WebDAV)')).toEqual(['WebDAV']);
+    expect(deriveSearchTerms('()')).toEqual([]);
   });
 });

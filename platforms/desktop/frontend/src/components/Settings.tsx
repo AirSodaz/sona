@@ -1,4 +1,3 @@
-import { Search, X } from 'lucide-react';
 import type React from 'react';
 import { Fragment, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -33,16 +32,54 @@ import { XIcon } from './Icons';
 import type { ModelScenario } from './settings/SettingsModelsTab';
 import type { SubtitleSubTab } from './settings/SettingsSubtitleTab';
 import type { PromptsSubTab, VocabularySubTab } from './settings/SettingsVocabularyTab';
-import { SettingsSearchResults } from './settings/search/SettingsSearchResults';
-import { type SettingsSearchHit, useSettingsSearch } from './settings/search/useSettingsSearch';
+import {
+  SettingsSearchSection,
+  type SettingsSearchSectionHandle,
+} from './settings/search/SettingsSearchSection';
+import type { SettingsSearchHit } from './settings/search/useSettingsSearch';
 import { SETTINGS_TAB_META } from './settings/settingsTabMeta';
 
-type SettingsPendingSubTab = {
-  tab: SettingsTab;
-  subTab?: string;
-  promptsSubTab?: PromptsSubTab;
-  requestId?: number;
-} | null;
+type SettingsNavRequest = {
+  requestId: number;
+  targetId?: string;
+};
+
+type SettingsPendingSubTab =
+  | (SettingsNavRequest & { tab: 'subtitle'; subTab?: SubtitleSubTab; promptsSubTab?: never })
+  | (SettingsNavRequest & { tab: 'models'; subTab?: ModelScenario; promptsSubTab?: never })
+  | (SettingsNavRequest & {
+      tab: 'vocabulary';
+      subTab?: VocabularySubTab;
+      promptsSubTab?: PromptsSubTab;
+    })
+  | (SettingsNavRequest & {
+      tab: Exclude<SettingsTab, 'subtitle' | 'models' | 'vocabulary'>;
+      subTab?: never;
+      promptsSubTab?: never;
+    })
+  | null;
+
+function createPendingSubTab(
+  hit: SettingsSearchHit,
+  requestId: number
+): Exclude<SettingsPendingSubTab, null> {
+  const base = { requestId, targetId: hit.targetId };
+  switch (hit.tab) {
+    case 'subtitle':
+      return { ...base, tab: 'subtitle', subTab: hit.subTab };
+    case 'models':
+      return { ...base, tab: 'models', subTab: hit.subTab };
+    case 'vocabulary':
+      return {
+        ...base,
+        tab: 'vocabulary',
+        subTab: hit.subTab,
+        promptsSubTab: hit.promptsSubTab,
+      };
+    default:
+      return { ...base, tab: hit.tab };
+  }
+}
 /** Props for the Settings modal. */
 interface SettingsProps {
   isOpen: boolean;
@@ -96,7 +133,7 @@ function renderSettingsPane(
         <SettingsSubtitleTab
           initialSubTab={
             pendingSubTab?.tab === 'subtitle'
-              ? (pendingSubTab.subTab as SubtitleSubTab)
+              ? pendingSubTab.subTab
               : initialTab === 'voice_typing'
                 ? 'voice_typing'
                 : undefined
@@ -109,9 +146,7 @@ function renderSettingsPane(
         <SettingsModelsPane
           isOpen={isOpen}
           isActive={isActive}
-          initialScenario={
-            pendingSubTab?.tab === 'models' ? (pendingSubTab.subTab as ModelScenario) : undefined
-          }
+          initialScenario={pendingSubTab?.tab === 'models' ? pendingSubTab.subTab : undefined}
           subTabRequestId={pendingSubTab?.tab === 'models' ? pendingSubTab.requestId : undefined}
         />
       );
@@ -120,7 +155,7 @@ function renderSettingsPane(
         <SettingsVocabularyTab
           initialSubTab={
             pendingSubTab?.tab === 'vocabulary'
-              ? (pendingSubTab.subTab as VocabularySubTab)
+              ? pendingSubTab.subTab
               : initialTab === 'context'
                 ? 'prompts'
                 : undefined
@@ -138,7 +173,13 @@ function renderSettingsPane(
     case 'storage':
       return <SettingsStorageTab />;
     case 'sync':
-      return <SettingsSyncTab isVisible={isOpen} isPrewarming={isPrewarming} />;
+      return (
+        <SettingsSyncTab
+          isVisible={isOpen}
+          isPrewarming={isPrewarming}
+          navRequest={pendingSubTab?.tab === 'sync' ? pendingSubTab : undefined}
+        />
+      );
     case 'api_server':
       return <SettingsApiServerTab />;
     case 'mcp':
@@ -286,13 +327,12 @@ export function Settings({
   );
 
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
+  const searchSectionRef = useRef<SettingsSearchSectionHandle>(null);
+  const navRequestIdRef = useRef(0);
   const [pendingSubTab, setPendingSubTab] = useState<SettingsPendingSubTab>(null);
   const isMac =
     typeof navigator !== 'undefined' &&
     /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent || '');
-  const { hits } = useSettingsSearch(searchQuery);
   const highlightTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const highlightedElementRef = useRef<HTMLElement | null>(null);
   const scrollRafRef = useRef<number | null>(null);
@@ -309,6 +349,23 @@ export function Settings({
     document.querySelectorAll('.settings-item--highlighted').forEach((node) => {
       node.classList.remove('settings-item--highlighted');
     });
+  }, []);
+
+  const applyHighlight = useCallback((el: HTMLElement) => {
+    if (highlightTimeoutRef.current) {
+      clearTimeout(highlightTimeoutRef.current);
+      highlightTimeoutRef.current = null;
+    }
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.classList.add('settings-item--highlighted');
+    highlightedElementRef.current = el;
+    highlightTimeoutRef.current = setTimeout(() => {
+      el.classList.remove('settings-item--highlighted');
+      if (highlightedElementRef.current === el) {
+        highlightedElementRef.current = null;
+      }
+      highlightTimeoutRef.current = null;
+    }, 1600);
   }, []);
 
   const navigateToTab = useCallback(
@@ -333,10 +390,13 @@ export function Settings({
     const scrolled = e.currentTarget.scrollTop > 4;
     setIsSidebarScrolled((prev) => (prev !== scrolled ? scrolled : prev));
   }, []);
-  const navigationContextValue = {
-    activeTab: renderedTab,
-    navigateToTab,
-  };
+  const navigationContextValue = useMemo(
+    () => ({
+      activeTab: renderedTab,
+      navigateToTab,
+    }),
+    [renderedTab, navigateToTab]
+  );
 
   useEffect(() => {
     return () => {
@@ -348,8 +408,6 @@ export function Settings({
   }, [clearHighlight]);
   useEffect(() => {
     if (!isOpen) {
-      setSearchQuery('');
-      setActiveIndex(0);
       setPendingSubTab(null);
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
@@ -362,16 +420,8 @@ export function Settings({
   const handleSelectResult = useCallback(
     (hit: SettingsSearchHit) => {
       navigateToTab(hit.tab);
-      setPendingSubTab(
-        hit.subTab
-          ? {
-              tab: hit.tab,
-              subTab: hit.subTab,
-              promptsSubTab: hit.promptsSubTab,
-              requestId: Date.now(),
-            }
-          : null
-      );
+      navRequestIdRef.current += 1;
+      setPendingSubTab(createPendingSubTab(hit, navRequestIdRef.current));
 
       const targetId = hit.targetId;
       if (!targetId) return;
@@ -395,79 +445,28 @@ export function Settings({
         }
         if (el && !el.closest('[hidden]')) {
           scrollRafRef.current = null;
-          el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          el.classList.add('settings-item--highlighted');
-          highlightedElementRef.current = el;
-
-          highlightTimeoutRef.current = setTimeout(() => {
-            el.classList.remove('settings-item--highlighted');
-            if (highlightedElementRef.current === el) {
-              highlightedElementRef.current = null;
-            }
-            highlightTimeoutRef.current = null;
-          }, 1600);
+          applyHighlight(el);
         } else if (performance.now() - startTime < maxDurationMs) {
           scrollRafRef.current = requestAnimationFrame(findAndScroll);
         } else {
           scrollRafRef.current = null;
-          if (hit.tab === 'sync') {
-            const fallbackEl = document.getElementById('settings-sync-toggle');
-            if (fallbackEl && !fallbackEl.closest('[hidden]')) {
-              fallbackEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              fallbackEl.classList.add('settings-item--highlighted');
-              highlightedElementRef.current = fallbackEl;
-              highlightTimeoutRef.current = setTimeout(() => {
-                fallbackEl.classList.remove('settings-item--highlighted');
-                if (highlightedElementRef.current === fallbackEl) {
-                  highlightedElementRef.current = null;
-                }
-                highlightTimeoutRef.current = null;
-              }, 1600);
-            }
+          const fallbackEl = hit.fallbackTargetId
+            ? document.getElementById(hit.fallbackTargetId)
+            : null;
+          if (fallbackEl && !fallbackEl.closest('[hidden]')) {
+            applyHighlight(fallbackEl);
           }
         }
       };
 
       scrollRafRef.current = requestAnimationFrame(findAndScroll);
     },
-    [clearHighlight, navigateToTab]
+    [applyHighlight, clearHighlight, navigateToTab]
   );
 
-  const handleSearchInputKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.nativeEvent.isComposing) {
-        return;
-      }
-
-      if (e.key === 'ArrowDown') {
-        if (hits.length > 0) {
-          e.preventDefault();
-          setActiveIndex((prev) => (prev + 1) % hits.length);
-        }
-      } else if (e.key === 'ArrowUp') {
-        if (hits.length > 0) {
-          e.preventDefault();
-          setActiveIndex((prev) => (prev - 1 + hits.length) % hits.length);
-        }
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (hits.length > 0 && hits[activeIndex]) {
-          handleSelectResult(hits[activeIndex]);
-        }
-      } else if (e.key === 'Escape') {
-        if (isAnyDialogOpen()) {
-          return;
-        }
-        if (searchQuery.length > 0) {
-          e.preventDefault();
-          e.stopPropagation();
-          setSearchQuery('');
-          setActiveIndex(0);
-        }
-      }
-    },
-    [activeIndex, handleSelectResult, hits, searchQuery]
-  );
+  const handleQueryEmptied = useCallback(() => {
+    setPendingSubTab(null);
+  }, []);
 
   // Focus management
   useFocusTrap(isOpen, onClose, modalRef);
@@ -571,10 +570,16 @@ export function Settings({
 
       const isSearchShortcut = isMac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
       if (isSearchShortcut && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'f') {
+        const activeElement = document.activeElement;
+        const isEditable =
+          activeElement instanceof HTMLInputElement ||
+          activeElement instanceof HTMLTextAreaElement ||
+          (activeElement instanceof HTMLElement && activeElement.isContentEditable);
+        if (isEditable && activeElement !== searchInputRef.current) {
+          return;
+        }
         e.preventDefault();
-        e.stopPropagation();
-        searchInputRef.current?.focus();
-        searchInputRef.current?.select();
+        searchSectionRef.current?.focusAndSelect();
         return;
       }
 
@@ -644,74 +649,25 @@ export function Settings({
         onKeyDown={
           isOpen
             ? (e) => {
-                if (e.key === 'Escape' && searchQuery.length > 0 && !isAnyDialogOpen()) {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setSearchQuery('');
-                  setActiveIndex(0);
-                  searchInputRef.current?.focus();
+                if (e.key === 'Escape' && !isAnyDialogOpen()) {
+                  if (searchSectionRef.current?.clearIfSearching()) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                  }
                 }
               }
             : undefined
         }
       >
-        <div className={`settings-sidebar-header ${isSidebarScrolled ? 'is-scrolled' : ''}`}>
-          <h2 id="settings-title">{t('settings.title')}</h2>
-          <div className="settings-search-bar">
-            <Search size={14} className="settings-search-icon" aria-hidden="true" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              role="searchbox"
-              className="settings-search-input"
-              aria-label={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
-              placeholder={t('settings.search_placeholder', { defaultValue: 'Search settings...' })}
-              aria-expanded={Boolean(searchQuery.trim() && hits.length > 0)}
-              aria-haspopup="listbox"
-              aria-autocomplete="list"
-              aria-controls={
-                searchQuery.trim() && hits.length > 0 ? 'settings-search-listbox' : undefined
-              }
-              aria-activedescendant={
-                searchQuery.trim() && hits.length > 0 && hits[activeIndex]
-                  ? `settings-search-result-${hits[activeIndex].id}`
-                  : undefined
-              }
-              value={searchQuery}
-              onChange={(e) => {
-                setSearchQuery(e.target.value);
-                setActiveIndex(0);
-              }}
-              onKeyDown={handleSearchInputKeyDown}
-            />
-            {searchQuery ? (
-              <button
-                type="button"
-                className="settings-search-clear"
-                onClick={() => {
-                  setSearchQuery('');
-                  setActiveIndex(0);
-                  searchInputRef.current?.focus();
-                }}
-                aria-label={t('common.clear_search', { defaultValue: 'Clear search' })}
-              >
-                <X size={12} />
-              </button>
-            ) : (
-              <kbd className="settings-search-shortcut">{isMac ? '⌘F' : 'Ctrl F'}</kbd>
-            )}
-          </div>
-        </div>
-
-        {searchQuery.trim().length > 0 ? (
-          <SettingsSearchResults
-            hits={hits}
-            searchQuery={searchQuery}
-            activeIndex={activeIndex}
-            onSelectResult={handleSelectResult}
-            onHoverResult={setActiveIndex}
-          />
-        ) : (
+        <SettingsSearchSection
+          ref={searchSectionRef}
+          inputRef={searchInputRef}
+          isOpen={isOpen}
+          isMac={isMac}
+          isSidebarScrolled={isSidebarScrolled}
+          onSelectResult={handleSelectResult}
+          onQueryEmptied={handleQueryEmptied}
+        >
           <div
             className="settings-tabs-container"
             role="tablist"
@@ -739,7 +695,7 @@ export function Settings({
               </Fragment>
             ))}
           </div>
-        )}
+        </SettingsSearchSection>
       </div>
       {/* Main Content */}
       <div className="settings-content">

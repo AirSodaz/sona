@@ -19,7 +19,6 @@ const mockHits: SettingsSearchHit[] = [
     id: 'general-language',
     tab: 'general',
     targetId: 'settings-language',
-    groupKey: 'settings.group.general',
     tabKey: 'settings.general',
     sectionKey: 'settings.general_title',
     titleKey: 'settings.language',
@@ -33,7 +32,6 @@ const mockHits: SettingsSearchHit[] = [
     id: 'llm-providers',
     tab: 'llm_service',
     targetId: 'settings-llm-provider-list',
-    groupKey: 'settings.group.intelligence',
     tabKey: 'settings.llm.title',
     titleKey: 'settings.llm.credentials_section',
     score: 50,
@@ -73,8 +71,7 @@ describe('SettingsSearchResults component', () => {
     expect(screen.getByText('智能增强 > 大模型服务')).toBeDefined();
 
     const header = container.querySelector('.settings-search-header');
-    expect(header?.getAttribute('role')).toBe('presentation');
-    expect(header?.getAttribute('aria-hidden')).toBe('true');
+    expect(header?.getAttribute('aria-hidden')).toBeNull();
 
     const breadcrumbElements = container.querySelectorAll('.settings-search-result-breadcrumb');
     expect(breadcrumbElements).toHaveLength(2);
@@ -152,25 +149,6 @@ describe('SettingsSearchResults component', () => {
     expect(marks[0].textContent).toBe('语');
   });
 
-  it('pressing Enter or Space on an option triggers onSelectResult', () => {
-    const onSelectResult = vi.fn();
-    render(
-      <SettingsSearchResults
-        hits={mockHits}
-        searchQuery="语"
-        activeIndex={0}
-        onSelectResult={onSelectResult}
-      />
-    );
-
-    const options = screen.getAllByRole('option');
-    fireEvent.keyDown(options[0], { key: 'Enter' });
-    expect(onSelectResult).toHaveBeenCalledWith(mockHits[0]);
-
-    fireEvent.keyDown(options[1], { key: ' ' });
-    expect(onSelectResult).toHaveBeenCalledWith(mockHits[1]);
-  });
-
   it('suppresses hover updates while in keyboard navigation mode until real mousemove occurs', () => {
     const onHoverResult = vi.fn();
     render(
@@ -201,5 +179,26 @@ describe('SettingsSearchResults component', () => {
     // Hover should now work again
     fireEvent.mouseMove(options[1]);
     expect(onHoverResult).toHaveBeenCalledWith(1);
+  });
+
+  it('pressing Enter or Space on a focused item invokes onSelectResult', () => {
+    const onSelectResult = vi.fn();
+    render(
+      <SettingsSearchResults
+        hits={mockHits}
+        searchQuery="语"
+        activeIndex={0}
+        onSelectResult={onSelectResult}
+      />
+    );
+
+    const options = screen.getAllByRole('option');
+    fireEvent.keyDown(options[0], { key: 'Enter' });
+    expect(onSelectResult).toHaveBeenCalledTimes(1);
+    expect(onSelectResult).toHaveBeenCalledWith(mockHits[0]);
+
+    fireEvent.keyDown(options[1], { key: ' ' });
+    expect(onSelectResult).toHaveBeenCalledTimes(2);
+    expect(onSelectResult).toHaveBeenCalledWith(mockHits[1]);
   });
 });

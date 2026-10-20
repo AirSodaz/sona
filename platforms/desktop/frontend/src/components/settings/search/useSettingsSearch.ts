@@ -1,14 +1,31 @@
 import React, { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SETTINGS_SEARCH_REGISTRY, type SettingsSearchItem } from './settingsSearchRegistry';
+import { CJK_REGEX, deriveSearchTerms } from '../../../utils/segmentUtils';
+import { foldText } from '../../../utils/textFold';
+import {
+  groupKeyForTab,
+  SETTINGS_SEARCH_REGISTRY,
+  type SettingsSearchItem,
+} from './settingsSearchRegistry';
 
-export interface SettingsSearchHit extends SettingsSearchItem {
+export type SettingsSearchHit = SettingsSearchItem & {
   score: number;
   resolvedTitle: string;
   resolvedHint?: string;
   resolvedSection?: string;
   resolvedTab: string;
   resolvedGroup: string;
+};
+
+export function resolveDisplayTitle(
+  item: SettingsSearchItem,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
+  const rawTitle = t(item.titleKey, { defaultValue: '' });
+  if (rawTitle && rawTitle !== item.titleKey) {
+    return rawTitle;
+  }
+  return item.id.replace(/-/g, ' ');
 }
 
 /**
@@ -26,81 +43,94 @@ export interface SettingsSearchHit extends SettingsSearchItem {
  * When title is an exact match (+100), redundant keyword/hint bonuses are not added
  * so exact title match has a clean, definitive top score of 100.
  */
-export function resolveDisplayTitle(
-  item: SettingsSearchItem,
-  t: (key: string, options?: Record<string, unknown>) => string
-): string {
-  const rawTitle = t(item.titleKey, { defaultValue: '' });
-  if (rawTitle && rawTitle !== item.titleKey) {
-    return rawTitle;
-  }
-  return item.id.replace(/-/g, ' ');
-}
-
 export function calculateItemScore(
   item: SettingsSearchItem,
   normalizedQuery: string,
   t: (key: string, options?: Record<string, unknown>) => string
 ): number {
-  const q = normalizedQuery.trim().toLowerCase();
+  const q = foldText(normalizedQuery.trim().toLowerCase());
   if (!q) return 0;
 
-  const isCjk = (str: string) => /[\u4e00-\u9fa5\u3040-\u309f\u30a0-\u30ff\uac00-\ud7af]/.test(str);
-  const isSingleLatin = q.length === 1 && !isCjk(q);
+  const isSingleLatin = q.length === 1 && !CJK_REGEX.test(q);
 
   const displayTitle = resolveDisplayTitle(item, t);
-  const title = (displayTitle || '').toLowerCase();
+  const title = foldText(displayTitle.toLowerCase());
   const rawHint = item.hintKey ? t(item.hintKey, { defaultValue: '' }) : '';
-  const hint = (rawHint && rawHint !== item.hintKey ? rawHint : '').toLowerCase();
+  const hint = foldText(rawHint && rawHint !== item.hintKey ? rawHint.toLowerCase() : '');
   const rawSection = item.sectionKey ? t(item.sectionKey, { defaultValue: '' }) : '';
-  const section = (rawSection && rawSection !== item.sectionKey ? rawSection : '').toLowerCase();
+  const section = foldText(
+    rawSection && rawSection !== item.sectionKey ? rawSection.toLowerCase() : ''
+  );
   const rawTab = t(item.tabKey, { defaultValue: '' });
-  const tab = (rawTab && rawTab !== item.tabKey ? rawTab : '').toLowerCase();
+  const tab = foldText(rawTab && rawTab !== item.tabKey ? rawTab.toLowerCase() : '');
 
-  const terms = q.split(/\s+/).filter(Boolean);
-  const keywords = (item.keywords || []).map((k) => k.toLowerCase());
+  const wsTokens = q.split(/\s+/).filter(Boolean);
+  const terms = [...new Set(wsTokens.flatMap((token) => deriveSearchTerms(token)))];
+  const keywords = (item.keywords || []).map((keyword) => foldText(keyword.toLowerCase()));
 
   const matchesKeyword = (term: string) => {
-    const termIsSingleLatin = term.length === 1 && !isCjk(term);
+    const termIsSingleLatin = term.length === 1 && !CJK_REGEX.test(term);
     return keywords.some(
-      (k) =>
-        k === term ||
+      (keyword) =>
+        keyword === term ||
         (!termIsSingleLatin &&
-          (k.includes(term) ||
-            (term.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && term.includes(k))))
+          (keyword.includes(term) ||
+            (term.length > 2 &&
+              keyword.length >= (CJK_REGEX.test(keyword) ? 2 : 3) &&
+              term.includes(keyword))))
     );
   };
 
-  // If multi-token query, every token must match at least one attribute of the item
-  if (terms.length > 1) {
-    const allTokensMatch = terms.every(
-      (term) =>
-        title.includes(term) ||
-        matchesKeyword(term) ||
-        hint.includes(term) ||
-        section.includes(term) ||
-        tab.includes(term)
+  const matchesAttribute = (term: string) =>
+    title.includes(term) ||
+    matchesKeyword(term) ||
+    hint.includes(term) ||
+    section.includes(term) ||
+    tab.includes(term);
+
+  // If multi-token query, every whitespace token must match at least one attribute
+  if (wsTokens.length > 1) {
+    const allTokensMatch = wsTokens.every((token) =>
+      deriveSearchTerms(token).some(matchesAttribute)
     );
     if (!allTokensMatch) {
       return 0;
     }
   }
 
+  // Tier 1: Title starts with the full query, or equals/starts with a full whitespace token.
+  // CJK sub-bigrams are excluded so partial n-grams never hijack the prefix tier.
+  const hasTitlePrefix =
+    title.startsWith(q) ||
+    (wsTokens.length > 1 && wsTokens.some((token) => title === token || title.startsWith(token)));
+
+  // Tier 2: Title contains the complete query, or contains a full whitespace token.
+  const hasTitleMatch =
+    hasTitlePrefix ||
+    (!isSingleLatin && title.includes(q)) ||
+    (wsTokens.length > 1 &&
+      wsTokens.some((token) => {
+        const isSingleLatinToken = token.length === 1 && !CJK_REGEX.test(token);
+        return !isSingleLatinToken && title.includes(token);
+      }));
+
   let score = 0;
 
   // Title matching
   if (title === q) {
     score += 100;
-  } else if (
-    title.startsWith(q) ||
-    (terms.length > 1 && terms.some((term) => title === term || title.startsWith(term)))
-  ) {
+  } else if (hasTitlePrefix) {
     score += 80;
-  } else if (
-    (!isSingleLatin && title.includes(q)) ||
-    (terms.length > 1 && terms.some((term) => title.includes(term)))
-  ) {
+  } else if (hasTitleMatch) {
     score += 60;
+  } else if (
+    terms.length > 1 &&
+    terms.some((term) => {
+      const isSingleLatinTerm = term.length === 1 && !CJK_REGEX.test(term);
+      return !isSingleLatinTerm && title.includes(term);
+    })
+  ) {
+    score += 40;
   }
 
   // If title is an exact match (+100), it's already the highest relevance match.
@@ -108,9 +138,11 @@ export function calculateItemScore(
     return score;
   }
 
-  // Keyword / alias matching
+  // Keyword / alias matching: exact keyword match requires matching the full query q
+  // or a full whitespace token, preventing partial CJK bigrams from claiming exact keyword bonus.
   const hasExactKeyword = keywords.some(
-    (k) => k === q || (terms.length > 1 && terms.some((t) => k === t))
+    (keyword) =>
+      keyword === q || (wsTokens.length > 1 && wsTokens.some((token) => keyword === token))
   );
   const hasSubKeyword =
     !hasExactKeyword &&
@@ -118,7 +150,11 @@ export function calculateItemScore(
     (terms.length > 1
       ? terms.some(matchesKeyword)
       : keywords.some(
-          (k) => k.includes(q) || (q.length > 2 && k.length >= (isCjk(k) ? 2 : 3) && q.includes(k))
+          (keyword) =>
+            keyword.includes(q) ||
+            (q.length > 2 &&
+              keyword.length >= (CJK_REGEX.test(keyword) ? 2 : 3) &&
+              q.includes(keyword))
         ));
   if (hasExactKeyword) {
     score += 50;
@@ -138,30 +174,21 @@ export function calculateItemScore(
   // Section or Tab title matching
   if (
     !isSingleLatin &&
-    (section?.includes(q) ||
-      tab?.includes(q) ||
+    (section.includes(q) ||
+      tab.includes(q) ||
       (terms.length > 1 && terms.some((term) => section.includes(term) || tab.includes(term))))
   ) {
     score += 20;
-  }
-
-  // Multi-token fallback when no individual scoring applied but all tokens matched
-  if (terms.length > 1 && score === 0) {
-    score += 45;
   }
 
   if (score === 0) {
     return 0;
   }
 
-  // Prefix matches outrank substring matches; substring matches must not exceed prefix threshold
-  const hasTitlePrefix =
-    title.startsWith(q) || (terms.length > 1 && terms.some((term) => title.startsWith(term)));
-  const hasTitleMatch =
-    hasTitlePrefix ||
-    (!isSingleLatin && title.includes(q)) ||
-    (terms.length > 1 && terms.some((term) => title.includes(term)));
-
+  // Strict tier hierarchy:
+  // - Title prefix / exact token (Tier 1): capped at 99
+  // - Title full query substring (Tier 2): capped at 79
+  // - Partial bigram / keyword / hint / section (Tier 3): strictly capped at 59
   if (hasTitlePrefix) {
     return Math.min(score, 99);
   }
@@ -176,34 +203,56 @@ export function calculateItemScore(
  * `<mark className="settings-search-highlight">`.
  */
 export function highlightMatches(text: string, query: string): React.ReactNode {
-  const terms = query.trim().split(/\s+/).filter(Boolean);
+  const wsTokens = query.trim().split(/\s+/).filter(Boolean);
+  const terms = [...new Set(wsTokens.flatMap((token) => deriveSearchTerms(token)))];
   if (terms.length === 0 || !text) {
     return text;
   }
 
-  // Unique lowercased terms sorted descending by length to prioritize longer phrases
-  const uniqueTerms = Array.from(new Set(terms.map((t) => t.toLowerCase())));
-  const pattern = uniqueTerms
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .sort((a, b) => b.length - a.length)
-    .join('|');
-
-  const regex = new RegExp(`(${pattern})`, 'gi');
-  const parts = text.split(regex);
-  if (parts.length === 1) {
+  // NFKC-only folding keeps match offsets aligned with the original string
+  const normalizedText = text.normalize('NFKC');
+  if (normalizedText.length !== text.length) {
     return text;
   }
 
-  const nodes: React.ReactNode[] = parts.map((part, index) => {
-    if (uniqueTerms.includes(part.toLowerCase())) {
-      return React.createElement(
-        'mark',
-        { key: index, className: 'settings-search-highlight' },
-        part
-      );
+  // Unique normalized terms sorted descending by length to prioritize longer phrases
+  const uniqueTerms = Array.from(
+    new Set(terms.map((term) => term.normalize('NFKC').toLowerCase()).filter(Boolean))
+  );
+  if (uniqueTerms.length === 0) {
+    return text;
+  }
+  const pattern = uniqueTerms
+    .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .sort((a, b) => b.length - a.length)
+    .join('|');
+  const regex = new RegExp(`(${pattern})`, 'gi');
+  const nodes: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null = regex.exec(normalizedText);
+
+  while (match !== null) {
+    if (match.index > lastIndex) {
+      nodes.push(text.slice(lastIndex, match.index));
     }
-    return part;
-  });
+    nodes.push(
+      React.createElement(
+        'mark',
+        { key: match.index, className: 'settings-search-highlight' },
+        text.slice(match.index, match.index + match[0].length)
+      )
+    );
+    lastIndex = match.index + match[0].length;
+    match = regex.exec(normalizedText);
+  }
+
+  if (nodes.length === 0) {
+    return text;
+  }
+
+  if (lastIndex < text.length) {
+    nodes.push(text.slice(lastIndex));
+  }
 
   return React.createElement(React.Fragment, null, ...nodes);
 }
@@ -249,8 +298,9 @@ export function useSettingsSearch(
         const rawTab = t(item.tabKey, { defaultValue: '' });
         const resolvedTab = rawTab && rawTab !== item.tabKey ? rawTab : item.tabKey;
 
-        const rawGroup = t(item.groupKey, { defaultValue: '' });
-        const resolvedGroup = rawGroup && rawGroup !== item.groupKey ? rawGroup : item.groupKey;
+        const groupKey = groupKeyForTab(item.tab);
+        const rawGroup = t(groupKey, { defaultValue: '' });
+        const resolvedGroup = rawGroup && rawGroup !== groupKey ? rawGroup : groupKey;
 
         matched.push({
           ...item,

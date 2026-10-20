@@ -22,7 +22,9 @@ export type VocabularySubTab = 'recognition' | 'prompts' | 'speakers';
 export type PromptsSubTab = 'polish' | 'translation' | 'summary';
 
 export interface SettingsVocabularyTabProps {
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialSubTab?: VocabularySubTab;
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialPromptsSubTab?: PromptsSubTab;
   subTabRequestId?: number;
 }

@@ -45,7 +45,6 @@ const SettingsSearchResultItem = React.memo(function SettingsSearchResultItem({
     }
     onHoverResult?.(index);
   };
-
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.key === 'Enter' || e.key === ' ') {
       e.preventDefault();
@@ -56,15 +55,15 @@ const SettingsSearchResultItem = React.memo(function SettingsSearchResultItem({
   return (
     <div
       id={`settings-search-result-${hit.id}`}
-      className={`settings-search-result-item ${isActive ? 'is-active' : ''}`}
+      className="settings-search-result-item"
       data-active={isActive}
       role="option"
       aria-selected={isActive}
       tabIndex={-1}
       onClick={() => onSelectResult(hit)}
+      onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
       onMouseMove={handleMouseMove}
-      onKeyDown={handleKeyDown}
     >
       <div className="settings-search-result-icon" aria-hidden="true">
         {Icon ? <Icon /> : null}
@@ -99,7 +98,10 @@ export function SettingsSearchResults({
   const resultsContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (searchQuery !== undefined && resultsContainerRef.current) {
+    if (!searchQuery) {
+      return;
+    }
+    if (resultsContainerRef.current) {
       resultsContainerRef.current.scrollTop = 0;
     }
   }, [searchQuery]);
@@ -140,7 +142,7 @@ export function SettingsSearchResults({
   if (hits.length === 0) {
     return (
       <div ref={resultsContainerRef} className="settings-search-results">
-        <div className="settings-search-empty" role="status" aria-live="polite">
+        <div className="settings-search-empty">
           <SearchX size={32} className="settings-search-empty-icon" aria-hidden="true" />
           <div className="settings-search-empty-title">
             {t('settings.search_no_results', { defaultValue: 'No settings found' })}
@@ -157,8 +159,8 @@ export function SettingsSearchResults({
 
   return (
     <div ref={resultsContainerRef} className="settings-search-results">
-      <div className="settings-search-header" role="presentation" aria-hidden="true">
-        <span className="settings-search-count">
+      <div className="settings-search-header">
+        <span id="settings-search-count" className="settings-search-count">
           {t('settings.search_matches_count', {
             count: hits.length,
             defaultValue: `Matches (${hits.length})`,
@@ -170,10 +172,7 @@ export function SettingsSearchResults({
         id="settings-search-listbox"
         className="settings-search-listbox"
         role="listbox"
-        aria-label={t('settings.search_matches_count', {
-          count: hits.length,
-          defaultValue: `Matches (${hits.length})`,
-        })}
+        aria-labelledby="settings-search-count"
       >
         {hits.map((hit, index) => (
           <SettingsSearchResultItem

@@ -881,6 +881,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
 export type SubtitleSubTab = 'voice_typing' | 'subtitles';
 
 export interface SettingsSubtitleTabProps {
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialSubTab?: SubtitleSubTab;
   subTabRequestId?: number;
 }

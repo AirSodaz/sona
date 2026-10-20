@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { dashboardService } from '../../services/dashboardService';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -136,6 +136,20 @@ vi.mock('@tauri-apps/plugin-dialog', () => ({
   message: vi.fn(),
 }));
 
+function expectLastScrollTarget(
+  scrollIntoViewMock: ReturnType<typeof vi.fn>,
+  element: HTMLElement | null
+) {
+  const smoothCallIndexes = scrollIntoViewMock.mock.calls.flatMap(
+    (call: unknown[], index: number) =>
+      (call[0] as ScrollIntoViewOptions | undefined)?.behavior === 'smooth' ? [index] : []
+  );
+  expect(smoothCallIndexes.length).toBeGreaterThan(0);
+  expect(scrollIntoViewMock.mock.instances[smoothCallIndexes[smoothCallIndexes.length - 1]]).toBe(
+    element
+  );
+}
+
 describe('Settings search integration', () => {
   const onClose = vi.fn();
   const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
@@ -226,11 +240,14 @@ describe('Settings search integration', () => {
     fireEvent.click(options[0]);
 
     // Real element in DOM should be scrolled and class added
-    await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-    });
-    const targetElement = document.getElementById('settings-language');
-    expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
+    await waitFor(
+      () => {
+        const targetElement = document.getElementById('settings-language');
+        expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
+        expectLastScrollTarget(scrollIntoViewMock, targetElement);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('navigates results with ArrowDown / ArrowUp and selects with Enter', async () => {
@@ -260,14 +277,17 @@ describe('Settings search integration', () => {
     // Enter selects active result
     fireEvent.keyDown(searchInput, { key: 'Enter', code: 'Enter' });
 
-    await waitFor(() => {
-      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-    });
+    await waitFor(
+      () => {
+        expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('has accessible aria-label on search input', () => {
     render(<Settings isOpen={true} onClose={onClose} />);
-    const searchInput = screen.getByRole('searchbox', { name: '搜索设置...' });
+    const searchInput = screen.getByRole('combobox', { name: '搜索设置...' });
     expect(searchInput).toBeDefined();
   });
 
@@ -345,19 +365,25 @@ describe('Settings search integration', () => {
     scrollIntoViewMock.mockClear();
     fireEvent.click(options[0]);
 
-    await waitFor(() => {
-      const activePane = document.querySelector(
-        '[data-settings-tab-pane="llm_service"]:not([hidden])'
-      );
-      expect(activePane).not.toBeNull();
-    });
+    await waitFor(
+      () => {
+        const activePane = document.querySelector(
+          '[data-settings-tab-pane="llm_service"]:not([hidden])'
+        );
+        expect(activePane).not.toBeNull();
+      },
+      { timeout: 3000 }
+    );
 
-    await waitFor(() => {
-      const targetElement = document.getElementById('settings-llm-provider-list');
-      expect(targetElement).not.toBeNull();
-      expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
-      expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
-    });
+    await waitFor(
+      () => {
+        const targetElement = document.getElementById('settings-llm-provider-list');
+        expect(targetElement).not.toBeNull();
+        expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
+        expectLastScrollTarget(scrollIntoViewMock, targetElement);
+      },
+      { timeout: 3000 }
+    );
   });
 
   it('renders shortcut hint when empty and clear button when typing', () => {
@@ -366,7 +392,7 @@ describe('Settings search integration', () => {
     expect(shortcut).not.toBeNull();
     expect(screen.queryByLabelText('Clear search')).toBeNull();
 
-    const searchInput = screen.getByRole('searchbox');
+    const searchInput = screen.getByRole('combobox');
     fireEvent.change(searchInput, { target: { value: 'test' } });
 
     expect(document.querySelector('.settings-search-shortcut')).toBeNull();
@@ -388,11 +414,11 @@ describe('Settings search integration', () => {
     // Search for sync credentials/webdav which might not exist when sync is off
     fireEvent.change(searchInput, { target: { value: 'webdav' } });
 
-    const options = screen.getAllByRole('option');
-    expect(options.length).toBeGreaterThan(0);
+    const credentialsResult = document.getElementById('settings-search-result-sync-credentials');
+    expect(credentialsResult).not.toBeNull();
 
     scrollIntoViewMock.mockClear();
-    fireEvent.click(options[0]);
+    fireEvent.click(credentialsResult!);
 
     await waitFor(
       () => {
@@ -406,8 +432,8 @@ describe('Settings search integration', () => {
       () => {
         const toggleElement = document.getElementById('settings-sync-toggle');
         expect(toggleElement).not.toBeNull();
-        expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
         expect(toggleElement?.classList.contains('settings-item--highlighted')).toBe(true);
+        expectLastScrollTarget(scrollIntoViewMock, toggleElement);
       },
       { timeout: 3000 }
     );
@@ -473,5 +499,89 @@ describe('Settings search integration', () => {
 
     const silentStartItem = document.getElementById('settings-silent-start');
     expect(silentStartItem).not.toBeNull();
+  });
+});
+
+describe('Settings search highlight lifecycle', () => {
+  const onClose = vi.fn();
+  const originalScrollIntoView = window.HTMLElement.prototype.scrollIntoView;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDialogStore.setState({ isOpen: false });
+    useTranscriptStore.setState({ config: buildTestConfig() });
+    vi.mocked(dashboardService.getFastSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
+    vi.mocked(dashboardService.getDeepSnapshot).mockResolvedValue(createEmptyDashboardSnapshot());
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    window.HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+  });
+
+  it('applies the highlight, removes it after 1600ms, and transfers it on re-selection', async () => {
+    const { rerender } = render(<Settings isOpen={true} onClose={onClose} />);
+    expect(await screen.findByText('settings.general_title')).toBeDefined();
+
+    vi.useFakeTimers();
+    try {
+      const searchInput = screen.getByPlaceholderText('搜索设置...');
+      fireEvent.change(searchInput, { target: { value: '语言' } });
+      fireEvent.click(screen.getAllByRole('option')[0]);
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      const languageElement = document.getElementById('settings-language');
+      expect(languageElement?.classList.contains('settings-item--highlighted')).toBe(true);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(0);
+
+      fireEvent.change(searchInput, { target: { value: '主题' } });
+      fireEvent.click(screen.getAllByRole('option')[0]);
+
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+
+      const themeElement = document.getElementById('settings-theme');
+      expect(themeElement?.classList.contains('settings-item--highlighted')).toBe(true);
+      expect(languageElement?.classList.contains('settings-item--highlighted')).toBe(false);
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(1);
+
+      await act(async () => {
+        vi.advanceTimersByTime(1600);
+      });
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(0);
+
+      // Navigating to another tab while a highlight is still active clears it immediately.
+      fireEvent.change(searchInput, { target: { value: '语言' } });
+      fireEvent.click(screen.getAllByRole('option')[0]);
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(1);
+
+      fireEvent.keyDown(searchInput, { key: 'Escape', code: 'Escape' });
+      expect((searchInput as HTMLInputElement).value).toBe('');
+      fireEvent.click(document.getElementById('settings-tab-shortcuts')!);
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(0);
+
+      // Closing the dialog leaves no stale highlight behind.
+      fireEvent.change(searchInput, { target: { value: '语言' } });
+      fireEvent.click(screen.getAllByRole('option')[0]);
+      await act(async () => {
+        vi.advanceTimersByTime(50);
+      });
+      rerender(<Settings isOpen={false} onClose={onClose} />);
+      expect(document.querySelectorAll('.settings-item--highlighted')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

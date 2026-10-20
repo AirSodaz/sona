@@ -35,6 +35,7 @@ import type {
 } from '../../../types/sync';
 import { Modal } from '../../Modal';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
+import type { SettingsSyncNavRequest } from '../SettingsSyncTab';
 import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
 import { isPresetShrink } from './syncPreset';
@@ -43,6 +44,7 @@ interface SyncConnectedPanelProps {
   busyAction: string | null;
   recoveryKey: string | null;
   status: SyncStatusSnapshot;
+  navRequest?: SettingsSyncNavRequest;
   onChangeMasterPassword: (currentPassword: string, nextPassword: string) => Promise<void>;
   onChangePreset: (preset: SyncPresetV1) => Promise<void>;
   onCopyRecoveryKey: () => Promise<void>;
@@ -99,6 +101,7 @@ export function SyncConnectedPanel({
   busyAction,
   recoveryKey,
   status,
+  navRequest,
   onChangeMasterPassword,
   onChangePreset,
   onCopyRecoveryKey,
@@ -158,6 +161,29 @@ export function SyncConnectedPanel({
   const [copiedKey, setCopiedKey] = React.useState(false);
   const [pairingInfo, setPairingInfo] = React.useState<SyncPairingInfo | null>(null);
   const [isKeyRevealed, setIsKeyRevealed] = React.useState(false);
+  const [securityOpen, setSecurityOpen] = React.useState(
+    () =>
+      Boolean(recoveryKey) ||
+      navRequest?.targetId === 'settings-sync-recovery-key' ||
+      navRequest?.targetId === 'settings-sync-encryption'
+  );
+  const navRequestId = navRequest?.requestId;
+  const navTargetId = navRequest?.targetId;
+
+  React.useEffect(() => {
+    if (recoveryKey) {
+      setSecurityOpen(true);
+    }
+  }, [recoveryKey]);
+
+  React.useEffect(() => {
+    if (
+      navRequestId !== undefined &&
+      (navTargetId === 'settings-sync-recovery-key' || navTargetId === 'settings-sync-encryption')
+    ) {
+      setSecurityOpen(true);
+    }
+  }, [navRequestId, navTargetId]);
 
   React.useEffect(() => {
     if (!status.vaultId) {
@@ -744,7 +770,8 @@ export function SyncConnectedPanel({
       {/* Advanced Security & Key Accordion */}
       <SettingsSection id="settings-sync-encryption">
         <SettingsAccordion
-          defaultOpen={true}
+          isOpen={securityOpen}
+          onToggle={() => setSecurityOpen((value) => !value)}
           title={
             <div className="settings-accordion-copy">
               <div className="settings-accordion-copy-title sync-security-title">

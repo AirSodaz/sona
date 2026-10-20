@@ -47,14 +47,21 @@ import { SyncConnectedPanel } from './sync/SyncConnectedPanel';
 import { SyncSetupPanel } from './sync/SyncSetupPanel';
 import './sync/SyncSettings.css';
 
+export interface SettingsSyncNavRequest {
+  requestId: number;
+  targetId?: string;
+}
+
 interface SettingsSyncTabProps {
   isVisible?: boolean;
   isPrewarming?: boolean;
+  navRequest?: SettingsSyncNavRequest;
 }
 
 export function SettingsSyncTab({
   isVisible = true,
   isPrewarming = false,
+  navRequest,
 }: SettingsSyncTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const alert = useDialogStore((state) => state.alert);
@@ -315,6 +322,7 @@ export function SettingsSyncTab({
           busyAction={busyAction}
           recoveryKey={recoveryKey}
           status={status}
+          navRequest={navRequest}
           onChangeMasterPassword={handleChangeMasterPassword}
           onChangePreset={handleChangePreset}
           onCopyRecoveryKey={handleCopyRecoveryKey}
