@@ -33,6 +33,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-mcp` | host |
+| `sona-shim` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -82,6 +83,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) server host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | Mobile / UniFFI composition root |
+| `platforms/shim/` | `sona-shim` | host | Universal command shim and channel router host |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
 Role roots are `core/`, `application/`, `adapters/`, `providers/`, `platforms/`, and `tools/`. Inbound and outbound adapters share the `adapters/` root and remain distinguished by manifest metadata. Provider crates under `providers/` implement engine-specific ASR backends behind Core ports.
@@ -202,7 +204,8 @@ current SQLite payload and applies post-v0.8.0 field upgrades.
 <a id="reviewed-exceptions"></a>
 ## Reviewed exceptions
 
-There are currently no registered outbound-adapter-to-outbound-adapter exceptions. Each outbound adapter should depend only on Core (and reviewed Application edges such as `sona-sync-webdav -> sona-sync` and `sona-sync-s3 -> sona-sync`).
+The following architectural dependency exceptions are registered and reviewed:
+- `sona -> sona-shim`: Desktop host integrates channel registration and universal command shims directly.
 
 <a id="native-window-chrome"></a>
 ## Native window chrome follows the application theme

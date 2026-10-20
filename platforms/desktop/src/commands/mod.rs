@@ -205,6 +205,10 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::mcp::mcp_get_activity_logs,
         crate::commands::mcp::mcp_clear_activity_logs,
         crate::commands::mcp::mcp_get_tools_catalog,
-        crate::commands::mcp::mcp_get_client_configs
+        crate::commands::mcp::mcp_get_client_configs,
+        crate::commands::system::get_shim_status,
+        crate::commands::system::install_shim,
+        crate::commands::system::uninstall_shim,
+        crate::commands::system::set_default_channel,
     ]
 }

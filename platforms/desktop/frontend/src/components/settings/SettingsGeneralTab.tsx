@@ -1,9 +1,11 @@
-import { Languages, Stethoscope } from 'lucide-react';
+import { CheckCircle2, Languages, Stethoscope, Terminal, XCircle } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { APP_LANGUAGE_OPTIONS } from '../../constants/appLanguages';
+import { shimService } from '../../services/shimService';
 import { useSetConfig, useUIConfig } from '../../stores/configStore';
 import type { AppLanguagePreference, AppLogLevel, UIConfig } from '../../types/config';
+import type { DesktopShimStatus, ShimChannel } from '../../types/shim';
 import { APP_LOG_LEVELS, normalizeLogLevel } from '../../utils/logLevel';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
@@ -43,6 +45,113 @@ export function SettingsGeneralTab({
   const { t } = useTranslation();
   const config = useUIConfig();
   const updateConfig = useSetConfig();
+  const [shimStatus, setShimStatus] = React.useState<DesktopShimStatus | null>(null);
+  const [activeAction, setActiveAction] = React.useState<
+    'install' | 'uninstall' | 'channel' | null
+  >(null);
+  const [isStatusLoading, setIsStatusLoading] = React.useState(false);
+  const isShimLoading = activeAction !== null || isStatusLoading;
+  const [shimActionError, setShimActionError] = React.useState<string | null>(null);
+  const isMountedRef = React.useRef(true);
+  const fetchSeqRef = React.useRef(0);
+
+  const loadShimStatus = React.useCallback(async () => {
+    const seq = ++fetchSeqRef.current;
+    if (!isMountedRef.current) return;
+    setIsStatusLoading(true);
+    try {
+      const status = await shimService.getStatus();
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
+        setShimStatus(status);
+        setShimActionError(null);
+      }
+    } catch (err) {
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
+        console.warn('Failed to fetch shim status:', err);
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (isMountedRef.current && seq === fetchSeqRef.current) {
+        setIsStatusLoading(false);
+      }
+    }
+  }, []);
+
+  React.useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      fetchSeqRef.current++;
+    };
+  }, []);
+  React.useEffect(() => {
+    if (isVisible) {
+      void loadShimStatus();
+    }
+  }, [isVisible, loadShimStatus]);
+
+  const handleInstallShim = async () => {
+    setActiveAction('install');
+    setShimActionError(null);
+    try {
+      await shimService.install();
+      await loadShimStatus();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
+    }
+  };
+
+  const handleUninstallShim = async () => {
+    setActiveAction('uninstall');
+    setShimActionError(null);
+    try {
+      await shimService.uninstall();
+      await loadShimStatus();
+    } catch (err) {
+      if (isMountedRef.current) {
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
+    }
+  };
+
+  const handleSetDefaultChannel = async (channel: ShimChannel) => {
+    const previousChannel = shimStatus?.defaultChannel;
+    setActiveAction('channel');
+    setShimActionError(null);
+    if (shimStatus) {
+      setShimStatus({
+        ...shimStatus,
+        defaultChannel: channel,
+      });
+    }
+    try {
+      await shimService.setDefaultChannel(channel);
+      await loadShimStatus();
+    } catch (err) {
+      if (isMountedRef.current) {
+        if (previousChannel) {
+          setShimStatus((current) =>
+            current ? { ...current, defaultChannel: previousChannel } : current
+          );
+        }
+        setShimActionError(err instanceof Error ? err.message : String(err));
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setActiveAction(null);
+      }
+    }
+  };
 
   React.useEffect(() => {
     if (!isVisible && !isPrewarming) {
@@ -258,6 +367,188 @@ export function SettingsGeneralTab({
         </SettingsItem>
       </SettingsSection>
 
+      <SettingsSection
+        title={t('settings.cli_tools.title')}
+        description={t('settings.cli_tools.description')}
+        icon={<Terminal size={20} />}
+      >
+        <SettingsItem
+          title={t('settings.cli_tools.status_title')}
+          hint={
+            shimStatus === null
+              ? ''
+              : shimStatus.isConfigured
+                ? t('settings.cli_tools.configured_hint')
+                : t('settings.cli_tools.not_configured_hint')
+          }
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '13px',
+                fontWeight: 500,
+                color: shimStatus?.isConfigured
+                  ? 'var(--color-success, #10b981)'
+                  : 'var(--color-text-muted, #888)',
+              }}
+            >
+              {shimStatus === null ? (
+                <span style={{ opacity: 0.6 }}>...</span>
+              ) : shimStatus.isConfigured ? (
+                <>
+                  <CheckCircle2 size={16} />
+                  {t('settings.cli_tools.status_configured')}
+                </>
+              ) : (
+                <>
+                  <XCircle size={16} />
+                  {t('settings.cli_tools.status_not_configured')}
+                </>
+              )}
+            </span>
+            {shimStatus === null && shimActionError ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void loadShimStatus()}
+                disabled={isShimLoading}
+              >
+                {t('common.retry')}
+              </button>
+            ) : shimStatus?.isConfigured ? (
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={handleUninstallShim}
+                disabled={isShimLoading || shimStatus === null}
+              >
+                {activeAction === 'uninstall'
+                  ? t('settings.cli_tools.uninstalling')
+                  : t('settings.cli_tools.uninstall_btn')}
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={handleInstallShim}
+                disabled={isShimLoading || shimStatus === null}
+              >
+                {activeAction === 'install'
+                  ? t('settings.cli_tools.installing')
+                  : t('settings.cli_tools.install_btn')}
+              </button>
+            )}
+          </div>
+        </SettingsItem>
+
+        {shimStatus && (
+          <SettingsItem title={t('settings.cli_tools.bin_dir_title')}>
+            <code
+              style={{
+                fontSize: '12px',
+                padding: '4px 8px',
+                background: 'var(--color-bg-secondary, rgba(0,0,0,0.05))',
+                borderRadius: '4px',
+                wordBreak: 'break-all',
+              }}
+            >
+              {shimStatus.shimDir}
+            </code>
+          </SettingsItem>
+        )}
+
+        {shimStatus?.stableInstalled && shimStatus.nightlyInstalled && (
+          <SettingsItem
+            title={t('settings.cli_tools.default_channel_title')}
+            hint={
+              <div>
+                <div>{t('settings.cli_tools.default_channel_hint')}</div>
+                <div style={{ marginTop: '4px', fontSize: '12px', opacity: 0.8 }}>
+                  {t('settings.cli_tools.coexistence_note')}
+                </div>
+              </div>
+            }
+          >
+            <div
+              role="radiogroup"
+              aria-label={t('settings.cli_tools.default_channel_title')}
+              style={{ display: 'flex', gap: '16px', alignItems: 'center' }}
+            >
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="defaultChannel"
+                  value="stable"
+                  checked={shimStatus.defaultChannel === 'stable'}
+                  onChange={() => void handleSetDefaultChannel('stable')}
+                  disabled={isShimLoading}
+                />
+                {t('settings.cli_tools.channel_stable')}
+              </label>
+              <label
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="defaultChannel"
+                  value="nightly"
+                  checked={shimStatus.defaultChannel === 'nightly'}
+                  onChange={() => void handleSetDefaultChannel('nightly')}
+                  disabled={isShimLoading}
+                />
+                {t('settings.cli_tools.channel_nightly')}
+              </label>
+            </div>
+          </SettingsItem>
+        )}
+
+        {shimActionError && (
+          <div
+            role="alert"
+            style={{
+              padding: '8px 12px',
+              color: 'var(--color-danger, #ef4444)',
+              fontSize: '12px',
+              borderRadius: '4px',
+              background: 'rgba(239, 68, 68, 0.1)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '8px',
+            }}
+          >
+            <span>{shimActionError}</span>
+            {shimStatus !== null && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => void loadShimStatus()}
+                disabled={isShimLoading}
+                style={{ fontSize: '11px', padding: '2px 8px' }}
+              >
+                {t('common.retry')}
+              </button>
+            )}
+          </div>
+        )}
+      </SettingsSection>
       <SettingsSection
         title={t('settings.diagnostics.title', { defaultValue: 'Model & Environment Diagnostics' })}
         description={t('settings.diagnostics.entry_description', {

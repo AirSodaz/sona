@@ -33,6 +33,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona` | host |
 | `sona-cli` | host |
 | `sona-mcp` | host |
+| `sona-shim` | host |
 | `sona-uniffi-bind` | host |
 | `sona-uniffi-bindgen` | tool |
 
@@ -82,6 +83,7 @@ Core <- Outbound Adapter <------------- Host
 | `platforms/cli/` | `sona-cli` | host | |
 | `platforms/mcp/` | `sona-mcp` | host | Model Context Protocol (MCP) 服务端 Host |
 | `platforms/uniffi/` | `sona-uniffi-bind` | host | 移动端 / UniFFI 组合根 |
+| `platforms/shim/` | `sona-shim` | host | 通用命令 Shim 与通道分发 Host |
 | `tools/uniffi_bindgen/` | `sona-uniffi-bindgen` | tool | |
 
 角色根目录分别为 `core/`、`application/`、`adapters/`、`providers/`、`platforms/` 和 `tools/`。Inbound 与 Outbound Adapter 共用 `adapters/` 根目录，并通过 manifest 元数据区分；`providers/` 下的 Provider crate 在 Core 端口之后实现特定引擎的 ASR 后端。
@@ -200,7 +202,8 @@ schema 的数据库以及 v0.8.0 之前的 JSON 存储布局不再在运行时�
 <a id="reviewed-exceptions"></a>
 ## 已评审例外
 
-当前没有已登记的 outbound-adapter 互依例外。每个 outbound adapter 只应依赖 Core（以及已评审的 Application，如 `sona-sync-webdav -> sona-sync` 与 `sona-sync-s3 -> sona-sync`）。
+当前已登记并经过评审的架构依赖例外：
+- `sona -> sona-shim`：桌面端 Host 直接集成通道注册与通用命令分发。
 
 <a id="native-window-chrome"></a>
 ## 原生窗口边框跟随应用主题

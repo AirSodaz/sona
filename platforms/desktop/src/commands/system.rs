@@ -202,3 +202,152 @@ pub async fn get_diagnostics_core_snapshot(
 pub async fn check_media_formats(paths: Vec<String>) -> Result<Vec<bool>, String> {
     crate::platform::media_detector::check_media_formats(paths).await
 }
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopShimStatus {
+    pub shim_dir: String,
+    pub in_current_path: bool,
+    pub in_user_path: bool,
+    pub is_configured: bool,
+    pub installed_shims: Vec<String>,
+    pub default_channel: String,
+    pub current_channel: String,
+    pub stable_installed: bool,
+    pub nightly_installed: bool,
+}
+
+pub fn detect_app_channel_from_config(
+    identifier: &str,
+    product_name: Option<&str>,
+    version: Option<&str>,
+) -> sona_shim::registry::Channel {
+    let id = identifier.to_lowercase();
+    let prod = product_name.unwrap_or("").to_lowercase();
+    let ver = version.unwrap_or("").to_lowercase();
+
+    if id.ends_with(".nightly") || prod.contains("nightly") || ver.contains("nightly") {
+        return sona_shim::registry::Channel::Nightly;
+    }
+
+    if let Ok(env_channel) = std::env::var("SONA_CHANNEL") {
+        let trimmed = env_channel.trim().to_lowercase();
+        if trimmed == "nightly" {
+            return sona_shim::registry::Channel::Nightly;
+        } else if trimmed == "stable" {
+            return sona_shim::registry::Channel::Stable;
+        }
+    }
+
+    sona_shim::registry::Channel::Stable
+}
+
+pub fn detect_app_channel(app: &AppHandle) -> sona_shim::registry::Channel {
+    detect_app_channel_from_config(
+        &app.config().identifier,
+        app.config().product_name.as_deref(),
+        app.config().version.as_deref(),
+    )
+}
+
+#[tauri::command]
+pub async fn get_shim_status(app: AppHandle) -> Result<DesktopShimStatus, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let status = sona_shim::installer::check_path_status();
+        let default_ch = sona_shim::registry::get_default_channel();
+        let stable_installed =
+            sona_shim::registry::is_channel_installed(sona_shim::registry::Channel::Stable);
+        let nightly_installed =
+            sona_shim::registry::is_channel_installed(sona_shim::registry::Channel::Nightly);
+
+        let channel = detect_app_channel(&app);
+        let current_channel = channel.as_str();
+        let is_configured =
+            (status.in_current_path || status.in_user_path) && !status.installed_shims.is_empty();
+
+        Ok(DesktopShimStatus {
+            shim_dir: status.shim_dir.to_string_lossy().to_string(),
+            in_current_path: status.in_current_path,
+            in_user_path: status.in_user_path,
+            is_configured,
+            installed_shims: status.installed_shims,
+            default_channel: default_ch.as_str().to_string(),
+            current_channel: current_channel.to_string(),
+            stable_installed,
+            nightly_installed,
+        })
+    })
+    .await
+    .map_err(|e| format!("Failed to get shim status: {}", e))?
+}
+
+#[tauri::command]
+pub async fn install_shim(app: AppHandle) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let current_exe = std::env::current_exe().map_err(|e| e.to_string())?;
+        let channel = detect_app_channel(&app);
+
+        let parent = current_exe
+            .parent()
+            .ok_or_else(|| "Failed to find parent directory".to_string())?;
+        let shim_binary_name = if cfg!(windows) {
+            "sona-shim.exe"
+        } else {
+            "sona-shim"
+        };
+        let mut source_shim = parent.join(shim_binary_name);
+
+        if !source_shim.exists() {
+            for rel in &[
+                "../debug",
+                "../release",
+                "../../target/debug",
+                "../../target/release",
+            ] {
+                let candidate = parent.join(rel).join(shim_binary_name);
+                if candidate.exists() {
+                    source_shim = candidate;
+                    break;
+                }
+            }
+        }
+
+        if !source_shim.exists() {
+            return Err(format!("Could not find {} to install", shim_binary_name));
+        }
+
+        let version_str = app.config().version.as_deref();
+        let exe_name = current_exe.file_name().and_then(|n| n.to_str());
+        let install_dir = parent;
+        let reg_tuple = Some((channel, install_dir, version_str, exe_name));
+
+        sona_shim::installer::install_shims(&source_shim, reg_tuple).map(|_| ())
+    })
+    .await
+    .map_err(|e| format!("Install shim error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn uninstall_shim() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        // From Settings UI, remove shims and PATH without unregistering the application channel
+        sona_shim::installer::uninstall_shims(None, true).map(|_| ())
+    })
+    .await
+    .map_err(|e| format!("Uninstall shim error: {}", e))?
+}
+
+#[tauri::command]
+pub async fn set_default_channel(channel: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let ch = sona_shim::registry::Channel::parse(&channel).ok_or_else(|| {
+            format!(
+                "Invalid channel '{}'. Expected 'stable' or 'nightly'.",
+                channel
+            )
+        })?;
+        sona_shim::registry::set_default_channel(ch)
+    })
+    .await
+    .map_err(|e| format!("Set default channel error: {}", e))?
+}
