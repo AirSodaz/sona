@@ -7,11 +7,7 @@ pub async fn cancel_download(
     services: State<'_, DesktopServices>,
     id: String,
 ) -> Result<bool, String> {
-    if services.downloads.notify_download(&id).await {
-        Ok(true)
-    } else {
-        Err(format!("No active download found for id: {id}"))
-    }
+    Ok(services.downloads.notify_download(&id).await)
 }
 
 #[tauri::command]
@@ -70,10 +66,14 @@ pub async fn check_interrupted_download<R: tauri::Runtime>(
     model_id: String,
 ) -> Result<Option<sona_core::models::downloads::InterruptedDownloadInfo>, String> {
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
-    Ok(sona_core::models::downloads::inspect_interrupted_download(
-        &models_dir,
-        &model_id,
-    ))
+    tokio::task::spawn_blocking(move || {
+        Ok(sona_core::models::downloads::inspect_interrupted_download(
+            &models_dir,
+            &model_id,
+        ))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -82,8 +82,12 @@ pub async fn clean_interrupted_download<R: tauri::Runtime>(
     model_id: String,
 ) -> Result<bool, String> {
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
-    sona_core::models::downloads::clean_interrupted_download(&models_dir, &model_id)
-        .map_err(|e| e.to_string())
+    tokio::task::spawn_blocking(move || {
+        sona_core::models::downloads::clean_interrupted_download(&models_dir, &model_id)
+            .map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]

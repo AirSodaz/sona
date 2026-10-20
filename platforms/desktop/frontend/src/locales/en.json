@@ -118,6 +118,7 @@
       "download_failed": "Failed to download the model.",
       "load_failed": "Failed to load model: {{name}}",
       "delete_failed": "Failed to delete model: {{name}}",
+      "clean_failed": "Failed to clean incomplete download files. Please check if the files are in use.",
       "already_in_progress": "This model is currently being downloaded by another process. Please wait for it to finish."
     },
     "export": {

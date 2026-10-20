@@ -56,6 +56,7 @@ pub fn is_file_locked(path: &Path) -> bool {
                 true
             }
         }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
         Err(_) => true,
     }
 }
@@ -76,14 +77,19 @@ pub fn inspect_interrupted_download(
         return None;
     }
 
+    if resolved.download_path != resolved.install_path
+        && resolved.download_path.exists()
+        && is_file_locked(&resolved.download_path)
+    {
+        return None;
+    }
+
     let staging_path = staging_install_path(&resolved.install_path);
-    if staging_path.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&staging_path) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
-                    return None;
-                }
+    if let Ok(entries) = std::fs::read_dir(&staging_path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
+                return None;
             }
         }
     }
@@ -126,6 +132,16 @@ pub fn inspect_interrupted_download(
                 downloaded_bytes = len;
             }
         }
+        if resolved.download_path != resolved.install_path && resolved.download_path.is_file() {
+            let len = resolved
+                .download_path
+                .metadata()
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if len > 0 && downloaded_bytes == 0 {
+                downloaded_bytes = len;
+            }
+        }
         if staging_path.exists() {
             if staging_path.is_dir() {
                 if let Ok(entries) = std::fs::read_dir(&staging_path) {
@@ -142,8 +158,10 @@ pub fn inspect_interrupted_download(
         total_bytes = resolved.artifacts.first().and_then(|a| a.size_bytes);
     }
 
-    let has_interrupted_artifacts =
-        downloaded_bytes > 0 || temp_download.is_file() || staging_path.exists();
+    let has_interrupted_artifacts = downloaded_bytes > 0
+        || temp_download.is_file()
+        || staging_path.exists()
+        || (resolved.download_path != resolved.install_path && resolved.download_path.is_file());
 
     if has_interrupted_artifacts {
         let percentage = total_bytes.map(|t| {
@@ -187,17 +205,25 @@ pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io:
         ));
     }
 
+    if resolved.download_path != resolved.install_path
+        && resolved.download_path.exists()
+        && is_file_locked(&resolved.download_path)
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download archive file is actively locked: {model_id}"),
+        ));
+    }
+
     let staging_path = staging_install_path(&resolved.install_path);
-    if staging_path.is_dir() {
-        if let Ok(entries) = std::fs::read_dir(&staging_path) {
-            for entry in entries.flatten() {
-                let p = entry.path();
-                if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
-                    return Err(std::io::Error::new(
-                        std::io::ErrorKind::ResourceBusy,
-                        format!("Staged download file is actively locked: {}", p.display()),
-                    ));
-                }
+    if let Ok(entries) = std::fs::read_dir(&staging_path) {
+        for entry in entries.flatten() {
+            let p = entry.path();
+            if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::ResourceBusy,
+                    format!("Staged download file is actively locked: {}", p.display()),
+                ));
             }
         }
     }
@@ -224,6 +250,17 @@ pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io:
         }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => return Err(e),
+    }
+
+    if resolved.download_path != resolved.install_path {
+        match std::fs::symlink_metadata(&resolved.download_path) {
+            Ok(_) => {
+                std::fs::remove_file(&resolved.download_path)?;
+                removed = true;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
     }
 
     if lock_path.exists() && !is_file_locked(&lock_path) {

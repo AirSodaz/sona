@@ -477,4 +477,54 @@ describe('LocalProviderAccordionItem', () => {
       expect.objectContaining({ modelId: 'qwen3.5-4b' })
     );
   });
+
+  it('still proceeds with download when cleanInterruptedDownload returns false (already clean)', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: true });
+    vi.mocked(cleanInterruptedDownload).mockResolvedValueOnce(false);
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'qwen3.5-4b' })
+    );
+  });
 });

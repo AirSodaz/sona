@@ -98,6 +98,10 @@ export class ModelDownloadService {
     mirror,
     downloadId,
   }: DownloadModelInput): Promise<string> {
+    if (signal?.aborted) {
+      throw new Error('Download cancelled');
+    }
+
     const resolvedDownloadId = downloadId ?? Math.random().toString(36).substring(7);
     if (this.ports.downloadPresetModel) {
       return await this.downloadPresetModel(
@@ -233,6 +237,10 @@ export class ModelDownloadService {
       throw new Error('Preset model downloads are unavailable in this host');
     }
 
+    if (signal?.aborted) {
+      throw new Error('Download cancelled');
+    }
+
     const resolvedDownloadId = downloadId ?? Math.random().toString(36).substring(7);
     const abort = async () => {
       try {
@@ -318,17 +326,20 @@ export class ModelDownloadService {
     let lastDownloaded = 0;
     let uiLastDownloaded = 0;
     let lastTime = Date.now();
+    if (signal?.aborted) {
+      throw new Error('Download cancelled');
+    }
+
     const resolvedDownloadId = downloadId ?? Math.random().toString(36).substring(7);
 
-    if (signal) {
-      signal.addEventListener('abort', async () => {
-        try {
-          await this.ports.cancelDownload(resolvedDownloadId);
-        } catch (error) {
-          logger.error('Failed to cancel download:', error);
-        }
-      });
-    }
+    const abort = async () => {
+      try {
+        await this.ports.cancelDownload(resolvedDownloadId);
+      } catch (error) {
+        logger.error('Failed to cancel download:', error);
+      }
+    };
+    signal?.addEventListener('abort', abort, { once: true });
 
     const unlisten = await this.ports.listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
       const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
@@ -444,6 +455,7 @@ export class ModelDownloadService {
         { cause }
       );
     } finally {
+      signal?.removeEventListener('abort', abort);
       if (unlisten) {
         unlisten();
       }

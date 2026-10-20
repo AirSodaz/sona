@@ -70,7 +70,11 @@ export async function cleanInterruptedDownload(modelId: string): Promise<boolean
 }
 
 export async function cancelDownload(id: string): Promise<boolean> {
-  return await invokeTauri(TauriCommand.app.cancelDownload, { id });
+  try {
+    return await invokeTauri(TauriCommand.app.cancelDownload, { id });
+  } catch {
+    return false;
+  }
 }
 
 export async function openLogFolder(): Promise<void> {

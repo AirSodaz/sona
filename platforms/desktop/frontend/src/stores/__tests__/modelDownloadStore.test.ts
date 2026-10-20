@@ -80,7 +80,7 @@ describe('modelDownloadStore', () => {
     expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
   });
 
-  it('does not flip to cancelled if backend cancellation fails', async () => {
+  it('still flips to cancelled even if backend cancellation fails', async () => {
     const { cancelDownload: tauriCancelDownload } = await import('../../services/tauri/app');
     vi.mocked(tauriCancelDownload).mockRejectedValueOnce(new Error('Backend error'));
 
@@ -91,8 +91,8 @@ describe('modelDownloadStore', () => {
     });
 
     const result = await useModelDownloadStore.getState().cancelDownload('test-model', 'dl-active');
-    expect(result).toBe(false);
-    // Should NOT flip to cancelled
-    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('downloading');
+    expect(result).toBe(true);
+    // Should reliably flip to cancelled when user requests cancellation
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
   });
 });

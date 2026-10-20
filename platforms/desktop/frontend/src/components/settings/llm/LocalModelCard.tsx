@@ -237,10 +237,12 @@ export function LocalModelCard({
           ) : card.interruptedDownload ? (
             <span className="model-status-chip model-status-interrupted">
               <span>
-                {t('settings.model_status_interrupted', {
-                  progress: Math.round(card.interruptedDownload.percentage ?? 0),
-                  defaultValue: `可续传 (${Math.round(card.interruptedDownload.percentage ?? 0)}%)`,
-                })}
+                {card.interruptedDownload.percentage != null
+                  ? t('settings.model_status_interrupted', {
+                      progress: Math.round(card.interruptedDownload.percentage),
+                      defaultValue: `可续传 (${Math.round(card.interruptedDownload.percentage)}%)`,
+                    })
+                  : t('settings.resume_download', { defaultValue: '可续传' })}
               </span>
             </span>
           ) : (
@@ -398,10 +400,12 @@ export function LocalModelCard({
               }
               data-tooltip={
                 card.interruptedDownload
-                  ? t('settings.resume_download_tooltip', {
-                      progress: Math.round(card.interruptedDownload.percentage ?? 0),
-                      defaultValue: `继续下载 (已完成 ${Math.round(card.interruptedDownload.percentage ?? 0)}%)`,
-                    })
+                  ? card.interruptedDownload.percentage != null
+                    ? t('settings.resume_download_tooltip', {
+                        progress: Math.round(card.interruptedDownload.percentage),
+                        defaultValue: `继续下载 (已完成 ${Math.round(card.interruptedDownload.percentage)}%)`,
+                      })
+                    : t('settings.resume_download', { defaultValue: '继续下载' })
                   : t('common.download', { defaultValue: '下载' })
               }
               data-tooltip-pos="top"

@@ -621,13 +621,13 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
     });
   });
 
-  it('halts and alerts without starting download when cleanInterruptedDownload fails (H3)', async () => {
+  it('halts and shows error without starting download when cleanInterruptedDownload rejects (H3)', async () => {
     const { cleanInterruptedDownload } = await import('../../services/tauri/app');
-    vi.mocked(cleanInterruptedDownload).mockResolvedValue(false);
+    vi.mocked(cleanInterruptedDownload).mockRejectedValue(new Error('File is locked'));
 
-    const alertMock = vi.fn();
+    const showErrorMock = vi.fn();
     useDialogStore.setState({
-      alert: alertMock,
+      showError: showErrorMock,
       checkboxConfirm: vi.fn().mockResolvedValue({ confirmed: true, checked: true }),
     });
 
@@ -656,7 +656,7 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
     });
 
     expect(cleanInterruptedDownload).toHaveBeenCalledWith(catalogModel.id);
-    expect(alertMock).toHaveBeenCalledTimes(1);
+    expect(showErrorMock).toHaveBeenCalledTimes(1);
     expect(modelService.downloadModel).not.toHaveBeenCalled();
   });
 

@@ -65,11 +65,7 @@ pub async fn cancel_download(
     services: &DesktopServices,
     download_id: String,
 ) -> Result<bool, String> {
-    if services.downloads.notify_download(&download_id).await {
-        Ok(true)
-    } else {
-        Err(format!("No active download found for id: {download_id}"))
-    }
+    Ok(services.downloads.notify_download(&download_id).await)
 }
 
 pub async fn delete_preset_model(

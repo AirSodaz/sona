@@ -976,41 +976,80 @@ fn models_info_shows_incomplete_download_when_present() {
     assert_eq!(val["interrupted_download"]["downloadedBytes"], 14);
 }
 
-#[test]
-fn models_download_resumes_with_notice_when_incomplete_present() {
+#[tokio::test]
+async fn models_download_resumes_prompt_cancel() {
     let dir = tempfile::tempdir().unwrap();
     let models_dir = dir.path().join("models");
     std::fs::create_dir_all(&models_dir).unwrap();
 
-    // Create partial .download file for silero-vad
     let temp_file = models_dir.join("silero_vad.onnx.download");
     std::fs::write(&temp_file, b"partial-silero").unwrap();
 
-    // Running with --yes should print notice to stderr about resuming
-    // Note: It will attempt download which might fail due to dummy URL or network,
-    // but the resume detection and notice generation happens before network call.
-    let res = sona_cli::run_cli_from_args([
-        "sona-cli",
-        "models",
-        "download",
-        "silero-vad",
-        "--yes",
-        "--models-dir",
-        models_dir.to_string_lossy().as_ref(),
-    ]);
+    let mut io = sona_cli::MemoryCliIo {
+        stdin_is_terminal: true,
+        stdin_lines: std::collections::VecDeque::from([String::from("n\n")]),
+        ..Default::default()
+    };
 
-    // Either succeeds or fails on network, but stderr should have the resumption notice
-    match res {
-        Ok(out) => {
-            assert!(
-                out.stderr
-                    .contains("Found incomplete download for silero-vad")
-            );
-            assert!(out.stderr.contains("Resuming download"));
-        }
-        Err(err) => {
-            // If network fails, the error message or output still verifies the code path
-            println!("Download result: {:?}", err);
-        }
-    }
+    let res = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "models",
+            "download",
+            "silero-vad",
+            "--models-dir",
+            models_dir.to_string_lossy().as_ref(),
+        ],
+        &mut io,
+    )
+    .await;
+
+    assert!(matches!(res, Err(sona_cli::CliError::Model(msg)) if msg.contains("cancelled")));
+    let out = io.into_output();
+    assert!(
+        out.stderr
+            .contains("Found incomplete download for silero-vad")
+    );
+    assert!(out.stderr.contains("Resume download? [Y/n/restart]"));
+}
+
+#[tokio::test]
+async fn models_download_resumes_prompt_restart_cleans_incomplete() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-silero").unwrap();
+
+    let mut io = sona_cli::MemoryCliIo {
+        stdin_is_terminal: true,
+        stdin_lines: std::collections::VecDeque::from([String::from("restart\n")]),
+        ..Default::default()
+    };
+
+    let _res = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "models",
+            "download",
+            "silero-vad",
+            "--models-dir",
+            models_dir.to_string_lossy().as_ref(),
+        ],
+        &mut io,
+    )
+    .await;
+
+    let out = io.into_output();
+    assert!(
+        out.stderr
+            .contains("Found incomplete download for silero-vad")
+    );
+    assert!(
+        out.stderr
+            .contains("Restarting download for silero-vad from beginning...")
+    );
+    // Verify that the partial file was cleaned/removed before proceeding to download
+    assert!(!temp_file.exists());
 }

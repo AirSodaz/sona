@@ -54,8 +54,11 @@ interface ModelDownloadState {
 }
 
 let unlistenProgress: UnlistenFn | null = null;
-let lastProgressTime = 0;
-const lastBytesMap = new Map<string, number>();
+interface ProgressSample {
+  lastTime: number;
+  lastDownloadedBytes: number;
+}
+const progressSamples = new Map<string, ProgressSample>();
 
 export async function ensureModelDownloadListener(): Promise<void> {
   const isTauri =
@@ -68,20 +71,23 @@ export async function ensureModelDownloadListener(): Promise<void> {
       if (!id || total <= 0) return;
 
       const now = Date.now();
-      const prevDownloaded = lastBytesMap.get(id) ?? 0;
-      const timeDiff = now - lastProgressTime;
+      const sample = progressSamples.get(id);
 
       let speedStr: string | undefined;
-      if (timeDiff > 400) {
-        const bytesDiff = Math.max(0, downloaded - prevDownloaded);
-        const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-        speedStr =
-          speedBytesPerSec > 1024 * 1024
-            ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-            : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
+      if (!sample) {
+        progressSamples.set(id, { lastTime: now, lastDownloadedBytes: downloaded });
+      } else {
+        const timeDiff = now - sample.lastTime;
+        if (timeDiff > 400) {
+          const bytesDiff = Math.max(0, downloaded - sample.lastDownloadedBytes);
+          const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
+          speedStr =
+            speedBytesPerSec > 1024 * 1024
+              ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+              : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
-        lastBytesMap.set(id, downloaded);
-        lastProgressTime = now;
+          progressSamples.set(id, { lastTime: now, lastDownloadedBytes: downloaded });
+        }
       }
 
       const progress = Math.min(100, Math.round((downloaded / total) * 100));
@@ -106,7 +112,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   downloads: {},
 
   startDownload: ({ modelId, modelName, modelType = 'asr', downloadId, onRetry, onCancel }) => {
-    lastBytesMap.set(downloadId, 0);
+    progressSamples.delete(downloadId);
     set((state) => ({
       downloads: {
         ...state.downloads,
@@ -160,6 +166,10 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   },
 
   completeDownload: (modelId, downloadId) => {
+    const item = get().downloads[modelId];
+    if (item) {
+      progressSamples.delete(item.downloadId);
+    }
     set((state) => {
       const current = state.downloads[modelId];
       if (!current || (downloadId && current.downloadId !== downloadId)) return state;
@@ -178,6 +188,10 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   },
 
   failDownload: (modelId, error, downloadId) => {
+    const item = get().downloads[modelId];
+    if (item) {
+      progressSamples.delete(item.downloadId);
+    }
     set((state) => {
       const current = state.downloads[modelId];
       if (!current || (downloadId && current.downloadId !== downloadId)) return state;
@@ -201,13 +215,17 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
       return false;
     }
     if (item.status === 'downloading') {
-      item.onCancel?.();
+      try {
+        item.onCancel?.();
+      } catch (err) {
+        console.warn(`Error during onCancel for ${modelId}:`, err);
+      }
       try {
         await tauriCancelDownload(item.downloadId);
       } catch (err) {
-        console.error(`Failed to cancel download for ${modelId}:`, err);
-        return false;
+        console.warn(`Backend cancelDownload returned error for ${modelId}:`, err);
       }
+      progressSamples.delete(item.downloadId);
       set((state) => {
         const current = state.downloads[modelId];
         if (!current || (downloadId && current.downloadId !== downloadId)) return state;
@@ -228,6 +246,10 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   },
 
   dismissDownload: (modelId) => {
+    const item = get().downloads[modelId];
+    if (item) {
+      progressSamples.delete(item.downloadId);
+    }
     set((state) => {
       const next = { ...state.downloads };
       delete next[modelId];

@@ -10,7 +10,8 @@ const mockT = ((key: string, options?: { defaultValue?: string } & Record<string
 describe('formatBytes', () => {
   it('formats MB and GB correctly', () => {
     expect(formatBytes(undefined)).toBe('');
-    expect(formatBytes(0)).toBe('');
+    expect(formatBytes(null)).toBe('');
+    expect(formatBytes(0)).toBe('0 MB');
     expect(formatBytes(-100)).toBe('');
     expect(formatBytes(50 * 1024 * 1024)).toBe('50 MB');
     expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB');
@@ -112,9 +113,44 @@ describe('adaptModelDownloadsEntries', () => {
     const entry = entries[0];
     expect(entry.priority).toBe('action');
     expect(entry.tone).toBe('error');
-    expect(entry.body).toBe('Connection reset by peer');
+    expect(entry.body).toBe('Failed to complete model download.');
+    expect(entry.detail).toBe('Connection reset by peer');
     expect(entry.actions).toHaveLength(1);
     expect(entry.actions[0].id).toBe('retry-paraformer');
+    expect(entry.actions[0].label).toBe('Retry');
+
+    entry.actions[0].run();
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('adapts cancelled download entry with info tone and resume action when onRetry is provided', () => {
+    const onRetry = vi.fn();
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl4: {
+          id: 'dl4',
+          modelId: 'whisper-large',
+          modelName: 'Whisper Large',
+          modelType: 'asr',
+          status: 'cancelled',
+          progress: 30,
+          timestamp: 4000,
+          downloadId: 'dl4',
+          onRetry,
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.priority).toBe('info');
+    expect(entry.tone).toBe('info');
+    expect(entry.closeAction).toBeDefined();
+    expect(entry.actions).toHaveLength(1);
+    expect(entry.actions[0].id).toBe('retry-whisper-large');
+    expect(entry.actions[0].label).toBe('Resume');
 
     entry.actions[0].run();
     expect(onRetry).toHaveBeenCalled();

@@ -318,40 +318,53 @@ export function useModelManager(isOpen: boolean) {
 
     let downloadedPath: string;
     try {
-      downloadedPath = await downloadFn(
-        modelId,
-        (pct, status) => {
-          setDownloads((prev) => {
-            if (!prev[modelId]) return prev;
-            return {
-              ...prev,
-              [modelId]: { ...prev[modelId], progress: pct, status: status },
-            };
-          });
-          useModelDownloadStore.getState().updateProgress(downloadId, { progress: pct });
-        },
-        controller.signal,
-        downloadId
-      );
-    } catch (error) {
-      const errorMsg = extractErrorMessage(error);
-      if (errorMsg === 'Download cancelled' || controller.signal.aborted) {
-        logger.info('Download cancelled by user');
-        void useModelDownloadStore.getState().cancelDownload(modelId, downloadId);
-      } else {
-        useModelDownloadStore.getState().failDownload(modelId, errorMsg, downloadId);
-        if (errorMsg.includes('Download already in progress')) {
-          await alert(t('errors.model.already_in_progress'));
+      try {
+        downloadedPath = await downloadFn(
+          modelId,
+          (pct, status) => {
+            setDownloads((prev) => {
+              if (!prev[modelId]) return prev;
+              return {
+                ...prev,
+                [modelId]: { ...prev[modelId], progress: pct, status: status },
+              };
+            });
+            useModelDownloadStore.getState().updateProgress(downloadId, { progress: pct });
+          },
+          controller.signal,
+          downloadId
+        );
+      } catch (error) {
+        const errorMsg = extractErrorMessage(error);
+        if (errorMsg === 'Download cancelled' || controller.signal.aborted) {
+          logger.info('Download cancelled by user');
+          void useModelDownloadStore.getState().cancelDownload(modelId, downloadId);
         } else {
-          await showError({
-            code: 'model.download_failed',
-            messageKey: 'errors.model.download_failed',
-            cause: error,
-          });
+          useModelDownloadStore.getState().failDownload(modelId, errorMsg, downloadId);
+          if (errorMsg.includes('Download already in progress')) {
+            await alert(t('errors.model.already_in_progress'));
+          } else {
+            await showError({
+              code: 'model.download_failed',
+              messageKey: 'errors.model.download_failed',
+              cause: error,
+            });
+          }
         }
+        await refreshModelCatalogSnapshot();
+        return;
       }
-      await refreshModelCatalogSnapshot();
-      return;
+
+      useModelDownloadStore.getState().completeDownload(modelId, downloadId);
+      try {
+        await refreshModelCatalogSnapshot();
+        await onSuccess(downloadedPath);
+      } catch (postError) {
+        logger.error(
+          'Failed to refresh catalog snapshot or complete download callback:',
+          postError
+        );
+      }
     } finally {
       inFlightModelsRef.current.delete(modelId);
       activeDownloadsRef.current.delete(modelId);
@@ -360,14 +373,6 @@ export function useModelManager(isOpen: boolean) {
         delete next[modelId];
         return next;
       });
-    }
-
-    useModelDownloadStore.getState().completeDownload(modelId, downloadId);
-    try {
-      await refreshModelCatalogSnapshot();
-      await onSuccess(downloadedPath);
-    } catch (postError) {
-      logger.error('Failed to refresh catalog snapshot or complete download callback:', postError);
     }
   }
 
@@ -416,7 +421,7 @@ export function useModelManager(isOpen: boolean) {
       const interruptedDownload =
         catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
       if (interruptedDownload) {
-        const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes);
+        const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
         const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
         const sizeText = totalFormatted
           ? `${downloadedFormatted} / ${totalFormatted}`
@@ -454,17 +459,7 @@ export function useModelManager(isOpen: boolean) {
 
         if (result.checked) {
           try {
-            const cleaned = await cleanInterruptedDownload(model.id);
-            if (!cleaned) {
-              inFlightModelsRef.current.delete(model.id);
-              logger.warn(`Failed to clean interrupted download for ${model.id}`);
-              await alert(
-                t('errors.model.clean_failed', {
-                  defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
-                })
-              );
-              return;
-            }
+            await cleanInterruptedDownload(model.id);
             await refreshModelCatalogSnapshot();
           } catch (cleanErr) {
             inFlightModelsRef.current.delete(model.id);

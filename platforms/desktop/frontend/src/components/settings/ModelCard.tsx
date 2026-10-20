@@ -15,7 +15,7 @@ type ModelStatus =
   | { kind: 'downloading'; progress: number }
   | { kind: 'installed' }
   | { kind: 'partial'; installed: number; total: number }
-  | { kind: 'interrupted'; progress: number };
+  | { kind: 'interrupted'; progress: number | null };
 
 interface ModelCardProps {
   models: ModelInfo[];
@@ -111,10 +111,12 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
     case 'interrupted':
       return (
         <span className="model-status-chip model-status-interrupted">
-          {t('settings.model_status_interrupted', {
-            progress: Math.round(status.progress),
-            defaultValue: `可续传 (${Math.round(status.progress)}%)`,
-          })}
+          {status.progress != null
+            ? t('settings.model_status_interrupted', {
+                progress: Math.round(status.progress),
+                defaultValue: `可续传 (${Math.round(status.progress)}%)`,
+              })
+            : t('settings.resume_download', { defaultValue: '可续传' })}
         </span>
       );
     default:
@@ -251,11 +253,14 @@ function ModelCardActions({
   }
 
   const isInterrupted = !isInstalled && !isDownloading && !!model.interruptedDownload;
+  const pct = model.interruptedDownload?.percentage;
   const downloadTooltip = isInterrupted
-    ? t('settings.resume_download_tooltip', {
-        progress: Math.round(model.interruptedDownload?.percentage ?? 0),
-        defaultValue: `继续下载 (已完成 ${Math.round(model.interruptedDownload?.percentage ?? 0)}%)`,
-      })
+    ? pct != null
+      ? t('settings.resume_download_tooltip', {
+          progress: Math.round(pct),
+          defaultValue: `继续下载 (已完成 ${Math.round(pct)}%)`,
+        })
+      : t('settings.resume_download', { defaultValue: '继续下载' })
     : t('common.download');
   const downloadAriaLabel = isInterrupted
     ? `${t('settings.resume_download', { defaultValue: '继续下载' })} ${model.name}`
@@ -303,7 +308,7 @@ export function ModelCard({
       if (baseModel.interruptedDownload) {
         return {
           kind: 'interrupted',
-          progress: baseModel.interruptedDownload.percentage ?? 0,
+          progress: baseModel.interruptedDownload.percentage ?? null,
         };
       }
       return { kind: 'not-installed' };
@@ -322,7 +327,7 @@ export function ModelCard({
     if (interruptedModel?.interruptedDownload) {
       return {
         kind: 'interrupted',
-        progress: interruptedModel.interruptedDownload.percentage ?? 0,
+        progress: interruptedModel.interruptedDownload.percentage ?? null,
       };
     }
     return { kind: 'not-installed' };
@@ -404,10 +409,12 @@ export function ModelCard({
                     {isInstalled && <CheckIcon className="model-version-check" />}
                     {!isInstalled && !isDownloading && model.interruptedDownload && (
                       <span className="model-status-chip model-status-interrupted">
-                        {t('settings.model_status_interrupted', {
-                          progress: Math.round(model.interruptedDownload.percentage ?? 0),
-                          defaultValue: `可续传 (${Math.round(model.interruptedDownload.percentage ?? 0)}%)`,
-                        })}
+                        {model.interruptedDownload.percentage != null
+                          ? t('settings.model_status_interrupted', {
+                              progress: Math.round(model.interruptedDownload.percentage),
+                              defaultValue: `可续传 (${Math.round(model.interruptedDownload.percentage)}%)`,
+                            })
+                          : t('settings.resume_download', { defaultValue: '可续传' })}
                       </span>
                     )}
                   </div>

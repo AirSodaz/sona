@@ -229,4 +229,32 @@ describe('ModelCard interrupted download', () => {
     expect(chips.length).toBeGreaterThanOrEqual(1);
     expect(chips[0].textContent).toContain('50%');
   });
+
+  it('renders interrupted chip without percentage when percentage is null', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: null,
+        percentage: null,
+      },
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).not.toContain('0%');
+    expect(chip?.textContent).toContain('可续传');
+  });
 });

@@ -8,8 +8,9 @@ import type {
 } from '../../types/notification';
 import type { TFunction } from './adapterUtils';
 
-export function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '';
+export function formatBytes(bytes?: number | null): string {
+  if (bytes == null || bytes < 0 || Number.isNaN(bytes)) return '';
+  if (bytes === 0) return '0 MB';
   const gb = bytes / (1024 * 1024 * 1024);
   if (gb >= 1) return `${gb.toFixed(2)} GB`;
   const mb = bytes / (1024 * 1024);
@@ -74,24 +75,26 @@ export function adaptModelDownloadsEntries(
     let body: string | null = null;
     if (isActive) {
       const parts: string[] = [];
-      if (item.downloadedBytes && item.totalBytes) {
+      if (item.downloadedBytes != null && item.totalBytes != null) {
         parts.push(`${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalBytes)}`);
+      } else if (item.downloadedBytes != null) {
+        parts.push(formatBytes(item.downloadedBytes));
       }
       if (item.speed) {
         parts.push(item.speed);
       }
-      body = parts.length > 0 ? parts.join(' • ') : `${item.progress}%`;
+      body = parts.length > 0 ? parts.join(' • ') : null;
     } else if (isSuccess) {
       body = t('notifications.model_download.completed_body', {
         defaultValue: 'Model installed and ready to use.',
       });
     } else if (isFailed) {
-      body =
-        item.error ||
-        t('notifications.model_download.failed_body', {
-          defaultValue: 'Failed to complete model download.',
-        });
+      body = t('notifications.model_download.failed_body', {
+        defaultValue: 'Failed to complete model download.',
+      });
     }
+
+    const detail = isFailed && item.error?.trim() ? item.error.trim() : undefined;
 
     const actions: NotificationAction[] = [];
     if (isActive) {
@@ -103,11 +106,13 @@ export function adaptModelDownloadsEntries(
           void callbacks.cancelDownload(item.modelId, item.downloadId);
         },
       });
-    } else if (isFailed && item.onRetry) {
+    } else if ((isFailed || isCancelled) && item.onRetry) {
       actions.push({
         id: `retry-${item.modelId}`,
-        label: t('common.retry', { defaultValue: 'Retry' }),
-        variant: 'primary',
+        label: isCancelled
+          ? t('common.resume', { defaultValue: 'Resume' })
+          : t('common.retry', { defaultValue: 'Retry' }),
+        variant: isCancelled ? 'secondary' : 'primary',
         run: () => {
           if (item.onRetry) {
             void item.onRetry();
@@ -133,6 +138,7 @@ export function adaptModelDownloadsEntries(
       icon: isSuccess ? <CheckIcon /> : <DownloadIcon />,
       title,
       body,
+      detail,
       timestamp: item.timestamp,
       progress: isActive ? item.progress : undefined,
       actions,

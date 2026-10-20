@@ -121,19 +121,27 @@ export function useNotificationEntries({
     },
   });
 
-  // --- Ledger clear counts ---
-  const succeededCount = useMemo(
-    () => tasks.filter((task) => task.status === 'succeeded').length,
-    [tasks]
-  );
+  // --- Ledger & download clear counts ---
+  const succeededCount = useMemo(() => {
+    const taskSucceeded = tasks.filter((task) => task.status === 'succeeded').length;
+    const modelSucceeded = Object.values(modelDownloads).filter(
+      (item) => item.status === 'completed'
+    ).length;
+    return taskSucceeded + modelSucceeded;
+  }, [tasks, modelDownloads]);
+
   const totalClearableCount = useMemo(() => {
     const activeStatuses: Record<string, true> = {
       pending: true,
       running: true,
       cancelRequested: true,
     };
-    return tasks.filter((task) => !activeStatuses[task.status]).length;
-  }, [tasks]);
+    const taskClearable = tasks.filter((task) => !activeStatuses[task.status]).length;
+    const modelClearable = Object.values(modelDownloads).filter(
+      (item) => item.status !== 'downloading'
+    ).length;
+    return taskClearable + modelClearable;
+  }, [tasks, modelDownloads]);
 
   const handleClear = (scope: 'succeeded' | 'all') => {
     if (scope === 'succeeded') {

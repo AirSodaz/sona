@@ -102,21 +102,6 @@ impl DownloadState {
     }
 }
 
-pub async fn cancel_download(
-    state: tauri::State<'_, DownloadState>,
-    id: String,
-) -> Result<bool, String> {
-    if state.notify_download(&id).await {
-        Ok(true)
-    } else {
-        Err(format!("No active download found for id: {id}"))
-    }
-}
-
-pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {
-    Ok(state.has_active_downloads().await)
-}
-
 pub async fn download_file(
     emitter: Arc<dyn crate::platform::event::EventEmitterPort>,
     state: &DownloadState,

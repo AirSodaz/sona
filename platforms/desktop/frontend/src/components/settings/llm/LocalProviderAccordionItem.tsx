@@ -8,7 +8,6 @@ import type {
 import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { parseDownloadProgressPayload } from '../../../services/modelDownloadService';
 import {
-  cancelDownload,
   cleanInterruptedDownload,
   deletePresetModel,
   downloadPresetModel,
@@ -52,6 +51,8 @@ export function LocalProviderAccordionItem({
   const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
+  const cardsRef = useRef(data?.cards);
+  cardsRef.current = data?.cards;
 
   const confirm = useDialogStore((state) => state.confirm);
   const alert = useDialogStore((state) => state.alert);
@@ -123,7 +124,7 @@ export function LocalProviderAccordionItem({
 
       if (card.interruptedDownload) {
         const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
-        const downloadedFormatted = formatBytes(downloadedBytes);
+        const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
         const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
         const sizeText = totalFormatted
           ? `${downloadedFormatted} / ${totalFormatted}`
@@ -159,16 +160,7 @@ export function LocalProviderAccordionItem({
 
         if (result.checked) {
           try {
-            const cleaned = await cleanInterruptedDownload(card.id);
-            if (!cleaned) {
-              console.warn(`Failed to clean interrupted download for ${card.id}`);
-              await alert(
-                t('errors.model.clean_failed', {
-                  defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
-                })
-              );
-              return;
-            }
+            await cleanInterruptedDownload(card.id);
             await fetchCards();
           } catch (cleanErr) {
             console.warn('Failed to clean interrupted download:', cleanErr);
@@ -188,7 +180,8 @@ export function LocalProviderAccordionItem({
         modelType: 'llm',
         downloadId,
         onRetry: () => {
-          void handleDownload(card);
+          const freshCard = cardsRef.current?.find((c) => c.id === card.id) ?? card;
+          void handleDownload(freshCard);
         },
       });
 
@@ -234,8 +227,7 @@ export function LocalProviderAccordionItem({
   const handleCancelDownload = useCallback(
     async (cardId: string) => {
       try {
-        void useModelDownloadStore.getState().cancelDownload(cardId);
-        await cancelDownload(cardId);
+        await useModelDownloadStore.getState().cancelDownload(cardId);
       } catch (err) {
         console.error(`Failed to cancel download for ${cardId}:`, err);
       } finally {

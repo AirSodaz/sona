@@ -870,7 +870,7 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
         sona_core::models::preset_models::LanguageMode::None => "none",
     };
 
-    let interrupted = if !is_installed {
+    let interrupted = if !is_valid {
         sona_model_downloads::inspect_interrupted_download(&models_dir, &resolved.model.id)
     } else {
         None
@@ -959,13 +959,17 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
     lines.push(format!("  Size:        {}", resolved.model.size));
     lines.push(format!("  Installed:   {}", install_status));
     if let Some(info) = &interrupted {
+        let pct_str = info
+            .percentage
+            .map(|p| format!("{p}% downloaded"))
+            .unwrap_or_else(|| "unknown percentage".into());
         lines.push(format!(
-            "  Incomplete:  yes ({} / {}, {}% downloaded)",
+            "  Incomplete:  yes ({} / {}, {})",
             format_bytes(info.downloaded_bytes),
             info.total_bytes
                 .map(format_bytes)
                 .unwrap_or_else(|| "unknown".into()),
-            info.percentage.unwrap_or(0),
+            pct_str,
         ));
     }
     lines.push(format!("  Languages:   {}", languages_str));
@@ -1120,10 +1124,16 @@ async fn download_one_model(
                     "Restarting download for {} from beginning...",
                     resolved.model.id
                 );
-                let _ = sona_model_downloads::clean_interrupted_download(
+                if let Err(err) = sona_model_downloads::clean_interrupted_download(
                     &resolved.models_dir,
                     &resolved.model.id,
-                );
+                ) {
+                    let _ = writeln!(
+                        io.stderr(),
+                        "Warning: Failed to clean incomplete download for {}: {err}",
+                        resolved.model.id
+                    );
+                }
             } else if trimmed == "n" || trimmed == "no" {
                 return Err(CliError::Model("Download cancelled by user.".to_string()));
             } else {
