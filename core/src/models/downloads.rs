@@ -131,18 +131,18 @@ pub fn inspect_interrupted_download(
             if len > 0 {
                 downloaded_bytes = len;
             }
-        }
-        if resolved.download_path != resolved.install_path && resolved.download_path.is_file() {
+        } else if resolved.download_path != resolved.install_path
+            && resolved.download_path.is_file()
+        {
             let len = resolved
                 .download_path
                 .metadata()
                 .map(|m| m.len())
                 .unwrap_or(0);
-            if len > 0 && downloaded_bytes == 0 {
+            if len > 0 {
                 downloaded_bytes = len;
             }
-        }
-        if staging_path.exists() {
+        } else if staging_path.exists() {
             if staging_path.is_dir() {
                 if let Ok(entries) = std::fs::read_dir(&staging_path) {
                     for entry in entries.flatten() {
@@ -156,6 +156,12 @@ pub fn inspect_interrupted_download(
             }
         }
         total_bytes = resolved.artifacts.first().and_then(|a| a.size_bytes);
+    }
+
+    if let Some(total) = total_bytes {
+        if total > 0 {
+            downloaded_bytes = downloaded_bytes.min(total);
+        }
     }
 
     let has_interrupted_artifacts = downloaded_bytes > 0

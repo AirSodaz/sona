@@ -13,6 +13,8 @@ describe('formatBytes', () => {
     expect(formatBytes(null)).toBe('');
     expect(formatBytes(0)).toBe('0 MB');
     expect(formatBytes(-100)).toBe('');
+    expect(formatBytes(500)).toBe('500 B');
+    expect(formatBytes(350 * 1024)).toBe('350 KB');
     expect(formatBytes(50 * 1024 * 1024)).toBe('50 MB');
     expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB');
   });

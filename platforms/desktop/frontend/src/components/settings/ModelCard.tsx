@@ -117,9 +117,9 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
           {status.progress != null
             ? t('settings.model_status_interrupted', {
                 progress: Math.round(status.progress),
-                defaultValue: `已暂停 (${Math.round(status.progress)}%)`,
+                defaultValue: `Paused (${Math.round(status.progress)}%)`,
               })
-            : t('settings.model_status_interrupted_no_progress', { defaultValue: '已暂停' })}
+            : t('settings.model_status_interrupted_no_progress', { defaultValue: 'Paused' })}
         </span>
       );
     default:
@@ -264,10 +264,10 @@ function ModelCardActions({
       pct != null
         ? t('settings.resume_download_tooltip', {
             progress: Math.round(pct),
-            defaultValue: `继续下载 (已完成 ${Math.round(pct)}%)`,
+            defaultValue: `Resume download (${Math.round(pct)}% completed)`,
           })
-        : t('settings.resume_download', { defaultValue: '继续下载' });
-    const downloadAriaLabel = `${t('settings.resume_download', { defaultValue: '继续下载' })} ${model.name}`;
+        : t('settings.resume_download', { defaultValue: 'Resume download' });
+    const downloadAriaLabel = `${t('settings.resume_download', { defaultValue: 'Resume download' })} ${model.name}`;
 
     return (
       <>
@@ -287,10 +287,10 @@ function ModelCardActions({
             className="model-action-icon model-action-delete"
             onClick={() => onDiscardDownload(model)}
             disabled={disabled}
-            aria-label={`${t('settings.discard_download', { defaultValue: '丢弃未完成的下载' })} ${model.name}`}
+            aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
             data-tooltip={t('settings.discard_download_tooltip', {
               size: downloadedFormatted,
-              defaultValue: `丢弃未完成的下载 (已占用 ${downloadedFormatted})`,
+              defaultValue: `Discard incomplete download (${downloadedFormatted})`,
             })}
           >
             <TrashIcon />
@@ -448,10 +448,10 @@ export function ModelCard({
                         {model.interruptedDownload.percentage != null
                           ? t('settings.model_status_interrupted', {
                               progress: Math.round(model.interruptedDownload.percentage),
-                              defaultValue: `已暂停 (${Math.round(model.interruptedDownload.percentage)}%)`,
+                              defaultValue: `Paused (${Math.round(model.interruptedDownload.percentage)}%)`,
                             })
                           : t('settings.model_status_interrupted_no_progress', {
-                              defaultValue: '已暂停',
+                              defaultValue: 'Paused',
                             })}
                       </span>
                     )}

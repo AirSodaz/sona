@@ -231,16 +231,16 @@ export function LocalProviderAccordionItem({
         t('settings.discard_download_confirm_message', {
           name: card.name,
           progress: progressDetail,
-          defaultValue: `确定要丢弃 ${card.name} 未完成的下载文件（${progressDetail}）吗？此操作将清除临时文件并释放磁盘空间。`,
+          defaultValue: `Are you sure you want to discard the incomplete download for ${card.name} (${progressDetail})? This will delete partial files and free up disk space.`,
         }),
         {
           title: t('settings.discard_download_confirm_title', {
-            defaultValue: '丢弃未完成的下载',
+            defaultValue: 'Discard Incomplete Download',
           }),
           confirmLabel: t('settings.discard_download_confirm_button', {
-            defaultValue: '丢弃文件',
+            defaultValue: 'Discard Files',
           }),
-          cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+          cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
           variant: 'warning',
         }
       );
@@ -254,7 +254,8 @@ export function LocalProviderAccordionItem({
         console.warn('Failed to clean interrupted download:', cleanErr);
         await alert(
           t('errors.model.clean_failed', {
-            defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
+            defaultValue:
+              'Failed to clean incomplete download files. Please check if the files are in use.',
           })
         );
       }

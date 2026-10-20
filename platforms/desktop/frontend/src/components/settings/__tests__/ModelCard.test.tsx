@@ -255,7 +255,7 @@ describe('ModelCard interrupted download', () => {
     const chip = container.querySelector('.model-status-interrupted');
     expect(chip).toBeTruthy();
     expect(chip?.textContent).not.toContain('0%');
-    expect(chip?.textContent).toContain('已暂停');
+    expect(chip?.textContent).toContain('Paused');
   });
 
   it('renders discard button and fires onDiscardDownload on click', () => {
@@ -282,7 +282,9 @@ describe('ModelCard interrupted download', () => {
       />
     );
 
-    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 SenseVoice/i });
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download SenseVoice/i,
+    });
     expect(discardBtn).toBeTruthy();
     fireEvent.click(discardBtn);
     expect(onDiscardDownload).toHaveBeenCalledWith(interruptedModel);

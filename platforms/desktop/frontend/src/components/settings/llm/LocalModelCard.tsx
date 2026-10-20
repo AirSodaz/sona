@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
+import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import './LocalModelCard.css';
@@ -49,14 +50,6 @@ interface LocalModelCardProps {
     feature: 'polish' | 'translation' | 'summary' | 'all'
   ) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
-}
-
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)} MB`;
 }
 
 export type SupportedModality = 'text' | 'image' | 'audio' | 'video';
@@ -242,9 +235,9 @@ export function LocalModelCard({
                 {card.interruptedDownload.percentage != null
                   ? t('settings.model_status_interrupted', {
                       progress: Math.round(card.interruptedDownload.percentage),
-                      defaultValue: `已暂停 (${Math.round(card.interruptedDownload.percentage)}%)`,
+                      defaultValue: `Paused (${Math.round(card.interruptedDownload.percentage)}%)`,
                     })
-                  : t('settings.model_status_interrupted_no_progress', { defaultValue: '已暂停' })}
+                  : t('settings.model_status_interrupted_no_progress', { defaultValue: 'Paused' })}
               </span>
             </span>
           ) : (
@@ -396,14 +389,14 @@ export function LocalModelCard({
                 type="button"
                 className="model-action-icon"
                 onClick={() => onDownload(card)}
-                aria-label={`${t('settings.resume_download', { defaultValue: '继续下载' })} ${card.name}`}
+                aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${card.name}`}
                 data-tooltip={
                   card.interruptedDownload.percentage != null
                     ? t('settings.resume_download_tooltip', {
                         progress: Math.round(card.interruptedDownload.percentage),
-                        defaultValue: `继续下载 (已完成 ${Math.round(card.interruptedDownload.percentage)}%)`,
+                        defaultValue: `Resume download (${Math.round(card.interruptedDownload.percentage)}% completed)`,
                       })
-                    : t('settings.resume_download', { defaultValue: '继续下载' })
+                    : t('settings.resume_download', { defaultValue: 'Resume download' })
                 }
                 data-tooltip-pos="top"
               >
@@ -414,10 +407,10 @@ export function LocalModelCard({
                   type="button"
                   className="model-action-icon model-action-delete"
                   onClick={() => onDiscardDownload(card)}
-                  aria-label={`${t('settings.discard_download', { defaultValue: '丢弃未完成的下载' })} ${card.name}`}
+                  aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${card.name}`}
                   data-tooltip={t('settings.discard_download_tooltip', {
                     size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
-                    defaultValue: `丢弃未完成的下载 (已占用 ${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
+                    defaultValue: `Discard incomplete download (${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
                   })}
                   data-tooltip-pos="top"
                 >

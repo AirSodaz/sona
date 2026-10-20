@@ -527,16 +527,16 @@ export function useModelManager(isOpen: boolean) {
       t('settings.discard_download_confirm_message', {
         name: model.name,
         progress: progressDetail,
-        defaultValue: `确定要丢弃 ${model.name} 未完成的下载文件（${progressDetail}）吗？此操作将清除临时文件并释放磁盘空间。`,
+        defaultValue: `Are you sure you want to discard the incomplete download for ${model.name} (${progressDetail})? This will delete partial files and free up disk space.`,
       }),
       {
         title: t('settings.discard_download_confirm_title', {
-          defaultValue: '丢弃未完成的下载',
+          defaultValue: 'Discard Incomplete Download',
         }),
         confirmLabel: t('settings.discard_download_confirm_button', {
-          defaultValue: '丢弃文件',
+          defaultValue: 'Discard Files',
         }),
-        cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+        cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
         variant: 'warning',
       }
     );

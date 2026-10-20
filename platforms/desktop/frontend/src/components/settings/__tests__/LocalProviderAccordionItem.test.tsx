@@ -415,10 +415,10 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
     });
 
-    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
     await act(async () => {
       fireEvent.click(downloadBtn);
     });
@@ -465,10 +465,12 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
     });
 
-    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
     await act(async () => {
       fireEvent.click(discardBtn);
     });
@@ -513,10 +515,12 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
     });
 
-    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
     await act(async () => {
       fireEvent.click(discardBtn);
     });

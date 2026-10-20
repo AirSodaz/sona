@@ -445,7 +445,7 @@ describe('LocalModelCard', () => {
     expect(chip).toBeTruthy();
     expect(chip?.textContent).toContain('50%');
 
-    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
     expect(downloadBtn).toBeTruthy();
     expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
   });
@@ -474,7 +474,9 @@ describe('LocalModelCard', () => {
       />
     );
 
-    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
     expect(discardBtn).toBeTruthy();
     fireEvent.click(discardBtn);
     expect(onDiscardDownload).toHaveBeenCalledWith(interruptedCard);

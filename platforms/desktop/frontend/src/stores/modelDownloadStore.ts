@@ -54,6 +54,7 @@ interface ModelDownloadState {
 }
 
 let unlistenProgress: UnlistenFn | null = null;
+let listenerPromise: Promise<void> | null = null;
 interface ProgressSample {
   lastTime: number;
   lastDownloadedBytes: number;
@@ -64,43 +65,50 @@ export async function ensureModelDownloadListener(): Promise<void> {
   const isTauri =
     typeof window !== 'undefined' && ('__TAURI_INTERNALS__' in window || '__TAURI__' in window);
   if (!isTauri || unlistenProgress !== null) return;
+  if (listenerPromise !== null) return listenerPromise;
 
-  try {
-    unlistenProgress = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
-      const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
-      if (!id || total <= 0) return;
+  listenerPromise = (async () => {
+    try {
+      unlistenProgress = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
+        const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
+        if (!id || total <= 0) return;
 
-      const now = Date.now();
-      const sample = progressSamples.get(id);
+        const now = Date.now();
+        const sample = progressSamples.get(id);
 
-      let speedStr: string | undefined;
-      if (!sample) {
-        progressSamples.set(id, { lastTime: now, lastDownloadedBytes: downloaded });
-      } else {
-        const timeDiff = now - sample.lastTime;
-        if (timeDiff > 400) {
-          const bytesDiff = Math.max(0, downloaded - sample.lastDownloadedBytes);
-          const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
-          speedStr =
-            speedBytesPerSec > 1024 * 1024
-              ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
-              : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
-
+        let speedStr: string | undefined;
+        if (!sample) {
           progressSamples.set(id, { lastTime: now, lastDownloadedBytes: downloaded });
-        }
-      }
+        } else {
+          const timeDiff = now - sample.lastTime;
+          if (timeDiff > 400) {
+            const bytesDiff = Math.max(0, downloaded - sample.lastDownloadedBytes);
+            const speedBytesPerSec = bytesDiff / (timeDiff / 1000);
+            speedStr =
+              speedBytesPerSec > 1024 * 1024
+                ? `${(speedBytesPerSec / 1024 / 1024).toFixed(1)} MB/s`
+                : `${Math.round(speedBytesPerSec / 1024)} KB/s`;
 
-      const progress = Math.min(100, Math.round((downloaded / total) * 100));
-      useModelDownloadStore.getState().updateProgress(id, {
-        progress,
-        downloadedBytes: downloaded,
-        totalBytes: total,
-        speed: speedStr,
+            progressSamples.set(id, { lastTime: now, lastDownloadedBytes: downloaded });
+          }
+        }
+
+        const progress = Math.min(100, Math.round((downloaded / total) * 100));
+        useModelDownloadStore.getState().updateProgress(id, {
+          progress,
+          downloadedBytes: downloaded,
+          totalBytes: total,
+          speed: speedStr,
+        });
       });
-    });
-  } catch (err) {
-    console.error('Failed to initialize model download progress listener:', err);
-  }
+    } catch (err) {
+      console.error('Failed to initialize model download progress listener:', err);
+    } finally {
+      listenerPromise = null;
+    }
+  })();
+
+  return listenerPromise;
 }
 
 // Auto-initialize listener if running in browser/tauri
