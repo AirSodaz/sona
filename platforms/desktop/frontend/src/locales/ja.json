@@ -2026,6 +2026,13 @@
     "model_search_clear": "検索をクリア",
     "model_status_installed": "インストール済み",
     "model_status_partial_installed": "{{installed}}/{{total}} がインストール済み",
+    "model_status_interrupted": "再開可能 ({{progress}}%)",
+    "resume_download": "ダウンロードを再開",
+    "resume_download_tooltip": "ダウンロードを再開 ({{progress}}% 完了)",
+    "resume_confirm_title": "モデルのダウンロードを再開",
+    "resume_confirm_message": "{{name}} の未完了のダウンロードが検出されました（{{progress}} 完了）。中断した位置からダウンロードを再開しますか？",
+    "resume_restart_checkbox": "最初からやり直す（未完了のファイルを破棄）",
+    "resume_restart_button": "最初からダウンロード",
     "model_rating_accuracy": "精度",
     "model_rating_speed": "速度",
     "model_tag_accurate": "高精度",
@@ -2875,5 +2882,15 @@
     "export_txt": "テキスト (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "{{name}} をダウンロード中…",
+      "completed_title": "{{name}} のダウンロード完了",
+      "completed_body": "モデルがインストールされ、使用可能になりました。",
+      "failed_title": "{{name}} のダウンロードに失敗しました",
+      "failed_body": "モデルのダウンロードを完了できませんでした。",
+      "cancelled_title": "{{name}} のダウンロードをキャンセルしました"
+    }
   }
 }

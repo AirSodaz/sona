@@ -14,8 +14,10 @@ import {
   buildRestoreDefaultModelConfigPatch,
 } from '../services/modelConfigPatches';
 import { modelService } from '../services/modelService';
+import { cleanInterruptedDownload } from '../services/tauri/app';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useModelDownloadStore } from '../stores/modelDownloadStore';
 import type {
   ModelCatalogModel,
   ModelCatalogSnapshot,
@@ -28,6 +30,7 @@ import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
+import { formatBytes } from './notifications/modelDownloadAdapter';
 
 type DownloadState = {
   progress: number;
@@ -103,6 +106,7 @@ export function useModelManager(isOpen: boolean) {
   const config = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
+  const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
   const showError = useDialogStore((state) => state.showError);
   const alert = useDialogStore((state) => state.alert);
   const { t } = useTranslation();
@@ -276,10 +280,27 @@ export function useModelManager(isOpen: boolean) {
     if (downloads[modelId]) return;
 
     const controller = new AbortController();
+    const downloadId = Math.random().toString(36).substring(7);
     setDownloads((prev) => ({
       ...prev,
       [modelId]: { progress: 0, status: '', controller },
     }));
+
+    const catalogModel = getCatalogModel(modelId);
+    const modelName = catalogModel?.name ?? modelId;
+
+    useModelDownloadStore.getState().startDownload({
+      modelId,
+      modelName,
+      modelType: 'asr',
+      downloadId,
+      onRetry: () => {
+        const targetModel = getCatalogModel(modelId);
+        if (targetModel) {
+          void handleDownload(targetModel);
+        }
+      },
+    });
 
     try {
       const downloadedPath = await downloadFn(
@@ -292,24 +313,30 @@ export function useModelManager(isOpen: boolean) {
               [modelId]: { ...prev[modelId], progress: pct, status: status },
             };
           });
+          useModelDownloadStore.getState().updateProgress(modelId, { progress: pct });
         },
         controller.signal
       );
 
+      useModelDownloadStore.getState().completeDownload(modelId);
       await refreshModelCatalogSnapshot();
       await onSuccess(downloadedPath);
     } catch (error) {
       const errorMsg = extractErrorMessage(error);
       if (errorMsg === 'Download cancelled') {
         logger.info('Download cancelled by user');
-      } else if (errorMsg.includes('Download already in progress')) {
-        await alert(t('errors.model.already_in_progress'));
+        void useModelDownloadStore.getState().cancelDownload(modelId);
       } else {
-        await showError({
-          code: 'model.download_failed',
-          messageKey: 'errors.model.download_failed',
-          cause: error,
-        });
+        useModelDownloadStore.getState().failDownload(modelId, errorMsg);
+        if (errorMsg.includes('Download already in progress')) {
+          await alert(t('errors.model.already_in_progress'));
+        } else {
+          await showError({
+            code: 'model.download_failed',
+            messageKey: 'errors.model.download_failed',
+            cause: error,
+          });
+        }
       }
     } finally {
       setDownloads((prev) => {
@@ -324,6 +351,7 @@ export function useModelManager(isOpen: boolean) {
     const download = downloads[modelId];
     if (download) {
       download.controller.abort();
+      void useModelDownloadStore.getState().cancelDownload(modelId);
       setDownloads((prev) => {
         const next = { ...prev };
         delete next[modelId];
@@ -340,6 +368,53 @@ export function useModelManager(isOpen: boolean) {
         variant: 'warning',
       });
       if (!confirmed) return;
+    }
+
+    const catalogModel = getCatalogModel(model.id);
+    const interruptedDownload =
+      catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
+    if (interruptedDownload) {
+      const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes);
+      const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
+      const sizeText = totalFormatted
+        ? `${downloadedFormatted} / ${totalFormatted}`
+        : downloadedFormatted;
+      const pctText =
+        interruptedDownload.percentage != null ? `${interruptedDownload.percentage}%` : '';
+      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+      const result = await checkboxConfirm(
+        t('settings.resume_confirm_message', {
+          name: model.name,
+          progress: progressDetail,
+          defaultValue: `检测到 ${model.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
+        }),
+        {
+          title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
+          confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
+          cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+          variant: 'info',
+          checkbox: {
+            label: t('settings.resume_restart_checkbox', {
+              defaultValue: '重新开始下载（丢弃未完成的文件）',
+            }),
+            checkedConfirmLabel: t('settings.resume_restart_button', { defaultValue: '重新下载' }),
+          },
+        }
+      );
+
+      if (!result.confirmed) {
+        return;
+      }
+
+      if (result.checked) {
+        try {
+          await cleanInterruptedDownload(model.id);
+          await refreshModelCatalogSnapshot();
+        } catch (cleanErr) {
+          logger.warn('Failed to clean interrupted download:', cleanErr);
+        }
+      }
     }
 
     if (model.modes && model.modes.length > 0) {

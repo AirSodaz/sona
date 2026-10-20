@@ -2510,6 +2510,13 @@
     "model_search_clear": "Clear search",
     "model_status_installed": "Installed",
     "model_status_partial_installed": "{{installed}}/{{total}} installed",
+    "model_status_interrupted": "Resume ({{progress}}%)",
+    "resume_download": "Resume Download",
+    "resume_download_tooltip": "Resume download ({{progress}}% completed)",
+    "resume_confirm_title": "Resume Model Download",
+    "resume_confirm_message": "Detected an incomplete download for {{name}} (completed {{progress}}). Resume from breakpoint?",
+    "resume_restart_checkbox": "Restart download from scratch (discard partial download)",
+    "resume_restart_button": "Restart Download",
     "model_rating_accuracy": "Accuracy",
     "model_rating_speed": "Speed",
     "model_tag_accurate": "Accurate",
@@ -2875,5 +2882,15 @@
     "export_txt": "Plain Text (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "Downloading {{name}}…",
+      "completed_title": "{{name}} ready",
+      "completed_body": "Model installed and ready to use.",
+      "failed_title": "{{name}} download failed",
+      "failed_body": "Failed to complete model download.",
+      "cancelled_title": "{{name}} download cancelled"
+    }
   }
 }

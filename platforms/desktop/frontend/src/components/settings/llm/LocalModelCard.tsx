@@ -234,6 +234,15 @@ export function LocalModelCard({
               <Check size={11} />
               <span>{t('settings.llm.installed_ready', { defaultValue: '已就绪' })}</span>
             </span>
+          ) : card.interruptedDownload ? (
+            <span className="model-status-chip model-status-interrupted">
+              <span>
+                {t('settings.model_status_interrupted', {
+                  progress: Math.round(card.interruptedDownload.percentage ?? 0),
+                  defaultValue: `可续传 (${Math.round(card.interruptedDownload.percentage ?? 0)}%)`,
+                })}
+              </span>
+            </span>
           ) : (
             <span className="model-status-chip model-status-not-installed">
               {t('settings.not_installed', { defaultValue: '未安装' })}
@@ -382,8 +391,19 @@ export function LocalModelCard({
               type="button"
               className="model-action-icon"
               onClick={() => onDownload(card)}
-              aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
-              data-tooltip={t('common.download', { defaultValue: '下载' })}
+              aria-label={
+                card.interruptedDownload
+                  ? `${t('settings.resume_download', { defaultValue: '继续下载' })} ${card.name}`
+                  : `${t('common.download', { defaultValue: '下载' })} ${card.name}`
+              }
+              data-tooltip={
+                card.interruptedDownload
+                  ? t('settings.resume_download_tooltip', {
+                      progress: Math.round(card.interruptedDownload.percentage ?? 0),
+                      defaultValue: `继续下载 (已完成 ${Math.round(card.interruptedDownload.percentage ?? 0)}%)`,
+                    })
+                  : t('common.download', { defaultValue: '下载' })
+              }
               data-tooltip-pos="top"
             >
               <DownloadIcon />

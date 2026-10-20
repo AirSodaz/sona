@@ -90,6 +90,7 @@ function normalizeCatalogModel(model: CoreModelCatalogModel): ModelCatalogModel 
     installPath: model.installPath,
     downloadPath: model.downloadPath,
     isInstalled: model.isInstalled,
+    interruptedDownload: model.interruptedDownload ?? undefined,
   };
 }
 

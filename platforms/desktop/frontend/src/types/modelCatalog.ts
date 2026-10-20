@@ -1,4 +1,5 @@
 import presetModelsData from '../../../../../core/src/models/preset-models.json';
+import type { InterruptedDownloadInfo } from '../bindings';
 import type { ModelFileConfig } from './model';
 
 export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
@@ -75,6 +76,7 @@ export interface ModelInfo {
   fileConfig?: ModelFileConfig;
   groupId?: string;
   versionLabel?: string;
+  interruptedDownload?: InterruptedDownloadInfo | null;
 }
 
 export type ModelCatalogSectionType =

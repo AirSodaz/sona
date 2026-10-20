@@ -59,6 +59,16 @@ export async function deletePresetModel(modelId: string): Promise<void> {
   await invokeTauri(TauriCommand.app.deletePresetModel, { modelId });
 }
 
+export async function checkInterruptedDownload(
+  modelId: string
+): Promise<import('../../bindings').InterruptedDownloadInfo | null> {
+  return await invokeTauri(TauriCommand.app.checkInterruptedDownload, { modelId });
+}
+
+export async function cleanInterruptedDownload(modelId: string): Promise<boolean> {
+  return await invokeTauri(TauriCommand.app.cleanInterruptedDownload, { modelId });
+}
+
 export async function cancelDownload(id: string): Promise<void> {
   await invokeTauri(TauriCommand.app.cancelDownload, { id });
 }

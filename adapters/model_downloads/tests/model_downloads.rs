@@ -247,3 +247,88 @@ async fn multi_file_hash_failure_preserves_previous_install() {
     );
     assert!(!install_path.join("model.gguf").exists());
 }
+
+#[test]
+fn inspect_and_clean_interrupted_download_single_file() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "silero-vad";
+    // Initially, no interrupted download
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create a partial .download file
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-data").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"partial-data".len() as u64);
+    assert!(info.total_bytes.is_some());
+
+    // Clean interrupted download
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!temp_file.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_multi_file() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3-asr-0.6b-q8-gguf";
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create staging directory with partial download
+    let staging_dir = models_dir.join(format!("{}.installing", model_id));
+    std::fs::create_dir_all(&staging_dir).unwrap();
+    let staged_temp = staging_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf.download");
+    std::fs::write(&staged_temp, b"multi-partial-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"multi-partial-bytes".len() as u64);
+
+    // Clean interrupted download
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!staging_dir.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_local_llm() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3.5-4b";
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create partial .download file for the local LLM model
+    let temp_file = models_dir.join("Qwen3.5-4B-Q4_K_M.gguf.download");
+    std::fs::write(&temp_file, b"llm-partial-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted LLM download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"llm-partial-bytes".len() as u64);
+    assert!(info.total_bytes.is_some());
+
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!temp_file.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}

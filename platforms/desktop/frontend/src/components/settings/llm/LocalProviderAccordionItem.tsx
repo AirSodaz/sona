@@ -5,9 +5,11 @@ import type {
   LocalLlmCardsResponse,
   LocalLlmModelCard as LocalLlmModelCardType,
 } from '../../../bindings';
+import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { parseDownloadProgressPayload } from '../../../services/modelDownloadService';
 import {
   cancelDownload,
+  cleanInterruptedDownload,
   deletePresetModel,
   downloadPresetModel,
 } from '../../../services/tauri/app';
@@ -17,6 +19,7 @@ import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import { normalizeError } from '../../../utils/errorUtils';
 import { SettingsAccordion } from '../SettingsLayout';
@@ -51,6 +54,7 @@ export function LocalProviderAccordionItem({
   activeDownloadsRef.current = downloads;
 
   const confirm = useDialogStore((state) => state.confirm);
+  const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
 
   const fetchCards = useCallback(async () => {
     setIsLoading(true);
@@ -116,6 +120,62 @@ export function LocalProviderAccordionItem({
       const downloadId = card.id;
       if (activeDownloadsRef.current[downloadId]) return;
 
+      if (card.interruptedDownload) {
+        const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
+        const downloadedFormatted = formatBytes(downloadedBytes);
+        const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
+        const sizeText = totalFormatted
+          ? `${downloadedFormatted} / ${totalFormatted}`
+          : downloadedFormatted;
+        const pctText = percentage != null ? `${percentage}%` : '';
+        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+        const result = await checkboxConfirm(
+          t('settings.resume_confirm_message', {
+            name: card.name,
+            progress: progressDetail,
+            defaultValue: `检测到 ${card.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
+          }),
+          {
+            title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
+            confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
+            cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+            variant: 'info',
+            checkbox: {
+              label: t('settings.resume_restart_checkbox', {
+                defaultValue: '重新开始下载（丢弃未完成的文件）',
+              }),
+              checkedConfirmLabel: t('settings.resume_restart_button', {
+                defaultValue: '重新下载',
+              }),
+            },
+          }
+        );
+
+        if (!result.confirmed) {
+          return;
+        }
+
+        if (result.checked) {
+          try {
+            await cleanInterruptedDownload(card.id);
+            await fetchCards();
+          } catch (cleanErr) {
+            console.warn('Failed to clean interrupted download:', cleanErr);
+          }
+        }
+      }
+
+      useModelDownloadStore.getState().startDownload({
+        modelId: card.id,
+        modelName: card.name,
+        modelType: 'llm',
+        downloadId,
+        onRetry: () => {
+          void handleDownload(card);
+        },
+      });
+
       setDownloads((prev) => ({
         ...prev,
         [downloadId]: { progress: 0, statusText: t('settings.llm.status_downloading') },
@@ -127,9 +187,16 @@ export function LocalProviderAccordionItem({
           downloadId,
           mirror: modelDownloadMirror,
         });
+        useModelDownloadStore.getState().completeDownload(downloadId);
         await fetchCards();
       } catch (err) {
-        console.error(`Failed to download model ${card.id}:`, err);
+        const errorMsg = normalizeError(err).message;
+        if (errorMsg === 'Download cancelled') {
+          void useModelDownloadStore.getState().cancelDownload(downloadId);
+        } else {
+          console.error(`Failed to download model ${card.id}:`, err);
+          useModelDownloadStore.getState().failDownload(downloadId, errorMsg);
+        }
       } finally {
         setDownloads((prev) => {
           const next = { ...prev };
@@ -138,22 +205,27 @@ export function LocalProviderAccordionItem({
         });
       }
     },
-    [fetchCards, modelDownloadMirror, t]
+    [checkboxConfirm, fetchCards, modelDownloadMirror, t]
   );
 
-  const handleCancelDownload = useCallback(async (cardId: string) => {
-    try {
-      await cancelDownload(cardId);
-    } catch (err) {
-      console.error(`Failed to cancel download for ${cardId}:`, err);
-    } finally {
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[cardId];
-        return next;
-      });
-    }
-  }, []);
+  const handleCancelDownload = useCallback(
+    async (cardId: string) => {
+      try {
+        void useModelDownloadStore.getState().cancelDownload(cardId);
+        await cancelDownload(cardId);
+      } catch (err) {
+        console.error(`Failed to cancel download for ${cardId}:`, err);
+      } finally {
+        setDownloads((prev) => {
+          const next = { ...prev };
+          delete next[cardId];
+          return next;
+        });
+        await fetchCards();
+      }
+    },
+    [fetchCards]
+  );
 
   const handleDelete = useCallback(
     async (card: LocalLlmModelCardType) => {

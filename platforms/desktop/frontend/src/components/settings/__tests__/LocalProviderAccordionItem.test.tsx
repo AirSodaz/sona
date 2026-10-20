@@ -33,6 +33,7 @@ vi.mock('../../../services/tauri/app', () => ({
   downloadPresetModel: vi.fn(),
   cancelDownload: vi.fn(),
   deletePresetModel: vi.fn(),
+  cleanInterruptedDownload: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../../services/tauri/platform/dialog', () => ({
@@ -44,10 +45,19 @@ vi.mock('../../../stores/configStore', () => ({
     selector({ config: { modelDownloadMirror: 'direct' } }),
 }));
 
+const mockCheckboxConfirm = vi.fn().mockResolvedValue({ confirmed: true, checked: false });
+
 vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (
-    selector: (state: { confirm: (opts: unknown) => Promise<boolean> }) => unknown
-  ) => selector({ confirm: vi.fn().mockResolvedValue(true) }),
+    selector: (state: {
+      confirm: (opts: unknown) => Promise<boolean>;
+      checkboxConfirm: typeof mockCheckboxConfirm;
+    }) => unknown
+  ) =>
+    selector({
+      confirm: vi.fn().mockResolvedValue(true),
+      checkboxConfirm: mockCheckboxConfirm,
+    }),
 }));
 
 const mockConfig: LlmAssistantConfig = {
@@ -366,5 +376,105 @@ describe('LocalProviderAccordionItem', () => {
     await vi.waitFor(() => {
       expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
     });
+  });
+
+  it('prompts to resume when downloading an interrupted model, and resumes without cleaning when restart is unchecked', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: false });
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+
+    expect(mockCheckboxConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'qwen3.5-4b' })
+    );
+  });
+
+  it('cleans interrupted download when restart checkbox is checked', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: true });
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+
+    expect(mockCheckboxConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'qwen3.5-4b' })
+    );
   });
 });

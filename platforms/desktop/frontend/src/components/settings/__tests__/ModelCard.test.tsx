@@ -165,3 +165,68 @@ describe('ModelCard mode tags', () => {
     expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
   });
 });
+
+describe('ModelCard interrupted download', () => {
+  it('renders interrupted chip and resume tooltip for single-version model', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toContain('50%');
+
+    const downloadBtn = screen.getByRole('button', { name: /SenseVoice/i });
+    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+  });
+
+  it('renders interrupted chip in version row for multi-version model', () => {
+    const int8Interrupted: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+    const fp32Model: ModelInfo = {
+      ...mockModel,
+      id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+      versionLabel: 'Fp32',
+      interruptedDownload: undefined,
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[int8Interrupted, fp32Model]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chips = container.querySelectorAll('.model-status-interrupted');
+    expect(chips.length).toBeGreaterThanOrEqual(1);
+    expect(chips[0].textContent).toContain('50%');
+  });
+});

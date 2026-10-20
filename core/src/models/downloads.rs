@@ -1,9 +1,127 @@
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::path::{Path, PathBuf};
 
 use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
 use crate::runtime::error::RuntimeValidationError;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct InterruptedDownloadInfo {
+    pub model_id: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub downloaded_bytes: u64,
+    #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
+    pub total_bytes: Option<u64>,
+    pub percentage: Option<u8>,
+}
+
+pub fn temporary_download_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".download");
+    PathBuf::from(s)
+}
+
+pub fn staging_install_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".installing");
+    PathBuf::from(s)
+}
+
+pub fn inspect_interrupted_download(
+    models_dir: &Path,
+    model_id: &str,
+) -> Option<InterruptedDownloadInfo> {
+    let resolved = resolve_model_download(model_id, models_dir).ok()?;
+
+    let mut downloaded_bytes = 0_u64;
+    let mut total_bytes = None;
+
+    if resolved.model.is_multi_file() {
+        let staging_path = staging_install_path(&resolved.install_path);
+        let expected_total = resolved
+            .artifacts
+            .iter()
+            .map(|a| a.size_bytes.unwrap_or(0))
+            .sum::<u64>();
+        if expected_total > 0 {
+            total_bytes = Some(expected_total);
+        }
+
+        if staging_path.is_dir() {
+            for artifact in &resolved.artifacts {
+                let staged_path = staging_path.join(&artifact.filename);
+                let artifact_size = artifact.size_bytes.unwrap_or(0);
+                if staged_path.is_file() {
+                    let len = staged_path.metadata().map(|m| m.len()).unwrap_or(0);
+                    if artifact_size > 0 && len == artifact_size {
+                        downloaded_bytes = downloaded_bytes.saturating_add(len);
+                        continue;
+                    }
+                }
+                let temp_path = temporary_download_path(&staged_path);
+                if temp_path.is_file() {
+                    let len = temp_path.metadata().map(|m| m.len()).unwrap_or(0);
+                    downloaded_bytes = downloaded_bytes.saturating_add(len);
+                }
+            }
+        }
+    } else {
+        let temp_download = temporary_download_path(&resolved.download_path);
+        if temp_download.is_file() {
+            let len = temp_download.metadata().map(|m| m.len()).unwrap_or(0);
+            if len > 0 {
+                downloaded_bytes = len;
+            }
+        }
+        total_bytes = resolved.artifacts.first().and_then(|a| a.size_bytes);
+    }
+
+    if downloaded_bytes > 0 {
+        let percentage = total_bytes.map(|t| {
+            if t > 0 {
+                ((downloaded_bytes as f64 / t as f64) * 100.0)
+                    .round()
+                    .min(99.0) as u8
+            } else {
+                0
+            }
+        });
+        Some(InterruptedDownloadInfo {
+            model_id: model_id.to_string(),
+            downloaded_bytes,
+            total_bytes,
+            percentage,
+        })
+    } else {
+        None
+    }
+}
+
+pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io::Result<bool> {
+    let Ok(resolved) = resolve_model_download(model_id, models_dir) else {
+        return Ok(false);
+    };
+
+    let mut removed = false;
+    if resolved.model.is_multi_file() {
+        let staging_path = staging_install_path(&resolved.install_path);
+        if staging_path.exists() {
+            let _ = std::fs::remove_dir_all(&staging_path);
+            removed = true;
+        }
+    }
+    let temp_download = temporary_download_path(&resolved.download_path);
+    if temp_download.exists() {
+        let _ = std::fs::remove_file(&temp_download);
+        removed = true;
+    }
+    Ok(removed)
+}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModelDownload {

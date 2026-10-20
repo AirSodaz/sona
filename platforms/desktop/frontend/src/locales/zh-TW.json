@@ -2026,6 +2026,13 @@
     "model_search_clear": "清除搜尋",
     "model_status_installed": "已安裝",
     "model_status_partial_installed": "{{installed}}/{{total}} 已安裝",
+    "model_status_interrupted": "可續傳 ({{progress}}%)",
+    "resume_download": "繼續下載",
+    "resume_download_tooltip": "繼續下載 (已完成 {{progress}}%)",
+    "resume_confirm_title": "繼續下載模型",
+    "resume_confirm_message": "檢測到 {{name}} 存在未完成的下載（已完成 {{progress}}）。是否從斷點繼續下載？",
+    "resume_restart_checkbox": "重新開始下載（丟棄未完成的文件）",
+    "resume_restart_button": "重新下載",
     "model_rating_accuracy": "準確度",
     "model_rating_speed": "速度",
     "model_tag_accurate": "準確",
@@ -2875,5 +2882,15 @@
     "export_txt": "純文字 (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "正在下載 {{name}}…",
+      "completed_title": "{{name}} 下載完成",
+      "completed_body": "模型已安裝就緒。",
+      "failed_title": "{{name}} 下載失敗",
+      "failed_body": "未能完成模型下載。",
+      "cancelled_title": "{{name}} 下載已取消"
+    }
   }
 }

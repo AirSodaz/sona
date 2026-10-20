@@ -19,6 +19,7 @@ import type {
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
   ExportTranscriptFileResult,
+  InterruptedDownloadInfo,
   LocalLlmCardsResponse,
   RustTauriCommandContractMap,
   StorageUsageSnapshot_Serialize,
@@ -183,6 +184,14 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.app.deletePresetModel]: {
     args: { modelId: string };
     result: undefined;
+  };
+  [TauriCommand.app.checkInterruptedDownload]: {
+    args: { modelId: string };
+    result: InterruptedDownloadInfo | null;
+  };
+  [TauriCommand.app.cleanInterruptedDownload]: {
+    args: { modelId: string };
+    result: boolean;
   };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };

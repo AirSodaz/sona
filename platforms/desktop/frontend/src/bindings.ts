@@ -1375,6 +1375,13 @@ export type HybridLogicalClock = {
 	logical: number,
 };
 
+export type InterruptedDownloadInfo = {
+	modelId: string,
+	downloadedBytes: number,
+	totalBytes: number | null,
+	percentage: number | null,
+};
+
 /**
  *  How a model handles ASR language selection.
  *
@@ -1669,12 +1676,21 @@ export type LlmUsageEventPayload_Serialize = {
 
 export type LocalAsrEngine = "sherpa-onnx" | "llama-cpp";
 
-export type LocalLlmCardsResponse = {
+export type LocalLlmCardsResponse = LocalLlmCardsResponse_Serialize | LocalLlmCardsResponse_Deserialize;
+
+export type LocalLlmCardsResponse_Deserialize = {
 	modelsDir: string,
-	cards: LocalLlmModelCard[],
+	cards: LocalLlmModelCard_Deserialize[],
 };
 
-export type LocalLlmModelCard = {
+export type LocalLlmCardsResponse_Serialize = {
+	modelsDir: string,
+	cards: LocalLlmModelCard_Serialize[],
+};
+
+export type LocalLlmModelCard = LocalLlmModelCard_Serialize | LocalLlmModelCard_Deserialize;
+
+export type LocalLlmModelCard_Deserialize = {
 	id: string,
 	name: string,
 	model: string,
@@ -1695,6 +1711,31 @@ export type LocalLlmModelCard = {
 	installedSizeBytes: number | null,
 	downloadUrl: string | null,
 	downloadSizeBytes: number | null,
+	interruptedDownload: InterruptedDownloadInfo | null,
+};
+
+export type LocalLlmModelCard_Serialize = {
+	id: string,
+	name: string,
+	model: string,
+	filename: string,
+	description: string,
+	backend: string,
+	contextWindow: number,
+	maxOutputTokens: number,
+	size: string,
+	parameters: string | null,
+	quantization: string | null,
+	modalities: string[],
+	languages: string[],
+	capabilities: string[],
+	isRecommended: boolean,
+	isInstalled: boolean,
+	installedPath: string | null,
+	installedSizeBytes: number | null,
+	downloadUrl: string | null,
+	downloadSizeBytes: number | null,
+	interruptedDownload?: InterruptedDownloadInfo | null,
 };
 
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
@@ -1739,6 +1780,7 @@ export type ModelCatalogModel_Deserialize = {
 	installPath: string,
 	downloadPath: string,
 	isInstalled: boolean,
+	interruptedDownload: InterruptedDownloadInfo | null,
 };
 
 export type ModelCatalogModel_Serialize = {
@@ -1765,6 +1807,7 @@ export type ModelCatalogModel_Serialize = {
 	installPath: string,
 	downloadPath: string,
 	isInstalled: boolean,
+	interruptedDownload?: InterruptedDownloadInfo | null,
 };
 
 export type ModelCatalogPathMatchToken = {

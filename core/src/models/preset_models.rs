@@ -565,6 +565,8 @@ pub struct ModelCatalogModel {
     pub install_path: String,
     pub download_path: String,
     pub is_installed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupted_download: Option<crate::models::downloads::InterruptedDownloadInfo>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1153,6 +1155,12 @@ impl ModelCatalogModel {
             .parse::<ModelEngine>()
             .unwrap_or_else(|_| panic!("Unknown model engine in preset model '{}'", model.id));
 
+        let interrupted_download = if !is_installed {
+            crate::models::downloads::inspect_interrupted_download(models_dir, &model.id)
+        } else {
+            None
+        };
+
         Self {
             id: model.id.clone(),
             name: model.name.clone(),
@@ -1173,6 +1181,7 @@ impl ModelCatalogModel {
             install_path: path_to_catalog_string(&install_path),
             download_path: path_to_catalog_string(&download_path),
             is_installed,
+            interrupted_download,
         }
     }
 

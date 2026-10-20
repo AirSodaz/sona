@@ -418,4 +418,35 @@ describe('LocalModelCard', () => {
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(true);
   });
+
+  it('renders interrupted download chip and resume tooltip when download was interrupted', () => {
+    const interruptedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: mockCard.id,
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    const { container } = render(
+      <LocalModelCard
+        card={interruptedCard}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toContain('50%');
+
+    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    expect(downloadBtn).toBeTruthy();
+    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+  });
 });

@@ -2026,6 +2026,13 @@
     "model_search_clear": "검색 지우기",
     "model_status_installed": "설치됨",
     "model_status_partial_installed": "{{installed}}/{{total}} 설치됨",
+    "model_status_interrupted": "이어받기 가능 ({{progress}}%)",
+    "resume_download": "다운로드 이어받기",
+    "resume_download_tooltip": "다운로드 이어받기 ({{progress}}% 완료)",
+    "resume_confirm_title": "모델 다운로드 이어받기",
+    "resume_confirm_message": "{{name}}의 완료되지 않은 다운로드가 감지되었습니다({{progress}} 완료). 중단된 위치부터 이어받으시겠습니까?",
+    "resume_restart_checkbox": "처음부터 다시 다운로드(완료되지 않은 파일 삭제)",
+    "resume_restart_button": "다시 다운로드",
     "model_rating_accuracy": "정확도",
     "model_rating_speed": "속도",
     "model_tag_accurate": "정확",
@@ -2875,5 +2882,15 @@
     "export_txt": "일반 텍스트 (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "{{name}} 다운로드 중…",
+      "completed_title": "{{name}} 다운로드 완료",
+      "completed_body": "모델이 설치되어 사용할 준비가 되었습니다.",
+      "failed_title": "{{name}} 다운로드 실패",
+      "failed_body": "모델 다운로드를 완료하지 못했습니다.",
+      "cancelled_title": "{{name}} 다운로드 취소됨"
+    }
   }
 }

@@ -149,6 +149,7 @@ impl LocalLlmPreset {
             installed_size_bytes,
             download_url: self.download.as_ref().map(|d| d.url.clone()),
             download_size_bytes: self.download.as_ref().and_then(|d| d.size_bytes),
+            interrupted_download: None,
         }
     }
     /// Checks whether the preset model file exists in the specified models directory.
@@ -195,6 +196,8 @@ pub struct LocalLlmModelCard {
     pub download_url: Option<String>,
     #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
     pub download_size_bytes: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupted_download: Option<crate::models::downloads::InterruptedDownloadInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -363,7 +366,12 @@ pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
             .map(|m| m.len());
         let is_installed = found_path_buf.is_some();
         let found_path = found_path_buf.map(|p| p.to_string_lossy().into_owned());
-        cards.push(preset.to_model_card(is_installed, found_path, found_size));
+        let mut card = preset.to_model_card(is_installed, found_path, found_size);
+        if !is_installed {
+            card.interrupted_download =
+                crate::models::downloads::inspect_interrupted_download(models_dir, &preset.id);
+        }
+        cards.push(card);
     }
 
     // 2. Discover custom GGUF models in models_dir
@@ -426,6 +434,7 @@ pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
                     installed_size_bytes: Some(file_size),
                     download_url: None,
                     download_size_bytes: None,
+                    interrupted_download: None,
                 });
             }
         }

@@ -830,6 +830,8 @@ struct ModelInfoJson {
     languages: Vec<String>,
     language_mode: String,
     companion_models: Vec<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    interrupted_download: Option<sona_core::models::downloads::InterruptedDownloadInfo>,
     artifacts: Vec<ModelInfoArtifactJson>,
 }
 
@@ -868,6 +870,12 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
         sona_core::models::preset_models::LanguageMode::None => "none",
     };
 
+    let interrupted = if !is_installed {
+        sona_model_downloads::inspect_interrupted_download(&models_dir, &resolved.model.id)
+    } else {
+        None
+    };
+
     if args.json {
         let json_obj = ModelInfoJson {
             id: resolved.model.id.clone(),
@@ -882,6 +890,7 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
             languages: resolved.model.languages.clone(),
             language_mode: language_mode_str.to_string(),
             companion_models: companion_ids,
+            interrupted_download: interrupted,
             artifacts: resolved
                 .model
                 .artifacts
@@ -949,6 +958,16 @@ async fn run_model_info(args: ModelInfoArgs) -> CliResult<CliOutput> {
     lines.push(format!("  Modes:       {}", modes_str));
     lines.push(format!("  Size:        {}", resolved.model.size));
     lines.push(format!("  Installed:   {}", install_status));
+    if let Some(info) = &interrupted {
+        lines.push(format!(
+            "  Incomplete:  yes ({} / {}, {}% downloaded)",
+            format_bytes(info.downloaded_bytes),
+            info.total_bytes
+                .map(format_bytes)
+                .unwrap_or_else(|| "unknown".into()),
+            info.percentage.unwrap_or(0),
+        ));
+    }
     lines.push(format!("  Languages:   {}", languages_str));
     lines.push(format!("  Companions:  {}", companions_str));
     if !resolved.model.artifacts.is_empty() {
@@ -1020,6 +1039,18 @@ where
     result
 }
 
+fn format_bytes(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 * 1024 {
+        format!("{:.2} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    } else if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else if bytes >= 1024 {
+        format!("{:.0} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
 async fn download_one_model(
     resolved: &ResolvedModelDownload,
     yes: bool,
@@ -1050,6 +1081,68 @@ async fn download_one_model(
             "Download cancelled: model files are invalid and user declined to overwrite."
                 .to_string(),
         ));
+    }
+
+    if let Some(info) =
+        sona_model_downloads::inspect_interrupted_download(&resolved.models_dir, &resolved.model.id)
+    {
+        let downloaded_str = format_bytes(info.downloaded_bytes);
+        let total_str = info
+            .total_bytes
+            .map(format_bytes)
+            .unwrap_or_else(|| "unknown".to_string());
+        let pct_str = info
+            .percentage
+            .map(|p| format!("{p}%"))
+            .unwrap_or_else(|| "unknown".to_string());
+
+        if !yes && io.stdin_is_terminal() {
+            write!(
+                io.stderr(),
+                "Found incomplete download for {} ({} / {}, {}). Resume download? [Y/n/restart] ",
+                resolved.model.id,
+                downloaded_str,
+                total_str,
+                pct_str,
+            )
+            .map_err(|e| CliError::Io(e.to_string()))?;
+            io.stderr()
+                .flush()
+                .map_err(|e| CliError::Io(e.to_string()))?;
+
+            let mut answer = String::new();
+            io.read_line_stdin(&mut answer)
+                .map_err(|e| CliError::Io(e.to_string()))?;
+            let trimmed = answer.trim().to_lowercase();
+            if trimmed == "restart" || trimmed == "r" {
+                let _ = writeln!(
+                    io.stderr(),
+                    "Restarting download for {} from beginning...",
+                    resolved.model.id
+                );
+                let _ = sona_model_downloads::clean_interrupted_download(
+                    &resolved.models_dir,
+                    &resolved.model.id,
+                );
+            } else if trimmed == "n" || trimmed == "no" {
+                return Err(CliError::Model("Download cancelled by user.".to_string()));
+            } else {
+                let _ = writeln!(
+                    io.stderr(),
+                    "Resuming download for {}...",
+                    resolved.model.id
+                );
+            }
+        } else if !quiet {
+            let _ = writeln!(
+                io.stderr(),
+                "Found incomplete download for {} ({} / {}, {}). Resuming download...",
+                resolved.model.id,
+                downloaded_str,
+                total_str,
+                pct_str,
+            );
+        }
     }
 
     let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<(u64, u64)>();
