@@ -56,7 +56,7 @@ describe('adaptModelDownloadsEntries', () => {
     expect(entry.actions[0].id).toBe('cancel-sensevoice');
 
     entry.actions[0].run();
-    expect(callbacks.cancelDownload).toHaveBeenCalledWith('sensevoice');
+    expect(callbacks.cancelDownload).toHaveBeenCalledWith('sensevoice', 'dl1');
   });
 
   it('adapts completed download entry with success tone and close action', () => {

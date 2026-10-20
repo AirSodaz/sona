@@ -81,9 +81,12 @@ impl DownloadState {
         self.downloads.lock().ok()?.remove(id)
     }
 
-    pub(crate) async fn notify_download(&self, id: &str) {
+    pub(crate) async fn notify_download(&self, id: &str) -> bool {
         if let Some(notify) = self.notify_for_download(id).await {
             notify.notify_one();
+            true
+        } else {
+            false
         }
     }
 
@@ -102,9 +105,12 @@ impl DownloadState {
 pub async fn cancel_download(
     state: tauri::State<'_, DownloadState>,
     id: String,
-) -> Result<(), String> {
-    state.notify_download(&id).await;
-    Ok(())
+) -> Result<bool, String> {
+    if state.notify_download(&id).await {
+        Ok(true)
+    } else {
+        Err(format!("No active download found for id: {id}"))
+    }
 }
 
 pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {

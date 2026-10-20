@@ -6,9 +6,12 @@ use crate::services::DesktopServices;
 pub async fn cancel_download(
     services: State<'_, DesktopServices>,
     id: String,
-) -> Result<(), String> {
-    services.downloads.notify_download(&id).await;
-    Ok(())
+) -> Result<bool, String> {
+    if services.downloads.notify_download(&id).await {
+        Ok(true)
+    } else {
+        Err(format!("No active download found for id: {id}"))
+    }
 }
 
 #[tauri::command]

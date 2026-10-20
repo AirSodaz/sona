@@ -332,3 +332,79 @@ fn inspect_and_clean_interrupted_download_local_llm() {
     assert!(!temp_file.exists());
     assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
 }
+
+#[test]
+fn inspect_and_clean_interrupted_download_handles_locked_files() {
+    use fs3::FileExt;
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "silero-vad";
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"actively-downloading-data").unwrap();
+
+    // Lock the file exclusively as an active download would
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&temp_file)
+        .unwrap();
+    file.try_lock_exclusive().unwrap();
+
+    // While locked, inspection must return None (not interrupted)
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Cleaning while locked must return Err(ResourceBusy)
+    let clean_res = clean_interrupted_download(&models_dir, model_id);
+    assert!(clean_res.is_err());
+    assert_eq!(
+        clean_res.unwrap_err().kind(),
+        std::io::ErrorKind::ResourceBusy
+    );
+    assert!(temp_file.exists());
+
+    // Unlock file
+    drop(file);
+
+    // Now inspection finds it
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_some());
+    // And cleaning succeeds
+    assert!(clean_interrupted_download(&models_dir, model_id).unwrap());
+    assert!(!temp_file.exists());
+}
+
+#[test]
+fn clean_interrupted_download_handles_installing_file_and_archive_staging() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    // sensevoice is an archive model (artifacts.len() == 1, is_archive = true)
+    let model_id = "sensevoice";
+    let resolved =
+        sona_core::models::downloads::resolve_model_download(model_id, &models_dir).unwrap();
+    let staging_dir = sona_core::models::downloads::staging_install_path(&resolved.install_path);
+    std::fs::create_dir_all(&staging_dir).unwrap();
+    std::fs::write(staging_dir.join("extracted_part.bin"), b"staged-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id);
+    assert!(info.is_some());
+
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!staging_dir.exists());
+
+    // Also test when .installing is a regular file (e.g. symlink or touched file)
+    let staging_file = staging_dir;
+    std::fs::write(&staging_file, b"stray-file").unwrap();
+    assert!(staging_file.exists());
+
+    let cleaned2 = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned2);
+    assert!(!staging_file.exists());
+}

@@ -112,6 +112,10 @@ export function useModelManager(isOpen: boolean) {
   const { t } = useTranslation();
 
   const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
+  const inFlightModelsRef = useRef<Set<string>>(new Set());
+  const activeDownloadsRef = useRef<
+    Map<string, { downloadId: string; controller: AbortController }>
+  >(new Map());
   const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(
     EMPTY_MODEL_CATALOG_SNAPSHOT
@@ -274,13 +278,20 @@ export function useModelManager(isOpen: boolean) {
 
   async function executeDownload(
     modelId: string,
-    downloadFn: (id: string, callback: ProgressCallback, signal: AbortSignal) => Promise<string>,
+    downloadFn: (
+      id: string,
+      callback: ProgressCallback,
+      signal: AbortSignal,
+      downloadId: string
+    ) => Promise<string>,
     onSuccess: (path: string) => void | Promise<void>
   ) {
-    if (downloads[modelId]) return;
+    if (activeDownloadsRef.current.has(modelId)) return;
 
     const controller = new AbortController();
-    const downloadId = Math.random().toString(36).substring(7);
+    const downloadId = `${modelId}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    activeDownloadsRef.current.set(modelId, { downloadId, controller });
+
     setDownloads((prev) => ({
       ...prev,
       [modelId]: { progress: 0, status: '', controller },
@@ -294,16 +305,20 @@ export function useModelManager(isOpen: boolean) {
       modelName,
       modelType: 'asr',
       downloadId,
+      onCancel: () => {
+        controller.abort();
+      },
       onRetry: () => {
         const targetModel = getCatalogModel(modelId);
-        if (targetModel) {
+        if (targetModel && !activeDownloadsRef.current.has(modelId)) {
           void handleDownload(targetModel);
         }
       },
     });
 
+    let downloadedPath: string;
     try {
-      const downloadedPath = await downloadFn(
+      downloadedPath = await downloadFn(
         modelId,
         (pct, status) => {
           setDownloads((prev) => {
@@ -313,21 +328,18 @@ export function useModelManager(isOpen: boolean) {
               [modelId]: { ...prev[modelId], progress: pct, status: status },
             };
           });
-          useModelDownloadStore.getState().updateProgress(modelId, { progress: pct });
+          useModelDownloadStore.getState().updateProgress(downloadId, { progress: pct });
         },
-        controller.signal
+        controller.signal,
+        downloadId
       );
-
-      useModelDownloadStore.getState().completeDownload(modelId);
-      await refreshModelCatalogSnapshot();
-      await onSuccess(downloadedPath);
     } catch (error) {
       const errorMsg = extractErrorMessage(error);
-      if (errorMsg === 'Download cancelled') {
+      if (errorMsg === 'Download cancelled' || controller.signal.aborted) {
         logger.info('Download cancelled by user');
-        void useModelDownloadStore.getState().cancelDownload(modelId);
+        void useModelDownloadStore.getState().cancelDownload(modelId, downloadId);
       } else {
-        useModelDownloadStore.getState().failDownload(modelId, errorMsg);
+        useModelDownloadStore.getState().failDownload(modelId, errorMsg, downloadId);
         if (errorMsg.includes('Download already in progress')) {
           await alert(t('errors.model.already_in_progress'));
         } else {
@@ -338,122 +350,177 @@ export function useModelManager(isOpen: boolean) {
           });
         }
       }
+      await refreshModelCatalogSnapshot();
+      return;
     } finally {
+      inFlightModelsRef.current.delete(modelId);
+      activeDownloadsRef.current.delete(modelId);
       setDownloads((prev) => {
         const next = { ...prev };
         delete next[modelId];
         return next;
       });
+    }
+
+    useModelDownloadStore.getState().completeDownload(modelId, downloadId);
+    try {
+      await refreshModelCatalogSnapshot();
+      await onSuccess(downloadedPath);
+    } catch (postError) {
+      logger.error('Failed to refresh catalog snapshot or complete download callback:', postError);
     }
   }
 
   function handleCancelDownload(modelId: string) {
-    const download = downloads[modelId];
-    if (download) {
-      download.controller.abort();
-      void useModelDownloadStore.getState().cancelDownload(modelId);
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[modelId];
-        return next;
-      });
+    inFlightModelsRef.current.delete(modelId);
+    const active = activeDownloadsRef.current.get(modelId);
+    if (active) {
+      active.controller.abort();
+      void useModelDownloadStore.getState().cancelDownload(modelId, active.downloadId);
+      activeDownloadsRef.current.delete(modelId);
+    } else {
+      const download = downloads[modelId];
+      if (download) {
+        download.controller.abort();
+        void useModelDownloadStore.getState().cancelDownload(modelId);
+      }
     }
+    setDownloads((prev) => {
+      const next = { ...prev };
+      delete next[modelId];
+      return next;
+    });
+    void refreshModelCatalogSnapshot();
   }
 
   async function handleDownload(model: ModelInfo) {
-    const { compatible, reason } = await modelService.checkHardware(model.id);
-    if (!compatible) {
-      const confirmed = await confirm(t('settings.hardware_warning_confirm', { reason }), {
-        title: t('settings.hardware_warning_title'),
-        variant: 'warning',
-      });
-      if (!confirmed) return;
+    if (inFlightModelsRef.current.has(model.id) || activeDownloadsRef.current.has(model.id)) {
+      return;
     }
+    inFlightModelsRef.current.add(model.id);
 
-    const catalogModel = getCatalogModel(model.id);
-    const interruptedDownload =
-      catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
-    if (interruptedDownload) {
-      const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes);
-      const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
-      const sizeText = totalFormatted
-        ? `${downloadedFormatted} / ${totalFormatted}`
-        : downloadedFormatted;
-      const pctText =
-        interruptedDownload.percentage != null ? `${interruptedDownload.percentage}%` : '';
-      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+    try {
+      const { compatible, reason } = await modelService.checkHardware(model.id);
+      if (!compatible) {
+        const confirmed = await confirm(t('settings.hardware_warning_confirm', { reason }), {
+          title: t('settings.hardware_warning_title'),
+          variant: 'warning',
+        });
+        if (!confirmed) {
+          inFlightModelsRef.current.delete(model.id);
+          return;
+        }
+      }
 
-      const result = await checkboxConfirm(
-        t('settings.resume_confirm_message', {
-          name: model.name,
-          progress: progressDetail,
-          defaultValue: `检测到 ${model.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
-        }),
-        {
-          title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
-          confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
-          cancelLabel: t('common.cancel', { defaultValue: '取消' }),
-          variant: 'info',
-          checkbox: {
-            label: t('settings.resume_restart_checkbox', {
-              defaultValue: '重新开始下载（丢弃未完成的文件）',
-            }),
-            checkedConfirmLabel: t('settings.resume_restart_button', { defaultValue: '重新下载' }),
-          },
+      const catalogModel = getCatalogModel(model.id);
+      const interruptedDownload =
+        catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
+      if (interruptedDownload) {
+        const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes);
+        const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
+        const sizeText = totalFormatted
+          ? `${downloadedFormatted} / ${totalFormatted}`
+          : downloadedFormatted;
+        const pctText =
+          interruptedDownload.percentage != null ? `${interruptedDownload.percentage}%` : '';
+        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+        const result = await checkboxConfirm(
+          t('settings.resume_confirm_message', {
+            name: model.name,
+            progress: progressDetail,
+            defaultValue: `检测到 ${model.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
+          }),
+          {
+            title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
+            confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
+            cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+            variant: 'info',
+            checkbox: {
+              label: t('settings.resume_restart_checkbox', {
+                defaultValue: '重新开始下载（丢弃未完成的文件）',
+              }),
+              checkedConfirmLabel: t('settings.resume_restart_button', {
+                defaultValue: '重新下载',
+              }),
+            },
+          }
+        );
+
+        if (!result.confirmed) {
+          inFlightModelsRef.current.delete(model.id);
+          return;
+        }
+
+        if (result.checked) {
+          try {
+            const cleaned = await cleanInterruptedDownload(model.id);
+            if (!cleaned) {
+              inFlightModelsRef.current.delete(model.id);
+              logger.warn(`Failed to clean interrupted download for ${model.id}`);
+              await alert(
+                t('errors.model.clean_failed', {
+                  defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
+                })
+              );
+              return;
+            }
+            await refreshModelCatalogSnapshot();
+          } catch (cleanErr) {
+            inFlightModelsRef.current.delete(model.id);
+            logger.warn('Failed to clean interrupted download:', cleanErr);
+            await showError({
+              code: 'model.clean_failed',
+              messageKey: 'errors.model.clean_failed',
+              cause: cleanErr,
+            });
+            return;
+          }
+        }
+      }
+
+      if (model.modes && model.modes.length > 0) {
+        const dependencyUpdates: Partial<typeof config> = {};
+        const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
+        for (const dependency of dependencies) {
+          const fieldKeys = [
+            scenarioModelFieldKey(dependency.configKey, 'live'),
+            scenarioModelFieldKey(dependency.configKey, 'batch'),
+          ];
+          if (fieldKeys.every((key) => config[key])) {
+            continue;
+          }
+          if (dependency.isInstalled) {
+            for (const key of fieldKeys) {
+              if (!config[key]) {
+                dependencyUpdates[key] = dependency.installPath;
+              }
+            }
+          } else {
+            document.dispatchEvent(
+              new CustomEvent('download-background-model', {
+                detail: { modelId: dependency.modelId },
+              })
+            );
+          }
+        }
+        if (Object.keys(dependencyUpdates).length > 0) {
+          updateConfig(dependencyUpdates);
+        }
+      }
+
+      await executeDownload(
+        model.id,
+        (id, cb, sig, dlId) =>
+          modelService.downloadModel(id, cb, sig, config.modelDownloadMirror, dlId),
+        (path) => {
+          setModelPath(model, path);
         }
       );
-
-      if (!result.confirmed) {
-        return;
-      }
-
-      if (result.checked) {
-        try {
-          await cleanInterruptedDownload(model.id);
-          await refreshModelCatalogSnapshot();
-        } catch (cleanErr) {
-          logger.warn('Failed to clean interrupted download:', cleanErr);
-        }
-      }
+    } catch (err) {
+      inFlightModelsRef.current.delete(model.id);
+      throw err;
     }
-
-    if (model.modes && model.modes.length > 0) {
-      const dependencyUpdates: Partial<typeof config> = {};
-      const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
-      for (const dependency of dependencies) {
-        const fieldKeys = [
-          scenarioModelFieldKey(dependency.configKey, 'live'),
-          scenarioModelFieldKey(dependency.configKey, 'batch'),
-        ];
-        if (fieldKeys.every((key) => config[key])) {
-          continue;
-        }
-        if (dependency.isInstalled) {
-          for (const key of fieldKeys) {
-            if (!config[key]) {
-              dependencyUpdates[key] = dependency.installPath;
-            }
-          }
-        } else {
-          document.dispatchEvent(
-            new CustomEvent('download-background-model', {
-              detail: { modelId: dependency.modelId },
-            })
-          );
-        }
-      }
-      if (Object.keys(dependencyUpdates).length > 0) {
-        updateConfig(dependencyUpdates);
-      }
-    }
-
-    await executeDownload(
-      model.id,
-      (id, cb, sig) => modelService.downloadModel(id, cb, sig, config.modelDownloadMirror),
-      (path) => {
-        setModelPath(model, path);
-      }
-    );
   }
 
   async function handleLoad(model: ModelInfo) {

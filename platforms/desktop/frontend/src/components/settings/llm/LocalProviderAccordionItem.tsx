@@ -54,6 +54,7 @@ export function LocalProviderAccordionItem({
   activeDownloadsRef.current = downloads;
 
   const confirm = useDialogStore((state) => state.confirm);
+  const alert = useDialogStore((state) => state.alert);
   const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
 
   const fetchCards = useCallback(async () => {
@@ -158,10 +159,25 @@ export function LocalProviderAccordionItem({
 
         if (result.checked) {
           try {
-            await cleanInterruptedDownload(card.id);
+            const cleaned = await cleanInterruptedDownload(card.id);
+            if (!cleaned) {
+              console.warn(`Failed to clean interrupted download for ${card.id}`);
+              await alert(
+                t('errors.model.clean_failed', {
+                  defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
+                })
+              );
+              return;
+            }
             await fetchCards();
           } catch (cleanErr) {
             console.warn('Failed to clean interrupted download:', cleanErr);
+            await alert(
+              t('errors.model.clean_failed', {
+                defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
+              })
+            );
+            return;
           }
         }
       }
@@ -187,16 +203,16 @@ export function LocalProviderAccordionItem({
           downloadId,
           mirror: modelDownloadMirror,
         });
-        useModelDownloadStore.getState().completeDownload(downloadId);
-        await fetchCards();
       } catch (err) {
         const errorMsg = normalizeError(err).message;
         if (errorMsg === 'Download cancelled') {
-          void useModelDownloadStore.getState().cancelDownload(downloadId);
+          void useModelDownloadStore.getState().cancelDownload(card.id, downloadId);
         } else {
           console.error(`Failed to download model ${card.id}:`, err);
-          useModelDownloadStore.getState().failDownload(downloadId, errorMsg);
+          useModelDownloadStore.getState().failDownload(card.id, errorMsg, downloadId);
         }
+        await fetchCards();
+        return;
       } finally {
         setDownloads((prev) => {
           const next = { ...prev };
@@ -204,8 +220,15 @@ export function LocalProviderAccordionItem({
           return next;
         });
       }
+
+      useModelDownloadStore.getState().completeDownload(card.id, downloadId);
+      try {
+        await fetchCards();
+      } catch (cardErr) {
+        console.warn('Failed to refresh cards after download:', cardErr);
+      }
     },
-    [checkboxConfirm, fetchCards, modelDownloadMirror, t]
+    [alert, checkboxConfirm, fetchCards, modelDownloadMirror, t]
   );
 
   const handleCancelDownload = useCallback(

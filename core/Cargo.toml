@@ -35,6 +35,7 @@ toml = { workspace = true }
 infer = { workspace = true }
 jsonschema = { workspace = true }
 schemars = { workspace = true }
+fs3 = { workspace = true }
 
 tokio = { workspace = true, features = ["sync", "rt"] }
 uuid = { workspace = true }

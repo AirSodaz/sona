@@ -195,7 +195,7 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };
-    result: undefined;
+    result: boolean;
   };
   [TauriCommand.app.openLogFolder]: {
     args: undefined;

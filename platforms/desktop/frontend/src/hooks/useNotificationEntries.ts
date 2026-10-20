@@ -238,7 +238,8 @@ export function useNotificationEntries({
 
     // 5. Model downloads (Settings / Background)
     const modelDownloadEntries = adaptModelDownloadsEntries(modelDownloads, t, {
-      cancelDownload: (id) => void useModelDownloadStore.getState().cancelDownload(id),
+      cancelDownload: (modelId, downloadId) =>
+        void useModelDownloadStore.getState().cancelDownload(modelId, downloadId),
       dismissDownload: (id) => useModelDownloadStore.getState().dismissDownload(id),
     });
     result.push(...modelDownloadEntries);

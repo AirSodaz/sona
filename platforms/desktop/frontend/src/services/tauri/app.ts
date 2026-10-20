@@ -69,8 +69,8 @@ export async function cleanInterruptedDownload(modelId: string): Promise<boolean
   return await invokeTauri(TauriCommand.app.cleanInterruptedDownload, { modelId });
 }
 
-export async function cancelDownload(id: string): Promise<void> {
-  await invokeTauri(TauriCommand.app.cancelDownload, { id });
+export async function cancelDownload(id: string): Promise<boolean> {
+  return await invokeTauri(TauriCommand.app.cancelDownload, { id });
 }
 
 export async function openLogFolder(): Promise<void> {

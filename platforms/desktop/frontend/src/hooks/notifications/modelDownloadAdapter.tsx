@@ -17,7 +17,7 @@ export function formatBytes(bytes?: number): string {
 }
 
 export interface ModelDownloadAdapterCallbacks {
-  cancelDownload: (modelId: string) => Promise<void> | void;
+  cancelDownload: (modelId: string, downloadId?: string) => Promise<unknown> | undefined;
   dismissDownload: (modelId: string) => void;
 }
 
@@ -99,7 +99,9 @@ export function adaptModelDownloadsEntries(
         id: `cancel-${item.modelId}`,
         label: t('common.cancel', { defaultValue: 'Cancel' }),
         variant: 'soft',
-        run: () => callbacks.cancelDownload(item.modelId),
+        run: () => {
+          void callbacks.cancelDownload(item.modelId, item.downloadId);
+        },
       });
     } else if (isFailed && item.onRetry) {
       actions.push({

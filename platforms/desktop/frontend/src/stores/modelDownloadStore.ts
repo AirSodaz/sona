@@ -21,6 +21,7 @@ export interface ModelDownloadItem {
   timestamp: number;
   downloadId: string;
   onRetry?: () => Promise<void> | void;
+  onCancel?: () => void;
 }
 
 export interface StartDownloadParams {
@@ -29,6 +30,7 @@ export interface StartDownloadParams {
   modelType?: ModelDownloadType;
   downloadId: string;
   onRetry?: () => Promise<void> | void;
+  onCancel?: () => void;
 }
 
 interface ModelDownloadState {
@@ -43,9 +45,9 @@ interface ModelDownloadState {
       speed?: string;
     }
   ) => void;
-  completeDownload: (modelId: string) => void;
-  failDownload: (modelId: string, error: string) => void;
-  cancelDownload: (modelId: string) => Promise<void>;
+  completeDownload: (modelId: string, downloadId?: string) => void;
+  failDownload: (modelId: string, error?: string, downloadId?: string) => void;
+  cancelDownload: (modelId: string, downloadId?: string) => Promise<boolean>;
   dismissDownload: (modelId: string) => void;
   clearCompleted: () => void;
   clearAllNonActive: () => void;
@@ -103,7 +105,7 @@ if (typeof window !== 'undefined') {
 export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   downloads: {},
 
-  startDownload: ({ modelId, modelName, modelType = 'asr', downloadId, onRetry }) => {
+  startDownload: ({ modelId, modelName, modelType = 'asr', downloadId, onRetry, onCancel }) => {
     lastBytesMap.set(downloadId, 0);
     set((state) => ({
       downloads: {
@@ -118,6 +120,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
           timestamp: Date.now(),
           downloadId,
           onRetry,
+          onCancel,
         },
       },
     }));
@@ -125,17 +128,15 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
 
   updateProgress: (identifier, { progress, downloadedBytes, totalBytes, speed }) => {
     set((state) => {
-      // Find item by modelId or downloadId
       let targetModelId: string | null = null;
-      if (state.downloads[identifier]) {
-        targetModelId = identifier;
-      } else {
-        for (const [mid, item] of Object.entries(state.downloads)) {
-          if (item.downloadId === identifier) {
-            targetModelId = mid;
-            break;
-          }
+      for (const [mid, item] of Object.entries(state.downloads)) {
+        if (item.downloadId === identifier) {
+          targetModelId = mid;
+          break;
         }
+      }
+      if (!targetModelId && state.downloads[identifier]) {
+        targetModelId = identifier;
       }
 
       if (!targetModelId) return state;
@@ -158,10 +159,10 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     });
   },
 
-  completeDownload: (modelId) => {
+  completeDownload: (modelId, downloadId) => {
     set((state) => {
       const current = state.downloads[modelId];
-      if (!current) return state;
+      if (!current || (downloadId && current.downloadId !== downloadId)) return state;
       return {
         downloads: {
           ...state.downloads,
@@ -176,17 +177,17 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     });
   },
 
-  failDownload: (modelId, error) => {
+  failDownload: (modelId, error, downloadId) => {
     set((state) => {
       const current = state.downloads[modelId];
-      if (!current) return state;
+      if (!current || (downloadId && current.downloadId !== downloadId)) return state;
       return {
         downloads: {
           ...state.downloads,
           [modelId]: {
             ...current,
             status: 'failed',
-            error,
+            error: error ?? current.error,
             timestamp: Date.now(),
           },
         },
@@ -194,17 +195,22 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     });
   },
 
-  cancelDownload: async (modelId) => {
+  cancelDownload: async (modelId, downloadId) => {
     const item = get().downloads[modelId];
-    if (item && item.status === 'downloading') {
+    if (!item || (downloadId && item.downloadId !== downloadId)) {
+      return false;
+    }
+    if (item.status === 'downloading') {
+      item.onCancel?.();
       try {
         await tauriCancelDownload(item.downloadId);
       } catch (err) {
         console.error(`Failed to cancel download for ${modelId}:`, err);
+        return false;
       }
       set((state) => {
         const current = state.downloads[modelId];
-        if (!current) return state;
+        if (!current || (downloadId && current.downloadId !== downloadId)) return state;
         return {
           downloads: {
             ...state.downloads,
@@ -216,7 +222,9 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
           },
         };
       });
+      return true;
     }
+    return false;
   },
 
   dismissDownload: (modelId) => {

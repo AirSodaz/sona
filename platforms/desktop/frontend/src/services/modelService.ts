@@ -135,7 +135,8 @@ export class ModelService {
     modelId: string,
     onProgress?: ProgressCallback,
     signal?: AbortSignal,
-    mirror?: string
+    mirror?: string,
+    downloadId?: string
   ): Promise<string> {
     const catalogModel = await this.ports.registryService.resolveCatalogModel(modelId);
     const model = catalogModel ?? PRESET_MODELS_MAP.get(modelId);
@@ -150,6 +151,7 @@ export class ModelService {
       onProgress,
       signal,
       mirror,
+      downloadId,
     });
   }
 
