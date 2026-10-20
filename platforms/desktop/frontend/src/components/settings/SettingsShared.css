@@ -1247,9 +1247,9 @@
 }
 
 .model-status-interrupted {
-  background: color-mix(in srgb, var(--color-warning) 14%, transparent);
-  color: color-mix(in srgb, var(--color-warning) 85%, var(--color-text-primary) 15%);
-  border-color: color-mix(in srgb, var(--color-warning) 25%, transparent);
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-secondary);
+  border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
 }
 
 /* Semantic tag tints: scenario, engine, recommendation. */

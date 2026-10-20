@@ -282,7 +282,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
     vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation(
       (snapshot, paths) => {
         const resolve = (path: string, options: Array<{ id: string }>) => {
-          if (!path.trim()) return null;
+          if (!path?.trim()) return null;
           const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
           const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
           if (exact && options.some((option) => option.id === exact)) return exact;
@@ -621,16 +621,47 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
     });
   });
 
-  it('halts and shows error without starting download when cleanInterruptedDownload rejects (H3)', async () => {
+  it('halts and shows error when cleanInterruptedDownload rejects in handleDiscardDownload (H3)', async () => {
     const { cleanInterruptedDownload } = await import('../../services/tauri/app');
     vi.mocked(cleanInterruptedDownload).mockRejectedValue(new Error('File is locked'));
 
     const showErrorMock = vi.fn();
+    const confirmMock = vi.fn().mockResolvedValue(true);
     useDialogStore.setState({
       showError: showErrorMock,
-      checkboxConfirm: vi.fn().mockResolvedValue({ confirmed: true, checked: true }),
+      confirm: confirmMock,
     });
 
+    const interruptedModel = {
+      ...catalogModel,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: catalogModel.id,
+        downloadedBytes: 500,
+        totalBytes: 1000,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue({
+      ...modelCatalogSnapshot,
+      models: [interruptedModel],
+      sections: [{ type: 'asr', groups: [{ key: 'preset-a', models: [interruptedModel] }] }],
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      await result.current.handleDiscardDownload(interruptedModel);
+    });
+
+    expect(confirmMock).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith(catalogModel.id);
+    expect(showErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes download directly without prompt when model has interruptedDownload', async () => {
+    const { cleanInterruptedDownload } = await import('../../services/tauri/app');
     const interruptedModel = {
       ...catalogModel,
       isInstalled: false,
@@ -655,9 +686,14 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
       await result.current.handleDownload(interruptedModel);
     });
 
-    expect(cleanInterruptedDownload).toHaveBeenCalledWith(catalogModel.id);
-    expect(showErrorMock).toHaveBeenCalledTimes(1);
-    expect(modelService.downloadModel).not.toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(modelService.downloadModel).toHaveBeenCalledWith(
+      catalogModel.id,
+      expect.any(Function),
+      expect.any(AbortSignal),
+      expect.anything(),
+      expect.any(String)
+    );
   });
 
   it('does not flip download to failed when post-download snapshot refresh throws (H8)', async () => {

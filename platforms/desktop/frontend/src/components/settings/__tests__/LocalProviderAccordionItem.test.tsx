@@ -45,18 +45,21 @@ vi.mock('../../../stores/configStore', () => ({
     selector({ config: { modelDownloadMirror: 'direct' } }),
 }));
 
+const mockConfirm = vi.fn().mockResolvedValue(true);
 const mockCheckboxConfirm = vi.fn().mockResolvedValue({ confirmed: true, checked: false });
 
 vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (
     selector: (state: {
-      confirm: (opts: unknown) => Promise<boolean>;
+      confirm: typeof mockConfirm;
       checkboxConfirm: typeof mockCheckboxConfirm;
+      alert: (opts: unknown) => Promise<void>;
     }) => unknown
   ) =>
     selector({
-      confirm: vi.fn().mockResolvedValue(true),
+      confirm: mockConfirm,
       checkboxConfirm: mockCheckboxConfirm,
+      alert: vi.fn().mockResolvedValue(undefined),
     }),
 }));
 
@@ -378,11 +381,10 @@ describe('LocalProviderAccordionItem', () => {
     });
   });
 
-  it('prompts to resume when downloading an interrupted model, and resumes without cleaning when restart is unchecked', async () => {
+  it('resumes download directly without prompt when downloading an interrupted model', async () => {
     const { cleanInterruptedDownload, downloadPresetModel } = await import(
       '../../../services/tauri/app'
     );
-    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: false });
 
     const interruptedCard = {
       ...mockInstalledCard,
@@ -413,7 +415,7 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
     });
 
     const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
@@ -421,18 +423,18 @@ describe('LocalProviderAccordionItem', () => {
       fireEvent.click(downloadBtn);
     });
 
-    expect(mockCheckboxConfirm).toHaveBeenCalled();
+    expect(mockCheckboxConfirm).not.toHaveBeenCalled();
     expect(cleanInterruptedDownload).not.toHaveBeenCalled();
     expect(downloadPresetModel).toHaveBeenCalledWith(
       expect.objectContaining({ modelId: 'qwen3.5-4b' })
     );
   });
 
-  it('cleans interrupted download when restart checkbox is checked', async () => {
+  it('cleans interrupted download when discard button is clicked and confirmed', async () => {
     const { cleanInterruptedDownload, downloadPresetModel } = await import(
       '../../../services/tauri/app'
     );
-    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: true });
+    mockConfirm.mockResolvedValueOnce(true);
 
     const interruptedCard = {
       ...mockInstalledCard,
@@ -463,27 +465,24 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
     });
 
-    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
     await act(async () => {
-      fireEvent.click(downloadBtn);
+      fireEvent.click(discardBtn);
     });
 
-    expect(mockCheckboxConfirm).toHaveBeenCalled();
+    expect(mockConfirm).toHaveBeenCalled();
     expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
-    expect(downloadPresetModel).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: 'qwen3.5-4b' })
-    );
+    expect(downloadPresetModel).not.toHaveBeenCalled();
   });
 
-  it('still proceeds with download when cleanInterruptedDownload returns false (already clean)', async () => {
+  it('does not clean interrupted download when discard button is clicked and cancelled', async () => {
     const { cleanInterruptedDownload, downloadPresetModel } = await import(
       '../../../services/tauri/app'
     );
-    mockCheckboxConfirm.mockResolvedValueOnce({ confirmed: true, checked: true });
-    vi.mocked(cleanInterruptedDownload).mockResolvedValueOnce(false);
+    mockConfirm.mockResolvedValueOnce(false);
 
     const interruptedCard = {
       ...mockInstalledCard,
@@ -514,17 +513,16 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      expect(screen.getByText(/可续传 \(50%\)/)).toBeTruthy();
+      expect(screen.getByText(/已暂停 \(50%\)/)).toBeTruthy();
     });
 
-    const downloadBtn = screen.getByRole('button', { name: /继续下载 Qwen3.5 4B/i });
+    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
     await act(async () => {
-      fireEvent.click(downloadBtn);
+      fireEvent.click(discardBtn);
     });
 
-    expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
-    expect(downloadPresetModel).toHaveBeenCalledWith(
-      expect.objectContaining({ modelId: 'qwen3.5-4b' })
-    );
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).not.toHaveBeenCalled();
   });
 });

@@ -31,7 +31,12 @@ export interface LocalModelManagementSectionProps {
   catalogLoadError: ModelManagerContextType['catalogLoadError'];
   sectionProps: Pick<
     ModelManagerContextType,
-    'installedModels' | 'downloads' | 'handleDelete' | 'handleDownload' | 'handleCancelDownload'
+    | 'installedModels'
+    | 'downloads'
+    | 'handleDelete'
+    | 'handleDownload'
+    | 'handleCancelDownload'
+    | 'handleDiscardDownload'
   >;
   localModelActionsDisabled: boolean;
   getSectionGroups: (
@@ -258,6 +263,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -286,6 +292,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -314,6 +321,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -344,6 +352,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -374,6 +383,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -404,6 +414,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}

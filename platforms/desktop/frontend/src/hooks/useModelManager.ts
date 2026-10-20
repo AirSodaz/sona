@@ -106,7 +106,6 @@ export function useModelManager(isOpen: boolean) {
   const config = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
   const confirm = useDialogStore((state) => state.confirm);
-  const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
   const showError = useDialogStore((state) => state.showError);
   const alert = useDialogStore((state) => state.alert);
   const { t } = useTranslation();
@@ -417,63 +416,6 @@ export function useModelManager(isOpen: boolean) {
         }
       }
 
-      const catalogModel = getCatalogModel(model.id);
-      const interruptedDownload =
-        catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
-      if (interruptedDownload) {
-        const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
-        const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
-        const sizeText = totalFormatted
-          ? `${downloadedFormatted} / ${totalFormatted}`
-          : downloadedFormatted;
-        const pctText =
-          interruptedDownload.percentage != null ? `${interruptedDownload.percentage}%` : '';
-        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
-
-        const result = await checkboxConfirm(
-          t('settings.resume_confirm_message', {
-            name: model.name,
-            progress: progressDetail,
-            defaultValue: `检测到 ${model.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
-          }),
-          {
-            title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
-            confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
-            cancelLabel: t('common.cancel', { defaultValue: '取消' }),
-            variant: 'info',
-            checkbox: {
-              label: t('settings.resume_restart_checkbox', {
-                defaultValue: '重新开始下载（丢弃未完成的文件）',
-              }),
-              checkedConfirmLabel: t('settings.resume_restart_button', {
-                defaultValue: '重新下载',
-              }),
-            },
-          }
-        );
-
-        if (!result.confirmed) {
-          inFlightModelsRef.current.delete(model.id);
-          return;
-        }
-
-        if (result.checked) {
-          try {
-            await cleanInterruptedDownload(model.id);
-            await refreshModelCatalogSnapshot();
-          } catch (cleanErr) {
-            inFlightModelsRef.current.delete(model.id);
-            logger.warn('Failed to clean interrupted download:', cleanErr);
-            await showError({
-              code: 'model.clean_failed',
-              messageKey: 'errors.model.clean_failed',
-              cause: cleanErr,
-            });
-            return;
-          }
-        }
-      }
-
       if (model.modes && model.modes.length > 0) {
         const dependencyUpdates: Partial<typeof config> = {};
         const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
@@ -560,6 +502,60 @@ export function useModelManager(isOpen: boolean) {
     }
   }
 
+  async function handleDiscardDownload(model: ModelInfo) {
+    if (inFlightModelsRef.current.has(model.id) || activeDownloadsRef.current.has(model.id)) {
+      return;
+    }
+
+    const catalogModel = getCatalogModel(model.id);
+    const interruptedDownload =
+      catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
+    if (!interruptedDownload) return;
+
+    const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
+    const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
+    const sizeText = totalFormatted
+      ? `${downloadedFormatted} / ${totalFormatted}`
+      : downloadedFormatted;
+    const pctText =
+      interruptedDownload.percentage != null
+        ? `${Math.round(interruptedDownload.percentage)}%`
+        : '';
+    const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+    const confirmed = await confirm(
+      t('settings.discard_download_confirm_message', {
+        name: model.name,
+        progress: progressDetail,
+        defaultValue: `确定要丢弃 ${model.name} 未完成的下载文件（${progressDetail}）吗？此操作将清除临时文件并释放磁盘空间。`,
+      }),
+      {
+        title: t('settings.discard_download_confirm_title', {
+          defaultValue: '丢弃未完成的下载',
+        }),
+        confirmLabel: t('settings.discard_download_confirm_button', {
+          defaultValue: '丢弃文件',
+        }),
+        cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+        variant: 'warning',
+      }
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await cleanInterruptedDownload(model.id);
+      await refreshModelCatalogSnapshot();
+    } catch (cleanErr) {
+      logger.warn('Failed to clean interrupted download:', cleanErr);
+      await showError({
+        code: 'model.clean_failed',
+        messageKey: 'errors.model.clean_failed',
+        cause: cleanErr,
+      });
+    }
+  }
+
   async function restoreDefaultModelSettings() {
     const confirmed = await confirm(t('settings.restore_defaults_confirm'), {
       title: t('settings.restore_defaults'),
@@ -587,6 +583,7 @@ export function useModelManager(isOpen: boolean) {
 
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
     handleLoad,
     handleDelete,
     restoreDefaultModelSettings,

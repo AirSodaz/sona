@@ -56,7 +56,6 @@ export function LocalProviderAccordionItem({
 
   const confirm = useDialogStore((state) => state.confirm);
   const alert = useDialogStore((state) => state.alert);
-  const checkboxConfirm = useDialogStore((state) => state.checkboxConfirm);
 
   const fetchCards = useCallback(async () => {
     setIsLoading(true);
@@ -122,58 +121,6 @@ export function LocalProviderAccordionItem({
       const downloadId = card.id;
       if (activeDownloadsRef.current[downloadId]) return;
 
-      if (card.interruptedDownload) {
-        const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
-        const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
-        const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
-        const sizeText = totalFormatted
-          ? `${downloadedFormatted} / ${totalFormatted}`
-          : downloadedFormatted;
-        const pctText = percentage != null ? `${percentage}%` : '';
-        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
-
-        const result = await checkboxConfirm(
-          t('settings.resume_confirm_message', {
-            name: card.name,
-            progress: progressDetail,
-            defaultValue: `检测到 ${card.name} 存在未完成的下载（已完成 ${progressDetail}）。是否从断点继续下载？`,
-          }),
-          {
-            title: t('settings.resume_confirm_title', { defaultValue: '继续下载模型' }),
-            confirmLabel: t('settings.resume_download', { defaultValue: '继续下载' }),
-            cancelLabel: t('common.cancel', { defaultValue: '取消' }),
-            variant: 'info',
-            checkbox: {
-              label: t('settings.resume_restart_checkbox', {
-                defaultValue: '重新开始下载（丢弃未完成的文件）',
-              }),
-              checkedConfirmLabel: t('settings.resume_restart_button', {
-                defaultValue: '重新下载',
-              }),
-            },
-          }
-        );
-
-        if (!result.confirmed) {
-          return;
-        }
-
-        if (result.checked) {
-          try {
-            await cleanInterruptedDownload(card.id);
-            await fetchCards();
-          } catch (cleanErr) {
-            console.warn('Failed to clean interrupted download:', cleanErr);
-            await alert(
-              t('errors.model.clean_failed', {
-                defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
-              })
-            );
-            return;
-          }
-        }
-      }
-
       useModelDownloadStore.getState().startDownload({
         modelId: card.id,
         modelName: card.name,
@@ -221,7 +168,7 @@ export function LocalProviderAccordionItem({
         console.warn('Failed to refresh cards after download:', cardErr);
       }
     },
-    [alert, checkboxConfirm, fetchCards, modelDownloadMirror, t]
+    [fetchCards, modelDownloadMirror, t]
   );
 
   const handleCancelDownload = useCallback(
@@ -265,6 +212,54 @@ export function LocalProviderAccordionItem({
       }
     },
     [confirm, fetchCards, t]
+  );
+
+  const handleDiscardDownload = useCallback(
+    async (card: LocalLlmModelCardType) => {
+      if (activeDownloadsRef.current[card.id] || !card.interruptedDownload) return;
+
+      const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
+      const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
+      const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
+      const sizeText = totalFormatted
+        ? `${downloadedFormatted} / ${totalFormatted}`
+        : downloadedFormatted;
+      const pctText = percentage != null ? `${Math.round(percentage)}%` : '';
+      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+      const confirmed = await confirm(
+        t('settings.discard_download_confirm_message', {
+          name: card.name,
+          progress: progressDetail,
+          defaultValue: `确定要丢弃 ${card.name} 未完成的下载文件（${progressDetail}）吗？此操作将清除临时文件并释放磁盘空间。`,
+        }),
+        {
+          title: t('settings.discard_download_confirm_title', {
+            defaultValue: '丢弃未完成的下载',
+          }),
+          confirmLabel: t('settings.discard_download_confirm_button', {
+            defaultValue: '丢弃文件',
+          }),
+          cancelLabel: t('common.cancel', { defaultValue: '取消' }),
+          variant: 'warning',
+        }
+      );
+
+      if (!confirmed) return;
+
+      try {
+        await cleanInterruptedDownload(card.id);
+        await fetchCards();
+      } catch (cleanErr) {
+        console.warn('Failed to clean interrupted download:', cleanErr);
+        await alert(
+          t('errors.model.clean_failed', {
+            defaultValue: '无法清理未完成的下载文件，请检查文件是否被占用。',
+          })
+        );
+      }
+    },
+    [alert, confirm, fetchCards, t]
   );
 
   const handleImportCustomFile = useCallback(async () => {
@@ -473,6 +468,7 @@ export function LocalProviderAccordionItem({
               onDownload={handleDownload}
               onCancelDownload={handleCancelDownload}
               onDelete={handleDelete}
+              onDiscardDownload={handleDiscardDownload}
               t={t}
             />
           ))}

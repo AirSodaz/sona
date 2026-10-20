@@ -449,4 +449,34 @@ describe('LocalModelCard', () => {
     expect(downloadBtn).toBeTruthy();
     expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
   });
+
+  it('renders discard button and fires onDiscardDownload on click', () => {
+    const interruptedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: mockCard.id,
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+    const onDiscardDownload = vi.fn();
+
+    render(
+      <LocalModelCard
+        card={interruptedCard}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onDiscardDownload={onDiscardDownload}
+        t={defaultT}
+      />
+    );
+
+    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 Qwen3.5 4B/i });
+    expect(discardBtn).toBeTruthy();
+    fireEvent.click(discardBtn);
+    expect(onDiscardDownload).toHaveBeenCalledWith(interruptedCard);
+  });
 });

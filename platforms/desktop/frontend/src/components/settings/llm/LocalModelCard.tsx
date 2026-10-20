@@ -43,6 +43,7 @@ interface LocalModelCardProps {
   onDownload: (card: LocalLlmModelCardType) => void;
   onCancelDownload: (cardId: string) => void;
   onDelete: (card: LocalLlmModelCardType) => void;
+  onDiscardDownload?: (card: LocalLlmModelCardType) => void;
   onApplyFeature?: (
     card: LocalLlmModelCardType,
     feature: 'polish' | 'translation' | 'summary' | 'all'
@@ -144,6 +145,7 @@ export function LocalModelCard({
   onDownload,
   onCancelDownload,
   onDelete,
+  onDiscardDownload,
   t,
 }: LocalModelCardProps): React.JSX.Element {
   const isDownloading = Boolean(downloadState);
@@ -240,9 +242,9 @@ export function LocalModelCard({
                 {card.interruptedDownload.percentage != null
                   ? t('settings.model_status_interrupted', {
                       progress: Math.round(card.interruptedDownload.percentage),
-                      defaultValue: `可续传 (${Math.round(card.interruptedDownload.percentage)}%)`,
+                      defaultValue: `已暂停 (${Math.round(card.interruptedDownload.percentage)}%)`,
                     })
-                  : t('settings.resume_download', { defaultValue: '可续传' })}
+                  : t('settings.model_status_interrupted_no_progress', { defaultValue: '已暂停' })}
               </span>
             </span>
           ) : (
@@ -388,26 +390,48 @@ export function LocalModelCard({
             >
               <TrashIcon />
             </button>
-          ) : (
-            <button
-              type="button"
-              className="model-action-icon"
-              onClick={() => onDownload(card)}
-              aria-label={
-                card.interruptedDownload
-                  ? `${t('settings.resume_download', { defaultValue: '继续下载' })} ${card.name}`
-                  : `${t('common.download', { defaultValue: '下载' })} ${card.name}`
-              }
-              data-tooltip={
-                card.interruptedDownload
-                  ? card.interruptedDownload.percentage != null
+          ) : card.interruptedDownload ? (
+            <>
+              <button
+                type="button"
+                className="model-action-icon"
+                onClick={() => onDownload(card)}
+                aria-label={`${t('settings.resume_download', { defaultValue: '继续下载' })} ${card.name}`}
+                data-tooltip={
+                  card.interruptedDownload.percentage != null
                     ? t('settings.resume_download_tooltip', {
                         progress: Math.round(card.interruptedDownload.percentage),
                         defaultValue: `继续下载 (已完成 ${Math.round(card.interruptedDownload.percentage)}%)`,
                       })
                     : t('settings.resume_download', { defaultValue: '继续下载' })
-                  : t('common.download', { defaultValue: '下载' })
-              }
+                }
+                data-tooltip-pos="top"
+              >
+                <DownloadIcon />
+              </button>
+              {onDiscardDownload && (
+                <button
+                  type="button"
+                  className="model-action-icon model-action-delete"
+                  onClick={() => onDiscardDownload(card)}
+                  aria-label={`${t('settings.discard_download', { defaultValue: '丢弃未完成的下载' })} ${card.name}`}
+                  data-tooltip={t('settings.discard_download_tooltip', {
+                    size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
+                    defaultValue: `丢弃未完成的下载 (已占用 ${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
+                  })}
+                  data-tooltip-pos="top"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="model-action-icon"
+              onClick={() => onDownload(card)}
+              aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
+              data-tooltip={t('common.download', { defaultValue: '下载' })}
               data-tooltip-pos="top"
             >
               <DownloadIcon />

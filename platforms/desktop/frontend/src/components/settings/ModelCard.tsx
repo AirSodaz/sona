@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatBytes } from '../../hooks/notifications/modelDownloadAdapter';
 import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../types/modelCatalog';
 import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from '../Icons';
 import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
@@ -24,6 +25,7 @@ interface ModelCardProps {
   onDelete: (model: ModelInfo) => void;
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
+  onDiscardDownload?: (model: ModelInfo) => void;
   actionsDisabled?: boolean;
   isAsr?: boolean;
 }
@@ -35,6 +37,7 @@ interface ModelCardActionsProps {
   onDelete: (model: ModelInfo) => void;
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: () => void;
+  onDiscardDownload?: (model: ModelInfo) => void;
   disabled?: boolean;
 }
 
@@ -114,9 +117,9 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
           {status.progress != null
             ? t('settings.model_status_interrupted', {
                 progress: Math.round(status.progress),
-                defaultValue: `可续传 (${Math.round(status.progress)}%)`,
+                defaultValue: `已暂停 (${Math.round(status.progress)}%)`,
               })
-            : t('settings.resume_download', { defaultValue: '可续传' })}
+            : t('settings.model_status_interrupted_no_progress', { defaultValue: '已暂停' })}
         </span>
       );
     default:
@@ -219,6 +222,7 @@ function ModelCardActions({
   onDelete,
   onDownload,
   onCancelDownload,
+  onDiscardDownload,
   disabled = false,
 }: ModelCardActionsProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -253,18 +257,48 @@ function ModelCardActions({
   }
 
   const isInterrupted = !isInstalled && !isDownloading && !!model.interruptedDownload;
-  const pct = model.interruptedDownload?.percentage;
-  const downloadTooltip = isInterrupted
-    ? pct != null
-      ? t('settings.resume_download_tooltip', {
-          progress: Math.round(pct),
-          defaultValue: `继续下载 (已完成 ${Math.round(pct)}%)`,
-        })
-      : t('settings.resume_download', { defaultValue: '继续下载' })
-    : t('common.download');
-  const downloadAriaLabel = isInterrupted
-    ? `${t('settings.resume_download', { defaultValue: '继续下载' })} ${model.name}`
-    : `${t('common.download')} ${model.name}`;
+  if (isInterrupted) {
+    const pct = model.interruptedDownload?.percentage;
+    const downloadedFormatted = formatBytes(model.interruptedDownload?.downloadedBytes) || '0 MB';
+    const downloadTooltip =
+      pct != null
+        ? t('settings.resume_download_tooltip', {
+            progress: Math.round(pct),
+            defaultValue: `继续下载 (已完成 ${Math.round(pct)}%)`,
+          })
+        : t('settings.resume_download', { defaultValue: '继续下载' });
+    const downloadAriaLabel = `${t('settings.resume_download', { defaultValue: '继续下载' })} ${model.name}`;
+
+    return (
+      <>
+        <button
+          type="button"
+          className="model-action-icon"
+          onClick={() => onDownload(model)}
+          disabled={disabled}
+          aria-label={downloadAriaLabel}
+          data-tooltip={downloadTooltip}
+        >
+          <DownloadIcon />
+        </button>
+        {onDiscardDownload && (
+          <button
+            type="button"
+            className="model-action-icon model-action-delete"
+            onClick={() => onDiscardDownload(model)}
+            disabled={disabled}
+            aria-label={`${t('settings.discard_download', { defaultValue: '丢弃未完成的下载' })} ${model.name}`}
+            data-tooltip={t('settings.discard_download_tooltip', {
+              size: downloadedFormatted,
+              defaultValue: `丢弃未完成的下载 (已占用 ${downloadedFormatted})`,
+            })}
+          >
+            <TrashIcon />
+          </button>
+        )}
+      </>
+    );
+  }
 
   return (
     <button
@@ -272,8 +306,8 @@ function ModelCardActions({
       className="model-action-icon"
       onClick={() => onDownload(model)}
       disabled={disabled}
-      aria-label={downloadAriaLabel}
-      data-tooltip={downloadTooltip}
+      aria-label={`${t('common.download')} ${model.name}`}
+      data-tooltip={t('common.download')}
     >
       <DownloadIcon />
     </button>
@@ -287,6 +321,7 @@ export function ModelCard({
   onDelete,
   onDownload,
   onCancelDownload,
+  onDiscardDownload,
   actionsDisabled = false,
   isAsr: isAsrProp,
 }: ModelCardProps): React.JSX.Element | null {
@@ -386,6 +421,7 @@ export function ModelCard({
                 onDelete={onDelete}
                 onDownload={onDownload}
                 onCancelDownload={() => onCancelDownload(baseModel.id)}
+                onDiscardDownload={onDiscardDownload}
                 disabled={actionsDisabled}
               />
             </div>
@@ -412,9 +448,11 @@ export function ModelCard({
                         {model.interruptedDownload.percentage != null
                           ? t('settings.model_status_interrupted', {
                               progress: Math.round(model.interruptedDownload.percentage),
-                              defaultValue: `可续传 (${Math.round(model.interruptedDownload.percentage)}%)`,
+                              defaultValue: `已暂停 (${Math.round(model.interruptedDownload.percentage)}%)`,
                             })
-                          : t('settings.resume_download', { defaultValue: '可续传' })}
+                          : t('settings.model_status_interrupted_no_progress', {
+                              defaultValue: '已暂停',
+                            })}
                       </span>
                     )}
                   </div>
@@ -427,6 +465,7 @@ export function ModelCard({
                       onDelete={onDelete}
                       onDownload={onDownload}
                       onCancelDownload={() => onCancelDownload(model.id)}
+                      onDiscardDownload={onDiscardDownload}
                       disabled={actionsDisabled}
                     />
                   </div>

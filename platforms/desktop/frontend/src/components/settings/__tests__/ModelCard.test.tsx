@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import { formatModelModeTag, ModelCard, resolveUniqueModeTags } from '../ModelCard';
@@ -255,6 +255,36 @@ describe('ModelCard interrupted download', () => {
     const chip = container.querySelector('.model-status-interrupted');
     expect(chip).toBeTruthy();
     expect(chip?.textContent).not.toContain('0%');
-    expect(chip?.textContent).toContain('可续传');
+    expect(chip?.textContent).toContain('已暂停');
+  });
+
+  it('renders discard button and fires onDiscardDownload on click', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+    const onDiscardDownload = vi.fn();
+
+    render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDiscardDownload={onDiscardDownload}
+      />
+    );
+
+    const discardBtn = screen.getByRole('button', { name: /丢弃未完成的下载 SenseVoice/i });
+    expect(discardBtn).toBeTruthy();
+    fireEvent.click(discardBtn);
+    expect(onDiscardDownload).toHaveBeenCalledWith(interruptedModel);
   });
 });
