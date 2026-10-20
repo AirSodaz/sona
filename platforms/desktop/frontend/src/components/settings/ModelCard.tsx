@@ -2,7 +2,7 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { formatBytes } from '../../hooks/notifications/modelDownloadAdapter';
 import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../types/modelCatalog';
-import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from '../Icons';
+import { CheckIcon, DownloadIcon, StopIcon, TrashIcon } from '../Icons';
 import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
 
@@ -246,12 +246,12 @@ function ModelCardActions({
     return (
       <button
         type="button"
-        className="model-action-icon"
+        className="model-action-icon model-action-cancel"
         onClick={onCancelDownload}
         aria-label={t('common.cancel')}
         data-tooltip={t('common.cancel')}
       >
-        <XIcon />
+        <StopIcon />
       </button>
     );
   }

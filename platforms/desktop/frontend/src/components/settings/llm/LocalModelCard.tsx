@@ -13,7 +13,7 @@ import {
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
 import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
-import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
+import { DownloadIcon, StopIcon, TrashIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import './LocalModelCard.css';
 
@@ -364,13 +364,13 @@ export function LocalModelCard({
           {isDownloading ? (
             <button
               type="button"
-              className="model-action-icon"
+              className="model-action-icon model-action-cancel"
               onClick={() => onCancelDownload(card.id)}
               aria-label={t('common.cancel', { defaultValue: '取消' })}
               data-tooltip={t('common.cancel', { defaultValue: '取消' })}
               data-tooltip-pos="top"
             >
-              <XIcon />
+              <StopIcon />
             </button>
           ) : isInstalled ? (
             <button

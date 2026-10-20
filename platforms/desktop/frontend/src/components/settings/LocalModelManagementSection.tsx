@@ -146,6 +146,11 @@ export function LocalModelManagementSection({
     );
   }, [filterModels, getSectionGroups]);
 
+  const hasLoadedSections = useMemo(
+    () => Array.from(filteredGroupsByType.values()).some((groups) => groups.length > 0),
+    [filteredGroupsByType]
+  );
+
   const isCatalogLoading = catalogLoadState === 'loading';
   const isCatalogReady = catalogLoadState === 'ready';
 
@@ -229,7 +234,7 @@ export function LocalModelManagementSection({
           </div>
         </div>
       )}
-      {isCatalogLoading && (
+      {isCatalogLoading && !hasLoadedSections && (
         <div className="settings-hint" role="status">
           {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
         </div>
@@ -242,7 +247,7 @@ export function LocalModelManagementSection({
           })}
         </div>
       )}
-      {isCatalogReady && (
+      {(isCatalogReady || hasLoadedSections) && (
         <>
           <SettingsAccordion
             title={t('settings.recognition_models')}

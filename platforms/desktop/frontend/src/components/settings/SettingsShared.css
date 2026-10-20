@@ -1428,6 +1428,11 @@
   color: var(--color-error);
 }
 
+.model-action-cancel:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, transparent);
+  color: var(--color-warning, #d97706);
+}
+
 .model-action-add:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-accent-primary) 12%, transparent);
   color: var(--color-accent-primary);

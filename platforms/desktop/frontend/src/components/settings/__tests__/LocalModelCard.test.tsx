@@ -96,6 +96,8 @@ describe('LocalModelCard', () => {
     expect(cancelBtn).toBeTruthy();
     expect(cancelBtn.getAttribute('data-tooltip')).toBe('取消');
     expect(cancelBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(cancelBtn.className).toContain('model-action-cancel');
+    expect(cancelBtn.className).not.toContain('model-action-delete');
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith('qwen3.5-4b');
   });

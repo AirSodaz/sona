@@ -144,7 +144,7 @@ export function useModelManager(isOpen: boolean) {
     async (loadGeneration?: number) => {
       const isCurrentLoad = () =>
         loadGeneration === undefined || loadGeneration === catalogLoadGenerationRef.current;
-      setCatalogLoadState('loading');
+      setCatalogLoadState((prev) => (prev === 'ready' ? 'ready' : 'loading'));
       setCatalogLoadError(null);
       markSettingsPerf('settings.models.catalog.load.start');
       try {
@@ -170,7 +170,7 @@ export function useModelManager(isOpen: boolean) {
           });
           throw error;
         }
-        setCatalogLoadState('error');
+        setCatalogLoadState((prev) => (prev === 'ready' ? 'ready' : 'error'));
         setCatalogLoadError(extractErrorMessage(error));
         markSettingsPerf('settings.models.catalog.load.fail', getSettingsPerfErrorDetail(error));
         throw error;

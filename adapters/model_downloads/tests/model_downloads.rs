@@ -408,3 +408,58 @@ fn clean_interrupted_download_handles_installing_file_and_archive_staging() {
     assert!(cleaned2);
     assert!(!staging_file.exists());
 }
+
+#[tokio::test]
+async fn cancel_during_connection_handshake_aborts_immediately() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let model = find_preset_model("silero-vad").unwrap().clone();
+    let install_path = models_dir.join(&model.id);
+
+    // Set up a listener that accepts connections but never sends an HTTP response (simulating hanging connection)
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((socket, _)) = listener.accept().await {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            drop(socket);
+        }
+    });
+
+    let resolved = ResolvedModelDownload {
+        model,
+        models_dir: models_dir.clone(),
+        download_path: install_path.clone(),
+        install_path: install_path.clone(),
+        artifacts: vec![ResolvedModelArtifact {
+            url: format!("http://{addr}/silero_vad.onnx"),
+            filename: "silero_vad.onnx".to_string(),
+            sha256: None,
+            size_bytes: Some(1000),
+            install_path: install_path.clone(),
+        }],
+    };
+
+    let cancel = Arc::new(tokio::sync::Notify::new());
+    let cancel_for_task = cancel.clone();
+
+    let download_task = tokio::spawn(async move {
+        download_model_with_cancel(&resolved, cancel_for_task, |_| {}).await
+    });
+
+    // Allow time for request.send() to begin connecting
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let start = std::time::Instant::now();
+    cancel.notify_one();
+
+    let result = download_task.await.unwrap();
+    let elapsed = start.elapsed();
+
+    assert!(matches!(result, Err(DownloadError::Cancelled)));
+    assert!(
+        elapsed.as_millis() < 1000,
+        "Cancellation took too long during connect phase: {:?}",
+        elapsed
+    );
+}

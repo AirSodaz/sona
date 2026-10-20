@@ -471,6 +471,21 @@ export function PauseIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Elem
   );
 }
 
+export function StopIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      viewBox="0 0 24 24"
+      fill="currentColor"
+      width="14"
+      height="14"
+      {...props}
+    >
+      <rect x="6" y="6" width="12" height="12" rx="2" />
+    </svg>
+  );
+}
+
 export function VolumeIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
   return (
     <svg

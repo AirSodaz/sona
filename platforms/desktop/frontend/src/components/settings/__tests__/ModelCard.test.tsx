@@ -289,4 +289,25 @@ describe('ModelCard interrupted download', () => {
     fireEvent.click(discardBtn);
     expect(onDiscardDownload).toHaveBeenCalledWith(interruptedModel);
   });
+
+  it('renders cancel button with model-action-cancel and fires onCancelDownload on click', () => {
+    const onCancelDownload = vi.fn();
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set()}
+        downloads={{ [mockModel.id]: { progress: 45, status: 'downloading' } }}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={onCancelDownload}
+      />
+    );
+
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+    expect(cancelBtn).toBeTruthy();
+    expect(cancelBtn.classList.contains('model-action-cancel')).toBe(true);
+    expect(cancelBtn.classList.contains('model-action-delete')).toBe(false);
+    fireEvent.click(cancelBtn);
+    expect(onCancelDownload).toHaveBeenCalledWith(mockModel.id);
+  });
 });
