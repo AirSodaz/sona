@@ -43,14 +43,11 @@ import {
   SettingsTabContainer,
 } from './SettingsLayout';
 import { SyncConflictCenter } from './sync/SyncConflictCenter';
-import { SyncConnectedPanel } from './sync/SyncConnectedPanel';
+import { type SettingsSyncNavRequest, SyncConnectedPanel } from './sync/SyncConnectedPanel';
 import { SyncSetupPanel } from './sync/SyncSetupPanel';
 import './sync/SyncSettings.css';
 
-export interface SettingsSyncNavRequest {
-  requestId: number;
-  targetId?: string;
-}
+export type { SettingsSyncNavRequest };
 
 interface SettingsSyncTabProps {
   isVisible?: boolean;

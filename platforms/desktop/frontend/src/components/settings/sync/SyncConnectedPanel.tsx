@@ -35,10 +35,14 @@ import type {
 } from '../../../types/sync';
 import { Modal } from '../../Modal';
 import { SettingsAccordion, SettingsItem, SettingsSection } from '../SettingsLayout';
-import type { SettingsSyncNavRequest } from '../SettingsSyncTab';
 import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
 import { isPresetShrink } from './syncPreset';
+
+export interface SettingsSyncNavRequest {
+  requestId: number;
+  targetId?: string;
+}
 
 interface SyncConnectedPanelProps {
   busyAction: string | null;
