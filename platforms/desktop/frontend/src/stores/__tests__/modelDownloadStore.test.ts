@@ -95,4 +95,63 @@ describe('modelDownloadStore', () => {
     // Should reliably flip to cancelled when user requests cancellation
     expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
   });
+
+  it('does not overwrite cancelled status with failDownload', async () => {
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'test-model',
+      modelName: 'Test Model',
+      downloadId: 'dl-active',
+    });
+
+    await useModelDownloadStore.getState().cancelDownload('test-model', 'dl-active');
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
+
+    // Downstream rejection handler catches abort error and calls failDownload
+    useModelDownloadStore.getState().failDownload('test-model', 'AbortError', 'dl-active');
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
+  });
+
+  it('does not overwrite completed status with cancelDownload', async () => {
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'test-model',
+      modelName: 'Test Model',
+      downloadId: 'dl-active',
+    });
+
+    useModelDownloadStore.getState().completeDownload('test-model', 'dl-active');
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('completed');
+
+    const result = await useModelDownloadStore.getState().cancelDownload('test-model', 'dl-active');
+    expect(result).toBe(false);
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('completed');
+  });
+
+  it('handles dismissDownload, clearCompleted, and clearAllNonActive', () => {
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'active-1',
+      modelName: 'Active 1',
+      downloadId: 'dl-active-1',
+    });
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'completed-1',
+      modelName: 'Completed 1',
+      downloadId: 'dl-completed-1',
+    });
+    useModelDownloadStore.getState().completeDownload('completed-1', 'dl-completed-1');
+
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'dismiss-me',
+      modelName: 'Dismiss Me',
+      downloadId: 'dl-dismiss-me',
+    });
+    useModelDownloadStore.getState().dismissDownload('dismiss-me');
+    expect(useModelDownloadStore.getState().downloads['dismiss-me']).toBeUndefined();
+
+    useModelDownloadStore.getState().clearCompleted();
+    expect(useModelDownloadStore.getState().downloads['completed-1']).toBeUndefined();
+    expect(useModelDownloadStore.getState().downloads['active-1']).toBeDefined();
+
+    useModelDownloadStore.getState().clearAllNonActive();
+    expect(useModelDownloadStore.getState().downloads['active-1']).toBeDefined();
+  });
 });

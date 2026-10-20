@@ -168,7 +168,10 @@ pub async fn download_preset_model<R: tauri::Runtime>(
         return Ok(resolved.install_path.to_string_lossy().into_owned());
     }
 
-    let notify = Arc::new(Notify::new());
+    let notify = state
+        .notify_for_download(&download_id)
+        .await
+        .unwrap_or_else(|| Arc::new(Notify::new()));
     let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
@@ -285,7 +288,10 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
             })?,
     };
 
-    let notify = Arc::new(Notify::new());
+    let notify = state
+        .notify_for_download(&download_id)
+        .await
+        .unwrap_or_else(|| Arc::new(Notify::new()));
     let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();

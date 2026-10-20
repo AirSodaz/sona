@@ -44,7 +44,13 @@ pub async fn download_preset_model(
     let model_id = req.model_id;
     let mirror = req.mirror;
 
+    let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    let _download_guard = services
+        .downloads
+        .register_download(download_id.clone(), notify);
+
     tauri::async_runtime::spawn(async move {
+        let _guard = _download_guard;
         if let Err(e) = crate::platform::model_downloads::download_preset_model(
             app_clone,
             &downloads_service,

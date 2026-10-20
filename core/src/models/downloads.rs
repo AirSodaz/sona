@@ -40,7 +40,7 @@ pub fn install_lock_path(path: &Path) -> PathBuf {
 
 pub fn is_file_locked(path: &Path) -> bool {
     use fs3::FileExt;
-    if !path.exists() {
+    if !path.is_file() {
         return false;
     }
     match std::fs::OpenOptions::new()
@@ -113,7 +113,7 @@ pub fn inspect_interrupted_download(
                 let artifact_size = artifact.size_bytes.unwrap_or(0);
                 if staged_path.is_file() {
                     let len = staged_path.metadata().map(|m| m.len()).unwrap_or(0);
-                    if artifact_size > 0 && len == artifact_size {
+                    if len > 0 && (artifact_size == 0 || len == artifact_size) {
                         downloaded_bytes = downloaded_bytes.saturating_add(len);
                         continue;
                     }
@@ -158,10 +158,10 @@ pub fn inspect_interrupted_download(
         total_bytes = resolved.artifacts.first().and_then(|a| a.size_bytes);
     }
 
-    if let Some(total) = total_bytes {
-        if total > 0 {
-            downloaded_bytes = downloaded_bytes.min(total);
-        }
+    if let Some(total) = total_bytes
+        && total > 0
+    {
+        downloaded_bytes = downloaded_bytes.min(total);
     }
 
     let has_interrupted_artifacts = downloaded_bytes > 0
@@ -190,18 +190,68 @@ pub fn inspect_interrupted_download(
     }
 }
 
+struct CleanupLockGuard {
+    file: Option<std::fs::File>,
+    path: PathBuf,
+    existed_initially: bool,
+}
+
+impl CleanupLockGuard {
+    fn release_and_remove(mut self) -> bool {
+        drop(self.file.take());
+        if self.path.exists() && !is_file_locked(&self.path) {
+            std::fs::remove_file(&self.path).is_ok() && self.existed_initially
+        } else {
+            false
+        }
+    }
+}
+
+impl Drop for CleanupLockGuard {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        if !self.existed_initially && self.path.exists() && !is_file_locked(&self.path) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
 pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io::Result<bool> {
     let Ok(resolved) = resolve_model_download(model_id, models_dir) else {
         return Ok(false);
     };
 
     let lock_path = install_lock_path(&resolved.install_path);
+    let lock_existed_initially = lock_path.is_file();
     if is_file_locked(&lock_path) {
         return Err(std::io::Error::new(
             std::io::ErrorKind::ResourceBusy,
             format!("Model download is actively in progress: {model_id}"),
         ));
     }
+
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    use fs3::FileExt;
+    let lock_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)?;
+    if lock_file.try_lock_exclusive().is_err() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download is actively in progress: {model_id}"),
+        ));
+    }
+
+    let lock_guard = CleanupLockGuard {
+        file: Some(lock_file),
+        path: lock_path,
+        existed_initially: lock_existed_initially,
+    };
 
     let temp_download = temporary_download_path(&resolved.download_path);
     if is_file_locked(&temp_download) {
@@ -269,8 +319,8 @@ pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io:
         }
     }
 
-    if lock_path.exists() && !is_file_locked(&lock_path) {
-        let _ = std::fs::remove_file(&lock_path);
+    if lock_guard.release_and_remove() {
+        removed = true;
     }
 
     Ok(removed)

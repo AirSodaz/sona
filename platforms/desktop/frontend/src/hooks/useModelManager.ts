@@ -365,29 +365,30 @@ export function useModelManager(isOpen: boolean) {
         );
       }
     } finally {
-      inFlightModelsRef.current.delete(modelId);
-      activeDownloadsRef.current.delete(modelId);
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[modelId];
-        return next;
-      });
+      if (activeDownloadsRef.current.get(modelId)?.downloadId === downloadId) {
+        activeDownloadsRef.current.delete(modelId);
+        inFlightModelsRef.current.delete(modelId);
+        setDownloads((prev) => {
+          const next = { ...prev };
+          delete next[modelId];
+          return next;
+        });
+      }
     }
   }
 
   function handleCancelDownload(modelId: string) {
-    inFlightModelsRef.current.delete(modelId);
     const active = activeDownloadsRef.current.get(modelId);
     if (active) {
       active.controller.abort();
       void useModelDownloadStore.getState().cancelDownload(modelId, active.downloadId);
-      activeDownloadsRef.current.delete(modelId);
     } else {
       const download = downloads[modelId];
       if (download) {
         download.controller.abort();
         void useModelDownloadStore.getState().cancelDownload(modelId);
       }
+      inFlightModelsRef.current.delete(modelId);
     }
     setDownloads((prev) => {
       const next = { ...prev };
@@ -398,7 +399,13 @@ export function useModelManager(isOpen: boolean) {
   }
 
   async function handleDownload(model: ModelInfo) {
-    if (inFlightModelsRef.current.has(model.id) || activeDownloadsRef.current.has(model.id)) {
+    const isDownloadingInStore =
+      useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading';
+    if (
+      inFlightModelsRef.current.has(model.id) ||
+      activeDownloadsRef.current.has(model.id) ||
+      isDownloadingInStore
+    ) {
       return;
     }
     inFlightModelsRef.current.add(model.id);
@@ -512,47 +519,55 @@ export function useModelManager(isOpen: boolean) {
       catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
     if (!interruptedDownload) return;
 
-    const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
-    const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
-    const sizeText = totalFormatted
-      ? `${downloadedFormatted} / ${totalFormatted}`
-      : downloadedFormatted;
-    const pctText =
-      interruptedDownload.percentage != null
-        ? `${Math.round(interruptedDownload.percentage)}%`
-        : '';
-    const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
-
-    const confirmed = await confirm(
-      t('settings.discard_download_confirm_message', {
-        name: model.name,
-        progress: progressDetail,
-        defaultValue: `Are you sure you want to discard the incomplete download for ${model.name} (${progressDetail})? This will delete partial files and free up disk space.`,
-      }),
-      {
-        title: t('settings.discard_download_confirm_title', {
-          defaultValue: 'Discard Incomplete Download',
-        }),
-        confirmLabel: t('settings.discard_download_confirm_button', {
-          defaultValue: 'Discard Files',
-        }),
-        cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
-        variant: 'warning',
-      }
-    );
-
-    if (!confirmed) return;
-
+    inFlightModelsRef.current.add(model.id);
     try {
-      await cleanInterruptedDownload(model.id);
-      await refreshModelCatalogSnapshot();
-    } catch (cleanErr) {
-      logger.warn('Failed to clean interrupted download:', cleanErr);
-      await showError({
-        code: 'model.clean_failed',
-        messageKey: 'errors.model.clean_failed',
-        cause: cleanErr,
-      });
+      const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
+      const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
+      const sizeText = totalFormatted
+        ? `${downloadedFormatted} / ${totalFormatted}`
+        : downloadedFormatted;
+      const pctText =
+        interruptedDownload.percentage != null
+          ? `${Math.round(interruptedDownload.percentage)}%`
+          : '';
+      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+      const confirmed = await confirm(
+        t('settings.discard_download_confirm_message', {
+          name: model.name,
+          progress: progressDetail,
+          defaultValue: `Are you sure you want to discard the incomplete download for ${model.name} (${progressDetail})? This will delete partial files and free up disk space.`,
+        }),
+        {
+          title: t('settings.discard_download_confirm_title', {
+            defaultValue: 'Discard Incomplete Download',
+          }),
+          confirmLabel: t('settings.discard_download_confirm_button', {
+            defaultValue: 'Discard Files',
+          }),
+          cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+          variant: 'warning',
+        }
+      );
+
+      if (!confirmed) return;
+
+      if (activeDownloadsRef.current.has(model.id)) return;
+
+      try {
+        await cleanInterruptedDownload(model.id);
+        useModelDownloadStore.getState().dismissDownload(model.id);
+        await refreshModelCatalogSnapshot();
+      } catch (cleanErr) {
+        logger.warn('Failed to clean interrupted download:', cleanErr);
+        await showError({
+          code: 'model.clean_failed',
+          messageKey: 'errors.model.clean_failed',
+          cause: cleanErr,
+        });
+      }
+    } finally {
+      inFlightModelsRef.current.delete(model.id);
     }
   }
 

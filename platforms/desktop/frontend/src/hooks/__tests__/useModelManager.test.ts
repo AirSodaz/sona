@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { modelService } from '../../services/modelService';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useModelDownloadStore } from '../../stores/modelDownloadStore';
 import { setTestConfig } from '../../test-utils/configTestUtils';
 import { useModelManager } from '../useModelManager';
 
@@ -548,6 +549,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
 
 describe('useModelManager download lifecycle and errors (H1-H8)', () => {
   beforeEach(() => {
+    useModelDownloadStore.setState({ downloads: {} });
     vi.mocked(modelService.downloadModel).mockReset();
     vi.mocked(modelService.checkHardware).mockReset();
     vi.mocked(modelService.getModelCatalogSnapshot).mockReset();

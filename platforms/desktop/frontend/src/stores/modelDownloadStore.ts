@@ -73,6 +73,15 @@ export async function ensureModelDownloadListener(): Promise<void> {
         const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
         if (!id || total <= 0) return;
 
+        const currentDownloads = useModelDownloadStore.getState().downloads;
+        const isActive = Object.values(currentDownloads).some(
+          (item) => (item.downloadId === id || item.modelId === id) && item.status === 'downloading'
+        );
+        if (!isActive) {
+          progressSamples.delete(id);
+          return;
+        }
+
         const now = Date.now();
         const sample = progressSamples.get(id);
 
@@ -109,6 +118,15 @@ export async function ensureModelDownloadListener(): Promise<void> {
   })();
 
   return listenerPromise;
+}
+
+export function cleanupModelDownloadListener(): void {
+  if (unlistenProgress) {
+    unlistenProgress();
+    unlistenProgress = null;
+  }
+  listenerPromise = null;
+  progressSamples.clear();
 }
 
 // Auto-initialize listener if running in browser/tauri
@@ -174,13 +192,16 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   },
 
   completeDownload: (modelId, downloadId) => {
-    const item = get().downloads[modelId];
-    if (item) {
-      progressSamples.delete(item.downloadId);
-    }
     set((state) => {
       const current = state.downloads[modelId];
-      if (!current || (downloadId && current.downloadId !== downloadId)) return state;
+      if (
+        !current ||
+        (downloadId && current.downloadId !== downloadId) ||
+        current.status !== 'downloading'
+      ) {
+        return state;
+      }
+      progressSamples.delete(current.downloadId);
       return {
         downloads: {
           ...state.downloads,
@@ -188,6 +209,8 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             ...current,
             status: 'completed',
             progress: 100,
+            speed: undefined,
+            onCancel: undefined,
             timestamp: Date.now(),
           },
         },
@@ -196,13 +219,16 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   },
 
   failDownload: (modelId, error, downloadId) => {
-    const item = get().downloads[modelId];
-    if (item) {
-      progressSamples.delete(item.downloadId);
-    }
     set((state) => {
       const current = state.downloads[modelId];
-      if (!current || (downloadId && current.downloadId !== downloadId)) return state;
+      if (
+        !current ||
+        (downloadId && current.downloadId !== downloadId) ||
+        current.status !== 'downloading'
+      ) {
+        return state;
+      }
+      progressSamples.delete(current.downloadId);
       return {
         downloads: {
           ...state.downloads,
@@ -210,6 +236,8 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             ...current,
             status: 'failed',
             error: error ?? current.error,
+            speed: undefined,
+            onCancel: undefined,
             timestamp: Date.now(),
           },
         },
@@ -222,6 +250,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     if (!item || (downloadId && item.downloadId !== downloadId)) {
       return false;
     }
+    const targetDownloadId = downloadId ?? item.downloadId;
     if (item.status === 'downloading') {
       try {
         item.onCancel?.();
@@ -229,20 +258,28 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
         console.warn(`Error during onCancel for ${modelId}:`, err);
       }
       try {
-        await tauriCancelDownload(item.downloadId);
+        await tauriCancelDownload(targetDownloadId);
       } catch (err) {
         console.warn(`Backend cancelDownload returned error for ${modelId}:`, err);
       }
-      progressSamples.delete(item.downloadId);
+      progressSamples.delete(targetDownloadId);
       set((state) => {
         const current = state.downloads[modelId];
-        if (!current || (downloadId && current.downloadId !== downloadId)) return state;
+        if (
+          !current ||
+          current.downloadId !== targetDownloadId ||
+          current.status !== 'downloading'
+        ) {
+          return state;
+        }
         return {
           downloads: {
             ...state.downloads,
             [modelId]: {
               ...current,
               status: 'cancelled',
+              speed: undefined,
+              onCancel: undefined,
               timestamp: Date.now(),
             },
           },

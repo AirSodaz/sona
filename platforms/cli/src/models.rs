@@ -1117,31 +1117,40 @@ async fn download_one_model(
             let mut answer = String::new();
             io.read_line_stdin(&mut answer)
                 .map_err(|e| CliError::Io(e.to_string()))?;
-            let trimmed = answer.trim().to_lowercase();
-            if trimmed == "restart" || trimmed == "r" {
-                let _ = writeln!(
-                    io.stderr(),
-                    "Restarting download for {} from beginning...",
-                    resolved.model.id
-                );
-                if let Err(err) = sona_model_downloads::clean_interrupted_download(
-                    &resolved.models_dir,
-                    &resolved.model.id,
-                ) {
+            let trimmed = answer.trim().to_ascii_lowercase();
+            match trimmed.as_str() {
+                "restart" | "r" => {
                     let _ = writeln!(
                         io.stderr(),
-                        "Warning: Failed to clean incomplete download for {}: {err}",
+                        "Restarting download for {} from beginning...",
+                        resolved.model.id
+                    );
+                    sona_model_downloads::clean_interrupted_download(
+                        &resolved.models_dir,
+                        &resolved.model.id,
+                    )
+                    .map_err(|err| {
+                        CliError::Io(format!(
+                            "Failed to clean incomplete download for {}: {err}",
+                            resolved.model.id
+                        ))
+                    })?;
+                }
+                "n" | "no" | "c" | "cancel" | "q" => {
+                    return Err(CliError::Model("Download cancelled by user.".to_string()));
+                }
+                "" | "y" | "yes" => {
+                    let _ = writeln!(
+                        io.stderr(),
+                        "Resuming download for {}...",
                         resolved.model.id
                     );
                 }
-            } else if trimmed == "n" || trimmed == "no" {
-                return Err(CliError::Model("Download cancelled by user.".to_string()));
-            } else {
-                let _ = writeln!(
-                    io.stderr(),
-                    "Resuming download for {}...",
-                    resolved.model.id
-                );
+                other => {
+                    return Err(CliError::Validation(format!(
+                        "Unrecognized choice '{other}'. Download cancelled."
+                    )));
+                }
             }
         } else if !quiet {
             let _ = writeln!(

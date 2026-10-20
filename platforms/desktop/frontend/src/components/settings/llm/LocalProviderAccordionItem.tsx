@@ -51,6 +51,7 @@ export function LocalProviderAccordionItem({
   const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
+  const inFlightDownloadsRef = useRef<Set<string>>(new Set());
   const cardsRef = useRef(data?.cards);
   cardsRef.current = data?.cards;
 
@@ -119,7 +120,10 @@ export function LocalProviderAccordionItem({
   const handleDownload = useCallback(
     async (card: LocalLlmModelCardType) => {
       const downloadId = card.id;
-      if (activeDownloadsRef.current[downloadId]) return;
+      if (inFlightDownloadsRef.current.has(downloadId) || activeDownloadsRef.current[downloadId]) {
+        return;
+      }
+      inFlightDownloadsRef.current.add(downloadId);
 
       useModelDownloadStore.getState().startDownload({
         modelId: card.id,
@@ -154,6 +158,7 @@ export function LocalProviderAccordionItem({
         await fetchCards();
         return;
       } finally {
+        inFlightDownloadsRef.current.delete(downloadId);
         setDownloads((prev) => {
           const next = { ...prev };
           delete next[downloadId];
@@ -249,6 +254,7 @@ export function LocalProviderAccordionItem({
 
       try {
         await cleanInterruptedDownload(card.id);
+        useModelDownloadStore.getState().dismissDownload(card.id);
         await fetchCards();
       } catch (cleanErr) {
         console.warn('Failed to clean interrupted download:', cleanErr);

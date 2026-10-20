@@ -67,13 +67,10 @@ pub async fn check_interrupted_download<R: tauri::Runtime>(
 ) -> Result<Option<sona_core::models::downloads::InterruptedDownloadInfo>, String> {
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     tokio::task::spawn_blocking(move || {
-        Ok(sona_core::models::downloads::inspect_interrupted_download(
-            &models_dir,
-            &model_id,
-        ))
+        sona_core::models::downloads::inspect_interrupted_download(&models_dir, &model_id)
     })
     .await
-    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
