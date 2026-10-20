@@ -133,6 +133,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         })}
       >
         <SettingsItem
+          id="settings-voice-typing-enable"
           title={t('settings.enable_voice_typing', {
             defaultValue: 'Enable Voice Typing',
           })}
@@ -147,6 +148,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
+          id="settings-voice-typing-shortcut"
           title={t('settings.voice_typing_shortcut', { defaultValue: 'Shortcut' })}
           hint={t('settings.voice_typing_shortcut_hint', {
             defaultValue: 'Global shortcut to activate voice typing',
@@ -188,6 +190,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
+          id="settings-voice-typing-mode"
           title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
           hint={t('settings.voice_typing_mode_hint', {
             defaultValue: 'How the shortcut triggers listening',
@@ -257,6 +260,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         })}
       >
         <SettingsItem
+          id="settings-voice-typing-processing"
           title={t('settings.voice_typing_processing_mode', { defaultValue: 'Processing Mode' })}
           hint={t('settings.voice_typing_processing_mode_hint', {
             defaultValue: 'Choose between fast raw output or AI-powered smart polishing',
@@ -364,6 +368,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
+          id="settings-voice-typing-cjk"
           title={t('settings.voice_typing_cjk_spacing_enabled', {
             defaultValue: 'CJK-Latin Typography Spacing',
           })}
@@ -391,6 +396,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         })}
       >
         <SettingsItem
+          id="settings-voice-typing-context"
           title={t('settings.voice_typing_context_awareness_enabled', {
             defaultValue: 'Application Context Awareness',
           })}
@@ -586,6 +592,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
 
   return (
     <SettingsSection
+      id="settings-voice-typing-history"
       title={t('settings.voice_typing_history', { defaultValue: 'Dictation History' })}
       icon={<History size={20} />}
     >
@@ -874,23 +881,26 @@ function VoiceTypingHistorySection(): React.JSX.Element {
 export type SubtitleSubTab = 'voice_typing' | 'subtitles';
 
 export interface SettingsSubtitleTabProps {
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialSubTab?: SubtitleSubTab;
+  subTabRequestId?: number;
 }
 
 export function SettingsSubtitleTab({
-  initialSubTab = 'voice_typing',
+  initialSubTab,
+  subTabRequestId,
 }: SettingsSubtitleTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const config = useCaptionConfig();
   const updateConfig = useSetConfig();
 
-  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab || 'voice_typing');
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (initialSubTab && subTabRequestId !== undefined) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, subTabRequestId]);
   const lockWindow = config.lockWindow ?? false;
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;
@@ -972,6 +982,7 @@ export function SettingsSubtitleTab({
           }}
         >
           <SettingsSection
+            id="settings-subtitle-window"
             title={t('settings.subtitle_behavior_title')}
             icon={<SlidersHorizontal size={20} />}
           >
@@ -998,6 +1009,7 @@ export function SettingsSubtitleTab({
           </SettingsSection>
 
           <SettingsSection
+            id="settings-subtitle-appearance"
             title={t('settings.subtitle_appearance_title')}
             icon={<Subtitles size={20} />}
             description={t('settings.subtitle_appearance_desc')}

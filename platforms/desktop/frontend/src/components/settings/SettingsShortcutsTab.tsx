@@ -13,12 +13,14 @@ import { SettingsShortcutInput } from './SettingsShortcutInput';
 
 interface ShortcutItem {
   id?: string;
+  targetId?: string;
   key: string;
   description: string;
   editable?: boolean;
 }
 
 interface ShortcutSection {
+  id?: string;
   title: string;
   icon?: React.JSX.Element;
   items: ShortcutItem[];
@@ -36,14 +38,21 @@ export function SettingsShortcutsTab(): React.JSX.Element {
       items: [
         {
           id: 'liveRecordShortcut',
+          targetId: 'settings-shortcut-record',
           key: config.liveRecordShortcut || 'Ctrl + Space',
           description: t('shortcuts.record_start_stop'),
           editable: true,
         },
-        { key: 'Space', description: t('shortcuts.record_pause_resume') },
+        {
+          id: 'livePauseShortcut',
+          targetId: 'settings-shortcut-pause',
+          key: 'Space',
+          description: t('shortcuts.record_pause_resume'),
+        },
       ],
     },
     {
+      id: 'settings-shortcut-playback',
       title: t('shortcuts.section_playback'),
       icon: <Play size={20} />,
       items: [
@@ -60,6 +69,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
       ],
     },
     {
+      id: 'settings-shortcut-search',
       title: t('shortcuts.section_search'),
       icon: <Search size={20} />,
       items: [
@@ -90,6 +100,7 @@ export function SettingsShortcutsTab(): React.JSX.Element {
       ],
     },
     {
+      id: 'settings-shortcut-editor',
       title: t('shortcuts.section_editor'),
       icon: <FilePenLine size={20} />,
       items: [
@@ -110,9 +121,18 @@ export function SettingsShortcutsTab(): React.JSX.Element {
       />
 
       {sections.map((section) => (
-        <SettingsSection key={section.title} title={section.title} icon={section.icon}>
+        <SettingsSection
+          id={section.id}
+          key={section.title}
+          title={section.title}
+          icon={section.icon}
+        >
           {section.items.map((item) => (
-            <SettingsItem key={item.id} title={item.description}>
+            <SettingsItem
+              id={item.targetId}
+              key={item.id || item.description}
+              title={item.description}
+            >
               {item.editable && item.id === 'liveRecordShortcut' ? (
                 <SettingsShortcutInput
                   value={config.liveRecordShortcut || 'Ctrl + Space'}

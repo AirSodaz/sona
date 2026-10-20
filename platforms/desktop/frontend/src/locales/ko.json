@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "설정",
+    "search_placeholder": "설정 검색...",
+    "search_no_results": "관련 설정을 찾을 수 없습니다",
+    "search_no_results_hint": "단축키, 모델 또는 API와 같은 다른 검색어를 입력해 보세요",
+    "search_matches_count": "일치 항목 ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",
@@ -1985,6 +1989,7 @@
     "auto_start_hint": "컴퓨터가 시작될 때 애플리케이션을 자동으로 실행합니다.",
     "silent_start": "자동 실행 시 트레이로 시작",
     "silent_start_hint": "자동 실행 시 메인 창을 표시하지 않고 시스템 트레이로 최소화합니다.",
+    "silent_start_disabled_hint": "\"시작할 때 자동 실행\"과 \"닫을 때 트레이로 최소화\"가 모두 활성화되어 있어야 합니다.",
     "auto_check_updates": "시작할 때 업데이트 확인",
     "shortcuts_title": "Keyboard Shortcuts",
     "shortcuts_description": "View application hotkeys.",

@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "Settings",
+    "search_placeholder": "Search settings...",
+    "search_no_results": "No settings found",
+    "search_no_results_hint": "Try different keywords, such as shortcuts, models, or API",
+    "search_matches_count": "Matches ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",
@@ -1985,6 +1989,7 @@
     "auto_start_hint": "Automatically launch the application when your computer starts.",
     "silent_start": "Silent launch",
     "silent_start_hint": "Start minimized to the system tray on startup without displaying the main window.",
+    "silent_start_disabled_hint": "Requires \"Launch on startup\" and \"Minimize to tray on exit\" to be enabled.",
     "auto_check_updates": "Automatically check for updates",
     "shortcuts_title": "Keyboard Shortcuts",
     "shortcuts_description": "View application hotkeys.",

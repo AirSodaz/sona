@@ -254,6 +254,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
       <SettingsSection>
         {/* Enable Toggle */}
         <SettingsItem
+          id="settings-api-server-switch"
           title={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
           hint={t('settings.api_server.enable_hint', {
             defaultValue: 'Start an HTTP server to control Sona via external applications.',
@@ -323,6 +324,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
 
         {/* API Key */}
         <SettingsItem
+          id="settings-api-server-auth"
           title={t('settings.api_server.api_key_label', { defaultValue: 'API Key' })}
           hint={t('settings.api_server.api_key_hint', {
             defaultValue: 'Optional Bearer token for authenticating HTTP requests.',

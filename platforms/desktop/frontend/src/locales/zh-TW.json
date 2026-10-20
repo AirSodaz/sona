@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "設定",
+    "search_placeholder": "搜尋設定...",
+    "search_no_results": "未找到相關設定",
+    "search_no_results_hint": "請嘗試其他關鍵字，如快捷鍵、模型或 API",
+    "search_matches_count": "相符項目 ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI Responses",
@@ -1985,6 +1989,7 @@
     "auto_start_hint": "在電腦啟動時自動執行應用程式。",
     "silent_start": "靜默啟動",
     "silent_start_hint": "開機自啟後自動最小化到系統匣，不顯示主視窗。",
+    "silent_start_disabled_hint": "需要同時啟用「開機自啟」和「結束時最小化到系統匣」。",
     "auto_check_updates": "自動檢查更新",
     "shortcuts_title": "鍵盤快速鍵",
     "shortcuts_description": "查看應用程式快速鍵。",

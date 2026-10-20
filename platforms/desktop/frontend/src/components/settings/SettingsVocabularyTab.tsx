@@ -22,30 +22,36 @@ export type VocabularySubTab = 'recognition' | 'prompts' | 'speakers';
 export type PromptsSubTab = 'polish' | 'translation' | 'summary';
 
 export interface SettingsVocabularyTabProps {
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialSubTab?: VocabularySubTab;
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialPromptsSubTab?: PromptsSubTab;
+  subTabRequestId?: number;
 }
 
 export function SettingsVocabularyTab({
-  initialSubTab = 'recognition',
-  initialPromptsSubTab = 'polish',
+  initialSubTab,
+  initialPromptsSubTab,
+  subTabRequestId,
 }: SettingsVocabularyTabProps = {}): React.JSX.Element {
-  const [activeSubTab, setActiveSubTab] = useState<VocabularySubTab>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<VocabularySubTab>(
+    initialSubTab || 'recognition'
+  );
   const [activePromptsSubTab, setActivePromptsSubTab] = useState<PromptsSubTab>(
     initialPromptsSubTab || 'polish'
   );
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (initialSubTab && subTabRequestId !== undefined) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, subTabRequestId]);
 
   useEffect(() => {
-    if (initialPromptsSubTab) {
+    if (initialPromptsSubTab && subTabRequestId !== undefined) {
       setActivePromptsSubTab(initialPromptsSubTab);
     }
-  }, [initialPromptsSubTab]);
+  }, [initialPromptsSubTab, subTabRequestId]);
 
   const { t } = useTranslation();
   const config = useVocabularyConfig();

@@ -819,6 +819,10 @@
   },
   "settings": {
     "title": "設定",
+    "search_placeholder": "設定を検索...",
+    "search_no_results": "一致する設定が見つかりません",
+    "search_no_results_hint": "ショートカット、モデル、APIなどの別のキーワードをお試しください",
+    "search_matches_count": "一致項目 ({{count}})",
     "llm_providers": {
       "open_ai": "OpenAI",
       "open_ai_responses": "OpenAI 応答",
@@ -1985,6 +1989,7 @@
     "auto_start_hint": "コンピューターの起動時にアプリケーションを自動的に開始します。",
     "silent_start": "サイレント起動",
     "silent_start_hint": "起動時にメインウィンドウを表示せず、システムトレイに最小化します。",
+    "silent_start_disabled_hint": "「システム起動時に実行」と「排出時にトレイに最小化する」の両方を有効にする必要があります。",
     "auto_check_updates": "アップデートを自動的にチェックする",
     "shortcuts_title": "キーボードショートカット",
     "shortcuts_description": "アプリケーションのホットキーを表示します。",

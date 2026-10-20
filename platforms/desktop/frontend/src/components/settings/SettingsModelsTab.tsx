@@ -60,7 +60,7 @@ import {
 } from './SettingsLayout';
 import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 
-type ModelScenario = 'live' | 'batch';
+export type ModelScenario = 'live' | 'batch';
 
 const VOLCENGINE_DOUBAO_OPTION_ID = ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
 const MODEL_DROPDOWN_CONTAINER_STYLE: React.CSSProperties = {
@@ -68,8 +68,11 @@ const MODEL_DROPDOWN_CONTAINER_STYLE: React.CSSProperties = {
   maxWidth: '100%',
 };
 
-interface SettingsModelsTabProps {
+export interface SettingsModelsTabProps {
   isActive?: boolean;
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
+  initialScenario?: ModelScenario;
+  subTabRequestId?: number;
 }
 
 function scheduleAfterFrame(callback: () => void): () => void {
@@ -112,14 +115,24 @@ function toDropdownOptions(
 
 export function SettingsModelsTab({
   isActive: _isActive = true,
-}: SettingsModelsTabProps): React.JSX.Element {
+  initialScenario,
+  subTabRequestId,
+}: SettingsModelsTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const modelConfig = useModelConfig();
   const transcriptionConfig = useTranscriptionConfig();
   const updateConfig = useSetConfig();
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const [showLocalModelContent, setShowLocalModelContent] = useState(false);
-  const [activeScenario, setActiveScenario] = useState<ModelScenario>('live');
+  const [activeScenario, setActiveScenario] = useState<ModelScenario>(initialScenario || 'live');
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(Boolean(initialScenario));
+
+  useEffect(() => {
+    if (initialScenario && subTabRequestId !== undefined) {
+      setActiveScenario(initialScenario);
+      setIsAdvancedOpen(true);
+    }
+  }, [initialScenario, subTabRequestId]);
   const {
     installedModels,
     modelCatalog,
@@ -751,6 +764,7 @@ export function SettingsModelsTab({
         description={t('settings.model_settings_description')}
       />
       <SettingsSection
+        id="settings-model-hub"
         title={t('settings.model_selection')}
         description={t('settings.model_selection_desc')}
         icon={<Settings2 size={20} />}
@@ -1258,6 +1272,8 @@ export function SettingsModelsTab({
         )}
 
         <SettingsAccordion
+          isOpen={isAdvancedOpen}
+          onToggle={() => setIsAdvancedOpen((prev) => !prev)}
           title={t('settings.advanced_settings_title', { defaultValue: 'Advanced Settings' })}
           status={
             activeAsrRulesBadge ? (
@@ -1353,6 +1369,7 @@ export function SettingsModelsTab({
 
               {isBatchScenario && (
                 <SettingsItem
+                  id="settings-batch-vad"
                   title={t('settings.batch_vad_enabled')}
                   hint={
                     isBatchVadForced

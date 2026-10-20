@@ -284,6 +284,7 @@ export function SettingsLLMServiceTab({
       />
 
       <SettingsSection
+        id="settings-llm-models-config"
         title={t('settings.llm.feature_models')}
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
@@ -374,6 +375,7 @@ export function SettingsLLMServiceTab({
       </SettingsSection>
 
       <SettingsSection
+        id="settings-llm-provider-list"
         title={t('settings.llm.credentials_section')}
         description={t('settings.llm.credentials_hint')}
         icon={<Settings2 size={20} />}
@@ -419,7 +421,7 @@ export function SettingsLLMServiceTab({
             })}
           </div>
         )}
-        <div className="custom-provider-actions">
+        <div id="settings-llm-custom-provider" className="custom-provider-actions">
           <button type="button" className="btn btn-secondary" onClick={openAddProvider}>
             <Plus size={16} />
             <span>{t('settings.llm.add_custom_provider')}</span>

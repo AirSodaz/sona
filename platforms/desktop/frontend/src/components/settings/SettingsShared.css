@@ -1898,6 +1898,10 @@
   border-radius: 8px;
   background: var(--color-bg-primary);
 }
+.settings-storage-detail-block--loading {
+  min-height: 180px;
+  opacity: 0.5;
+}
 
 .settings-storage-detail-heading {
   color: var(--color-text-primary);

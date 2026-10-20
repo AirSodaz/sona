@@ -477,6 +477,7 @@ export function SettingsMicrophoneTab({
         icon={<SlidersHorizontal size={20} />}
       >
         <SettingsItem
+          id="settings-input-device"
           title={t('settings.microphone_selection')}
           hint={t('settings.mic_auto_hint')}
           layout="vertical"
@@ -521,12 +522,14 @@ export function SettingsMicrophoneTab({
         </SettingsItem>
 
         <SettingsItem
+          id="settings-mic-boost"
           title={t('settings.microphone_boost')}
           hint={t('settings.microphone_boost_hint')}
         >
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <input
-              id="settings-mic-boost"
+              id="settings-mic-boost-input"
+              aria-label={t('settings.microphone_boost')}
               type="number"
               min="1.0"
               max="5.0"
@@ -548,6 +551,7 @@ export function SettingsMicrophoneTab({
         </SettingsItem>
 
         <SettingsItem
+          id="settings-keep-mic-active"
           title={t('settings.keep_microphone_active')}
           hint={t('settings.keep_microphone_active_hint')}
         >
@@ -565,6 +569,7 @@ export function SettingsMicrophoneTab({
         description={t('settings.system_audio_description')}
       >
         <SettingsItem
+          id="settings-system-audio"
           title={t('settings.system_audio_selection')}
           hint={t('settings.system_audio_hint')}
           layout="vertical"
@@ -608,6 +613,7 @@ export function SettingsMicrophoneTab({
         </SettingsItem>
 
         <SettingsItem
+          id="settings-mute-recording"
           title={t('settings.mute_during_recording')}
           hint={t('settings.mute_during_recording_hint')}
         >
@@ -627,6 +633,7 @@ export function SettingsMicrophoneTab({
         )}
       >
         <SettingsItem
+          id="settings-ffmpeg"
           title={t('settings.enable_ffmpeg', '启用 FFmpeg 解码器')}
           hint={t(
             'settings.enable_ffmpeg_hint',

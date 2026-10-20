@@ -35,9 +35,42 @@ const PUNCTUATION_REGEX = /[\s\p{P}]/u;
 const PUNCTUATION_REPLACE_REGEX = /[\s\p{P}]+/gu;
 
 // Regex for detection
-const CJK_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}]/u;
+const CJK_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}\u30fc]/u;
+const CJK_RUN_REGEX = /[\p{sc=Han}\p{sc=Hiragana}\p{sc=Katakana}\p{sc=Hangul}\u30fc]+/gu;
 
-export { stripHtmlTags };
+export { CJK_REGEX, stripHtmlTags };
+
+/**
+ * Expands a search token into matching terms: CJK runs contribute their full
+ * form plus overlapping bigrams, while non-CJK fragments stay whole.
+ */
+export function deriveSearchTerms(token: string): string[] {
+  if (!CJK_REGEX.test(token)) {
+    const cleaned = token.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, '');
+    return cleaned ? [cleaned] : [];
+  }
+
+  const terms = new Set<string>();
+  for (const run of token.match(CJK_RUN_REGEX) ?? []) {
+    terms.add(run);
+    const chars = Array.from(run);
+    for (let index = 0; index < chars.length - 1; index += 1) {
+      terms.add(chars.slice(index, index + 2).join(''));
+    }
+  }
+
+  const nonCjk = token.replace(CJK_RUN_REGEX, ' ').trim();
+  if (nonCjk) {
+    for (const part of nonCjk.split(/\s+/)) {
+      const cleaned = part.replace(/^[\p{P}\p{S}]+|[\p{P}\p{S}]+$/gu, '');
+      if (cleaned) {
+        terms.add(cleaned);
+      }
+    }
+  }
+
+  return [...terms];
+}
 
 /**
  * Calculates the length of the text excluding punctuation and whitespace.

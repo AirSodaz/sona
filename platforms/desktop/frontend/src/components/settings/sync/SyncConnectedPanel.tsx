@@ -39,10 +39,16 @@ import { PasswordInput } from './PasswordInput';
 import { encodeS3SyncPairingToken, encodeSyncPairingToken } from './syncPairing';
 import { isPresetShrink } from './syncPreset';
 
+export interface SettingsSyncNavRequest {
+  requestId: number;
+  targetId?: string;
+}
+
 interface SyncConnectedPanelProps {
   busyAction: string | null;
   recoveryKey: string | null;
   status: SyncStatusSnapshot;
+  navRequest?: SettingsSyncNavRequest;
   onChangeMasterPassword: (currentPassword: string, nextPassword: string) => Promise<void>;
   onChangePreset: (preset: SyncPresetV1) => Promise<void>;
   onCopyRecoveryKey: () => Promise<void>;
@@ -99,6 +105,7 @@ export function SyncConnectedPanel({
   busyAction,
   recoveryKey,
   status,
+  navRequest,
   onChangeMasterPassword,
   onChangePreset,
   onCopyRecoveryKey,
@@ -158,6 +165,29 @@ export function SyncConnectedPanel({
   const [copiedKey, setCopiedKey] = React.useState(false);
   const [pairingInfo, setPairingInfo] = React.useState<SyncPairingInfo | null>(null);
   const [isKeyRevealed, setIsKeyRevealed] = React.useState(false);
+  const [securityOpen, setSecurityOpen] = React.useState(
+    () =>
+      Boolean(recoveryKey) ||
+      navRequest?.targetId === 'settings-sync-recovery-key' ||
+      navRequest?.targetId === 'settings-sync-encryption'
+  );
+  const navRequestId = navRequest?.requestId;
+  const navTargetId = navRequest?.targetId;
+
+  React.useEffect(() => {
+    if (recoveryKey) {
+      setSecurityOpen(true);
+    }
+  }, [recoveryKey]);
+
+  React.useEffect(() => {
+    if (
+      navRequestId !== undefined &&
+      (navTargetId === 'settings-sync-recovery-key' || navTargetId === 'settings-sync-encryption')
+    ) {
+      setSecurityOpen(true);
+    }
+  }, [navRequestId, navTargetId]);
 
   React.useEffect(() => {
     if (!status.vaultId) {
@@ -407,7 +437,7 @@ export function SyncConnectedPanel({
   return (
     <div className="sync-connected-panel">
       {/* Status Hero Card */}
-      <div className={`sync-status-hero-card is-${status.state}`}>
+      <div id="settings-sync-webdav" className={`sync-status-hero-card is-${status.state}`}>
         <div className="sync-hero-top-row">
           <div className="sync-hero-info">
             <div className="sync-hero-status-pill">
@@ -447,6 +477,7 @@ export function SyncConnectedPanel({
 
           <div className="sync-hero-actions">
             <button
+              id="settings-sync-pairing"
               type="button"
               className="btn btn-secondary btn-sm sync-pair-btn"
               onClick={() => setShowPairingModal(true)}
@@ -741,9 +772,10 @@ export function SyncConnectedPanel({
       </SettingsSection>
 
       {/* Advanced Security & Key Accordion */}
-      <SettingsSection>
+      <SettingsSection id="settings-sync-encryption">
         <SettingsAccordion
-          defaultOpen={Boolean(recoveryKey)}
+          isOpen={securityOpen}
+          onToggle={() => setSecurityOpen((value) => !value)}
           title={
             <div className="settings-accordion-copy">
               <div className="settings-accordion-copy-title sync-security-title">
@@ -763,6 +795,7 @@ export function SyncConnectedPanel({
           <div className="sync-security-panel">
             {/* Recovery Key Management */}
             <SettingsItem
+              id={!recoveryKey ? 'settings-sync-recovery-key' : undefined}
               title={t('settings.sync.recovery_key_manage_title', {
                 defaultValue: 'Emergency Recovery Key',
               })}
@@ -802,7 +835,7 @@ export function SyncConnectedPanel({
             </SettingsItem>
 
             {recoveryKey && (
-              <div className="sync-recovery-output-card">
+              <div id="settings-sync-recovery-key" className="sync-recovery-output-card">
                 <div className="sync-recovery-card-header">
                   <ShieldCheck size={16} />
                   <strong>

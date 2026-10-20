@@ -286,6 +286,7 @@ export function SettingsSpeakerProfilesSection(): React.JSX.Element {
   return (
     <>
       <SettingsSection
+        id="settings-vocabulary-speaker-profiles"
         title={t('settings.speaker_profiles_title', { defaultValue: 'Speaker Profiles' })}
         icon={<Mic size={20} />}
         description={t('settings.speaker_profiles_description', {
