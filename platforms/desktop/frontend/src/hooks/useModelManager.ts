@@ -110,27 +110,26 @@ export function useModelManager(isOpen: boolean) {
   const alert = useDialogStore((state) => state.alert);
   const { t } = useTranslation();
 
-  const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
   const inFlightModelsRef = useRef<Set<string>>(new Set());
   const activeDownloadsRef = useRef<
     Map<string, { downloadId: string; controller: AbortController }>
   >(new Map());
   const storeDownloads = useModelDownloadStore((state) => state.downloads);
 
-  const effectiveDownloads = useMemo(() => {
-    const merged: Record<string, DownloadState> = { ...downloads };
+  const downloads = useMemo(() => {
+    const projection: Record<string, DownloadState> = {};
     for (const [modelId, item] of Object.entries(storeDownloads)) {
       if (item.status === 'downloading') {
         const active = activeDownloadsRef.current.get(modelId);
-        merged[modelId] = {
-          progress: item.progress ?? merged[modelId]?.progress ?? 0,
-          status: merged[modelId]?.status ?? '',
+        projection[modelId] = {
+          progress: item.progress ?? 0,
+          status: '',
           controller: active?.controller,
         };
       }
     }
-    return merged;
-  }, [downloads, storeDownloads]);
+    return projection;
+  }, [storeDownloads]);
   const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(
     EMPTY_MODEL_CATALOG_SNAPSHOT
@@ -262,7 +261,7 @@ export function useModelManager(isOpen: boolean) {
       if (customEvent.detail?.modelId) {
         const modelId = customEvent.detail.modelId;
         const model = getCatalogModel(modelId);
-        if (model && !effectiveDownloads[modelId]) {
+        if (model && !downloads[modelId]) {
           try {
             const path = await modelService.downloadModel(
               modelId,
@@ -284,7 +283,7 @@ export function useModelManager(isOpen: boolean) {
       document.removeEventListener('download-background-model', handleBackgroundDownload);
     };
   }, [
-    effectiveDownloads,
+    downloads,
     getCatalogModel,
     refreshModelCatalogSnapshot,
     setModelPath,
@@ -306,11 +305,6 @@ export function useModelManager(isOpen: boolean) {
     const controller = new AbortController();
     const downloadId = `${modelId}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
     activeDownloadsRef.current.set(modelId, { downloadId, controller });
-
-    setDownloads((prev) => ({
-      ...prev,
-      [modelId]: { progress: 0, status: '', controller },
-    }));
 
     const catalogModel = getCatalogModel(modelId);
     const modelName = catalogModel?.name ?? modelId;
@@ -336,14 +330,7 @@ export function useModelManager(isOpen: boolean) {
       try {
         downloadedPath = await downloadFn(
           modelId,
-          (pct, status) => {
-            setDownloads((prev) => {
-              if (!prev[modelId]) return prev;
-              return {
-                ...prev,
-                [modelId]: { ...prev[modelId], progress: pct, status: status },
-              };
-            });
+          (pct) => {
             useModelDownloadStore.getState().updateProgress(downloadId, { progress: pct });
           },
           controller.signal,
@@ -388,11 +375,6 @@ export function useModelManager(isOpen: boolean) {
       if (activeDownloadsRef.current.get(modelId)?.downloadId === downloadId) {
         activeDownloadsRef.current.delete(modelId);
         inFlightModelsRef.current.delete(modelId);
-        setDownloads((prev) => {
-          const next = { ...prev };
-          delete next[modelId];
-          return next;
-        });
       }
     }
   }
@@ -403,7 +385,7 @@ export function useModelManager(isOpen: boolean) {
       active.controller.abort();
       void useModelDownloadStore.getState().cancelDownload(modelId, active.downloadId);
     } else {
-      const download = effectiveDownloads[modelId];
+      const download = downloads[modelId];
       if (download?.controller) {
         download.controller.abort();
       }
@@ -413,12 +395,6 @@ export function useModelManager(isOpen: boolean) {
         logger.warn('Failed to refresh catalog snapshot after cancel:', err);
       });
     }
-    setDownloads((prev) => {
-      if (!prev[modelId]) return prev;
-      const next = { ...prev };
-      delete next[modelId];
-      return next;
-    });
   }
 
   async function handleDownload(model: ModelInfo) {
@@ -626,7 +602,7 @@ export function useModelManager(isOpen: boolean) {
 
   return {
     deletingId,
-    downloads: effectiveDownloads,
+    downloads,
     installedModels,
     modelCatalog,
     selectedModelIds,

@@ -11,7 +11,6 @@ role = "outbound-adapter"
 
 [dependencies]
 async-trait = { workspace = true }
-chrono = { workspace = true, features = ["std"] }
 parking_lot = { workspace = true }
 reqwest = { workspace = true, features = ["rustls"] }
 roxmltree = { workspace = true }
@@ -29,5 +28,4 @@ axum = { workspace = true, features = ["macros"] }
 axum-server = { version = "0.7", features = ["tls-rustls"] }
 rcgen = "0.13"
 rustls = { version = "0.23", default-features = false, features = ["aws-lc-rs"] }
-tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "net"] }

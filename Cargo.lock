@@ -6309,7 +6309,6 @@ name = "sona"
 version = "0.9.8"
 dependencies = [
  "async-trait",
- "axum",
  "chrono",
  "cpal",
  "enigo",
@@ -6318,7 +6317,6 @@ dependencies = [
  "notify",
  "reqwest 0.13.5",
  "rfd 0.17.2",
- "ringbuf",
  "rusqlite",
  "serde",
  "serde_json",
@@ -6435,7 +6433,6 @@ dependencies = [
  "ringbuf",
  "rubato",
  "serde",
- "sona-core",
  "thiserror 2.0.21",
 ]
 
@@ -6447,7 +6444,6 @@ dependencies = [
  "axum",
  "clap",
  "clap_complete",
- "cpal",
  "crossterm",
  "hex",
  "hound",
@@ -6484,11 +6480,9 @@ name = "sona-core"
 version = "0.9.8"
 dependencies = [
  "async-trait",
- "axum",
  "bitflags 2.13.2",
  "chrono",
  "fs3",
- "futures-util",
  "infer 0.19.0",
  "jsonschema 0.37.4",
  "log",
@@ -6515,7 +6509,6 @@ dependencies = [
 name = "sona-export"
 version = "0.9.8"
 dependencies = [
- "serde",
  "sona-application",
  "sona-core",
  "tempfile",
@@ -6610,7 +6603,6 @@ dependencies = [
  "futures-util",
  "log",
  "reqwest 0.13.5",
- "schemars 1.2.3",
  "serde",
  "serde_json",
  "sona-core",
@@ -6622,7 +6614,6 @@ dependencies = [
 name = "sona-punct"
 version = "0.9.8"
 dependencies = [
- "log",
  "sherpa-onnx",
  "sona-core",
 ]
@@ -6661,18 +6652,13 @@ name = "sona-sherpa-onnx"
 version = "0.9.8"
 dependencies = [
  "async-trait",
- "glob",
  "hound",
  "log",
- "regex",
- "serde_json",
- "sha2 0.11.1",
  "sherpa-onnx",
  "sona-core",
  "sysinfo",
  "tokio",
  "uuid",
- "walkdir",
 ]
 
 [[package]]
@@ -6738,7 +6724,6 @@ dependencies = [
  "sha2 0.11.1",
  "sona-core",
  "sona-sync",
- "tempfile",
  "tokio",
  "url",
  "urlencoding",
@@ -6752,7 +6737,6 @@ dependencies = [
  "async-trait",
  "axum",
  "axum-server",
- "chrono",
  "parking_lot",
  "rcgen",
  "reqwest 0.13.5",
@@ -6762,7 +6746,6 @@ dependencies = [
  "serde_json",
  "sona-core",
  "sona-sync",
- "tempfile",
  "tokio",
  "url",
  "urlencoding",
@@ -6814,7 +6797,6 @@ dependencies = [
  "thiserror 2.0.21",
  "tokio",
  "uniffi",
- "uuid",
 ]
 
 [[package]]

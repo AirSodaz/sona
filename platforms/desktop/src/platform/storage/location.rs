@@ -608,7 +608,6 @@ pub async fn migrate_data_directory(
         current_db.close();
     }
 
-    let mut unremoved = Vec::new();
     let mut models_were_copied = false;
     if copy_existing && active_data_dir.exists() {
         std::fs::create_dir_all(&target_path).map_err(|e| e.to_string())?;
@@ -702,26 +701,33 @@ pub async fn migrate_data_directory(
         services.sync.reset().await;
     }
 
-    if copy_existing && active_data_dir.exists() {
-        unremoved = cleanup_data_directory_contents(
-            &active_data_dir,
-            &default_data_dir,
-            models_were_copied,
-        );
-    }
-
     let mut bootstrap = load_bootstrap_config(&default_data_dir);
     if target_path == default_data_dir {
         bootstrap.custom_data_dir = None;
     } else {
         bootstrap.custom_data_dir = Some(target_path);
     }
-    if !unremoved.is_empty() && !bootstrap.pending_cleanup_dirs.contains(&active_data_dir) {
-        bootstrap.pending_cleanup_dirs.push(active_data_dir);
-    }
-    save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
-    restart_guard.commit_and_restart();
 
+    if copy_existing && active_data_dir.exists() {
+        if !bootstrap.pending_cleanup_dirs.contains(&active_data_dir) {
+            bootstrap.pending_cleanup_dirs.push(active_data_dir.clone());
+        }
+        save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+
+        let unremoved = cleanup_data_directory_contents(
+            &active_data_dir,
+            &default_data_dir,
+            models_were_copied,
+        );
+
+        if unremoved.is_empty() {
+            bootstrap.pending_cleanup_dirs.retain(|p| p != &active_data_dir);
+            save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+        }
+    } else {
+        save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+    }
+    restart_guard.commit_and_restart();
     let _ = app.emit(
         STORAGE_MIGRATION_PROGRESS_EVENT,
         StorageMigrationProgress {
@@ -839,14 +845,6 @@ pub async fn set_models_directory(
         emitter.emit("preparing", "");
         copy_directory_contents_with_progress(&active_models_dir, &target_path, &mut emitter, 16)
             .map_err(|e| format!("Failed to copy model files: {}", e))?;
-
-        if let Err(e) = safe_remove_dir_all(&active_models_dir) {
-            log::warn!(
-                "Failed to remove old models directory {}: {}",
-                active_models_dir.display(),
-                e
-            );
-        }
     }
 
     let default_models_dir = default_data_dir.join("models");
@@ -857,6 +855,17 @@ pub async fn set_models_directory(
         bootstrap.custom_models_dir = Some(target_path);
     }
     save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
+
+    if move_existing
+        && active_models_dir.exists()
+        && let Err(e) = safe_remove_dir_all(&active_models_dir)
+    {
+        log::warn!(
+            "Failed to remove old models directory {}: {}",
+            active_models_dir.display(),
+            e
+        );
+    }
     restart_guard.commit_and_restart();
 
     let _ = app.emit(

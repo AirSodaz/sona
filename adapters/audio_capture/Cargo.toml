@@ -15,7 +15,6 @@ log = { workspace = true }
 ringbuf = { workspace = true }
 serde = { workspace = true }
 rubato = { workspace = true }
-sona-core = { workspace = true }
 thiserror = { workspace = true }
 
 [dev-dependencies]

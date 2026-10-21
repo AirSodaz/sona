@@ -24,6 +24,7 @@ pub mod tag;
 pub mod task_ledger;
 
 pub use application_context::SqliteApplicationContext;
+pub use schema::CURRENT_SCHEMA_VERSION;
 pub use automation::{
     AutomationRepositoryState, SqliteAutomationAdapter, SqliteAutomationRepository,
 };

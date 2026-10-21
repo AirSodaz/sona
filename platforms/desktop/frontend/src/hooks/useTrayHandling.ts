@@ -106,9 +106,15 @@ export function useTrayHandling(
                   stopSystemAudioCapture(id).catch((error) => {
                     logger.error('[Tray] Failed to fallback stop system audio capture:', error);
                   }),
-                  stopNativeLiveTranscription(id, 'microphone').catch(() => {}),
-                  stopNativeLiveTranscription(id, 'system').catch(() => {}),
-                  stopLiveTranscription(id).catch(() => {}),
+                  stopNativeLiveTranscription(id, 'microphone').catch((err) => {
+                    logger.warn('[Tray] Fallback stop live transcription failed:', err);
+                  }),
+                  stopNativeLiveTranscription(id, 'system').catch((err) => {
+                    logger.warn('[Tray] Fallback stop live transcription failed:', err);
+                  }),
+                  stopLiveTranscription(id).catch((err) => {
+                    logger.warn('[Tray] Fallback stop live transcription failed:', err);
+                  }),
                 ])
               );
             }

@@ -1,8 +1,12 @@
-use crate::downmix::{push_downmixed_f32, push_downmixed_i16, push_downmixed_u16};
+use crate::downmix::{
+    push_downmixed_f32_checked, push_downmixed_i16_checked, push_downmixed_u16_checked,
+};
 use crate::error::{AudioCaptureError, AudioCaptureResult};
 use cpal::SampleFormat;
 use cpal::traits::DeviceTrait;
 use ringbuf::traits::Producer;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 /// Builds and configures a real-time safe CPAL input stream.
 ///
@@ -15,6 +19,7 @@ pub fn build_cpal_input_stream(
     mut raw_producer: impl Producer<Item = f32> + Send + 'static,
     data_notifier: impl Fn() + Send + Sync + 'static,
     error_callback: impl FnMut(cpal::Error) + Send + 'static,
+    overflow: Arc<AtomicBool>,
 ) -> AudioCaptureResult<cpal::Stream> {
     if config.channels == 0 || config.channels > 64 {
         return Err(AudioCaptureError::ConfigFailed(format!(
@@ -30,39 +35,48 @@ pub fn build_cpal_input_stream(
     }
     let channels = config.channels as usize;
     let stream = match sample_format {
-        SampleFormat::F32 => device
-            .build_input_stream(
-                config,
-                move |data: &[f32], _| {
-                    push_downmixed_f32(data, channels, &mut raw_producer);
-                    data_notifier();
-                },
-                error_callback,
-                None,
-            )
-            .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?,
-        SampleFormat::I16 => device
-            .build_input_stream(
-                config,
-                move |data: &[i16], _| {
-                    push_downmixed_i16(data, channels, &mut raw_producer);
-                    data_notifier();
-                },
-                error_callback,
-                None,
-            )
-            .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?,
-        SampleFormat::U16 => device
-            .build_input_stream(
-                config,
-                move |data: &[u16], _| {
-                    push_downmixed_u16(data, channels, &mut raw_producer);
-                    data_notifier();
-                },
-                error_callback,
-                None,
-            )
-            .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?,
+        SampleFormat::F32 => {
+            let overflow = Arc::clone(&overflow);
+            device
+                .build_input_stream(
+                    config,
+                    move |data: &[f32], _| {
+                        push_downmixed_f32_checked(data, channels, &mut raw_producer, &overflow);
+                        data_notifier();
+                    },
+                    error_callback,
+                    None,
+                )
+                .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?
+        }
+        SampleFormat::I16 => {
+            let overflow = Arc::clone(&overflow);
+            device
+                .build_input_stream(
+                    config,
+                    move |data: &[i16], _| {
+                        push_downmixed_i16_checked(data, channels, &mut raw_producer, &overflow);
+                        data_notifier();
+                    },
+                    error_callback,
+                    None,
+                )
+                .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?
+        }
+        SampleFormat::U16 => {
+            let overflow = Arc::clone(&overflow);
+            device
+                .build_input_stream(
+                    config,
+                    move |data: &[u16], _| {
+                        push_downmixed_u16_checked(data, channels, &mut raw_producer, &overflow);
+                        data_notifier();
+                    },
+                    error_callback,
+                    None,
+                )
+                .map_err(|e| AudioCaptureError::BuildStreamFailed(e.to_string()))?
+        }
         other => {
             return Err(AudioCaptureError::UnsupportedSampleFormat(format!(
                 "{other:?}"
@@ -89,6 +103,7 @@ pub fn open_device_stream(
     raw_producer: impl Producer<Item = f32> + Send + 'static,
     data_notifier: impl Fn() + Send + Sync + 'static,
     error_callback: impl FnMut(cpal::Error) + Send + 'static,
+    overflow: Arc<AtomicBool>,
 ) -> AudioCaptureResult<(cpal::Stream, cpal::StreamConfig, SampleFormat)> {
     let supported_config = match direction {
         CaptureDirection::Input => device.default_input_config().map_err(|e| {
@@ -107,6 +122,7 @@ pub fn open_device_stream(
         raw_producer,
         data_notifier,
         error_callback,
+        overflow,
     )?;
     Ok((stream, config, sample_format))
 }
@@ -129,7 +145,15 @@ mod tests {
                 buffer_size: cpal::BufferSize::Default,
             };
             assert!(matches!(
-                build_cpal_input_stream(&device, config, SampleFormat::F32, prod, || {}, |_| {}),
+                build_cpal_input_stream(
+                    &device,
+                    config,
+                    SampleFormat::F32,
+                    prod,
+                    || {},
+                    |_| {},
+                    Arc::new(AtomicBool::new(false)),
+                ),
                 Err(AudioCaptureError::ConfigFailed(_))
             ));
         }

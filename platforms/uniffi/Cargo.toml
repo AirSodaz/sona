@@ -37,7 +37,6 @@ sona-sync-s3 = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread"] }
 uniffi = { workspace = true }
-uuid = { workspace = true }
 [target.'cfg(target_os = "android")'.dependencies]
 jni = { version = "0.22", default-features = false }
 rustls-platform-verifier = "=0.7.0"

@@ -86,17 +86,19 @@ pub async fn open_remote_vault_with_password_or_recovery_key(
     vault_id: &str,
     password_or_recovery_key: &str,
 ) -> Result<OpenedRemoteVault, SyncError> {
-    match open_remote_vault_with_password(store, vault_id, password_or_recovery_key).await {
-        Ok(opened) => Ok(opened),
-        Err(password_err) => {
-            match open_remote_vault_with_recovery_key(store, vault_id, password_or_recovery_key)
-                .await
-            {
-                Ok(opened) => Ok(opened),
-                Err(_) => Err(password_err),
-            }
-        }
-    }
+    let (header, etag) = load_remote_header(store, vault_id).await?;
+    let vault_key = match unlock_with_master_password(&header, password_or_recovery_key) {
+        Ok(key) => key,
+        Err(password_err) => match unlock_with_recovery_key(&header, password_or_recovery_key) {
+            Ok(key) => key,
+            Err(_) => return Err(password_err),
+        },
+    };
+    Ok(OpenedRemoteVault {
+        header,
+        vault_key,
+        etag,
+    })
 }
 
 pub async fn open_remote_vault_with_vault_key(
