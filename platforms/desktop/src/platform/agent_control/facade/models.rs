@@ -44,6 +44,9 @@ pub async fn download_preset_model(
     let model_id = req.model_id;
     let mirror = req.mirror;
 
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    sona_core::models::downloads::resolve_model_download(&model_id, &models_dir)
+        .map_err(|e| e.to_string())?;
     let notify = std::sync::Arc::new(tokio::sync::Notify::new());
     let _download_guard = services
         .downloads

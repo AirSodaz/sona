@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLlmSettings } from '../../../services/llm/state';
 import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmCompletionResponse } from '../../../types/llm';
 import { LocalProviderAccordionItem } from '../llm/LocalProviderAccordionItem';
@@ -47,6 +48,7 @@ vi.mock('../../../stores/configStore', () => ({
 
 const mockConfirm = vi.fn().mockResolvedValue(true);
 const mockCheckboxConfirm = vi.fn().mockResolvedValue({ confirmed: true, checked: false });
+const mockShowError = vi.fn().mockResolvedValue(undefined);
 
 vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (
@@ -54,12 +56,14 @@ vi.mock('../../../stores/dialogStore', () => ({
       confirm: typeof mockConfirm;
       checkboxConfirm: typeof mockCheckboxConfirm;
       alert: (opts: unknown) => Promise<void>;
+      showError: typeof mockShowError;
     }) => unknown
   ) =>
     selector({
       confirm: mockConfirm,
       checkboxConfirm: mockCheckboxConfirm,
       alert: vi.fn().mockResolvedValue(undefined),
+      showError: mockShowError,
     }),
 }));
 
@@ -114,6 +118,7 @@ describe('LocalProviderAccordionItem', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useModelDownloadStore.setState({ downloads: {} });
   });
 
   it('renders import GGUF and refresh buttons with project unified data-tooltip instead of title', () => {

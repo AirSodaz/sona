@@ -158,6 +158,12 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     };
     use tauri::Emitter;
 
+    let notify = state
+        .notify_for_download(&download_id)
+        .await
+        .unwrap_or_else(|| Arc::new(Notify::new()));
+    let _download_guard = state.register_download(download_id.clone(), notify.clone());
+
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     let resolved =
         resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
@@ -167,12 +173,6 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     {
         return Ok(resolved.install_path.to_string_lossy().into_owned());
     }
-
-    let notify = state
-        .notify_for_download(&download_id)
-        .await
-        .unwrap_or_else(|| Arc::new(Notify::new()));
-    let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
     let result = download_model_with_cancel_and_mirror(

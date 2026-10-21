@@ -196,7 +196,7 @@ pub struct LocalLlmModelCard {
     pub download_url: Option<String>,
     #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
     pub download_size_bytes: Option<u64>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub interrupted_download: Option<crate::models::downloads::InterruptedDownloadInfo>,
 }
 

@@ -409,6 +409,47 @@ fn clean_interrupted_download_handles_installing_file_and_archive_staging() {
     assert!(!staging_file.exists());
 }
 
+#[test]
+fn inspect_and_clean_interrupted_download_handles_nested_locked_files() {
+    use fs3::FileExt;
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3-asr-0.6b-q8-gguf";
+    let resolved =
+        sona_core::models::downloads::resolve_model_download(model_id, &models_dir).unwrap();
+    let staging_dir = sona_core::models::downloads::staging_install_path(&resolved.install_path);
+    let nested_dir = staging_dir.join("tokenizer");
+    std::fs::create_dir_all(&nested_dir).unwrap();
+    let nested_file = nested_dir.join("vocab.json.download");
+    std::fs::write(&nested_file, b"actively-downloading-nested-data").unwrap();
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&nested_file)
+        .unwrap();
+    file.try_lock_exclusive().unwrap();
+
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    let clean_res = clean_interrupted_download(&models_dir, model_id);
+    assert!(clean_res.is_err());
+    assert_eq!(
+        clean_res.unwrap_err().kind(),
+        std::io::ErrorKind::ResourceBusy
+    );
+    assert!(nested_file.exists());
+
+    drop(file);
+
+    assert!(clean_interrupted_download(&models_dir, model_id).unwrap());
+    assert!(!staging_dir.exists());
+}
+
 #[tokio::test]
 async fn cancel_during_connection_handshake_aborts_immediately() {
     let dir = tempfile::tempdir().unwrap();

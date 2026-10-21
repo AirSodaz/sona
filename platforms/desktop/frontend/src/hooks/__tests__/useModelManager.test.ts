@@ -567,22 +567,60 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
     );
     vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
     let passedDownloadId = '';
+    let passedSignal: AbortSignal | undefined;
+    const { promise, resolve: resolveDownload } = Promise.withResolvers<string>();
     vi.mocked(modelService.downloadModel).mockImplementation(
-      async (_id, _cb, _sig, _mirror, downloadId) => {
+      async (_id, _cb, sig, _mirror, downloadId) => {
         passedDownloadId = downloadId ?? '';
-        return '/models/preset-a';
+        passedSignal = sig;
+        return promise;
       }
     );
 
     const { result } = renderHook(() => useModelManager(true));
 
+    let downloadPromise: Promise<void> | undefined;
     await act(async () => {
-      await result.current.handleDownload(catalogModel);
+      downloadPromise = result.current.handleDownload(catalogModel);
     });
 
     expect(passedDownloadId).toBeTruthy();
     expect(passedDownloadId).toContain(catalogModel.id);
     expect(modelService.downloadModel).toHaveBeenCalledTimes(1);
+
+    const item = useModelDownloadStore.getState().downloads[catalogModel.id];
+    expect(item).toBeDefined();
+    expect(item?.onCancel).toBeDefined();
+    expect(passedSignal?.aborted).toBe(false);
+    item?.onCancel?.();
+    expect(passedSignal?.aborted).toBe(true);
+
+    await act(async () => {
+      resolveDownload('/models/preset-a');
+      await downloadPromise;
+    });
+  });
+
+  it('cancels active background download via store when local activeDownloadsRef is empty', async () => {
+    const onCancel = vi.fn();
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-bg-123',
+      onCancel,
+    });
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      result.current.handleCancelDownload(catalogModel.id);
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(useModelDownloadStore.getState().downloads[catalogModel.id]?.status).toBe('cancelled');
   });
 
   it('guards against concurrent download triggers before running prompts (H6)', async () => {

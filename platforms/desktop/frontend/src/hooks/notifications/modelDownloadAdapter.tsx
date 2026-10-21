@@ -9,7 +9,7 @@ import type {
 import type { TFunction } from './adapterUtils';
 
 export function formatBytes(bytes?: number | null): string {
-  if (bytes == null || bytes < 0 || Number.isNaN(bytes)) return '';
+  if (bytes == null || bytes < 0 || !Number.isFinite(bytes)) return '';
   if (bytes === 0) return '0 MB';
   const gb = bytes / (1024 * 1024 * 1024);
   if (gb >= 1) return `${gb.toFixed(2)} GB`;
@@ -78,10 +78,12 @@ export function adaptModelDownloadsEntries(
     let body: string | null = null;
     if (isActive) {
       const parts: string[] = [];
-      if (item.downloadedBytes != null && item.totalBytes != null) {
-        parts.push(`${formatBytes(item.downloadedBytes)} / ${formatBytes(item.totalBytes)}`);
-      } else if (item.downloadedBytes != null) {
-        parts.push(formatBytes(item.downloadedBytes));
+      const formattedDownloaded = formatBytes(item.downloadedBytes);
+      const formattedTotal = formatBytes(item.totalBytes);
+      if (formattedDownloaded && formattedTotal && (item.totalBytes ?? 0) > 0) {
+        parts.push(`${formattedDownloaded} / ${formattedTotal}`);
+      } else if (formattedDownloaded) {
+        parts.push(formattedDownloaded);
       }
       if (item.speed) {
         parts.push(item.speed);
@@ -143,7 +145,10 @@ export function adaptModelDownloadsEntries(
       body,
       detail,
       timestamp: item.timestamp,
-      progress: isActive ? item.progress : undefined,
+      progress:
+        isActive && typeof item.progress === 'number' && Number.isFinite(item.progress)
+          ? Math.max(0, Math.min(100, Math.round(item.progress)))
+          : undefined,
       actions,
       closeAction,
       itemClassName: `notification-center-item-download${isFailed ? ' notification-center-item-error' : ''}`,

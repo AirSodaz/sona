@@ -225,7 +225,7 @@ describe('ModelCard interrupted download', () => {
       />
     );
 
-    const chips = container.querySelectorAll('.model-status-interrupted');
+    const chips = container.querySelectorAll('.model-version-row .model-status-interrupted');
     expect(chips.length).toBeGreaterThanOrEqual(1);
     expect(chips[0].textContent).toContain('50%');
   });

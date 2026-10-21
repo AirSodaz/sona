@@ -386,8 +386,8 @@ export function useModelManager(isOpen: boolean) {
       const download = downloads[modelId];
       if (download) {
         download.controller.abort();
-        void useModelDownloadStore.getState().cancelDownload(modelId);
       }
+      void useModelDownloadStore.getState().cancelDownload(modelId);
       inFlightModelsRef.current.delete(modelId);
     }
     setDownloads((prev) => {
@@ -510,7 +510,11 @@ export function useModelManager(isOpen: boolean) {
   }
 
   async function handleDiscardDownload(model: ModelInfo) {
-    if (inFlightModelsRef.current.has(model.id) || activeDownloadsRef.current.has(model.id)) {
+    if (
+      inFlightModelsRef.current.has(model.id) ||
+      activeDownloadsRef.current.has(model.id) ||
+      useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading'
+    ) {
       return;
     }
 
@@ -552,7 +556,12 @@ export function useModelManager(isOpen: boolean) {
 
       if (!confirmed) return;
 
-      if (activeDownloadsRef.current.has(model.id)) return;
+      if (
+        activeDownloadsRef.current.has(model.id) ||
+        useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading'
+      ) {
+        return;
+      }
 
       try {
         await cleanInterruptedDownload(model.id);

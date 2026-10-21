@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import { adaptModelDownloadsEntries, formatBytes } from '../modelDownloadAdapter';
 
@@ -18,6 +18,13 @@ describe('formatBytes', () => {
     expect(formatBytes(50 * 1024 * 1024)).toBe('50 MB');
     expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB');
   });
+
+  it('handles Infinity, NaN, and negative numbers cleanly', () => {
+    expect(formatBytes(Number.POSITIVE_INFINITY)).toBe('');
+    expect(formatBytes(Number.NEGATIVE_INFINITY)).toBe('');
+    expect(formatBytes(Number.NaN)).toBe('');
+    expect(formatBytes(-1)).toBe('');
+  });
 });
 
 describe('adaptModelDownloadsEntries', () => {
@@ -25,6 +32,10 @@ describe('adaptModelDownloadsEntries', () => {
     cancelDownload: vi.fn(),
     dismissDownload: vi.fn(),
   };
+
+  beforeEach(() => {
+    useModelDownloadStore.setState({ downloads: {} });
+  });
 
   it('adapts active download entry with progress and cancel action', () => {
     const entries = adaptModelDownloadsEntries(
@@ -60,6 +71,44 @@ describe('adaptModelDownloadsEntries', () => {
 
     entry.actions[0].run();
     expect(callbacks.cancelDownload).toHaveBeenCalledWith('sensevoice', 'dl1');
+  });
+
+  it('never produces dangling slash when totalBytes is 0, missing, or invalid', () => {
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl1: {
+          id: 'dl1',
+          modelId: 'test1',
+          modelName: 'Test 1',
+          modelType: 'asr',
+          status: 'downloading',
+          progress: 0,
+          downloadedBytes: 1024,
+          totalBytes: 0,
+          timestamp: 1000,
+          downloadId: 'dl1',
+        },
+        dl2: {
+          id: 'dl2',
+          modelId: 'test2',
+          modelName: 'Test 2',
+          modelType: 'asr',
+          status: 'downloading',
+          progress: 0,
+          downloadedBytes: 1024,
+          totalBytes: undefined,
+          timestamp: 1000,
+          downloadId: 'dl2',
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    for (const entry of entries) {
+      expect(entry.body).not.toContain('/');
+      expect(entry.body).toBe('1 KB');
+    }
   });
 
   it('adapts completed download entry with success tone and close action', () => {

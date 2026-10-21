@@ -111,6 +111,24 @@ describe('modelDownloadStore', () => {
     expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
   });
 
+  it('maintains cancelled status even when onCancel synchronously calls failDownload', async () => {
+    const onCancel = vi.fn(() => {
+      useModelDownloadStore.getState().failDownload('test-model', 'AbortError', 'dl-active');
+    });
+
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'test-model',
+      modelName: 'Test Model',
+      downloadId: 'dl-active',
+      onCancel,
+    });
+
+    const result = await useModelDownloadStore.getState().cancelDownload('test-model', 'dl-active');
+    expect(result).toBe(true);
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(useModelDownloadStore.getState().downloads['test-model'].status).toBe('cancelled');
+  });
+
   it('does not overwrite completed status with cancelDownload', async () => {
     useModelDownloadStore.getState().startDownload({
       modelId: 'test-model',

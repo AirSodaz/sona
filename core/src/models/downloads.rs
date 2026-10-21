@@ -61,6 +61,22 @@ pub fn is_file_locked(path: &Path) -> bool {
     }
 }
 
+fn find_locked_download_file(dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let is_dir = entry.file_type().is_ok_and(|ft| ft.is_dir());
+        let p = entry.path();
+        if is_dir {
+            if let Some(locked) = find_locked_download_file(&p) {
+                return Some(locked);
+            }
+        } else if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
+            return Some(p);
+        }
+    }
+    None
+}
+
 pub fn inspect_interrupted_download(
     models_dir: &Path,
     model_id: &str,
@@ -85,13 +101,8 @@ pub fn inspect_interrupted_download(
     }
 
     let staging_path = staging_install_path(&resolved.install_path);
-    if let Ok(entries) = std::fs::read_dir(&staging_path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
-                return None;
-            }
-        }
+    if find_locked_download_file(&staging_path).is_some() {
+        return None;
     }
 
     let mut downloaded_bytes = 0_u64;
@@ -272,16 +283,14 @@ pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io:
     }
 
     let staging_path = staging_install_path(&resolved.install_path);
-    if let Ok(entries) = std::fs::read_dir(&staging_path) {
-        for entry in entries.flatten() {
-            let p = entry.path();
-            if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::ResourceBusy,
-                    format!("Staged download file is actively locked: {}", p.display()),
-                ));
-            }
-        }
+    if let Some(locked) = find_locked_download_file(&staging_path) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!(
+                "Staged download file is actively locked: {}",
+                locked.display()
+            ),
+        ));
     }
 
     let mut removed = false;

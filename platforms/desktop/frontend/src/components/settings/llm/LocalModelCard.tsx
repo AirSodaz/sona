@@ -50,6 +50,7 @@ interface LocalModelCardProps {
     feature: 'polish' | 'translation' | 'summary' | 'all'
   ) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
+  disabled?: boolean;
 }
 
 export type SupportedModality = 'text' | 'image' | 'audio' | 'video';
@@ -135,6 +136,7 @@ export function LocalModelCard({
   testState,
   onTest,
   isAnyTesting = false,
+  disabled = false,
   onDownload,
   onCancelDownload,
   onDelete,
@@ -389,6 +391,7 @@ export function LocalModelCard({
                 type="button"
                 className="model-action-icon"
                 onClick={() => onDownload(card)}
+                disabled={disabled}
                 aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${card.name}`}
                 data-tooltip={
                   card.interruptedDownload.percentage != null
@@ -407,6 +410,7 @@ export function LocalModelCard({
                   type="button"
                   className="model-action-icon model-action-delete"
                   onClick={() => onDiscardDownload(card)}
+                  disabled={disabled}
                   aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${card.name}`}
                   data-tooltip={t('settings.discard_download_tooltip', {
                     size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
@@ -423,6 +427,7 @@ export function LocalModelCard({
               type="button"
               className="model-action-icon"
               onClick={() => onDownload(card)}
+              disabled={disabled}
               aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
               data-tooltip={t('common.download', { defaultValue: '下载' })}
               data-tooltip-pos="top"

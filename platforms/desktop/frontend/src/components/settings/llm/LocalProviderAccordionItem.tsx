@@ -56,7 +56,7 @@ export function LocalProviderAccordionItem({
   cardsRef.current = data?.cards;
 
   const confirm = useDialogStore((state) => state.confirm);
-  const alert = useDialogStore((state) => state.alert);
+  const showError = useDialogStore((state) => state.showError);
 
   const fetchCards = useCallback(async () => {
     setIsLoading(true);
@@ -221,52 +221,70 @@ export function LocalProviderAccordionItem({
 
   const handleDiscardDownload = useCallback(
     async (card: LocalLlmModelCardType) => {
-      if (activeDownloadsRef.current[card.id] || !card.interruptedDownload) return;
+      if (
+        activeDownloadsRef.current[card.id] ||
+        inFlightDownloadsRef.current.has(card.id) ||
+        useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading' ||
+        !card.interruptedDownload
+      ) {
+        return;
+      }
 
-      const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
-      const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
-      const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
-      const sizeText = totalFormatted
-        ? `${downloadedFormatted} / ${totalFormatted}`
-        : downloadedFormatted;
-      const pctText = percentage != null ? `${Math.round(percentage)}%` : '';
-      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
-
-      const confirmed = await confirm(
-        t('settings.discard_download_confirm_message', {
-          name: card.name,
-          progress: progressDetail,
-          defaultValue: `Are you sure you want to discard the incomplete download for ${card.name} (${progressDetail})? This will delete partial files and free up disk space.`,
-        }),
-        {
-          title: t('settings.discard_download_confirm_title', {
-            defaultValue: 'Discard Incomplete Download',
-          }),
-          confirmLabel: t('settings.discard_download_confirm_button', {
-            defaultValue: 'Discard Files',
-          }),
-          cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
-          variant: 'warning',
-        }
-      );
-
-      if (!confirmed) return;
-
+      inFlightDownloadsRef.current.add(card.id);
       try {
-        await cleanInterruptedDownload(card.id);
-        useModelDownloadStore.getState().dismissDownload(card.id);
-        await fetchCards();
-      } catch (cleanErr) {
-        console.warn('Failed to clean interrupted download:', cleanErr);
-        await alert(
-          t('errors.model.clean_failed', {
-            defaultValue:
-              'Failed to clean incomplete download files. Please check if the files are in use.',
-          })
+        const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
+        const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
+        const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
+        const sizeText = totalFormatted
+          ? `${downloadedFormatted} / ${totalFormatted}`
+          : downloadedFormatted;
+        const pctText = percentage != null ? `${Math.round(percentage)}%` : '';
+        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+        const confirmed = await confirm(
+          t('settings.discard_download_confirm_message', {
+            name: card.name,
+            progress: progressDetail,
+            defaultValue: `Are you sure you want to discard the incomplete download for ${card.name} (${progressDetail})? This will delete partial files and free up disk space.`,
+          }),
+          {
+            title: t('settings.discard_download_confirm_title', {
+              defaultValue: 'Discard Incomplete Download',
+            }),
+            confirmLabel: t('settings.discard_download_confirm_button', {
+              defaultValue: 'Discard Files',
+            }),
+            cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+            variant: 'warning',
+          }
         );
+
+        if (!confirmed) return;
+
+        if (
+          activeDownloadsRef.current[card.id] ||
+          useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading'
+        ) {
+          return;
+        }
+
+        try {
+          await cleanInterruptedDownload(card.id);
+          useModelDownloadStore.getState().dismissDownload(card.id);
+          await fetchCards();
+        } catch (cleanErr) {
+          console.warn('Failed to clean interrupted download:', cleanErr);
+          await showError({
+            code: 'model.clean_failed',
+            messageKey: 'errors.model.clean_failed',
+            cause: cleanErr,
+          });
+        }
+      } finally {
+        inFlightDownloadsRef.current.delete(card.id);
       }
     },
-    [alert, confirm, fetchCards, t]
+    [confirm, fetchCards, showError, t]
   );
 
   const handleImportCustomFile = useCallback(async () => {
@@ -470,6 +488,7 @@ export function LocalProviderAccordionItem({
               card={card}
               downloadState={downloads[card.id]}
               testState={modelTestStates[card.id]}
+              disabled={inFlightDownloadsRef.current.has(card.id) || !!downloads[card.id]}
               onTest={handleTestModel}
               isAnyTesting={isAnyTesting}
               onDownload={handleDownload}

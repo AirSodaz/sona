@@ -55,6 +55,7 @@ interface ModelDownloadState {
 
 let unlistenProgress: UnlistenFn | null = null;
 let listenerPromise: Promise<void> | null = null;
+let listenerGeneration = 0;
 interface ProgressSample {
   lastTime: number;
   lastDownloadedBytes: number;
@@ -67,9 +68,11 @@ export async function ensureModelDownloadListener(): Promise<void> {
   if (!isTauri || unlistenProgress !== null) return;
   if (listenerPromise !== null) return listenerPromise;
 
+  const currentGen = ++listenerGeneration;
+
   listenerPromise = (async () => {
     try {
-      unlistenProgress = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
+      const unlisten = await listen<unknown>(TauriEvent.app.downloadProgress, (event) => {
         const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
         if (!id || total <= 0) return;
 
@@ -110,6 +113,13 @@ export async function ensureModelDownloadListener(): Promise<void> {
           speed: speedStr,
         });
       });
+
+      if (currentGen !== listenerGeneration) {
+        unlisten();
+        unlistenProgress = null;
+      } else {
+        unlistenProgress = unlisten;
+      }
     } catch (err) {
       console.error('Failed to initialize model download progress listener:', err);
     } finally {
@@ -121,6 +131,7 @@ export async function ensureModelDownloadListener(): Promise<void> {
 }
 
 export function cleanupModelDownloadListener(): void {
+  listenerGeneration++;
   if (unlistenProgress) {
     unlistenProgress();
     unlistenProgress = null;
@@ -138,6 +149,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   downloads: {},
 
   startDownload: ({ modelId, modelName, modelType = 'asr', downloadId, onRetry, onCancel }) => {
+    void ensureModelDownloadListener();
     progressSamples.delete(downloadId);
     set((state) => ({
       downloads: {
@@ -211,6 +223,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             progress: 100,
             speed: undefined,
             onCancel: undefined,
+            onRetry: undefined,
             timestamp: Date.now(),
           },
         },
@@ -252,16 +265,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     }
     const targetDownloadId = downloadId ?? item.downloadId;
     if (item.status === 'downloading') {
-      try {
-        item.onCancel?.();
-      } catch (err) {
-        console.warn(`Error during onCancel for ${modelId}:`, err);
-      }
-      try {
-        await tauriCancelDownload(targetDownloadId);
-      } catch (err) {
-        console.warn(`Backend cancelDownload returned error for ${modelId}:`, err);
-      }
+      const onCancelCallback = item.onCancel;
       progressSamples.delete(targetDownloadId);
       set((state) => {
         const current = state.downloads[modelId];
@@ -280,11 +284,23 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
               status: 'cancelled',
               speed: undefined,
               onCancel: undefined,
+              onRetry: undefined,
               timestamp: Date.now(),
             },
           },
         };
       });
+
+      try {
+        onCancelCallback?.();
+      } catch (err) {
+        console.warn(`Error during onCancel for ${modelId}:`, err);
+      }
+      try {
+        await tauriCancelDownload(targetDownloadId);
+      } catch (err) {
+        console.warn(`Backend cancelDownload returned error for ${modelId}:`, err);
+      }
       return true;
     }
     return false;
