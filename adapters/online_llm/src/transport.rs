@@ -212,7 +212,7 @@ impl LlmApiUrl {
         let mut lock = map.lock().unwrap_or_else(|p| p.into_inner());
         lock.insert(key, client.clone());
         Ok(client)
-}
+    }
 }
 
 pub async fn post_json_request(

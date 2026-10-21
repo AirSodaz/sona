@@ -721,7 +721,9 @@ pub async fn migrate_data_directory(
         );
 
         if unremoved.is_empty() {
-            bootstrap.pending_cleanup_dirs.retain(|p| p != &active_data_dir);
+            bootstrap
+                .pending_cleanup_dirs
+                .retain(|p| p != &active_data_dir);
             save_bootstrap_config(&default_data_dir, &bootstrap).map_err(|e| e.to_string())?;
         }
     } else {

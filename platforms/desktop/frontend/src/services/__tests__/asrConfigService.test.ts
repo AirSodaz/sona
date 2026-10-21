@@ -3,6 +3,7 @@ import onlineAsrProviderManifest from '../../../../../../core/src/ports/online-a
 import { buildTestConfig } from '../../test-utils/configTestUtils';
 import type { AppConfig } from '../../types/config';
 import {
+  buildModelSelectionPatch,
   createVolcengineDoubaoSelection,
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   isAsrRequestConfigured,
@@ -779,5 +780,112 @@ projects:
     if (voiceTypingReq.engine === 'local') {
       expect(voiceTypingReq.enablePartialDecoding).toBe(false);
     }
+  });
+
+  describe('buildModelSelectionPatch', () => {
+    const dummyCatalog = {
+      modelPathById: {
+        'local-live': '/path/to/local-live',
+        'local-batch': '/path/to/local-batch',
+      },
+      models: [
+        { id: 'local-live', installPath: '/path/to/local-live' } as any,
+        { id: 'local-batch', installPath: '/path/to/local-batch' } as any,
+      ],
+      dependencyRequestsByModelId: {
+        'local-live': [
+          {
+            modelId: 'vad-model',
+            configKey: 'vadModelPath' as const,
+            installPath: '/path/to/vad',
+            isInstalled: true,
+          },
+          {
+            modelId: 'punct-model',
+            configKey: 'punctuationModelPath' as const,
+            installPath: '/path/to/punct',
+            isInstalled: false,
+          },
+        ],
+      },
+    };
+
+    it('clears selection when modelId is empty', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(config, 'live', '', dummyCatalog);
+      expect(livePatch.streamingModelPath).toBe('');
+      expect(livePatch.asr?.selections.live.modelPath).toBe('');
+      expect(livePatch.asr?.selections.live.modelId).toBeNull();
+
+      const batchPatch = buildModelSelectionPatch(config, 'batch', '', dummyCatalog);
+      expect(batchPatch.batchModelPath).toBe('');
+      expect(batchPatch.asr?.selections.batch.modelPath).toBe('');
+      expect(batchPatch.asr?.selections.batch.modelId).toBeNull();
+    });
+
+    it('handles online provider with submodel', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(
+        config,
+        'live',
+        'volcengine-doubao::doubao-pro',
+        dummyCatalog
+      );
+      expect(livePatch.asr?.selections.live.engine).toBe('online');
+      expect(livePatch.asr?.selections.live.providerId).toBe('volcengine-doubao');
+      expect(livePatch.asr?.selections.live.modelId).toBe('doubao-pro');
+
+      const batchPatch = buildModelSelectionPatch(
+        config,
+        'batch',
+        'volcengine-doubao::doubao-pro',
+        dummyCatalog
+      );
+      expect(batchPatch.asr?.selections.batch.engine).toBe('online');
+      expect(batchPatch.asr?.selections.batch.providerId).toBe('volcengine-doubao');
+      expect(batchPatch.asr?.selections.batch.modelId).toBe('doubao-pro');
+    });
+
+    it('handles online provider without submodel', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(config, 'live', 'groq-whisper', dummyCatalog);
+      expect(livePatch.asr?.selections.live.engine).toBe('online');
+      expect(livePatch.asr?.selections.live.providerId).toBe('groq-whisper');
+
+      const batchPatch = buildModelSelectionPatch(config, 'batch', 'groq-whisper', dummyCatalog);
+      expect(batchPatch.asr?.selections.batch.engine).toBe('online');
+      expect(batchPatch.asr?.selections.batch.providerId).toBe('groq-whisper');
+    });
+
+    it('returns empty patch if local model path cannot be resolved', () => {
+      const config = buildAsrConfig();
+      const patch = buildModelSelectionPatch(config, 'live', 'unknown-model', dummyCatalog);
+      expect(patch).toEqual({});
+    });
+
+    it('sets local model and applies installed/uninstalled dependencies', () => {
+      const dispatchSpy = vi.spyOn(document, 'dispatchEvent');
+      const config = buildAsrConfig({
+        liveVadModelPath: '',
+        batchVadModelPath: '',
+        livePunctuationModelPath: '',
+        batchPunctuationModelPath: '',
+      });
+
+      const patch = buildModelSelectionPatch(config, 'live', 'local-live', dummyCatalog);
+      expect(patch.streamingModelPath).toBe('/path/to/local-live');
+      expect(patch.asr?.selections.live.modelId).toBe('local-live');
+      // Installed VAD model should be applied to both live and batch
+      expect(patch.liveVadModelPath).toBe('/path/to/vad');
+      expect(patch.batchVadModelPath).toBe('/path/to/vad');
+      // Uninstalled punctuation model should trigger download-background-model event
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'download-background-model',
+          detail: { modelId: 'punct-model' },
+        })
+      );
+      dispatchSpy.mockRestore();
+    });
   });
 });

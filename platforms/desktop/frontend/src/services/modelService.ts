@@ -78,6 +78,9 @@ export class ModelService {
   async getModelCatalogSnapshot(): Promise<ModelCatalogSnapshot> {
     return this.ports.registryService.getModelCatalogSnapshot();
   }
+  get latestCatalogSnapshot(): ModelCatalogSnapshot | null {
+    return this.ports.registryService.latestSnapshot;
+  }
 
   async resolveModelCatalogSelectedIds(
     paths: ModelSelectionPaths

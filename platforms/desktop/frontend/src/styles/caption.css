@@ -79,38 +79,167 @@
 }
 
 /* ===========================
-   Parameter Settings Button
+   Parameter Settings (Ghost Row)
    =========================== */
 
 .btn-parameter-settings {
   width: 100%;
-  justify-content: center;
-  background-color: transparent;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  position: relative;
+  background: transparent;
   border: 1px solid transparent;
   color: var(--color-text-secondary);
   font-weight: 500;
-  padding: 10px 16px;
-  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  min-height: 32px;
+  border-radius: var(--radius-sm);
   box-shadow: none;
   transition:
     background var(--transition-fast),
-    box-shadow var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast),
-    opacity var(--transition-fast);
+    border-color var(--transition-fast),
+    color var(--transition-fast);
   cursor: pointer;
 }
 
 .btn-parameter-settings:hover:not(:disabled) {
   color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-hover);
   border-color: var(--color-border);
-  box-shadow: var(--apple-control-shadow-flat);
+}
+
+.btn-parameter-settings.active {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border);
 }
 
 .btn-parameter-settings:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
+  box-shadow: none;
+  background: transparent;
+  border-color: transparent;
+}
+
+.parameter-settings-capsule-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.parameter-settings-icon {
+  color: inherit;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-icon,
+.btn-parameter-settings.active .parameter-settings-icon {
+  opacity: 1;
+}
+
+.parameter-settings-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.parameter-settings-capsule-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+  margin-left: 8px;
+}
+
+.parameter-settings-summary-model {
+  font-size: var(--font-size-2xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-summary-model,
+.btn-parameter-settings.active .parameter-settings-summary-model {
+  color: var(--color-text-secondary);
+}
+
+.parameter-settings-summary-dot {
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-2xs);
+  flex-shrink: 0;
+}
+
+.parameter-settings-summary-lang {
+  font-size: var(--font-size-2xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-summary-lang,
+.btn-parameter-settings.active .parameter-settings-summary-lang {
+  color: var(--color-text-secondary);
+}
+
+.parameter-settings-chevron {
+  color: var(--color-text-muted);
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.parameter-settings-chevron.open {
+  transform: rotate(180deg);
+  color: var(--color-text-primary);
+}
+
+.parameter-settings-popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-md);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  animation: parameter-settings-popover-in var(--transition-fast) ease-out;
+}
+
+@keyframes parameter-settings-popover-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 /* ===========================

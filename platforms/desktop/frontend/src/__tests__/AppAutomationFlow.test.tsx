@@ -33,6 +33,8 @@ vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBan
 vi.mock('../components/Icons', () => ({
   AutomationIcon: () => <span>AutomationIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/NotificationCenter', () => ({

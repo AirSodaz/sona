@@ -262,21 +262,20 @@ fn run_capture_worker<F>(
     };
 
     let overflow = Arc::new(AtomicBool::new(false));
-    let (stream, stream_config, _sample_format) =
-        match open_device_stream(
-            &device,
-            direction,
-            producer,
-            data_notifier,
-            stream_error,
-            Arc::clone(&overflow),
-        ) {
-            Ok(res) => res,
-            Err(e) => {
-                let _ = startup_sender.send(Err(e));
-                return;
-            }
-        };
+    let (stream, stream_config, _sample_format) = match open_device_stream(
+        &device,
+        direction,
+        producer,
+        data_notifier,
+        stream_error,
+        Arc::clone(&overflow),
+    ) {
+        Ok(res) => res,
+        Err(e) => {
+            let _ = startup_sender.send(Err(e));
+            return;
+        }
+    };
     let sample_rate = stream_config.sample_rate;
 
     if let Err(e) = stream.play() {
@@ -340,9 +339,7 @@ fn run_capture_worker<F>(
 
     pull_buffer.clear();
     resampler.drain_from_consumer(&mut consumer, &mut pull_buffer);
-    if !pull_buffer.is_empty()
-        && !on_event(CaptureEvent::Chunk(std::mem::take(&mut pull_buffer)))
-    {
+    if !pull_buffer.is_empty() && !on_event(CaptureEvent::Chunk(std::mem::take(&mut pull_buffer))) {
         return;
     }
     let mut tail = Vec::new();

@@ -17,7 +17,7 @@ import type {
   OnlineAsrProviderId,
   TextReplacementRuleSet,
 } from '../types/config';
-import type { ModelInfo } from '../types/modelCatalog';
+import type { ModelCatalogSnapshot, ModelInfo } from '../types/modelCatalog';
 import type { EffectivePipelineSnapshot, ProjectPipelineConfig } from '../types/project';
 import { coerceLanguage, type LanguageCapable } from '../utils/languages';
 import { findSelectedModelByMode } from '../utils/modelSelection';
@@ -26,6 +26,7 @@ import {
   getScenarioPunctuationModelPath,
   getScenarioVadBufferSize,
   getScenarioVadModelPath,
+  scenarioModelFieldKey,
 } from '../utils/scenarioModels';
 import {
   getTermsForProject,
@@ -413,6 +414,98 @@ export class AsrConfigService {
   };
   syncLiveAsrSelectionFields = this.syncStreamingAsrSelectionFields;
   syncLiveOnlineAsrSelectionFields = this.syncStreamingOnlineAsrSelectionFields;
+  buildModelSelectionPatch = (
+    config: ModelConfig,
+    slot: AsrSelectionSlot,
+    modelId: string,
+    catalog: Pick<ModelCatalogSnapshot, 'modelPathById' | 'models' | 'dependencyRequestsByModelId'>
+  ): Partial<AppConfig> => {
+    const isLive = slot !== 'batch';
+    if (!modelId) {
+      if (isLive) {
+        return this.syncLiveAsrSelectionFields(config, {
+          modelId: null,
+          modelPath: '',
+        });
+      }
+      return this.syncLegacyAsrSelectionFields(config, 'batch', {
+        modelId: null,
+        modelPath: '',
+      });
+    }
+
+    if (modelId.includes('::')) {
+      const [providerId, subModelId] = modelId.split('::');
+      if (isLive) {
+        return this.syncLiveOnlineAsrSelectionFields(
+          config,
+          providerId as OnlineAsrProviderId,
+          subModelId
+        );
+      }
+      return this.syncOnlineAsrSelectionFields(
+        config,
+        'batch',
+        providerId as OnlineAsrProviderId,
+        subModelId
+      );
+    }
+
+    if (isOnlineAsrProviderId(modelId)) {
+      if (isLive) {
+        return this.syncLiveOnlineAsrSelectionFields(config, modelId);
+      }
+      return this.syncOnlineAsrSelectionFields(config, 'batch', modelId);
+    }
+
+    const path =
+      catalog.modelPathById?.[modelId] ||
+      catalog.models?.find((m) => m.id === modelId)?.installPath ||
+      '';
+    if (!path) {
+      return {};
+    }
+
+    const patch: Partial<AppConfig> = isLive
+      ? this.syncLiveAsrSelectionFields(config, {
+          modelId,
+          modelPath: path,
+        })
+      : this.syncLegacyAsrSelectionFields(config, 'batch', {
+          modelId,
+          modelPath: path,
+        });
+
+    const dependencyUpdates: Partial<AppConfig> = {};
+    const dependencies = catalog.dependencyRequestsByModelId?.[modelId] ?? [];
+    for (const dependency of dependencies) {
+      const fieldKeys = [
+        scenarioModelFieldKey(dependency.configKey, 'live'),
+        scenarioModelFieldKey(dependency.configKey, 'batch'),
+      ] as const;
+      if (fieldKeys.every((key) => config[key])) {
+        continue;
+      }
+      if (dependency.isInstalled) {
+        for (const key of fieldKeys) {
+          if (!config[key]) {
+            dependencyUpdates[key] = dependency.installPath;
+          }
+        }
+      } else if (typeof document !== 'undefined' && typeof CustomEvent !== 'undefined') {
+        document.dispatchEvent(
+          new CustomEvent('download-background-model', {
+            detail: { modelId: dependency.modelId },
+          })
+        );
+      }
+    }
+
+    return {
+      ...patch,
+      ...dependencyUpdates,
+    };
+  };
 
   // --- Private helpers ---
 
@@ -668,5 +761,6 @@ export const {
   syncStreamingAsrSelectionFields,
   syncLiveAsrSelectionFields,
   syncLiveOnlineAsrSelectionFields,
+  buildModelSelectionPatch,
   isBatchVadForced,
 } = asrConfigService;

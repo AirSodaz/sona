@@ -34,6 +34,8 @@ vi.mock('../components/OnboardingReminderBanner', () => ({
 }));
 vi.mock('../components/Icons', () => ({
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/Settings', () => ({
