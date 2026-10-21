@@ -350,7 +350,11 @@ export function useModelManager(isOpen: boolean) {
             });
           }
         }
-        await refreshModelCatalogSnapshot();
+        try {
+          await refreshModelCatalogSnapshot();
+        } catch (snapError) {
+          logger.warn('Failed to refresh catalog snapshot after download error/cancel:', snapError);
+        }
         return;
       }
 
@@ -379,6 +383,9 @@ export function useModelManager(isOpen: boolean) {
 
   function handleCancelDownload(modelId: string) {
     const active = activeDownloadsRef.current.get(modelId);
+    activeDownloadsRef.current.delete(modelId);
+    inFlightModelsRef.current.delete(modelId);
+
     if (active) {
       active.controller.abort();
       void useModelDownloadStore.getState().cancelDownload(modelId, active.downloadId);
@@ -388,14 +395,15 @@ export function useModelManager(isOpen: boolean) {
         download.controller.abort();
       }
       void useModelDownloadStore.getState().cancelDownload(modelId);
-      inFlightModelsRef.current.delete(modelId);
     }
     setDownloads((prev) => {
       const next = { ...prev };
       delete next[modelId];
       return next;
     });
-    void refreshModelCatalogSnapshot();
+    void refreshModelCatalogSnapshot().catch((err) => {
+      logger.warn('Failed to refresh catalog snapshot after cancel:', err);
+    });
   }
 
   async function handleDownload(model: ModelInfo) {
@@ -418,7 +426,6 @@ export function useModelManager(isOpen: boolean) {
           variant: 'warning',
         });
         if (!confirmed) {
-          inFlightModelsRef.current.delete(model.id);
           return;
         }
       }
@@ -461,9 +468,8 @@ export function useModelManager(isOpen: boolean) {
           setModelPath(model, path);
         }
       );
-    } catch (err) {
+    } finally {
       inFlightModelsRef.current.delete(model.id);
-      throw err;
     }
   }
 
@@ -519,8 +525,9 @@ export function useModelManager(isOpen: boolean) {
     }
 
     const catalogModel = getCatalogModel(model.id);
-    const interruptedDownload =
-      catalogModel?.interruptedDownload ?? (model as ModelCatalogModel).interruptedDownload;
+    const interruptedDownload = catalogModel
+      ? catalogModel.interruptedDownload
+      : (model as ModelCatalogModel).interruptedDownload;
     if (!interruptedDownload) return;
 
     inFlightModelsRef.current.add(model.id);
@@ -566,7 +573,6 @@ export function useModelManager(isOpen: boolean) {
       try {
         await cleanInterruptedDownload(model.id);
         useModelDownloadStore.getState().dismissDownload(model.id);
-        await refreshModelCatalogSnapshot();
       } catch (cleanErr) {
         logger.warn('Failed to clean interrupted download:', cleanErr);
         await showError({
@@ -574,6 +580,13 @@ export function useModelManager(isOpen: boolean) {
           messageKey: 'errors.model.clean_failed',
           cause: cleanErr,
         });
+        return;
+      }
+
+      try {
+        await refreshModelCatalogSnapshot();
+      } catch (snapErr) {
+        logger.warn('Failed to refresh catalog snapshot after discard cleanup:', snapErr);
       }
     } finally {
       inFlightModelsRef.current.delete(model.id);

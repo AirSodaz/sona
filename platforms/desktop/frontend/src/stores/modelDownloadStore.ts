@@ -123,7 +123,9 @@ export async function ensureModelDownloadListener(): Promise<void> {
     } catch (err) {
       console.error('Failed to initialize model download progress listener:', err);
     } finally {
-      listenerPromise = null;
+      if (currentGen === listenerGeneration) {
+        listenerPromise = null;
+      }
     }
   })();
 
@@ -151,6 +153,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
   startDownload: ({ modelId, modelName, modelType = 'asr', downloadId, onRetry, onCancel }) => {
     void ensureModelDownloadListener();
     progressSamples.delete(downloadId);
+    progressSamples.delete(modelId);
     set((state) => ({
       downloads: {
         ...state.downloads,
@@ -214,6 +217,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
         return state;
       }
       progressSamples.delete(current.downloadId);
+      progressSamples.delete(modelId);
       return {
         downloads: {
           ...state.downloads,
@@ -242,6 +246,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
         return state;
       }
       progressSamples.delete(current.downloadId);
+      progressSamples.delete(modelId);
       return {
         downloads: {
           ...state.downloads,
@@ -267,6 +272,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     if (item.status === 'downloading') {
       const onCancelCallback = item.onCancel;
       progressSamples.delete(targetDownloadId);
+      progressSamples.delete(modelId);
       set((state) => {
         const current = state.downloads[modelId];
         if (
@@ -284,7 +290,6 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
               status: 'cancelled',
               speed: undefined,
               onCancel: undefined,
-              onRetry: undefined,
               timestamp: Date.now(),
             },
           },
@@ -311,6 +316,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     if (item) {
       progressSamples.delete(item.downloadId);
     }
+    progressSamples.delete(modelId);
     set((state) => {
       const next = { ...state.downloads };
       delete next[modelId];

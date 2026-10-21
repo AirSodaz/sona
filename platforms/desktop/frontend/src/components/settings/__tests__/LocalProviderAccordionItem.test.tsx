@@ -454,7 +454,7 @@ describe('LocalProviderAccordionItem', () => {
       },
     };
 
-    vi.mocked(listLocalLlmCards).mockResolvedValue({
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
       modelsDir: '/test/models',
       cards: [interruptedCard],
     });

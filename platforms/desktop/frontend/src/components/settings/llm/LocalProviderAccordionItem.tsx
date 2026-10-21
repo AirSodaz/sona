@@ -49,6 +49,7 @@ export function LocalProviderAccordionItem({
   const [isLoading, setIsLoading] = useState(false);
   const [downloads, setDownloads] = useState<Record<string, LocalDownloadProgressState>>({});
   const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
+  const [inFlightActionIds, setInFlightActionIds] = useState<Set<string>>(new Set());
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
   const inFlightDownloadsRef = useRef<Set<string>>(new Set());
@@ -117,10 +118,32 @@ export function LocalProviderAccordionItem({
     };
   }, []);
 
+  const handleCancelDownload = useCallback(
+    async (cardId: string) => {
+      try {
+        await useModelDownloadStore.getState().cancelDownload(cardId);
+      } catch (err) {
+        console.error(`Failed to cancel download for ${cardId}:`, err);
+      } finally {
+        setDownloads((prev) => {
+          const next = { ...prev };
+          delete next[cardId];
+          return next;
+        });
+        await fetchCards();
+      }
+    },
+    [fetchCards]
+  );
+
   const handleDownload = useCallback(
     async (card: LocalLlmModelCardType) => {
       const downloadId = card.id;
-      if (inFlightDownloadsRef.current.has(downloadId) || activeDownloadsRef.current[downloadId]) {
+      if (
+        inFlightDownloadsRef.current.has(downloadId) ||
+        activeDownloadsRef.current[downloadId] ||
+        useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading'
+      ) {
         return;
       }
       inFlightDownloadsRef.current.add(downloadId);
@@ -134,6 +157,7 @@ export function LocalProviderAccordionItem({
           const freshCard = cardsRef.current?.find((c) => c.id === card.id) ?? card;
           void handleDownload(freshCard);
         },
+        onCancel: () => void handleCancelDownload(card.id),
       });
 
       setDownloads((prev) => ({
@@ -147,6 +171,12 @@ export function LocalProviderAccordionItem({
           downloadId,
           mirror: modelDownloadMirror,
         });
+        useModelDownloadStore.getState().completeDownload(card.id, downloadId);
+        try {
+          await fetchCards();
+        } catch (cardErr) {
+          console.warn('Failed to refresh cards after download:', cardErr);
+        }
       } catch (err) {
         const errorMsg = normalizeError(err).message;
         if (errorMsg === 'Download cancelled') {
@@ -165,33 +195,8 @@ export function LocalProviderAccordionItem({
           return next;
         });
       }
-
-      useModelDownloadStore.getState().completeDownload(card.id, downloadId);
-      try {
-        await fetchCards();
-      } catch (cardErr) {
-        console.warn('Failed to refresh cards after download:', cardErr);
-      }
     },
-    [fetchCards, modelDownloadMirror, t]
-  );
-
-  const handleCancelDownload = useCallback(
-    async (cardId: string) => {
-      try {
-        await useModelDownloadStore.getState().cancelDownload(cardId);
-      } catch (err) {
-        console.error(`Failed to cancel download for ${cardId}:`, err);
-      } finally {
-        setDownloads((prev) => {
-          const next = { ...prev };
-          delete next[cardId];
-          return next;
-        });
-        await fetchCards();
-      }
-    },
-    [fetchCards]
+    [fetchCards, handleCancelDownload, modelDownloadMirror, t]
   );
 
   const handleDelete = useCallback(
@@ -231,6 +236,7 @@ export function LocalProviderAccordionItem({
       }
 
       inFlightDownloadsRef.current.add(card.id);
+      setInFlightActionIds((prev) => new Set(prev).add(card.id));
       try {
         const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
         const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
@@ -282,6 +288,11 @@ export function LocalProviderAccordionItem({
         }
       } finally {
         inFlightDownloadsRef.current.delete(card.id);
+        setInFlightActionIds((prev) => {
+          const next = new Set(prev);
+          next.delete(card.id);
+          return next;
+        });
       }
     },
     [confirm, fetchCards, showError, t]
@@ -488,7 +499,7 @@ export function LocalProviderAccordionItem({
               card={card}
               downloadState={downloads[card.id]}
               testState={modelTestStates[card.id]}
-              disabled={inFlightDownloadsRef.current.has(card.id) || !!downloads[card.id]}
+              disabled={inFlightActionIds.has(card.id) || !!downloads[card.id]}
               onTest={handleTestModel}
               isAnyTesting={isAnyTesting}
               onDownload={handleDownload}

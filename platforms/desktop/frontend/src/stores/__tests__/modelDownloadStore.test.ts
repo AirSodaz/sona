@@ -1,14 +1,48 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useModelDownloadStore } from '../modelDownloadStore';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { TauriEvent } from '../../services/tauri/events';
+import {
+  cleanupModelDownloadListener,
+  ensureModelDownloadListener,
+  useModelDownloadStore,
+} from '../modelDownloadStore';
 
 vi.mock('../../services/tauri/app', () => ({
   cancelDownload: vi.fn().mockResolvedValue(true),
 }));
 
+let progressListener: ((event: { payload: unknown }) => void) | null = null;
+const mockUnlisten = vi.fn();
+const mockListen = vi
+  .fn()
+  .mockImplementation((event: string, cb: (e: { payload: unknown }) => void) => {
+    if (event === TauriEvent.app.downloadProgress) {
+      progressListener = cb;
+    }
+    return Promise.resolve(mockUnlisten);
+  });
+
+vi.mock('../../services/tauri/platform/events', () => ({
+  listen: (...args: unknown[]) => mockListen(...args),
+}));
+
 describe('modelDownloadStore', () => {
   beforeEach(() => {
+    cleanupModelDownloadListener();
     useModelDownloadStore.setState({ downloads: {} });
     vi.clearAllMocks();
+    progressListener = null;
+    mockListen.mockImplementation((event: string, cb: (e: { payload: unknown }) => void) => {
+      if (event === TauriEvent.app.downloadProgress) {
+        progressListener = cb;
+      }
+      return Promise.resolve(mockUnlisten);
+    });
+  });
+
+  afterEach(() => {
+    cleanupModelDownloadListener();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
   });
 
   it('starts download with onCancel and downloadId', () => {
@@ -171,5 +205,123 @@ describe('modelDownloadStore', () => {
 
     useModelDownloadStore.getState().clearAllNonActive();
     expect(useModelDownloadStore.getState().downloads['active-1']).toBeDefined();
+  });
+
+  it('preserves onRetry when cancelling download so it can be resumed', async () => {
+    const onRetry = vi.fn().mockResolvedValue(undefined);
+    const onCancel = vi.fn();
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'test-model',
+      modelName: 'Test Model',
+      downloadId: 'dl-123',
+      onRetry,
+      onCancel,
+    });
+
+    const cancelled = await useModelDownloadStore.getState().cancelDownload('test-model', 'dl-123');
+    expect(cancelled).toBe(true);
+
+    const item = useModelDownloadStore.getState().downloads['test-model'];
+    expect(item).toBeDefined();
+    expect(item.status).toBe('cancelled');
+    expect(item.onRetry).toBe(onRetry);
+    expect(item.onCancel).toBeUndefined();
+    expect(item.speed).toBeUndefined();
+
+    await item.onRetry?.();
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('handles generation deduplication and cleanup during listener reconnect', async () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
+    let resolveListen1!: (unlisten: () => void) => void;
+    const listenPromise1 = new Promise<() => void>((resolve) => {
+      resolveListen1 = resolve;
+    });
+    const unlisten1 = vi.fn();
+
+    mockListen.mockImplementationOnce(() => listenPromise1);
+
+    const p1 = ensureModelDownloadListener();
+    void ensureModelDownloadListener();
+    expect(mockListen).toHaveBeenCalledTimes(1);
+
+    cleanupModelDownloadListener();
+
+    resolveListen1(unlisten1);
+    await p1;
+
+    expect(unlisten1).toHaveBeenCalledTimes(1);
+
+    const unlisten2 = vi.fn();
+    mockListen.mockResolvedValueOnce(unlisten2);
+    await ensureModelDownloadListener();
+    expect(mockListen).toHaveBeenCalledTimes(2);
+
+    cleanupModelDownloadListener();
+    expect(unlisten2).toHaveBeenCalledTimes(1);
+  });
+
+  it('calculates speed on progress events and cleans up sample cache', async () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
+    vi.useFakeTimers();
+    await ensureModelDownloadListener();
+    expect(progressListener).toBeTypeOf('function');
+
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'model-speed',
+      modelName: 'Speed Test Model',
+      downloadId: 'dl-speed-1',
+    });
+
+    vi.setSystemTime(1000);
+    progressListener!({
+      payload: { id: 'dl-speed-1', downloaded: 100 * 1024, total: 10 * 1024 * 1024 },
+    });
+
+    let item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.progress).toBe(1);
+    expect(item.downloadedBytes).toBe(100 * 1024);
+    expect(item.totalBytes).toBe(10 * 1024 * 1024);
+    expect(item.speed).toBeUndefined();
+
+    vi.setSystemTime(1200);
+    progressListener!({
+      payload: { id: 'dl-speed-1', downloaded: 200 * 1024, total: 10 * 1024 * 1024 },
+    });
+    item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.speed).toBeUndefined();
+
+    vi.setSystemTime(1500);
+    progressListener!({
+      payload: {
+        id: 'dl-speed-1',
+        downloaded: 100 * 1024 + 1024 * 1024,
+        total: 10 * 1024 * 1024,
+      },
+    });
+    item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.speed).toBe('2.0 MB/s');
+
+    await useModelDownloadStore.getState().cancelDownload('model-speed', 'dl-speed-1');
+    item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.status).toBe('cancelled');
+    expect(item.speed).toBeUndefined();
+
+    progressListener!({
+      payload: { id: 'dl-speed-1', downloaded: 2 * 1024 * 1024, total: 10 * 1024 * 1024 },
+    });
+    item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.status).toBe('cancelled');
+    expect(item.speed).toBeUndefined();
+
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'model-speed',
+      modelName: 'Speed Test Model',
+      downloadId: 'dl-speed-2',
+    });
+    item = useModelDownloadStore.getState().downloads['model-speed'];
+    expect(item.status).toBe('downloading');
+    expect(item.speed).toBeUndefined();
   });
 });

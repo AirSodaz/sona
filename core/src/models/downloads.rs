@@ -210,11 +210,13 @@ struct CleanupLockGuard {
 impl CleanupLockGuard {
     fn release_and_remove(mut self) -> bool {
         drop(self.file.take());
-        if self.path.exists() && !is_file_locked(&self.path) {
+        let removed = if self.path.exists() && !is_file_locked(&self.path) {
             std::fs::remove_file(&self.path).is_ok() && self.existed_initially
         } else {
             false
-        }
+        };
+        std::mem::forget(self);
+        removed
     }
 }
 
