@@ -1711,7 +1711,7 @@ export type LocalLlmModelCard_Deserialize = {
 	installedSizeBytes: number | null,
 	downloadUrl: string | null,
 	downloadSizeBytes: number | null,
-	interruptedDownload: InterruptedDownloadInfo | null,
+	interruptedDownload?: InterruptedDownloadInfo | null,
 };
 
 export type LocalLlmModelCard_Serialize = {

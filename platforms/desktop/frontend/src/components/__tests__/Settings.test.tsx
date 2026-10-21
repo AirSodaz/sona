@@ -466,7 +466,8 @@ describe('Settings', () => {
           'test-model',
           expect.any(Function),
           expect.any(AbortSignal),
-          undefined
+          undefined,
+          expect.stringContaining('test-model')
         );
       });
     },
