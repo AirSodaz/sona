@@ -55,7 +55,7 @@ impl TestServer {
         let certified = generate_simple_self_signed(vec!["localhost".to_string()]).unwrap();
         let tls = RustlsConfig::from_pem(
             certified.cert.pem().into_bytes(),
-            certified.key_pair.serialize_pem().into_bytes(),
+            certified.signing_key.serialize_pem().into_bytes(),
         )
         .await
         .unwrap();
@@ -74,6 +74,7 @@ impl TestServer {
             .with_state(state.clone());
         let task = tokio::spawn(async move {
             axum_server::from_tcp_rustls(listener, tls)
+                .unwrap()
                 .serve(app.into_make_service())
                 .await
                 .unwrap();
