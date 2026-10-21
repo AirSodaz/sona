@@ -23,3 +23,6 @@ pub use models::{
     download_model, download_model_with_cancel, download_model_with_cancel_and_mirror,
     installed_model_is_complete, installed_model_is_valid, remove_model_install_path,
 };
+pub use sona_core::models::downloads::{
+    InterruptedDownloadInfo, clean_interrupted_download, inspect_interrupted_download,
+};

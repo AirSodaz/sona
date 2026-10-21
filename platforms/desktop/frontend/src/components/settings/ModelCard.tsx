@@ -1,7 +1,8 @@
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { formatBytes } from '../../hooks/notifications/modelDownloadAdapter';
 import { type ModelInfo, resolveModelLabels, resolveModelRatings } from '../../types/modelCatalog';
-import { CheckIcon, DownloadIcon, TrashIcon, XIcon } from '../Icons';
+import { CheckIcon, DownloadIcon, StopIcon, TrashIcon } from '../Icons';
 import { isAsrModel, ModelBrandLogo, resolveModelBrand } from '../icons/ModelLogos';
 import { LanguageBadges } from '../LanguageBadges';
 
@@ -14,7 +15,8 @@ type ModelStatus =
   | { kind: 'not-installed' }
   | { kind: 'downloading'; progress: number }
   | { kind: 'installed' }
-  | { kind: 'partial'; installed: number; total: number };
+  | { kind: 'partial'; installed: number; total: number }
+  | { kind: 'interrupted'; progress: number | null };
 
 interface ModelCardProps {
   models: ModelInfo[];
@@ -23,6 +25,7 @@ interface ModelCardProps {
   onDelete: (model: ModelInfo) => void;
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
+  onDiscardDownload?: (model: ModelInfo) => void;
   actionsDisabled?: boolean;
   isAsr?: boolean;
 }
@@ -34,6 +37,7 @@ interface ModelCardActionsProps {
   onDelete: (model: ModelInfo) => void;
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: () => void;
+  onDiscardDownload?: (model: ModelInfo) => void;
   disabled?: boolean;
 }
 
@@ -105,6 +109,17 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
             total: status.total,
             defaultValue: '{{installed}}/{{total}} 已安装',
           })}
+        </span>
+      );
+    case 'interrupted':
+      return (
+        <span className="model-status-chip model-status-interrupted">
+          {status.progress != null
+            ? t('settings.model_status_interrupted', {
+                progress: Math.round(status.progress),
+                defaultValue: `Paused (${Math.round(status.progress)}%)`,
+              })
+            : t('settings.model_status_interrupted_no_progress', { defaultValue: 'Paused' })}
         </span>
       );
     default:
@@ -207,6 +222,7 @@ function ModelCardActions({
   onDelete,
   onDownload,
   onCancelDownload,
+  onDiscardDownload,
   disabled = false,
 }: ModelCardActionsProps): React.JSX.Element {
   const { t } = useTranslation();
@@ -230,13 +246,57 @@ function ModelCardActions({
     return (
       <button
         type="button"
-        className="model-action-icon"
+        className="model-action-icon model-action-cancel"
         onClick={onCancelDownload}
         aria-label={t('common.cancel')}
         data-tooltip={t('common.cancel')}
       >
-        <XIcon />
+        <StopIcon />
       </button>
+    );
+  }
+
+  const isInterrupted = !isInstalled && !isDownloading && !!model.interruptedDownload;
+  if (isInterrupted) {
+    const pct = model.interruptedDownload?.percentage;
+    const downloadedFormatted = formatBytes(model.interruptedDownload?.downloadedBytes) || '0 MB';
+    const downloadTooltip =
+      pct != null
+        ? t('settings.resume_download_tooltip', {
+            progress: Math.round(pct),
+            defaultValue: `Resume download (${Math.round(pct)}% completed)`,
+          })
+        : t('settings.resume_download', { defaultValue: 'Resume download' });
+    const downloadAriaLabel = `${t('settings.resume_download', { defaultValue: 'Resume download' })} ${model.name}`;
+
+    return (
+      <>
+        <button
+          type="button"
+          className="model-action-icon"
+          onClick={() => onDownload(model)}
+          disabled={disabled}
+          aria-label={downloadAriaLabel}
+          data-tooltip={downloadTooltip}
+        >
+          <DownloadIcon />
+        </button>
+        {onDiscardDownload && (
+          <button
+            type="button"
+            className="model-action-icon model-action-delete"
+            onClick={() => onDiscardDownload(model)}
+            disabled={disabled}
+            aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
+            data-tooltip={t('settings.discard_download_tooltip', {
+              size: downloadedFormatted,
+              defaultValue: `Discard incomplete download (${downloadedFormatted})`,
+            })}
+          >
+            <TrashIcon />
+          </button>
+        )}
+      </>
     );
   }
 
@@ -261,6 +321,7 @@ export function ModelCard({
   onDelete,
   onDownload,
   onCancelDownload,
+  onDiscardDownload,
   actionsDisabled = false,
   isAsr: isAsrProp,
 }: ModelCardProps): React.JSX.Element | null {
@@ -278,16 +339,33 @@ export function ModelCard({
   const headerStatus: ModelStatus = (() => {
     if (!isMultiVersion) {
       if (baseDownload) return { kind: 'downloading', progress: baseDownload.progress };
-      return installedModels.has(baseModel.id) ? { kind: 'installed' } : { kind: 'not-installed' };
+      if (installedModels.has(baseModel.id)) return { kind: 'installed' };
+      if (baseModel.interruptedDownload) {
+        return {
+          kind: 'interrupted',
+          progress: baseModel.interruptedDownload.percentage ?? null,
+        };
+      }
+      return { kind: 'not-installed' };
     }
     const downloadingModel = models.find((model) => downloads[model.id]);
     if (downloadingModel) {
       return { kind: 'downloading', progress: downloads[downloadingModel.id].progress };
     }
     const installedCount = models.filter((model) => installedModels.has(model.id)).length;
-    if (installedCount === 0) return { kind: 'not-installed' };
     if (installedCount === models.length) return { kind: 'installed' };
-    return { kind: 'partial', installed: installedCount, total: models.length };
+    if (installedCount > 0)
+      return { kind: 'partial', installed: installedCount, total: models.length };
+    const interruptedModel = models.find(
+      (model) => !installedModels.has(model.id) && model.interruptedDownload
+    );
+    if (interruptedModel?.interruptedDownload) {
+      return {
+        kind: 'interrupted',
+        progress: interruptedModel.interruptedDownload.percentage ?? null,
+      };
+    }
+    return { kind: 'not-installed' };
   })();
 
   return (
@@ -343,6 +421,7 @@ export function ModelCard({
                 onDelete={onDelete}
                 onDownload={onDownload}
                 onCancelDownload={() => onCancelDownload(baseModel.id)}
+                onDiscardDownload={onDiscardDownload}
                 disabled={actionsDisabled}
               />
             </div>
@@ -364,6 +443,18 @@ export function ModelCard({
                     <span className="model-version-label">{model.versionLabel || model.name}</span>
                     <span className="model-tag model-tag-engine">{ENGINE_LABEL[model.engine]}</span>
                     {isInstalled && <CheckIcon className="model-version-check" />}
+                    {!isInstalled && !isDownloading && model.interruptedDownload && (
+                      <span className="model-status-chip model-status-interrupted">
+                        {model.interruptedDownload.percentage != null
+                          ? t('settings.model_status_interrupted', {
+                              progress: Math.round(model.interruptedDownload.percentage),
+                              defaultValue: `Paused (${Math.round(model.interruptedDownload.percentage)}%)`,
+                            })
+                          : t('settings.model_status_interrupted_no_progress', {
+                              defaultValue: 'Paused',
+                            })}
+                      </span>
+                    )}
                   </div>
                   <div className="model-card-side">
                     <span className="model-size">{model.size}</span>
@@ -374,6 +465,7 @@ export function ModelCard({
                       onDelete={onDelete}
                       onDownload={onDownload}
                       onCancelDownload={() => onCancelDownload(model.id)}
+                      onDiscardDownload={onDiscardDownload}
                       disabled={actionsDisabled}
                     />
                   </div>

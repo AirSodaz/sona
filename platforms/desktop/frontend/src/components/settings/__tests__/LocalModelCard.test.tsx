@@ -96,6 +96,8 @@ describe('LocalModelCard', () => {
     expect(cancelBtn).toBeTruthy();
     expect(cancelBtn.getAttribute('data-tooltip')).toBe('取消');
     expect(cancelBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(cancelBtn.className).toContain('model-action-cancel');
+    expect(cancelBtn.className).not.toContain('model-action-delete');
     fireEvent.click(cancelBtn);
     expect(onCancelDownload).toHaveBeenCalledWith('qwen3.5-4b');
   });
@@ -417,5 +419,68 @@ describe('LocalModelCard', () => {
       name: /测试连接 Qwen3.5 4B/i,
     }) as HTMLButtonElement;
     expect(testBtn.disabled).toBe(true);
+  });
+
+  it('renders interrupted download chip and resume tooltip when download was interrupted', () => {
+    const interruptedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: mockCard.id,
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    const { container } = render(
+      <LocalModelCard
+        card={interruptedCard}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toContain('50%');
+
+    const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
+    expect(downloadBtn).toBeTruthy();
+    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+  });
+
+  it('renders discard button and fires onDiscardDownload on click', () => {
+    const interruptedCard: LocalLlmModelCardType = {
+      ...mockCard,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: mockCard.id,
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+    const onDiscardDownload = vi.fn();
+
+    render(
+      <LocalModelCard
+        card={interruptedCard}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDelete={vi.fn()}
+        onDiscardDownload={onDiscardDownload}
+        t={defaultT}
+      />
+    );
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
+    expect(discardBtn).toBeTruthy();
+    fireEvent.click(discardBtn);
+    expect(onDiscardDownload).toHaveBeenCalledWith(interruptedCard);
   });
 });

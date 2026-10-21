@@ -1,0 +1,250 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
+import { adaptModelDownloadsEntries, formatBytes } from '../modelDownloadAdapter';
+
+const mockT = ((key: string, options?: { defaultValue?: string } & Record<string, unknown>) => {
+  if (options?.defaultValue) return options.defaultValue;
+  return key;
+}) as any;
+
+describe('formatBytes', () => {
+  it('formats MB and GB correctly', () => {
+    expect(formatBytes(undefined)).toBe('');
+    expect(formatBytes(null)).toBe('');
+    expect(formatBytes(0)).toBe('0 MB');
+    expect(formatBytes(-100)).toBe('');
+    expect(formatBytes(500)).toBe('500 B');
+    expect(formatBytes(350 * 1024)).toBe('350 KB');
+    expect(formatBytes(50 * 1024 * 1024)).toBe('50 MB');
+    expect(formatBytes(1.5 * 1024 * 1024 * 1024)).toBe('1.50 GB');
+  });
+
+  it('handles Infinity, NaN, and negative numbers cleanly', () => {
+    expect(formatBytes(Number.POSITIVE_INFINITY)).toBe('');
+    expect(formatBytes(Number.NEGATIVE_INFINITY)).toBe('');
+    expect(formatBytes(Number.NaN)).toBe('');
+    expect(formatBytes(-1)).toBe('');
+  });
+});
+
+describe('adaptModelDownloadsEntries', () => {
+  const callbacks = {
+    cancelDownload: vi.fn(),
+    dismissDownload: vi.fn(),
+  };
+
+  beforeEach(() => {
+    useModelDownloadStore.setState({ downloads: {} });
+  });
+
+  it('adapts active download entry with progress and cancel action', () => {
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl1: {
+          id: 'dl1',
+          modelId: 'sensevoice',
+          modelName: 'SenseVoice Small',
+          modelType: 'asr',
+          status: 'downloading',
+          progress: 45,
+          downloadedBytes: 100 * 1024 * 1024,
+          totalBytes: 200 * 1024 * 1024,
+          speed: '5.2 MB/s',
+          timestamp: 1000,
+          downloadId: 'dl1',
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.id).toBe('model-dl-sensevoice');
+    expect(entry.priority).toBe('active');
+    expect(entry.tone).toBe('accent');
+    expect(entry.progress).toBe(45);
+    expect(entry.body).toContain('100 MB / 200 MB');
+    expect(entry.body).toContain('5.2 MB/s');
+    expect(entry.actions).toHaveLength(1);
+    expect(entry.actions[0].id).toBe('cancel-sensevoice');
+
+    entry.actions[0].run();
+    expect(callbacks.cancelDownload).toHaveBeenCalledWith('sensevoice', 'dl1');
+  });
+
+  it('never produces dangling slash when totalBytes is 0, missing, or invalid', () => {
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl1: {
+          id: 'dl1',
+          modelId: 'test1',
+          modelName: 'Test 1',
+          modelType: 'asr',
+          status: 'downloading',
+          progress: 0,
+          downloadedBytes: 1024,
+          totalBytes: 0,
+          timestamp: 1000,
+          downloadId: 'dl1',
+        },
+        dl2: {
+          id: 'dl2',
+          modelId: 'test2',
+          modelName: 'Test 2',
+          modelType: 'asr',
+          status: 'downloading',
+          progress: 0,
+          downloadedBytes: 1024,
+          totalBytes: undefined,
+          timestamp: 1000,
+          downloadId: 'dl2',
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    for (const entry of entries) {
+      expect(entry.body).not.toContain('/');
+      expect(entry.body).toBe('1 KB');
+    }
+  });
+
+  it('adapts completed download entry with success tone and close action', () => {
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl2: {
+          id: 'dl2',
+          modelId: 'qwen3.5-4b',
+          modelName: 'Qwen3.5 4B',
+          modelType: 'llm',
+          status: 'completed',
+          progress: 100,
+          timestamp: 2000,
+          downloadId: 'dl2',
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.priority).toBe('info');
+    expect(entry.tone).toBe('success');
+    expect(entry.closeAction).toBeDefined();
+
+    entry.closeAction?.run();
+    expect(callbacks.dismissDownload).toHaveBeenCalledWith('qwen3.5-4b');
+  });
+
+  it('adapts failed download entry with action priority and retry action', () => {
+    const onRetry = vi.fn();
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl3: {
+          id: 'dl3',
+          modelId: 'paraformer',
+          modelName: 'Paraformer Large',
+          modelType: 'asr',
+          status: 'failed',
+          progress: 60,
+          error: 'Connection reset by peer',
+          timestamp: 3000,
+          downloadId: 'dl3',
+          onRetry,
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.priority).toBe('action');
+    expect(entry.tone).toBe('error');
+    expect(entry.body).toBe('Failed to complete model download.');
+    expect(entry.detail).toBe('Connection reset by peer');
+    expect(entry.actions).toHaveLength(1);
+    expect(entry.actions[0].id).toBe('retry-paraformer');
+    expect(entry.actions[0].label).toBe('Retry');
+
+    entry.actions[0].run();
+    expect(onRetry).toHaveBeenCalled();
+  });
+
+  it('adapts cancelled download entry with info tone and resume action when onRetry is provided', () => {
+    const onRetry = vi.fn();
+    const entries = adaptModelDownloadsEntries(
+      {
+        dl4: {
+          id: 'dl4',
+          modelId: 'whisper-large',
+          modelName: 'Whisper Large',
+          modelType: 'asr',
+          status: 'cancelled',
+          progress: 30,
+          timestamp: 4000,
+          downloadId: 'dl4',
+          onRetry,
+        },
+      },
+      mockT,
+      callbacks
+    );
+
+    expect(entries).toHaveLength(1);
+    const entry = entries[0];
+    expect(entry.priority).toBe('info');
+    expect(entry.tone).toBe('info');
+    expect(entry.closeAction).toBeDefined();
+    expect(entry.actions).toHaveLength(1);
+    expect(entry.actions[0].id).toBe('retry-whisper-large');
+    expect(entry.actions[0].label).toBe('Resume');
+
+    entry.actions[0].run();
+    expect(onRetry).toHaveBeenCalled();
+  });
+});
+
+describe('modelDownloadStore', () => {
+  it('manages download state transitions properly', () => {
+    const store = useModelDownloadStore.getState();
+
+    // Start download
+    store.startDownload({
+      modelId: 'test-model',
+      modelName: 'Test Model',
+      downloadId: 'test-dl-1',
+    });
+
+    let current = useModelDownloadStore.getState().downloads['test-model'];
+    expect(current).toBeDefined();
+    expect(current.status).toBe('downloading');
+    expect(current.progress).toBe(0);
+
+    // Update progress
+    store.updateProgress('test-dl-1', {
+      progress: 55,
+      downloadedBytes: 550,
+      totalBytes: 1000,
+      speed: '1.2 MB/s',
+    });
+
+    current = useModelDownloadStore.getState().downloads['test-model'];
+    expect(current.progress).toBe(55);
+    expect(current.downloadedBytes).toBe(550);
+    expect(current.speed).toBe('1.2 MB/s');
+
+    // Complete download
+    store.completeDownload('test-model');
+    current = useModelDownloadStore.getState().downloads['test-model'];
+    expect(current.status).toBe('completed');
+    expect(current.progress).toBe(100);
+
+    // Clear completed
+    store.clearCompleted();
+    expect(useModelDownloadStore.getState().downloads['test-model']).toBeUndefined();
+  });
+});

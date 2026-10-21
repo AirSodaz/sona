@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLlmSettings } from '../../../services/llm/state';
 import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmCompletionResponse } from '../../../types/llm';
 import { LocalProviderAccordionItem } from '../llm/LocalProviderAccordionItem';
@@ -33,6 +34,7 @@ vi.mock('../../../services/tauri/app', () => ({
   downloadPresetModel: vi.fn(),
   cancelDownload: vi.fn(),
   deletePresetModel: vi.fn(),
+  cleanInterruptedDownload: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../../services/tauri/platform/dialog', () => ({
@@ -44,10 +46,25 @@ vi.mock('../../../stores/configStore', () => ({
     selector({ config: { modelDownloadMirror: 'direct' } }),
 }));
 
+const mockConfirm = vi.fn().mockResolvedValue(true);
+const mockCheckboxConfirm = vi.fn().mockResolvedValue({ confirmed: true, checked: false });
+const mockShowError = vi.fn().mockResolvedValue(undefined);
+
 vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (
-    selector: (state: { confirm: (opts: unknown) => Promise<boolean> }) => unknown
-  ) => selector({ confirm: vi.fn().mockResolvedValue(true) }),
+    selector: (state: {
+      confirm: typeof mockConfirm;
+      checkboxConfirm: typeof mockCheckboxConfirm;
+      alert: (opts: unknown) => Promise<void>;
+      showError: typeof mockShowError;
+    }) => unknown
+  ) =>
+    selector({
+      confirm: mockConfirm,
+      checkboxConfirm: mockCheckboxConfirm,
+      alert: vi.fn().mockResolvedValue(undefined),
+      showError: mockShowError,
+    }),
 }));
 
 const mockConfig: LlmAssistantConfig = {
@@ -101,6 +118,7 @@ describe('LocalProviderAccordionItem', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useModelDownloadStore.setState({ downloads: {} });
   });
 
   it('renders import GGUF and refresh buttons with project unified data-tooltip instead of title', () => {
@@ -366,5 +384,154 @@ describe('LocalProviderAccordionItem', () => {
     await vi.waitFor(() => {
       expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
     });
+  });
+
+  it('resumes download directly without prompt when downloading an interrupted model', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+
+    expect(mockCheckboxConfirm).not.toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'qwen3.5-4b' })
+    );
+  });
+
+  it('cleans interrupted download when discard button is clicked and confirmed', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockConfirm.mockResolvedValueOnce(true);
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
+    expect(downloadPresetModel).not.toHaveBeenCalled();
+  });
+
+  it('does not clean interrupted download when discard button is clicked and cancelled', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockConfirm.mockResolvedValueOnce(false);
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).not.toHaveBeenCalled();
   });
 });

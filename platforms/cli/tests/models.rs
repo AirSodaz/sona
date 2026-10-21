@@ -934,3 +934,125 @@ fn models_list_shows_auxiliary_models_hidden_note() {
     assert!(output.stdout.contains("auxiliary companion models"));
     assert!(output.stdout.contains("'-a/--all'"));
 }
+
+#[test]
+fn models_info_shows_incomplete_download_when_present() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    // Create partial .download file for silero-vad
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-silero").unwrap();
+
+    let output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "info",
+        "silero-vad",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    assert!(output.stdout.contains("Incomplete:"));
+    assert!(output.stdout.contains("yes"));
+    assert!(output.stdout.contains("14 B"));
+
+    // Check JSON output
+    let json_output = sona_cli::run_cli_from_args([
+        "sona-cli",
+        "models",
+        "info",
+        "silero-vad",
+        "-j",
+        "--models-dir",
+        models_dir.to_string_lossy().as_ref(),
+    ])
+    .unwrap();
+
+    let val: serde_json::Value = serde_json::from_str(&json_output.stdout).unwrap();
+    assert_eq!(val["interrupted_download"]["modelId"], "silero-vad");
+    assert_eq!(val["interrupted_download"]["downloadedBytes"], 14);
+}
+
+#[tokio::test]
+async fn models_download_resumes_prompt_cancel() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-silero").unwrap();
+
+    let mut io = sona_cli::MemoryCliIo {
+        stdin_is_terminal: true,
+        stdin_lines: std::collections::VecDeque::from([String::from("n\n")]),
+        ..Default::default()
+    };
+
+    let res = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "models",
+            "download",
+            "silero-vad",
+            "--models-dir",
+            models_dir.to_string_lossy().as_ref(),
+        ],
+        &mut io,
+    )
+    .await;
+
+    assert!(matches!(res, Err(sona_cli::CliError::Model(msg)) if msg.contains("cancelled")));
+    let out = io.into_output();
+    assert!(
+        out.stderr
+            .contains("Found incomplete download for silero-vad")
+    );
+    assert!(out.stderr.contains("Resume download? [Y/n/restart]"));
+}
+
+#[tokio::test]
+async fn models_download_resumes_prompt_restart_cleans_incomplete() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-silero").unwrap();
+
+    let mut io = sona_cli::MemoryCliIo {
+        stdin_is_terminal: true,
+        stdin_lines: std::collections::VecDeque::from([String::from("restart\n")]),
+        ..Default::default()
+    };
+
+    let _res = sona_cli::run_cli_with_io_async(
+        [
+            "sona-cli",
+            "models",
+            "download",
+            "silero-vad",
+            "--models-dir",
+            models_dir.to_string_lossy().as_ref(),
+        ],
+        &mut io,
+    )
+    .await;
+
+    let out = io.into_output();
+    assert!(
+        out.stderr
+            .contains("Found incomplete download for silero-vad")
+    );
+    assert!(
+        out.stderr
+            .contains("Restarting download for silero-vad from beginning...")
+    );
+    // Verify that the partial file was cleaned/removed before proceeding to download
+    let original_content_retained = std::fs::read(&temp_file)
+        .map(|content| content == b"partial-silero")
+        .unwrap_or(false);
+    assert!(!original_content_retained);
+}

@@ -118,6 +118,7 @@
       "download_failed": "Failed to download the model.",
       "load_failed": "Failed to load model: {{name}}",
       "delete_failed": "Failed to delete model: {{name}}",
+      "clean_failed": "Failed to clean incomplete download files. Please check if the files are in use.",
       "already_in_progress": "This model is currently being downloaded by another process. Please wait for it to finish."
     },
     "export": {
@@ -2510,6 +2511,15 @@
     "model_search_clear": "Clear search",
     "model_status_installed": "Installed",
     "model_status_partial_installed": "{{installed}}/{{total}} installed",
+    "model_status_interrupted": "Paused ({{progress}}%)",
+    "model_status_interrupted_no_progress": "Paused",
+    "discard_download": "Discard Incomplete Download",
+    "discard_download_tooltip": "Discard incomplete download ({{size}})",
+    "discard_download_confirm_title": "Discard Incomplete Download",
+    "discard_download_confirm_message": "Are you sure you want to discard the incomplete download for {{name}} ({{progress}})? This will delete partial files and free up disk space.",
+    "discard_download_confirm_button": "Discard Files",
+    "resume_download": "Resume Download",
+    "resume_download_tooltip": "Resume download ({{progress}}% completed)",
     "model_rating_accuracy": "Accuracy",
     "model_rating_speed": "Speed",
     "model_tag_accurate": "Accurate",
@@ -2875,5 +2885,15 @@
     "export_txt": "Plain Text (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "Downloading {{name}}…",
+      "completed_title": "{{name}} ready",
+      "completed_body": "Model installed and ready to use.",
+      "failed_title": "{{name}} download failed",
+      "failed_body": "Failed to complete model download.",
+      "cancelled_title": "{{name}} download cancelled"
+    }
   }
 }

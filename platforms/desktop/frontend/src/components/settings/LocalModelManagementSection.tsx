@@ -31,7 +31,12 @@ export interface LocalModelManagementSectionProps {
   catalogLoadError: ModelManagerContextType['catalogLoadError'];
   sectionProps: Pick<
     ModelManagerContextType,
-    'installedModels' | 'downloads' | 'handleDelete' | 'handleDownload' | 'handleCancelDownload'
+    | 'installedModels'
+    | 'downloads'
+    | 'handleDelete'
+    | 'handleDownload'
+    | 'handleCancelDownload'
+    | 'handleDiscardDownload'
   >;
   localModelActionsDisabled: boolean;
   getSectionGroups: (
@@ -141,6 +146,11 @@ export function LocalModelManagementSection({
     );
   }, [filterModels, getSectionGroups]);
 
+  const hasLoadedSections = useMemo(
+    () => Array.from(filteredGroupsByType.values()).some((groups) => groups.length > 0),
+    [filteredGroupsByType]
+  );
+
   const isCatalogLoading = catalogLoadState === 'loading';
   const isCatalogReady = catalogLoadState === 'ready';
 
@@ -224,7 +234,7 @@ export function LocalModelManagementSection({
           </div>
         </div>
       )}
-      {isCatalogLoading && (
+      {isCatalogLoading && !hasLoadedSections && (
         <div className="settings-hint" role="status">
           {t('settings.models_checking_local', { defaultValue: 'Checking local models...' })}
         </div>
@@ -237,7 +247,7 @@ export function LocalModelManagementSection({
           })}
         </div>
       )}
-      {isCatalogReady && (
+      {(isCatalogReady || hasLoadedSections) && (
         <>
           <SettingsAccordion
             title={t('settings.recognition_models')}
@@ -258,6 +268,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -286,6 +297,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -314,6 +326,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -344,6 +357,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -374,6 +388,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}
@@ -404,6 +419,7 @@ export function LocalModelManagementSection({
                 onDelete={sectionProps.handleDelete}
                 onDownload={sectionProps.handleDownload}
                 onCancelDownload={sectionProps.handleCancelDownload}
+                onDiscardDownload={sectionProps.handleDiscardDownload}
                 actionsDisabled={localModelActionsDisabled}
               />
             ))}

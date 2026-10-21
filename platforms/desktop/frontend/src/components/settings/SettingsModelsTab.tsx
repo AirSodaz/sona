@@ -143,6 +143,7 @@ export function SettingsModelsTab({
     handleDelete,
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
     restoreDefaultModelSettings,
   } = useModelManagerContext();
 
@@ -438,6 +439,7 @@ export function SettingsModelsTab({
     handleDelete,
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
   };
 
   const speakerDisabledOption = useMemo(

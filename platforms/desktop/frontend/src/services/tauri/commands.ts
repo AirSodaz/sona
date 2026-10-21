@@ -10,6 +10,8 @@ export const TauriCommand = {
     downloadFile: 'download_file',
     downloadPresetModel: 'download_preset_model',
     deletePresetModel: 'delete_preset_model',
+    checkInterruptedDownload: 'check_interrupted_download',
+    cleanInterruptedDownload: 'clean_interrupted_download',
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
     getModelCatalogSnapshot: 'get_model_catalog_snapshot',

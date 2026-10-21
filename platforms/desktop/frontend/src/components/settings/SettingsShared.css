@@ -1246,6 +1246,12 @@
   color: var(--color-text-muted);
 }
 
+.model-status-interrupted {
+  background: color-mix(in srgb, var(--color-text-muted) 12%, transparent);
+  color: var(--color-text-secondary);
+  border-color: color-mix(in srgb, var(--color-border) 80%, transparent);
+}
+
 /* Semantic tag tints: scenario, engine, recommendation. */
 .model-tag-mode {
   background: color-mix(in srgb, var(--color-info) 10%, transparent);
@@ -1420,6 +1426,11 @@
 .model-action-delete:hover:not(:disabled) {
   background: color-mix(in srgb, var(--color-error) 10%, transparent);
   color: var(--color-error);
+}
+
+.model-action-cancel:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-warning, #d97706) 12%, transparent);
+  color: var(--color-warning, #d97706);
 }
 
 .model-action-add:hover:not(:disabled) {

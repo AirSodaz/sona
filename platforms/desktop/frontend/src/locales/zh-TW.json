@@ -118,6 +118,7 @@
       "download_failed": "下載模型失敗。",
       "load_failed": "載入模型失敗：{{name}}",
       "delete_failed": "刪除模型失敗：{{name}}",
+      "clean_failed": "無法清理未完成的下載檔案，請檢查檔案是否被佔用。",
       "already_in_progress": "該模型當前正被另一個進程下載，請等待其完成。"
     },
     "export": {
@@ -2026,6 +2027,15 @@
     "model_search_clear": "清除搜尋",
     "model_status_installed": "已安裝",
     "model_status_partial_installed": "{{installed}}/{{total}} 已安裝",
+    "model_status_interrupted": "已暫停 ({{progress}}%)",
+    "model_status_interrupted_no_progress": "已暫停",
+    "discard_download": "丟棄未完成的下載",
+    "discard_download_tooltip": "丟棄未完成的下載 (已佔用 {{size}})",
+    "discard_download_confirm_title": "丟棄未完成的下載",
+    "discard_download_confirm_message": "確定要丟棄 {{name}} 未完成的下載檔案（{{progress}}）嗎？此操作將清除暫存檔並釋放磁碟空間。",
+    "discard_download_confirm_button": "丟棄檔案",
+    "resume_download": "繼續下載",
+    "resume_download_tooltip": "繼續下載 (已完成 {{progress}}%)",
     "model_rating_accuracy": "準確度",
     "model_rating_speed": "速度",
     "model_tag_accurate": "準確",
@@ -2875,5 +2885,15 @@
     "export_txt": "純文字 (.txt)",
     "export_md": "Markdown (.md)",
     "export_json": "JSON (.json)"
+  },
+  "notifications": {
+    "model_download": {
+      "downloading_title": "正在下載 {{name}}…",
+      "completed_title": "{{name}} 下載完成",
+      "completed_body": "模型已安裝就緒。",
+      "failed_title": "{{name}} 下載失敗",
+      "failed_body": "未能完成模型下載。",
+      "cancelled_title": "{{name}} 下載已取消"
+    }
   }
 }

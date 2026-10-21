@@ -44,7 +44,16 @@ pub async fn download_preset_model(
     let model_id = req.model_id;
     let mirror = req.mirror;
 
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(app)?;
+    sona_core::models::downloads::resolve_model_download(&model_id, &models_dir)
+        .map_err(|e| e.to_string())?;
+    let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+    let _download_guard = services
+        .downloads
+        .register_download(download_id.clone(), notify);
+
     tauri::async_runtime::spawn(async move {
+        let _guard = _download_guard;
         if let Err(e) = crate::platform::model_downloads::download_preset_model(
             app_clone,
             &downloads_service,
@@ -65,8 +74,7 @@ pub async fn cancel_download(
     services: &DesktopServices,
     download_id: String,
 ) -> Result<bool, String> {
-    services.downloads.notify_download(&download_id).await;
-    Ok(true)
+    Ok(services.downloads.notify_download(&download_id).await)
 }
 
 pub async fn delete_preset_model(

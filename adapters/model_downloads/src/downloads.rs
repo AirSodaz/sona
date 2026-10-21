@@ -1,4 +1,4 @@
-﻿use reqwest::header::RANGE;
+use reqwest::header::RANGE;
 use sha2::{Digest, Sha256};
 use std::io::SeekFrom;
 use std::path::{Path, PathBuf};
@@ -296,7 +296,13 @@ pub async fn download_file(
     // Acquire an exclusive lock on the download file BEFORE establishing any
     // network connection. This lets us fail fast with AlreadyInProgress
     // instead of wasting a TCP connection and downloading bytes we cannot use.
-    let mut file = open_and_lock_download_file(temp_path).await?;
+    let mut file = tokio::select! {
+        biased;
+        _ = notify.notified() => {
+            return Err(DownloadError::Cancelled);
+        }
+        res = open_and_lock_download_file(temp_path) => res?,
+    };
 
     let max_retries = 3;
     let mut attempt = 0;
@@ -311,13 +317,25 @@ pub async fn download_file(
             request = request.header(RANGE, format!("bytes={}-", current_size));
         }
 
-        let res_result = request.send().await;
+        let res_result = tokio::select! {
+            biased;
+            _ = notify.notified() => {
+                return Err(DownloadError::Cancelled);
+            }
+            res = request.send() => res,
+        };
         let res = match res_result {
             Ok(r) => r,
             Err(e) => {
                 if attempt < max_retries {
                     attempt += 1;
-                    tokio::time::sleep(std::time::Duration::from_secs(1 << (attempt - 1))).await;
+                    tokio::select! {
+                        biased;
+                        _ = notify.notified() => {
+                            return Err(DownloadError::Cancelled);
+                        }
+                        _ = tokio::time::sleep(std::time::Duration::from_secs(1 << (attempt - 1))) => {}
+                    }
                     continue;
                 }
                 return Err(DownloadError::Network(e));
@@ -366,6 +384,7 @@ pub async fn download_file(
         let mut cancelled = false;
 
         tokio::select! {
+            biased;
             _ = notify.notified() => {
                 cancelled = true;
             }
@@ -409,7 +428,13 @@ pub async fn download_file(
             }
             if attempt < max_retries && matches!(e, DownloadError::Network(_)) {
                 attempt += 1;
-                tokio::time::sleep(std::time::Duration::from_secs(1 << (attempt - 1))).await;
+                tokio::select! {
+                    biased;
+                    _ = notify.notified() => {
+                        return Err(DownloadError::Cancelled);
+                    }
+                    _ = tokio::time::sleep(std::time::Duration::from_secs(1 << (attempt - 1))) => {}
+                }
                 continue;
             }
             return Err(e);

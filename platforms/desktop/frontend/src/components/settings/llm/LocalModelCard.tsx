@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
-import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
+import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
+import { DownloadIcon, StopIcon, TrashIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import './LocalModelCard.css';
 
@@ -43,19 +44,13 @@ interface LocalModelCardProps {
   onDownload: (card: LocalLlmModelCardType) => void;
   onCancelDownload: (cardId: string) => void;
   onDelete: (card: LocalLlmModelCardType) => void;
+  onDiscardDownload?: (card: LocalLlmModelCardType) => void;
   onApplyFeature?: (
     card: LocalLlmModelCardType,
     feature: 'polish' | 'translation' | 'summary' | 'all'
   ) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
-}
-
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)} MB`;
+  disabled?: boolean;
 }
 
 export type SupportedModality = 'text' | 'image' | 'audio' | 'video';
@@ -141,9 +136,11 @@ export function LocalModelCard({
   testState,
   onTest,
   isAnyTesting = false,
+  disabled = false,
   onDownload,
   onCancelDownload,
   onDelete,
+  onDiscardDownload,
   t,
 }: LocalModelCardProps): React.JSX.Element {
   const isDownloading = Boolean(downloadState);
@@ -233,6 +230,17 @@ export function LocalModelCard({
             <span className="model-status-chip model-status-installed">
               <Check size={11} />
               <span>{t('settings.llm.installed_ready', { defaultValue: '已就绪' })}</span>
+            </span>
+          ) : card.interruptedDownload ? (
+            <span className="model-status-chip model-status-interrupted">
+              <span>
+                {card.interruptedDownload.percentage != null
+                  ? t('settings.model_status_interrupted', {
+                      progress: Math.round(card.interruptedDownload.percentage),
+                      defaultValue: `Paused (${Math.round(card.interruptedDownload.percentage)}%)`,
+                    })
+                  : t('settings.model_status_interrupted_no_progress', { defaultValue: 'Paused' })}
+              </span>
             </span>
           ) : (
             <span className="model-status-chip model-status-not-installed">
@@ -358,13 +366,13 @@ export function LocalModelCard({
           {isDownloading ? (
             <button
               type="button"
-              className="model-action-icon"
+              className="model-action-icon model-action-cancel"
               onClick={() => onCancelDownload(card.id)}
               aria-label={t('common.cancel', { defaultValue: '取消' })}
               data-tooltip={t('common.cancel', { defaultValue: '取消' })}
               data-tooltip-pos="top"
             >
-              <XIcon />
+              <StopIcon />
             </button>
           ) : isInstalled ? (
             <button
@@ -377,11 +385,49 @@ export function LocalModelCard({
             >
               <TrashIcon />
             </button>
+          ) : card.interruptedDownload ? (
+            <>
+              <button
+                type="button"
+                className="model-action-icon"
+                onClick={() => onDownload(card)}
+                disabled={disabled}
+                aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${card.name}`}
+                data-tooltip={
+                  card.interruptedDownload.percentage != null
+                    ? t('settings.resume_download_tooltip', {
+                        progress: Math.round(card.interruptedDownload.percentage),
+                        defaultValue: `Resume download (${Math.round(card.interruptedDownload.percentage)}% completed)`,
+                      })
+                    : t('settings.resume_download', { defaultValue: 'Resume download' })
+                }
+                data-tooltip-pos="top"
+              >
+                <DownloadIcon />
+              </button>
+              {onDiscardDownload && (
+                <button
+                  type="button"
+                  className="model-action-icon model-action-delete"
+                  onClick={() => onDiscardDownload(card)}
+                  disabled={disabled}
+                  aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${card.name}`}
+                  data-tooltip={t('settings.discard_download_tooltip', {
+                    size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
+                    defaultValue: `Discard incomplete download (${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
+                  })}
+                  data-tooltip-pos="top"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </>
           ) : (
             <button
               type="button"
               className="model-action-icon"
               onClick={() => onDownload(card)}
+              disabled={disabled}
               aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
               data-tooltip={t('common.download', { defaultValue: '下载' })}
               data-tooltip-pos="top"
