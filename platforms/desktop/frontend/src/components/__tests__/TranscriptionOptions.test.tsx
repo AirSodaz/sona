@@ -1,9 +1,9 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as reactI18next from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { asrConfigService } from '../../services/asrConfigService';
 import { modelService } from '../../services/modelService';
-import { useConfigStore } from '../../stores/configStore';
+import { DEFAULT_CONFIG, useConfigStore } from '../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import type { ModelCatalogSnapshot } from '../../types/modelCatalog';
 import { TranscriptionOptions } from '../TranscriptionOptions';
@@ -24,14 +24,14 @@ vi.mock('react-i18next', async (importOriginal) => {
 
 describe('TranscriptionOptions', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
     useTranscriptRuntimeStore.setState({
       mode: 'live',
       isRecording: false,
     });
     useConfigStore.setState({
       config: {
-        ...useConfigStore.getState().config,
+        ...DEFAULT_CONFIG,
         enableTimeline: false,
         language: 'en',
       },
@@ -450,7 +450,9 @@ describe('TranscriptionOptions', () => {
     expect(getSnapshotSpy).toHaveBeenCalledTimes(1);
 
     fireEvent.click(getTriggerButton());
-    expect(getSnapshotSpy).toHaveBeenCalledTimes(2);
+    await waitFor(() => {
+      expect(getSnapshotSpy).toHaveBeenCalledTimes(2);
+    });
   });
 
   it('coerces language in capsule summary when active model enforces auto or fixed language', () => {

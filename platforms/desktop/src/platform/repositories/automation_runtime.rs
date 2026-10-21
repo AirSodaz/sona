@@ -195,8 +195,41 @@ fn schedule_candidate(
     let handle = tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(rule_for_task.debounce_ms)).await;
 
-        let mut previous_snapshot =
-            match candidate_payload_for_rule(&rule_for_task, &file_path_for_task) {
+        let mut previous_snapshot = match candidate_payload_for_rule(
+            &rule_for_task,
+            &file_path_for_task,
+        ) {
+            Ok(Some(snapshot)) => snapshot,
+            Ok(None) => {
+                state_for_task
+                    .inner
+                    .lock_pending_candidates()
+                    .remove(&pending_key_for_task);
+                return;
+            }
+            Err(error) => {
+                warn!(
+                    "[AutomationRuntime] Failed to stat candidate before stability wait: rule={} path={} error={}",
+                    rule_for_task.rule_id, file_path_for_task, error
+                );
+                state_for_task
+                    .inner
+                    .lock_pending_candidates()
+                    .remove(&pending_key_for_task);
+                return;
+            }
+        };
+
+        const MAX_STABILITY_CHECKS: usize = 20;
+        let mut stabilized_snapshot = None;
+
+        for attempt in 1..=MAX_STABILITY_CHECKS {
+            tokio::time::sleep(Duration::from_millis(rule_for_task.stable_window_ms)).await;
+
+            let current_snapshot = match candidate_payload_for_rule(
+                &rule_for_task,
+                &file_path_for_task,
+            ) {
                 Ok(Some(snapshot)) => snapshot,
                 Ok(None) => {
                     state_for_task
@@ -207,8 +240,12 @@ fn schedule_candidate(
                 }
                 Err(error) => {
                     warn!(
-                        "[AutomationRuntime] Failed to stat candidate before stability wait: rule={} path={} error={}",
-                        rule_for_task.rule_id, file_path_for_task, error
+                        "[AutomationRuntime] Failed to stat candidate during stability check (attempt {}/{}): rule={} path={} error={}",
+                        attempt,
+                        MAX_STABILITY_CHECKS,
+                        rule_for_task.rule_id,
+                        file_path_for_task,
+                        error
                     );
                     state_for_task
                         .inner
@@ -217,35 +254,6 @@ fn schedule_candidate(
                     return;
                 }
             };
-
-        const MAX_STABILITY_CHECKS: usize = 20;
-        let mut stabilized_snapshot = None;
-
-        for attempt in 1..=MAX_STABILITY_CHECKS {
-            tokio::time::sleep(Duration::from_millis(rule_for_task.stable_window_ms)).await;
-
-            let current_snapshot =
-                match candidate_payload_for_rule(&rule_for_task, &file_path_for_task) {
-                    Ok(Some(snapshot)) => snapshot,
-                    Ok(None) => {
-                        state_for_task
-                            .inner
-                            .lock_pending_candidates()
-                            .remove(&pending_key_for_task);
-                        return;
-                    }
-                    Err(error) => {
-                        warn!(
-                            "[AutomationRuntime] Failed to stat candidate during stability check (attempt {}/{}): rule={} path={} error={}",
-                            attempt, MAX_STABILITY_CHECKS, rule_for_task.rule_id, file_path_for_task, error
-                        );
-                        state_for_task
-                            .inner
-                            .lock_pending_candidates()
-                            .remove(&pending_key_for_task);
-                        return;
-                    }
-                };
 
             if previous_snapshot == current_snapshot {
                 stabilized_snapshot = Some(current_snapshot);
@@ -688,7 +696,10 @@ mod tests {
 
         // Append after debounce during stability window
         tokio::time::sleep(Duration::from_millis(15)).await;
-        let mut f = fs::OpenOptions::new().append(true).open(&file_path).unwrap();
+        let mut f = fs::OpenOptions::new()
+            .append(true)
+            .open(&file_path)
+            .unwrap();
         std::io::Write::write_all(&mut f, b" additional chunk").unwrap();
         drop(f);
 

@@ -24,7 +24,6 @@ pub mod tag;
 pub mod task_ledger;
 
 pub use application_context::SqliteApplicationContext;
-pub use schema::CURRENT_SCHEMA_VERSION;
 pub use automation::{
     AutomationRepositoryState, SqliteAutomationAdapter, SqliteAutomationRepository,
 };
@@ -43,6 +42,7 @@ pub use history_store::SqliteHistoryStore;
 pub use project::{
     SqliteProjectAdapter, SqliteProjectRepository, SqliteTagAdapter, SqliteTagRepository,
 };
+pub use schema::CURRENT_SCHEMA_VERSION;
 #[cfg(any(test, feature = "test-support"))]
 pub use storage_usage_repository::LazySqliteStorageUsageRepository;
 pub use storage_usage_repository::{

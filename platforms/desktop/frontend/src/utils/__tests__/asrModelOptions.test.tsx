@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG } from '../../services/onlineAsrProviders';
+import {
+  DEFAULT_GROQ_WHISPER_ASR_CONFIG,
+  DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
+} from '../../services/onlineAsrProviders';
 import type { ModelConfig } from '../../types/config';
 import type { ModelCatalogSnapshot } from '../../types/modelCatalog';
 import {
@@ -268,6 +271,42 @@ describe('asrModelOptions', () => {
       const values = options.map((o) => o.value);
       expect(values).toContain('sensevoice-batch');
       expect(values.some((v) => v.startsWith('volcengine-doubao'))).toBe(true);
+    });
+
+    it('formats compound option values when cloud provider has multiple active models', () => {
+      const config: ModelConfig = {
+        streamingModelPath: '',
+        batchModelPath: '',
+        asr: {
+          selections: {
+            live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            batch: { engine: 'local', mode: 'batch', modelId: null, modelPath: '' },
+          },
+          providers: {
+            online: {
+              'groq-whisper': {
+                ...DEFAULT_GROQ_WHISPER_ASR_CONFIG,
+                apiKey: 'test-groq-key',
+                addedModels: ['whisper-large-v3-turbo', 'whisper-large-v3'],
+              },
+            },
+          },
+        },
+      };
+
+      const options = buildAsrModelDropdownOptions({
+        slot: 'batch',
+        snapshot: mockCatalog,
+        selectedModelId: '',
+        modelConfig: config,
+        t,
+      });
+
+      const values = options.map((o) => o.value);
+      expect(values).toContain('groq-whisper::whisper-large-v3-turbo');
+      expect(values).toContain('groq-whisper::whisper-large-v3');
     });
   });
 });
