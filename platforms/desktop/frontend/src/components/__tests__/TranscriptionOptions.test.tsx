@@ -119,11 +119,12 @@ describe('TranscriptionOptions', () => {
     dependencyRequestsByModelId: {},
     restoreDefaults: { enableITN: true, vadBufferSize: 8, maxConcurrent: 1 },
   };
+  const getTriggerButton = () => screen.getByRole('button', { name: /^Preset/i });
 
   it('renders closed by default with proper aria attributes', () => {
     render(<TranscriptionOptions />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     expect(button).toBeTruthy();
     expect(button.getAttribute('aria-expanded')).toBe('false');
     expect(button.getAttribute('aria-haspopup')).toBe('true');
@@ -140,7 +141,7 @@ describe('TranscriptionOptions', () => {
   it('expands popover on click and shows timeline and language options', () => {
     render(<TranscriptionOptions />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     fireEvent.click(button);
 
     expect(button.getAttribute('aria-expanded')).toBe('true');
@@ -161,7 +162,7 @@ describe('TranscriptionOptions', () => {
   it('collapses popover when clicking the trigger button again', () => {
     render(<TranscriptionOptions />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     fireEvent.click(button);
     expect(screen.getByRole('region', { name: 'Parameter Settings' })).toBeTruthy();
 
@@ -174,7 +175,7 @@ describe('TranscriptionOptions', () => {
   it('collapses popover on Escape key and restores focus to trigger button', () => {
     render(<TranscriptionOptions />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     button.focus();
     fireEvent.click(button);
     expect(screen.getByRole('region', { name: 'Parameter Settings' })).toBeTruthy();
@@ -183,7 +184,6 @@ describe('TranscriptionOptions', () => {
     expect(screen.queryByRole('region', { name: 'Parameter Settings' })).toBeNull();
     expect(document.activeElement).toBe(button);
   });
-
   it('collapses popover when clicking outside', () => {
     render(
       <div>
@@ -192,7 +192,7 @@ describe('TranscriptionOptions', () => {
       </div>
     );
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     fireEvent.click(button);
     expect(screen.getByRole('region', { name: 'Parameter Settings' })).toBeTruthy();
 
@@ -203,7 +203,7 @@ describe('TranscriptionOptions', () => {
   it('keeps popover open when toggling timeline Switch', () => {
     render(<TranscriptionOptions />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    fireEvent.click(getTriggerButton());
     const switchControl = screen.getByRole('switch', { name: 'batch.timeline_mode' });
 
     expect(useConfigStore.getState().config.enableTimeline).toBe(false);
@@ -215,7 +215,7 @@ describe('TranscriptionOptions', () => {
 
   it('keeps popover open when interacting with portaled language Dropdown', () => {
     render(<TranscriptionOptions />);
-    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    fireEvent.click(getTriggerButton());
     const popover = screen.getByRole('region', { name: 'Parameter Settings' });
     expect(popover).toBeTruthy();
 
@@ -238,8 +238,7 @@ describe('TranscriptionOptions', () => {
 
   it('disables button when disabled prop is true and prevents expanding', () => {
     render(<TranscriptionOptions disabled={true} />);
-
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     expect((button as HTMLButtonElement).disabled).toBe(true);
 
     fireEvent.click(button);
@@ -249,7 +248,7 @@ describe('TranscriptionOptions', () => {
   it('automatically collapses when disabled prop changes to true while open', () => {
     const { rerender } = render(<TranscriptionOptions disabled={false} />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     fireEvent.click(button);
     expect(screen.getByRole('region', { name: 'Parameter Settings' })).toBeTruthy();
 
@@ -262,7 +261,7 @@ describe('TranscriptionOptions', () => {
 
     render(<TranscriptionOptions surface="live" />);
 
-    const button = screen.getByRole('button', { name: 'Parameter Settings' });
+    const button = getTriggerButton();
     expect((button as HTMLButtonElement).disabled).toBe(true);
   });
 
@@ -293,7 +292,7 @@ describe('TranscriptionOptions', () => {
 
     render(<TranscriptionOptions surface="live" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    fireEvent.click(getTriggerButton());
     const popover = screen.getByRole('region', { name: 'Parameter Settings' });
     expect(popover).toBeTruthy();
 
@@ -346,7 +345,7 @@ describe('TranscriptionOptions', () => {
 
     render(<TranscriptionOptions surface="batch" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    fireEvent.click(getTriggerButton());
     const popover = screen.getByRole('region', { name: 'Parameter Settings' });
     expect(popover).toBeTruthy();
 
@@ -389,7 +388,7 @@ describe('TranscriptionOptions', () => {
 
     render(<TranscriptionOptions surface="live" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    fireEvent.click(getTriggerButton());
     const popover = screen.getByRole('region', { name: 'Parameter Settings' });
 
     const modelDropdown = popover.querySelector('#parameter-settings-model') as HTMLElement;
@@ -401,5 +400,74 @@ describe('TranscriptionOptions', () => {
 
     // Language should have been coerced to 'zh'
     expect(useConfigStore.getState().config.language).toBe('zh');
+  });
+
+  it('renders capsule layout with SlidersIcon and active model/language summaries', () => {
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        asr: {
+          selections: {
+            live: {
+              engine: 'local',
+              mode: 'streaming',
+              modelId: 'sensevoice-live',
+              modelPath: '/models/sensevoice-live.onnx',
+            },
+            caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            batch: { engine: 'local', mode: 'batch', modelId: null, modelPath: '' },
+          },
+          providers: { online: {} },
+        },
+        streamingModelPath: '/models/sensevoice-live.onnx',
+        language: 'en',
+        enableTimeline: true,
+      },
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+
+    const button = getTriggerButton();
+    expect(button.querySelector('.parameter-settings-icon')).toBeTruthy();
+    expect(button.querySelector('.parameter-settings-capsule-main')).toBeTruthy();
+    expect(button.querySelector('.parameter-settings-capsule-summary')).toBeTruthy();
+    expect(button.querySelector('.parameter-settings-summary-model')?.textContent).toBe(
+      'SenseVoice Live'
+    );
+    expect(button.querySelector('.parameter-settings-summary-lang')?.textContent).toBe('English');
+    expect(button.getAttribute('title')).toBeNull();
+    expect(button.getAttribute('aria-label')).toBe('Preset: SenseVoice Live, English');
+  });
+
+  it('refreshes catalog snapshot when opening popover', async () => {
+    const getSnapshotSpy = vi
+      .spyOn(modelService, 'getModelCatalogSnapshot')
+      .mockResolvedValue(mockSnapshot);
+
+    render(<TranscriptionOptions surface="live" />);
+    expect(getSnapshotSpy).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(getTriggerButton());
+    expect(getSnapshotSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it('coerces language in capsule summary when active model enforces auto or fixed language', () => {
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+    vi.spyOn(asrConfigService, 'coerceConfiguredLanguage').mockReturnValue('auto');
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        language: 'en',
+      },
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+
+    const button = getTriggerButton();
+    expect(button.querySelector('.parameter-settings-summary-lang')?.textContent).toBe('Auto');
+    expect(button.getAttribute('aria-label')).toContain('Auto');
   });
 });

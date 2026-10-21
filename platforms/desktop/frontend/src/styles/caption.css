@@ -79,54 +79,140 @@
 }
 
 /* ===========================
-   Parameter Settings Button
+   Parameter Settings (Ghost Row)
    =========================== */
 
 .btn-parameter-settings {
   width: 100%;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: space-between;
   gap: var(--spacing-sm);
   position: relative;
-  background-color: transparent;
+  background: transparent;
   border: 1px solid transparent;
   color: var(--color-text-secondary);
   font-weight: 500;
-  padding: 10px 16px;
-  border-radius: var(--radius-md);
+  padding: 6px 10px;
+  min-height: 32px;
+  border-radius: var(--radius-sm);
   box-shadow: none;
   transition:
     background var(--transition-fast),
-    box-shadow var(--transition-fast),
-    color var(--transition-fast),
-    transform var(--transition-fast),
-    opacity var(--transition-fast);
+    border-color var(--transition-fast),
+    color var(--transition-fast);
   cursor: pointer;
 }
 
-.btn-parameter-settings:hover:not(:disabled),
+.btn-parameter-settings:hover:not(:disabled) {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+  border-color: var(--color-border);
+}
+
 .btn-parameter-settings.active {
   color: var(--color-text-primary);
-  background: var(--color-bg-elevated);
+  background: var(--color-bg-hover);
   border-color: var(--color-border);
-  box-shadow: var(--apple-control-shadow-flat);
 }
 
 .btn-parameter-settings:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
   cursor: default;
+  box-shadow: none;
+  background: transparent;
+  border-color: transparent;
+}
+
+.parameter-settings-capsule-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+.parameter-settings-icon {
+  color: inherit;
+  flex-shrink: 0;
+  opacity: 0.85;
+  transition:
+    color var(--transition-fast),
+    opacity var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-icon,
+.btn-parameter-settings.active .parameter-settings-icon {
+  opacity: 1;
+}
+
+.parameter-settings-label {
+  font-size: var(--font-size-xs);
+  font-weight: 500;
+  color: inherit;
+  white-space: nowrap;
+}
+
+.parameter-settings-capsule-summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+  justify-content: flex-end;
+  margin-left: 8px;
+}
+
+.parameter-settings-summary-model {
+  font-size: var(--font-size-2xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-summary-model,
+.btn-parameter-settings.active .parameter-settings-summary-model {
+  color: var(--color-text-secondary);
+}
+
+.parameter-settings-summary-dot {
+  color: var(--color-text-disabled);
+  font-size: var(--font-size-2xs);
+  flex-shrink: 0;
+}
+
+.parameter-settings-summary-lang {
+  font-size: var(--font-size-2xs);
+  font-weight: 400;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: color var(--transition-fast);
+}
+
+.btn-parameter-settings:hover:not(:disabled) .parameter-settings-summary-lang,
+.btn-parameter-settings.active .parameter-settings-summary-lang {
+  color: var(--color-text-secondary);
 }
 
 .parameter-settings-chevron {
-  transition: transform var(--transition-fast);
-  margin-left: auto;
+  color: var(--color-text-muted);
+  margin-left: 2px;
+  flex-shrink: 0;
+  transition:
+    transform var(--transition-fast),
+    color var(--transition-fast);
 }
 
 .parameter-settings-chevron.open {
   transform: rotate(180deg);
+  color: var(--color-text-primary);
 }
-
 .parameter-settings-popover {
   position: absolute;
   bottom: calc(100% + 8px);

@@ -18,6 +18,8 @@ export interface ParameterSettingsPopoverProps {
   surface: 'live' | 'batch';
   disabled?: boolean;
   triggerRef: React.RefObject<HTMLButtonElement | null>;
+  catalog?: ModelCatalogSnapshot | null;
+  onCatalogLoaded?: (catalog: ModelCatalogSnapshot) => void;
 }
 
 /**
@@ -30,6 +32,8 @@ export function ParameterSettingsPopover({
   surface,
   disabled = false,
   triggerRef,
+  catalog: externalCatalog,
+  onCatalogLoaded,
 }: ParameterSettingsPopoverProps): React.JSX.Element | null {
   const { t, i18n } = useTranslation();
   const appLocale = i18n?.language ?? 'en';
@@ -45,22 +49,38 @@ export function ParameterSettingsPopover({
   const slot: AsrSelectionSlot = surface === 'batch' ? 'batch' : 'live';
 
   // Catalog snapshot and loading state
-  const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(
-    () => modelService.latestCatalogSnapshot
+  const [internalCatalog, setInternalCatalog] = useState<ModelCatalogSnapshot | null>(
+    () => externalCatalog ?? modelService.latestCatalogSnapshot
   );
   const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+
+  const catalog = externalCatalog ?? internalCatalog;
+  const catalogRef = useRef(catalog);
+
+  useEffect(() => {
+    catalogRef.current = catalog;
+  }, [catalog]);
+
+  useEffect(() => {
+    if (externalCatalog) {
+      setInternalCatalog(externalCatalog);
+    }
+  }, [externalCatalog]);
 
   useEffect(() => {
     if (!isOpen) return;
 
     let isSubscribed = true;
-    setIsLoadingCatalog(true);
+    if (!catalogRef.current) {
+      setIsLoadingCatalog(true);
+    }
 
     modelService
       .getModelCatalogSnapshot()
       .then((snapshot) => {
-        if (isSubscribed) {
-          setCatalog(snapshot);
+        if (isSubscribed && snapshot) {
+          setInternalCatalog(snapshot);
+          onCatalogLoaded?.(snapshot);
         }
       })
       .catch(() => {
@@ -74,8 +94,9 @@ export function ParameterSettingsPopover({
 
     return () => {
       isSubscribed = false;
+      setIsLoadingCatalog(false);
     };
-  }, [isOpen]);
+  }, [isOpen, onCatalogLoaded]);
 
   const activeModelId = useMemo(
     () => resolveActiveAsrModelId(config, slot, catalog),

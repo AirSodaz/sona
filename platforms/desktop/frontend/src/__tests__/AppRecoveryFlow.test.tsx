@@ -36,6 +36,8 @@ vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstR
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => null }));
 vi.mock('../components/Icons', () => ({
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/NotificationCenter', () => ({
