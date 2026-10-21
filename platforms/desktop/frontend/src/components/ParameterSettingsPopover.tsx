@@ -1,14 +1,16 @@
 import type React from 'react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { asrConfigService } from '../services/asrConfigService';
+import { modelService } from '../services/modelService';
 import { useConfigStore } from '../stores/configStore';
 import type { AsrSelectionSlot } from '../types/config';
+import type { ModelCatalogSnapshot } from '../types/modelCatalog';
+import { buildAsrModelDropdownOptions, resolveActiveAsrModelId } from '../utils/asrModelOptions';
 import { buildLanguagePickerOptions, type LanguagePickerOption } from '../utils/languages';
 import { Dropdown } from './Dropdown';
 import { FormField } from './FormField';
 import { Switch } from './Switch';
-
 export interface ParameterSettingsPopoverProps {
   isOpen: boolean;
   onClose: () => void;
@@ -41,6 +43,69 @@ export function ParameterSettingsPopover({
   const enableTimeline = config.enableTimeline ?? false;
   const language = config.language;
   const slot: AsrSelectionSlot = surface === 'batch' ? 'batch' : 'live';
+
+  // Catalog snapshot and loading state
+  const [catalog, setCatalog] = useState<ModelCatalogSnapshot | null>(
+    () => modelService.latestCatalogSnapshot
+  );
+  const [isLoadingCatalog, setIsLoadingCatalog] = useState(false);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isSubscribed = true;
+    setIsLoadingCatalog(true);
+
+    modelService
+      .getModelCatalogSnapshot()
+      .then((snapshot) => {
+        if (isSubscribed) {
+          setCatalog(snapshot);
+        }
+      })
+      .catch(() => {
+        // Fall back to existing cached snapshot on error
+      })
+      .finally(() => {
+        if (isSubscribed) {
+          setIsLoadingCatalog(false);
+        }
+      });
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [isOpen]);
+
+  const activeModelId = useMemo(
+    () => resolveActiveAsrModelId(config, slot, catalog),
+    [config, slot, catalog]
+  );
+
+  const modelOptions = useMemo(
+    () =>
+      catalog
+        ? buildAsrModelDropdownOptions({
+            slot,
+            snapshot: catalog,
+            selectedModelId: activeModelId,
+            modelConfig: config,
+            t,
+          })
+        : [],
+    [catalog, slot, activeModelId, config, t]
+  );
+
+  const handleModelChange = useCallback(
+    (newModelId: string) => {
+      if (disabled || !catalog) return;
+      const patch = asrConfigService.buildModelSelectionPatch(config, slot, newModelId, catalog);
+      if (Object.keys(patch).length > 0) {
+        setConfig(patch);
+      }
+    },
+    [disabled, catalog, config, slot, setConfig]
+  );
 
   const capability = useMemo(
     () => (isOpen ? asrConfigService.resolveActiveLanguageCapability(config, slot) : null),
@@ -145,6 +210,29 @@ export function ParameterSettingsPopover({
       aria-label={t('common.parameter_settings', { defaultValue: 'Parameter Settings' })}
       className="parameter-settings-popover"
     >
+      <FormField
+        id="parameter-settings-model"
+        label={t('batch.model', { defaultValue: 'Model' })}
+        description={t('batch.model_hint', { defaultValue: 'Select transcription model' })}
+        layout="horizontal"
+      >
+        <Dropdown
+          id="parameter-settings-model"
+          value={activeModelId}
+          onChange={handleModelChange}
+          options={modelOptions}
+          placeholder={
+            isLoadingCatalog && modelOptions.length === 0
+              ? t('common.loading', { defaultValue: 'Loading...' })
+              : modelOptions.length === 0
+                ? t('batch.no_model_available', { defaultValue: 'No models available' })
+                : t('batch.select_model', { defaultValue: 'Select model...' })
+          }
+          disabled={disabled || (modelOptions.length === 0 && !isLoadingCatalog)}
+          style={dropdownStyle}
+        />
+      </FormField>
+
       <FormField
         id="parameter-settings-timeline"
         label={t('batch.timeline_mode')}

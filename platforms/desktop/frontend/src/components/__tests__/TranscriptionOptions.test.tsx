@@ -2,8 +2,10 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import type * as reactI18next from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { asrConfigService } from '../../services/asrConfigService';
+import { modelService } from '../../services/modelService';
 import { useConfigStore } from '../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
+import type { ModelCatalogSnapshot } from '../../types/modelCatalog';
 import { TranscriptionOptions } from '../TranscriptionOptions';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -40,6 +42,83 @@ describe('TranscriptionOptions', () => {
       languageMode: 'selectable',
     });
   });
+  const mockSnapshot: ModelCatalogSnapshot = {
+    modelsDir: '/models',
+    models: [
+      {
+        id: 'sensevoice-live',
+        name: 'SenseVoice Live',
+        installPath: '/models/sensevoice-live.onnx',
+        isInstalled: true,
+      } as any,
+      {
+        id: 'whisper-live',
+        name: 'Whisper Live',
+        installPath: '/models/whisper-live.onnx',
+        isInstalled: true,
+      } as any,
+      {
+        id: 'sensevoice-batch',
+        name: 'SenseVoice Batch',
+        installPath: '/models/sensevoice-batch.onnx',
+        isInstalled: true,
+      } as any,
+      {
+        id: 'whisper-batch',
+        name: 'Whisper Batch',
+        installPath: '/models/whisper-batch.onnx',
+        isInstalled: true,
+      } as any,
+    ],
+    sections: [],
+    selectionOptions: {
+      streaming: [
+        {
+          id: 'sensevoice-live',
+          label: 'SenseVoice Live',
+          isInstalled: true,
+          installPath: '/models/sensevoice-live.onnx',
+        },
+        {
+          id: 'whisper-live',
+          label: 'Whisper Live',
+          isInstalled: true,
+          installPath: '/models/whisper-live.onnx',
+        },
+      ],
+      batch: [
+        {
+          id: 'sensevoice-batch',
+          label: 'SenseVoice Batch',
+          isInstalled: true,
+          installPath: '/models/sensevoice-batch.onnx',
+        },
+        {
+          id: 'whisper-batch',
+          label: 'Whisper Batch',
+          isInstalled: true,
+          installPath: '/models/whisper-batch.onnx',
+        },
+      ],
+      speakerSegmentation: [],
+      speakerEmbedding: [],
+    },
+    modelPathById: {
+      'sensevoice-live': '/models/sensevoice-live.onnx',
+      'whisper-live': '/models/whisper-live.onnx',
+      'sensevoice-batch': '/models/sensevoice-batch.onnx',
+      'whisper-batch': '/models/whisper-batch.onnx',
+    },
+    modelIdByNormalizedPath: {
+      '/models/sensevoice-live.onnx': 'sensevoice-live',
+      '/models/whisper-live.onnx': 'whisper-live',
+      '/models/sensevoice-batch.onnx': 'sensevoice-batch',
+      '/models/whisper-batch.onnx': 'whisper-batch',
+    },
+    pathMatchTokens: [],
+    dependencyRequestsByModelId: {},
+    restoreDefaults: { enableITN: true, vadBufferSize: 8, maxConcurrent: 1 },
+  };
 
   it('renders closed by default with proper aria attributes', () => {
     render(<TranscriptionOptions />);
@@ -136,12 +215,12 @@ describe('TranscriptionOptions', () => {
 
   it('keeps popover open when interacting with portaled language Dropdown', () => {
     render(<TranscriptionOptions />);
-
     fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
-    expect(screen.getByRole('region', { name: 'Parameter Settings' })).toBeTruthy();
+    const popover = screen.getByRole('region', { name: 'Parameter Settings' });
+    expect(popover).toBeTruthy();
 
-    // Open language dropdown (its trigger is inside the FormField)
-    const dropdownTrigger = screen.getByRole('button', { expanded: false });
+    // Open language dropdown (its trigger has id="parameter-settings-language")
+    const dropdownTrigger = popover.querySelector('#parameter-settings-language') as HTMLElement;
     fireEvent.click(dropdownTrigger);
 
     const listbox = screen.getByRole('listbox');
@@ -185,5 +264,142 @@ describe('TranscriptionOptions', () => {
 
     const button = screen.getByRole('button', { name: 'Parameter Settings' });
     expect((button as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it('renders model selection field in popover and switches models in live surface', async () => {
+    vi.spyOn(modelService, 'getModelCatalogSnapshot').mockResolvedValue(mockSnapshot);
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        streamingModelPath: '/models/sensevoice-live.onnx',
+        asr: {
+          selections: {
+            live: {
+              engine: 'local',
+              mode: 'streaming',
+              modelId: 'sensevoice-live',
+              modelPath: '/models/sensevoice-live.onnx',
+            },
+            caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            batch: { engine: 'local', mode: 'batch', modelId: null, modelPath: '' },
+          },
+          providers: { online: {} },
+        },
+      },
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    const popover = screen.getByRole('region', { name: 'Parameter Settings' });
+    expect(popover).toBeTruthy();
+
+    // Verify model FormField is present
+    expect(screen.getByText('Model')).toBeTruthy();
+    expect(screen.getByText('Select transcription model')).toBeTruthy();
+    // Open model dropdown
+    const modelDropdown = popover.querySelector('#parameter-settings-model') as HTMLElement;
+    expect(modelDropdown).toBeTruthy();
+    fireEvent.click(modelDropdown);
+
+    // Listbox should contain the streaming options
+    const whisperOption = screen.getByRole('option', { name: /Whisper Live/i });
+    expect(whisperOption).toBeTruthy();
+
+    // Select Whisper Live
+    fireEvent.mouseDown(whisperOption);
+    fireEvent.click(whisperOption);
+
+    // Config should be updated to whisper-live
+    const updatedConfig = useConfigStore.getState().config;
+    expect(updatedConfig.streamingModelPath).toBe('/models/whisper-live.onnx');
+    expect(updatedConfig.asr?.selections.live.modelId).toBe('whisper-live');
+  });
+
+  it('switches models in batch surface and updates batch configuration', async () => {
+    vi.spyOn(modelService, 'getModelCatalogSnapshot').mockResolvedValue(mockSnapshot);
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        batchModelPath: '/models/sensevoice-batch.onnx',
+        asr: {
+          selections: {
+            live: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            caption: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            voiceTyping: { engine: 'local', mode: 'streaming', modelId: null, modelPath: '' },
+            batch: {
+              engine: 'local',
+              mode: 'batch',
+              modelId: 'sensevoice-batch',
+              modelPath: '/models/sensevoice-batch.onnx',
+            },
+          },
+          providers: { online: {} },
+        },
+      },
+    });
+
+    render(<TranscriptionOptions surface="batch" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    const popover = screen.getByRole('region', { name: 'Parameter Settings' });
+    expect(popover).toBeTruthy();
+
+    // Open model dropdown
+    const modelDropdown = popover.querySelector('#parameter-settings-model') as HTMLElement;
+    fireEvent.click(modelDropdown);
+
+    // Select Whisper Batch
+    const whisperOption = screen.getByRole('option', { name: /Whisper Batch/i });
+    expect(whisperOption).toBeTruthy();
+    fireEvent.mouseDown(whisperOption);
+    fireEvent.click(whisperOption);
+
+    // Config should be updated to whisper-batch
+    const updatedConfig = useConfigStore.getState().config;
+    expect(updatedConfig.batchModelPath).toBe('/models/whisper-batch.onnx');
+    expect(updatedConfig.asr?.selections.batch.modelId).toBe('whisper-batch');
+  });
+
+  it('coerces language when switching model to one with fixed language', async () => {
+    vi.spyOn(modelService, 'getModelCatalogSnapshot').mockResolvedValue(mockSnapshot);
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+
+    // Start with language 'en'
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        language: 'en',
+        streamingModelPath: '/models/sensevoice-live.onnx',
+      },
+    });
+
+    // Mock coerceConfiguredLanguage to coerce to 'zh' when whisper is selected
+    vi.spyOn(asrConfigService, 'coerceConfiguredLanguage').mockImplementation((cfg) => {
+      if (cfg.streamingModelPath === '/models/whisper-live.onnx') {
+        return 'zh';
+      }
+      return cfg.language ?? 'en';
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Parameter Settings' }));
+    const popover = screen.getByRole('region', { name: 'Parameter Settings' });
+
+    const modelDropdown = popover.querySelector('#parameter-settings-model') as HTMLElement;
+    fireEvent.click(modelDropdown);
+
+    const whisperOption = screen.getByRole('option', { name: /Whisper Live/i });
+    fireEvent.mouseDown(whisperOption);
+    fireEvent.click(whisperOption);
+
+    // Language should have been coerced to 'zh'
+    expect(useConfigStore.getState().config.language).toBe('zh');
   });
 });

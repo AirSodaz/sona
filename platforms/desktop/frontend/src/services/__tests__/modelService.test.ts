@@ -145,6 +145,7 @@ describe('ModelService', () => {
         installPath: '/app/data/models/silero_vad.onnx',
       });
       expect(snapshot.restoreDefaults.streamingModelPath).toBe('/app/data/models/catalog-model');
+      expect(modelService.latestCatalogSnapshot).toEqual(snapshot);
     });
 
     it('resolves paths and rules from the latest Rust catalog snapshot', async () => {
