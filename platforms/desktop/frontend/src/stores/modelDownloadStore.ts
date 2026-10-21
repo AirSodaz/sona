@@ -116,7 +116,6 @@ export async function ensureModelDownloadListener(): Promise<void> {
 
       if (currentGen !== listenerGeneration) {
         unlisten();
-        unlistenProgress = null;
       } else {
         unlistenProgress = unlisten;
       }

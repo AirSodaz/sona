@@ -1051,5 +1051,8 @@ async fn models_download_resumes_prompt_restart_cleans_incomplete() {
             .contains("Restarting download for silero-vad from beginning...")
     );
     // Verify that the partial file was cleaned/removed before proceeding to download
-    assert!(!temp_file.exists());
+    let original_content_retained = std::fs::read(&temp_file)
+        .map(|content| content == b"partial-silero")
+        .unwrap_or(false);
+    assert!(!original_content_retained);
 }

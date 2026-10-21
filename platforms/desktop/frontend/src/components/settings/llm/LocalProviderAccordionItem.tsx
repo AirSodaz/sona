@@ -157,7 +157,14 @@ export function LocalProviderAccordionItem({
           const freshCard = cardsRef.current?.find((c) => c.id === card.id) ?? card;
           void handleDownload(freshCard);
         },
-        onCancel: () => void handleCancelDownload(card.id),
+        onCancel: () => {
+          setDownloads((prev) => {
+            if (!prev[downloadId]) return prev;
+            const next = { ...prev };
+            delete next[downloadId];
+            return next;
+          });
+        },
       });
 
       setDownloads((prev) => ({
@@ -196,7 +203,7 @@ export function LocalProviderAccordionItem({
         });
       }
     },
-    [fetchCards, handleCancelDownload, modelDownloadMirror, t]
+    [fetchCards, modelDownloadMirror, t]
   );
 
   const handleDelete = useCallback(

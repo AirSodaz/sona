@@ -324,4 +324,31 @@ describe('modelDownloadStore', () => {
     expect(item.status).toBe('downloading');
     expect(item.speed).toBeUndefined();
   });
+
+  it('does not clear active unlistenProgress when a stale listener resolution completes', async () => {
+    vi.stubGlobal('window', { __TAURI_INTERNALS__: {} });
+    let resolveFirstListen: (val: typeof mockUnlisten) => void = () => {};
+    const unlisten1 = vi.fn();
+    const unlisten2 = vi.fn();
+
+    mockListen.mockImplementationOnce(() => {
+      return new Promise((resolve) => {
+        resolveFirstListen = resolve;
+      });
+    });
+
+    const p1 = ensureModelDownloadListener();
+
+    cleanupModelDownloadListener();
+    mockListen.mockResolvedValueOnce(unlisten2);
+    await ensureModelDownloadListener();
+
+    resolveFirstListen(unlisten1);
+    await p1;
+
+    expect(unlisten1).toHaveBeenCalled();
+
+    cleanupModelDownloadListener();
+    expect(unlisten2).toHaveBeenCalled();
+  });
 });

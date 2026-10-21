@@ -1,6 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { modelService } from '../../services/modelService';
+import { cleanInterruptedDownload } from '../../services/tauri/app';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useModelDownloadStore } from '../../stores/modelDownloadStore';
@@ -798,6 +799,64 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
     // Snapshot must be refreshed after cancellation so resume chip appears
     await waitFor(() => {
       expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled();
+    });
+  });
+
+  it('synchronizes store downloading status into hook downloads return value', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-store-sync',
+    });
+    useModelDownloadStore.getState().updateProgress('dl-store-sync', { progress: 45 });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    expect(result.current.downloads[catalogModel.id]).toBeDefined();
+    expect(result.current.downloads[catalogModel.id]?.progress).toBe(45);
+  });
+
+  it('prevents handleDiscardDownload while download cancellation is actively unwinding', async () => {
+    vi.mocked(cleanInterruptedDownload).mockClear();
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+
+    let finishAbort: () => void = () => {};
+    const downloadStarted = new Promise<void>((resolve) => {
+      vi.mocked(modelService.downloadModel).mockImplementation(async (_id, _cb, sig) => {
+        resolve();
+        return new Promise((_, reject) => {
+          sig?.addEventListener('abort', () => {
+            finishAbort = () => reject(new Error('Download cancelled'));
+          });
+        });
+      });
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+    void result.current.handleDownload(catalogModel);
+    await downloadStarted;
+
+    act(() => {
+      result.current.handleCancelDownload(catalogModel.id);
+    });
+
+    await act(async () => {
+      await result.current.handleDiscardDownload({
+        ...catalogModel,
+        interruptedDownload: { downloadedBytes: 50, totalBytes: 100, percentage: 50 },
+      });
+    });
+
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishAbort();
     });
   });
 });
