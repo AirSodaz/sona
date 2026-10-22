@@ -96,7 +96,7 @@ function SortableProjectItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''}`}
+      className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
     >
       <button
         type="button"
@@ -128,19 +128,22 @@ function SortableProjectItem({
             </span>
           )}
           <span className="projects-rail-count">{projectCount}</span>
-          <button
-            type="button"
-            className="projects-rail-menu-btn"
-            aria-label={t('common.more_options', { defaultValue: 'More options' })}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
-            }}
-          >
-            <MoreHorizontal size={14} />
-          </button>
         </div>
+      </button>
+      <button
+        type="button"
+        className="projects-rail-menu-btn"
+        aria-label={t('common.more_options', { defaultValue: 'More options' })}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <MoreHorizontal size={14} />
       </button>
     </div>
   );

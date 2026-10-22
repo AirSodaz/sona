@@ -285,6 +285,7 @@
 
 .projects-rail-item-container:hover .projects-rail-count,
 .projects-rail-item-container:focus-within .projects-rail-count,
+.projects-rail-item-container.context-menu-active .projects-rail-count,
 .projects-rail-item.context-menu-active .projects-rail-count {
   opacity: 0;
   pointer-events: none;
@@ -292,7 +293,7 @@
 
 .projects-rail-menu-btn {
   position: absolute;
-  right: 0;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
   display: inline-flex;
@@ -308,6 +309,7 @@
   cursor: pointer;
   opacity: 0;
   pointer-events: none;
+  z-index: 2;
   transition:
     opacity 0.12s ease,
     background 0.12s ease,
@@ -316,6 +318,7 @@
 
 .projects-rail-item-container:hover .projects-rail-menu-btn,
 .projects-rail-item-container:focus-within .projects-rail-menu-btn,
+.projects-rail-item-container.context-menu-active .projects-rail-menu-btn,
 .projects-rail-item.context-menu-active .projects-rail-menu-btn {
   opacity: 1;
   pointer-events: auto;
