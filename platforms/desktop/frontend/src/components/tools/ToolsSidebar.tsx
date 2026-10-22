@@ -1,4 +1,4 @@
-import { Bot, Keyboard, Server, Subtitles, Wrench } from 'lucide-react';
+import { Bot, Keyboard, Server, Subtitles } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
@@ -34,9 +34,6 @@ export function ToolsSidebar(): React.JSX.Element {
   const isVtActive = Boolean(vtConfig.voiceTypingEnabled);
   const isApiActive = Boolean(apiConfig.httpServerEnabled);
   const isMcpActive = Boolean(mcpConfig.mcpEnabled && (mcpStatus?.running ?? true));
-
-  const activeCount =
-    (isCaptionMode ? 1 : 0) + (isVtActive ? 1 : 0) + (isApiActive ? 1 : 0) + (isMcpActive ? 1 : 0);
 
   const tools: ToolItemDef[] = [
     {
@@ -121,17 +118,8 @@ export function ToolsSidebar(): React.JSX.Element {
       className="tools-sidebar panel-left"
       aria-label={t('tools.title', { defaultValue: 'Tools' })}
     >
-      <div className="tools-sidebar-header">
-        <div className="tools-sidebar-title-row">
-          <Wrench size={18} className="tools-sidebar-header-icon" aria-hidden="true" />
-          <h2 className="tools-sidebar-title">{t('tools.title', { defaultValue: 'Tools' })}</h2>
-        </div>
-        <p className="tools-sidebar-subtitle">
-          {t('tools.active_count', {
-            count: activeCount,
-            defaultValue: `${activeCount} services running`,
-          })}
-        </p>
+      <div className="panel-header tools-sidebar-header">
+        <h2>{t('panel.tools', { defaultValue: 'Tools' })}</h2>
       </div>
 
       <div

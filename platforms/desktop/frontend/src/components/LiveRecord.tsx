@@ -23,7 +23,6 @@ import type { TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
 import { RecordingTimer } from './RecordingTimer';
-import { Switch } from './Switch';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -79,7 +78,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
 
   // Caption Mode
   const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
-  const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
   const config = useConfigStore((state) => state.config);
 
   // Initialize dedicated caption session hook
@@ -219,13 +217,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       await pauseRecording();
     }
   }, [isPaused, pauseRecording, resumeRecording]);
-
-  const handleCaptionToggle = useCallback(
-    (checked: boolean) => {
-      setIsCaptionMode(checked);
-    },
-    [setIsCaptionMode]
-  );
 
   function getRecordingStatusText(): string {
     if (isAgentRecording) {
@@ -392,16 +383,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         <p className="recording-status-text" aria-live="polite">
           {getRecordingStatusText()}
         </p>
-      </div>
-
-      <div className="live-caption-toggle">
-        <Switch
-          checked={isCaptionMode}
-          onChange={handleCaptionToggle}
-          label={t('live.caption_mode')}
-          disabled={false}
-        />
-        <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
       </div>
     </div>
   );

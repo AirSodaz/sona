@@ -222,8 +222,6 @@
     "title": "Tools",
     "subtitle": "Manage and configure standalone extension tools and external integration services",
     "active_count": "{{count}} services running",
-    "active_count_one": "{{count}} service running",
-    "active_count_other": "{{count}} services running",
     "subtitles": "Live Subtitles",
     "subtitles_desc": "Desktop floating bilingual subtitles",
     "subtitles_preview_title": "Live Subtitle Preview",

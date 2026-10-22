@@ -1,4 +1,3 @@
-import { Type } from 'lucide-react';
 import type React from 'react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +5,7 @@ import { BatchImport } from './components/BatchImport';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { GlobalDialog } from './components/GlobalDialog';
-import { AutomationIcon, SettingsIcon } from './components/Icons';
+import { SettingsIcon } from './components/Icons';
 import { LiveRecord } from './components/LiveRecord';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ProjectSelectorDropdown } from './components/ProjectSelectorDropdown';
@@ -30,7 +29,6 @@ import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
 import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
-import { useToolsStore } from './stores/toolsStore';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
@@ -224,11 +222,6 @@ function App(): React.JSX.Element | null {
     openSettingsTab('automation');
   };
 
-  const openVoiceTypingSettings = () => {
-    useToolsStore.getState().setActiveTool('voice_typing');
-    setMode('tools');
-  };
-
   const runFirstRunSetupFromDiagnostics = () => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
@@ -313,36 +306,6 @@ function App(): React.JSX.Element | null {
             <div className="panel panel-left">
               <div className="panel-header">
                 <h2>{panelTitle}</h2>
-                {mode === 'batch' && (
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-rail-create"
-                    onClick={openAutomationSettings}
-                    aria-label={t('automation.open_settings', { defaultValue: 'Open Automation' })}
-                    data-tooltip={t('automation.open_settings', {
-                      defaultValue: 'Open Automation',
-                    })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <AutomationIcon width={18} height={18} />
-                  </button>
-                )}
-                {mode === 'live' && (
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-rail-create"
-                    onClick={openVoiceTypingSettings}
-                    aria-label={t('voice_typing.open_settings', {
-                      defaultValue: 'Open Voice Typing',
-                    })}
-                    data-tooltip={t('voice_typing.open_settings', {
-                      defaultValue: 'Open Voice Typing',
-                    })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <Type size={18} aria-hidden="true" />
-                  </button>
-                )}
               </div>
               <div className="panel-content">
                 <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>

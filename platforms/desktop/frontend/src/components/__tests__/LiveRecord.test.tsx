@@ -687,17 +687,15 @@ describe('LiveRecord', () => {
     // We use mockStart which intercepts calls to any TranscriptionService instance (singleton or new)
 
     render(<LiveRecord />);
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
 
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: true });
       await vi.advanceTimersByTimeAsync(100);
     });
 
     // Check stores
     expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
     expect(useTranscriptStore.getState().isRecording).toBe(false);
-
     // Check services
     expect(captionWindowService.open).toHaveBeenCalled();
     expect(mockStart).toHaveBeenCalled();
@@ -708,13 +706,11 @@ describe('LiveRecord', () => {
     render(<LiveRecord />);
 
     // 1. Start Caption
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: true });
       await vi.advanceTimersByTimeAsync(100);
     });
     expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
-
     // 2. Start Recording
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
     await act(async () => {
@@ -733,12 +729,10 @@ describe('LiveRecord', () => {
     render(<LiveRecord />);
 
     // 1. Start Caption
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: true });
       await vi.advanceTimersByTimeAsync(100);
     });
-
     // 2. Start Recording
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
     await act(async () => {
@@ -748,7 +742,7 @@ describe('LiveRecord', () => {
 
     // 3. Stop Caption
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: false });
       await vi.advanceTimersByTimeAsync(100);
     });
 

@@ -111,7 +111,7 @@ describe('App automation flow', () => {
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
   });
 
-  it('shows a batch-header automation button that opens automation settings', async () => {
+  it('does not render an automation shortcut button in the batch panel header', async () => {
     mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
       selector({
         mode: 'batch',
@@ -132,8 +132,8 @@ describe('App automation flow', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'automation.open_settings' }));
-
+    expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
   });
 });
