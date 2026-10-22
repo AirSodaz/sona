@@ -521,6 +521,7 @@
     "reveal_in_folder": "在文件管理器中显示"
   },
   "projects": {
+    "projects_group_title": "项目",
     "all_items": "全部内容",
     "untagged": "收件箱",
     "trash": "回收站",

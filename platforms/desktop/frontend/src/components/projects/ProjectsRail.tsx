@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Zap } from 'lucide-react';
+import { MoreHorizontal, Plus, Zap } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import type { ProjectRecord } from '../../types/project';
@@ -29,7 +29,6 @@ import {
   createPointerContextMenuRequest,
   isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
-import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
@@ -213,16 +212,6 @@ export function ProjectsRail({
           <div className="projects-rail-eyebrow">
             {t('panel.projects', { defaultValue: 'Workspace' })}
           </div>
-          <button
-            type="button"
-            className="btn btn-icon projects-rail-create"
-            onClick={onOpenCreateModal}
-            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip-pos="bottom"
-          >
-            <PlusCircleIcon width={18} height={18} />
-          </button>
         </div>
       </div>
 
@@ -269,6 +258,21 @@ export function ProjectsRail({
       </div>
 
       <div className="projects-rail-projects">
+        <div className="projects-rail-section-header">
+          <span className="projects-rail-section-title">
+            {t('projects.projects_group_title', { defaultValue: 'Projects' })}
+          </span>
+          <button
+            type="button"
+            className="btn btn-icon projects-rail-create"
+            onClick={onOpenCreateModal}
+            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip-pos="bottom"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
         <div
           className="projects-rail-list"
           onContextMenu={(event) => {

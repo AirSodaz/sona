@@ -521,6 +521,7 @@
     "reveal_in_folder": "파일 탐색기에서 보기"
   },
   "projects": {
+    "projects_group_title": "프로젝트",
     "all_items": "전체 항목",
     "untagged": "태그 없음",
     "trash": "휴지통",

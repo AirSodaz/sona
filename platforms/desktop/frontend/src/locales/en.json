@@ -521,6 +521,7 @@
     "reveal_in_folder": "Show in File Explorer"
   },
   "projects": {
+    "projects_group_title": "Projects",
     "all_items": "All Items",
     "untagged": "Inbox",
     "trash": "Trash",

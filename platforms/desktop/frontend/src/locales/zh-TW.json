@@ -521,6 +521,7 @@
     "reveal_in_folder": "在檔案管理器中顯示"
   },
   "projects": {
+    "projects_group_title": "專案",
     "all_items": "全部內容",
     "untagged": "未標記",
     "trash": "垃圾桶",

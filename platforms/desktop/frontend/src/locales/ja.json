@@ -521,6 +521,7 @@
     "reveal_in_folder": "ファイルエクスプローラーで表示"
   },
   "projects": {
+    "projects_group_title": "プロジェクト",
     "all_items": "すべてのアイテム",
     "untagged": "タグなし",
     "trash": "ゴミ箱",
