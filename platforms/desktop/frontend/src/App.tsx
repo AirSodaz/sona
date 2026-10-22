@@ -81,7 +81,7 @@ function getPanelTitle(
 ): string {
   switch (mode) {
     case 'create':
-      return t('panel.create', { defaultValue: '新建' });
+      return t('panel.create', { defaultValue: 'Create' });
     case 'live':
       return t('panel.live_record');
     case 'projects':
@@ -306,9 +306,11 @@ function App(): React.JSX.Element | null {
           <div className="panel-container">
             {/* Left Panel - Input */}
             <div className="panel panel-left">
-              <div className="panel-header">
-                <h2>{panelTitle}</h2>
-              </div>
+              {mode !== 'create' ? (
+                <div className="panel-header">
+                  <h2>{panelTitle}</h2>
+                </div>
+              ) : null}
               <div className="panel-content">
                 <CreateWorkspacePanel />
               </div>

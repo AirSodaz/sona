@@ -595,7 +595,7 @@
 .panel-footer {
   display: flex;
   align-items: center;
-  padding: 8px 16px 16px;
+  padding: 16px 20px 20px;
   background: transparent;
   flex-shrink: 0;
   box-sizing: border-box;

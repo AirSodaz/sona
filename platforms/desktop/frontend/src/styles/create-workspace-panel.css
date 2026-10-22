@@ -1,4 +1,4 @@
-/* Dual-Deck Accordion for Create Workspace Panel */
+/* Segmented Mode Selector & Full-Height Panes for Create Workspace Panel */
 
 .create-workspace-shell {
   display: flex;
@@ -9,161 +9,94 @@
   position: relative;
 }
 
-.deck-deck {
-  position: relative;
+.create-workspace-header {
+  height: 54px;
+  min-height: 54px;
+  padding: 0 16px;
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  transition:
-    flex 0.45s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.3s ease;
-}
-
-/* State: Live expanded, Batch collapsed */
-.create-workspace-shell.state-live .deck-live {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.create-workspace-shell.state-live .deck-batch {
-  flex: 0 0 52px;
-  min-height: 52px;
-  max-height: 52px;
-  background: var(--color-bg-secondary);
-  border-top: 1px solid var(--color-border);
-}
-
-/* State: Batch expanded, Live collapsed */
-.create-workspace-shell.state-batch .deck-live {
-  flex: 0 0 52px;
-  min-height: 52px;
-  max-height: 52px;
-  background: var(--color-bg-secondary);
+  align-items: center;
+  justify-content: center;
   border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
-.create-workspace-shell.state-batch .deck-batch {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* Collapsed Header Bar (Clickable interactive row) */
-.deck-collapsed-bar {
+.create-segmented-control {
+  display: flex;
   width: 100%;
-  height: 52px;
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  background: transparent;
-  border: none;
-  color: var(--color-text-secondary);
-  cursor: pointer;
-  font-family: inherit;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition:
-    background-color 0.2s ease,
-    color 0.2s ease;
-  user-select: none;
-  text-align: left;
-}
-
-.deck-collapsed-bar:hover {
   background: var(--color-bg-tertiary);
-  color: var(--color-text-primary);
+  padding: 3px;
+  border-radius: var(--radius-md, 8px);
+  gap: 2px;
+  box-sizing: border-box;
 }
 
-.deck-collapsed-bar:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
-}
-
-/* Expanded Header Bar */
-.deck-expanded-header {
-  height: 52px;
-  min-height: 52px;
+.create-segmented-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  font-size: 0.8125rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--color-border-subtle, var(--color-border));
-  font-size: 0.875rem;
-  font-weight: 600;
-  color: var(--color-text-primary);
+  justify-content: center;
+  gap: 6px;
+  transition: all 0.2s ease;
   user-select: none;
+  line-height: 1.2;
 }
 
-/* Deck Body */
-.deck-body {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  position: relative;
+.create-segmented-tab:hover:not(.active) {
+  color: var(--color-text-primary);
 }
 
-.deck-left-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.deck-right-info {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.deck-title {
+.create-segmented-tab.active {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
   font-weight: 600;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.deck-live-dot {
-  width: 8px;
-  height: 8px;
+.create-segmented-tab:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -1px;
+}
+
+.create-tab-badge.live-recording {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background-color: var(--color-text-muted);
-}
-
-.deck-live-dot.recording {
-  background-color: var(--color-danger, #ef4444);
+  background: var(--color-danger, #ef4444);
   box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
   animation: deck-pulse 1.8s infinite;
 }
 
-.deck-live-recording-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 2px 8px;
-  border-radius: 12px;
-  font-size: 0.75rem;
+.create-tab-badge.batch-count {
+  background: var(--color-accent);
+  color: white;
+  border-radius: 10px;
+  padding: 1px 6px;
+  font-size: 0.6875rem;
   font-weight: 600;
-  background: rgba(239, 68, 68, 0.12);
-  color: var(--color-danger, #ef4444);
   font-variant-numeric: tabular-nums;
 }
 
-.deck-compact-summary {
-  font-size: 0.8125rem;
-  color: var(--color-text-secondary);
-  font-variant-numeric: tabular-nums;
-}
-
-.deck-mini-progress {
-  width: 56px;
-  height: 4px;
-  background: var(--color-bg-tertiary);
-  border-radius: 2px;
+.create-workspace-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
   overflow: hidden;
 }
 
-.deck-mini-progress-fill {
+.create-pane {
   height: 100%;
-  background: var(--color-accent);
-  border-radius: 2px;
-  transition: width 0.3s ease;
+  width: 100%;
+  overflow-y: auto;
 }
 
 @keyframes deck-pulse {

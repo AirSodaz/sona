@@ -102,9 +102,10 @@ describe('App Title Logic', () => {
     setupStore();
   });
 
-  it('displays "Create" title in create mode', () => {
+  it('renders segmented control without redundant heading in create mode', () => {
     render(<App />);
-    expect(screen.getByRole('heading', { level: 2, name: 'panel.create' })).not.toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'panel.create' })).toBeNull();
+    expect(screen.getByRole('tablist')).not.toBeNull();
   });
 
   it('displays "Live Record" title in live mode', () => {

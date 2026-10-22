@@ -67,82 +67,90 @@ describe('CreateWorkspacePanel', () => {
     cleanup();
   });
 
-  it('renders default state with Live Deck expanded and Batch Deck collapsed', () => {
+  it('renders default state with Live tab active and Batch pane hidden', () => {
     render(<CreateWorkspacePanel />);
 
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-live');
 
-    // Live Deck expanded
-    expect(screen.getByTestId('deck-live-header')).toBeDefined();
-    expect(screen.getByTestId('deck-body-live').style.display).toBe('');
+    // Live Tab active
+    const liveTab = screen.getByTestId('create-tab-live');
+    expect(liveTab.getAttribute('aria-selected')).toBe('true');
+    expect(liveTab.classList.contains('active')).toBe(true);
+    expect(screen.getByTestId('pane-live').style.display).toBe('');
     expect(screen.getByTestId('live-record-component')).toBeDefined();
 
-    // Batch Deck collapsed (body stays mounted for persistent state, but hidden)
-    expect(screen.getByTestId('deck-batch-collapsed-bar')).toBeDefined();
-    expect(screen.getByTestId('deck-body-batch').style.display).toBe('none');
+    // Batch Tab inactive (body stays mounted for persistent state, but hidden)
+    const batchTab = screen.getByTestId('create-tab-batch');
+    expect(batchTab.getAttribute('aria-selected')).toBe('false');
+    expect(batchTab.classList.contains('active')).toBe(false);
+    expect(screen.getByTestId('pane-batch').style.display).toBe('none');
     expect(screen.getByTestId('batch-import-component')).toBeDefined();
-
-    // Must NOT contain "展开" or "收起" text
-    expect(screen.queryByText(/展开/)).toBeNull();
-    expect(screen.queryByText(/收起/)).toBeNull();
   });
 
-  it('switches ingestionFocus to batch when collapsed Batch Deck is clicked', () => {
+  it('switches ingestionFocus to batch when Batch tab is clicked', () => {
     render(<CreateWorkspacePanel />);
 
-    const batchCollapsedBar = screen.getByTestId('deck-batch-collapsed-bar');
-    fireEvent.click(batchCollapsedBar);
+    const batchTab = screen.getByTestId('create-tab-batch');
+    fireEvent.click(batchTab);
 
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
   });
 
-  it('renders batch state with Batch Deck expanded and Live Deck collapsed', () => {
+  it('renders batch state with Batch tab active and Live pane hidden', () => {
     testContext.runtimeState.ingestionFocus = 'batch';
-    testContext.runtimeState.isRecording = true;
     render(<CreateWorkspacePanel />);
 
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-batch');
 
-    // Live Deck collapsed (body stays mounted for background recording, but hidden)
-    expect(screen.getByTestId('deck-live-collapsed-bar')).toBeDefined();
-    expect(screen.getByTestId('deck-body-live').style.display).toBe('none');
-    expect(screen.getByTestId('live-record-component')).toBeDefined();
-    expect(screen.getByText('录音中')).toBeDefined();
-
-    // Batch Deck expanded
-    expect(screen.getByTestId('deck-batch-header')).toBeDefined();
-    expect(screen.getByTestId('deck-body-batch').style.display).toBe('');
+    // Batch Tab active
+    const batchTab = screen.getByTestId('create-tab-batch');
+    expect(batchTab.getAttribute('aria-selected')).toBe('true');
+    expect(batchTab.classList.contains('active')).toBe(true);
+    expect(screen.getByTestId('pane-batch').style.display).toBe('');
     expect(screen.getByTestId('batch-import-component')).toBeDefined();
 
-    // Must NOT contain "展开" or "收起" text
-    expect(screen.queryByText(/展开/)).toBeNull();
-    expect(screen.queryByText(/收起/)).toBeNull();
+    // Live Tab inactive (body stays mounted for background recording, but hidden)
+    const liveTab = screen.getByTestId('create-tab-live');
+    expect(liveTab.getAttribute('aria-selected')).toBe('false');
+    expect(liveTab.classList.contains('active')).toBe(false);
+    expect(screen.getByTestId('pane-live').style.display).toBe('none');
+    expect(screen.getByTestId('live-record-component')).toBeDefined();
   });
 
-  it('switches ingestionFocus to live when collapsed Live Deck is clicked', () => {
+  it('switches ingestionFocus to live when Live tab is clicked', () => {
     testContext.runtimeState.ingestionFocus = 'batch';
     render(<CreateWorkspacePanel />);
 
-    const liveCollapsedBar = screen.getByTestId('deck-live-collapsed-bar');
-    fireEvent.click(liveCollapsedBar);
+    const liveTab = screen.getByTestId('create-tab-live');
+    fireEvent.click(liveTab);
 
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
   });
 
-  it('displays summary and mini progress bar in collapsed batch deck when tasks exist', () => {
+  it('renders live-recording badge on live tab when isRecording is true and batch tab is active', () => {
+    testContext.runtimeState.ingestionFocus = 'batch';
+    testContext.runtimeState.isRecording = true;
+    render(<CreateWorkspacePanel />);
+
+    const liveTab = screen.getByTestId('create-tab-live');
+    const badge = liveTab.querySelector('.create-tab-badge.live-recording');
+    expect(badge).not.toBeNull();
+  });
+
+  it('renders batch-count badge on batch tab when queueItems exist and live tab is active', () => {
     testContext.runtimeState.ingestionFocus = 'live';
     testContext.batchQueueState.queueItems = [
       { id: '1', status: 'complete', progress: 100 },
       { id: '2', status: 'processing', progress: 50 },
     ];
 
-    const { container } = render(<CreateWorkspacePanel />);
+    render(<CreateWorkspacePanel />);
 
-    const progressBar = container.querySelector('.deck-mini-progress');
-    expect(progressBar).toBeDefined();
-    expect(progressBar?.getAttribute('aria-hidden')).toBe('true');
-    expect(screen.getByText('2 个文件 · 75%')).toBeDefined();
+    const batchTab = screen.getByTestId('create-tab-batch');
+    const badge = batchTab.querySelector('.create-tab-badge.batch-count');
+    expect(badge).not.toBeNull();
+    expect(badge?.textContent).toBe('2');
   });
 });

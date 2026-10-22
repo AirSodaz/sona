@@ -20,22 +20,9 @@ export function CreateWorkspacePanel({
   const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const setIngestionFocus = useTranscriptStore((state) => state.setIngestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
-  const isPaused = useTranscriptRuntimeStore((state) => state.isPaused);
 
   const queueItems = useBatchQueueStore((state) => state.queueItems);
-
-  // Calculate overall batch progress
   const totalCount = queueItems.length;
-  let progressSum = 0;
-  queueItems.forEach((item) => {
-    if (item.status === 'complete') {
-      progressSum += 100;
-    } else if (item.status === 'processing') {
-      progressSum += item.progress;
-    }
-  });
-  const overallProgress =
-    totalCount > 0 ? Math.min(100, Math.round((progressSum / (totalCount * 100)) * 100)) : 0;
 
   const isLiveActive = ingestionFocus === 'live';
   const isBatchActive = ingestionFocus === 'batch';
@@ -45,116 +32,59 @@ export function CreateWorkspacePanel({
       className={`create-workspace-shell state-${ingestionFocus} ${className}`}
       data-testid="create-workspace-shell"
     >
-      {/* Upper Deck: Live Record */}
-      <section
-        className={`deck-deck deck-live ${isLiveActive ? 'is-expanded' : 'is-collapsed'}`}
-        aria-label={t('panel.live_record')}
+      <header
+        className="create-workspace-header"
+        aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
       >
-        {isLiveActive ? (
-          <div className="deck-expanded-header" data-testid="deck-live-header">
-            <div className="deck-left-info">
-              {isRecording ? (
-                <span className="deck-live-dot recording" aria-hidden="true" />
-              ) : (
-                <Mic size={16} aria-hidden="true" />
-              )}
-              <span className="deck-title">{t('panel.live_record')}</span>
-            </div>
-            <div className="deck-right-info" />
-          </div>
-        ) : (
+        <div className="create-segmented-control" role="tablist">
           <button
             type="button"
-            className="deck-collapsed-bar"
-            data-testid="deck-live-collapsed-bar"
+            role="tab"
+            className={`create-segmented-tab ${isLiveActive ? 'active' : ''}`}
+            data-testid="create-tab-live"
+            aria-selected={isLiveActive}
             onClick={() => setIngestionFocus('live')}
-            aria-label={t('panel.live_record')}
           >
-            <div className="deck-left-info">
-              {isRecording ? (
-                <span className="deck-live-dot recording" aria-hidden="true" />
-              ) : (
-                <Mic size={16} aria-hidden="true" />
-              )}
-              <span className="deck-title">{t('panel.live_record')}</span>
-            </div>
-            <div className="deck-right-info">
-              {isRecording ? (
-                <span className="deck-live-recording-badge">
-                  <span className="deck-live-dot recording" aria-hidden="true" />
-                  <span>
-                    {isPaused
-                      ? t('live.paused', { defaultValue: '已暂停' })
-                      : t('live.recording', { defaultValue: '录音中' })}
-                  </span>
-                </span>
-              ) : null}
-            </div>
+            <Mic size={15} aria-hidden="true" />
+            <span>{t('panel.live_record', { defaultValue: 'Live Record' })}</span>
+            {isRecording && !isLiveActive ? (
+              <span className="create-tab-badge live-recording" aria-hidden="true" />
+            ) : null}
           </button>
-        )}
+
+          <button
+            type="button"
+            role="tab"
+            className={`create-segmented-tab ${isBatchActive ? 'active' : ''}`}
+            data-testid="create-tab-batch"
+            aria-selected={isBatchActive}
+            onClick={() => setIngestionFocus('batch')}
+          >
+            <Folder size={15} aria-hidden="true" />
+            <span>{t('panel.batch_import', { defaultValue: 'Batch Import' })}</span>
+            {totalCount > 0 && !isBatchActive ? (
+              <span className="create-tab-badge batch-count">{totalCount}</span>
+            ) : null}
+          </button>
+        </div>
+      </header>
+
+      <div className="create-workspace-body">
         <div
-          className="deck-body deck-body-live"
-          data-testid="deck-body-live"
+          className="create-pane create-pane-live"
+          data-testid="pane-live"
           style={{ display: isLiveActive ? undefined : 'none' }}
         >
           <LiveRecord />
         </div>
-      </section>
-
-      {/* Lower Deck: Batch Import */}
-      <section
-        className={`deck-deck deck-batch ${isBatchActive ? 'is-expanded' : 'is-collapsed'}`}
-        aria-label={t('panel.batch_import')}
-      >
-        {isBatchActive ? (
-          <div className="deck-expanded-header" data-testid="deck-batch-header">
-            <div className="deck-left-info">
-              <Folder size={16} aria-hidden="true" />
-              <span className="deck-title">{t('panel.batch_import')}</span>
-            </div>
-            <div className="deck-right-info" />
-          </div>
-        ) : (
-          <button
-            type="button"
-            className="deck-collapsed-bar"
-            data-testid="deck-batch-collapsed-bar"
-            onClick={() => setIngestionFocus('batch')}
-            aria-label={t('panel.batch_import')}
-          >
-            <div className="deck-left-info">
-              <Folder size={16} aria-hidden="true" />
-              <span className="deck-title">{t('panel.batch_import')}</span>
-            </div>
-            <div className="deck-right-info">
-              {totalCount > 0 ? (
-                <>
-                  <span className="deck-compact-summary">
-                    {t('batch.queue_summary_compact', {
-                      defaultValue: `${totalCount} 个文件 · ${overallProgress}%`,
-                      count: totalCount,
-                      progress: overallProgress,
-                    })}
-                  </span>
-                  <div className="deck-mini-progress" aria-hidden="true">
-                    <div
-                      className="deck-mini-progress-fill"
-                      style={{ width: `${overallProgress}%` }}
-                    />
-                  </div>
-                </>
-              ) : null}
-            </div>
-          </button>
-        )}
         <div
-          className="deck-body deck-body-batch"
-          data-testid="deck-body-batch"
+          className="create-pane create-pane-batch"
+          data-testid="pane-batch"
           style={{ display: isBatchActive ? undefined : 'none' }}
         >
           <BatchImport />
         </div>
-      </section>
+      </div>
     </div>
   );
 }
