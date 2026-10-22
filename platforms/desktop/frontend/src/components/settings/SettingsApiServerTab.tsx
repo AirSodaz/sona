@@ -1,4 +1,15 @@
-import { Activity, Clock, Copy, HardDrive, List, RefreshCw, Server, Zap } from 'lucide-react';
+import {
+  Activity,
+  Check,
+  Clock,
+  Copy,
+  Globe,
+  HardDrive,
+  List,
+  RefreshCw,
+  Server,
+  Zap,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,13 +24,8 @@ import type {
 } from '../../types/apiServer';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
-import { Switch } from '../Switch';
-import {
-  SettingsItem,
-  SettingsPageHeader,
-  SettingsSection,
-  SettingsTabContainer,
-} from './SettingsLayout';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { SettingsItem, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 
 export function SettingsApiServerTab(): React.JSX.Element {
   const { t } = useTranslation();
@@ -28,11 +34,11 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const transport = useTransport();
 
   const [copied, setCopied] = useState(false);
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [health, setHealth] = useState<ApiServerHealth | null>(null);
   const [info, setInfo] = useState<ApiServerInfo | null>(null);
   const [jobs, setJobs] = useState<Record<string, ApiServerJobStatus>>({});
   const [lastError, setLastError] = useState<string | null>(null);
-
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -42,6 +48,24 @@ export function SettingsApiServerTab(): React.JSX.Element {
     }
   }, [copied]);
 
+  useEffect(() => {
+    if (copiedEndpoint) {
+      const timer = setTimeout(() => setCopiedEndpoint(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copiedEndpoint]);
+
+  const handleCopyEndpoint = async () => {
+    const host = config.httpServerHost || '127.0.0.1';
+    const port = config.httpServerPort ?? 14200;
+    const url = `http://${host}:${port}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedEndpoint(true);
+    } catch (e) {
+      logger.error('[ApiServer] Failed to copy endpoint URL:', e);
+    }
+  };
   const fetchData = useCallback(async () => {
     if (!config.httpServerEnabled) return;
 
@@ -240,35 +264,162 @@ export function SettingsApiServerTab(): React.JSX.Element {
     setConfig({ httpServerEnabled: checked });
   };
 
+  const isEnabled = Boolean(config.httpServerEnabled);
+  const isError = isEnabled && Boolean(lastError && !health);
+  const statusTone: ToolHeroStatusTone = !isEnabled ? 'inactive' : isError ? 'error' : 'active';
+  const statusText = !isEnabled
+    ? t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })
+    : isError
+      ? t('common.error', { defaultValue: 'Error' })
+      : `Running :${config.httpServerPort ?? 14200}`;
+
   return (
     <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
-      <SettingsPageHeader
-        icon={<Server width={28} height={28} />}
+      <ToolHeroHeader
+        id="settings-api-server-switch"
+        icon={<Server size={24} />}
         title={t('settings.api_server.title', { defaultValue: 'API Server' })}
         description={t('settings.api_server.description', {
           defaultValue:
             'Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.',
         })}
+        statusText={statusText}
+        statusTone={statusTone}
+        enabled={isEnabled}
+        onToggle={handleToggleEnabled}
+        switchAriaLabel={t('settings.api_server.enable_label', {
+          defaultValue: 'Enable API Server',
+        })}
+        actions={
+          isEnabled ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleCopyEndpoint}
+              title={t('tools.copy_api_url', { defaultValue: 'Copy API Endpoint' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
+              <span>
+                {copiedEndpoint
+                  ? t('common.copied', { defaultValue: 'Copied!' })
+                  : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
+              </span>
+            </button>
+          ) : undefined
+        }
       />
 
-      <SettingsSection>
-        {/* Enable Toggle */}
-        <SettingsItem
-          id="settings-api-server-switch"
-          title={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
-          hint={t('settings.api_server.enable_hint', {
-            defaultValue: 'Start an HTTP server to control Sona via external applications.',
-          })}
+      {isEnabled && (
+        <SettingsSection
+          title={t('settings.api_server.status_title', { defaultValue: 'Server Status' })}
+          icon={<Activity size={20} />}
         >
-          <Switch
-            checked={config.httpServerEnabled ?? false}
-            onChange={handleToggleEnabled}
-            aria-label={t('settings.api_server.enable_label', {
-              defaultValue: 'Enable API Server',
-            })}
-          />
-        </SettingsItem>
+          <div className="settings-api-server-panel">
+            <div className="api-server-status-grid">
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Activity size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_state', { defaultValue: 'State' })}
+                  </div>
+                  <div className={`status-card-value ${health ? 'text-success' : 'text-error'}`}>
+                    {health
+                      ? t('settings.api_server.state_running', { defaultValue: 'Running' })
+                      : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Clock size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_uptime', { defaultValue: 'Uptime' })}
+                  </div>
+                  <div className="status-card-value">
+                    {health ? formatUptime(health.uptime) : '-'}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Zap size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_gpu', {
+                      defaultValue: 'GPU Acceleration',
+                    })}
+                  </div>
+                  <div className="status-card-value">
+                    {info?.gpuAvailable
+                      ? t('common.enabled', { defaultValue: 'Enabled' })
+                      : t('common.disabled', { defaultValue: 'Disabled' })}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Activity size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_active_jobs', {
+                      defaultValue: 'Active Tasks',
+                    })}
+                  </div>
+                  <div className="status-card-value">{health ? health.activeJobs : '-'}</div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <List size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_pending_jobs', {
+                      defaultValue: 'Pending Tasks',
+                    })}
+                  </div>
+                  <div className="status-card-value">{health ? health.pendingJobs : '-'}</div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <HardDrive size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_cache_space', {
+                      defaultValue: 'Cache Usage',
+                    })}
+                  </div>
+                  <div className="status-card-value">
+                    {health ? formatBytes(health.cacheSpaceBytes) : '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {lastError && !health && (
+              <div className="settings-error-notice" style={{ marginTop: '12px' }}>
+                {t('settings.api_server.connection_error', { defaultValue: 'Connection Error' })}:{' '}
+                {lastError}
+              </div>
+            )}
+          </div>
+        </SettingsSection>
+      )}
 
+      <SettingsSection
+        title={t('settings.api_server.network_security_title', {
+          defaultValue: 'Network & Security',
+        })}
+        icon={<Globe size={20} />}
+      >
         {/* Host */}
         <SettingsItem
           title={t('settings.api_server.host_label', { defaultValue: 'Host' })}
@@ -454,146 +605,41 @@ export function SettingsApiServerTab(): React.JSX.Element {
         </SettingsItem>
       </SettingsSection>
 
-      {config.httpServerEnabled && (
-        <>
-          <SettingsSection
-            title={t('settings.api_server.status_title', { defaultValue: 'Server Status' })}
-          >
-            <div className="settings-api-server-panel">
-              <div className="api-server-status-grid">
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Activity size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_state', { defaultValue: 'State' })}
-                    </div>
-                    <div className={`status-card-value ${health ? 'text-success' : 'text-error'}`}>
-                      {health
-                        ? t('settings.api_server.state_running', { defaultValue: 'Running' })
-                        : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })}
-                    </div>
-                  </div>
+      {isEnabled && (
+        <SettingsSection title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}>
+          <div className="settings-api-server-panel">
+            <div className="api-server-jobs-container">
+              {Object.keys(jobs).length === 0 ? (
+                <div className="empty-state-mini">
+                  <p>
+                    {t('settings.api_server.no_jobs', {
+                      defaultValue: 'No active or recent jobs.',
+                    })}
+                  </p>
                 </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Clock size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_uptime', { defaultValue: 'Uptime' })}
-                    </div>
-                    <div className="status-card-value">
-                      {health ? formatUptime(health.uptime) : '-'}
-                    </div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Zap size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_gpu', {
-                        defaultValue: 'GPU Acceleration',
-                      })}
-                    </div>
-                    <div className="status-card-value">
-                      {info?.gpuAvailable
-                        ? t('common.enabled', { defaultValue: 'Enabled' })
-                        : t('common.disabled', { defaultValue: 'Disabled' })}
-                    </div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Activity size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_active_jobs', {
-                        defaultValue: 'Active Tasks',
-                      })}
-                    </div>
-                    <div className="status-card-value">{health ? health.activeJobs : '-'}</div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <List size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_pending_jobs', {
-                        defaultValue: 'Pending Tasks',
-                      })}
-                    </div>
-                    <div className="status-card-value">{health ? health.pendingJobs : '-'}</div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <HardDrive size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_cache_space', {
-                        defaultValue: 'Cache Usage',
-                      })}
-                    </div>
-                    <div className="status-card-value">
-                      {health ? formatBytes(health.cacheSpaceBytes) : '-'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {lastError && !health && (
-                <div className="settings-error-notice" style={{ marginTop: '12px' }}>
-                  {t('settings.api_server.connection_error', { defaultValue: 'Connection Error' })}:{' '}
-                  {lastError}
-                </div>
+              ) : (
+                <table className="jobs-table">
+                  <thead>
+                    <tr>
+                      <th>{t('settings.api_server.job_id', { defaultValue: 'Job ID' })}</th>
+                      <th>{t('settings.api_server.job_status', { defaultValue: 'Status' })}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(jobs).map(([id, status]) => (
+                      <tr key={id}>
+                        <td className="job-id-cell" title={id}>
+                          {id.slice(0, 8)}...
+                        </td>
+                        <td>{getStatusLabel(status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
-          </SettingsSection>
-
-          <SettingsSection
-            title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}
-          >
-            <div className="settings-api-server-panel">
-              <div className="api-server-jobs-container">
-                {Object.keys(jobs).length === 0 ? (
-                  <div className="empty-state-mini">
-                    <p>
-                      {t('settings.api_server.no_jobs', {
-                        defaultValue: 'No active or recent jobs.',
-                      })}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="jobs-table">
-                    <thead>
-                      <tr>
-                        <th>{t('settings.api_server.job_id', { defaultValue: 'Job ID' })}</th>
-                        <th>{t('settings.api_server.job_status', { defaultValue: 'Status' })}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(jobs).map(([id, status]) => (
-                        <tr key={id}>
-                          <td className="job-id-cell" title={id}>
-                            {id.slice(0, 8)}...
-                          </td>
-                          <td>{getStatusLabel(status)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </SettingsSection>
-        </>
+          </div>
+        </SettingsSection>
       )}
     </SettingsTabContainer>
   );

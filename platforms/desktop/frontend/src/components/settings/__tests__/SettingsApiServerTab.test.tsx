@@ -56,13 +56,15 @@ describe('SettingsApiServerTab', () => {
       render(<SettingsApiServerTab />);
     });
 
-    screen.getByText('Enable API Server');
+    screen.getByText('API Server');
+    screen.getByRole('switch', { name: 'Enable API Server' });
+    screen.getByText('Network & Security');
     screen.getByText('Host');
     screen.getByText('Port');
     screen.getByText('API Key');
 
     // Verify sub-label hints render
-    screen.getByText('Start an HTTP server to control Sona via external applications.');
+    screen.getByText(/Expose an HTTP API for external headless integration/);
     screen.getByText(/Bind address for the server/);
     screen.getByText('TCP port for the API server. Must be between 1 and 65535 (default: 14200).');
     screen.getByText('Optional Bearer token for authenticating HTTP requests.');

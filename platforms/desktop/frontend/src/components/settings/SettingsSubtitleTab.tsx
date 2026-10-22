@@ -96,7 +96,13 @@ function getFailureSourceLabel(
   }
 }
 
-export function VoiceTypingSettingsSection(): React.JSX.Element {
+export interface VoiceTypingSettingsSectionProps {
+  hideEnableSwitch?: boolean;
+}
+
+export function VoiceTypingSettingsSection({
+  hideEnableSwitch = false,
+}: VoiceTypingSettingsSectionProps = {}): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const vtConfig = useVoiceTypingConfig();
   const updateConfig = useSetConfig();
@@ -132,20 +138,22 @@ export function VoiceTypingSettingsSection(): React.JSX.Element {
             'Configure global shortcut triggers, activation mode, and floating capsule placement',
         })}
       >
-        <SettingsItem
-          id="settings-voice-typing-enable"
-          title={t('settings.enable_voice_typing', {
-            defaultValue: 'Enable Voice Typing',
-          })}
-          hint={t('settings.enable_voice_typing_hint', {
-            defaultValue: 'Type text directly into any application using your voice',
-          })}
-        >
-          <Switch
-            checked={vtConfig.voiceTypingEnabled ?? false}
-            onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
-          />
-        </SettingsItem>
+        {!hideEnableSwitch && (
+          <SettingsItem
+            id="settings-voice-typing-enable"
+            title={t('settings.enable_voice_typing', {
+              defaultValue: 'Enable Voice Typing',
+            })}
+            hint={t('settings.enable_voice_typing_hint', {
+              defaultValue: 'Type text directly into any application using your voice',
+            })}
+          >
+            <Switch
+              checked={vtConfig.voiceTypingEnabled ?? false}
+              onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+            />
+          </SettingsItem>
+        )}
 
         <SettingsItem
           id="settings-voice-typing-shortcut"

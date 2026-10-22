@@ -241,7 +241,8 @@
     "migrated_notice": "이 설정 항목은 더 빠른 시작/중지, 매개변수 조정 및 상태 모니터링을 위해 홈의 '도구' 워크벤치로 이동되었습니다.",
     "migrated_notice_desc": "독립 확장 및 서비스 도구가 홈 통합 워크벤치로 통합되었습니다.",
     "migrated_badge": "도구로 이동됨",
-    "go_to_tools": "도구로 이동"
+    "go_to_tools": "도구로 이동",
+    "copy_api_url": "엔드포인트 복사"
   },
   "live": {
     "resume": "재개",
@@ -2247,6 +2248,7 @@
     "api_server": {
       "title": "API Server",
       "description": "외부 headless 연동을 위해 HTTP API를 노출합니다. Live Record와 Batch Import 전사를 HTTP로 호출할 수 있습니다.",
+      "network_security_title": "네트워크 및 보안",
       "restart_warning": "API Server 설정 변경은 다음 앱 실행 시 적용됩니다.",
       "enable_label": "API Server 사용",
       "enable_hint": "외부 앱이 Sona를 제어할 수 있도록 HTTP server를 시작합니다.",
@@ -2301,6 +2303,9 @@
       "active_clients_count": "{{count}}개 에이전트 연결됨",
       "active_clients_count_one": "{{count}}개 에이전트 연결됨",
       "active_clients_count_other": "{{count}}개 에이전트 연결됨",
+      "active_clients_count_short": "{{count}}개 연결됨",
+      "active_clients_count_short_one": "{{count}}개 연결됨",
+      "active_clients_count_short_other": "{{count}}개 연결됨",
       "ipc_endpoint": "통신 엔드포인트",
       "ipc_endpoint_hint": "외부 에이전트 프로세스가 Sona와 로컬 통신하는 데 사용하는 통합 IPC 엔드포인트입니다.",
       "bridge_binary": "브리지 실행 파일 (sona-mcp)",

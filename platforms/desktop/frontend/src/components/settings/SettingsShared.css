@@ -1682,6 +1682,7 @@
   font-weight: 700;
   color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .text-success {

@@ -5,12 +5,8 @@ import { useCaptionConfig, useSetConfig } from '../../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { ColorSwatchPicker } from '../../ColorSwatchPicker';
 import { Switch } from '../../Switch';
-import {
-  SettingsItem,
-  SettingsPageHeader,
-  SettingsSection,
-  SettingsTabContainer,
-} from '../../settings/SettingsLayout';
+import { SettingsItem, SettingsSection, SettingsTabContainer } from '../../settings/SettingsLayout';
+import { ToolHeroHeader } from '../ToolHeroHeader';
 
 function hexToRgba(hex: string, opacity: number): string {
   const cleaned = hex.replace('#', '');
@@ -48,34 +44,22 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
 
   return (
     <SettingsTabContainer id="tools-panel-subtitles" ariaLabelledby="tools-tab-subtitles">
-      <div className="tool-hero-header">
-        <SettingsPageHeader
-          icon={<Subtitles width={28} height={28} />}
-          title={t('tools.subtitles', { defaultValue: 'Live Subtitles' })}
-          description={t('settings.subtitle_tab_description', {
-            defaultValue: 'Configure live caption window behavior and visual appearance.',
-          })}
-        />
-        <div className="tool-hero-control">
-          <div className="tool-hero-status">
-            <span
-              className={`tools-status-badge tools-status-${isCaptionMode ? 'active' : 'inactive'}`}
-            >
-              <span className="tools-status-dot" aria-hidden="true" />
-              <span>
-                {isCaptionMode
-                  ? t('tools.status_running', { defaultValue: 'Running' })
-                  : t('tools.status_stopped', { defaultValue: 'Stopped' })}
-              </span>
-            </span>
-          </div>
-          <Switch
-            checked={isCaptionMode}
-            onChange={handleToggleCaptionMode}
-            aria-label={t('live.caption_mode', { defaultValue: 'Live Caption' })}
-          />
-        </div>
-      </div>
+      <ToolHeroHeader
+        icon={<Subtitles size={24} />}
+        title={t('tools.subtitles', { defaultValue: 'Live Subtitles' })}
+        description={t('settings.subtitle_tab_description', {
+          defaultValue: 'Configure live caption window behavior and visual appearance.',
+        })}
+        statusText={
+          isCaptionMode
+            ? t('tools.status_running', { defaultValue: 'Running' })
+            : t('tools.status_stopped', { defaultValue: 'Stopped' })
+        }
+        statusTone={isCaptionMode ? 'active' : 'inactive'}
+        enabled={isCaptionMode}
+        onToggle={handleToggleCaptionMode}
+        switchAriaLabel={t('live.caption_mode', { defaultValue: 'Live Caption' })}
+      />
 
       <div className="tools-panel-body">
         <SettingsSection

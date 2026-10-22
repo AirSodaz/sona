@@ -28,11 +28,11 @@ import { useMcpStore } from '../../stores/mcpStore';
 import type { AppConfig, McpPermissionMode } from '../../types/config';
 import { ClientLogo } from '../icons/ClientLogos';
 import { Switch } from '../Switch';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
 import {
   SegmentedSubTabs,
   SettingsAccordion,
   SettingsItem,
-  SettingsPageHeader,
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
@@ -187,16 +187,59 @@ export function SettingsMcpTab(): React.JSX.Element {
   );
 
   const currentMode = config.mcpPermissionMode ?? status?.permissionMode ?? 'full';
+  const isEnabled = Boolean(config.mcpEnabled ?? status?.enabled ?? true);
+  const isRunning = Boolean(status?.running);
+  const activeConnections = status?.activeConnections ?? 0;
+
+  const statusTone: ToolHeroStatusTone = !isEnabled || !isRunning ? 'inactive' : 'active';
+  const statusText =
+    !isEnabled || !isRunning
+      ? t('tools.status_disabled', { defaultValue: 'Disabled' })
+      : activeConnections > 0
+        ? t('settings.mcp.active_clients_count_short', {
+            count: activeConnections,
+            defaultValue: `${activeConnections} Connected`,
+          })
+        : t('settings.mcp.status_listening', { defaultValue: 'Listening' });
 
   return (
     <SettingsTabContainer id="settings-panel-mcp" ariaLabelledby="settings-tab-mcp">
-      <SettingsPageHeader
-        icon={<Bot width={28} height={28} />}
+      <ToolHeroHeader
+        id="settings-mcp-hero"
+        icon={<Bot size={24} />}
         title={t('settings.mcp.title', { defaultValue: 'MCP Agents' })}
         description={t('settings.mcp.description', {
           defaultValue:
             'Securely expose transcription, recording control, and historical data to external AI Agents (Claude Desktop, Cursor, Windsurf, Zed) via Model Context Protocol.',
         })}
+        statusText={statusText}
+        statusTone={statusTone}
+        enabled={isEnabled}
+        onToggle={handleToggleEnabled}
+        switchAriaLabel={t('settings.mcp.enable_label', {
+          defaultValue: 'Enable MCP Agent Service',
+        })}
+        actions={
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!isEnabled || isPinging}
+            onClick={() => void handlePing()}
+            title={t('settings.mcp.btn_ping', { defaultValue: 'Ping MCP Service' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Zap size={13} />
+            <span>
+              {isPinging
+                ? t('common.testing', { defaultValue: 'Pinging...' })
+                : pingLatency !== null
+                  ? pingLatency >= 0
+                    ? `${pingLatency}ms`
+                    : t('common.failed', { defaultValue: 'Failed' })
+                  : t('settings.mcp.ping', { defaultValue: 'Ping' })}
+            </span>
+          </button>
+        }
       />
 
       {/* 1. Service Lifecycle & Status */}
@@ -205,22 +248,6 @@ export function SettingsMcpTab(): React.JSX.Element {
         title={t('settings.mcp.status_title', { defaultValue: 'Service Lifecycle & Status' })}
         icon={<Activity size={18} />}
       >
-        <SettingsItem
-          title={t('settings.mcp.enable_label', { defaultValue: 'Enable MCP Agent Service' })}
-          hint={t('settings.mcp.enable_hint', {
-            defaultValue:
-              'Start the local IPC listener (Named Pipe / Unix Domain Socket) allowing external AI Agents to control Sona.',
-          })}
-        >
-          <Switch
-            checked={config.mcpEnabled ?? status?.enabled ?? true}
-            onChange={handleToggleEnabled}
-            aria-label={t('settings.mcp.enable_label', {
-              defaultValue: 'Enable MCP Agent Service',
-            })}
-          />
-        </SettingsItem>
-
         <SettingsItem
           title={t('settings.mcp.service_status', { defaultValue: 'Service Status & Clients' })}
           hint={

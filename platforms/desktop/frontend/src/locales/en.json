@@ -241,7 +241,8 @@
     "migrated_notice": "This setting has been moved to the homepage Tools workbench for faster control, configuration, and monitoring.",
     "migrated_notice_desc": "Standalone extension and service tools have been consolidated into the unified homepage workbench.",
     "migrated_badge": "Moved to Tools",
-    "go_to_tools": "Go to Tools"
+    "go_to_tools": "Go to Tools",
+    "copy_api_url": "Copy Endpoint"
   },
   "live": {
     "resume": "Resume",
@@ -2209,6 +2210,7 @@
     "api_server": {
       "title": "API Server",
       "description": "Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.",
+      "network_security_title": "Network & Security",
       "restart_warning": "Changes to the API Server take effect on the next application launch.",
       "enable_label": "Enable API Server",
       "enable_hint": "Start an HTTP server to control Sona via external applications.",
@@ -2263,6 +2265,9 @@
       "active_clients_count": "{{count}} Agent connected",
       "active_clients_count_one": "{{count}} Agent connected",
       "active_clients_count_other": "{{count}} Agents connected",
+      "active_clients_count_short": "{{count}} Connected",
+      "active_clients_count_short_one": "{{count}} Connected",
+      "active_clients_count_short_other": "{{count}} Connected",
       "ipc_endpoint": "IPC Endpoint",
       "ipc_endpoint_hint": "Unified local IPC endpoint used by external agent processes.",
       "bridge_binary": "Bridge Executable (sona-mcp)",
