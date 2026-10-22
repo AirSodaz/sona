@@ -86,6 +86,10 @@ function patchTauriConf(version, config) {
   } else {
     console.warn('Warning: plugins or plugins.updater config is missing in tauri.conf.json');
   }
+  if (version.includes('-') && json.bundle && Array.isArray(json.bundle.targets)) {
+    json.bundle.targets = json.bundle.targets.filter((target) => target !== 'rpm');
+    console.log('[patch-channel] platforms/desktop/tauri.conf.json -> excluded rpm bundle target for pre-release version');
+  }
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
   console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> identifier ${config.identifier}, productName "${config.productName}"`);
   console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> updater endpoint ${config.updaterEndpoints[0]}`);

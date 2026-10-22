@@ -90,7 +90,7 @@ test('Android Gradle dependencies stay aligned across modules and Cargo', () => 
     /name = "rustls-platform-verifier-android"\s+version = "([\d.]+)"/u,
   );
   const cargoVerifierVersion = cargoVerifierMatch?.[1];
-  const androidVerifierVersion = appGradle.match(/rustls-platform-verifier:([\d.]+)/u)?.[1];
+  const androidVerifierVersion = appGradle.match(/(?:org\.)?rustls:rustls-platform-verifier:([\d.]+)/u)?.[1];
   assert.ok(cargoVerifierVersion, 'Cargo.lock must include rustls-platform-verifier-android');
   assert.equal(
     androidVerifierVersion,
