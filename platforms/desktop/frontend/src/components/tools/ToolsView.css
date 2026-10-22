@@ -16,6 +16,8 @@
    Left Sidebar
    -------------------------------------------------------------------------- */
 
+.tools-workbench .tools-sidebar,
+.tools-sidebar.panel-left,
 .tools-sidebar {
   flex: 0 0 350px;
   width: 350px;
@@ -234,6 +236,8 @@
    Right Detail Pane
    -------------------------------------------------------------------------- */
 
+.tools-workbench .tools-detail-pane,
+.tools-detail-pane.panel-right,
 .tools-detail-pane {
   flex: 1;
   min-width: 500px;
@@ -244,6 +248,7 @@
   border-top-left-radius: var(--radius-lg);
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior-y: contain;
   padding: 32px 48px;
   box-sizing: border-box;
 }
@@ -387,11 +392,15 @@
    -------------------------------------------------------------------------- */
 
 @media (max-width: 899px) {
+  .tools-workbench .tools-sidebar,
+  .tools-sidebar.panel-left,
   .tools-sidebar {
     flex: 0 0 300px;
     width: 300px;
     min-width: 300px;
   }
+  .tools-workbench .tools-detail-pane,
+  .tools-detail-pane.panel-right,
   .tools-detail-pane {
     min-width: 0;
     padding: 24px 24px;

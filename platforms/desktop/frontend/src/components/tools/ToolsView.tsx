@@ -1,4 +1,5 @@
 import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useToolsStore } from '../../stores/toolsStore';
 import { ToolApiServerPanel } from './panels/ToolApiServerPanel';
 import { ToolMcpPanel } from './panels/ToolMcpPanel';
@@ -13,6 +14,13 @@ interface ToolsViewProps {
 
 export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Element {
   const activeTool = useToolsStore((state) => state.activeTool);
+  const detailPaneRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (activeTool && detailPaneRef.current) {
+      detailPaneRef.current.scrollTop = 0;
+    }
+  }, [activeTool]);
 
   return (
     <div
@@ -22,7 +30,7 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
       aria-label="Tools Workbench"
     >
       <ToolsSidebar />
-      <div className="tools-detail-pane panel-right" tabIndex={-1}>
+      <div ref={detailPaneRef} className="tools-detail-pane panel-right" tabIndex={-1}>
         {activeTool === 'subtitles' && <ToolSubtitlesPanel />}
         {activeTool === 'voice_typing' && <ToolVoiceTypingPanel />}
         {activeTool === 'api_server' && <ToolApiServerPanel />}

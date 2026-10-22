@@ -110,4 +110,18 @@ describe('ToolsView', () => {
 
     expect(useTranscriptRuntimeStore.getState().isCaptionMode).toBe(true);
   });
+
+  it('resets scroll position to top when active tool changes', () => {
+    const { container } = render(<ToolsView />);
+    const detailPane = container.querySelector('.tools-detail-pane') as HTMLElement;
+    expect(detailPane).not.toBeNull();
+
+    // Simulate user having scrolled down
+    detailPane.scrollTop = 350;
+
+    const sidebarTabs = screen.getAllByRole('tab');
+    fireEvent.click(sidebarTabs[1]); // switch to voice typing
+
+    expect(detailPane.scrollTop).toBe(0);
+  });
 });
