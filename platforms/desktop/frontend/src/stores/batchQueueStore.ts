@@ -402,8 +402,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
           // Only update the active project when still in batch mode,
           // to avoid overriding the browse scope in the projects view.
-          const currentMode = useTranscriptStore.getState().mode;
-          if (currentMode === 'batch') {
+          const { mode: currentMode, ingestionFocus } = useTranscriptStore.getState();
+          if (currentMode === 'create' && ingestionFocus === 'batch') {
             void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
           }
         }
@@ -460,6 +460,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       const audioUrl = item.audioUrl || session.audioUrl;
       useTranscriptStore.setState({
         activeSessionId: id,
+        ingestionFocus: 'batch',
         sessions: {
           ...transcriptState.sessions,
           [id]: {

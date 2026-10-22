@@ -211,6 +211,7 @@
     }
   },
   "panel": {
+    "create": "새로 만들기",
     "live_record": "Live Record",
     "batch_import": "Batch Import",
     "projects": "Workspace",

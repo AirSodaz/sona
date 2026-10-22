@@ -185,6 +185,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       if (isAgentRecording) {
         return;
       }
+      useTranscriptStore.getState().setIngestionFocus('live');
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],

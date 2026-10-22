@@ -20,7 +20,7 @@ describe('SettingsMigratedBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useToolsStore.setState({ activeTool: 'mcp' });
-    useTranscriptRuntimeStore.setState({ mode: 'live' });
+    useTranscriptRuntimeStore.setState({ mode: 'create', ingestionFocus: 'live' });
   });
 
   afterEach(() => {

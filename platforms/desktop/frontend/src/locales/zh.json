@@ -211,6 +211,7 @@
     }
   },
   "panel": {
+    "create": "新建",
     "live_record": "实时录音",
     "batch_import": "批量导入",
     "projects": "项目中心",

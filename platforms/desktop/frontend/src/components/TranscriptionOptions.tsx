@@ -36,9 +36,12 @@ export function TranscriptionOptions({
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const storeMode = useTranscriptRuntimeStore((state) => state.mode);
+  const storeIngestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const storeIsRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
-  const surface = customSurface ?? (storeMode === 'batch' ? 'batch' : 'live');
+  const surface =
+    customSurface ??
+    (storeIngestionFocus === 'batch' || (storeMode as string) === 'batch' ? 'batch' : 'live');
   const disabled = customDisabled ?? (surface === 'live' && storeIsRecording);
   const slot: AsrSelectionSlot = surface === 'batch' ? 'batch' : 'live';
 

@@ -513,7 +513,7 @@
   position: absolute;
   top: 4px;
   left: 4px;
-  width: calc((100% - 8px - 12px) / 4); /* 4 tabs, minus container padding and gaps */
+  width: calc((100% - 8px - 8px) / 3); /* 3 tabs, minus container padding and gaps */
   height: calc(100% - 8px);
   background: var(--color-bg-elevated);
   border-radius: var(--radius-sm);

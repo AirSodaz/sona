@@ -1,12 +1,11 @@
 import type React from 'react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BatchImport } from './components/BatchImport';
+import { CreateWorkspacePanel } from './components/CreateWorkspacePanel';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { GlobalDialog } from './components/GlobalDialog';
 import { SettingsIcon } from './components/Icons';
-import { LiveRecord } from './components/LiveRecord';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ProjectSelectorDropdown } from './components/ProjectSelectorDropdown';
 import { ProjectsView } from './components/ProjectsView';
@@ -81,6 +80,8 @@ function getPanelTitle(
   t: (key: string, options?: Record<string, unknown>) => string
 ): string {
   switch (mode) {
+    case 'create':
+      return t('panel.create', { defaultValue: '新建' });
     case 'live':
       return t('panel.live_record');
     case 'projects':
@@ -103,6 +104,7 @@ function App(): React.JSX.Element | null {
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const isProjectsMode = mode === 'projects';
+  const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
@@ -228,7 +230,7 @@ function App(): React.JSX.Element | null {
   };
 
   const closeTranscriptSession = () => {
-    if (mode === 'batch') {
+    if (mode === 'create' && ingestionFocus === 'batch') {
       useBatchQueueStore.getState().setActiveItem(null);
     } else {
       clearActiveTranscriptSession({ clearAudio: true });
@@ -308,17 +310,12 @@ function App(): React.JSX.Element | null {
                 <h2>{panelTitle}</h2>
               </div>
               <div className="panel-content">
-                <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
-                  <LiveRecord />
-                </div>
-                <div style={{ display: mode === 'batch' ? undefined : 'none', height: '100%' }}>
-                  <BatchImport />
-                </div>
+                <CreateWorkspacePanel />
               </div>
               <div className="panel-footer">
                 <TranscriptionOptions
-                  surface={mode === 'batch' ? 'batch' : 'live'}
-                  disabled={mode === 'live' && isRecording}
+                  surface={ingestionFocus}
+                  disabled={ingestionFocus === 'live' && isRecording}
                 />
               </div>
             </div>

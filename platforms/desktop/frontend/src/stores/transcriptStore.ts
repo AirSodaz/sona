@@ -13,6 +13,7 @@ import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import type {
   AppMode,
   HistorySummaryPayload,
+  IngestionFocus,
   ProcessingStatus,
   TranscriptSegment,
   TranscriptSummaryState,
@@ -84,6 +85,7 @@ export interface TranscriptStore {
 
   // --- Runtime (Global) ---
   mode: AppMode;
+  ingestionFocus: IngestionFocus;
   processingStatus: ProcessingStatus;
   processingProgress: number;
   isRecording: boolean;
@@ -128,6 +130,7 @@ export interface TranscriptStore {
 
   // Runtime
   setMode: (mode: AppMode) => void;
+  setIngestionFocus: (focus: IngestionFocus) => void;
   setProcessingStatus: (status: ProcessingStatus) => void;
   setProcessingProgress: (progress: number) => void;
   setIsRecording: (isRecording: boolean) => void;
@@ -248,7 +251,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
 
-  mode: 'live',
+  mode: 'create',
+  ingestionFocus: 'live',
   processingStatus: 'idle',
   processingProgress: 0,
   isRecording: false,
@@ -261,7 +265,18 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   autoSaveStates: {},
 
   // --- Runtime ---
-  setMode: (mode) => set({ mode }),
+  setMode: (mode) => {
+    if ((mode as string) === 'live') {
+      set({ mode: 'create', ingestionFocus: 'live' });
+      return;
+    }
+    if ((mode as string) === 'batch') {
+      set({ mode: 'create', ingestionFocus: 'batch' });
+      return;
+    }
+    set({ mode });
+  },
+  setIngestionFocus: (ingestionFocus) => set({ ingestionFocus }),
   setProcessingStatus: (processingStatus) => set({ processingStatus }),
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
   setIsRecording: (isRecording) => set({ isRecording }),

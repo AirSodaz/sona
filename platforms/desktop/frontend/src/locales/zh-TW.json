@@ -211,6 +211,7 @@
     }
   },
   "panel": {
+    "create": "新增",
     "live_record": "即時錄音",
     "batch_import": "批次匯入",
     "projects": "工作區",

@@ -14,6 +14,7 @@ import {
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 import type { ProjectRecord } from '../types/project';
@@ -105,6 +106,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
+  const setIngestionFocus = useTranscriptStore((state) => state.setIngestionFocus);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
@@ -784,9 +786,15 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             headerIcon={browseState.headerIcon}
             headerTitle={browseState.headerTitle}
             isScrolled={browseState.isScrolled}
-            onOpenBatchImport={() => setMode('batch')}
+            onOpenBatchImport={() => {
+              setMode('create');
+              setIngestionFocus('batch');
+            }}
             onOpenProjectSettings={() => projectSettingsDraft.setIsSettingsOpen(true)}
-            onStartLiveRecord={() => setMode('live')}
+            onStartLiveRecord={() => {
+              setMode('create');
+              setIngestionFocus('live');
+            }}
             showWorkflowActions={browseState.showWorkflowActions}
             isTrashScope={browseState.isTrashScope}
             onEmptyTrash={() => void handleEmptyTrash()}

@@ -63,7 +63,8 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App Title Logic', () => {
   const defaultTranscriptState = {
-    mode: 'live',
+    mode: 'create',
+    ingestionFocus: 'live',
     setMode: vi.fn(),
   };
 
@@ -101,17 +102,22 @@ describe('App Title Logic', () => {
     setupStore();
   });
 
-  it('displays "Live Record" title in live mode', () => {
+  it('displays "Create" title in create mode', () => {
     render(<App />);
-    expect(screen.getByText('panel.live_record')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'panel.create' })).not.toBeNull();
+  });
+
+  it('displays "Live Record" title in live mode', () => {
+    setupStore({ mode: 'live' });
+    render(<App />);
+    expect(screen.getByRole('heading', { level: 2, name: 'panel.live_record' })).not.toBeNull();
   });
 
   it('displays "Batch Import" title in batch mode', () => {
     setupStore({ mode: 'batch' });
     render(<App />);
-    expect(screen.getByText('panel.batch_import')).not.toBeNull();
+    expect(screen.getByRole('heading', { level: 2, name: 'panel.batch_import' })).not.toBeNull();
   });
-
   it('displays active project name as a tag in header when active', () => {
     setupStore(
       { mode: 'live' },

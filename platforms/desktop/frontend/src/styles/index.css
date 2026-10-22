@@ -14,6 +14,7 @@
 @import "./workflow-surfaces.css";
 @import "./live-record.css";
 @import "./batch-import.css";
+@import "./create-workspace-panel.css";
 @import "./history-layouts.css";
 @import "./transcript-updates.css";
 @import "./caption.css";

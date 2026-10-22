@@ -211,6 +211,7 @@
     }
   },
   "panel": {
+    "create": "New",
     "live_record": "Live Record",
     "batch_import": "Batch Import",
     "projects": "Projects",

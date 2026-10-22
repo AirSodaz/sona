@@ -240,10 +240,10 @@ class TranscriptAutoSaveRuntime {
       }
 
       this.lastFingerprint = currentFingerprint;
-      const delayMs =
-        useTranscriptRuntimeStore.getState().mode === 'live'
-          ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS
-          : DEFAULT_AUTO_SAVE_DELAY_MS;
+      const runtimeState = useTranscriptRuntimeStore.getState();
+      const isLiveIngestion =
+        runtimeState.mode === 'create' && runtimeState.ingestionFocus === 'live';
+      const delayMs = isLiveIngestion ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
       this.queueSave(currentId, state.segments, delayMs);
     });
   }

@@ -1,4 +1,4 @@
-import { Wrench } from 'lucide-react';
+import { PlusCircle, Wrench } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -7,14 +7,14 @@ import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppMode } from '../types/transcript';
-import { BookIcon, FolderIcon, MicIcon } from './Icons';
+import { BookIcon } from './Icons';
 
 /** Props for TabNavigation. */
 interface TabNavigationProps {
   /** Optional CSS class name. */
   className?: string;
 }
-const TAB_MODES: AppMode[] = ['live', 'batch', 'projects', 'tools'];
+const TAB_MODES: AppMode[] = ['create', 'projects', 'tools'];
 
 /**
  * Tab navigation component for switching between application modes (Live Record, Batch Import).
@@ -31,11 +31,14 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
   const handleTabChange = useCallback(
     (newMode: AppMode) => {
       if (mode === newMode) {
-        if (newMode === 'projects') {
+        if (newMode === 'create') {
+          const ingestionFocus = useTranscriptStore.getState().ingestionFocus;
+          if (ingestionFocus === 'batch') {
+            document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+          }
+        } else if (newMode === 'projects') {
           document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });
           document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
-        } else if (newMode === 'batch') {
-          document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
         } else if (newMode === 'tools') {
           document.querySelector('.tools-detail-pane')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
@@ -43,28 +46,29 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
       }
       setMode(newMode);
 
-      if (newMode === 'live') {
-        const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
-        useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
-      }
-
-      if (newMode === 'batch') {
-        const activeItemId = useBatchQueueStore.getState().activeItemId;
-        if (activeItemId) {
-          const sessions = useTranscriptStore.getState().sessions;
-          if (sessions[activeItemId]) {
-            useTranscriptStore.setState({ activeSessionId: activeItemId });
+      if (newMode === 'create') {
+        const ingestionFocus = useTranscriptStore.getState().ingestionFocus;
+        if (ingestionFocus === 'live') {
+          const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+          useTranscriptStore.setState({ activeSessionId: recordingSessionId || 'default' });
+        } else if (ingestionFocus === 'batch') {
+          const activeItemId = useBatchQueueStore.getState().activeItemId;
+          if (activeItemId) {
+            const sessions = useTranscriptStore.getState().sessions;
+            if (sessions[activeItemId]) {
+              useTranscriptStore.setState({ activeSessionId: activeItemId });
+            } else {
+              useTranscriptStore.setState({ activeSessionId: 'default' });
+            }
+          } else {
+            useTranscriptStore.setState({ activeSessionId: 'default' });
           }
         }
       }
 
-      if (newMode === 'projects') {
+      if (newMode === 'projects' || newMode === 'tools') {
         // Reset to a neutral session so the batch item's transcript is not
-        // shown in the projects view while a batch run is in progress.
-        useTranscriptStore.setState({ activeSessionId: 'default' });
-      }
-
-      if (newMode === 'tools') {
+        // shown in the projects/tools view while a batch run is in progress.
         useTranscriptStore.setState({ activeSessionId: 'default' });
       }
     },
@@ -106,22 +110,13 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         aria-hidden="true"
       />
       <button
-        className={`tab-button ${mode === 'live' ? 'active' : ''}`}
-        onClick={() => handleTabChange('live')}
-        aria-selected={mode === 'live'}
+        className={`tab-button ${mode === 'create' ? 'active' : ''}`}
+        onClick={() => handleTabChange('create')}
+        aria-selected={mode === 'create'}
         role="tab"
       >
-        <MicIcon />
-        <span>{t('panel.live_record')}</span>
-      </button>
-      <button
-        className={`tab-button ${mode === 'batch' ? 'active' : ''}`}
-        onClick={() => handleTabChange('batch')}
-        aria-selected={mode === 'batch'}
-        role="tab"
-      >
-        <FolderIcon />
-        <span>{t('panel.batch_import')}</span>
+        <PlusCircle size={16} aria-hidden="true" />
+        <span>{t('panel.create', { defaultValue: '新建' })}</span>
       </button>
       <button
         className={`tab-button ${mode === 'projects' ? 'active' : ''}`}

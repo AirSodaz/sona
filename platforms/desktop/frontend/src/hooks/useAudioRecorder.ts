@@ -413,7 +413,8 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         return false;
       }
       const onboardingStore = useOnboardingStore.getState();
-      useTranscriptRuntimeStore.getState().setMode('live');
+      useTranscriptRuntimeStore.getState().setMode('create');
+      useTranscriptStore.getState().setIngestionFocus('live');
       onboardingStore.reopen(
         getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
         'live_record'

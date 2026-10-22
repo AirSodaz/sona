@@ -26,7 +26,8 @@ describe('TranscriptionOptions', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useTranscriptRuntimeStore.setState({
-      mode: 'live',
+      mode: 'create',
+      ingestionFocus: 'live',
       isRecording: false,
     });
     useConfigStore.setState({

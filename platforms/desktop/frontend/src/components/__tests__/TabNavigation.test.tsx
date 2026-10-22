@@ -3,8 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const testContext = vi.hoisted(() => ({
   runtimeState: {
-    mode: 'live',
+    mode: 'create' as 'create' | 'projects' | 'tools',
     setMode: vi.fn(),
+  },
+  transcriptState: {
+    ingestionFocus: 'live' as 'live' | 'batch',
+    recordingSessionId: null as string | null,
+    sessions: {} as Record<string, unknown>,
   },
 }));
 
@@ -20,7 +25,15 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 vi.mock('../../stores/transcriptRuntimeStore', () => ({
-  useTranscriptRuntimeStore: (selector: any) => selector(testContext.runtimeState),
+  useTranscriptRuntimeStore: <T,>(selector: (state: typeof testContext.runtimeState) => T) =>
+    selector(testContext.runtimeState),
+}));
+
+vi.mock('../../stores/transcriptStore', () => ({
+  useTranscriptStore: {
+    getState: () => testContext.transcriptState,
+    setState: vi.fn(),
+  },
 }));
 
 import { TabNavigation } from '../TabNavigation';
@@ -28,9 +41,9 @@ import { TabNavigation } from '../TabNavigation';
 describe('TabNavigation', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    testContext.runtimeState.mode = 'live';
+    testContext.runtimeState.mode = 'create';
+    testContext.transcriptState.ingestionFocus = 'live';
   });
-
   afterEach(() => {
     cleanup();
   });
@@ -45,23 +58,19 @@ describe('TabNavigation', () => {
 
     // Check for tabs
     const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(4);
+    expect(tabs).toHaveLength(3);
 
-    // Check live tab
+    // Check create tab
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(tabs[0].textContent).toContain('panel.live_record');
-
-    // Check batch tab
-    expect(tabs[1].getAttribute('aria-selected')).toBe('false');
-    expect(tabs[1].textContent).toContain('panel.batch_import');
+    expect(tabs[0].textContent).toContain('新建');
 
     // Check workspace tab
-    expect(tabs[2].getAttribute('aria-selected')).toBe('false');
-    expect(tabs[2].textContent).toContain('panel.projects');
+    expect(tabs[1].getAttribute('aria-selected')).toBe('false');
+    expect(tabs[1].textContent).toContain('panel.projects');
 
     // Check tools tab
-    expect(tabs[3].getAttribute('aria-selected')).toBe('false');
-    expect(tabs[3].textContent).toContain('Tools');
+    expect(tabs[2].getAttribute('aria-selected')).toBe('false');
+    expect(tabs[2].textContent).toContain('Tools');
   });
 
   it('scrolls projects containers to top when active Projects tab is clicked', () => {
@@ -80,8 +89,7 @@ describe('TabNavigation', () => {
       render(<TabNavigation />);
 
       const tabs = screen.getAllByRole('tab');
-      fireEvent.click(tabs[2]); // projects is index 2
-
+      fireEvent.click(tabs[1]); // projects is index 1
       expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
       expect(mainScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
       expect(railScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
@@ -91,8 +99,10 @@ describe('TabNavigation', () => {
     }
   });
 
-  it('scrolls batch queue to top when active Batch Import tab is clicked', () => {
-    testContext.runtimeState.mode = 'batch';
+  it('scrolls batch queue to top when active Create tab is clicked and ingestionFocus is batch', () => {
+    testContext.runtimeState.mode = 'create';
+    testContext.transcriptState.ingestionFocus = 'batch';
+
     const queueList = document.createElement('div');
     queueList.className = 'queue-list';
     const queueScrollTo = vi.fn();
@@ -103,7 +113,7 @@ describe('TabNavigation', () => {
       render(<TabNavigation />);
 
       const tabs = screen.getAllByRole('tab');
-      fireEvent.click(tabs[1]); // batch is index 1
+      fireEvent.click(tabs[0]); // create is index 0
 
       expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
       expect(queueScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
@@ -111,7 +121,6 @@ describe('TabNavigation', () => {
       queueList.remove();
     }
   });
-
   it('scrolls tools container to top when active Tools tab is clicked', () => {
     testContext.runtimeState.mode = 'tools';
     const detailPane = document.createElement('div');
@@ -124,8 +133,7 @@ describe('TabNavigation', () => {
       render(<TabNavigation />);
 
       const tabs = screen.getAllByRole('tab');
-      fireEvent.click(tabs[3]); // tools is index 3
-
+      fireEvent.click(tabs[2]); // tools is index 2
       expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
       expect(detailScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
     } finally {
@@ -133,32 +141,32 @@ describe('TabNavigation', () => {
     }
   });
 
-  it('cycles through 4 modes on Ctrl+Tab and Ctrl+Shift+Tab', () => {
+  it('cycles through 3 modes on Ctrl+Tab and Ctrl+Shift+Tab', () => {
     testContext.runtimeState.mode = 'projects';
     render(<TabNavigation />);
 
-    // Forward: projects (index 2) -> tools (index 3)
+    // Forward: projects (index 1) -> tools (index 2)
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
     expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
 
-    // Backward: projects (index 2) -> batch (index 1)
+    // Backward: projects (index 1) -> create (index 0)
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
-    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('batch');
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('create');
   });
 
   it('wraps around boundaries on Ctrl+Tab and Ctrl+Shift+Tab', () => {
-    // Forward wrap: tools (index 3) -> live (index 0)
+    // Forward wrap: tools (index 2) -> create (index 0)
     testContext.runtimeState.mode = 'tools';
     const { unmount } = render(<TabNavigation />);
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
-    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('live');
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('create');
 
     unmount();
     testContext.runtimeState.setMode.mockClear();
 
-    // Backward wrap: live (index 0) -> tools (index 3)
-    testContext.runtimeState.mode = 'live';
+    // Backward wrap: create (index 0) -> tools (index 2)
+    testContext.runtimeState.mode = 'create';
     render(<TabNavigation />);
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });

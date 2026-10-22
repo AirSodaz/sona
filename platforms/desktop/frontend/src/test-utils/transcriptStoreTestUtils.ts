@@ -37,6 +37,7 @@ import type { AppConfig } from '../types/config';
 import type {
   AppMode,
   HistorySummaryPayload,
+  IngestionFocus,
   ProcessingStatus,
   SummaryTemplateId,
   TranscriptSegment,
@@ -82,6 +83,7 @@ interface PlaybackPatch {
 
 interface RuntimePatch {
   mode?: AppMode;
+  ingestionFocus?: IngestionFocus;
   processingStatus?: ProcessingStatus;
   processingProgress?: number;
   isRecording?: boolean;
@@ -117,6 +119,7 @@ const PLAYBACK_KEYS = new Set<keyof PlaybackPatch>([
 
 const RUNTIME_KEYS = new Set<keyof RuntimePatch>([
   'mode',
+  'ingestionFocus',
   'processingStatus',
   'processingProgress',
   'isRecording',
@@ -245,7 +248,8 @@ export function resetTranscriptStores(): void {
         aligningSegmentIds: new Set<string>(),
       },
     },
-    mode: 'live',
+    mode: 'create',
+    ingestionFocus: 'live',
     processingStatus: 'idle',
     processingProgress: 0,
     isRecording: false,

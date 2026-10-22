@@ -211,6 +211,7 @@
     }
   },
   "panel": {
+    "create": "新規",
     "live_record": "Live Record",
     "batch_import": "Batch Import",
     "projects": "ワークスペース",

@@ -14,6 +14,7 @@ import {
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { OnboardingStep } from '../types/onboarding';
 import { logger } from '../utils/logger';
 import { hasRequiredOnboardingModels } from '../utils/onboarding';
@@ -189,7 +190,8 @@ export function useFirstRunGuide() {
 
   function handleFinish(): void {
     setConfig({ microphoneId: selectedMicrophoneId });
-    setMode('live');
+    setMode('create');
+    useTranscriptStore.getState().setIngestionFocus('live');
     complete();
   }
 

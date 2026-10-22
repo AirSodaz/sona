@@ -106,7 +106,8 @@ describe('TranscriptWorkbench', () => {
       title: 'Transcript Title',
       icon: null,
       sourceHistoryId: null,
-      mode: 'live',
+      mode: 'create',
+      ingestionFocus: 'live',
       isRecording: false,
       isPaused: false,
     });

@@ -183,7 +183,8 @@ describe('Transcript Stores', () => {
   it('runtime store updates workbench and recording flags independently of transcript content', () => {
     const runtimeStore = useTranscriptRuntimeStore.getState();
 
-    runtimeStore.setMode('batch');
+    runtimeStore.setMode('create');
+    runtimeStore.setIngestionFocus('batch');
     runtimeStore.setProcessingStatus('processing');
     runtimeStore.setProcessingProgress(45);
     runtimeStore.setIsRecording(true);
@@ -192,7 +193,8 @@ describe('Transcript Stores', () => {
 
     expect(useTranscriptRuntimeStore.getState()).toEqual(
       expect.objectContaining({
-        mode: 'batch',
+        mode: 'create',
+        ingestionFocus: 'batch',
         processingStatus: 'processing',
         processingProgress: 45,
         isRecording: true,
