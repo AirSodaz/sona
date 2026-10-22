@@ -59,7 +59,7 @@ edition = "2024"
             version: '1.0.0',
             identifier: 'com.asoda.sona',
             bundle: {
-              targets: ['deb', 'rpm', 'appimage'],
+              targets: ['deb', 'rpm', 'appimage', 'msi', 'nsis'],
             },
             plugins: {
               updater: {
@@ -113,7 +113,7 @@ edition = "2024"
       expect(patchedTauri.plugins.updater.endpoints[0]).toBe(
         'https://github.com/AirSodaz/sona/releases/download/nightly/updater.json'
       );
-      expect(patchedTauri.bundle.targets).toEqual(['deb', 'appimage']);
+      expect(patchedTauri.bundle.targets).toEqual(['deb', 'appimage', 'nsis']);
 
       const patchedTauriWindows = JSON.parse(
         fs.readFileSync(path.join(tauriDir, 'tauri.windows.conf.json'), 'utf8')

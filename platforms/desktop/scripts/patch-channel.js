@@ -87,8 +87,8 @@ function patchTauriConf(version, config) {
     console.warn('Warning: plugins or plugins.updater config is missing in tauri.conf.json');
   }
   if (version.includes('-') && json.bundle && Array.isArray(json.bundle.targets)) {
-    json.bundle.targets = json.bundle.targets.filter((target) => target !== 'rpm');
-    console.log('[patch-channel] platforms/desktop/tauri.conf.json -> excluded rpm bundle target for pre-release version');
+    json.bundle.targets = json.bundle.targets.filter((target) => target !== 'rpm' && target !== 'msi');
+    console.log('[patch-channel] platforms/desktop/tauri.conf.json -> excluded rpm and msi bundle targets for pre-release version');
   }
   fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
   console.log(`[patch-channel] platforms/desktop/tauri.conf.json -> identifier ${config.identifier}, productName "${config.productName}"`);
@@ -101,6 +101,9 @@ function patchTauriWindowsConf(version, config) {
     const json = JSON.parse(fs.readFileSync(file, 'utf8'));
     json.version = version;
     json.identifier = config.identifier;
+    if (version.includes('-') && json.bundle && Array.isArray(json.bundle.targets)) {
+      json.bundle.targets = json.bundle.targets.filter((target) => target !== 'msi');
+    }
     fs.writeFileSync(file, JSON.stringify(json, null, 2) + '\n');
     console.log(`[patch-channel] platforms/desktop/tauri.windows.conf.json -> identifier ${config.identifier}`);
   } else {
