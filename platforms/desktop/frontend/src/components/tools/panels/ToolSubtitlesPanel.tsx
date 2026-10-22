@@ -3,21 +3,11 @@ import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useCaptionConfig, useSetConfig } from '../../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
+import { hexToRgba } from '../../../utils/colorUtils';
 import { ColorSwatchPicker } from '../../ColorSwatchPicker';
 import { Switch } from '../../Switch';
 import { SettingsItem, SettingsSection, SettingsTabContainer } from '../../settings/SettingsLayout';
 import { ToolHeroHeader } from '../ToolHeroHeader';
-
-function hexToRgba(hex: string, opacity: number): string {
-  const cleaned = hex.replace('#', '');
-  if (cleaned.length === 6) {
-    const r = parseInt(cleaned.slice(0, 2), 16);
-    const g = parseInt(cleaned.slice(2, 4), 16);
-    const b = parseInt(cleaned.slice(4, 6), 16);
-    return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-  }
-  return hex;
-}
 
 export function ToolSubtitlesPanel(): React.JSX.Element {
   const { t } = useTranslation();
@@ -36,8 +26,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
 
-  const handleToggleCaptionMode = () => {
-    setIsCaptionMode(!isCaptionMode);
+  const handleToggleCaptionMode = (next?: boolean) => {
+    setIsCaptionMode(typeof next === 'boolean' ? next : !isCaptionMode);
   };
 
   const previewBgColor = hexToRgba(captionBackgroundColor, captionBackgroundOpacity);
@@ -76,6 +66,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <Switch
               checked={startOnLaunch}
               onChange={(enabled) => updateConfig({ startOnLaunch: enabled })}
+              aria-label={t('live.start_on_launch', { defaultValue: 'Start on Launch' })}
             />
           </SettingsItem>
 
@@ -88,6 +79,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <Switch
               checked={alwaysOnTop}
               onChange={(enabled) => updateConfig({ alwaysOnTop: enabled })}
+              aria-label={t('live.always_on_top', { defaultValue: 'Always on Top' })}
             />
           </SettingsItem>
 
@@ -100,6 +92,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <Switch
               checked={lockWindow}
               onChange={(enabled) => updateConfig({ lockWindow: enabled })}
+              aria-label={t('live.lock_window', { defaultValue: 'Lock Window' })}
             />
           </SettingsItem>
         </SettingsSection>
@@ -121,6 +114,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 step="10"
                 value={captionWindowWidth}
                 onChange={(e) => updateConfig({ captionWindowWidth: Number(e.target.value) })}
+                aria-label={t('live.window_width', { defaultValue: 'Floating Window Width' })}
                 className="settings-slider"
                 style={{ width: '160px' }}
               />
@@ -141,6 +135,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 step="1"
                 value={captionFontSize}
                 onChange={(e) => updateConfig({ captionFontSize: Number(e.target.value) })}
+                aria-label={t('live.font_size', { defaultValue: 'Font Size' })}
                 className="settings-slider"
                 style={{ width: '160px' }}
               />
@@ -181,6 +176,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 onChange={(e) =>
                   updateConfig({ captionBackgroundOpacity: Number(e.target.value) / 100 })
                 }
+                aria-label={t('live.background_opacity', { defaultValue: 'Background Opacity' })}
                 className="settings-slider"
                 style={{ flex: 1 }}
               />
@@ -221,7 +217,9 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 className="subtitle-live-preview-line-primary"
                 style={{ fontSize: `${captionFontSize}px`, margin: 0, fontWeight: 500 }}
               >
-                Sona 实时语音识别与双语字幕预览
+                {t('tools.subtitles_preview_text_primary', {
+                  defaultValue: 'Sona Live Speech Recognition and Subtitles',
+                })}
               </p>
               <p
                 className="subtitle-live-preview-line-secondary"
@@ -231,7 +229,9 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                   opacity: 0.85,
                 }}
               >
-                Real-time speech recognition and bilingual live subtitle preview.
+                {t('tools.subtitles_preview_text_secondary', {
+                  defaultValue: 'Real-time speech recognition and bilingual live subtitle preview.',
+                })}
               </p>
             </div>
           </div>

@@ -19,7 +19,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 describe('SettingsMigratedBanner', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useToolsStore.setState({ activeTool: 'subtitles' });
+    useToolsStore.setState({ activeTool: 'mcp' });
     useTranscriptRuntimeStore.setState({ mode: 'live' });
   });
 
@@ -28,9 +28,9 @@ describe('SettingsMigratedBanner', () => {
   });
 
   it('renders migration notice for subtitles and navigates to tools tab', () => {
+    useToolsStore.setState({ activeTool: 'mcp' });
     const onClose = vi.fn();
     render(<SettingsMigratedBanner tool="subtitles" onClose={onClose} />);
-
     expect(screen.getAllByText('Live Subtitles').length).toBeGreaterThan(0);
     expect(
       screen.getByText(
@@ -47,9 +47,9 @@ describe('SettingsMigratedBanner', () => {
   });
 
   it('renders migration notice for api_server and navigates to tools tab', () => {
+    useToolsStore.setState({ activeTool: 'subtitles' });
     const onClose = vi.fn();
     render(<SettingsMigratedBanner tool="api_server" onClose={onClose} />);
-
     expect(screen.getAllByText('API Server').length).toBeGreaterThan(0);
 
     const goToToolsBtn = screen.getByRole('button', { name: /Go to Tools/i });
@@ -61,9 +61,9 @@ describe('SettingsMigratedBanner', () => {
   });
 
   it('renders migration notice for mcp and navigates to tools tab', () => {
+    useToolsStore.setState({ activeTool: 'subtitles' });
     const onClose = vi.fn();
     render(<SettingsMigratedBanner tool="mcp" onClose={onClose} />);
-
     expect(screen.getAllByText('MCP Agents').length).toBeGreaterThan(0);
 
     const goToToolsBtn = screen.getByRole('button', { name: /Go to Tools/i });
@@ -71,6 +71,20 @@ describe('SettingsMigratedBanner', () => {
 
     expect(onClose).toHaveBeenCalled();
     expect(useToolsStore.getState().activeTool).toBe('mcp');
+    expect(useTranscriptRuntimeStore.getState().mode).toBe('tools');
+  });
+
+  it('renders migration notice for voice_typing and navigates to tools tab', () => {
+    useToolsStore.setState({ activeTool: 'subtitles' });
+    const onClose = vi.fn();
+    render(<SettingsMigratedBanner tool="voice_typing" onClose={onClose} />);
+    expect(screen.getAllByText('Voice Typing').length).toBeGreaterThan(0);
+
+    const goToToolsBtn = screen.getByRole('button', { name: /Go to Tools/i });
+    fireEvent.click(goToToolsBtn);
+
+    expect(onClose).toHaveBeenCalled();
+    expect(useToolsStore.getState().activeTool).toBe('voice_typing');
     expect(useTranscriptRuntimeStore.getState().mode).toBe('tools');
   });
 });

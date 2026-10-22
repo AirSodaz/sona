@@ -10,6 +10,31 @@ export interface SettingsMigratedBannerProps {
   tool: ToolId;
   onClose?: () => void;
 }
+const TOOL_META_MAP: Record<
+  ToolId,
+  { titleKey: string; defaultTitle: string; icon: React.ReactElement }
+> = {
+  subtitles: {
+    titleKey: 'tools.subtitles',
+    defaultTitle: 'Live Subtitles',
+    icon: <Subtitles width={28} height={28} />,
+  },
+  voice_typing: {
+    titleKey: 'tools.voice_typing',
+    defaultTitle: 'Voice Typing',
+    icon: <Keyboard width={28} height={28} />,
+  },
+  api_server: {
+    titleKey: 'tools.api_server',
+    defaultTitle: 'API Server',
+    icon: <Server width={28} height={28} />,
+  },
+  mcp: {
+    titleKey: 'tools.mcp',
+    defaultTitle: 'MCP Agents',
+    icon: <Bot width={28} height={28} />,
+  },
+};
 
 export function SettingsMigratedBanner({
   tool,
@@ -17,33 +42,7 @@ export function SettingsMigratedBanner({
 }: SettingsMigratedBannerProps): React.JSX.Element {
   const { t } = useTranslation();
 
-  const toolMetaMap: Record<
-    ToolId,
-    { titleKey: string; defaultTitle: string; icon: React.ReactElement }
-  > = {
-    subtitles: {
-      titleKey: 'tools.subtitles',
-      defaultTitle: 'Live Subtitles',
-      icon: <Subtitles width={28} height={28} />,
-    },
-    voice_typing: {
-      titleKey: 'tools.voice_typing',
-      defaultTitle: 'Voice Typing',
-      icon: <Keyboard width={28} height={28} />,
-    },
-    api_server: {
-      titleKey: 'tools.api_server',
-      defaultTitle: 'API Server',
-      icon: <Server width={28} height={28} />,
-    },
-    mcp: {
-      titleKey: 'tools.mcp',
-      defaultTitle: 'MCP Agents',
-      icon: <Bot width={28} height={28} />,
-    },
-  };
-
-  const meta = toolMetaMap[tool] || toolMetaMap.subtitles;
+  const meta = TOOL_META_MAP[tool] || TOOL_META_MAP.subtitles;
   const toolName = t(meta.titleKey, { defaultValue: meta.defaultTitle });
 
   const handleGoToTools = () => {
@@ -53,10 +52,7 @@ export function SettingsMigratedBanner({
   };
 
   return (
-    <SettingsTabContainer
-      id={`settings-panel-migrated-${tool}`}
-      ariaLabelledby={`settings-tab-${tool}`}
-    >
+    <SettingsTabContainer id={`settings-panel-migrated-${tool}`}>
       <SettingsPageHeader
         icon={meta.icon}
         title={toolName}

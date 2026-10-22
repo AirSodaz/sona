@@ -58,7 +58,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const handleCopyEndpoint = async () => {
     const host = config.httpServerHost || '127.0.0.1';
     const port = config.httpServerPort ?? 14200;
-    const url = `http://${host}:${port}`;
+    const formattedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    const url = `http://${formattedHost}:${port}`;
     try {
       await navigator.clipboard.writeText(url);
       setCopiedEndpoint(true);
@@ -265,16 +266,24 @@ export function SettingsApiServerTab(): React.JSX.Element {
   };
 
   const isEnabled = Boolean(config.httpServerEnabled);
+  const isRunning = Boolean(health);
   const isError = isEnabled && Boolean(lastError && !health);
-  const statusTone: ToolHeroStatusTone = !isEnabled ? 'inactive' : isError ? 'error' : 'active';
+  const statusTone: ToolHeroStatusTone = !isEnabled
+    ? 'inactive'
+    : isError
+      ? 'error'
+      : isRunning
+        ? 'active'
+        : 'inactive';
   const statusText = !isEnabled
     ? t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })
     : isError
       ? t('common.error', { defaultValue: 'Error' })
-      : `Running :${config.httpServerPort ?? 14200}`;
-
+      : isRunning
+        ? `Running :${config.httpServerPort ?? 14200}`
+        : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' });
   return (
-    <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
+    <SettingsTabContainer id="tools-panel-api_server" ariaLabelledby="tools-tab-api_server">
       <ToolHeroHeader
         id="settings-api-server-switch"
         icon={<Server size={24} />}
@@ -296,13 +305,13 @@ export function SettingsApiServerTab(): React.JSX.Element {
               type="button"
               className="btn btn-secondary btn-sm"
               onClick={handleCopyEndpoint}
-              title={t('tools.copy_api_url', { defaultValue: 'Copy API Endpoint' })}
+              title={t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
               style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
             >
               {copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
               <span>
                 {copiedEndpoint
-                  ? t('common.copied', { defaultValue: 'Copied!' })
+                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
                   : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
               </span>
             </button>

@@ -232,6 +232,13 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .tools-status-active .tools-status-dot,
+  .tools-status-error .tools-status-dot {
+    animation: none;
+  }
+}
+
 /* --------------------------------------------------------------------------
    Right Detail Pane
    -------------------------------------------------------------------------- */

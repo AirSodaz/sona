@@ -26,7 +26,7 @@ export function ToolVoiceTypingPanel(): React.JSX.Element {
       : t('tools.status_needs_config', { defaultValue: 'Needs Config' });
 
   return (
-    <SettingsTabContainer id="tools-panel-voice-typing" ariaLabelledby="tools-tab-voice_typing">
+    <SettingsTabContainer id="tools-panel-voice_typing" ariaLabelledby="tools-tab-voice_typing">
       <ToolHeroHeader
         icon={<Keyboard size={24} />}
         title={t('tools.voice_typing', { defaultValue: 'Voice Typing' })}

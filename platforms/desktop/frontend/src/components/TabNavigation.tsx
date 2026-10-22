@@ -14,6 +14,7 @@ interface TabNavigationProps {
   /** Optional CSS class name. */
   className?: string;
 }
+const TAB_MODES: AppMode[] = ['live', 'batch', 'projects', 'tools'];
 
 /**
  * Tab navigation component for switching between application modes (Live Record, Batch Import).
@@ -25,7 +26,6 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
   const { t } = useTranslation();
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const TAB_MODES: AppMode[] = ['live', 'batch', 'projects', 'tools'];
   const activeIndex = TAB_MODES.indexOf(mode);
 
   const handleTabChange = useCallback(
@@ -79,13 +79,12 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         if (isSettingsOpen || isAnyDialogOpen()) return;
 
         e.preventDefault();
-        const modes: AppMode[] = ['live', 'batch', 'projects', 'tools'];
-        const currentIndex = modes.indexOf(mode);
+        const currentIndex = TAB_MODES.indexOf(mode);
         const nextIndex = e.shiftKey
-          ? (currentIndex - 1 + modes.length) % modes.length
-          : (currentIndex + 1) % modes.length;
+          ? (currentIndex - 1 + TAB_MODES.length) % TAB_MODES.length
+          : (currentIndex + 1) % TAB_MODES.length;
 
-        handleTabChange(modes[nextIndex]);
+        handleTabChange(TAB_MODES[nextIndex]);
       }
     };
 
@@ -140,7 +139,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         role="tab"
       >
         <Wrench size={16} aria-hidden="true" />
-        <span>{t('panel.tools', { defaultValue: '工具箱' })}</span>
+        <span>{t('panel.tools', { defaultValue: 'Tools' })}</span>
       </button>
     </div>
   );

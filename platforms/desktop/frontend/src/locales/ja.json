@@ -242,7 +242,9 @@
     "migrated_notice_desc": "独立した拡張機能とサービスツールはホームページの統一ワークベンチに統合されました。",
     "migrated_badge": "ツールへ移行済み",
     "go_to_tools": "ツールへ移動",
-    "copy_api_url": "エンドポイントをコピー"
+    "copy_api_url": "エンドポイントをコピー",
+    "subtitles_preview_text_primary": "Sona リアルタイム音声認識と二言語字幕プレビュー",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
   },
   "live": {
     "resume": "再開",
@@ -2383,6 +2385,7 @@
       "allowed": "許可",
       "blocked": "ポリシーにより遮断",
       "btn_ping": "Ping",
+      "pinging": "Ping 実行中...",
       "ping_failed": "Ping 失敗"
     },
     "llm": {

@@ -242,7 +242,9 @@
     "migrated_notice_desc": "独立扩展与服务类工具已收归至首页统一工作台。",
     "migrated_badge": "已迁移至工具箱",
     "go_to_tools": "前往工具箱",
-    "copy_api_url": "复制端点"
+    "copy_api_url": "复制端点",
+    "subtitles_preview_text_primary": "Sona 实时语音识别与双语字幕预览",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
   },
   "live": {
     "resume": "恢复",
@@ -2345,6 +2347,7 @@
       "allowed": "允许",
       "blocked": "策略拦截",
       "btn_ping": "测试延迟",
+      "pinging": "正在测试...",
       "ping_failed": "测试失败"
     },
     "llm": {

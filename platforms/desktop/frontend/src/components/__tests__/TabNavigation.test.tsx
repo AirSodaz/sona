@@ -14,7 +14,7 @@ vi.mock('react-i18next', async (importOriginal) => {
   return {
     ...actual,
     useTranslation: () => ({
-      t: (key: string) => key,
+      t: (key: string, options?: { defaultValue?: string }) => options?.defaultValue ?? key,
     }),
   };
 });
@@ -61,7 +61,7 @@ describe('TabNavigation', () => {
 
     // Check tools tab
     expect(tabs[3].getAttribute('aria-selected')).toBe('false');
-    expect(tabs[3].textContent).toContain('panel.tools');
+    expect(tabs[3].textContent).toContain('Tools');
   });
 
   it('scrolls projects containers to top when active Projects tab is clicked', () => {
@@ -144,5 +144,24 @@ describe('TabNavigation', () => {
     // Backward: projects (index 2) -> batch (index 1)
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
     expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('batch');
+  });
+
+  it('wraps around boundaries on Ctrl+Tab and Ctrl+Shift+Tab', () => {
+    // Forward wrap: tools (index 3) -> live (index 0)
+    testContext.runtimeState.mode = 'tools';
+    const { unmount } = render(<TabNavigation />);
+
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('live');
+
+    unmount();
+    testContext.runtimeState.setMode.mockClear();
+
+    // Backward wrap: live (index 0) -> tools (index 3)
+    testContext.runtimeState.mode = 'live';
+    render(<TabNavigation />);
+
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
   });
 });

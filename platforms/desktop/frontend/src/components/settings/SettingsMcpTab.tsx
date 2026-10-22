@@ -125,8 +125,12 @@ export function SettingsMcpTab(): React.JSX.Element {
     const start = performance.now();
     try {
       await fetchStatus();
-      const elapsed = Math.round((performance.now() - start) * 10) / 10;
-      setPingLatency(elapsed);
+      if (!useMcpStore.getState().status?.running) {
+        setPingLatency(-1);
+      } else {
+        const elapsed = Math.round((performance.now() - start) * 10) / 10;
+        setPingLatency(elapsed);
+      }
     } catch {
       setPingLatency(-1);
     } finally {
@@ -203,7 +207,7 @@ export function SettingsMcpTab(): React.JSX.Element {
         : t('settings.mcp.status_listening', { defaultValue: 'Listening' });
 
   return (
-    <SettingsTabContainer id="settings-panel-mcp" ariaLabelledby="settings-tab-mcp">
+    <SettingsTabContainer id="tools-panel-mcp" ariaLabelledby="tools-tab-mcp">
       <ToolHeroHeader
         id="settings-mcp-hero"
         icon={<Bot size={24} />}
@@ -223,7 +227,7 @@ export function SettingsMcpTab(): React.JSX.Element {
           <button
             type="button"
             className="btn btn-secondary btn-sm"
-            disabled={!isEnabled || isPinging}
+            disabled={!isEnabled || !status?.running || isPinging}
             onClick={() => void handlePing()}
             title={t('settings.mcp.btn_ping', { defaultValue: 'Ping MCP Service' })}
             style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
@@ -231,12 +235,12 @@ export function SettingsMcpTab(): React.JSX.Element {
             <Zap size={13} />
             <span>
               {isPinging
-                ? t('common.testing', { defaultValue: 'Pinging...' })
+                ? t('settings.mcp.pinging', { defaultValue: 'Pinging...' })
                 : pingLatency !== null
                   ? pingLatency >= 0
                     ? `${pingLatency}ms`
                     : t('common.failed', { defaultValue: 'Failed' })
-                  : t('settings.mcp.ping', { defaultValue: 'Ping' })}
+                  : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
             </span>
           </button>
         }

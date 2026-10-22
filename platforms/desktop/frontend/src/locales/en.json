@@ -222,6 +222,8 @@
     "title": "Tools",
     "subtitle": "Manage and configure standalone extension tools and external integration services",
     "active_count": "{{count}} services running",
+    "active_count_one": "{{count}} service running",
+    "active_count_other": "{{count}} services running",
     "subtitles": "Live Subtitles",
     "subtitles_desc": "Desktop floating bilingual subtitles",
     "subtitles_preview_title": "Live Subtitle Preview",
@@ -242,7 +244,9 @@
     "migrated_notice_desc": "Standalone extension and service tools have been consolidated into the unified homepage workbench.",
     "migrated_badge": "Moved to Tools",
     "go_to_tools": "Go to Tools",
-    "copy_api_url": "Copy Endpoint"
+    "copy_api_url": "Copy Endpoint",
+    "subtitles_preview_text_primary": "Sona Live Speech Recognition and Subtitles",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
   },
   "live": {
     "resume": "Resume",
@@ -2345,6 +2349,7 @@
       "allowed": "Allowed",
       "blocked": "Blocked by Policy",
       "btn_ping": "Ping",
+      "pinging": "Pinging...",
       "ping_failed": "Ping failed"
     },
     "llm": {

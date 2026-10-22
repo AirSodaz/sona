@@ -71,11 +71,6 @@ export const loadSettingsMicrophoneTab = memoizeLoader(async () => {
   return resolveModuleComponent(module, 'SettingsMicrophoneTab');
 });
 
-export const loadSettingsSubtitleTab = memoizeLoader(async () => {
-  const module = await import('./SettingsSubtitleTab');
-  return resolveModuleComponent(module, 'SettingsSubtitleTab');
-});
-
 export const loadSettingsModelsPane = memoizeLoader(async () => {
   const module = await import('./SettingsModelsPane');
   return resolveModuleComponent(module, 'SettingsModelsPane');
@@ -98,15 +93,6 @@ export const loadSettingsStorageTab = memoizeLoader(async () => {
 export const loadSettingsSyncTab = memoizeLoader(async () => {
   const module = await import('./SettingsSyncTab');
   return resolveModuleComponent(module, 'SettingsSyncTab');
-});
-
-export const loadSettingsApiServerTab = memoizeLoader(async () => {
-  const module = await import('./SettingsApiServerTab');
-  return resolveModuleComponent(module, 'SettingsApiServerTab');
-});
-export const loadSettingsMcpTab = memoizeLoader(async () => {
-  const module = await import('./SettingsMcpTab');
-  return resolveModuleComponent(module, 'SettingsMcpTab');
 });
 
 export const loadSettingsLLMServiceTab = memoizeLoader(async () => {
@@ -132,14 +118,14 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
   general: preloadSettingsGeneralTab,
   dashboard: () => loadSettingsDashboardTab().then(() => undefined),
   microphone: () => loadSettingsMicrophoneTab().then(() => undefined),
-  subtitle: () => loadSettingsSubtitleTab().then(() => undefined),
+  subtitle: () => Promise.resolve(),
   models: () => loadSettingsModelsPane().then(() => undefined),
   vocabulary: () => loadSettingsVocabularyTab().then(() => undefined),
   automation: () => loadSettingsAutomationTab().then(() => undefined),
   storage: () => loadSettingsStorageTab().then(() => undefined),
   sync: () => loadSettingsSyncTab().then(() => undefined),
-  api_server: () => loadSettingsApiServerTab().then(() => undefined),
-  mcp: () => loadSettingsMcpTab().then(() => undefined),
+  api_server: () => Promise.resolve(),
+  mcp: () => Promise.resolve(),
   llm_service: () => loadSettingsLLMServiceTab().then(() => undefined),
   shortcuts: () => loadSettingsShortcutsTab().then(() => undefined),
   about: () => loadSettingsAboutTab().then(() => undefined),

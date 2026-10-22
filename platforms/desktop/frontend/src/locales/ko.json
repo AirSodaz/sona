@@ -242,7 +242,9 @@
     "migrated_notice_desc": "독립 확장 및 서비스 도구가 홈 통합 워크벤치로 통합되었습니다.",
     "migrated_badge": "도구로 이동됨",
     "go_to_tools": "도구로 이동",
-    "copy_api_url": "엔드포인트 복사"
+    "copy_api_url": "엔드포인트 복사",
+    "subtitles_preview_text_primary": "Sona 실시간 음성 인식 및 이중 언어 자막 미리보기",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
   },
   "live": {
     "resume": "재개",
@@ -2383,6 +2385,7 @@
       "allowed": "허용됨",
       "blocked": "정책에 의해 차단됨",
       "btn_ping": "Ping",
+      "pinging": "Ping 확인 중...",
       "ping_failed": "Ping 실패"
     },
     "llm": {

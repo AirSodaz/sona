@@ -2,7 +2,7 @@ import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceTypingRuntimeStore } from '../../../stores/voiceTypingRuntimeStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
-import { SettingsSubtitleTab } from '../SettingsSubtitleTab';
+import { SettingsSubtitleTab, VoiceTypingSettingsSection } from '../SettingsSubtitleTab';
 
 function interpolate(template: string, options?: Record<string, unknown>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
@@ -110,5 +110,10 @@ describe('SettingsSubtitleTab voice typing section', () => {
     expect(screen.queryByText('Voice Typing hit a runtime problem.')).toBeNull();
     expect(screen.queryByText('Source: Input device')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();
+  });
+
+  it('omits enable switch when hideEnableSwitch is true', () => {
+    const { container } = render(<VoiceTypingSettingsSection hideEnableSwitch={true} />);
+    expect(container.querySelector('#settings-voice-typing-enable')).toBeNull();
   });
 });

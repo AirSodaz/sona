@@ -33,7 +33,7 @@ export function ToolsSidebar(): React.JSX.Element {
 
   const isVtActive = Boolean(vtConfig.voiceTypingEnabled);
   const isApiActive = Boolean(apiConfig.httpServerEnabled);
-  const isMcpActive = Boolean(mcpConfig.mcpEnabled);
+  const isMcpActive = Boolean(mcpConfig.mcpEnabled && (mcpStatus?.running ?? true));
 
   const activeCount =
     (isCaptionMode ? 1 : 0) + (isVtActive ? 1 : 0) + (isApiActive ? 1 : 0) + (isMcpActive ? 1 : 0);
@@ -73,7 +73,7 @@ export function ToolsSidebar(): React.JSX.Element {
       defaultDesc: 'Local HTTP audio transcription API',
       Icon: Server,
       statusText: isApiActive
-        ? `:${apiConfig.httpServerPort || 3000}`
+        ? `:${apiConfig.httpServerPort ?? 14200}`
         : t('tools.status_stopped', { defaultValue: 'Stopped' }),
       statusType: isApiActive ? 'active' : 'inactive',
     },
@@ -92,6 +92,29 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: isMcpActive ? 'active' : 'inactive',
     },
   ];
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const currentIndex = tools.findIndex((tool) => tool.id === activeTool);
+    if (currentIndex === -1) return;
+
+    let nextIndex = currentIndex;
+    if (e.key === 'ArrowDown') {
+      nextIndex = (currentIndex + 1) % tools.length;
+    } else if (e.key === 'ArrowUp') {
+      nextIndex = (currentIndex - 1 + tools.length) % tools.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = tools.length - 1;
+    }
+
+    const nextTool = tools[nextIndex];
+    if (nextTool) {
+      setActiveTool(nextTool.id);
+      document.getElementById(`tools-tab-${nextTool.id}`)?.focus();
+    }
+  };
 
   return (
     <aside
@@ -111,7 +134,12 @@ export function ToolsSidebar(): React.JSX.Element {
         </p>
       </div>
 
-      <div className="tools-sidebar-nav" role="tablist" aria-orientation="vertical">
+      <div
+        className="tools-sidebar-nav"
+        role="tablist"
+        aria-orientation="vertical"
+        onKeyDown={handleKeyDown}
+      >
         {tools.map((tool) => {
           const isSelected = activeTool === tool.id;
           const Icon = tool.Icon;
@@ -119,9 +147,12 @@ export function ToolsSidebar(): React.JSX.Element {
           return (
             <button
               key={tool.id}
+              id={`tools-tab-${tool.id}`}
               type="button"
               role="tab"
               aria-selected={isSelected}
+              aria-controls={`tools-panel-${tool.id}`}
+              tabIndex={isSelected ? 0 : -1}
               className={`tools-sidebar-item ${isSelected ? 'active' : ''}`}
               onClick={() => setActiveTool(tool.id)}
             >
