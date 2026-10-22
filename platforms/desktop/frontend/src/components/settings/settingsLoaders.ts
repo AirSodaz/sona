@@ -11,7 +11,7 @@ export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
   },
   {
     labelKey: 'settings.group.audio',
-    tabs: ['microphone', 'models', 'subtitle', 'vocabulary'],
+    tabs: ['microphone', 'models', 'vocabulary'],
   },
   {
     labelKey: 'settings.group.intelligence',
@@ -19,7 +19,7 @@ export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
   },
   {
     labelKey: 'settings.group.infrastructure',
-    tabs: ['storage', 'sync', 'api_server', 'mcp'],
+    tabs: ['storage', 'sync'],
   },
 ] as const;
 

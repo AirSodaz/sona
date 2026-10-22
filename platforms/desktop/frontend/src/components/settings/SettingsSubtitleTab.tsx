@@ -96,7 +96,7 @@ function getFailureSourceLabel(
   }
 }
 
-function VoiceTypingSettingsSection(): React.JSX.Element {
+export function VoiceTypingSettingsSection(): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const vtConfig = useVoiceTypingConfig();
   const updateConfig = useSetConfig();
@@ -502,7 +502,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     </>
   );
 }
-function VoiceTypingHistorySection(): React.JSX.Element {
+export function VoiceTypingHistorySection(): React.JSX.Element {
   const { t } = useTranslation();
   const historyItems = useVoiceTypingHistoryStore((state) => state.items);
   const removeItem = useVoiceTypingHistoryStore((state) => state.removeItem);

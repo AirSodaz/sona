@@ -45,7 +45,7 @@ describe('TabNavigation', () => {
 
     // Check for tabs
     const tabs = screen.getAllByRole('tab');
-    expect(tabs).toHaveLength(3);
+    expect(tabs).toHaveLength(4);
 
     // Check live tab
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
@@ -58,6 +58,10 @@ describe('TabNavigation', () => {
     // Check workspace tab
     expect(tabs[2].getAttribute('aria-selected')).toBe('false');
     expect(tabs[2].textContent).toContain('panel.projects');
+
+    // Check tools tab
+    expect(tabs[3].getAttribute('aria-selected')).toBe('false');
+    expect(tabs[3].textContent).toContain('panel.tools');
   });
 
   it('scrolls projects containers to top when active Projects tab is clicked', () => {
@@ -106,5 +110,39 @@ describe('TabNavigation', () => {
     } finally {
       queueList.remove();
     }
+  });
+
+  it('scrolls tools container to top when active Tools tab is clicked', () => {
+    testContext.runtimeState.mode = 'tools';
+    const detailPane = document.createElement('div');
+    detailPane.className = 'tools-detail-pane';
+    const detailScrollTo = vi.fn();
+    detailPane.scrollTo = detailScrollTo;
+    document.body.append(detailPane);
+
+    try {
+      render(<TabNavigation />);
+
+      const tabs = screen.getAllByRole('tab');
+      fireEvent.click(tabs[3]); // tools is index 3
+
+      expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
+      expect(detailScrollTo).toHaveBeenCalledWith({ top: 0, behavior: 'smooth' });
+    } finally {
+      detailPane.remove();
+    }
+  });
+
+  it('cycles through 4 modes on Ctrl+Tab and Ctrl+Shift+Tab', () => {
+    testContext.runtimeState.mode = 'projects';
+    render(<TabNavigation />);
+
+    // Forward: projects (index 2) -> tools (index 3)
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
+
+    // Backward: projects (index 2) -> batch (index 1)
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('batch');
   });
 });

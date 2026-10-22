@@ -10,17 +10,14 @@ import { SettingsNavigationProvider } from './settings/SettingsNavigationContext
 import { SettingsSidebarGroupHeader, SettingsTabButton } from './settings/SettingsTabButton';
 import {
   loadSettingsAboutTab,
-  loadSettingsApiServerTab,
   loadSettingsAutomationTab,
   loadSettingsDashboardTab,
   loadSettingsGeneralTab,
   loadSettingsLLMServiceTab,
-  loadSettingsMcpTab,
   loadSettingsMicrophoneTab,
   loadSettingsModelsPane,
   loadSettingsShortcutsTab,
   loadSettingsStorageTab,
-  loadSettingsSubtitleTab,
   loadSettingsSyncTab,
   loadSettingsVocabularyTab,
   SETTINGS_TAB_GROUPS,
@@ -29,6 +26,7 @@ import {
 import './settings/Settings.css';
 import type { LlmProvider } from '../types/transcript';
 import { XIcon } from './Icons';
+import { SettingsMigratedBanner } from './settings/SettingsMigratedBanner';
 import type { ModelScenario } from './settings/SettingsModelsTab';
 import type { SubtitleSubTab } from './settings/SettingsSubtitleTab';
 import type { PromptsSubTab, VocabularySubTab } from './settings/SettingsVocabularyTab';
@@ -93,13 +91,10 @@ interface SettingsProps {
 const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
 const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
 const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
-const SettingsSubtitleTab = lazy(loadSettingsSubtitleTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
-const SettingsApiServerTab = lazy(loadSettingsApiServerTab);
-const SettingsMcpTab = lazy(loadSettingsMcpTab);
 const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
@@ -113,7 +108,8 @@ function renderSettingsPane(
   onOpenDiagnostics?: () => void,
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
   initialTab?: SettingsTabInput,
-  pendingSubTab?: SettingsPendingSubTab
+  pendingSubTab?: SettingsPendingSubTab,
+  onClose?: () => void
 ): React.JSX.Element | null {
   switch (activeTab) {
     case 'general':
@@ -130,15 +126,15 @@ function renderSettingsPane(
       return <SettingsMicrophoneTab isActiveTab={isActive} isOpen={isOpen} />;
     case 'subtitle':
       return (
-        <SettingsSubtitleTab
-          initialSubTab={
+        <SettingsMigratedBanner
+          tool={
             pendingSubTab?.tab === 'subtitle'
-              ? pendingSubTab.subTab
+              ? (pendingSubTab.subTab ?? 'subtitles')
               : initialTab === 'voice_typing'
                 ? 'voice_typing'
-                : undefined
+                : 'subtitles'
           }
-          subTabRequestId={pendingSubTab?.tab === 'subtitle' ? pendingSubTab.requestId : undefined}
+          onClose={onClose}
         />
       );
     case 'models':
@@ -181,9 +177,9 @@ function renderSettingsPane(
         />
       );
     case 'api_server':
-      return <SettingsApiServerTab />;
+      return <SettingsMigratedBanner tool="api_server" onClose={onClose} />;
     case 'mcp':
-      return <SettingsMcpTab />;
+      return <SettingsMigratedBanner tool="mcp" onClose={onClose} />;
     case 'llm_service':
       return (
         <SettingsLLMServiceTab
@@ -207,7 +203,13 @@ function addMountedSettingsTab(current: SettingsTab[], tab: SettingsTab): Settin
 
   const next = new Set(current);
   next.add(tab);
-  return SETTINGS_TABS.filter((candidate) => next.has(candidate));
+  const ordered = SETTINGS_TABS.filter((candidate) => next.has(candidate));
+  for (const t of next) {
+    if (!ordered.includes(t)) {
+      ordered.push(t);
+    }
+  }
+  return ordered;
 }
 
 function requestSettingsFrame(callback: FrameRequestCallback): number {
@@ -268,6 +270,7 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails,
   initialTab,
   pendingSubTab,
+  onClose,
 }: {
   tab: SettingsTab;
   isOpen: boolean;
@@ -277,6 +280,7 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
   initialTab?: SettingsTabInput;
   pendingSubTab?: SettingsPendingSubTab;
+  onClose?: () => void;
 }): React.JSX.Element {
   return (
     <Suspense fallback={null}>
@@ -288,7 +292,8 @@ function SettingsPaneContent({
         onOpenDiagnostics,
         onOpenLlmProviderDetails,
         initialTab,
-        pendingSubTab
+        pendingSubTab,
+        onClose
       )}
     </Suspense>
   );
@@ -739,6 +744,7 @@ export function Settings({
                       onOpenLlmProviderDetails={onOpenLlmProviderDetails}
                       initialTab={initialTab}
                       pendingSubTab={pendingSubTab}
+                      onClose={onClose}
                     />
                   </SettingsPaneFrame>
                 );

@@ -15,6 +15,7 @@ import { SyncHeaderPill } from './components/SyncHeaderPill';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptionOptions } from './components/TranscriptionOptions';
+import { ToolsView } from './components/tools/ToolsView';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
 import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
@@ -29,6 +30,7 @@ import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
 import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
+import { useToolsStore } from './stores/toolsStore';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
@@ -76,12 +78,17 @@ type ActivePanelModal =
 /**
  * Helper to determine the title of the left panel based on the current mode.
  */
-function getPanelTitle(mode: string, t: (key: string) => string): string {
+function getPanelTitle(
+  mode: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   switch (mode) {
     case 'live':
       return t('panel.live_record');
     case 'projects':
       return t('panel.projects');
+    case 'tools':
+      return t('panel.tools', { defaultValue: 'Tools' });
     case 'batch':
     default:
       return t('panel.batch_import');
@@ -218,7 +225,8 @@ function App(): React.JSX.Element | null {
   };
 
   const openVoiceTypingSettings = () => {
-    openSettingsTab('subtitle');
+    useToolsStore.getState().setActiveTool('voice_typing');
+    setMode('tools');
   };
 
   const runFirstRunSetupFromDiagnostics = () => {
@@ -239,11 +247,12 @@ function App(): React.JSX.Element | null {
   }
 
   const panelTitle = getPanelTitle(mode, t);
+  const isToolsMode = mode === 'tools';
   const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
-  const shouldShowTranscriptHost = !isProjectsMode || hasActiveTranscript;
+  const shouldShowTranscriptHost = isProjectsMode ? hasActiveTranscript : !isToolsMode;
   const appMainClassName = [
     'app-main',
-    isProjectsMode ? 'app-main--projects' : 'app-main--workspace',
+    isProjectsMode ? 'app-main--projects' : isToolsMode ? 'app-main--tools' : 'app-main--workspace',
     shouldShowTranscriptHost ? 'app-main--with-transcript' : 'app-main--without-transcript',
   ].join(' ');
 
@@ -292,9 +301,12 @@ function App(): React.JSX.Element | null {
             onOpenAutomationSettings={openAutomationSettingsForTag}
           />
         </div>
+        <div className="tools-mode-shell" style={{ display: isToolsMode ? undefined : 'none' }}>
+          <ToolsView isActive={isToolsMode} />
+        </div>
         <div
           className="workspace-mode-shell"
-          style={{ display: !isProjectsMode ? undefined : 'none' }}
+          style={{ display: !isProjectsMode && !isToolsMode ? undefined : 'none' }}
         >
           <div className="panel-container">
             {/* Left Panel - Input */}

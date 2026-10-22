@@ -47,7 +47,7 @@ export interface TranscriptUpdate {
 /**
  * Application operation mode.
  */
-export type AppMode = 'live' | 'batch' | 'projects';
+export type AppMode = 'live' | 'batch' | 'projects' | 'tools';
 
 /**
  * Processing status for batch imports.

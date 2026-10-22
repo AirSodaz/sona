@@ -180,17 +180,15 @@ describe('Settings Focus Trap & Navigation', () => {
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // Arrow Up -> Should switch to 'mcp' (loops around from general)
+    // Arrow Up -> Should switch to 'sync' (loops around from general)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
-
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // End -> Should switch to 'mcp' (last)
+    // End -> Should switch to 'sync' (last)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
-
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
     // Reset mock
     setActiveTabMock.mockClear();
 
@@ -203,9 +201,8 @@ describe('Settings Focus Trap & Navigation', () => {
     const onClose = vi.fn();
     render(<Settings isOpen={true} onClose={onClose} />);
 
-    screen.getByText('settings.subtitle_voice_typing_title');
+    expect(screen.queryByText('settings.subtitle_voice_typing_title')).toBeNull();
     expect(screen.queryByText('settings.voice_typing')).toBeNull();
-
     const tabLabels = screen
       .getAllByRole('tab')
       .map((tab) => tab.textContent?.trim()?.replace(/^Icon/, ''));
@@ -217,24 +214,22 @@ describe('Settings Focus Trap & Navigation', () => {
       'settings.about',
       'settings.input_device',
       'settings.model_hub',
-      'settings.subtitle_voice_typing_title',
       'settings.vocabulary',
       'settings.llm.title',
       'settings.automation',
       'settings.storage.title',
       'settings.sync.title',
-      'settings.api_server.title',
-      'settings.mcp.title',
     ]);
   });
 
-  it('renders the combined subtitle panel when that tab is active', async () => {
+  it('renders the migrated banner when subtitle tab is active', async () => {
     mockActiveTab = 'subtitle';
     const onClose = vi.fn();
 
     render(<Settings isOpen={true} onClose={onClose} />);
 
-    expect(await screen.findByText('Subtitle Tab')).toBeDefined();
+    expect((await screen.findAllByText('tools.subtitles')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('tools.migrated_notice')).toBeDefined();
     expect(screen.getByText('General Tab Input').closest('[hidden]')).not.toBeNull();
   });
 
@@ -248,7 +243,7 @@ describe('Settings Focus Trap & Navigation', () => {
     setActiveTabMock.mockClear();
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
   });
 
   it('keeps prewarmed inactive panes closed when the settings dialog opens', async () => {

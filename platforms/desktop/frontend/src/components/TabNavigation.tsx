@@ -1,3 +1,4 @@
+import { Wrench } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +7,6 @@ import { isAnyDialogOpen } from '../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppMode } from '../types/transcript';
-
 import { BookIcon, FolderIcon, MicIcon } from './Icons';
 
 /** Props for TabNavigation. */
@@ -25,7 +25,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
   const { t } = useTranslation();
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const TAB_MODES: AppMode[] = ['live', 'batch', 'projects'];
+  const TAB_MODES: AppMode[] = ['live', 'batch', 'projects', 'tools'];
   const activeIndex = TAB_MODES.indexOf(mode);
 
   const handleTabChange = useCallback(
@@ -36,6 +36,8 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
           document.querySelector('.projects-rail-list')?.scrollTo({ top: 0, behavior: 'smooth' });
         } else if (newMode === 'batch') {
           document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+        } else if (newMode === 'tools') {
+          document.querySelector('.tools-detail-pane')?.scrollTo({ top: 0, behavior: 'smooth' });
         }
         return;
       }
@@ -61,6 +63,10 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         // shown in the projects view while a batch run is in progress.
         useTranscriptStore.setState({ activeSessionId: 'default' });
       }
+
+      if (newMode === 'tools') {
+        useTranscriptStore.setState({ activeSessionId: 'default' });
+      }
     },
     [mode, setMode]
   );
@@ -73,7 +79,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         if (isSettingsOpen || isAnyDialogOpen()) return;
 
         e.preventDefault();
-        const modes: AppMode[] = ['live', 'batch', 'projects'];
+        const modes: AppMode[] = ['live', 'batch', 'projects', 'tools'];
         const currentIndex = modes.indexOf(mode);
         const nextIndex = e.shiftKey
           ? (currentIndex - 1 + modes.length) % modes.length
@@ -126,6 +132,15 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
       >
         <BookIcon />
         <span>{t('panel.projects')}</span>
+      </button>
+      <button
+        className={`tab-button ${mode === 'tools' ? 'active' : ''}`}
+        onClick={() => handleTabChange('tools')}
+        aria-selected={mode === 'tools'}
+        role="tab"
+      >
+        <Wrench size={16} aria-hidden="true" />
+        <span>{t('panel.tools', { defaultValue: '工具箱' })}</span>
       </button>
     </div>
   );
