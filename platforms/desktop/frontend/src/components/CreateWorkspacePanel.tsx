@@ -21,22 +21,22 @@ export function CreateWorkspacePanel({
   const setIngestionFocus = useTranscriptStore((state) => state.setIngestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
-  const queueItems = useBatchQueueStore((state) => state.queueItems);
+  const totalCount = useBatchQueueStore((state) => state.queueItems.length);
   const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
-  const totalCount = queueItems.length;
-  const isBatchProcessing =
-    isQueueProcessing || queueItems.some((item) => item.status === 'processing');
-
+  const hasProcessingItem = useBatchQueueStore((state) =>
+    state.queueItems.some((item) => item.status === 'processing')
+  );
+  const isBatchProcessing = isQueueProcessing || hasProcessingItem;
   const isLiveActive = ingestionFocus === 'live';
   const isBatchActive = ingestionFocus === 'batch';
   const activeIndex = isLiveActive ? 0 : 1;
 
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'Home') {
       e.preventDefault();
       setIngestionFocus('live');
       document.getElementById('create-tab-live')?.focus();
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'End') {
       e.preventDefault();
       setIngestionFocus('batch');
       document.getElementById('create-tab-batch')?.focus();
@@ -106,7 +106,13 @@ export function CreateWorkspacePanel({
                 </span>
               </>
             ) : totalCount > 0 && !isBatchActive ? (
-              <span className="create-tab-badge batch-count">{totalCount}</span>
+              <span className="create-tab-badge batch-count">
+                <span aria-hidden="true">{totalCount}</span>
+                <span className="sr-only">
+                  {' '}
+                  ({totalCount} {t('batch.items', { defaultValue: 'items' })})
+                </span>
+              </span>
             ) : null}
           </button>
         </div>

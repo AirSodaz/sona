@@ -221,8 +221,6 @@
   },
   "tools": {
     "title": "工具箱",
-    "subtitle": "管理和配置独立扩展功能与外部集成服务",
-    "active_count": "{{count}} 个服务运行中",
     "subtitles": "实时字幕",
     "subtitles_desc": "桌面悬浮双语字幕",
     "subtitles_preview_title": "实时字幕效果预览",
@@ -280,6 +278,7 @@
     "subtitle_settings": "字幕设置"
   },
   "batch": {
+    "items": "项",
     "processing_title": "正在处理音频",
     "processing_desc": "请稍候，正在转录您的文件...",
     "transcribing": "正在转录...",

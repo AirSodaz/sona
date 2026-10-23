@@ -8,7 +8,7 @@ import {
   VoiceTypingHistorySection,
   VoiceTypingSettingsSection,
 } from '../../settings/SettingsSubtitleTab';
-import { ToolHeroHeader } from '../ToolHeroHeader';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 
 export function ToolVoiceTypingPanel(): React.JSX.Element {
   const { t } = useTranslation();
@@ -17,13 +17,22 @@ export function ToolVoiceTypingPanel(): React.JSX.Element {
   const readiness = useVoiceTypingReadiness();
 
   const isEnabled = Boolean(vtConfig.voiceTypingEnabled);
-  const isReady = readiness.state === 'ready';
-  const statusTone = !isEnabled ? 'inactive' : isReady ? 'active' : 'warning';
+  const statusTone: ToolHeroStatusTone = !isEnabled
+    ? 'inactive'
+    : readiness.state === 'ready'
+      ? 'active'
+      : readiness.state === 'failed'
+        ? 'error'
+        : 'warning';
   const statusText = !isEnabled
     ? t('tools.status_disabled', { defaultValue: 'Disabled' })
-    : isReady
+    : readiness.state === 'ready'
       ? t('tools.status_ready', { defaultValue: 'Ready' })
-      : t('tools.status_needs_config', { defaultValue: 'Needs Config' });
+      : readiness.state === 'failed'
+        ? t('common.error', { defaultValue: 'Error' })
+        : readiness.state === 'preparing'
+          ? t('common.preparing', { defaultValue: 'Preparing...' })
+          : t('tools.status_needs_config', { defaultValue: 'Needs Config' });
 
   return (
     <SettingsTabContainer id="tools-panel-voice_typing" ariaLabelledby="tools-tab-voice_typing">

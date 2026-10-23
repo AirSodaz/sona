@@ -1,5 +1,6 @@
 import { Bot, Keyboard, Server, Subtitles } from 'lucide-react';
 import type React from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import { useApiServerConfig, useMcpConfig, useVoiceTypingConfig } from '../../stores/configStore';
@@ -33,8 +34,14 @@ export function ToolsSidebar(): React.JSX.Element {
 
   const isVtActive = Boolean(vtConfig.voiceTypingEnabled);
   const isApiActive = Boolean(apiConfig.httpServerEnabled);
-  const isMcpActive = Boolean(mcpConfig.mcpEnabled && (mcpStatus?.running ?? true));
+  const isMcpEnabled = Boolean(mcpConfig.mcpEnabled);
+  const isMcpRunning = Boolean(mcpStatus?.running);
 
+  useEffect(() => {
+    if (!mcpStatus) {
+      void useMcpStore.getState().fetchStatus();
+    }
+  }, [mcpStatus]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',
@@ -59,7 +66,11 @@ export function ToolsSidebar(): React.JSX.Element {
         ? t('tools.status_disabled', { defaultValue: 'Disabled' })
         : readiness.state === 'ready'
           ? t('tools.status_ready', { defaultValue: 'Ready' })
-          : t('tools.status_needs_config', { defaultValue: 'Needs Config' }),
+          : readiness.state === 'failed'
+            ? t('common.error', { defaultValue: 'Error' })
+            : readiness.state === 'preparing'
+              ? t('common.preparing', { defaultValue: 'Preparing...' })
+              : t('tools.status_needs_config', { defaultValue: 'Needs Config' }),
       statusType: !isVtActive ? 'inactive' : readiness.state === 'ready' ? 'active' : 'warning',
     },
     {
@@ -81,15 +92,18 @@ export function ToolsSidebar(): React.JSX.Element {
       descKey: 'tools.mcp_desc',
       defaultDesc: 'Model Context Protocol agent server',
       Icon: Bot,
-      statusText: !isMcpActive
+      statusText: !isMcpEnabled
         ? t('tools.status_disabled', { defaultValue: 'Disabled' })
-        : mcpStatus?.activeConnections && mcpStatus.activeConnections > 0
-          ? `${mcpStatus.activeConnections} ${t('tools.clients_unit', { defaultValue: 'clients' })}`
-          : t('tools.status_running', { defaultValue: 'Running' }),
-      statusType: isMcpActive ? 'active' : 'inactive',
+        : !isMcpRunning
+          ? t('tools.status_stopped', { defaultValue: 'Stopped' })
+          : mcpStatus?.activeConnections && mcpStatus.activeConnections > 0
+            ? `${mcpStatus.activeConnections} ${t('tools.clients_unit', { defaultValue: 'clients' })}`
+            : t('tools.status_running', { defaultValue: 'Running' }),
+      statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
   ];
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
     const currentIndex = tools.findIndex((tool) => tool.id === activeTool);

@@ -1,21 +1,39 @@
 import { Eye, SlidersHorizontal, Subtitles } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
-import { useCaptionConfig, useSetConfig } from '../../../stores/configStore';
+import {
+  isAsrRequestConfigured,
+  resolveAsrTranscriptionRequest,
+} from '../../../services/asrConfigService';
+import { useCaptionConfig, useConfigStore, useSetConfig } from '../../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { hexToRgba } from '../../../utils/colorUtils';
 import { ColorSwatchPicker } from '../../ColorSwatchPicker';
 import { Switch } from '../../Switch';
 import { SettingsItem, SettingsSection, SettingsTabContainer } from '../../settings/SettingsLayout';
-import { ToolHeroHeader } from '../ToolHeroHeader';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 
 export function ToolSubtitlesPanel(): React.JSX.Element {
   const { t } = useTranslation();
+  const globalConfig = useConfigStore((state) => state.config);
   const config = useCaptionConfig();
   const updateConfig = useSetConfig();
-
+  const isCaptionConfigured = isAsrRequestConfigured(
+    resolveAsrTranscriptionRequest(globalConfig, 'caption')
+  );
   const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
   const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
+
+  const statusTone: ToolHeroStatusTone = !isCaptionMode
+    ? 'inactive'
+    : !isCaptionConfigured
+      ? 'warning'
+      : 'active';
+  const statusText = !isCaptionMode
+    ? t('tools.status_stopped', { defaultValue: 'Stopped' })
+    : !isCaptionConfigured
+      ? t('tools.status_needs_config', { defaultValue: 'Needs Config' })
+      : t('tools.status_running', { defaultValue: 'Running' });
 
   const lockWindow = config.lockWindow ?? false;
   const alwaysOnTop = config.alwaysOnTop ?? true;
@@ -40,12 +58,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
         description={t('settings.subtitle_tab_description', {
           defaultValue: 'Configure live caption window behavior and visual appearance.',
         })}
-        statusText={
-          isCaptionMode
-            ? t('tools.status_running', { defaultValue: 'Running' })
-            : t('tools.status_stopped', { defaultValue: 'Stopped' })
-        }
-        statusTone={isCaptionMode ? 'active' : 'inactive'}
+        statusText={statusText}
+        statusTone={statusTone}
         enabled={isCaptionMode}
         onToggle={handleToggleCaptionMode}
         switchAriaLabel={t('live.caption_mode', { defaultValue: 'Live Caption' })}

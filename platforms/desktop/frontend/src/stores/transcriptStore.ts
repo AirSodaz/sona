@@ -40,6 +40,12 @@ import {
   resolveTranscriptHistoryKey,
 } from './transcriptSidecarState';
 
+let activeBatchItemIdResolver: (() => string | null) | null = null;
+
+export function registerBatchActiveItemIdResolver(resolver: () => string | null): void {
+  activeBatchItemIdResolver = resolver;
+}
+
 export interface SessionData {
   // Session fields
   segments: TranscriptSegment[];
@@ -267,16 +273,58 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   // --- Runtime ---
   setMode: (mode) => {
     if ((mode as string) === 'live') {
-      set({ mode: 'create', ingestionFocus: 'live' });
+      set({
+        mode: 'create',
+        ingestionFocus: 'live',
+        activeSessionId: get().recordingSessionId || 'default',
+      });
       return;
     }
     if ((mode as string) === 'batch') {
-      set({ mode: 'create', ingestionFocus: 'batch' });
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({ mode: 'create', ingestionFocus: 'batch', activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'create') {
+      const focus = get().ingestionFocus;
+      const activeItemId = focus === 'batch' ? activeBatchItemIdResolver?.() : null;
+      const targetSessionId =
+        focus === 'live'
+          ? get().recordingSessionId || 'default'
+          : activeItemId && get().sessions[activeItemId]
+            ? activeItemId
+            : 'default';
+      set({ mode: 'create', activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'projects' || mode === 'tools') {
+      set({ mode, activeSessionId: 'default' });
       return;
     }
     set({ mode });
   },
-  setIngestionFocus: (ingestionFocus) => set({ ingestionFocus }),
+  setIngestionFocus: (ingestionFocus) => {
+    if (ingestionFocus === 'live') {
+      set({
+        ingestionFocus,
+        activeSessionId: get().recordingSessionId || 'default',
+      });
+      return;
+    }
+    if (ingestionFocus === 'batch') {
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({
+        ingestionFocus,
+        activeSessionId: targetSessionId,
+      });
+      return;
+    }
+    set({ ingestionFocus });
+  },
   setProcessingStatus: (processingStatus) => set({ processingStatus }),
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
   setIsRecording: (isRecording) => set({ isRecording }),

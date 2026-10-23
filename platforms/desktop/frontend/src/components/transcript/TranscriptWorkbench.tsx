@@ -129,15 +129,14 @@ export function TranscriptWorkbench({
         ? 'recording'
         : undefined;
   const isBatchMode = mode === 'create' && ingestionFocus === 'batch';
-  const isLiveMode = mode === 'create' && ingestionFocus === 'live';
   const displayIconType =
     defaultIconType || historyDefaultIconType || (isBatchMode ? 'batch' : 'recording');
 
   // Determine display title
   const fallbackTitle =
-    historyDefaultIconType === 'recording' || isLiveMode
-      ? t('panel.live_record')
-      : t('panel.batch_import');
+    displayIconType === 'batch'
+      ? t('panel.batch_import', { defaultValue: 'Batch Import' })
+      : t('panel.live_record', { defaultValue: 'Live Record' });
   const displayTitle = propsTitle || storeTitle || fallbackTitle;
   const isManualHeaderActionsDisabled = isRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;

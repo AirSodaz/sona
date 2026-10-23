@@ -14,7 +14,6 @@ import {
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 import type { ProjectRecord } from '../types/project';
@@ -106,7 +105,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const setIngestionFocus = useTranscriptStore((state) => state.setIngestionFocus);
+  const setIngestionFocus = useTranscriptRuntimeStore((state) => state.setIngestionFocus);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);

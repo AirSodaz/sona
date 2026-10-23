@@ -221,8 +221,6 @@
   },
   "tools": {
     "title": "工具箱",
-    "subtitle": "管理和設定獨立擴充功能與外部整合服務",
-    "active_count": "{{count}} 個服務執行中",
     "subtitles": "即時字幕",
     "subtitles_desc": "桌面懸浮雙語字幕",
     "subtitles_preview_title": "即時字幕效果預覽",
@@ -231,14 +229,14 @@
     "voice_typing_desc": "全域快速輸入與智慧潤色",
     "api_server": "API 服務",
     "api_server_desc": "本機 HTTP 音訊轉錄介面",
-    "mcp": "MCP 智慧代理",
+    "mcp": "MCP 智慧體",
     "mcp_desc": "AI Agent 協定服務端",
     "status_running": "執行中",
     "status_stopped": "已停止",
     "status_ready": "已就緒",
     "status_disabled": "未啟用",
     "status_needs_config": "需設定",
-    "clients_unit": "用戶端",
+    "clients_unit": "客戶端",
     "migrated_notice": "該設定項目已遷移至首頁「工具箱」工作台，提供更有效率的快速啟停、參數調整與執行狀態監控。",
     "migrated_notice_desc": "獨立擴充與服務類工具已收歸至首頁統一工作台。",
     "migrated_badge": "已遷移至工具箱",
@@ -280,6 +278,7 @@
     "subtitle_settings": "字幕設定"
   },
   "batch": {
+    "items": "項",
     "processing_title": "正在處理音訊",
     "processing_desc": "請稍候，正在轉錄您的檔案...",
     "transcribing": "正在轉錄...",

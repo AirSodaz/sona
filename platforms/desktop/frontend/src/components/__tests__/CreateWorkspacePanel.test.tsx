@@ -194,7 +194,10 @@ describe('CreateWorkspacePanel', () => {
     const batchTab = screen.getByTestId('create-tab-batch');
     const badge = batchTab.querySelector('.create-tab-badge.batch-count');
     expect(badge).not.toBeNull();
-    expect(badge?.textContent).toBe('2');
+    expect(badge?.querySelector('[aria-hidden="true"]')?.textContent).toBe('2');
+    const srOnly = badge?.querySelector('.sr-only');
+    expect(srOnly).not.toBeNull();
+    expect(srOnly?.textContent).toContain('2 items');
   });
 
   it('renders batch-processing blue dot badge on batch tab when batch items are processing and live tab is active', () => {
@@ -237,5 +240,17 @@ describe('CreateWorkspacePanel', () => {
 
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
+
+    testContext.transcriptState.setIngestionFocus.mockClear();
+
+    fireEvent.keyDown(tablist, { key: 'End' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
+    expect(document.activeElement).toBe(batchTab);
+
+    testContext.transcriptState.setIngestionFocus.mockClear();
+
+    fireEvent.keyDown(tablist, { key: 'Home' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
+    expect(document.activeElement).toBe(liveTab);
   });
 });

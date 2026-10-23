@@ -195,3 +195,14 @@
     box-shadow: 0 0 0 0 rgba(11, 110, 153, 0);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .create-tab-slider {
+    transition: none;
+  }
+
+  .create-tab-badge.live-recording,
+  .create-tab-badge.batch-processing {
+    animation: none;
+  }
+}

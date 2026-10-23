@@ -221,8 +221,6 @@
   },
   "tools": {
     "title": "도구",
-    "subtitle": "독립 확장 기능 및 외부 연동 서비스 관리와 구성",
-    "active_count": "{{count}}개 서비스 실행 중",
     "subtitles": "실시간 자막",
     "subtitles_desc": "데스크톱 플로팅 이중 언어 자막",
     "subtitles_preview_title": "실시간 자막 미리보기",
@@ -280,6 +278,7 @@
     "subtitle_settings": "자막 설정"
   },
   "batch": {
+    "items": "개",
     "processing_title": "오디오 처리 중",
     "processing_desc": "파일을 전사하는 동안 잠시 기다려 주세요...",
     "transcribing": "전사 중...",

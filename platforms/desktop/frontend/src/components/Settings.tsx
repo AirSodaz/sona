@@ -332,6 +332,13 @@ export function Settings({
   const [migratedSubtitleTool, setMigratedSubtitleTool] = useState<ToolId>(() =>
     initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles'
   );
+  useEffect(() => {
+    if (initialTab === 'voice_typing') {
+      setMigratedSubtitleTool('voice_typing');
+    } else if (initialTab === 'subtitle') {
+      setMigratedSubtitleTool('subtitles');
+    }
+  }, [initialTab]);
   const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
   const renderedMountedTabs = useMemo(
     () => (shouldRender ? addMountedSettingsTab(mountedTabs, renderedTab) : mountedTabs),
@@ -461,6 +468,10 @@ export function Settings({
           hit.tab === 'sync' && Boolean(document.querySelector('.sync-disabled-feature-card'));
         if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
           el = document.getElementById('settings-sync-toggle');
+        }
+        if (!el && (hit.tab === 'subtitle' || hit.tab === 'api_server' || hit.tab === 'mcp')) {
+          const tool = hit.tab === 'subtitle' ? hit.subTab || 'subtitles' : hit.tab;
+          el = document.getElementById(`settings-panel-migrated-${tool}`);
         }
         if (el && !el.closest('[hidden]')) {
           scrollRafRef.current = null;
@@ -606,8 +617,12 @@ export function Settings({
         e.preventDefault();
         const currentIndex = SETTINGS_TABS.indexOf(renderedTab as (typeof SETTINGS_TABS)[number]);
         const nextIndex = e.shiftKey
-          ? (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length
-          : (currentIndex + 1) % SETTINGS_TABS.length;
+          ? currentIndex <= 0
+            ? SETTINGS_TABS.length - 1
+            : currentIndex - 1
+          : currentIndex === -1
+            ? 0
+            : (currentIndex + 1) % SETTINGS_TABS.length;
 
         const nextTab = SETTINGS_TABS[nextIndex];
         navigateToTab(nextTab);

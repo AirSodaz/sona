@@ -136,7 +136,13 @@ function SortableProjectItem({
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
-          onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+          const isKeyboard = event.detail === 0 || (event.clientX === 0 && event.clientY === 0);
+          onOpenContextMenu(
+            project.id,
+            isKeyboard
+              ? createKeyboardContextMenuRequest(event.currentTarget)
+              : createPointerContextMenuRequest(event)
+          );
         }}
         onPointerDown={(event) => {
           event.stopPropagation();
@@ -305,6 +311,7 @@ export function ProjectsRail({
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
             modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
           >
             <SortableContext

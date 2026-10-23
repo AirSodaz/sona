@@ -285,6 +285,25 @@ describe('Settings Focus Trap & Navigation', () => {
     expect(setActiveTabMock).toHaveBeenCalledWith('sync');
   });
 
+  it('wraps to last tab with ctrl+shift+tab when active tab is unlisted/migrated', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
+  });
+
+  it('updates migratedSubtitleTool when prewarmed Settings opens with initialTab voice_typing', async () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    const { rerender } = render(<Settings isOpen={false} prewarm onClose={onClose} />);
+
+    rerender(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    expect((await screen.findAllByText('tools.voice_typing')).length).toBeGreaterThan(0);
+  });
+
   it('keeps prewarmed inactive panes closed when the settings dialog opens', async () => {
     const onClose = vi.fn();
     const { rerender } = render(<Settings isOpen={false} prewarm onClose={onClose} />);

@@ -221,8 +221,6 @@
   },
   "tools": {
     "title": "ツール",
-    "subtitle": "独立した拡張機能と外部連携サービスの管理と設定",
-    "active_count": "{{count}} 件のサービスが実行中",
     "subtitles": "リアルタイム字幕",
     "subtitles_desc": "デスクトップフローティング二言語字幕",
     "subtitles_preview_title": "リアルタイム字幕プレビュー",
@@ -280,6 +278,7 @@
     "subtitle_settings": "字幕設定"
   },
   "batch": {
+    "items": "件",
     "processing_title": "オーディオの処理",
     "processing_desc": "ファイルを文字起こししています。しばらくお待ちください...",
     "transcribing": "文字起こし中...",

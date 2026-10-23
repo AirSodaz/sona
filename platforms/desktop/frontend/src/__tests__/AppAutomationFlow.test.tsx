@@ -87,11 +87,14 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App automation flow', () => {
   it('opens settings on the automation tab from the notification center entry', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
-      selector({
-        mode: 'live',
-        setMode: vi.fn(),
-      })
+    mockUseTranscriptRuntimeStore.mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          mode: 'create',
+          ingestionFocus: 'live',
+          isRecording: false,
+          setMode: vi.fn(),
+        })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
       selector({
@@ -113,11 +116,14 @@ describe('App automation flow', () => {
   });
 
   it('does not render an automation shortcut button in the batch panel header', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
-      selector({
-        mode: 'batch',
-        setMode: vi.fn(),
-      })
+    mockUseTranscriptRuntimeStore.mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          mode: 'create',
+          ingestionFocus: 'batch',
+          isRecording: false,
+          setMode: vi.fn(),
+        })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
       selector({

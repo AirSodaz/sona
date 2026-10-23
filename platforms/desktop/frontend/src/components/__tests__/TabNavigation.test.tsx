@@ -54,7 +54,7 @@ describe('TabNavigation', () => {
     // Check for tablist role
     const tablist = screen.getByRole('tablist');
     expect(tablist).toBeDefined();
-    expect(tablist.getAttribute('aria-label')).toBe('panel.mode_selection');
+    expect(tablist.getAttribute('aria-label')).toBe('Mode Selection');
 
     // Check for tabs
     const tabs = screen.getAllByRole('tab');
@@ -68,7 +68,7 @@ describe('TabNavigation', () => {
 
     // Check workspace tab
     expect(tabs[1].getAttribute('aria-selected')).toBe('false');
-    expect(tabs[1].textContent).toContain('panel.projects');
+    expect(tabs[1].textContent).toContain('Projects');
     expect(tabs[1].hasAttribute('data-tooltip')).toBe(false);
 
     // Check tools tab

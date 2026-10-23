@@ -63,4 +63,32 @@ describe('ProjectsRail', () => {
 
     expect(onOpenCreateModal).toHaveBeenCalledTimes(1);
   });
+
+  it('calls onOpenProjectContextMenu with keyboard request when menu button activated by keyboard', () => {
+    const onOpenProjectContextMenu = vi.fn();
+    render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
+
+    const menuBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(menuBtn, { detail: 0, clientX: 0, clientY: 0 });
+
+    expect(onOpenProjectContextMenu).toHaveBeenCalledTimes(1);
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ invocation: 'keyboard' })
+    );
+  });
+
+  it('calls onOpenProjectContextMenu with pointer request when menu button activated by mouse', () => {
+    const onOpenProjectContextMenu = vi.fn();
+    render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
+
+    const menuBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(menuBtn, { detail: 1, clientX: 150, clientY: 200 });
+
+    expect(onOpenProjectContextMenu).toHaveBeenCalledTimes(1);
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ invocation: 'pointer', point: { x: 150, y: 200 } })
+    );
+  });
 });

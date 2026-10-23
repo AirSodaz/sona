@@ -3,6 +3,7 @@ import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as Platform from '../../../platform';
 import { useConfigStore } from '../../../stores/configStore';
+import { useMcpStore } from '../../../stores/mcpStore';
 import { useToolsStore } from '../../../stores/toolsStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
@@ -194,6 +195,45 @@ describe('ToolsView', () => {
 
     // Home -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'Home' });
+    expect(useToolsStore.getState().activeTool).toBe('subtitles');
+  });
+
+  it('renders Stopped warning badge for MCP when enabled but server is not running', () => {
+    useConfigStore.setState({
+      config: buildTestConfig({
+        mcpEnabled: true,
+      }),
+    });
+    useMcpStore.setState({
+      status: {
+        enabled: true,
+        running: false,
+        endpoint: 'http://localhost:14201',
+        activeConnections: 0,
+        binaryExists: true,
+        permissionMode: 'full',
+      },
+    });
+
+    render(<ToolsSidebar />);
+    const mcpTab = screen.getAllByRole('tab')[3];
+    expect(mcpTab.textContent).toContain('Stopped');
+    const badge = mcpTab.querySelector('.tools-status-badge');
+    expect(badge?.classList.contains('tools-status-warning')).toBe(true);
+  });
+
+  it('bypasses sidebar arrow key navigation when ctrl, alt, or meta keys are pressed', () => {
+    render(<ToolsSidebar />);
+    const tablist = screen.getByRole('tablist');
+    expect(useToolsStore.getState().activeTool).toBe('subtitles');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowDown', ctrlKey: true });
+    expect(useToolsStore.getState().activeTool).toBe('subtitles');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowDown', altKey: true });
+    expect(useToolsStore.getState().activeTool).toBe('subtitles');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowDown', metaKey: true });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
   });
 });

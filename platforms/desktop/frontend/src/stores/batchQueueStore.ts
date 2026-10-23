@@ -38,7 +38,11 @@ import { useProjectStore } from './projectStore';
 import { useTaskLedgerStore } from './taskLedgerStore';
 import { clearActiveTranscriptSession, setTranscriptSegments } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
-import { DEFAULT_SESSION_DATA, useTranscriptStore } from './transcriptStore';
+import {
+  DEFAULT_SESSION_DATA,
+  registerBatchActiveItemIdResolver,
+  useTranscriptStore,
+} from './transcriptStore';
 
 interface AddFilesOptions {
   origin?: BatchQueueItemOrigin;
@@ -723,3 +727,5 @@ export const useIsQueueProcessing = () => useBatchQueueStore((state) => state.is
 
 /** Selector for paused state. */
 export const useIsQueuePaused = () => useBatchQueueStore((state) => state.isQueuePaused);
+
+registerBatchActiveItemIdResolver(() => useBatchQueueStore.getState().activeItemId);

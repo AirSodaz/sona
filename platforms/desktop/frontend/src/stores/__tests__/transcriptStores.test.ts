@@ -17,6 +17,10 @@ import { useTranscriptPlaybackStore } from '../transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../transcriptRuntimeStore';
 import { getSessionStoreState, useTranscriptSessionStore } from '../transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../transcriptSidecarStore';
+import {
+  DEFAULT_SESSION_DATA,
+  useTranscriptStore as useCanonicalTranscriptStore,
+} from '../transcriptStore';
 
 vi.mock('../../services/tauri/app', () => ({
   resolveEffectiveConfig: vi.fn(async (globalConfig: any) => globalConfig),
@@ -383,5 +387,33 @@ describe('Transcript Stores', () => {
     // Assert session B (active session) was untouched
     const untouchedSessionB = useTranscriptStore.getState().sessions[sessionB];
     expect(untouchedSessionB.segments[0].text).toBe('Original text B');
+  });
+
+  it('synchronizes activeSessionId when setMode is called with create', () => {
+    const realStore = useCanonicalTranscriptStore;
+
+    // Set up a live recording session
+    realStore.setState({
+      recordingSessionId: 'live-rec-123',
+      ingestionFocus: 'live',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'live-rec-123': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'live-rec-123',
+          title: 'Live Session',
+        },
+      },
+    });
+
+    // Switch to projects mode -> activeSessionId resets to default
+    realStore.getState().setMode('projects');
+    expect(realStore.getState().mode).toBe('projects');
+    expect(realStore.getState().activeSessionId).toBe('default');
+
+    // Switch back to create mode -> activeSessionId restores to recordingSessionId
+    realStore.getState().setMode('create');
+    expect(realStore.getState().mode).toBe('create');
+    expect(realStore.getState().activeSessionId).toBe('live-rec-123');
   });
 });
