@@ -116,7 +116,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         role="tab"
       >
         <SquarePen size={16} aria-hidden="true" />
-        <span>{t('panel.create', { defaultValue: '新建' })}</span>
+        <span>{t('panel.create', { defaultValue: 'Create' })}</span>
       </button>
       <button
         className={`tab-button ${mode === 'projects' ? 'active' : ''}`}

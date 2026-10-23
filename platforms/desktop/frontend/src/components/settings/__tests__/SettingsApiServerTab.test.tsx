@@ -233,4 +233,28 @@ describe('SettingsApiServerTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerIpWhitelist: '127.0.0.0/8,::1/128' });
     vi.useRealTimers();
   });
+
+  it('suppresses "not running" error during initial startup polling', async () => {
+    currentConfig.httpServerEnabled = true;
+    vi.mocked(invokeTauri).mockRejectedValueOnce(new Error('Server is not running'));
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    expect(screen.queryByText(/Server is not running/i)).toBeNull();
+  });
+
+  it('displays real errors that are not "not running"', async () => {
+    currentConfig.httpServerEnabled = true;
+    vi.mocked(invokeTauri).mockRejectedValueOnce(new Error('Port 14200 already bound'));
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Port 14200 already bound/)).toBeDefined();
+    });
+  });
 });

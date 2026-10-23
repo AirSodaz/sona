@@ -22,7 +22,10 @@ export function CreateWorkspacePanel({
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
   const queueItems = useBatchQueueStore((state) => state.queueItems);
+  const isQueueProcessing = useBatchQueueStore((state) => state.isQueueProcessing);
   const totalCount = queueItems.length;
+  const isBatchProcessing =
+    isQueueProcessing || queueItems.some((item) => item.status === 'processing');
 
   const isLiveActive = ingestionFocus === 'live';
   const isBatchActive = ingestionFocus === 'batch';
@@ -32,9 +35,11 @@ export function CreateWorkspacePanel({
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
       e.preventDefault();
       setIngestionFocus('live');
+      document.getElementById('create-tab-live')?.focus();
     } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
       e.preventDefault();
       setIngestionFocus('batch');
+      document.getElementById('create-tab-batch')?.focus();
     }
   };
 
@@ -43,11 +48,13 @@ export function CreateWorkspacePanel({
       className={`create-workspace-shell state-${ingestionFocus} ${className}`}
       data-testid="create-workspace-shell"
     >
-      <header
-        className="create-workspace-header"
-        aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
-      >
-        <div className="create-tab-navigation" role="tablist" onKeyDown={handleTabKeyDown}>
+      <header className="create-workspace-header">
+        <div
+          className="create-tab-navigation"
+          role="tablist"
+          aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
+          onKeyDown={handleTabKeyDown}
+        >
           <div
             className="create-tab-slider"
             style={{
@@ -58,6 +65,9 @@ export function CreateWorkspacePanel({
           <button
             type="button"
             role="tab"
+            id="create-tab-live"
+            aria-controls="pane-live"
+            tabIndex={isLiveActive ? 0 : -1}
             className={`create-tab-button ${isLiveActive ? 'active' : ''}`}
             data-testid="create-tab-live"
             aria-selected={isLiveActive}
@@ -66,13 +76,21 @@ export function CreateWorkspacePanel({
             <Mic size={16} aria-hidden="true" />
             <span>{t('panel.live_record', { defaultValue: 'Live Record' })}</span>
             {isRecording && !isLiveActive ? (
-              <span className="create-tab-badge live-recording" aria-hidden="true" />
+              <>
+                <span className="create-tab-badge live-recording" aria-hidden="true" />
+                <span className="sr-only">
+                  ({t('live.recording', { defaultValue: 'Recording' })})
+                </span>
+              </>
             ) : null}
           </button>
 
           <button
             type="button"
             role="tab"
+            id="create-tab-batch"
+            aria-controls="pane-batch"
+            tabIndex={isBatchActive ? 0 : -1}
             className={`create-tab-button ${isBatchActive ? 'active' : ''}`}
             data-testid="create-tab-batch"
             aria-selected={isBatchActive}
@@ -80,7 +98,14 @@ export function CreateWorkspacePanel({
           >
             <Folder size={16} aria-hidden="true" />
             <span>{t('panel.batch_import', { defaultValue: 'Batch Import' })}</span>
-            {totalCount > 0 && !isBatchActive ? (
+            {isBatchProcessing && !isBatchActive ? (
+              <>
+                <span className="create-tab-badge batch-processing" aria-hidden="true" />
+                <span className="sr-only">
+                  ({t('batch.processing', { defaultValue: 'Processing' })})
+                </span>
+              </>
+            ) : totalCount > 0 && !isBatchActive ? (
               <span className="create-tab-badge batch-count">{totalCount}</span>
             ) : null}
           </button>
@@ -89,6 +114,10 @@ export function CreateWorkspacePanel({
 
       <div className="create-workspace-body">
         <div
+          id="pane-live"
+          role="tabpanel"
+          aria-labelledby="create-tab-live"
+          tabIndex={0}
           className="create-pane create-pane-live"
           data-testid="pane-live"
           style={{ display: isLiveActive ? undefined : 'none' }}
@@ -96,6 +125,10 @@ export function CreateWorkspacePanel({
           <LiveRecord />
         </div>
         <div
+          id="pane-batch"
+          role="tabpanel"
+          aria-labelledby="create-tab-batch"
+          tabIndex={0}
           className="create-pane create-pane-batch"
           data-testid="pane-batch"
           style={{ display: isBatchActive ? undefined : 'none' }}

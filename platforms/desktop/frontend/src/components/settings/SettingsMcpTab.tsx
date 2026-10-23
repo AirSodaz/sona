@@ -125,7 +125,8 @@ export function SettingsMcpTab(): React.JSX.Element {
     const start = performance.now();
     try {
       await fetchStatus();
-      if (!useMcpStore.getState().status?.running) {
+      const mcpState = useMcpStore.getState();
+      if (mcpState.error || !mcpState.status?.running) {
         setPingLatency(-1);
       } else {
         const elapsed = Math.round((performance.now() - start) * 10) / 10;
@@ -195,10 +196,15 @@ export function SettingsMcpTab(): React.JSX.Element {
   const isRunning = Boolean(status?.running);
   const activeConnections = status?.activeConnections ?? 0;
 
-  const statusTone: ToolHeroStatusTone = !isEnabled || !isRunning ? 'inactive' : 'active';
-  const statusText =
-    !isEnabled || !isRunning
-      ? t('tools.status_disabled', { defaultValue: 'Disabled' })
+  const statusTone: ToolHeroStatusTone = !isEnabled
+    ? 'inactive'
+    : !isRunning
+      ? 'warning'
+      : 'active';
+  const statusText = !isEnabled
+    ? t('tools.status_disabled', { defaultValue: 'Disabled' })
+    : !isRunning
+      ? t('settings.mcp.status_stopped', { defaultValue: 'Stopped' })
       : activeConnections > 0
         ? t('settings.mcp.active_clients_count_short', {
             count: activeConnections,

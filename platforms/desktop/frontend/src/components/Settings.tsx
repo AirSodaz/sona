@@ -24,6 +24,7 @@ import {
   SETTINGS_TABS,
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
+import type { ToolId } from '../types/tools';
 import type { LlmProvider } from '../types/transcript';
 import { XIcon } from './Icons';
 import { SettingsMigratedBanner } from './settings/SettingsMigratedBanner';
@@ -109,6 +110,7 @@ function renderSettingsPane(
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
   initialTab?: SettingsTabInput,
   pendingSubTab?: SettingsPendingSubTab,
+  migratedSubtitleTool: ToolId = initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles',
   onClose?: () => void
 ): React.JSX.Element | null {
   switch (activeTab) {
@@ -128,11 +130,9 @@ function renderSettingsPane(
       return (
         <SettingsMigratedBanner
           tool={
-            pendingSubTab?.tab === 'subtitle'
-              ? (pendingSubTab.subTab ?? 'subtitles')
-              : initialTab === 'voice_typing'
-                ? 'voice_typing'
-                : 'subtitles'
+            pendingSubTab?.tab === 'subtitle' && pendingSubTab.subTab
+              ? (pendingSubTab.subTab as ToolId)
+              : migratedSubtitleTool
           }
           onClose={onClose}
         />
@@ -270,6 +270,7 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails,
   initialTab,
   pendingSubTab,
+  migratedSubtitleTool,
   onClose,
 }: {
   tab: SettingsTab;
@@ -280,6 +281,7 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
   initialTab?: SettingsTabInput;
   pendingSubTab?: SettingsPendingSubTab;
+  migratedSubtitleTool?: ToolId;
   onClose?: () => void;
 }): React.JSX.Element {
   return (
@@ -293,6 +295,7 @@ function SettingsPaneContent({
         onOpenLlmProviderDetails,
         initialTab,
         pendingSubTab,
+        migratedSubtitleTool,
         onClose
       )}
     </Suspense>
@@ -325,6 +328,10 @@ export function Settings({
 
   const { activeTab, setActiveTab } = useSettingsLogic(isOpen, onClose, effectiveInitialTab);
   const renderedTab = isPrewarming ? 'general' : activeTab;
+  const isRenderedTabInList = (SETTINGS_TABS as readonly string[]).includes(renderedTab);
+  const [migratedSubtitleTool, setMigratedSubtitleTool] = useState<ToolId>(() =>
+    initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles'
+  );
   const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
   const renderedMountedTabs = useMemo(
     () => (shouldRender ? addMountedSettingsTab(mountedTabs, renderedTab) : mountedTabs),
@@ -428,6 +435,9 @@ export function Settings({
 
   const handleSelectResult = useCallback(
     (hit: SettingsSearchHit) => {
+      if (hit.tab === 'subtitle' && hit.subTab) {
+        setMigratedSubtitleTool(hit.subTab as ToolId);
+      }
       navigateToTab(hit.tab);
       navRequestIdRef.current += 1;
       setPendingSubTab(createPendingSubTab(hit, navRequestIdRef.current));
@@ -615,11 +625,11 @@ export function Settings({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        nextIndex = (currentIndex + 1) % SETTINGS_TABS.length;
+        nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % SETTINGS_TABS.length;
         break;
       case 'ArrowUp':
         e.preventDefault();
-        nextIndex = (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+        nextIndex = currentIndex <= 0 ? SETTINGS_TABS.length - 1 : currentIndex - 1;
         break;
       case 'Home':
         e.preventDefault();
@@ -697,7 +707,12 @@ export function Settings({
                       Icon={meta.Icon}
                       activeTab={renderedTab}
                       setActiveTab={navigateToTab}
-                      tabIndex={renderedTab === tabId ? 0 : -1}
+                      tabIndex={
+                        renderedTab === tabId ||
+                        (!isRenderedTabInList && tabId === SETTINGS_TABS[0])
+                          ? 0
+                          : -1
+                      }
                     />
                   );
                 })}
@@ -744,6 +759,7 @@ export function Settings({
                       onOpenLlmProviderDetails={onOpenLlmProviderDetails}
                       initialTab={initialTab}
                       pendingSubTab={pendingSubTab}
+                      migratedSubtitleTool={migratedSubtitleTool}
                       onClose={onClose}
                     />
                   </SettingsPaneFrame>

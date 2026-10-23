@@ -62,7 +62,7 @@ describe('TabNavigation', () => {
 
     // Check create tab
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
-    expect(tabs[0].textContent).toContain('新建');
+    expect(tabs[0].textContent).toContain('Create');
     expect(tabs[0].hasAttribute('data-tooltip')).toBe(false);
     expect(tabs[0].querySelector('svg')).not.toBeNull();
 

@@ -121,6 +121,7 @@ export function ToolsSidebar(): React.JSX.Element {
       <div
         className="tools-sidebar-nav"
         role="tablist"
+        aria-label={t('tools.title', { defaultValue: 'Tools' })}
         aria-orientation="vertical"
         onKeyDown={handleKeyDown}
       >

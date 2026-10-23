@@ -48,14 +48,28 @@
   pointer-events: none;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 .create-tab-button {
   position: relative;
   z-index: 1;
   flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: var(--spacing-sm);
+  white-space: nowrap;
   padding: 4px 12px;
   height: 32px;
   border: none;
@@ -70,6 +84,10 @@
     color var(--transition-fast),
     font-weight var(--transition-fast);
   user-select: none;
+}
+
+.create-tab-button span {
+  white-space: nowrap;
 }
 
 .create-tab-button:hover {
@@ -103,16 +121,36 @@
   background: var(--color-danger, #ef4444);
   box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
   animation: deck-pulse 1.8s infinite;
+  flex-shrink: 0;
+}
+
+.create-tab-badge.batch-processing {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-info, #0b6e99);
+  box-shadow: 0 0 0 0 rgba(11, 110, 153, 0.7);
+  animation: deck-pulse-info 1.8s infinite;
+  flex-shrink: 0;
 }
 
 .create-tab-badge.batch-count {
-  background: var(--color-accent);
-  color: white;
-  border-radius: 10px;
-  padding: 1px 6px;
-  font-size: 0.6875rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3.5px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-info, #0b6e99);
+  color: #ffffff;
+  font-size: 0.6rem;
   font-weight: 600;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
 }
 
 .create-workspace-body {
@@ -140,5 +178,20 @@
   100% {
     transform: scale(0.95);
     box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes deck-pulse-info {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(11, 110, 153, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(11, 110, 153, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(11, 110, 153, 0);
   }
 }

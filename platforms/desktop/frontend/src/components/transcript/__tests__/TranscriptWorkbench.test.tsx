@@ -270,4 +270,44 @@ describe('TranscriptWorkbench', () => {
       true
     );
   });
+
+  it('synchronizes fallback title and icon for recording items in projects mode', () => {
+    mockHistoryItems.current = [
+      {
+        id: 'rec-1',
+        type: 'recording',
+        title: '',
+      },
+    ];
+    useTranscriptStore.setState({
+      mode: 'projects',
+      sourceHistoryId: 'rec-1',
+      title: '',
+    });
+
+    render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    expect(screen.getByText('panel.live_record')).toBeDefined();
+    expect(screen.getByTestId('icon-mic')).toBeDefined();
+  });
+
+  it('synchronizes fallback title and icon for batch items in projects mode', () => {
+    mockHistoryItems.current = [
+      {
+        id: 'batch-1',
+        type: 'batch',
+        title: '',
+      },
+    ];
+    useTranscriptStore.setState({
+      mode: 'projects',
+      sourceHistoryId: 'batch-1',
+      title: '',
+    });
+
+    render(<TranscriptWorkbench onClose={vi.fn()} />);
+
+    expect(screen.getByText('panel.batch_import')).toBeDefined();
+    expect(screen.getByTestId('icon-file-text')).toBeDefined();
+  });
 });

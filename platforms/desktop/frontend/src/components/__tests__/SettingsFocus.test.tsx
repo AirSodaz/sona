@@ -233,6 +233,45 @@ describe('Settings Focus Trap & Navigation', () => {
     expect(screen.getByText('General Tab Input').closest('[hidden]')).not.toBeNull();
   });
 
+  it('falls back to tabIndex=0 on the first tab when on an unlisted/migrated tab', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    const tabs = screen.getAllByRole('tab');
+    const generalTab = tabs[0];
+    expect(generalTab.getAttribute('tabindex')).toBe('0');
+    for (let i = 1; i < tabs.length; i++) {
+      expect(tabs[i].getAttribute('tabindex')).toBe('-1');
+    }
+  });
+
+  it('wraps around correctly from unlisted tab using ArrowUp and ArrowDown', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    const tablist = screen.getByRole('tablist');
+
+    // ArrowUp from unlisted (currentIndex === -1) wraps to the last tab (sync)
+    fireEvent.keyDown(tablist, { key: 'ArrowUp' });
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
+
+    setActiveTabMock.mockClear();
+
+    // ArrowDown from unlisted (currentIndex === -1) moves to the first tab (general)
+    fireEvent.keyDown(tablist, { key: 'ArrowDown' });
+    expect(setActiveTabMock).toHaveBeenCalledWith('general');
+  });
+
+  it('renders voice_typing migrated banner when initialTab is voice_typing', async () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    expect((await screen.findAllByText('tools.voice_typing')).length).toBeGreaterThan(0);
+  });
+
   it('navigates tabs with ctrl+tab without the removed local tab', () => {
     const onClose = vi.fn();
     render(<Settings isOpen={true} onClose={onClose} />);

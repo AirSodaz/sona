@@ -72,28 +72,6 @@ type ActivePanelModal =
   | { kind: 'provider_details'; origin: 'settings'; provider: LlmProvider }
   | null;
 
-/**
- * Helper to determine the title of the left panel based on the current mode.
- */
-function getPanelTitle(
-  mode: string,
-  t: (key: string, options?: Record<string, unknown>) => string
-): string {
-  switch (mode) {
-    case 'create':
-      return t('panel.create', { defaultValue: 'Create' });
-    case 'live':
-      return t('panel.live_record');
-    case 'projects':
-      return t('panel.projects');
-    case 'tools':
-      return t('panel.tools', { defaultValue: 'Tools' });
-    case 'batch':
-    default:
-      return t('panel.batch_import');
-  }
-}
-
 function App(): React.JSX.Element | null {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [shouldPrewarmSettings, setShouldPrewarmSettings] = useState(false);
@@ -241,7 +219,6 @@ function App(): React.JSX.Element | null {
     return null; // Wait for config and onboarding state to load
   }
 
-  const panelTitle = getPanelTitle(mode, t);
   const isToolsMode = mode === 'tools';
   const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
   const shouldShowTranscriptHost = isProjectsMode ? hasActiveTranscript : !isToolsMode;
@@ -306,11 +283,6 @@ function App(): React.JSX.Element | null {
           <div className="panel-container">
             {/* Left Panel - Input */}
             <div className="panel panel-left">
-              {mode !== 'create' ? (
-                <div className="panel-header">
-                  <h2>{panelTitle}</h2>
-                </div>
-              ) : null}
               <div className="panel-content">
                 <CreateWorkspacePanel />
               </div>

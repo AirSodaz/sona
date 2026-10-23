@@ -63,6 +63,11 @@
   box-shadow: var(--shadow-sm);
 }
 
+.tools-sidebar-item:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
 .tools-sidebar-item-icon {
   display: flex;
   align-items: center;

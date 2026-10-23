@@ -40,6 +40,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const [jobs, setJobs] = useState<Record<string, ApiServerJobStatus>>({});
   const [lastError, setLastError] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const healthRef = useRef<ApiServerHealth | null>(null);
+  healthRef.current = health;
 
   useEffect(() => {
     if (copied) {
@@ -74,15 +76,18 @@ export function SettingsApiServerTab(): React.JSX.Element {
       const snapshot = await transport.invoke<ApiServerDashboardSnapshot>(
         TauriCommand.apiServer.dashboardSnapshot
       );
-      setHealth(snapshot.health);
-      setInfo(snapshot.info);
-      setJobs(snapshot.jobs);
+      setHealth(snapshot?.health ?? null);
+      setInfo(snapshot?.info ?? null);
+      setJobs(snapshot?.jobs ?? {});
       setLastError(null);
     } catch (err) {
       setHealth(null);
       setInfo(null);
       setJobs({});
-      setLastError(extractErrorMessage(err));
+      const errMsg = extractErrorMessage(err);
+      if (!(healthRef.current === null && errMsg.toLowerCase().includes('not running'))) {
+        setLastError(errMsg);
+      }
     }
   }, [config.httpServerEnabled, transport.invoke]);
 
@@ -185,6 +190,8 @@ export function SettingsApiServerTab(): React.JSX.Element {
             gpuAcceleration: config.gpuAcceleration ?? 'auto',
           })
           .then((normalizedWhitelist) => {
+            setLastError(null);
+            void fetchData();
             if (
               typeof normalizedWhitelist === 'string' &&
               normalizedWhitelist !== config.httpServerIpWhitelist
@@ -207,6 +214,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
             });
           });
       } else {
+        setLastError(null);
         transport.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
           logger.error('[ApiServer] Failed to stop server:', e);
         });
@@ -224,6 +232,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
     config.httpServerJobTtlMinutes,
     config.httpServerIpWhitelist,
     config.gpuAcceleration,
+    fetchData,
     setConfig,
     t,
     transport.invoke,
@@ -618,7 +627,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
         <SettingsSection title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}>
           <div className="settings-api-server-panel">
             <div className="api-server-jobs-container">
-              {Object.keys(jobs).length === 0 ? (
+              {Object.keys(jobs || {}).length === 0 ? (
                 <div className="empty-state-mini">
                   <p>
                     {t('settings.api_server.no_jobs', {
@@ -635,7 +644,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
                     </tr>
                   </thead>
                   <tbody>
-                    {Object.entries(jobs).map(([id, status]) => (
+                    {Object.entries(jobs || {}).map(([id, status]) => (
                       <tr key={id}>
                         <td className="job-id-cell" title={id}>
                           {id.slice(0, 8)}...

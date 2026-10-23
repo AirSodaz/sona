@@ -73,6 +73,9 @@ describe('CreateWorkspacePanel', () => {
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-live');
 
+    const tablist = screen.getByRole('tablist', { name: 'Mode Selection' });
+    expect(tablist).not.toBeNull();
+
     // Slider and Live Tab active
     const slider = shell.querySelector('.create-tab-slider') as HTMLElement;
     expect(slider).not.toBeNull();
@@ -80,14 +83,29 @@ describe('CreateWorkspacePanel', () => {
 
     const liveTab = screen.getByTestId('create-tab-live');
     expect(liveTab.getAttribute('aria-selected')).toBe('true');
+    expect(liveTab.getAttribute('aria-controls')).toBe('pane-live');
+    expect(liveTab.getAttribute('tabindex')).toBe('0');
     expect(liveTab.classList.contains('active')).toBe(true);
-    expect(screen.getByTestId('pane-live').style.display).toBe('');
+
+    const livePane = screen.getByTestId('pane-live');
+    expect(livePane.getAttribute('role')).toBe('tabpanel');
+    expect(livePane.getAttribute('aria-labelledby')).toBe('create-tab-live');
+    expect(livePane.getAttribute('tabindex')).toBe('0');
+    expect(livePane.style.display).toBe('');
     expect(screen.getByTestId('live-record-component')).toBeDefined();
+
     // Batch Tab inactive (body stays mounted for persistent state, but hidden)
     const batchTab = screen.getByTestId('create-tab-batch');
     expect(batchTab.getAttribute('aria-selected')).toBe('false');
+    expect(batchTab.getAttribute('aria-controls')).toBe('pane-batch');
+    expect(batchTab.getAttribute('tabindex')).toBe('-1');
     expect(batchTab.classList.contains('active')).toBe(false);
-    expect(screen.getByTestId('pane-batch').style.display).toBe('none');
+
+    const batchPane = screen.getByTestId('pane-batch');
+    expect(batchPane.getAttribute('role')).toBe('tabpanel');
+    expect(batchPane.getAttribute('aria-labelledby')).toBe('create-tab-batch');
+    expect(batchPane.getAttribute('tabindex')).toBe('0');
+    expect(batchPane.style.display).toBe('none');
     expect(screen.getByTestId('batch-import-component')).toBeDefined();
   });
 
@@ -114,14 +132,29 @@ describe('CreateWorkspacePanel', () => {
 
     const batchTab = screen.getByTestId('create-tab-batch');
     expect(batchTab.getAttribute('aria-selected')).toBe('true');
+    expect(batchTab.getAttribute('aria-controls')).toBe('pane-batch');
+    expect(batchTab.getAttribute('tabindex')).toBe('0');
     expect(batchTab.classList.contains('active')).toBe(true);
-    expect(screen.getByTestId('pane-batch').style.display).toBe('');
+
+    const batchPane = screen.getByTestId('pane-batch');
+    expect(batchPane.getAttribute('role')).toBe('tabpanel');
+    expect(batchPane.getAttribute('aria-labelledby')).toBe('create-tab-batch');
+    expect(batchPane.getAttribute('tabindex')).toBe('0');
+    expect(batchPane.style.display).toBe('');
     expect(screen.getByTestId('batch-import-component')).toBeDefined();
+
     // Live Tab inactive (body stays mounted for background recording, but hidden)
     const liveTab = screen.getByTestId('create-tab-live');
     expect(liveTab.getAttribute('aria-selected')).toBe('false');
+    expect(liveTab.getAttribute('aria-controls')).toBe('pane-live');
+    expect(liveTab.getAttribute('tabindex')).toBe('-1');
     expect(liveTab.classList.contains('active')).toBe(false);
-    expect(screen.getByTestId('pane-live').style.display).toBe('none');
+
+    const livePane = screen.getByTestId('pane-live');
+    expect(livePane.getAttribute('role')).toBe('tabpanel');
+    expect(livePane.getAttribute('aria-labelledby')).toBe('create-tab-live');
+    expect(livePane.getAttribute('tabindex')).toBe('0');
+    expect(livePane.style.display).toBe('none');
     expect(screen.getByTestId('live-record-component')).toBeDefined();
   });
 
@@ -135,7 +168,7 @@ describe('CreateWorkspacePanel', () => {
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
   });
 
-  it('renders live-recording badge on live tab when isRecording is true and batch tab is active', () => {
+  it('renders live-recording badge and sr-only label on live tab when isRecording is true and batch tab is active', () => {
     testContext.runtimeState.ingestionFocus = 'batch';
     testContext.runtimeState.isRecording = true;
     render(<CreateWorkspacePanel />);
@@ -143,13 +176,17 @@ describe('CreateWorkspacePanel', () => {
     const liveTab = screen.getByTestId('create-tab-live');
     const badge = liveTab.querySelector('.create-tab-badge.live-recording');
     expect(badge).not.toBeNull();
+    const srOnly = liveTab.querySelector('.sr-only');
+    expect(srOnly).not.toBeNull();
+    expect(srOnly?.textContent).toContain('Recording');
   });
 
-  it('renders batch-count badge on batch tab when queueItems exist and live tab is active', () => {
+  it('renders batch-count badge on batch tab when queueItems exist and are not processing', () => {
     testContext.runtimeState.ingestionFocus = 'live';
+    testContext.batchQueueState.isQueueProcessing = false;
     testContext.batchQueueState.queueItems = [
       { id: '1', status: 'complete', progress: 100 },
-      { id: '2', status: 'processing', progress: 50 },
+      { id: '2', status: 'complete', progress: 100 },
     ];
 
     render(<CreateWorkspacePanel />);
@@ -160,13 +197,34 @@ describe('CreateWorkspacePanel', () => {
     expect(badge?.textContent).toBe('2');
   });
 
-  it('supports arrow key navigation to switch between tabs', () => {
+  it('renders batch-processing blue dot badge on batch tab when batch items are processing and live tab is active', () => {
+    testContext.runtimeState.ingestionFocus = 'live';
+    testContext.batchQueueState.isQueueProcessing = true;
+    testContext.batchQueueState.queueItems = [{ id: '1', status: 'processing', progress: 50 }];
+
+    render(<CreateWorkspacePanel />);
+
+    const batchTab = screen.getByTestId('create-tab-batch');
+    const badge = batchTab.querySelector('.create-tab-badge.batch-processing');
+    expect(badge).not.toBeNull();
+    const srOnly = batchTab.querySelector('.sr-only');
+    expect(srOnly).not.toBeNull();
+    expect(srOnly?.textContent).toContain('Processing');
+  });
+
+  it('supports arrow key navigation to switch between tabs and roving focus', () => {
     render(<CreateWorkspacePanel />);
 
     const tablist = screen.getByRole('tablist');
+    const liveTab = screen.getByTestId('create-tab-live');
+    const batchTab = screen.getByTestId('create-tab-batch');
+
+    liveTab.focus();
+    expect(document.activeElement).toBe(liveTab);
 
     fireEvent.keyDown(tablist, { key: 'ArrowRight' });
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
+    expect(document.activeElement).toBe(batchTab);
 
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
@@ -175,6 +233,7 @@ describe('CreateWorkspacePanel', () => {
 
     fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
+    expect(document.activeElement).toBe(liveTab);
 
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
     expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');

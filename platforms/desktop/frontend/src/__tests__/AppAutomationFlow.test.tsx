@@ -24,6 +24,7 @@ vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishBu
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => null }));
 vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () => null }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));

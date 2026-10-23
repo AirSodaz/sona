@@ -134,8 +134,11 @@ export function TranscriptWorkbench({
     defaultIconType || historyDefaultIconType || (isBatchMode ? 'batch' : 'recording');
 
   // Determine display title
-  const displayTitle =
-    propsTitle || storeTitle || (isLiveMode ? t('panel.live_record') : t('panel.batch_import'));
+  const fallbackTitle =
+    historyDefaultIconType === 'recording' || isLiveMode
+      ? t('panel.live_record')
+      : t('panel.batch_import');
+  const displayTitle = propsTitle || storeTitle || fallbackTitle;
   const isManualHeaderActionsDisabled = isRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 
