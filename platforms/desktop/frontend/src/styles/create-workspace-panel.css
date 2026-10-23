@@ -16,55 +16,84 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: none;
   background: var(--color-bg-secondary);
   flex-shrink: 0;
   box-sizing: border-box;
 }
 
-.create-segmented-control {
+.create-tab-navigation {
+  position: relative;
   display: flex;
   width: 100%;
   background: var(--color-bg-tertiary);
-  padding: 3px;
-  border-radius: var(--radius-md, 8px);
-  gap: 2px;
+  padding: 4px;
+  border-radius: var(--radius-md);
+  gap: 4px;
   box-sizing: border-box;
 }
 
-.create-segmented-tab {
-  flex: 1;
-  border: none;
-  background: transparent;
-  color: var(--color-text-secondary);
-  font-weight: 500;
-  font-size: 0.8125rem;
-  padding: 6px 10px;
-  border-radius: 6px;
-  cursor: pointer;
+/* Sliding pill indicator */
+.create-tab-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+  height: calc(100% - 8px);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.create-tab-button {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  transition: all 0.2s ease;
+  gap: var(--spacing-sm);
+  padding: 4px 12px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    font-weight var(--transition-fast);
   user-select: none;
-  line-height: 1.2;
 }
 
-.create-segmented-tab:hover:not(.active) {
-  color: var(--color-text-primary);
+.create-tab-button:hover {
+  color: var(--color-text-secondary);
 }
 
-.create-segmented-tab.active {
-  background: var(--color-bg-primary);
+.create-tab-button:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.create-tab-button.active {
   color: var(--color-text-primary);
   font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
-.create-segmented-tab:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -1px;
+.create-tab-button.active:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
+}
+
+.create-tab-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2px;
 }
 
 .create-tab-badge.live-recording {

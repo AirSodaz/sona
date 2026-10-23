@@ -63,16 +63,19 @@ describe('TabNavigation', () => {
     // Check create tab
     expect(tabs[0].getAttribute('aria-selected')).toBe('true');
     expect(tabs[0].textContent).toContain('新建');
+    expect(tabs[0].hasAttribute('data-tooltip')).toBe(false);
+    expect(tabs[0].querySelector('svg')).not.toBeNull();
 
     // Check workspace tab
     expect(tabs[1].getAttribute('aria-selected')).toBe('false');
     expect(tabs[1].textContent).toContain('panel.projects');
+    expect(tabs[1].hasAttribute('data-tooltip')).toBe(false);
 
     // Check tools tab
     expect(tabs[2].getAttribute('aria-selected')).toBe('false');
     expect(tabs[2].textContent).toContain('Tools');
+    expect(tabs[2].hasAttribute('data-tooltip')).toBe(false);
   });
-
   it('scrolls projects containers to top when active Projects tab is clicked', () => {
     testContext.runtimeState.mode = 'projects';
     const mainScroll = document.createElement('div');

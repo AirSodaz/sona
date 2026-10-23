@@ -589,6 +589,10 @@
 
 .panel-left {
   flex: 0 0 350px;
+  width: 350px;
+  min-width: 350px;
+  max-width: 350px;
+  box-sizing: border-box;
   background: var(--color-bg-secondary);
 }
 

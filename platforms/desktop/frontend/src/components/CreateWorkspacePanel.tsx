@@ -26,6 +26,17 @@ export function CreateWorkspacePanel({
 
   const isLiveActive = ingestionFocus === 'live';
   const isBatchActive = ingestionFocus === 'batch';
+  const activeIndex = isLiveActive ? 0 : 1;
+
+  const handleTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+      e.preventDefault();
+      setIngestionFocus('live');
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      setIngestionFocus('batch');
+    }
+  };
 
   return (
     <div
@@ -36,16 +47,23 @@ export function CreateWorkspacePanel({
         className="create-workspace-header"
         aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
       >
-        <div className="create-segmented-control" role="tablist">
+        <div className="create-tab-navigation" role="tablist" onKeyDown={handleTabKeyDown}>
+          <div
+            className="create-tab-slider"
+            style={{
+              transform: `translateX(calc(${activeIndex} * (100% + 4px)))`,
+            }}
+            aria-hidden="true"
+          />
           <button
             type="button"
             role="tab"
-            className={`create-segmented-tab ${isLiveActive ? 'active' : ''}`}
+            className={`create-tab-button ${isLiveActive ? 'active' : ''}`}
             data-testid="create-tab-live"
             aria-selected={isLiveActive}
             onClick={() => setIngestionFocus('live')}
           >
-            <Mic size={15} aria-hidden="true" />
+            <Mic size={16} aria-hidden="true" />
             <span>{t('panel.live_record', { defaultValue: 'Live Record' })}</span>
             {isRecording && !isLiveActive ? (
               <span className="create-tab-badge live-recording" aria-hidden="true" />
@@ -55,12 +73,12 @@ export function CreateWorkspacePanel({
           <button
             type="button"
             role="tab"
-            className={`create-segmented-tab ${isBatchActive ? 'active' : ''}`}
+            className={`create-tab-button ${isBatchActive ? 'active' : ''}`}
             data-testid="create-tab-batch"
             aria-selected={isBatchActive}
             onClick={() => setIngestionFocus('batch')}
           >
-            <Folder size={15} aria-hidden="true" />
+            <Folder size={16} aria-hidden="true" />
             <span>{t('panel.batch_import', { defaultValue: 'Batch Import' })}</span>
             {totalCount > 0 && !isBatchActive ? (
               <span className="create-tab-badge batch-count">{totalCount}</span>

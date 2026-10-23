@@ -1,4 +1,4 @@
-import { PlusCircle, Wrench } from 'lucide-react';
+import { SquarePen, Wrench } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -115,7 +115,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         aria-selected={mode === 'create'}
         role="tab"
       >
-        <PlusCircle size={16} aria-hidden="true" />
+        <SquarePen size={16} aria-hidden="true" />
         <span>{t('panel.create', { defaultValue: '新建' })}</span>
       </button>
       <button

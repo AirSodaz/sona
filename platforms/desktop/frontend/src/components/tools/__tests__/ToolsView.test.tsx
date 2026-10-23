@@ -79,10 +79,10 @@ describe('ToolsView', () => {
     expect(sidebar).not.toBeNull();
     expect(sidebar?.classList.contains('panel-left')).toBe(true);
 
-    const sidebarHeader = sidebar?.querySelector('.tools-sidebar-header');
-    expect(sidebarHeader).not.toBeNull();
-    expect(sidebarHeader?.classList.contains('panel-header')).toBe(true);
-    expect(sidebarHeader?.querySelector('h2')?.textContent).toBe('Tools');
+    expect(sidebar?.querySelector('.tools-sidebar-header')).toBeNull();
+    const sidebarNav = sidebar?.querySelector('.tools-sidebar-nav');
+    expect(sidebarNav).not.toBeNull();
+    expect(sidebar?.firstElementChild).toBe(sidebarNav);
     const detailPane = container.querySelector('.tools-detail-pane');
     expect(detailPane).not.toBeNull();
     expect(detailPane?.classList.contains('panel-right')).toBe(true);

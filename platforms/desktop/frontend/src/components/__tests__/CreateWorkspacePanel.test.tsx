@@ -73,13 +73,16 @@ describe('CreateWorkspacePanel', () => {
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-live');
 
-    // Live Tab active
+    // Slider and Live Tab active
+    const slider = shell.querySelector('.create-tab-slider') as HTMLElement;
+    expect(slider).not.toBeNull();
+    expect(slider.style.transform).toBe('translateX(calc(0 * (100% + 4px)))');
+
     const liveTab = screen.getByTestId('create-tab-live');
     expect(liveTab.getAttribute('aria-selected')).toBe('true');
     expect(liveTab.classList.contains('active')).toBe(true);
     expect(screen.getByTestId('pane-live').style.display).toBe('');
     expect(screen.getByTestId('live-record-component')).toBeDefined();
-
     // Batch Tab inactive (body stays mounted for persistent state, but hidden)
     const batchTab = screen.getByTestId('create-tab-batch');
     expect(batchTab.getAttribute('aria-selected')).toBe('false');
@@ -104,13 +107,16 @@ describe('CreateWorkspacePanel', () => {
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-batch');
 
-    // Batch Tab active
+    // Slider and Batch Tab active
+    const slider = shell.querySelector('.create-tab-slider') as HTMLElement;
+    expect(slider).not.toBeNull();
+    expect(slider.style.transform).toBe('translateX(calc(1 * (100% + 4px)))');
+
     const batchTab = screen.getByTestId('create-tab-batch');
     expect(batchTab.getAttribute('aria-selected')).toBe('true');
     expect(batchTab.classList.contains('active')).toBe(true);
     expect(screen.getByTestId('pane-batch').style.display).toBe('');
     expect(screen.getByTestId('batch-import-component')).toBeDefined();
-
     // Live Tab inactive (body stays mounted for background recording, but hidden)
     const liveTab = screen.getByTestId('create-tab-live');
     expect(liveTab.getAttribute('aria-selected')).toBe('false');
@@ -152,5 +158,25 @@ describe('CreateWorkspacePanel', () => {
     const badge = batchTab.querySelector('.create-tab-badge.batch-count');
     expect(badge).not.toBeNull();
     expect(badge?.textContent).toBe('2');
+  });
+
+  it('supports arrow key navigation to switch between tabs', () => {
+    render(<CreateWorkspacePanel />);
+
+    const tablist = screen.getByRole('tablist');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowDown' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('batch');
+
+    testContext.transcriptState.setIngestionFocus.mockClear();
+
+    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowUp' });
+    expect(testContext.transcriptState.setIngestionFocus).toHaveBeenCalledWith('live');
   });
 });

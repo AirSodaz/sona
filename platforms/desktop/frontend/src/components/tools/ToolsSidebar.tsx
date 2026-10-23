@@ -118,10 +118,6 @@ export function ToolsSidebar(): React.JSX.Element {
       className="tools-sidebar panel-left"
       aria-label={t('tools.title', { defaultValue: 'Tools' })}
     >
-      <div className="panel-header tools-sidebar-header">
-        <h2>{t('panel.tools', { defaultValue: 'Tools' })}</h2>
-      </div>
-
       <div
         className="tools-sidebar-nav"
         role="tablist"

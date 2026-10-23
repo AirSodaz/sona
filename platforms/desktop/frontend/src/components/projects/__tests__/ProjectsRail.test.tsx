@@ -37,11 +37,11 @@ describe('ProjectsRail', () => {
   it('renders section header with project group title and create button', () => {
     const { container } = render(<ProjectsRail {...defaultProps} />);
 
-    // Header has workspace eyebrow and NO create button
-    const railHeader = container.querySelector('.projects-rail-header');
-    expect(railHeader).not.toBeNull();
-    expect(railHeader?.querySelector('.projects-rail-create')).toBeNull();
-
+    // Redundant header is removed; scopes renders directly at the top
+    expect(container.querySelector('.projects-rail-header')).toBeNull();
+    const railScopes = container.querySelector('.projects-rail-scopes');
+    expect(railScopes).not.toBeNull();
+    expect(container.querySelector('.projects-rail')?.firstElementChild).toBe(railScopes);
     // Section header has section title and create button
     const sectionHeader = container.querySelector('.projects-rail-section-header');
     expect(sectionHeader).not.toBeNull();

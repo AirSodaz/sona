@@ -207,14 +207,6 @@ export function ProjectsRail({
 
   return (
     <aside className="projects-rail">
-      <div className="projects-rail-header">
-        <div className="projects-rail-title-row">
-          <div className="projects-rail-eyebrow">
-            {t('panel.projects', { defaultValue: 'Workspace' })}
-          </div>
-        </div>
-      </div>
-
       <div className="projects-rail-scopes">
         <button
           type="button"
