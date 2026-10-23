@@ -275,10 +275,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "배경 색상",
     "background_opacity": "배경 불투명도",
+    "recording": "녹음 중",
     "subtitle_settings": "자막 설정"
   },
   "batch": {
     "items": "개",
+    "processing": "처리 중",
     "processing_title": "오디오 처리 중",
     "processing_desc": "파일을 전사하는 동안 잠시 기다려 주세요...",
     "transcribing": "전사 중...",

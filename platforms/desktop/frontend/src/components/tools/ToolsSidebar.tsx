@@ -17,7 +17,7 @@ interface ToolItemDef {
   defaultDesc: string;
   Icon: React.ComponentType<{ size?: number; className?: string }>;
   statusText: string;
-  statusType: 'active' | 'warning' | 'inactive';
+  statusType: 'active' | 'warning' | 'inactive' | 'error';
 }
 
 export function ToolsSidebar(): React.JSX.Element {
@@ -71,7 +71,13 @@ export function ToolsSidebar(): React.JSX.Element {
             : readiness.state === 'preparing'
               ? t('common.preparing', { defaultValue: 'Preparing...' })
               : t('tools.status_needs_config', { defaultValue: 'Needs Config' }),
-      statusType: !isVtActive ? 'inactive' : readiness.state === 'ready' ? 'active' : 'warning',
+      statusType: !isVtActive
+        ? 'inactive'
+        : readiness.state === 'ready'
+          ? 'active'
+          : readiness.state === 'failed'
+            ? 'error'
+            : 'warning',
     },
     {
       id: 'api_server',

@@ -273,10 +273,12 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   // --- Runtime ---
   setMode: (mode) => {
     if ((mode as string) === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       set({
         mode: 'create',
         ingestionFocus: 'live',
-        activeSessionId: get().recordingSessionId || 'default',
+        activeSessionId: targetSessionId,
       });
       return;
     }
@@ -290,9 +292,12 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     if (mode === 'create') {
       const focus = get().ingestionFocus;
       const activeItemId = focus === 'batch' ? activeBatchItemIdResolver?.() : null;
+      const recId = get().recordingSessionId;
       const targetSessionId =
         focus === 'live'
-          ? get().recordingSessionId || 'default'
+          ? recId && get().sessions[recId]
+            ? recId
+            : 'default'
           : activeItemId && get().sessions[activeItemId]
             ? activeItemId
             : 'default';
@@ -307,9 +312,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   },
   setIngestionFocus: (ingestionFocus) => {
     if (ingestionFocus === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       set({
         ingestionFocus,
-        activeSessionId: get().recordingSessionId || 'default',
+        activeSessionId: targetSessionId,
       });
       return;
     }

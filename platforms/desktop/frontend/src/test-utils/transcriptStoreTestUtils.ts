@@ -250,6 +250,7 @@ export function resetTranscriptStores(): void {
     },
     mode: 'create',
     ingestionFocus: 'live',
+    recordingSessionId: null,
     processingStatus: 'idle',
     processingProgress: 0,
     isRecording: false,

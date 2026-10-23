@@ -275,10 +275,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "背景色",
     "background_opacity": "背景の不透明度",
+    "recording": "録音中",
     "subtitle_settings": "字幕設定"
   },
   "batch": {
     "items": "件",
+    "processing": "処理中",
     "processing_title": "オーディオの処理",
     "processing_desc": "ファイルを文字起こししています。しばらくお待ちください...",
     "transcribing": "文字起こし中...",

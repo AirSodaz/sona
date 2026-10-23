@@ -464,7 +464,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       const audioUrl = item.audioUrl || session.audioUrl;
       useTranscriptStore.setState({
         activeSessionId: id,
-        ingestionFocus: 'batch',
         sessions: {
           ...transcriptState.sessions,
           [id]: {

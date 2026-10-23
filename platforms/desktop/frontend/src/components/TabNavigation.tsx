@@ -33,7 +33,9 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         if (newMode === 'create') {
           const ingestionFocus = useTranscriptStore.getState().ingestionFocus;
           if (ingestionFocus === 'batch') {
-            document.querySelector('.queue-list')?.scrollTo({ top: 0, behavior: 'smooth' });
+            document
+              .querySelector('.queue-grouped-list, .create-pane-batch, .queue-list')
+              ?.scrollTo({ top: 0, behavior: 'smooth' });
           }
         } else if (newMode === 'projects') {
           document.querySelector('.projects-main-scroll')?.scrollTo({ top: 0, behavior: 'smooth' });

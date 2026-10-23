@@ -275,10 +275,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "背景顏色",
     "background_opacity": "背景不透明度",
+    "recording": "錄音中",
     "subtitle_settings": "字幕設定"
   },
   "batch": {
     "items": "項",
+    "processing": "處理中",
     "processing_title": "正在處理音訊",
     "processing_desc": "請稍候，正在轉錄您的檔案...",
     "transcribing": "正在轉錄...",

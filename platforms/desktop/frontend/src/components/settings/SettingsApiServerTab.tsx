@@ -289,7 +289,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
     : isError
       ? t('common.error', { defaultValue: 'Error' })
       : isRunning
-        ? `Running :${config.httpServerPort ?? 14200}`
+        ? `${t('settings.api_server.state_running', { defaultValue: 'Running' })} :${config.httpServerPort ?? 14200}`
         : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' });
   return (
     <SettingsTabContainer id="tools-panel-api_server" ariaLabelledby="tools-tab-api_server">

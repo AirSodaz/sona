@@ -54,6 +54,7 @@ describe('ToolsView', () => {
     vi.clearAllMocks();
     useToolsStore.setState({ activeTool: 'subtitles' });
     useTranscriptRuntimeStore.setState({ isCaptionMode: false });
+    useMcpStore.setState({ status: null, error: null });
     useConfigStore.setState({
       config: buildTestConfig({
         voiceTypingEnabled: false,

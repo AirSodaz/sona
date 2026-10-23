@@ -245,7 +245,7 @@ export function SettingsMcpTab(): React.JSX.Element {
                 : pingLatency !== null
                   ? pingLatency >= 0
                     ? `${pingLatency}ms`
-                    : t('common.failed', { defaultValue: 'Failed' })
+                    : t('settings.mcp.ping_failed', { defaultValue: 'Failed' })
                   : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
             </span>
           </button>

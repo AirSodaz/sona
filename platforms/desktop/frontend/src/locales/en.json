@@ -275,10 +275,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "Background Color",
     "background_opacity": "Background Opacity",
+    "recording": "Recording",
     "subtitle_settings": "Subtitle Settings"
   },
   "batch": {
     "items": "items",
+    "processing": "Processing",
     "processing_title": "Processing Audio",
     "processing_desc": "Please wait while we transcribe your file...",
     "transcribing": "Transcribing...",
