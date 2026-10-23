@@ -442,8 +442,8 @@ export function Settings({
 
   const handleSelectResult = useCallback(
     (hit: SettingsSearchHit) => {
-      if (hit.tab === 'subtitle' && hit.subTab) {
-        setMigratedSubtitleTool(hit.subTab as ToolId);
+      if (hit.tab === 'subtitle') {
+        setMigratedSubtitleTool((hit.subTab as ToolId) || 'subtitles');
       }
       navigateToTab(hit.tab);
       navRequestIdRef.current += 1;
@@ -463,15 +463,18 @@ export function Settings({
       const maxDurationMs = 2000;
 
       const findAndScroll = () => {
-        let el = document.getElementById(targetId);
-        const isSyncDisabledCardPresent =
-          hit.tab === 'sync' && Boolean(document.querySelector('.sync-disabled-feature-card'));
-        if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
-          el = document.getElementById('settings-sync-toggle');
-        }
-        if (!el && (hit.tab === 'subtitle' || hit.tab === 'api_server' || hit.tab === 'mcp')) {
+        const modal = modalRef.current;
+        let el: HTMLElement | null = null;
+        if (hit.tab === 'subtitle' || hit.tab === 'api_server' || hit.tab === 'mcp') {
           const tool = hit.tab === 'subtitle' ? hit.subTab || 'subtitles' : hit.tab;
-          el = document.getElementById(`settings-panel-migrated-${tool}`);
+          el = modal?.querySelector<HTMLElement>(`#settings-panel-migrated-${tool}`) ?? null;
+        } else {
+          el = modal?.querySelector<HTMLElement>(`#${targetId}`) ?? null;
+          const isSyncDisabledCardPresent =
+            hit.tab === 'sync' && Boolean(modal?.querySelector('.sync-disabled-feature-card'));
+          if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
+            el = modal?.querySelector<HTMLElement>('#settings-sync-toggle') ?? null;
+          }
         }
         if (el && !el.closest('[hidden]')) {
           scrollRafRef.current = null;
@@ -481,7 +484,7 @@ export function Settings({
         } else {
           scrollRafRef.current = null;
           const fallbackEl = hit.fallbackTargetId
-            ? document.getElementById(hit.fallbackTargetId)
+            ? (modal?.querySelector<HTMLElement>(`#${hit.fallbackTargetId}`) ?? null)
             : null;
           if (fallbackEl && !fallbackEl.closest('[hidden]')) {
             applyHighlight(fallbackEl);

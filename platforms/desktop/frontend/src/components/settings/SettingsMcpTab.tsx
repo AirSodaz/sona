@@ -82,6 +82,12 @@ export function SettingsMcpTab(): React.JSX.Element {
     void fetchClientConfigs();
   }, [fetchStatus, fetchLogs, fetchTools, fetchClientConfigs]);
 
+  useEffect(() => {
+    if (!status?.running) {
+      setPingLatency(null);
+    }
+  }, [status?.running]);
+
   const handleCopy = useCallback((text: string, key: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -92,6 +98,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
   const handleToggleEnabled = useCallback(
     async (nextEnabled: boolean) => {
+      setPingLatency(null);
       setConfig({ mcpEnabled: nextEnabled });
       await toggleEnabled(nextEnabled);
     },
@@ -99,6 +106,7 @@ export function SettingsMcpTab(): React.JSX.Element {
   );
 
   const handleRestart = useCallback(async () => {
+    setPingLatency(null);
     await toggleEnabled(false);
     await toggleEnabled(true);
   }, [toggleEnabled]);
@@ -245,7 +253,7 @@ export function SettingsMcpTab(): React.JSX.Element {
                 : pingLatency !== null
                   ? pingLatency >= 0
                     ? `${pingLatency}ms`
-                    : t('settings.mcp.ping_failed', { defaultValue: 'Failed' })
+                    : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })
                   : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
             </span>
           </button>
@@ -858,7 +866,7 @@ export function SettingsMcpTab(): React.JSX.Element {
             <button
               type="button"
               className="btn btn-secondary btn-xs"
-              disabled={isPinging || !status?.running}
+              disabled={!isEnabled || isPinging || !status?.running}
               onClick={(e) => {
                 e.stopPropagation();
                 void handlePing();

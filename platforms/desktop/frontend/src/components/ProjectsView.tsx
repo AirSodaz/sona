@@ -105,7 +105,6 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
-  const setIngestionFocus = useTranscriptRuntimeStore((state) => state.setIngestionFocus);
 
   const globalConfig = useConfigStore((state) => state.config);
   const setConfig = useConfigStore((state) => state.setConfig);
@@ -390,6 +389,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, [browseState.filteredAndSortedItems, historyItems, projectAssignmentIds]);
 
   useEffect(() => {
+    if (!isActive) return;
+
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
       queueMicrotask(() => {
         setSelectedHistoryId(null);
@@ -409,7 +410,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         clearActiveTranscriptSession({ clearAudio: true });
       }
     }
-  }, [effectiveSelectedHistoryId, selectedHistoryId]);
+  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {
@@ -786,13 +787,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             headerTitle={browseState.headerTitle}
             isScrolled={browseState.isScrolled}
             onOpenBatchImport={() => {
-              setMode('create');
-              setIngestionFocus('batch');
+              setMode('create', 'batch');
             }}
             onOpenProjectSettings={() => projectSettingsDraft.setIsSettingsOpen(true)}
             onStartLiveRecord={() => {
-              setMode('create');
-              setIngestionFocus('live');
+              setMode('create', 'live');
             }}
             showWorkflowActions={browseState.showWorkflowActions}
             isTrashScope={browseState.isTrashScope}

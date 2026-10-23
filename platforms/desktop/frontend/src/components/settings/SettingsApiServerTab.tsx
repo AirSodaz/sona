@@ -283,9 +283,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
       ? 'error'
       : isRunning
         ? 'active'
-        : 'inactive';
+        : 'warning';
   const statusText = !isEnabled
-    ? t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })
+    ? t('tools.status_disabled', { defaultValue: 'Disabled' })
     : isError
       ? t('common.error', { defaultValue: 'Error' })
       : isRunning

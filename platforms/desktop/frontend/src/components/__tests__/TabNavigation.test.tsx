@@ -75,7 +75,12 @@ describe('TabNavigation', () => {
     expect(tabs[2].getAttribute('aria-selected')).toBe('false');
     expect(tabs[2].textContent).toContain('Tools');
     expect(tabs[2].hasAttribute('data-tooltip')).toBe(false);
+    expect(tabs[0].getAttribute('tabindex')).toBe('0');
+    expect(tabs[1].getAttribute('tabindex')).toBe('-1');
+    expect(tabs[2].getAttribute('tabindex')).toBe('-1');
+    expect(tabs[2].hasAttribute('data-tooltip')).toBe(false);
   });
+
   it('scrolls projects containers to top when active Projects tab is clicked', () => {
     testContext.runtimeState.mode = 'projects';
     const mainScroll = document.createElement('div');
@@ -174,5 +179,44 @@ describe('TabNavigation', () => {
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
     expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
+  });
+
+  it('navigates tabs with horizontal arrow keys (ArrowRight, ArrowLeft, Home, End)', () => {
+    testContext.runtimeState.mode = 'create';
+    const { unmount } = render(<TabNavigation />);
+    const tablist = screen.getByRole('tablist');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowRight' });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('projects');
+
+    fireEvent.keyDown(tablist, { key: 'ArrowLeft' });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
+
+    fireEvent.keyDown(tablist, { key: 'End' });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('tools');
+
+    unmount();
+    testContext.runtimeState.setMode.mockClear();
+    testContext.runtimeState.mode = 'tools';
+    render(<TabNavigation />);
+    const tablistTools = screen.getByRole('tablist');
+
+    fireEvent.keyDown(tablistTools, { key: 'Home' });
+    expect(testContext.runtimeState.setMode).toHaveBeenCalledWith('create');
+  });
+
+  it('suppresses Ctrl+Tab when settings or panel modal overlay is open', () => {
+    testContext.runtimeState.mode = 'create';
+    const overlay = document.createElement('div');
+    overlay.className = 'panel-modal-overlay';
+    document.body.appendChild(overlay);
+
+    try {
+      render(<TabNavigation />);
+      fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+      expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
+    } finally {
+      overlay.remove();
+    }
   });
 });

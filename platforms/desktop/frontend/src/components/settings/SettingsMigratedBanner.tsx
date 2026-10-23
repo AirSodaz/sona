@@ -52,8 +52,12 @@ export function SettingsMigratedBanner({
   };
 
   return (
-    <SettingsTabContainer id={`settings-panel-migrated-${tool}`}>
+    <SettingsTabContainer
+      id={`settings-panel-migrated-${tool}`}
+      ariaLabelledby={`settings-migrated-heading-${tool}`}
+    >
       <SettingsPageHeader
+        id={`settings-migrated-heading-${tool}`}
         icon={meta.icon}
         title={toolName}
         description={t('tools.migrated_notice_desc', {

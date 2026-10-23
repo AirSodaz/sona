@@ -84,7 +84,7 @@ describe('ToolsView', () => {
     expect(sidebar?.querySelector('.tools-sidebar-header')).toBeNull();
     const sidebarNav = sidebar?.querySelector('.tools-sidebar-nav');
     expect(sidebarNav).not.toBeNull();
-    expect(sidebarNav?.getAttribute('aria-label')).toBe('Tools');
+    expect(sidebarNav?.getAttribute('aria-label')).toBe('Tools list');
     expect(sidebar?.firstElementChild).toBe(sidebarNav);
     const detailPane = container.querySelector('.tools-detail-pane');
     expect(detailPane).not.toBeNull();

@@ -279,7 +279,7 @@ describe('SettingsMcpTab', () => {
       fireEvent.click(pingBtn);
     });
 
-    expect(screen.getByText('Failed')).toBeDefined();
+    expect(screen.getAllByText('Ping failed').length).toBeGreaterThanOrEqual(1);
   });
 
   it('renders Stopped badge with warning tone when enabled but not running', async () => {

@@ -178,16 +178,25 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
           updateTranscript: (...args) => historyService.updateTranscript(...args),
         },
-        getTranscriptState: () => ({
-          config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
-          segments: useTranscriptSessionStore.getState().segments,
-          setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
-          setSegments: setTranscriptSegments,
-          activeSessionId: useTranscriptStore.getState().activeSessionId,
-          setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => {
-            useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
-          },
-        }),
+        getTranscriptState: () => {
+          const recSessionId =
+            recordSessionIdRef.current || useTranscriptStore.getState().recordingSessionId;
+          const sessions = useTranscriptStore.getState().sessions;
+          const recordingSegments = recSessionId ? sessions[recSessionId]?.segments : undefined;
+          return {
+            config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
+            segments: recordingSegments ?? useTranscriptSessionStore.getState().segments,
+            setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
+            setSegments: setTranscriptSegments,
+            activeSessionId:
+              recordSessionIdRef.current ||
+              useTranscriptStore.getState().recordingSessionId ||
+              useTranscriptStore.getState().activeSessionId,
+            setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => {
+              useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
+            },
+          };
+        },
         getActiveProjectId: () => useProjectStore.getState().activeProjectId,
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
@@ -222,7 +231,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
               globalConfig: effectiveConfig,
               baseFileName: `Recording-${historyId}`,
               onSegmentsUpdated: (updatedSegments) => {
-                useTranscriptSessionStore.getState().setSegments(updatedSegments);
+                useTranscriptStore.getState().setSegmentsForSession(historyId, updatedSegments);
               },
             });
             return result.segments;
@@ -413,8 +422,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         return false;
       }
       const onboardingStore = useOnboardingStore.getState();
-      useTranscriptRuntimeStore.getState().setMode('create');
-      useTranscriptStore.getState().setIngestionFocus('live');
+      useTranscriptRuntimeStore.getState().setMode('create', 'live');
       onboardingStore.reopen(
         getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
         'live_record'

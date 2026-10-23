@@ -16,7 +16,7 @@ interface TabNavigationProps {
 const TAB_MODES: AppMode[] = ['create', 'projects', 'tools'];
 
 /**
- * Tab navigation component for switching between application modes (Live Record, Batch Import).
+ * Tab navigation component for switching between application modes (Create, Projects, Tools).
  *
  * @param props - Component props.
  * @return The navigation tabs.
@@ -54,8 +54,8 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'Tab') {
         // Check if any modal/dialog is open
-        const isSettingsOpen = !!document.querySelector('.settings-overlay');
-        if (isSettingsOpen || isAnyDialogOpen()) return;
+        const isModalOpen = !!document.querySelector('.settings-overlay, .panel-modal-overlay');
+        if (isModalOpen || isAnyDialogOpen()) return;
 
         e.preventDefault();
         const currentIndex = TAB_MODES.indexOf(mode);
@@ -71,11 +71,34 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [handleTabChange, mode]);
 
+  const handleNavKeyDown = (e: React.KeyboardEvent) => {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    e.preventDefault();
+    const currentIndex = TAB_MODES.indexOf(mode);
+    const effectiveIndex = Math.max(currentIndex, 0);
+    let nextIndex = effectiveIndex;
+    if (e.key === 'ArrowRight') {
+      nextIndex = (effectiveIndex + 1) % TAB_MODES.length;
+    } else if (e.key === 'ArrowLeft') {
+      nextIndex = (effectiveIndex - 1 + TAB_MODES.length) % TAB_MODES.length;
+    } else if (e.key === 'Home') {
+      nextIndex = 0;
+    } else if (e.key === 'End') {
+      nextIndex = TAB_MODES.length - 1;
+    }
+    const nextMode = TAB_MODES[nextIndex];
+    if (nextMode) {
+      handleTabChange(nextMode);
+      document.getElementById(`tab-button-${nextMode}`)?.focus();
+    }
+  };
   return (
     <div
       className={`tab-navigation ${className}`}
       role="tablist"
       aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
+      onKeyDown={handleNavKeyDown}
     >
       <div
         className="tab-slider"
@@ -85,27 +108,36 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         aria-hidden="true"
       />
       <button
+        id="tab-button-create"
+        type="button"
         className={`tab-button ${mode === 'create' ? 'active' : ''}`}
         onClick={() => handleTabChange('create')}
         aria-selected={mode === 'create'}
+        tabIndex={mode === 'create' ? 0 : -1}
         role="tab"
       >
         <SquarePen size={16} aria-hidden="true" />
         <span>{t('panel.create', { defaultValue: 'Create' })}</span>
       </button>
       <button
+        id="tab-button-projects"
+        type="button"
         className={`tab-button ${mode === 'projects' ? 'active' : ''}`}
         onClick={() => handleTabChange('projects')}
         aria-selected={mode === 'projects'}
+        tabIndex={mode === 'projects' ? 0 : -1}
         role="tab"
       >
         <BookIcon />
         <span>{t('panel.projects', { defaultValue: 'Projects' })}</span>
       </button>
       <button
+        id="tab-button-tools"
+        type="button"
         className={`tab-button ${mode === 'tools' ? 'active' : ''}`}
         onClick={() => handleTabChange('tools')}
         aria-selected={mode === 'tools'}
+        tabIndex={mode === 'tools' ? 0 : -1}
         role="tab"
       >
         <Wrench size={16} aria-hidden="true" />

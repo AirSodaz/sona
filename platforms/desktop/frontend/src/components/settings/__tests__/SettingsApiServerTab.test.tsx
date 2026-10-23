@@ -257,4 +257,30 @@ describe('SettingsApiServerTab', () => {
       expect(screen.getByText(/Port 14200 already bound/)).toBeDefined();
     });
   });
+
+  it('copies formatted endpoint URL to clipboard when Copy Endpoint button is clicked', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    currentConfig = buildTestConfig({
+      httpServerEnabled: true,
+      httpServerHost: '127.0.0.1',
+      httpServerPort: 14200,
+    });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    const copyBtn = screen.getByRole('button', { name: /Copy Endpoint/i });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(writeTextMock).toHaveBeenCalledWith('http://127.0.0.1:14200');
+  });
 });

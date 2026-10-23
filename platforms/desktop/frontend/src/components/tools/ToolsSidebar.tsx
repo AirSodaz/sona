@@ -3,7 +3,16 @@ import type React from 'react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
-import { useApiServerConfig, useMcpConfig, useVoiceTypingConfig } from '../../stores/configStore';
+import {
+  isAsrRequestConfigured,
+  resolveAsrTranscriptionRequest,
+} from '../../services/asrConfigService';
+import {
+  useApiServerConfig,
+  useConfigStore,
+  useMcpConfig,
+  useVoiceTypingConfig,
+} from '../../stores/configStore';
 import { useMcpStore } from '../../stores/mcpStore';
 import { useToolsStore } from '../../stores/toolsStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
@@ -26,6 +35,10 @@ export function ToolsSidebar(): React.JSX.Element {
   const setActiveTool = useToolsStore((state) => state.setActiveTool);
 
   const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+  const globalConfig = useConfigStore((state) => state.config);
+  const isCaptionConfigured = isAsrRequestConfigured(
+    resolveAsrTranscriptionRequest(globalConfig, 'caption')
+  );
   const vtConfig = useVoiceTypingConfig();
   const readiness = useVoiceTypingReadiness();
   const apiConfig = useApiServerConfig();
@@ -34,9 +47,8 @@ export function ToolsSidebar(): React.JSX.Element {
 
   const isVtActive = Boolean(vtConfig.voiceTypingEnabled);
   const isApiActive = Boolean(apiConfig.httpServerEnabled);
-  const isMcpEnabled = Boolean(mcpConfig.mcpEnabled);
+  const isMcpEnabled = Boolean(mcpConfig.mcpEnabled ?? mcpStatus?.enabled ?? true);
   const isMcpRunning = Boolean(mcpStatus?.running);
-
   useEffect(() => {
     if (!mcpStatus) {
       void useMcpStore.getState().fetchStatus();
@@ -50,10 +62,12 @@ export function ToolsSidebar(): React.JSX.Element {
       descKey: 'tools.subtitles_desc',
       defaultDesc: 'Desktop floating bilingual subtitles',
       Icon: Subtitles,
-      statusText: isCaptionMode
-        ? t('tools.status_running', { defaultValue: 'Running' })
-        : t('tools.status_stopped', { defaultValue: 'Stopped' }),
-      statusType: isCaptionMode ? 'active' : 'inactive',
+      statusText: !isCaptionMode
+        ? t('tools.status_stopped', { defaultValue: 'Stopped' })
+        : !isCaptionConfigured
+          ? t('tools.status_needs_config', { defaultValue: 'Needs Config' })
+          : t('tools.status_running', { defaultValue: 'Running' }),
+      statusType: !isCaptionMode ? 'inactive' : !isCaptionConfigured ? 'warning' : 'active',
     },
     {
       id: 'voice_typing',
@@ -108,12 +122,14 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
   ];
+  const selectedIndex = tools.findIndex((tool) => tool.id === activeTool);
+  const effectiveIndex = Math.max(selectedIndex, 0);
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.altKey || e.ctrlKey || e.metaKey) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
-    const currentIndex = tools.findIndex((tool) => tool.id === activeTool);
-    if (currentIndex === -1) return;
+    const currentIndex = Math.max(selectedIndex, 0);
 
     let nextIndex = currentIndex;
     if (e.key === 'ArrowDown') {
@@ -136,16 +152,16 @@ export function ToolsSidebar(): React.JSX.Element {
   return (
     <aside
       className="tools-sidebar panel-left"
-      aria-label={t('tools.title', { defaultValue: 'Tools' })}
+      aria-label={t('tools.sidebar_title', { defaultValue: 'Tools sidebar' })}
     >
       <div
         className="tools-sidebar-nav"
         role="tablist"
-        aria-label={t('tools.title', { defaultValue: 'Tools' })}
+        aria-label={t('tools.tabs_title', { defaultValue: 'Tools list' })}
         aria-orientation="vertical"
         onKeyDown={handleKeyDown}
       >
-        {tools.map((tool) => {
+        {tools.map((tool, index) => {
           const isSelected = activeTool === tool.id;
           const Icon = tool.Icon;
 
@@ -157,7 +173,7 @@ export function ToolsSidebar(): React.JSX.Element {
               role="tab"
               aria-selected={isSelected}
               aria-controls={`tools-panel-${tool.id}`}
-              tabIndex={isSelected ? 0 : -1}
+              tabIndex={index === effectiveIndex ? 0 : -1}
               className={`tools-sidebar-item ${isSelected ? 'active' : ''}`}
               onClick={() => setActiveTool(tool.id)}
             >

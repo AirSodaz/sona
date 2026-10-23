@@ -87,4 +87,26 @@ describe('ToolHeroHeader', () => {
     const actionButton = screen.getByRole('button', { name: 'Copy Endpoint' });
     expect(actionButton).toBeDefined();
   });
+
+  it('forwards disabled prop to Switch and prevents toggling', () => {
+    const handleToggle = vi.fn();
+    render(
+      <ToolHeroHeader
+        icon={<Wrench />}
+        title="Disabled Test"
+        statusText="Disabled"
+        statusTone="inactive"
+        enabled={false}
+        disabled={true}
+        onToggle={handleToggle}
+        switchAriaLabel="Toggle Disabled"
+      />
+    );
+
+    const switchEl = screen.getByRole('switch', { name: 'Toggle Disabled' });
+    expect(switchEl.getAttribute('aria-disabled')).toBe('true');
+
+    fireEvent.click(switchEl);
+    expect(handleToggle).not.toHaveBeenCalled();
+  });
 });

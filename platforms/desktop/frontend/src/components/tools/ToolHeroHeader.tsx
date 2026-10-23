@@ -11,6 +11,7 @@ export interface ToolHeroHeaderProps {
   statusText: string;
   statusTone: ToolHeroStatusTone;
   enabled: boolean;
+  disabled?: boolean;
   onToggle: (nextState: boolean) => void | Promise<void>;
   switchAriaLabel: string;
   actions?: React.ReactNode;
@@ -24,6 +25,7 @@ export function ToolHeroHeader({
   statusText,
   statusTone,
   enabled,
+  disabled,
   onToggle,
   switchAriaLabel,
   actions,
@@ -49,6 +51,7 @@ export function ToolHeroHeader({
         </div>
         <Switch
           checked={enabled}
+          disabled={disabled}
           onChange={(val) => {
             void onToggle(val);
           }}

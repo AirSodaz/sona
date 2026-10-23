@@ -133,6 +133,7 @@ function SortableProjectItem({
         type="button"
         className="projects-rail-menu-btn"
         aria-label={t('common.more_options', { defaultValue: 'More options' })}
+        aria-haspopup="menu"
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();

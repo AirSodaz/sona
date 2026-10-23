@@ -239,6 +239,7 @@
   overscroll-behavior-y: contain;
   padding: 32px 48px;
   box-sizing: border-box;
+  outline: none;
 }
 
 .tools-detail-pane .settings-tab-container {

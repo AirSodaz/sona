@@ -389,11 +389,12 @@ describe('Transcript Stores', () => {
     expect(untouchedSessionB.segments[0].text).toBe('Original text B');
   });
 
-  it('synchronizes activeSessionId when setMode is called with create', () => {
+  it('preserves activeSessionId during background recording and synchronizes when switching modes', () => {
     const realStore = useCanonicalTranscriptStore;
 
     // Set up a live recording session
     realStore.setState({
+      activeSessionId: 'live-rec-123',
       recordingSessionId: 'live-rec-123',
       ingestionFocus: 'live',
       sessions: {
@@ -406,14 +407,52 @@ describe('Transcript Stores', () => {
       },
     });
 
-    // Switch to projects mode -> activeSessionId resets to default
+    // Switch to projects mode -> activeSessionId is NOT clobbered to default
     realStore.getState().setMode('projects');
     expect(realStore.getState().mode).toBe('projects');
-    expect(realStore.getState().activeSessionId).toBe('default');
+    expect(realStore.getState().activeSessionId).toBe('live-rec-123');
+
+    // Switch to tools mode -> activeSessionId remains preserved
+    realStore.getState().setMode('tools');
+    expect(realStore.getState().mode).toBe('tools');
+    expect(realStore.getState().activeSessionId).toBe('live-rec-123');
 
     // Switch back to create mode -> activeSessionId restores to recordingSessionId
     realStore.getState().setMode('create');
     expect(realStore.getState().mode).toBe('create');
     expect(realStore.getState().activeSessionId).toBe('live-rec-123');
+  });
+
+  it('retains completed recording session across mode and focus switches', () => {
+    const realStore = useCanonicalTranscriptStore;
+
+    // Set up a completed recording session (recordingSessionId is null)
+    realStore.setState({
+      activeSessionId: 'completed-rec-456',
+      recordingSessionId: null,
+      ingestionFocus: 'live',
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        'completed-rec-456': {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: 'completed-rec-456',
+          title: 'Completed Recording',
+        },
+      },
+    });
+
+    // Switching mode to projects does not clobber activeSessionId
+    realStore.getState().setMode('projects');
+    expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
+
+    // Returning to create mode with live focus retains the completed recording session
+    realStore.getState().setMode('create', 'live');
+    expect(realStore.getState().mode).toBe('create');
+    expect(realStore.getState().ingestionFocus).toBe('live');
+    expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
+
+    // Calling setIngestionFocus('live') retains the completed recording session
+    realStore.getState().setIngestionFocus('live');
+    expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
   });
 });
