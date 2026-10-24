@@ -1100,6 +1100,10 @@ fn resolves_canonical_aliases_and_suggestions() {
         Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
     );
     assert_eq!(
+        canonical_preset_model_id("canary-1b-fp16"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
         canonical_preset_model_id("canary-1b-fp32"),
         Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
     );
@@ -1177,4 +1181,44 @@ fn all_preset_models_have_valid_catalog_enums() {
     let snapshot =
         build_model_catalog_snapshot_with_installed_ids(Path::new("/dummy"), &HashSet::new());
     assert_eq!(snapshot.models.len(), presets.len());
+}
+
+#[test]
+fn canary_presets_are_verified_bundles() {
+    for (id, expected_encoder, expected_decoder) in [
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+            "encoder.onnx",
+            "decoder.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr",
+            "encoder.fp16.onnx",
+            "decoder.fp16.onnx",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "canary");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert_eq!(model.languages, vec!["de", "en", "es", "fr"]);
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+    }
 }

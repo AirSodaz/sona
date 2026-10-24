@@ -235,7 +235,7 @@ fn offline_decode_result_reports_empty_text() {
 
 #[test]
 fn offline_recognizer_creation_with_corrupt_files_fails_cleanly_without_abort() {
-    let temp_dir = std::env::temp_dir().join(format!("sona-corrupt-test-{}", std::process::id()));
+    let temp_dir = std::env::temp_dir().join(format!("sona-corrupt-test-{}", uuid::Uuid::new_v4()));
     let _ = std::fs::create_dir_all(&temp_dir);
 
     let encoder = temp_dir.join("encoder.onnx");

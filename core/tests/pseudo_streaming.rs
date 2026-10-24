@@ -315,3 +315,128 @@ async fn pseudo_streaming_empty_durations_falls_back_to_synthesize() {
 
     session.stop().await.unwrap();
 }
+
+#[tokio::test]
+async fn pseudo_streaming_explicit_durations_are_preserved() {
+    let speech_flag = Arc::new(AtomicBool::new(true));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-pipeline".to_string(),
+        decoder: Arc::new(DurationsTestDecoder {
+            return_empty_durations: false,
+        }),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: None,
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        assert!(!updates.is_empty(), "Should have emitted transcript");
+        let seg = &updates[0].update.upsert_segments[0];
+        assert_eq!(
+            seg.durations,
+            Some(vec![0.35, 0.45]),
+            "matching explicit durations must be preserved"
+        );
+    }
+
+    session.stop().await.unwrap();
+}
+
+struct MismatchedDurationsTestDecoder;
+
+impl PseudoStreamDecoder for MismatchedDurationsTestDecoder {
+    fn decode(
+        &self,
+        _audio_samples: &[f32],
+        _stage: DecodeStage,
+    ) -> Result<Option<PseudoStreamDecodeResult>, AsrPortError> {
+        Ok(Some(PseudoStreamDecodeResult {
+            text: "word1 word2".to_string(),
+            tokens: Some(vec!["word1".to_string(), "word2".to_string()]),
+            timestamps: Some(vec![0.02, 0.08]),
+            durations: Some(vec![0.99]),
+        }))
+    }
+}
+
+#[tokio::test]
+async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
+    let speech_flag = Arc::new(AtomicBool::new(true));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-pipeline".to_string(),
+        decoder: Arc::new(MismatchedDurationsTestDecoder),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: None,
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        assert!(!updates.is_empty(), "Should have emitted transcript");
+        let seg = &updates[0].update.upsert_segments[0];
+        assert!(
+            seg.durations.is_some(),
+            "durations must be synthesized when decoder returned mismatched vector"
+        );
+        let durs = seg.durations.as_ref().unwrap();
+        assert_eq!(durs.len(), 2);
+        assert_ne!(durs, &vec![0.99]);
+        assert!(durs[0] > 0.0);
+        assert!(durs[1] > 0.0);
+    }
+
+    session.stop().await.unwrap();
+}

@@ -188,6 +188,10 @@ impl SafeSpeakerEmbeddingManager {
             }
 
             let result = &*r;
+            if result.count <= 0 || result.matches.is_null() {
+                sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerFreeBestMatches(r);
+                return Vec::new();
+            }
             let matches = std::slice::from_raw_parts(result.matches, result.count as usize)
                 .iter()
                 .map(|m| SpeakerEmbeddingMatch {

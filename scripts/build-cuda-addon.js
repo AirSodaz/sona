@@ -211,6 +211,9 @@ function downloadSherpaOnnxCuda({
   }
   fs.mkdirSync(cacheDir, { recursive: true });
 
+  if (cudaVersion.startsWith('11')) {
+    console.warn('[sherpa-onnx CUDA] Warning: sherpa-onnx 2.0.0 does not publish CUDA 11 prebuilt assets.');
+  }
   const cuMajor = cudaVersion.startsWith('11') ? '11' : (cudaVersion.startsWith('13') ? '13' : '12');
 
   if (normPlatform === 'windows-x86_64') {
@@ -457,14 +460,23 @@ function stageCudaAddonFiles({
   const copiedFiles = [];
 
   // 1. Copy sherpa-onnx and ONNX Runtime GPU libraries
-  if (ortLibDir && fs.existsSync(ortLibDir)) {
-    const ortEntries = fs.readdirSync(ortLibDir);
-    for (const file of ortEntries) {
-      if (/\.(?:dll|so(?:\.\d+)*)$/iu.test(file)) {
-        const src = path.join(ortLibDir, file);
-        const dest = path.join(stagedDir, file);
-        fs.copyFileSync(src, dest);
-        copiedFiles.push(file);
+  const ortDirsToScan = [ortLibDir];
+  if (ortLibDir) {
+    const siblingBin = path.join(path.dirname(ortLibDir), 'bin');
+    if (fs.existsSync(siblingBin)) {
+      ortDirsToScan.push(siblingBin);
+    }
+  }
+  for (const scanDir of ortDirsToScan) {
+    if (scanDir && fs.existsSync(scanDir)) {
+      const ortEntries = fs.readdirSync(scanDir);
+      for (const file of ortEntries) {
+        if (/\.(?:dll|so(?:\.\d+)*)$/iu.test(file) && !copiedFiles.includes(file)) {
+          const src = path.join(scanDir, file);
+          const dest = path.join(stagedDir, file);
+          fs.copyFileSync(src, dest);
+          copiedFiles.push(file);
+        }
       }
     }
   }

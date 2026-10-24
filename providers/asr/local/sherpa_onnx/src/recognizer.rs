@@ -327,12 +327,20 @@ pub fn build_model_config(
             let encoder = get_path(&fc.encoder)?;
             let decoder = get_path(&fc.decoder)?;
             let tokens = get_path(&fc.tokens)?;
-            let (src_lang, tgt_lang) =
-                if language == "auto" || language == "multilingual" || language.is_empty() {
-                    (String::new(), String::new())
-                } else {
-                    (language.to_string(), language.to_string())
-                };
+            let normalized_lang = language
+                .split(['-', '_'])
+                .next()
+                .unwrap_or(language)
+                .trim()
+                .to_ascii_lowercase();
+            let (src_lang, tgt_lang) = if normalized_lang == "auto"
+                || normalized_lang == "multilingual"
+                || normalized_lang.is_empty()
+            {
+                (String::new(), String::new())
+            } else {
+                (normalized_lang.clone(), normalized_lang)
+            };
             Ok(ModelType::OfflineCanary {
                 encoder,
                 decoder,
@@ -948,14 +956,18 @@ fn decode_offline_samples_chunked(
         } else {
             None
         };
+        let timestamps = if has_timestamps
+            && !combined_timestamps.is_empty()
+            && combined_timestamps.len() == combined_tokens.len()
+        {
+            Some(combined_timestamps)
+        } else {
+            None
+        };
         Some(OfflineDecodeResult {
             text: combined_text,
             tokens: combined_tokens,
-            timestamps: if has_timestamps {
-                Some(combined_timestamps)
-            } else {
-                None
-            },
+            timestamps,
             durations,
         })
     } else {

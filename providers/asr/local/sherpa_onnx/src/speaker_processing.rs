@@ -877,6 +877,20 @@ fn run_diarization(
     crate::speaker::run_speaker_diarization(samples, segmentation_model, embedding_model)
 }
 
+fn compute_cluster_confidence(spans: &[SpeakerSpan]) -> Option<f32> {
+    let valid_confidences: Vec<f32> = spans
+        .iter()
+        .map(|s| s.confidence)
+        .filter(|&c| c >= -1.0 && c.is_finite())
+        .collect();
+    if valid_confidences.is_empty() {
+        None
+    } else {
+        let mean = valid_confidences.iter().sum::<f32>() / valid_confidences.len() as f32;
+        Some(mean.max(0.0))
+    }
+}
+
 fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Vec<ClusterInfo> {
     let mut spans_by_speaker: BTreeMap<i32, Vec<SpeakerSpan>> = BTreeMap::new();
 
@@ -911,16 +925,7 @@ fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Ve
         .into_iter()
         .enumerate()
         .map(|(index, (raw_speaker, _, spans))| {
-            let valid_confidences: Vec<f32> = spans
-                .iter()
-                .map(|s| s.confidence)
-                .filter(|&c| c > 0.0)
-                .collect();
-            let avg_confidence = if !valid_confidences.is_empty() {
-                Some(valid_confidences.iter().sum::<f32>() / valid_confidences.len() as f32)
-            } else {
-                None
-            };
+            let avg_confidence = compute_cluster_confidence(&spans);
             ClusterInfo {
                 raw_speaker,
                 spans,
@@ -1136,6 +1141,7 @@ fn repair_cluster_oversegmentation(
 
         combined_spans.sort_by(|a, b| a.start.partial_cmp(&b.start).unwrap_or(Ordering::Equal));
 
+        let avg_confidence = compute_cluster_confidence(&combined_spans);
         merged_clusters.push(ClusterInfo {
             raw_speaker: canonical_raw_speaker,
             spans: combined_spans,
@@ -1143,7 +1149,7 @@ fn repair_cluster_oversegmentation(
                 id: format!("anonymous-{}", group_idx + 1),
                 label: format!("Speaker {}", group_idx + 1),
                 kind: "anonymous".to_string(),
-                score: None,
+                score: avg_confidence,
             },
         });
     }

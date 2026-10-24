@@ -497,11 +497,14 @@ fn transcribe_samples(
                     .map(|timestamp| *timestamp + segment.start_time)
                     .collect::<Vec<_>>()
             });
-            let durations = result.durations.filter(|d| !d.is_empty()).or_else(|| {
-                timestamps_abs
-                    .as_ref()
-                    .and_then(|timestamps| synthesize_durations(timestamps, segment.end_time()))
-            });
+            let durations = result
+                .durations
+                .filter(|d| !d.is_empty() && d.len() == result.tokens.len())
+                .or_else(|| {
+                    timestamps_abs
+                        .as_ref()
+                        .and_then(|timestamps| synthesize_durations(timestamps, segment.end_time()))
+                });
 
             let mut transcript_segment = TranscriptSegment {
                 id: uuid::Uuid::new_v4().to_string(),

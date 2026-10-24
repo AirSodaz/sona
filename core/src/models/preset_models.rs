@@ -214,6 +214,7 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
         "canary-1b-int8",
         "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
     ),
+    ("canary-1b-fp16", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
     ("canary-1b-fp32", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
     ("online-punct", "sherpa-onnx-online-punct-en-2024-08-06"),
     (

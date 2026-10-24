@@ -150,6 +150,17 @@ describe('ModelLogos - resolveModelBrand', () => {
     ).toBe('nvidia');
   });
 
+  it('correctly resolves Canary (NVIDIA) models', () => {
+    expect(
+      resolveModelBrand({
+        id: 'sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8',
+        groupId: 'canary-180m-flash',
+        type: 'canary',
+      })
+    ).toBe('nvidia');
+    expect(isAsrModel({ type: 'canary' })).toBe(true);
+  });
+
   it('correctly resolves Dolphin models', () => {
     expect(
       resolveModelBrand({
