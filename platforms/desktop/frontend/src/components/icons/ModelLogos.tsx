@@ -499,6 +499,7 @@ export const ASR_MODEL_TYPES = new Set([
   'deepgram',
   'assemblyai',
   'elevenlabs',
+  'canary',
 ]);
 
 const NON_ASR_MODEL_TYPES = new Set([
@@ -567,7 +568,8 @@ export function isAsrModel(model: {
     token.includes('assemblyai') ||
     token.includes('assembly') ||
     token.includes('elevenlabs') ||
-    token.includes('r2t2')
+    token.includes('r2t2') ||
+    token.includes('canary')
   ) {
     return true;
   }
@@ -644,7 +646,7 @@ export function resolveModelBrand(model: {
   ) {
     return 'zipformer';
   }
-  if (token.includes('parakeet') || token.includes('nemo')) {
+  if (token.includes('parakeet') || token.includes('nemo') || token.includes('canary')) {
     return 'nvidia';
   }
   if (token.includes('dolphin')) {

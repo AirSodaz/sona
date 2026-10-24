@@ -794,3 +794,74 @@ async fn test_x_asr_streaming_segment_isolation_no_duplication() {
         );
     }
 }
+
+#[test]
+fn build_model_config_constructs_offline_canary_when_files_present() {
+    let model_path = Path::new("C:/models/canary-180m");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        decoder: Some("decoder.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    // Auto language
+    let model_type =
+        build_offline_model_config(model_path, "canary", &file_config, false, "auto", None)
+            .expect("canary config should succeed with valid files");
+
+    assert_eq!(model_type.model_type_name(), "canary");
+    assert!(model_type.is_offline());
+
+    match model_type {
+        ModelType::OfflineCanary {
+            encoder,
+            decoder,
+            tokens,
+            src_lang,
+            tgt_lang,
+            use_pnc,
+        } => {
+            assert_eq!(encoder, model_path.join("encoder.int8.onnx"));
+            assert_eq!(decoder, model_path.join("decoder.int8.onnx"));
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+            assert_eq!(src_lang, "");
+            assert_eq!(tgt_lang, "");
+            assert!(use_pnc);
+        }
+        other => panic!("expected OfflineCanary, got {other:?}"),
+    }
+
+    // Specific language
+    let model_type =
+        build_offline_model_config(model_path, "canary", &file_config, false, "de", None)
+            .expect("canary config should succeed with valid files");
+    match model_type {
+        ModelType::OfflineCanary {
+            src_lang, tgt_lang, ..
+        } => {
+            assert_eq!(src_lang, "de");
+            assert_eq!(tgt_lang, "de");
+        }
+        other => panic!("expected OfflineCanary, got {other:?}"),
+    }
+}
+
+#[test]
+fn build_model_config_rejects_canary_when_files_missing() {
+    let model_path = Path::new("C:/models/canary-180m");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        // missing decoder
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let err = build_offline_model_config(model_path, "canary", &file_config, false, "auto", None)
+        .unwrap_err();
+    assert_eq!(err.kind, AsrPortErrorKind::Model);
+    assert!(
+        err.message
+            .contains("Required file name not specified in config")
+    );
+}

@@ -393,6 +393,8 @@ fn asr_catalog_sections_follow_specified_display_order() {
             "parakeet-tdt",
             "dolphin",
             "moonshine-v2",
+            "canary-180m-flash",
+            "canary-1b",
         ]
     );
 }
@@ -1073,7 +1075,42 @@ fn resolves_canonical_aliases_and_suggestions() {
         canonical_preset_model_id("confucius4-r2t2-f16"),
         Some("confucius4-r2t2-f16-gguf")
     );
-
+    assert_eq!(
+        canonical_preset_model_id("canary"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-int8"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-fp32"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-int8"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-fp32"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punct"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punctuation"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
     let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");
     assert_eq!(whisper.id, "sherpa-onnx-whisper-turbo");
 
