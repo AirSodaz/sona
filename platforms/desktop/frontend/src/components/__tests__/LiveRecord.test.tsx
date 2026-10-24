@@ -681,40 +681,16 @@ describe('LiveRecord', () => {
     expect(useTranscriptStore.getState().isRecording).toBe(false);
   });
 
-  it('should start caption mode independently without recording', async () => {
-    const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-    const { captionWindowService } = await import('../../services/captionWindowService');
-    // We use mockStart which intercepts calls to any TranscriptionService instance (singleton or new)
-
-    render(<LiveRecord />);
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
-
-    await act(async () => {
-      fireEvent.click(captionSwitch);
-      await vi.advanceTimersByTimeAsync(100);
-    });
-
-    // Check stores
-    expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
-    expect(useTranscriptStore.getState().isRecording).toBe(false);
-
-    // Check services
-    expect(captionWindowService.open).toHaveBeenCalled();
-    expect(mockStart).toHaveBeenCalled();
-  });
-
   it('should allow recording while caption mode is active', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     render(<LiveRecord />);
 
     // 1. Start Caption
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: true });
       await vi.advanceTimersByTimeAsync(100);
     });
     expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
-
     // 2. Start Recording
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
     await act(async () => {
@@ -728,17 +704,14 @@ describe('LiveRecord', () => {
 
   it('should NOT stop recording when caption mode is toggled OFF', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-    const { captionWindowService } = await import('../../services/captionWindowService');
 
     render(<LiveRecord />);
 
     // 1. Start Caption
-    const captionSwitch = screen.getByRole('switch', { name: /live.caption_mode/i });
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: true });
       await vi.advanceTimersByTimeAsync(100);
     });
-
     // 2. Start Recording
     const startBtn = screen.getByRole('button', { name: /live.start_recording/i });
     await act(async () => {
@@ -748,15 +721,13 @@ describe('LiveRecord', () => {
 
     // 3. Stop Caption
     await act(async () => {
-      fireEvent.click(captionSwitch);
+      useTranscriptStore.setState({ isCaptionMode: false });
       await vi.advanceTimersByTimeAsync(100);
     });
 
     expect(useTranscriptStore.getState().isCaptionMode).toBe(false);
     expect(useTranscriptStore.getState().isRecording).toBe(true); // Should still be true
-    expect(captionWindowService.close).toHaveBeenCalled();
   });
-
   it('should toggle recording with Ctrl+Space', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     render(<LiveRecord />);

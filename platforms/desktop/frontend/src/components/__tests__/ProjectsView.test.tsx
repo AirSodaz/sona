@@ -1787,7 +1787,8 @@ describe('ProjectsView', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Start Live Record' }));
 
-    expect(useTranscriptStore.getState().mode).toBe('live');
+    expect(useTranscriptStore.getState().mode).toBe('create');
+    expect(useTranscriptStore.getState().ingestionFocus).toBe('live');
     expect(useProjectStore.getState().activeProjectId).toBe('project-1');
   });
 

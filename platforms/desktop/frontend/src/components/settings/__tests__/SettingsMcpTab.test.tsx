@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommand } from '../../../services/tauri/commands';
 import { invokeTauri } from '../../../services/tauri/invoke';
 import { useConfigStore } from '../../../stores/configStore';
@@ -29,6 +29,10 @@ vi.mock('../../../services/configPersistenceService', () => ({
 const mockInvokeTauri = vi.mocked(invokeTauri);
 
 describe('SettingsMcpTab', () => {
+  afterEach(() => {
+    useMcpStore.setState({ fetchStatus: useMcpStore.getInitialState().fetchStatus });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     useConfigStore.setState({
@@ -234,5 +238,107 @@ describe('SettingsMcpTab', () => {
     });
 
     expect(mockInvokeTauri).toHaveBeenCalledWith(TauriCommand.mcp.clearActivityLogs);
+  });
+
+  it('reports ping failure when daemon is not running or returns error', async () => {
+    let callCount = 0;
+    useMcpStore.setState({
+      status: {
+        enabled: true,
+        running: true,
+        endpoint: '\\\\.\\pipe\\sona-agent-ipc',
+        activeConnections: 0,
+        binaryPath: 'C:\\Program Files\\Sona\\sona-mcp.exe',
+        binaryExists: true,
+        permissionMode: 'full',
+      },
+      fetchStatus: vi.fn().mockImplementation(async () => {
+        callCount++;
+        if (callCount > 1) {
+          useMcpStore.setState({
+            status: {
+              enabled: true,
+              running: false,
+              endpoint: '\\\\.\\pipe\\sona-agent-ipc',
+              activeConnections: 0,
+              binaryPath: 'C:\\Program Files\\Sona\\sona-mcp.exe',
+              binaryExists: true,
+              permissionMode: 'full',
+            },
+            error: 'Daemon connection refused',
+          });
+        }
+      }),
+    });
+
+    await act(async () => {
+      render(<SettingsMcpTab />);
+    });
+
+    const pingButtons = screen.getAllByRole('button', { name: /Ping/i });
+    const pingBtn = pingButtons[0];
+    expect(pingBtn).toBeDefined();
+
+    await act(async () => {
+      fireEvent.click(pingBtn);
+    });
+
+    expect(screen.getAllByText('Ping failed').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('renders Stopped badge with warning tone when enabled but not running', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        mcpEnabled: true,
+      },
+    });
+    useMcpStore.setState({
+      status: {
+        enabled: true,
+        running: false,
+        endpoint: '\\\\.\\pipe\\sona-agent-ipc',
+        activeConnections: 0,
+        binaryPath: '',
+        binaryExists: false,
+        permissionMode: 'full',
+      },
+    });
+
+    await act(async () => {
+      render(<SettingsMcpTab />);
+    });
+
+    const heroBadge = document.querySelector('.tool-hero-status .tools-status-badge');
+    expect(heroBadge?.className).toContain('tools-status-warning');
+    expect(heroBadge?.textContent).toContain('Stopped');
+  });
+
+  it('renders Disabled badge with inactive tone when disabled', async () => {
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        mcpEnabled: false,
+      },
+    });
+    useMcpStore.setState({
+      status: {
+        enabled: false,
+        running: false,
+        endpoint: '',
+        activeConnections: 0,
+        binaryPath: '',
+        binaryExists: false,
+        permissionMode: 'full',
+      },
+    });
+
+    await act(async () => {
+      render(<SettingsMcpTab />);
+    });
+
+    const heroBadge = document.querySelector('.tool-hero-status .tools-status-badge');
+    expect(heroBadge?.className).toContain('tools-status-inactive');
+    expect(heroBadge?.textContent).toContain('Disabled');
   });
 });

@@ -81,14 +81,12 @@ describe('Settings voice typing navigation', () => {
     });
   });
 
-  it('maps the legacy voice typing initial tab to the combined subtitle page', async () => {
-    render(<Settings isOpen={true} onClose={vi.fn()} initialTab="voice_typing" />);
+  it('maps the legacy voice typing initial tab to the migrated banner', async () => {
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
 
-    const subtitleTab = await screen.findByRole('tab', {
-      name: 'settings.subtitle_voice_typing_title',
-    });
-    expect(subtitleTab.getAttribute('aria-selected')).toBe('true');
-    expect(await screen.findByText('Subtitle Tab')).toBeDefined();
+    expect((await screen.findAllByText('tools.voice_typing')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('tools.migrated_notice')).toBeDefined();
     expect(screen.queryByRole('tab', { name: 'settings.voice_typing' })).toBeNull();
   });
 });

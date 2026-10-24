@@ -211,11 +211,44 @@
     }
   },
   "panel": {
+    "create": "新增",
     "live_record": "即時錄音",
     "batch_import": "批次匯入",
     "projects": "工作區",
     "transcript": "轉錄",
-    "mode_selection": "模式選擇"
+    "mode_selection": "模式選擇",
+    "input_selection": "工作區輸入選擇",
+    "tools": "工具箱"
+  },
+  "tools": {
+    "title": "工具箱",
+    "subtitles": "即時字幕",
+    "subtitles_desc": "桌面懸浮雙語字幕",
+    "subtitles_preview_title": "即時字幕效果預覽",
+    "subtitles_preview_desc": "所見即所得模擬字幕在桌面呈現的真實視覺效果。",
+    "voice_typing": "語音輸入法",
+    "voice_typing_desc": "全域快速輸入與智慧潤色",
+    "api_server": "API 服務",
+    "api_server_desc": "本機 HTTP 音訊轉錄介面",
+    "mcp": "MCP 智慧體",
+    "mcp_desc": "AI Agent 協定服務端",
+    "status_running": "執行中",
+    "status_stopped": "已停止",
+    "status_ready": "已就緒",
+    "status_disabled": "未啟用",
+    "status_needs_config": "需設定",
+    "clients_unit": "客戶端",
+    "migrated_notice": "該設定項目已遷移至首頁「工具箱」工作台，提供更有效率的快速啟停、參數調整與執行狀態監控。",
+    "migrated_notice_desc": "獨立擴充與服務類工具已收歸至首頁統一工作台。",
+    "migrated_badge": "已遷移至工具箱",
+    "go_to_tools": "前往工具箱",
+    "copy_api_url": "複製端點",
+    "subtitles_preview_text_primary": "Sona 即時語音辨識與雙語字幕預覽",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "客戶端",
+    "subtitles_missing_model_warning": "即時字幕需要串流語音辨識模型，請在模型設定中設定串流模型。",
+    "sidebar_title": "工具箱側邊欄",
+    "tabs_title": "工具列表"
   },
   "live": {
     "resume": "恢復",
@@ -247,9 +280,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "背景顏色",
     "background_opacity": "背景不透明度",
+    "recording": "錄音中",
     "subtitle_settings": "字幕設定"
   },
   "batch": {
+    "items": "項",
+    "processing": "處理中",
     "processing_title": "正在處理音訊",
     "processing_desc": "請稍候，正在轉錄您的檔案...",
     "transcribing": "正在轉錄...",
@@ -492,6 +528,7 @@
     "reveal_in_folder": "在檔案管理器中顯示"
   },
   "projects": {
+    "projects_group_title": "專案",
     "all_items": "全部內容",
     "untagged": "未標記",
     "trash": "垃圾桶",
@@ -2221,6 +2258,7 @@
     "api_server": {
       "title": "API 服務",
       "description": "透過公開本機 HTTP API，使外部應用程式能夠透過程式設計的方式呼叫 Sona。支援批次音訊轉寫任務提交與狀態輪詢等。",
+      "network_security_title": "網路與安全性",
       "restart_warning": "修改後的 API 服務設定將在下次啟動應用程式時生效。",
       "enable_label": "啟用 API 服務",
       "enable_hint": "啟動 HTTP 服務，允許外部程式呼叫 Sona。",
@@ -2275,6 +2313,9 @@
       "active_clients_count": "{{count}} 個智慧體連線",
       "active_clients_count_one": "{{count}} 個智慧體連線",
       "active_clients_count_other": "{{count}} 個智慧體連線",
+      "active_clients_count_short": "{{count}} 個已連線",
+      "active_clients_count_short_one": "{{count}} 個已連線",
+      "active_clients_count_short_other": "{{count}} 個已連線",
       "ipc_endpoint": "通訊端點",
       "ipc_endpoint_hint": "外部智慧體程序用於與 Sona 進行本地通訊的統一 IPC 端點。",
       "bridge_binary": "橋接程式 (sona-mcp)",
@@ -2352,6 +2393,7 @@
       "allowed": "允許",
       "blocked": "策略攔截",
       "btn_ping": "測試延遲",
+      "pinging": "正在測試...",
       "ping_failed": "測試失敗"
     },
     "llm": {

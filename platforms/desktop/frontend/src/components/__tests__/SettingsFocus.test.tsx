@@ -64,9 +64,6 @@ vi.mock('../settings/SettingsDashboardTab', () => ({
 vi.mock('../settings/SettingsMicrophoneTab', () => ({
   SettingsMicrophoneTab: () => <div>Microphone Tab</div>,
 }));
-vi.mock('../settings/SettingsSubtitleTab', () => ({
-  SettingsSubtitleTab: () => <div>Subtitle Tab</div>,
-}));
 vi.mock('../settings/SettingsModelsTab', () => ({
   SettingsModelsTab: () => <div>Models Tab</div>,
 }));
@@ -180,17 +177,15 @@ describe('Settings Focus Trap & Navigation', () => {
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // Arrow Up -> Should switch to 'mcp' (loops around from general)
+    // Arrow Up -> Should switch to 'sync' (loops around from general)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
-
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
     // Reset mock
     setActiveTabMock.mockClear();
 
-    // End -> Should switch to 'mcp' (last)
+    // End -> Should switch to 'sync' (last)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
-
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
     // Reset mock
     setActiveTabMock.mockClear();
 
@@ -203,9 +198,8 @@ describe('Settings Focus Trap & Navigation', () => {
     const onClose = vi.fn();
     render(<Settings isOpen={true} onClose={onClose} />);
 
-    screen.getByText('settings.subtitle_voice_typing_title');
+    expect(screen.queryByText('settings.subtitle_voice_typing_title')).toBeNull();
     expect(screen.queryByText('settings.voice_typing')).toBeNull();
-
     const tabLabels = screen
       .getAllByRole('tab')
       .map((tab) => tab.textContent?.trim()?.replace(/^Icon/, ''));
@@ -217,25 +211,62 @@ describe('Settings Focus Trap & Navigation', () => {
       'settings.about',
       'settings.input_device',
       'settings.model_hub',
-      'settings.subtitle_voice_typing_title',
       'settings.vocabulary',
       'settings.llm.title',
       'settings.automation',
       'settings.storage.title',
       'settings.sync.title',
-      'settings.api_server.title',
-      'settings.mcp.title',
     ]);
   });
 
-  it('renders the combined subtitle panel when that tab is active', async () => {
+  it('renders the migrated banner when subtitle tab is active', async () => {
     mockActiveTab = 'subtitle';
     const onClose = vi.fn();
 
     render(<Settings isOpen={true} onClose={onClose} />);
 
-    expect(await screen.findByText('Subtitle Tab')).toBeDefined();
+    expect((await screen.findAllByText('tools.subtitles')).length).toBeGreaterThan(0);
+    expect(await screen.findByText('tools.migrated_notice')).toBeDefined();
     expect(screen.getByText('General Tab Input').closest('[hidden]')).not.toBeNull();
+  });
+
+  it('falls back to tabIndex=0 on the first tab when on an unlisted/migrated tab', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    const tabs = screen.getAllByRole('tab');
+    const generalTab = tabs[0];
+    expect(generalTab.getAttribute('tabindex')).toBe('0');
+    for (let i = 1; i < tabs.length; i++) {
+      expect(tabs[i].getAttribute('tabindex')).toBe('-1');
+    }
+  });
+
+  it('wraps around correctly from unlisted tab using ArrowUp and ArrowDown', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    const tablist = screen.getByRole('tablist');
+
+    // ArrowUp from unlisted (currentIndex === -1) wraps to the last tab (sync)
+    fireEvent.keyDown(tablist, { key: 'ArrowUp' });
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
+
+    setActiveTabMock.mockClear();
+
+    // ArrowDown from unlisted (currentIndex === -1) moves to the first tab (general)
+    fireEvent.keyDown(tablist, { key: 'ArrowDown' });
+    expect(setActiveTabMock).toHaveBeenCalledWith('general');
+  });
+
+  it('renders voice_typing migrated banner when initialTab is voice_typing', async () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    expect((await screen.findAllByText('tools.voice_typing')).length).toBeGreaterThan(0);
   });
 
   it('navigates tabs with ctrl+tab without the removed local tab', () => {
@@ -248,7 +279,26 @@ describe('Settings Focus Trap & Navigation', () => {
     setActiveTabMock.mockClear();
 
     fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
-    expect(setActiveTabMock).toHaveBeenCalledWith('mcp');
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
+  });
+
+  it('wraps to last tab with ctrl+shift+tab when active tab is unlisted/migrated', () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    render(<Settings isOpen={true} onClose={onClose} />);
+
+    fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true, shiftKey: true });
+    expect(setActiveTabMock).toHaveBeenCalledWith('sync');
+  });
+
+  it('updates migratedSubtitleTool when prewarmed Settings opens with initialTab voice_typing', async () => {
+    mockActiveTab = 'subtitle';
+    const onClose = vi.fn();
+    const { rerender } = render(<Settings isOpen={false} prewarm onClose={onClose} />);
+
+    rerender(<Settings isOpen={true} onClose={onClose} initialTab="voice_typing" />);
+
+    expect((await screen.findAllByText('tools.voice_typing')).length).toBeGreaterThan(0);
   });
 
   it('keeps prewarmed inactive panes closed when the settings dialog opens', async () => {

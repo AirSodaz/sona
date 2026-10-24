@@ -1,13 +1,11 @@
-import { Type } from 'lucide-react';
 import type React from 'react';
 import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { BatchImport } from './components/BatchImport';
+import { CreateWorkspacePanel } from './components/CreateWorkspacePanel';
 import { ErrorDialog } from './components/ErrorDialog';
 import { FirstRunGuide } from './components/FirstRunGuide';
 import { GlobalDialog } from './components/GlobalDialog';
-import { AutomationIcon, SettingsIcon } from './components/Icons';
-import { LiveRecord } from './components/LiveRecord';
+import { SettingsIcon } from './components/Icons';
 import { NotificationCenter } from './components/NotificationCenter';
 import { ProjectSelectorDropdown } from './components/ProjectSelectorDropdown';
 import { ProjectsView } from './components/ProjectsView';
@@ -15,27 +13,32 @@ import { SyncHeaderPill } from './components/SyncHeaderPill';
 import { preloadAllSettingsTabs, preloadSettingsTab } from './components/settings/settingsLoaders';
 import { TabNavigation } from './components/TabNavigation';
 import { TranscriptionOptions } from './components/TranscriptionOptions';
+import { ToolsView } from './components/tools/ToolsView';
 import { TranscriptWorkbench } from './components/transcript/TranscriptWorkbench';
 import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
+import { useCaptionSession } from './hooks/useCaptionSession';
 import { useNumberStepperHoverEffect } from './hooks/useNumberStepperHoverEffect';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { useTrayHandling } from './hooks/useTrayHandling';
+import { captionWindowService } from './services/captionWindowService';
 import { diagnosticsService } from './services/diagnosticsService';
 import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
 import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
-import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
+import { useConfigStore, useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
+import { useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
 import type { LlmProvider } from './types/transcript';
+import { logger } from './utils/logger';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
@@ -73,21 +76,6 @@ type ActivePanelModal =
   | { kind: 'provider_details'; origin: 'settings'; provider: LlmProvider }
   | null;
 
-/**
- * Helper to determine the title of the left panel based on the current mode.
- */
-function getPanelTitle(mode: string, t: (key: string) => string): string {
-  switch (mode) {
-    case 'live':
-      return t('panel.live_record');
-    case 'projects':
-      return t('panel.projects');
-    case 'batch':
-    default:
-      return t('panel.batch_import');
-  }
-}
-
 function App(): React.JSX.Element | null {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [shouldPrewarmSettings, setShouldPrewarmSettings] = useState(false);
@@ -98,6 +86,7 @@ function App(): React.JSX.Element | null {
   const mode = useTranscriptRuntimeStore((state) => state.mode);
   const setMode = useTranscriptRuntimeStore((state) => state.setMode);
   const isProjectsMode = mode === 'projects';
+  const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
@@ -119,6 +108,18 @@ function App(): React.JSX.Element | null {
 
   // Keep TranscriptionService synced and preloaded in background
   useTranscriptionServiceSync();
+
+  // Dedicated background caption session lifecycle and window synchronization
+  const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+  const appConfig = useConfigStore((state) => state.config);
+  useCaptionSession(appConfig, isCaptionMode);
+
+  const lockWindow = appConfig.lockWindow ?? false;
+  const alwaysOnTop = appConfig.alwaysOnTop ?? true;
+  useEffect(() => {
+    captionWindowService.setClickThrough(lockWindow).catch(logger.error);
+    captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
+  }, [lockWindow, alwaysOnTop]);
 
   useNumberStepperHoverEffect();
 
@@ -217,17 +218,18 @@ function App(): React.JSX.Element | null {
     openSettingsTab('automation');
   };
 
-  const openVoiceTypingSettings = () => {
-    openSettingsTab('subtitle');
-  };
-
   const runFirstRunSetupFromDiagnostics = () => {
     setIsDiagnosticsOpen(false);
     reopenOnboarding(diagnosticsService.getResumeOnboardingStep(), 'startup');
   };
 
   const closeTranscriptSession = () => {
-    if (mode === 'batch') {
+    const activeBatchId = useBatchQueueStore.getState().activeItemId;
+    if (
+      activeBatchId &&
+      (useTranscriptStore.getState().activeSessionId === activeBatchId ||
+        (mode === 'create' && ingestionFocus === 'batch'))
+    ) {
       useBatchQueueStore.getState().setActiveItem(null);
     } else {
       clearActiveTranscriptSession({ clearAudio: true });
@@ -238,12 +240,12 @@ function App(): React.JSX.Element | null {
     return null; // Wait for config and onboarding state to load
   }
 
-  const panelTitle = getPanelTitle(mode, t);
+  const isToolsMode = mode === 'tools';
   const hasActiveTranscript = Boolean(sourceHistoryId || segmentsLength > 0 || audioUrl);
-  const shouldShowTranscriptHost = !isProjectsMode || hasActiveTranscript;
+  const shouldShowTranscriptHost = isProjectsMode ? hasActiveTranscript : !isToolsMode;
   const appMainClassName = [
     'app-main',
-    isProjectsMode ? 'app-main--projects' : 'app-main--workspace',
+    isProjectsMode ? 'app-main--projects' : isToolsMode ? 'app-main--tools' : 'app-main--workspace',
     shouldShowTranscriptHost ? 'app-main--with-transcript' : 'app-main--without-transcript',
   ].join(' ');
 
@@ -284,6 +286,7 @@ function App(): React.JSX.Element | null {
       {/* Main Content */}
       <main id="main-content" className={appMainClassName}>
         <div
+          id="projects-mode-shell"
           className="projects-mode-shell"
           style={{ display: isProjectsMode ? undefined : 'none' }}
         >
@@ -293,57 +296,27 @@ function App(): React.JSX.Element | null {
           />
         </div>
         <div
+          id="tools-mode-shell"
+          className="tools-mode-shell"
+          style={{ display: isToolsMode ? undefined : 'none' }}
+        >
+          <ToolsView isActive={isToolsMode} />
+        </div>
+        <div
+          id="workspace-mode-shell"
           className="workspace-mode-shell"
-          style={{ display: !isProjectsMode ? undefined : 'none' }}
+          style={{ display: !isProjectsMode && !isToolsMode ? undefined : 'none' }}
         >
           <div className="panel-container">
             {/* Left Panel - Input */}
             <div className="panel panel-left">
-              <div className="panel-header">
-                <h2>{panelTitle}</h2>
-                {mode === 'batch' && (
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-rail-create"
-                    onClick={openAutomationSettings}
-                    aria-label={t('automation.open_settings', { defaultValue: 'Open Automation' })}
-                    data-tooltip={t('automation.open_settings', {
-                      defaultValue: 'Open Automation',
-                    })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <AutomationIcon width={18} height={18} />
-                  </button>
-                )}
-                {mode === 'live' && (
-                  <button
-                    type="button"
-                    className="btn btn-icon projects-rail-create"
-                    onClick={openVoiceTypingSettings}
-                    aria-label={t('voice_typing.open_settings', {
-                      defaultValue: 'Open Voice Typing',
-                    })}
-                    data-tooltip={t('voice_typing.open_settings', {
-                      defaultValue: 'Open Voice Typing',
-                    })}
-                    data-tooltip-pos="bottom"
-                  >
-                    <Type size={18} aria-hidden="true" />
-                  </button>
-                )}
-              </div>
               <div className="panel-content">
-                <div style={{ display: mode === 'live' ? undefined : 'none', height: '100%' }}>
-                  <LiveRecord />
-                </div>
-                <div style={{ display: mode === 'batch' ? undefined : 'none', height: '100%' }}>
-                  <BatchImport />
-                </div>
+                <CreateWorkspacePanel />
               </div>
               <div className="panel-footer">
                 <TranscriptionOptions
-                  surface={mode === 'batch' ? 'batch' : 'live'}
-                  disabled={mode === 'live' && isRecording}
+                  surface={ingestionFocus}
+                  disabled={ingestionFocus === 'live' && isRecording}
                 />
               </div>
             </div>

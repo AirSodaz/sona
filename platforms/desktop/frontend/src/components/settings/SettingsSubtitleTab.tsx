@@ -96,7 +96,13 @@ function getFailureSourceLabel(
   }
 }
 
-function VoiceTypingSettingsSection(): React.JSX.Element {
+export interface VoiceTypingSettingsSectionProps {
+  hideEnableSwitch?: boolean;
+}
+
+export function VoiceTypingSettingsSection({
+  hideEnableSwitch = false,
+}: VoiceTypingSettingsSectionProps = {}): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const vtConfig = useVoiceTypingConfig();
   const updateConfig = useSetConfig();
@@ -111,11 +117,15 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     [i18n?.language]
   );
   const isAvailable = readiness.state === 'ready';
+  const isMissingDependency =
+    readiness.state === 'needs_shortcut' ||
+    readiness.state === 'needs_live_model' ||
+    readiness.state === 'needs_vad';
   const hasFailureReason = readiness.state === 'failed' && Boolean(readiness.lastErrorMessage);
   const failureSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
   const availabilityTone: AvailabilityTone = isAvailable
     ? 'ready'
-    : hasFailureReason
+    : hasFailureReason || isMissingDependency
       ? 'missing'
       : 'off';
 
@@ -132,20 +142,22 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             'Configure global shortcut triggers, activation mode, and floating capsule placement',
         })}
       >
-        <SettingsItem
-          id="settings-voice-typing-enable"
-          title={t('settings.enable_voice_typing', {
-            defaultValue: 'Enable Voice Typing',
-          })}
-          hint={t('settings.enable_voice_typing_hint', {
-            defaultValue: 'Type text directly into any application using your voice',
-          })}
-        >
-          <Switch
-            checked={vtConfig.voiceTypingEnabled ?? false}
-            onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
-          />
-        </SettingsItem>
+        {!hideEnableSwitch && (
+          <SettingsItem
+            id="settings-voice-typing-enable"
+            title={t('settings.enable_voice_typing', {
+              defaultValue: 'Enable Voice Typing',
+            })}
+            hint={t('settings.enable_voice_typing_hint', {
+              defaultValue: 'Type text directly into any application using your voice',
+            })}
+          >
+            <Switch
+              checked={vtConfig.voiceTypingEnabled ?? false}
+              onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+            />
+          </SettingsItem>
+        )}
 
         <SettingsItem
           id="settings-voice-typing-shortcut"
@@ -471,6 +483,16 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             defaultValue: 'Availability',
           })}
           hint={(() => {
+            if (isMissingDependency) {
+              const key =
+                readiness.state === 'needs_shortcut'
+                  ? 'settings.voice_typing_status_summary_missing_shortcut'
+                  : readiness.state === 'needs_vad'
+                    ? 'settings.voice_typing_status_summary_missing_vad'
+                    : 'settings.voice_typing_status_summary_missing_model';
+              return t(key, { defaultValue: 'Voice Typing still needs setup before it can run.' });
+            }
+
             if (!hasFailureReason) {
               return undefined;
             }
@@ -502,7 +524,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     </>
   );
 }
-function VoiceTypingHistorySection(): React.JSX.Element {
+export function VoiceTypingHistorySection(): React.JSX.Element {
   const { t } = useTranslation();
   const historyItems = useVoiceTypingHistoryStore((state) => state.items);
   const removeItem = useVoiceTypingHistoryStore((state) => state.removeItem);

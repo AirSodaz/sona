@@ -9,7 +9,7 @@ import type { AsrSelectionSlot } from '../types/config';
 import type { ModelCatalogSnapshot } from '../types/modelCatalog';
 import { buildAsrModelDropdownOptions, resolveActiveAsrModelId } from '../utils/asrModelOptions';
 import { languageDisplayName } from '../utils/languages';
-import { ChevronUpIcon, SlidersIcon } from './Icons';
+import { ChevronUpIcon } from './Icons';
 import { ParameterSettingsPopover } from './ParameterSettingsPopover';
 
 /** Props for TranscriptionOptions component. */
@@ -36,9 +36,12 @@ export function TranscriptionOptions({
   const [isExpanded, setIsExpanded] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const storeMode = useTranscriptRuntimeStore((state) => state.mode);
+  const storeIngestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
   const storeIsRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
-  const surface = customSurface ?? (storeMode === 'batch' ? 'batch' : 'live');
+  const surface =
+    customSurface ??
+    (storeIngestionFocus === 'batch' || (storeMode as string) === 'batch' ? 'batch' : 'live');
   const disabled = customDisabled ?? (surface === 'live' && storeIsRecording);
   const slot: AsrSelectionSlot = surface === 'batch' ? 'batch' : 'live';
 
@@ -135,19 +138,15 @@ export function TranscriptionOptions({
         aria-haspopup="true"
         aria-controls="parameter-settings-popover"
       >
-        <span className="parameter-settings-capsule-main">
-          <SlidersIcon className="parameter-settings-icon" width={14} height={14} />
-          <span className="parameter-settings-label">{presetTitle}</span>
-        </span>
+        <span className="parameter-settings-status-dot" aria-hidden="true" />
 
         <span className="parameter-settings-capsule-summary">
           <span className="parameter-settings-summary-model">{activeModelLabel}</span>
-          <span className="parameter-settings-summary-dot" aria-hidden="true">
-            ·
+          <span className="parameter-settings-summary-divider" aria-hidden="true">
+            /
           </span>
           <span className="parameter-settings-summary-lang">{activeLanguageLabel}</span>
         </span>
-
         <ChevronUpIcon
           className={`parameter-settings-chevron ${isExpanded ? 'open' : ''}`}
           width={14}

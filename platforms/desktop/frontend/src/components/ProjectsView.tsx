@@ -11,7 +11,6 @@ import {
   clearActiveTranscriptSession,
   openTranscriptSession,
 } from '../stores/transcriptCoordinator';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
@@ -389,6 +388,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   }, [browseState.filteredAndSortedItems, historyItems, projectAssignmentIds]);
 
   useEffect(() => {
+    if (!isActive) return;
+
     if (effectiveSelectedHistoryId === null && selectedHistoryId) {
       queueMicrotask(() => {
         setSelectedHistoryId(null);
@@ -399,16 +400,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     if (effectiveSelectedHistoryId === null) {
       const sessionState = useTranscriptSessionStore.getState();
-      const playbackState = useTranscriptPlaybackStore.getState();
-      if (
-        sessionState.sourceHistoryId ||
-        sessionState.segments.length > 0 ||
-        playbackState.audioUrl
-      ) {
+      if (!isRecording && sessionState.sourceHistoryId) {
         clearActiveTranscriptSession({ clearAudio: true });
       }
     }
-  }, [effectiveSelectedHistoryId, selectedHistoryId]);
+  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive, isRecording]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {
@@ -784,9 +780,13 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
             headerIcon={browseState.headerIcon}
             headerTitle={browseState.headerTitle}
             isScrolled={browseState.isScrolled}
-            onOpenBatchImport={() => setMode('batch')}
+            onOpenBatchImport={() => {
+              setMode('create', 'batch');
+            }}
             onOpenProjectSettings={() => projectSettingsDraft.setIsSettingsOpen(true)}
-            onStartLiveRecord={() => setMode('live')}
+            onStartLiveRecord={() => {
+              setMode('create', 'live');
+            }}
             showWorkflowActions={browseState.showWorkflowActions}
             isTrashScope={browseState.isTrashScope}
             onEmptyTrash={() => void handleEmptyTrash()}

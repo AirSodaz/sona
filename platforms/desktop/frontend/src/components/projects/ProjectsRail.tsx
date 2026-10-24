@@ -19,7 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { MoreHorizontal, Zap } from 'lucide-react';
+import { MoreHorizontal, Plus, Zap } from 'lucide-react';
 import type React from 'react';
 import { useMemo, useState } from 'react';
 import type { ProjectRecord } from '../../types/project';
@@ -29,7 +29,6 @@ import {
   createPointerContextMenuRequest,
   isContextMenuKeyboardEvent,
 } from '../context-menu/trigger';
-import { PlusCircleIcon } from '../Icons';
 import { ALL_ITEMS_SCOPE, TRASH_SCOPE, UNTAGGED_SCOPE } from './constants';
 import type { ProjectBrowseScope, TranslationFn } from './types';
 import { RailItemContent, renderScopeIcon } from './utils';
@@ -96,7 +95,7 @@ function SortableProjectItem({
     <div
       ref={setNodeRef}
       style={style}
-      className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''}`}
+      className={`projects-rail-item-container ${isDragging ? 'is-dragging' : ''} ${isContextMenuOpen ? 'context-menu-active' : ''}`}
     >
       <button
         type="button"
@@ -128,19 +127,42 @@ function SortableProjectItem({
             </span>
           )}
           <span className="projects-rail-count">{projectCount}</span>
-          <button
-            type="button"
-            className="projects-rail-menu-btn"
-            aria-label={t('common.more_options', { defaultValue: 'More options' })}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
-            }}
-          >
-            <MoreHorizontal size={14} />
-          </button>
         </div>
+      </button>
+      <button
+        type="button"
+        className="projects-rail-menu-btn"
+        aria-label={t('common.more_options', { defaultValue: 'More options' })}
+        aria-haspopup="menu"
+        aria-expanded={isContextMenuOpen}
+        onClick={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const isKeyboard = event.detail === 0 || (event.clientX === 0 && event.clientY === 0);
+          onOpenContextMenu(
+            project.id,
+            isKeyboard
+              ? createKeyboardContextMenuRequest(event.currentTarget)
+              : createPointerContextMenuRequest(event)
+          );
+        }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+        }}
+        onKeyDown={(event) => {
+          if (isContextMenuKeyboardEvent(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenContextMenu(project.id, createKeyboardContextMenuRequest(event.currentTarget));
+          }
+        }}
+        onPointerDown={(event) => {
+          event.stopPropagation();
+        }}
+      >
+        <MoreHorizontal size={14} />
       </button>
     </div>
   );
@@ -205,24 +227,6 @@ export function ProjectsRail({
 
   return (
     <aside className="projects-rail">
-      <div className="projects-rail-header">
-        <div className="projects-rail-title-row">
-          <div className="projects-rail-eyebrow">
-            {t('panel.projects', { defaultValue: 'Workspace' })}
-          </div>
-          <button
-            type="button"
-            className="btn btn-icon projects-rail-create"
-            onClick={onOpenCreateModal}
-            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
-            data-tooltip-pos="bottom"
-          >
-            <PlusCircleIcon width={18} height={18} />
-          </button>
-        </div>
-      </div>
-
       <div className="projects-rail-scopes">
         <button
           type="button"
@@ -266,6 +270,21 @@ export function ProjectsRail({
       </div>
 
       <div className="projects-rail-projects">
+        <div className="projects-rail-section-header">
+          <span className="projects-rail-section-title">
+            {t('projects.projects_group_title', { defaultValue: 'Projects' })}
+          </span>
+          <button
+            type="button"
+            className="projects-rail-create"
+            onClick={onOpenCreateModal}
+            aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}
+            data-tooltip-pos="bottom"
+          >
+            <Plus size={14} />
+          </button>
+        </div>
         <div
           className="projects-rail-list"
           onContextMenu={(event) => {
@@ -306,6 +325,7 @@ export function ProjectsRail({
             collisionDetection={closestCorners}
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
+            onDragCancel={() => setActiveId(null)}
             modifiers={[restrictToVerticalAxis, restrictToWindowEdges]}
           >
             <SortableContext
@@ -354,6 +374,14 @@ export function ProjectsRail({
                       title={activeDragProject?.name || ''}
                     />
                     <div className="projects-rail-actions">
+                      {activeDragProject?.pipeline?.enabled && (
+                        <span
+                          className="projects-rail-pipeline-badge"
+                          title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+                        >
+                          <Zap size={13} />
+                        </span>
+                      )}
                       <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
                     </div>
                   </button>

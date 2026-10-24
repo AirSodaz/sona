@@ -27,15 +27,16 @@ export function SettingsTabContainer({
 }
 
 export interface SettingsPageHeaderProps {
+  id?: string;
   title: string | ReactNode;
   description?: string | ReactNode;
   icon?: ReactNode;
 }
 
-export function SettingsPageHeader({ title, description, icon }: SettingsPageHeaderProps) {
+export function SettingsPageHeader({ id, title, description, icon }: SettingsPageHeaderProps) {
   return (
     <div className="settings-page-header">
-      <h2 className="settings-page-title">
+      <h2 id={id} className="settings-page-title">
         {icon && <span className="settings-page-icon">{icon}</span>}
         {title}
       </h2>

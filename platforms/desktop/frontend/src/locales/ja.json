@@ -211,11 +211,44 @@
     }
   },
   "panel": {
+    "create": "新規",
     "live_record": "Live Record",
     "batch_import": "Batch Import",
     "projects": "ワークスペース",
     "transcript": "文字起こし",
-    "mode_selection": "モードの選択"
+    "mode_selection": "モードの選択",
+    "input_selection": "ワークスペース入力選択",
+    "tools": "ツール"
+  },
+  "tools": {
+    "title": "ツール",
+    "subtitles": "リアルタイム字幕",
+    "subtitles_desc": "デスクトップフローティング二言語字幕",
+    "subtitles_preview_title": "リアルタイム字幕プレビュー",
+    "subtitles_preview_desc": "デスクトップ上の字幕の表示効果をリアルタイムでシミュレーションします。",
+    "voice_typing": "音声入力",
+    "voice_typing_desc": "システム全体の音声入力とAI推敲",
+    "api_server": "API サーバー",
+    "api_server_desc": "ローカル HTTP 音声文字起こし API",
+    "mcp": "MCP エージェント",
+    "mcp_desc": "Model Context Protocol エージェントサーバー",
+    "status_running": "実行中",
+    "status_stopped": "停止",
+    "status_ready": "準備完了",
+    "status_disabled": "無効",
+    "status_needs_config": "設定が必要",
+    "clients_unit": "クライアント",
+    "migrated_notice": "この設定項目は、より迅速な起動・停止、設定調整、および実行ステータス監視のために、ホームページの「ツール」ワークベンチに移行されました。",
+    "migrated_notice_desc": "独立した拡張機能とサービスツールはホームページの統一ワークベンチに統合されました。",
+    "migrated_badge": "ツールへ移行済み",
+    "go_to_tools": "ツールへ移動",
+    "copy_api_url": "エンドポイントをコピー",
+    "subtitles_preview_text_primary": "Sona リアルタイム音声認識と二言語字幕プレビュー",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "クライアント",
+    "subtitles_missing_model_warning": "リアルタイム字幕にはストリーミング ASR モデルが必要です。モデル設定でストリーミングモデルを設定してください。",
+    "sidebar_title": "ツールサイドバー",
+    "tabs_title": "ツール一覧"
   },
   "live": {
     "resume": "再開",
@@ -247,9 +280,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "背景色",
     "background_opacity": "背景の不透明度",
+    "recording": "録音中",
     "subtitle_settings": "字幕設定"
   },
   "batch": {
+    "items": "件",
+    "processing": "処理中",
     "processing_title": "オーディオの処理",
     "processing_desc": "ファイルを文字起こししています。しばらくお待ちください...",
     "transcribing": "文字起こし中...",
@@ -492,6 +528,7 @@
     "reveal_in_folder": "ファイルエクスプローラーで表示"
   },
   "projects": {
+    "projects_group_title": "プロジェクト",
     "all_items": "すべてのアイテム",
     "untagged": "タグなし",
     "trash": "ゴミ箱",
@@ -2221,6 +2258,7 @@
     "api_server": {
       "title": "APIサーバー",
       "description": "Sona と外部 headless integration を行うための HTTP API を公開します。Live Record や Batch Import などの機能を HTTP 経由で呼び出せます。",
+      "network_security_title": "ネットワークとセキュリティ",
       "restart_warning": "API サーバーへの変更は、次回のアプリケーション起動時に有効になります。",
       "enable_label": "APIサーバーを有効にする",
       "enable_hint": "HTTP サーバーを起動して、外部アプリケーション経由で Sona を制御します。",
@@ -2275,6 +2313,9 @@
       "active_clients_count": "{{count}} エージェント接続中",
       "active_clients_count_one": "{{count}} エージェント接続中",
       "active_clients_count_other": "{{count}} エージェント接続中",
+      "active_clients_count_short": "{{count}} 件接続中",
+      "active_clients_count_short_one": "{{count}} 件接続中",
+      "active_clients_count_short_other": "{{count}} 件接続中",
       "ipc_endpoint": "通信エンドポイント",
       "ipc_endpoint_hint": "外部エージェントプロセスが Sona とのローカル通信に使用する統合 IPC エンドポイント。",
       "bridge_binary": "ブリッジ実行ファイル (sona-mcp)",
@@ -2352,6 +2393,7 @@
       "allowed": "許可",
       "blocked": "ポリシーにより遮断",
       "btn_ping": "Ping",
+      "pinging": "Ping 実行中...",
       "ping_failed": "Ping 失敗"
     },
     "llm": {

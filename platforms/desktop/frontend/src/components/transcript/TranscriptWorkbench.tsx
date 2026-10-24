@@ -92,6 +92,7 @@ export function TranscriptWorkbench({
   const setTitle = useTranscriptSessionStore((state) => state.setTitle);
   const setIcon = useTranscriptSessionStore((state) => state.setIcon);
   const mode = useTranscriptRuntimeStore((state) => state.mode);
+  const ingestionFocus = useTranscriptRuntimeStore((state) => state.ingestionFocus);
 
   const updateHistoryMeta = useHistoryStore((state) => state.updateItemMeta);
   const currentHistoryItem = useHistoryStore((state) =>
@@ -127,14 +128,16 @@ export function TranscriptWorkbench({
       : currentHistoryItem?.type === 'recording'
         ? 'recording'
         : undefined;
+  const isBatchMode = mode === 'create' && ingestionFocus === 'batch';
   const displayIconType =
-    defaultIconType || historyDefaultIconType || (mode === 'batch' ? 'batch' : 'recording');
+    defaultIconType || historyDefaultIconType || (isBatchMode ? 'batch' : 'recording');
 
   // Determine display title
-  const displayTitle =
-    propsTitle ||
-    storeTitle ||
-    (mode === 'live' ? t('panel.live_record') : t('panel.batch_import'));
+  const fallbackTitle =
+    displayIconType === 'batch'
+      ? t('panel.batch_import', { defaultValue: 'Batch Import' })
+      : t('panel.live_record', { defaultValue: 'Live Record' });
+  const displayTitle = propsTitle || storeTitle || fallbackTitle;
   const isManualHeaderActionsDisabled = isRecording;
   const isRenameModalVisible = isRenameModalOpen && !isManualHeaderActionsDisabled;
 

@@ -1682,6 +1682,7 @@
   font-weight: 700;
   color: var(--color-text-primary);
   letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
 }
 
 .text-success {
@@ -1768,6 +1769,15 @@
   border-radius: var(--radius-sm);
   font-size: 0.85rem;
   border: 1px solid color-mix(in srgb, var(--color-error) 20%, transparent);
+}
+
+.settings-warning-notice {
+  background: color-mix(in srgb, var(--color-warning) 8%, transparent);
+  color: var(--color-warning);
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  font-size: 0.85rem;
+  border: 1px solid color-mix(in srgb, var(--color-warning) 20%, transparent);
 }
 
 .settings-storage-retention-control {

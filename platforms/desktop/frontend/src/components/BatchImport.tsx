@@ -15,6 +15,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
 import { UploadIcon } from './Icons';
@@ -78,6 +79,7 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         useProjectStore.getState().projects,
         config
       );
+      useTranscriptStore.getState().setIngestionFocus('batch');
       addFiles(files, {
         projectId: activeProjectId,
         pipelineSnapshot,

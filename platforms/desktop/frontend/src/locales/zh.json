@@ -211,11 +211,44 @@
     }
   },
   "panel": {
+    "create": "新建",
     "live_record": "实时录音",
     "batch_import": "批量导入",
     "projects": "项目中心",
     "transcript": "转录",
-    "mode_selection": "模式选择"
+    "mode_selection": "模式选择",
+    "input_selection": "工作区输入选择",
+    "tools": "工具箱"
+  },
+  "tools": {
+    "title": "工具箱",
+    "subtitles": "实时字幕",
+    "subtitles_desc": "桌面悬浮双语字幕",
+    "subtitles_preview_title": "实时字幕效果预览",
+    "subtitles_preview_desc": "所见即所得模拟字幕在桌面呈现的真实视觉效果。",
+    "voice_typing": "语音输入法",
+    "voice_typing_desc": "全局快捷输入与智能润色",
+    "api_server": "API 服务",
+    "api_server_desc": "本地 HTTP 音频转录接口",
+    "mcp": "MCP 智能体",
+    "mcp_desc": "AI Agent 协议服务端",
+    "status_running": "运行中",
+    "status_stopped": "已停止",
+    "status_ready": "已就绪",
+    "status_disabled": "未启用",
+    "status_needs_config": "需配置",
+    "clients_unit": "客户端",
+    "migrated_notice": "该设置项已迁移至首页「工具箱」工作台，提供更高效的快速启停、参数调节与运行状态监控。",
+    "migrated_notice_desc": "独立扩展与服务类工具已收归至首页统一工作台。",
+    "migrated_badge": "已迁移至工具箱",
+    "go_to_tools": "前往工具箱",
+    "copy_api_url": "复制端点",
+    "subtitles_preview_text_primary": "Sona 实时语音识别与双语字幕预览",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "客户端",
+    "subtitles_missing_model_warning": "实时字幕需要流式语音识别模型，请在模型设置中配置流式模型。",
+    "sidebar_title": "工具箱侧边栏",
+    "tabs_title": "工具列表"
   },
   "live": {
     "resume": "恢复",
@@ -247,9 +280,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "背景颜色",
     "background_opacity": "背景不透明度",
+    "recording": "录音中",
     "subtitle_settings": "字幕设置"
   },
   "batch": {
+    "items": "项",
+    "processing": "处理中",
     "processing_title": "正在处理音频",
     "processing_desc": "请稍候，正在转录您的文件...",
     "transcribing": "正在转录...",
@@ -492,6 +528,7 @@
     "reveal_in_folder": "在文件管理器中显示"
   },
   "projects": {
+    "projects_group_title": "项目",
     "all_items": "全部内容",
     "untagged": "收件箱",
     "trash": "回收站",
@@ -2183,6 +2220,7 @@
     "api_server": {
       "title": "API 服务",
       "description": "通过暴露本地 HTTP API，使外部应用能够通过编程的方式调用 Sona。支持批量音频转写任务提交与状态轮询等。",
+      "network_security_title": "网络与安全",
       "restart_warning": "修改后的 API 服务设置将在下一次启动客户端时生效。",
       "enable_label": "启用 API 服务",
       "enable_hint": "启动 HTTP 服务，允许外部程序调用 Sona。",
@@ -2237,6 +2275,9 @@
       "active_clients_count": "{{count}} 个智能体连接",
       "active_clients_count_one": "{{count}} 个智能体连接",
       "active_clients_count_other": "{{count}} 个智能体连接",
+      "active_clients_count_short": "{{count}} 个已连接",
+      "active_clients_count_short_one": "{{count}} 个已连接",
+      "active_clients_count_short_other": "{{count}} 个已连接",
       "ipc_endpoint": "通信端点",
       "ipc_endpoint_hint": "外部智能体进程用于同 Sona 进行本地通信的统一 IPC 端点。",
       "bridge_binary": "桥接程序 (sona-mcp)",
@@ -2314,6 +2355,7 @@
       "allowed": "允许",
       "blocked": "策略拦截",
       "btn_ping": "测试延迟",
+      "pinging": "正在测试...",
       "ping_failed": "测试失败"
     },
     "llm": {

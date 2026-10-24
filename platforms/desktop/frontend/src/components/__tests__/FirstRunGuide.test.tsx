@@ -101,7 +101,8 @@ describe('FirstRunGuide', () => {
     ]);
 
     useTranscriptStore.setState({
-      mode: 'batch',
+      mode: 'create',
+      ingestionFocus: 'batch',
     });
     useConfigStore.setState({
       config: {
@@ -167,7 +168,8 @@ describe('FirstRunGuide', () => {
     expect(useConfigStore.getState().config.microphoneId).toBe('default');
     expect(useConfigStore.getState().config.streamingModelPath).toBe('/models/live');
     expect(useConfigStore.getState().config.batchModelPath).toBe('/models/batch');
-    expect(useTranscriptStore.getState().mode).toBe('live');
+    expect(useTranscriptStore.getState().mode).toBe('create');
+    expect(useTranscriptStore.getState().ingestionFocus).toBe('live');
     expect(useOnboardingStore.getState().persistedState.status).toBe('completed');
     expect(useOnboardingStore.getState().isOpen).toBe(false);
   });

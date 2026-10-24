@@ -211,11 +211,44 @@
     }
   },
   "panel": {
+    "create": "Create",
     "live_record": "Live Record",
     "batch_import": "Batch Import",
     "projects": "Projects",
     "transcript": "Transcript",
-    "mode_selection": "Mode Selection"
+    "mode_selection": "Mode Selection",
+    "input_selection": "Workspace Input Selection",
+    "tools": "Tools"
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitles": "Live Subtitles",
+    "subtitles_desc": "Desktop floating bilingual subtitles",
+    "subtitles_preview_title": "Live Subtitle Preview",
+    "subtitles_preview_desc": "WYSIWYG simulation of the floating subtitle appearance on your desktop.",
+    "voice_typing": "Voice Typing",
+    "voice_typing_desc": "System-wide dictation and smart polishing",
+    "api_server": "API Server",
+    "api_server_desc": "Local HTTP audio transcription API",
+    "mcp": "MCP Agents",
+    "mcp_desc": "Model Context Protocol agent server",
+    "status_running": "Running",
+    "status_stopped": "Stopped",
+    "status_ready": "Ready",
+    "status_disabled": "Disabled",
+    "status_needs_config": "Needs Config",
+    "clients_unit": "clients",
+    "migrated_notice": "This setting has been moved to the homepage Tools workbench for faster control, configuration, and monitoring.",
+    "migrated_notice_desc": "Standalone extension and service tools have been consolidated into the unified homepage workbench.",
+    "migrated_badge": "Moved to Tools",
+    "go_to_tools": "Go to Tools",
+    "copy_api_url": "Copy Endpoint",
+    "subtitles_preview_text_primary": "Sona Live Speech Recognition and Subtitles",
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "client",
+    "subtitles_missing_model_warning": "Live Subtitles requires a streaming ASR model. Please configure a streaming model in Model Settings.",
+    "sidebar_title": "Tools sidebar",
+    "tabs_title": "Tools list"
   },
   "live": {
     "resume": "Resume",
@@ -247,9 +280,12 @@
     "font_color_hex_placeholder": "#RRGGBB",
     "background_color": "Background Color",
     "background_opacity": "Background Opacity",
+    "recording": "Recording",
     "subtitle_settings": "Subtitle Settings"
   },
   "batch": {
+    "items": "items",
+    "processing": "Processing",
     "processing_title": "Processing Audio",
     "processing_desc": "Please wait while we transcribe your file...",
     "transcribing": "Transcribing...",
@@ -492,6 +528,7 @@
     "reveal_in_folder": "Show in File Explorer"
   },
   "projects": {
+    "projects_group_title": "Projects",
     "all_items": "All Items",
     "untagged": "Inbox",
     "trash": "Trash",
@@ -2183,6 +2220,7 @@
     "api_server": {
       "title": "API Server",
       "description": "Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.",
+      "network_security_title": "Network & Security",
       "restart_warning": "Changes to the API Server take effect on the next application launch.",
       "enable_label": "Enable API Server",
       "enable_hint": "Start an HTTP server to control Sona via external applications.",
@@ -2237,6 +2275,9 @@
       "active_clients_count": "{{count}} Agent connected",
       "active_clients_count_one": "{{count}} Agent connected",
       "active_clients_count_other": "{{count}} Agents connected",
+      "active_clients_count_short": "{{count}} Connected",
+      "active_clients_count_short_one": "{{count}} Connected",
+      "active_clients_count_short_other": "{{count}} Connected",
       "ipc_endpoint": "IPC Endpoint",
       "ipc_endpoint_hint": "Unified local IPC endpoint used by external agent processes.",
       "bridge_binary": "Bridge Executable (sona-mcp)",
@@ -2314,6 +2355,7 @@
       "allowed": "Allowed",
       "blocked": "Blocked by Policy",
       "btn_ping": "Ping",
+      "pinging": "Pinging...",
       "ping_failed": "Ping failed"
     },
     "llm": {

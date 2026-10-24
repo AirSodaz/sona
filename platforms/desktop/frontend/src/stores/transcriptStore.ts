@@ -13,6 +13,7 @@ import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import type {
   AppMode,
   HistorySummaryPayload,
+  IngestionFocus,
   ProcessingStatus,
   TranscriptSegment,
   TranscriptSummaryState,
@@ -38,6 +39,12 @@ import {
   rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry,
   resolveTranscriptHistoryKey,
 } from './transcriptSidecarState';
+
+let activeBatchItemIdResolver: (() => string | null) | null = null;
+
+export function registerBatchActiveItemIdResolver(resolver: () => string | null): void {
+  activeBatchItemIdResolver = resolver;
+}
 
 export interface SessionData {
   // Session fields
@@ -84,6 +91,7 @@ export interface TranscriptStore {
 
   // --- Runtime (Global) ---
   mode: AppMode;
+  ingestionFocus: IngestionFocus;
   processingStatus: ProcessingStatus;
   processingProgress: number;
   isRecording: boolean;
@@ -127,7 +135,8 @@ export interface TranscriptStore {
   ) => void;
 
   // Runtime
-  setMode: (mode: AppMode) => void;
+  setMode: (mode: AppMode, focus?: IngestionFocus) => void;
+  setIngestionFocus: (focus: IngestionFocus) => void;
   setProcessingStatus: (status: ProcessingStatus) => void;
   setProcessingProgress: (progress: number) => void;
   setIsRecording: (isRecording: boolean) => void;
@@ -248,7 +257,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
 
-  mode: 'live',
+  mode: 'create',
+  ingestionFocus: 'live',
   processingStatus: 'idle',
   processingProgress: 0,
   isRecording: false,
@@ -261,7 +271,66 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   autoSaveStates: {},
 
   // --- Runtime ---
-  setMode: (mode) => set({ mode }),
+  setMode: (mode, focus) => {
+    if ((mode as string) === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      set({
+        mode: 'create',
+        ingestionFocus: 'live',
+        activeSessionId: targetSessionId,
+      });
+      return;
+    }
+    if ((mode as string) === 'batch') {
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({ mode: 'create', ingestionFocus: 'batch', activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'create') {
+      const nextFocus = focus ?? get().ingestionFocus;
+      let targetSessionId = 'default';
+      if (nextFocus === 'live') {
+        const recId = get().recordingSessionId;
+        targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      } else if (nextFocus === 'batch') {
+        const activeItemId = activeBatchItemIdResolver?.();
+        targetSessionId = activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      }
+      set({ mode: 'create', ingestionFocus: nextFocus, activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'projects' || mode === 'tools') {
+      set({ mode });
+      return;
+    }
+    set({ mode });
+  },
+  setIngestionFocus: (ingestionFocus) => {
+    const isCreateMode = get().mode === 'create';
+    if (ingestionFocus === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      set({
+        ingestionFocus,
+        ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
+      });
+      return;
+    }
+    if (ingestionFocus === 'batch') {
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({
+        ingestionFocus,
+        ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
+      });
+      return;
+    }
+    set({ ingestionFocus });
+  },
   setProcessingStatus: (processingStatus) => set({ processingStatus }),
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
   setIsRecording: (isRecording) => set({ isRecording }),

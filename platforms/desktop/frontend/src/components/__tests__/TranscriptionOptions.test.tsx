@@ -26,7 +26,8 @@ describe('TranscriptionOptions', () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     useTranscriptRuntimeStore.setState({
-      mode: 'live',
+      mode: 'create',
+      ingestionFocus: 'live',
       isRecording: false,
     });
     useConfigStore.setState({
@@ -402,7 +403,7 @@ describe('TranscriptionOptions', () => {
     expect(useConfigStore.getState().config.language).toBe('zh');
   });
 
-  it('renders capsule layout with SlidersIcon and active model/language summaries', () => {
+  it('renders pill layout with status dot and active model/language summaries', () => {
     vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
     useConfigStore.setState({
       config: {
@@ -430,12 +431,12 @@ describe('TranscriptionOptions', () => {
     render(<TranscriptionOptions surface="live" />);
 
     const button = getTriggerButton();
-    expect(button.querySelector('.parameter-settings-icon')).toBeTruthy();
-    expect(button.querySelector('.parameter-settings-capsule-main')).toBeTruthy();
+    expect(button.querySelector('.parameter-settings-status-dot')).toBeTruthy();
     expect(button.querySelector('.parameter-settings-capsule-summary')).toBeTruthy();
     expect(button.querySelector('.parameter-settings-summary-model')?.textContent).toBe(
       'SenseVoice Live'
     );
+    expect(button.querySelector('.parameter-settings-summary-divider')?.textContent).toBe('/');
     expect(button.querySelector('.parameter-settings-summary-lang')?.textContent).toBe('English');
     expect(button.getAttribute('title')).toBeNull();
     expect(button.getAttribute('aria-label')).toBe('Preset: SenseVoice Live, English');

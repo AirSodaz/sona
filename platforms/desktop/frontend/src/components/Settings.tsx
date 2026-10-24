@@ -10,25 +10,24 @@ import { SettingsNavigationProvider } from './settings/SettingsNavigationContext
 import { SettingsSidebarGroupHeader, SettingsTabButton } from './settings/SettingsTabButton';
 import {
   loadSettingsAboutTab,
-  loadSettingsApiServerTab,
   loadSettingsAutomationTab,
   loadSettingsDashboardTab,
   loadSettingsGeneralTab,
   loadSettingsLLMServiceTab,
-  loadSettingsMcpTab,
   loadSettingsMicrophoneTab,
   loadSettingsModelsPane,
   loadSettingsShortcutsTab,
   loadSettingsStorageTab,
-  loadSettingsSubtitleTab,
   loadSettingsSyncTab,
   loadSettingsVocabularyTab,
   SETTINGS_TAB_GROUPS,
   SETTINGS_TABS,
 } from './settings/settingsLoaders';
 import './settings/Settings.css';
+import type { ToolId } from '../types/tools';
 import type { LlmProvider } from '../types/transcript';
 import { XIcon } from './Icons';
+import { SettingsMigratedBanner } from './settings/SettingsMigratedBanner';
 import type { ModelScenario } from './settings/SettingsModelsTab';
 import type { SubtitleSubTab } from './settings/SettingsSubtitleTab';
 import type { PromptsSubTab, VocabularySubTab } from './settings/SettingsVocabularyTab';
@@ -93,13 +92,10 @@ interface SettingsProps {
 const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
 const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
 const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
-const SettingsSubtitleTab = lazy(loadSettingsSubtitleTab);
 const SettingsModelsPane = lazy(loadSettingsModelsPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
-const SettingsApiServerTab = lazy(loadSettingsApiServerTab);
-const SettingsMcpTab = lazy(loadSettingsMcpTab);
 const SettingsSyncTab = lazy(loadSettingsSyncTab);
 const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
@@ -113,7 +109,9 @@ function renderSettingsPane(
   onOpenDiagnostics?: () => void,
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void,
   initialTab?: SettingsTabInput,
-  pendingSubTab?: SettingsPendingSubTab
+  pendingSubTab?: SettingsPendingSubTab,
+  migratedSubtitleTool: ToolId = initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles',
+  onClose?: () => void
 ): React.JSX.Element | null {
   switch (activeTab) {
     case 'general':
@@ -130,15 +128,13 @@ function renderSettingsPane(
       return <SettingsMicrophoneTab isActiveTab={isActive} isOpen={isOpen} />;
     case 'subtitle':
       return (
-        <SettingsSubtitleTab
-          initialSubTab={
-            pendingSubTab?.tab === 'subtitle'
-              ? pendingSubTab.subTab
-              : initialTab === 'voice_typing'
-                ? 'voice_typing'
-                : undefined
+        <SettingsMigratedBanner
+          tool={
+            pendingSubTab?.tab === 'subtitle' && pendingSubTab.subTab
+              ? (pendingSubTab.subTab as ToolId)
+              : migratedSubtitleTool
           }
-          subTabRequestId={pendingSubTab?.tab === 'subtitle' ? pendingSubTab.requestId : undefined}
+          onClose={onClose}
         />
       );
     case 'models':
@@ -181,9 +177,9 @@ function renderSettingsPane(
         />
       );
     case 'api_server':
-      return <SettingsApiServerTab />;
+      return <SettingsMigratedBanner tool="api_server" onClose={onClose} />;
     case 'mcp':
-      return <SettingsMcpTab />;
+      return <SettingsMigratedBanner tool="mcp" onClose={onClose} />;
     case 'llm_service':
       return (
         <SettingsLLMServiceTab
@@ -207,7 +203,13 @@ function addMountedSettingsTab(current: SettingsTab[], tab: SettingsTab): Settin
 
   const next = new Set(current);
   next.add(tab);
-  return SETTINGS_TABS.filter((candidate) => next.has(candidate));
+  const ordered = SETTINGS_TABS.filter((candidate) => next.has(candidate));
+  for (const t of next) {
+    if (!ordered.includes(t)) {
+      ordered.push(t);
+    }
+  }
+  return ordered;
 }
 
 function requestSettingsFrame(callback: FrameRequestCallback): number {
@@ -268,6 +270,8 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails,
   initialTab,
   pendingSubTab,
+  migratedSubtitleTool,
+  onClose,
 }: {
   tab: SettingsTab;
   isOpen: boolean;
@@ -277,6 +281,8 @@ function SettingsPaneContent({
   onOpenLlmProviderDetails?: (provider: LlmProvider) => void;
   initialTab?: SettingsTabInput;
   pendingSubTab?: SettingsPendingSubTab;
+  migratedSubtitleTool?: ToolId;
+  onClose?: () => void;
 }): React.JSX.Element {
   return (
     <Suspense fallback={null}>
@@ -288,7 +294,9 @@ function SettingsPaneContent({
         onOpenDiagnostics,
         onOpenLlmProviderDetails,
         initialTab,
-        pendingSubTab
+        pendingSubTab,
+        migratedSubtitleTool,
+        onClose
       )}
     </Suspense>
   );
@@ -320,6 +328,19 @@ export function Settings({
 
   const { activeTab, setActiveTab } = useSettingsLogic(isOpen, onClose, effectiveInitialTab);
   const renderedTab = isPrewarming ? 'general' : activeTab;
+  const isRenderedTabInList = (SETTINGS_TABS as readonly string[]).includes(renderedTab);
+  const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
+  const [migratedSubtitleTool, setMigratedSubtitleTool] = useState<ToolId>(() =>
+    initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles'
+  );
+  if (prevInitialTab !== initialTab) {
+    setPrevInitialTab(initialTab);
+    if (initialTab === 'voice_typing') {
+      setMigratedSubtitleTool('voice_typing');
+    } else if (initialTab === 'subtitle') {
+      setMigratedSubtitleTool('subtitles');
+    }
+  }
   const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
   const renderedMountedTabs = useMemo(
     () => (shouldRender ? addMountedSettingsTab(mountedTabs, renderedTab) : mountedTabs),
@@ -423,6 +444,9 @@ export function Settings({
 
   const handleSelectResult = useCallback(
     (hit: SettingsSearchHit) => {
+      if (hit.tab === 'subtitle') {
+        setMigratedSubtitleTool((hit.subTab as ToolId) || 'subtitles');
+      }
       navigateToTab(hit.tab);
       navRequestIdRef.current += 1;
       setPendingSubTab(createPendingSubTab(hit, navRequestIdRef.current));
@@ -441,11 +465,18 @@ export function Settings({
       const maxDurationMs = 2000;
 
       const findAndScroll = () => {
-        let el = document.getElementById(targetId);
-        const isSyncDisabledCardPresent =
-          hit.tab === 'sync' && Boolean(document.querySelector('.sync-disabled-feature-card'));
-        if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
-          el = document.getElementById('settings-sync-toggle');
+        const modal = modalRef.current;
+        let el: HTMLElement | null = null;
+        if (hit.tab === 'subtitle' || hit.tab === 'api_server' || hit.tab === 'mcp') {
+          const tool = hit.tab === 'subtitle' ? hit.subTab || 'subtitles' : hit.tab;
+          el = modal?.querySelector<HTMLElement>(`#settings-panel-migrated-${tool}`) ?? null;
+        } else {
+          el = modal?.querySelector<HTMLElement>(`#${targetId}`) ?? null;
+          const isSyncDisabledCardPresent =
+            hit.tab === 'sync' && Boolean(modal?.querySelector('.sync-disabled-feature-card'));
+          if (!el && hit.tab === 'sync' && isSyncDisabledCardPresent) {
+            el = modal?.querySelector<HTMLElement>('#settings-sync-toggle') ?? null;
+          }
         }
         if (el && !el.closest('[hidden]')) {
           scrollRafRef.current = null;
@@ -455,7 +486,7 @@ export function Settings({
         } else {
           scrollRafRef.current = null;
           const fallbackEl = hit.fallbackTargetId
-            ? document.getElementById(hit.fallbackTargetId)
+            ? (modal?.querySelector<HTMLElement>(`#${hit.fallbackTargetId}`) ?? null)
             : null;
           if (fallbackEl && !fallbackEl.closest('[hidden]')) {
             applyHighlight(fallbackEl);
@@ -591,8 +622,12 @@ export function Settings({
         e.preventDefault();
         const currentIndex = SETTINGS_TABS.indexOf(renderedTab as (typeof SETTINGS_TABS)[number]);
         const nextIndex = e.shiftKey
-          ? (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length
-          : (currentIndex + 1) % SETTINGS_TABS.length;
+          ? currentIndex <= 0
+            ? SETTINGS_TABS.length - 1
+            : currentIndex - 1
+          : currentIndex === -1
+            ? 0
+            : (currentIndex + 1) % SETTINGS_TABS.length;
 
         const nextTab = SETTINGS_TABS[nextIndex];
         navigateToTab(nextTab);
@@ -610,11 +645,11 @@ export function Settings({
     switch (e.key) {
       case 'ArrowDown':
         e.preventDefault();
-        nextIndex = (currentIndex + 1) % SETTINGS_TABS.length;
+        nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % SETTINGS_TABS.length;
         break;
       case 'ArrowUp':
         e.preventDefault();
-        nextIndex = (currentIndex - 1 + SETTINGS_TABS.length) % SETTINGS_TABS.length;
+        nextIndex = currentIndex <= 0 ? SETTINGS_TABS.length - 1 : currentIndex - 1;
         break;
       case 'Home':
         e.preventDefault();
@@ -692,7 +727,12 @@ export function Settings({
                       Icon={meta.Icon}
                       activeTab={renderedTab}
                       setActiveTab={navigateToTab}
-                      tabIndex={renderedTab === tabId ? 0 : -1}
+                      tabIndex={
+                        renderedTab === tabId ||
+                        (!isRenderedTabInList && tabId === SETTINGS_TABS[0])
+                          ? 0
+                          : -1
+                      }
                     />
                   );
                 })}
@@ -739,6 +779,8 @@ export function Settings({
                       onOpenLlmProviderDetails={onOpenLlmProviderDetails}
                       initialTab={initialTab}
                       pendingSubTab={pendingSubTab}
+                      migratedSubtitleTool={migratedSubtitleTool}
+                      onClose={onClose}
                     />
                   </SettingsPaneFrame>
                 );

@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommand } from '../../../services/tauri/commands';
 import { invokeTauri } from '../../../services/tauri/invoke';
+import { useDialogStore } from '../../../stores/dialogStore';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
 import { SettingsApiServerTab } from '../SettingsApiServerTab';
 
@@ -43,6 +44,7 @@ vi.mock('../../../stores/configStore', async () => {
 describe('SettingsApiServerTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useDialogStore.setState({ confirm: vi.fn().mockResolvedValue(true) });
     currentConfig = buildTestConfig({
       httpServerEnabled: false,
       httpServerHost: '127.0.0.1',
@@ -56,13 +58,15 @@ describe('SettingsApiServerTab', () => {
       render(<SettingsApiServerTab />);
     });
 
-    screen.getByText('Enable API Server');
+    screen.getByText('API Server');
+    screen.getByRole('switch', { name: 'Enable API Server' });
+    screen.getByText('Network & Security');
     screen.getByText('Host');
     screen.getByText('Port');
     screen.getByText('API Key');
 
     // Verify sub-label hints render
-    screen.getByText('Start an HTTP server to control Sona via external applications.');
+    screen.getByText(/Expose an HTTP API for external headless integration/);
     screen.getByText(/Bind address for the server/);
     screen.getByText('TCP port for the API server. Must be between 1 and 65535 (default: 14200).');
     screen.getByText('Optional Bearer token for authenticating HTTP requests.');
@@ -106,7 +110,10 @@ describe('SettingsApiServerTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerApiKey: 'new-custom-key' });
   });
 
-  it('handles Generate API Key', async () => {
+  it('handles Generate API Key after confirmation', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(true);
+    useDialogStore.setState({ confirm: confirmSpy });
+
     await act(async () => {
       render(<SettingsApiServerTab />);
     });
@@ -116,10 +123,28 @@ describe('SettingsApiServerTab', () => {
       fireEvent.click(generateBtn);
     });
 
+    expect(confirmSpy).toHaveBeenCalled();
     expect(mockUpdateConfig).toHaveBeenCalled();
     const arg = mockUpdateConfig.mock.calls[0]?.[0];
     expect(arg.httpServerApiKey).toBeDefined();
     expect(arg.httpServerApiKey).not.toBe('original-key');
+  });
+
+  it('does not regenerate API key if confirmation is cancelled', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(false);
+    useDialogStore.setState({ confirm: confirmSpy });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    const generateBtn = screen.getByRole('button', { name: 'Generate' });
+    await act(async () => {
+      fireEvent.click(generateBtn);
+    });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   it('renders custom data-tooltips on action buttons', async () => {
@@ -229,6 +254,88 @@ describe('SettingsApiServerTab', () => {
       })
     );
     expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerIpWhitelist: '127.0.0.0/8,::1/128' });
+    vi.useRealTimers();
+  });
+
+  it('suppresses "not running" error during initial startup polling', async () => {
+    currentConfig.httpServerEnabled = true;
+    vi.mocked(invokeTauri).mockRejectedValueOnce(new Error('Server is not running'));
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    expect(screen.queryByText(/Server is not running/i)).toBeNull();
+  });
+
+  it('displays real errors that are not "not running"', async () => {
+    currentConfig.httpServerEnabled = true;
+    vi.mocked(invokeTauri).mockRejectedValueOnce(new Error('Port 14200 already bound'));
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Port 14200 already bound/)).toBeDefined();
+    });
+  });
+
+  it('copies formatted endpoint URL to clipboard when Copy Endpoint button is clicked', async () => {
+    const writeTextMock = vi.fn().mockResolvedValue(undefined);
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: writeTextMock,
+      },
+    });
+
+    currentConfig = buildTestConfig({
+      httpServerEnabled: true,
+      httpServerHost: '127.0.0.1',
+      httpServerPort: 14200,
+    });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    const copyBtn = screen.getByRole('button', { name: /Copy Endpoint/i });
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(writeTextMock).toHaveBeenCalledWith('http://127.0.0.1:14200');
+  });
+
+  it('does not restart the server on mount when server is already running with unchanged config', async () => {
+    vi.useFakeTimers();
+    vi.mocked(invokeTauri).mockResolvedValue({
+      health: { status: 'ok', uptime: 100, activeJobs: 0, pendingJobs: 0, cacheSpaceBytes: 0 },
+      info: {
+        platform: 'win32',
+        gpuAvailable: true,
+        models: [],
+        vadInstalled: true,
+        punctuationInstalled: true,
+      },
+      jobs: {},
+    } as never);
+
+    currentConfig = buildTestConfig({
+      httpServerEnabled: true,
+      httpServerHost: '127.0.0.1',
+      httpServerPort: 14200,
+      httpServerApiKey: 'original-key',
+    });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(invokeTauri).not.toHaveBeenCalledWith(TauriCommand.apiServer.start, expect.anything());
     vi.useRealTimers();
   });
 });

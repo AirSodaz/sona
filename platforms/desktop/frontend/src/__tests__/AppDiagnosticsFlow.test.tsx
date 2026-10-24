@@ -22,8 +22,10 @@ vi.mock('../components/TranslateButton', () => ({
   TranslateButton: () => <div>TranslateButton</div>,
 }));
 vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
-vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
-vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
+vi.mock('../components/CreateWorkspacePanel', () => ({
+  CreateWorkspacePanel: () => <div>CreateWorkspacePanel</div>,
+}));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
 vi.mock('../components/ErrorDialog', () => ({ ErrorDialog: () => <div>ErrorDialog</div> }));
