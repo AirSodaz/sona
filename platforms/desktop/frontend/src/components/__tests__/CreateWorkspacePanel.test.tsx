@@ -73,7 +73,7 @@ describe('CreateWorkspacePanel', () => {
     const shell = screen.getByTestId('create-workspace-shell');
     expect(shell.className).toContain('state-live');
 
-    const tablist = screen.getByRole('tablist', { name: 'Mode Selection' });
+    const tablist = screen.getByRole('tablist', { name: 'Workspace Input Selection' });
     expect(tablist).not.toBeNull();
 
     // Slider and Live Tab active

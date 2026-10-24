@@ -117,7 +117,11 @@ export function ToolsSidebar(): React.JSX.Element {
         : !isMcpRunning
           ? t('tools.status_stopped', { defaultValue: 'Stopped' })
           : mcpStatus?.activeConnections && mcpStatus.activeConnections > 0
-            ? `${mcpStatus.activeConnections} ${t('tools.clients_unit', { defaultValue: 'clients' })}`
+            ? `${mcpStatus.activeConnections} ${
+                mcpStatus.activeConnections === 1
+                  ? t('tools.clients_unit_singular', { defaultValue: 'client' })
+                  : t('tools.clients_unit', { defaultValue: 'clients' })
+              }`
             : t('tools.status_running', { defaultValue: 'Running' }),
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
@@ -133,7 +137,7 @@ export function ToolsSidebar(): React.JSX.Element {
   const effectiveIndex = Math.max(selectedIndex, 0);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
     e.preventDefault();
     const currentIndex = Math.max(selectedIndex, 0);

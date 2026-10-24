@@ -19,14 +19,16 @@ import { useAgentControlSync } from './hooks/useAgentControlSync';
 import { useAppInitialization } from './hooks/useAppInitialization';
 import { useAutoSaveTranscript } from './hooks/useAutoSaveTranscript';
 import { useAutoUpdateCheck } from './hooks/useAutoUpdateCheck';
+import { useCaptionSession } from './hooks/useCaptionSession';
 import { useNumberStepperHoverEffect } from './hooks/useNumberStepperHoverEffect';
 import { useTranscriptionServiceSync } from './hooks/useTranscriptionServiceSync';
 import { useTrayHandling } from './hooks/useTrayHandling';
+import { captionWindowService } from './services/captionWindowService';
 import { diagnosticsService } from './services/diagnosticsService';
 import { buildLlmConfigPatch, createLlmSettings } from './services/llm/state';
 import { useAutomationStore } from './stores/automationStore';
 import { useBatchQueueStore } from './stores/batchQueueStore';
-import { useLlmAssistantConfig, useSetConfig } from './stores/configStore';
+import { useConfigStore, useLlmAssistantConfig, useSetConfig } from './stores/configStore';
 import { useOnboardingStore } from './stores/onboardingStore';
 import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 // import { LiveCaptionOverlay } from './components/LiveCaptionOverlay';
@@ -36,6 +38,7 @@ import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
 import { useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
 import type { LlmProvider } from './types/transcript';
+import { logger } from './utils/logger';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
 
 let settingsModulePromise: Promise<typeof import('./components/Settings')> | null = null;
@@ -105,6 +108,18 @@ function App(): React.JSX.Element | null {
 
   // Keep TranscriptionService synced and preloaded in background
   useTranscriptionServiceSync();
+
+  // Dedicated background caption session lifecycle and window synchronization
+  const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
+  const appConfig = useConfigStore((state) => state.config);
+  useCaptionSession(appConfig, isCaptionMode);
+
+  const lockWindow = appConfig.lockWindow ?? false;
+  const alwaysOnTop = appConfig.alwaysOnTop ?? true;
+  useEffect(() => {
+    captionWindowService.setClickThrough(lockWindow).catch(logger.error);
+    captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
+  }, [lockWindow, alwaysOnTop]);
 
   useNumberStepperHoverEffect();
 
@@ -271,6 +286,7 @@ function App(): React.JSX.Element | null {
       {/* Main Content */}
       <main id="main-content" className={appMainClassName}>
         <div
+          id="projects-mode-shell"
           className="projects-mode-shell"
           style={{ display: isProjectsMode ? undefined : 'none' }}
         >
@@ -279,10 +295,15 @@ function App(): React.JSX.Element | null {
             onOpenAutomationSettings={openAutomationSettingsForTag}
           />
         </div>
-        <div className="tools-mode-shell" style={{ display: isToolsMode ? undefined : 'none' }}>
+        <div
+          id="tools-mode-shell"
+          className="tools-mode-shell"
+          style={{ display: isToolsMode ? undefined : 'none' }}
+        >
           <ToolsView isActive={isToolsMode} />
         </div>
         <div
+          id="workspace-mode-shell"
           className="workspace-mode-shell"
           style={{ display: !isProjectsMode && !isToolsMode ? undefined : 'none' }}
         >

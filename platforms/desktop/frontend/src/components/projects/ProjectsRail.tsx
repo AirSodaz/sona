@@ -134,6 +134,7 @@ function SortableProjectItem({
         className="projects-rail-menu-btn"
         aria-label={t('common.more_options', { defaultValue: 'More options' })}
         aria-haspopup="menu"
+        aria-expanded={isContextMenuOpen}
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
@@ -373,6 +374,14 @@ export function ProjectsRail({
                       title={activeDragProject?.name || ''}
                     />
                     <div className="projects-rail-actions">
+                      {activeDragProject?.pipeline?.enabled && (
+                        <span
+                          className="projects-rail-pipeline-badge"
+                          title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+                        >
+                          <Zap size={13} />
+                        </span>
+                      )}
                       <span className="projects-rail-count">{itemCounts.get(activeId) || 0}</span>
                     </div>
                   </button>

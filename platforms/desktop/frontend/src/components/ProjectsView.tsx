@@ -11,7 +11,6 @@ import {
   clearActiveTranscriptSession,
   openTranscriptSession,
 } from '../stores/transcriptCoordinator';
-import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { HistoryItem as HistoryItemType } from '../types/history';
@@ -401,16 +400,11 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
 
     if (effectiveSelectedHistoryId === null) {
       const sessionState = useTranscriptSessionStore.getState();
-      const playbackState = useTranscriptPlaybackStore.getState();
-      if (
-        sessionState.sourceHistoryId ||
-        sessionState.segments.length > 0 ||
-        playbackState.audioUrl
-      ) {
+      if (!isRecording && sessionState.sourceHistoryId) {
         clearActiveTranscriptSession({ clearAudio: true });
       }
     }
-  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive]);
+  }, [effectiveSelectedHistoryId, selectedHistoryId, isActive, isRecording]);
 
   useEffect(() => {
     if (!isLiveDraftSessionLocked) {

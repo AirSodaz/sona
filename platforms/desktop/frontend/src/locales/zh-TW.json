@@ -217,6 +217,7 @@
     "projects": "工作區",
     "transcript": "轉錄",
     "mode_selection": "模式選擇",
+    "input_selection": "工作區輸入選擇",
     "tools": "工具箱"
   },
   "tools": {
@@ -243,7 +244,11 @@
     "go_to_tools": "前往工具箱",
     "copy_api_url": "複製端點",
     "subtitles_preview_text_primary": "Sona 即時語音辨識與雙語字幕預覽",
-    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "客戶端",
+    "subtitles_missing_model_warning": "即時字幕需要串流語音辨識模型，請在模型設定中設定串流模型。",
+    "sidebar_title": "工具箱側邊欄",
+    "tabs_title": "工具列表"
   },
   "live": {
     "resume": "恢復",

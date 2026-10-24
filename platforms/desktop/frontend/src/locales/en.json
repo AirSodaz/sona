@@ -217,6 +217,7 @@
     "projects": "Projects",
     "transcript": "Transcript",
     "mode_selection": "Mode Selection",
+    "input_selection": "Workspace Input Selection",
     "tools": "Tools"
   },
   "tools": {
@@ -243,7 +244,11 @@
     "go_to_tools": "Go to Tools",
     "copy_api_url": "Copy Endpoint",
     "subtitles_preview_text_primary": "Sona Live Speech Recognition and Subtitles",
-    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "client",
+    "subtitles_missing_model_warning": "Live Subtitles requires a streaming ASR model. Please configure a streaming model in Model Settings.",
+    "sidebar_title": "Tools sidebar",
+    "tabs_title": "Tools list"
   },
   "live": {
     "resume": "Resume",

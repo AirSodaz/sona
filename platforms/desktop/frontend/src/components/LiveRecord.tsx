@@ -5,8 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
-import { useCaptionSession } from '../hooks/useCaptionSession';
-import { captionWindowService } from '../services/captionWindowService';
 import { polishService } from '../services/polishService';
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -76,20 +74,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
   }, [focusStartRecordingToken, isRecording]);
 
-  // Caption Mode
-  const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
   const config = useConfigStore((state) => state.config);
-
-  // Initialize dedicated caption session hook
-  useCaptionSession(config, isCaptionMode);
-
-  // Config Helpers
-  const lockWindow = config.lockWindow ?? false;
-  const alwaysOnTop = config.alwaysOnTop ?? true;
-  useEffect(() => {
-    captionWindowService.setClickThrough(lockWindow).catch(logger.error);
-    captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
-  }, [lockWindow, alwaysOnTop]);
 
   // Segment Handler
   const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {

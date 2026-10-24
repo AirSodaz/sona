@@ -17,11 +17,10 @@ const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4a
 
 export function ToolSubtitlesPanel(): React.JSX.Element {
   const { t } = useTranslation();
-  const globalConfig = useConfigStore((state) => state.config);
   const config = useCaptionConfig();
   const updateConfig = useSetConfig();
-  const isCaptionConfigured = isAsrRequestConfigured(
-    resolveAsrTranscriptionRequest(globalConfig, 'caption')
+  const isCaptionConfigured = useConfigStore((state) =>
+    isAsrRequestConfigured(resolveAsrTranscriptionRequest(state.config, 'caption'))
   );
   const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
   const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);

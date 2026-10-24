@@ -91,7 +91,9 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     }
     const nextMode = TAB_MODES[nextIndex];
     if (nextMode) {
-      handleTabChange(nextMode);
+      if (nextMode !== mode) {
+        handleTabChange(nextMode);
+      }
       document.getElementById(`tab-button-${nextMode}`)?.focus();
     }
   };
@@ -115,6 +117,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         className={`tab-button ${mode === 'create' ? 'active' : ''}`}
         onClick={() => handleTabChange('create')}
         aria-selected={mode === 'create'}
+        aria-controls="workspace-mode-shell"
         tabIndex={mode === 'create' ? 0 : -1}
         role="tab"
       >
@@ -127,6 +130,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         className={`tab-button ${mode === 'projects' ? 'active' : ''}`}
         onClick={() => handleTabChange('projects')}
         aria-selected={mode === 'projects'}
+        aria-controls="projects-mode-shell"
         tabIndex={mode === 'projects' ? 0 : -1}
         role="tab"
       >
@@ -139,6 +143,7 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
         className={`tab-button ${mode === 'tools' ? 'active' : ''}`}
         onClick={() => handleTabChange('tools')}
         aria-selected={mode === 'tools'}
+        aria-controls="tools-mode-shell"
         tabIndex={mode === 'tools' ? 0 : -1}
         role="tab"
       >

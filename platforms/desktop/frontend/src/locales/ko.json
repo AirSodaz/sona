@@ -217,6 +217,7 @@
     "projects": "Workspace",
     "transcript": "전사",
     "mode_selection": "모드 선택",
+    "input_selection": "워크스페이스 입력 선택",
     "tools": "도구"
   },
   "tools": {
@@ -243,7 +244,11 @@
     "go_to_tools": "도구로 이동",
     "copy_api_url": "엔드포인트 복사",
     "subtitles_preview_text_primary": "Sona 실시간 음성 인식 및 이중 언어 자막 미리보기",
-    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "클라이언트",
+    "subtitles_missing_model_warning": "실시간 자막은 스트리밍 ASR 모델이 필요합니다. 모델 설정에서 스트리밍 모델을 구성해 주세요.",
+    "sidebar_title": "도구 사이드바",
+    "tabs_title": "도구 목록"
   },
   "live": {
     "resume": "재개",

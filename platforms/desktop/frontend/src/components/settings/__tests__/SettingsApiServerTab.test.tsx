@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommand } from '../../../services/tauri/commands';
 import { invokeTauri } from '../../../services/tauri/invoke';
+import { useDialogStore } from '../../../stores/dialogStore';
 import { buildTestConfig } from '../../../test-utils/configTestUtils';
 import { SettingsApiServerTab } from '../SettingsApiServerTab';
 
@@ -43,6 +44,7 @@ vi.mock('../../../stores/configStore', async () => {
 describe('SettingsApiServerTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useDialogStore.setState({ confirm: vi.fn().mockResolvedValue(true) });
     currentConfig = buildTestConfig({
       httpServerEnabled: false,
       httpServerHost: '127.0.0.1',
@@ -108,7 +110,10 @@ describe('SettingsApiServerTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ httpServerApiKey: 'new-custom-key' });
   });
 
-  it('handles Generate API Key', async () => {
+  it('handles Generate API Key after confirmation', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(true);
+    useDialogStore.setState({ confirm: confirmSpy });
+
     await act(async () => {
       render(<SettingsApiServerTab />);
     });
@@ -118,10 +123,28 @@ describe('SettingsApiServerTab', () => {
       fireEvent.click(generateBtn);
     });
 
+    expect(confirmSpy).toHaveBeenCalled();
     expect(mockUpdateConfig).toHaveBeenCalled();
     const arg = mockUpdateConfig.mock.calls[0]?.[0];
     expect(arg.httpServerApiKey).toBeDefined();
     expect(arg.httpServerApiKey).not.toBe('original-key');
+  });
+
+  it('does not regenerate API key if confirmation is cancelled', async () => {
+    const confirmSpy = vi.fn().mockResolvedValue(false);
+    useDialogStore.setState({ confirm: confirmSpy });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+
+    const generateBtn = screen.getByRole('button', { name: 'Generate' });
+    await act(async () => {
+      fireEvent.click(generateBtn);
+    });
+
+    expect(confirmSpy).toHaveBeenCalled();
+    expect(mockUpdateConfig).not.toHaveBeenCalled();
   });
 
   it('renders custom data-tooltips on action buttons', async () => {

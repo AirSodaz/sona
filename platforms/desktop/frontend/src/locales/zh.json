@@ -217,6 +217,7 @@
     "projects": "项目中心",
     "transcript": "转录",
     "mode_selection": "模式选择",
+    "input_selection": "工作区输入选择",
     "tools": "工具箱"
   },
   "tools": {
@@ -243,7 +244,11 @@
     "go_to_tools": "前往工具箱",
     "copy_api_url": "复制端点",
     "subtitles_preview_text_primary": "Sona 实时语音识别与双语字幕预览",
-    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "客户端",
+    "subtitles_missing_model_warning": "实时字幕需要流式语音识别模型，请在模型设置中配置流式模型。",
+    "sidebar_title": "工具箱侧边栏",
+    "tabs_title": "工具列表"
   },
   "live": {
     "resume": "恢复",

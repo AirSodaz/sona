@@ -46,9 +46,9 @@ export function SettingsMigratedBanner({
   const toolName = t(meta.titleKey, { defaultValue: meta.defaultTitle });
 
   const handleGoToTools = () => {
-    onClose?.();
     useToolsStore.getState().setActiveTool(tool);
     useTranscriptRuntimeStore.getState().setMode('tools');
+    onClose?.();
   };
 
   return (
@@ -94,7 +94,7 @@ export function SettingsMigratedBanner({
               flexShrink: 0,
             }}
           >
-            <Wrench size={22} />
+            <Wrench size={22} aria-hidden="true" />
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
@@ -151,9 +151,9 @@ export function SettingsMigratedBanner({
               padding: '8px 20px',
             }}
           >
-            <Wrench size={16} />
+            <Wrench size={16} aria-hidden="true" />
             <span>{t('tools.go_to_tools', { defaultValue: 'Go to Tools' })}</span>
-            <ArrowRight size={16} />
+            <ArrowRight size={16} aria-hidden="true" />
           </button>
         </div>
       </div>

@@ -69,7 +69,18 @@ export function SettingsApiServerTab(): React.JSX.Element {
     ipWhitelist: string;
     gpuAcceleration: string;
     enabled: boolean;
-  } | null>(null);
+  }>({
+    host: config.httpServerHost ?? '127.0.0.1',
+    port: config.httpServerPort ?? 14200,
+    apiKey: config.httpServerApiKey ?? '',
+    maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+    maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+    maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
+    jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+    ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+    gpuAcceleration: config.gpuAcceleration ?? 'auto',
+    enabled: Boolean(config.httpServerEnabled),
+  });
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -117,13 +128,13 @@ export function SettingsApiServerTab(): React.JSX.Element {
       );
       inFlightSnapshotRef.current = promise;
       const snapshot = await promise;
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !config.httpServerEnabled) return;
       setHealth(snapshot?.health ?? null);
       setInfo(snapshot?.info ?? null);
       setJobs(snapshot?.jobs ?? {});
       setLastError(null);
     } catch (err) {
-      if (!isMountedRef.current) return;
+      if (!isMountedRef.current || !config.httpServerEnabled) return;
       setHealth(null);
       setInfo(null);
       setJobs({});
@@ -145,6 +156,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
       setHealth(null);
       setInfo(null);
       setJobs({});
+      setLastError(null);
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
@@ -201,10 +213,28 @@ export function SettingsApiServerTab(): React.JSX.Element {
     setConfig({ httpServerApiKey: e.target.value });
   };
 
-  const handleGenerateKey = useCallback(() => {
+  const handleGenerateKey = useCallback(async () => {
+    if (config.httpServerApiKey) {
+      const confirmed = await useDialogStore.getState().confirm(
+        t('settings.api_server.regenerate_key_confirm_message', {
+          defaultValue:
+            'Regenerating the API key will invalidate the current key and require updating all external clients. Do you want to continue?',
+        }),
+        {
+          title: t('settings.api_server.regenerate_key_title', {
+            defaultValue: 'Regenerate API Key',
+          }),
+          variant: 'warning',
+          confirmLabel: t('settings.api_server.btn_generate_key', {
+            defaultValue: 'Generate New Key',
+          }),
+        }
+      );
+      if (!confirmed) return;
+    }
     const newKey = crypto.randomUUID();
     setConfig({ httpServerApiKey: newKey });
-  }, [setConfig]);
+  }, [config.httpServerApiKey, setConfig, t]);
 
   const handleCopyKey = useCallback(() => {
     const key = config.httpServerApiKey || '';
@@ -234,10 +264,6 @@ export function SettingsApiServerTab(): React.JSX.Element {
         gpuAcceleration: config.gpuAcceleration ?? 'auto',
         enabled: Boolean(config.httpServerEnabled),
       };
-
-      if (!mountConfigRef.current) {
-        mountConfigRef.current = currentSnapshot;
-      }
       const isFirstRun = prevConfigRef.current === null;
       const prev = prevConfigRef.current;
       prevConfigRef.current = currentSnapshot;
@@ -390,6 +416,15 @@ export function SettingsApiServerTab(): React.JSX.Element {
         }
       } catch (e) {
         logger.error('[ApiServer] Failed to check active jobs:', e);
+      }
+      setLastError(null);
+      setHealth(null);
+      setInfo(null);
+      setJobs({});
+      try {
+        await transport.invoke(TauriCommand.apiServer.stop, { force: true });
+      } catch (e) {
+        logger.error('[ApiServer] Failed to stop server:', e);
       }
     }
     setConfig({ httpServerEnabled: checked });
@@ -649,9 +684,13 @@ export function SettingsApiServerTab(): React.JSX.Element {
                   : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
               }
               data-tooltip-pos="top"
-              aria-label={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
+              aria-label={
+                copied
+                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
+                  : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
+              }
             >
-              <Copy size={16} />
+              {copied ? <Check size={16} /> : <Copy size={16} />}
             </button>
           </div>
         </SettingsItem>

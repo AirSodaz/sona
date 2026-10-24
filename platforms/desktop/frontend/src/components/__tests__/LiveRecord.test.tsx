@@ -681,26 +681,6 @@ describe('LiveRecord', () => {
     expect(useTranscriptStore.getState().isRecording).toBe(false);
   });
 
-  it('should start caption mode independently without recording', async () => {
-    const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-    const { captionWindowService } = await import('../../services/captionWindowService');
-    // We use mockStart which intercepts calls to any TranscriptionService instance (singleton or new)
-
-    render(<LiveRecord />);
-
-    await act(async () => {
-      useTranscriptStore.setState({ isCaptionMode: true });
-      await vi.advanceTimersByTimeAsync(100);
-    });
-
-    // Check stores
-    expect(useTranscriptStore.getState().isCaptionMode).toBe(true);
-    expect(useTranscriptStore.getState().isRecording).toBe(false);
-    // Check services
-    expect(captionWindowService.open).toHaveBeenCalled();
-    expect(mockStart).toHaveBeenCalled();
-  });
-
   it('should allow recording while caption mode is active', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     render(<LiveRecord />);
@@ -724,7 +704,6 @@ describe('LiveRecord', () => {
 
   it('should NOT stop recording when caption mode is toggled OFF', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
-    const { captionWindowService } = await import('../../services/captionWindowService');
 
     render(<LiveRecord />);
 
@@ -748,9 +727,7 @@ describe('LiveRecord', () => {
 
     expect(useTranscriptStore.getState().isCaptionMode).toBe(false);
     expect(useTranscriptStore.getState().isRecording).toBe(true); // Should still be true
-    expect(captionWindowService.close).toHaveBeenCalled();
   });
-
   it('should toggle recording with Ctrl+Space', async () => {
     const { useTranscriptStore } = await import('../../test-utils/transcriptStoreTestUtils');
     render(<LiveRecord />);

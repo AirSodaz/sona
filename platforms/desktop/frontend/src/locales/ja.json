@@ -217,6 +217,7 @@
     "projects": "ワークスペース",
     "transcript": "文字起こし",
     "mode_selection": "モードの選択",
+    "input_selection": "ワークスペース入力選択",
     "tools": "ツール"
   },
   "tools": {
@@ -243,7 +244,11 @@
     "go_to_tools": "ツールへ移動",
     "copy_api_url": "エンドポイントをコピー",
     "subtitles_preview_text_primary": "Sona リアルタイム音声認識と二言語字幕プレビュー",
-    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview."
+    "subtitles_preview_text_secondary": "Real-time speech recognition and bilingual live subtitle preview.",
+    "clients_unit_singular": "クライアント",
+    "subtitles_missing_model_warning": "リアルタイム字幕にはストリーミング ASR モデルが必要です。モデル設定でストリーミングモデルを設定してください。",
+    "sidebar_title": "ツールサイドバー",
+    "tabs_title": "ツール一覧"
   },
   "live": {
     "resume": "再開",

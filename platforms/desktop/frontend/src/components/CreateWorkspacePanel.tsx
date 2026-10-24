@@ -63,7 +63,7 @@ export function CreateWorkspacePanel({
         <div
           className="create-tab-navigation"
           role="tablist"
-          aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
+          aria-label={t('panel.input_selection', { defaultValue: 'Workspace Input Selection' })}
           aria-orientation="horizontal"
           onKeyDown={handleTabKeyDown}
         >

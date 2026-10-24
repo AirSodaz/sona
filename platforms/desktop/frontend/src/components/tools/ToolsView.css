@@ -86,8 +86,8 @@
 }
 
 .tools-sidebar-item.active .tools-sidebar-item-icon {
-  background: var(--color-primary-subtle, rgba(59, 130, 246, 0.12));
-  color: var(--color-primary);
+  background: var(--color-accent-subtle, rgba(59, 130, 246, 0.12));
+  color: var(--color-accent-blue, #3b82f6);
 }
 
 .tools-sidebar-item-content {
@@ -387,6 +387,7 @@
     flex: 0 0 300px;
     width: 300px;
     min-width: 300px;
+    max-width: 300px;
   }
   .tools-workbench .tools-detail-pane,
   .tools-detail-pane.panel-right,
