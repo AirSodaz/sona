@@ -93,6 +93,7 @@ struct SpeakerSpan {
     start: f32,
     end: f32,
     raw_speaker: i32,
+    confidence: f32,
 }
 
 #[derive(Debug, Clone)]
@@ -247,6 +248,7 @@ fn merge_speaker_spans(mut raw_spans: Vec<(f32, f32)>, raw_speaker: i32) -> Vec<
             start,
             end,
             raw_speaker,
+            confidence: 1.0,
         });
     }
     merged
@@ -886,6 +888,7 @@ fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Ve
                 start: segment.start,
                 end: segment.end,
                 raw_speaker: segment.speaker,
+                confidence: segment.confidence,
             });
     }
 
@@ -907,15 +910,27 @@ fn build_cluster_infos(diarization_segments: &[SpeakerDiarizationSegment]) -> Ve
     ordered
         .into_iter()
         .enumerate()
-        .map(|(index, (raw_speaker, _, spans))| ClusterInfo {
-            raw_speaker,
-            spans,
-            anonymous_tag: SpeakerTag {
-                id: format!("anonymous-{}", index + 1),
-                label: format!("Speaker {}", index + 1),
-                kind: "anonymous".to_string(),
-                score: None,
-            },
+        .map(|(index, (raw_speaker, _, spans))| {
+            let valid_confidences: Vec<f32> = spans
+                .iter()
+                .map(|s| s.confidence)
+                .filter(|&c| c > 0.0)
+                .collect();
+            let avg_confidence = if !valid_confidences.is_empty() {
+                Some(valid_confidences.iter().sum::<f32>() / valid_confidences.len() as f32)
+            } else {
+                None
+            };
+            ClusterInfo {
+                raw_speaker,
+                spans,
+                anonymous_tag: SpeakerTag {
+                    id: format!("anonymous-{}", index + 1),
+                    label: format!("Speaker {}", index + 1),
+                    kind: "anonymous".to_string(),
+                    score: avg_confidence,
+                },
+            }
         })
         .collect()
 }
@@ -999,6 +1014,7 @@ fn extract_purified_spans_for_cluster(
                     start: final_start,
                     end: final_end,
                     raw_speaker: span.raw_speaker,
+                    confidence: span.confidence,
                 });
             }
         }
@@ -2193,6 +2209,7 @@ mod tests {
                 start,
                 end,
                 raw_speaker,
+                confidence: 1.0,
             }],
             anonymous_tag: SpeakerTag {
                 id: format!("anonymous-{}", index),
@@ -2263,21 +2280,46 @@ mod tests {
                 start: 6.0,
                 end: 8.0,
                 speaker: 10,
+                confidence: 1.0,
             },
             SpeakerDiarizationSegment {
                 start: 0.5,
                 end: 2.0,
                 speaker: 42,
+                confidence: 1.0,
             },
         ];
-
         let clusters = build_cluster_infos(&diarization_segments);
 
         assert_eq!(clusters.len(), 2);
         assert_eq!(clusters[0].raw_speaker, 42);
         assert_eq!(clusters[0].anonymous_tag.label, "Speaker 1");
+        assert_eq!(clusters[0].anonymous_tag.score, Some(1.0));
         assert_eq!(clusters[1].raw_speaker, 10);
         assert_eq!(clusters[1].anonymous_tag.label, "Speaker 2");
+        assert_eq!(clusters[1].anonymous_tag.score, Some(1.0));
+    }
+
+    #[test]
+    fn build_cluster_infos_ignores_unavailable_silhouette_sentinel() {
+        let diarization_segments = vec![
+            SpeakerDiarizationSegment {
+                start: 0.0,
+                end: 2.0,
+                speaker: 1,
+                confidence: 0.8,
+            },
+            SpeakerDiarizationSegment {
+                start: 2.5,
+                end: 4.0,
+                speaker: 1,
+                confidence: -2.0, // kSilhouetteUnavailable
+            },
+        ];
+        let clusters = build_cluster_infos(&diarization_segments);
+        assert_eq!(clusters.len(), 1);
+        // The -2.0 sentinel must be ignored rather than averaging to (0.8 - 2.0)/2 = -0.6 -> None
+        assert_eq!(clusters[0].anonymous_tag.score, Some(0.8));
     }
 
     #[test]
@@ -2539,11 +2581,13 @@ mod tests {
                 start: 0.0,
                 end: 1.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             },
             SpeakerSpan {
                 start: 1.0,
                 end: 4.0,
                 raw_speaker: 2,
+                confidence: 1.0,
             },
         ];
         let tags = HashMap::from([
@@ -2601,11 +2645,13 @@ mod tests {
                 start: 0.0,
                 end: 1.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             },
             SpeakerSpan {
                 start: 1.0,
                 end: 2.0,
                 raw_speaker: 2,
+                confidence: 1.0,
             },
         ];
         let tags = HashMap::from([
@@ -2706,16 +2752,19 @@ mod tests {
                 start: 0.0,
                 end: 1.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             },
             SpeakerSpan {
                 start: 1.0,
                 end: 1.30,
                 raw_speaker: 2,
+                confidence: 1.0,
             },
             SpeakerSpan {
                 start: 1.30,
                 end: 3.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             },
         ];
 
@@ -2779,11 +2828,13 @@ mod tests {
                 start: 0.0,
                 end: 1.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             },
             SpeakerSpan {
                 start: 1.4,
                 end: 3.0,
                 raw_speaker: 2,
+                confidence: 1.0,
             },
         ];
 
@@ -2888,6 +2939,7 @@ mod tests {
                     start: 0.0,
                     end: 2.0,
                     raw_speaker: 1,
+                    confidence: 1.0,
                 }],
                 anonymous_tag: SpeakerTag {
                     id: "anonymous-1".to_string(),
@@ -2902,6 +2954,7 @@ mod tests {
                     start: 3.0,
                     end: 5.0,
                     raw_speaker: 2,
+                    confidence: 1.0,
                 }],
                 anonymous_tag: SpeakerTag {
                     id: "anonymous-2".to_string(),
@@ -2934,6 +2987,7 @@ mod tests {
                 start: 0.0,
                 end: 5.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             }],
             anonymous_tag: SpeakerTag {
                 id: "anonymous-1".to_string(),
@@ -2981,6 +3035,7 @@ mod tests {
                 start: 0.0,
                 end: 3.0,
                 raw_speaker: 1,
+                confidence: 1.0,
             }],
             anonymous_tag: SpeakerTag {
                 id: "anonymous-1".to_string(),

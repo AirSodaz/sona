@@ -110,6 +110,7 @@ serde_with = { version = "3", features = ["macros"] }
 sha2 = "0.11"
 shlex = "1.3"
 sherpa-onnx = { version = "=2.0.0", default-features = false, features = ["shared"] }
+sherpa-onnx-sys = { version = "=2.0.0", default-features = false, features = ["shared"] }
 specta = { version = "=2.0.0-rc.25" }
 specta-serde = "0.0.12"
 specta-typescript = "0.0.12"

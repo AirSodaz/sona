@@ -40,6 +40,8 @@ pub enum ModelType {
         tokenizer: PathBuf,
         tokens: Option<PathBuf>,
         language: String,
+        hotwords: Option<String>,
+        itn: bool,
     },
     OfflineFireRedAsr {
         encoder: PathBuf,
@@ -232,6 +234,8 @@ pub fn build_model_config(
                 tokenizer,
                 tokens,
                 language,
+                hotwords,
+                itn: enable_itn,
             })
         }
         "fire-red-asr" => {
@@ -359,6 +363,7 @@ pub struct OfflineDecodeResult {
     pub text: String,
     pub tokens: Vec<String>,
     pub timestamps: Option<Vec<f32>>,
+    pub durations: Option<Vec<f32>>,
 }
 
 impl OfflineDecodeResult {
@@ -581,6 +586,8 @@ impl Recognizer {
                 tokenizer,
                 tokens,
                 language,
+                hotwords,
+                itn,
             } => {
                 info!("[Recognizer::new] branch=OfflineFunASRNano");
                 let mut config =
@@ -593,10 +600,11 @@ impl Recognizer {
                 config.model_config.funasr_nano.tokenizer =
                     Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
+                config.model_config.funasr_nano.itn = itn as i32;
+                config.model_config.funasr_nano.hotwords = hotwords;
                 config.model_config.funasr_nano.temperature = 1e-6;
                 config.model_config.funasr_nano.top_p = 0.8;
                 config.model_config.funasr_nano.max_new_tokens = 512;
-
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
                 let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
                     AsrPortError::new(
@@ -827,6 +835,7 @@ pub fn decode_offline_samples(
         text: result.text,
         tokens: result.tokens,
         timestamps: result.timestamps,
+        durations: result.durations.filter(|d| !d.is_empty()),
     })
 }
 
@@ -841,7 +850,9 @@ fn decode_offline_samples_chunked(
     let mut combined_text = String::new();
     let mut combined_tokens = Vec::new();
     let mut combined_timestamps = Vec::new();
+    let mut combined_durations = Vec::new();
     let mut has_timestamps = false;
+    let mut has_durations = false;
     let mut any_success = false;
 
     for (i, chunk) in samples.chunks(split_size).enumerate() {
@@ -858,10 +869,24 @@ fn decode_offline_samples_chunked(
                 has_timestamps = true;
                 combined_timestamps.extend(ts.into_iter().map(|t| t + chunk_offset_sec));
             }
+            if let Some(durs) = result.durations
+                && !durs.is_empty()
+            {
+                has_durations = true;
+                combined_durations.extend(durs);
+            }
         }
     }
 
     if any_success {
+        let durations = if has_durations
+            && !combined_durations.is_empty()
+            && combined_durations.len() == combined_tokens.len()
+        {
+            Some(combined_durations)
+        } else {
+            None
+        };
         Some(OfflineDecodeResult {
             text: combined_text,
             tokens: combined_tokens,
@@ -870,6 +895,7 @@ fn decode_offline_samples_chunked(
             } else {
                 None
             },
+            durations,
         })
     } else {
         None

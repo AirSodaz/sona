@@ -6694,6 +6694,7 @@ dependencies = [
  "hound",
  "log",
  "sherpa-onnx",
+ "sherpa-onnx-sys",
  "sona-core",
  "sysinfo",
  "tokio",

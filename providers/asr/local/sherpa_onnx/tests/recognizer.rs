@@ -227,9 +227,40 @@ fn offline_decode_result_reports_empty_text() {
         text: "   ".to_string(),
         tokens: Vec::new(),
         timestamps: None,
+        durations: None,
     };
 
     assert!(result.is_empty_text());
+}
+
+#[test]
+fn offline_recognizer_creation_with_corrupt_files_fails_cleanly_without_abort() {
+    let temp_dir = std::env::temp_dir().join(format!("sona-corrupt-test-{}", std::process::id()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+
+    let encoder = temp_dir.join("encoder.onnx");
+    let decoder = temp_dir.join("decoder.onnx");
+    let tokens = temp_dir.join("tokens.txt");
+
+    std::fs::write(&encoder, b"corrupted onnx encoder data").unwrap();
+    std::fs::write(&decoder, b"corrupted onnx decoder data").unwrap();
+    std::fs::write(&tokens, b"<unk> 0\n<s> 1\n</s> 2\n").unwrap();
+
+    let model_type = ModelType::OfflineWhisper {
+        encoder,
+        decoder,
+        tokens,
+        language: "en".to_string(),
+    };
+
+    let result = create_offline_recognizer(model_type, 1, Some("cpu"));
+    let error = match result {
+        Err(e) => e,
+        Ok(_) => panic!("Corrupted model files should fail to create offline recognizer"),
+    };
+
+    assert_eq!(error.kind, AsrPortErrorKind::Model);
+    let _ = std::fs::remove_dir_all(temp_dir);
 }
 #[test]
 fn build_model_config_constructs_offline_omnilingual_when_files_present() {
@@ -283,6 +314,36 @@ fn build_model_config_normalizes_language_for_funasr_nano() {
     match model {
         ModelType::OfflineFunASRNano { language, .. } => {
             assert_eq!(language, "zh");
+        }
+        other => panic!("expected OfflineFunASRNano, got {other:?}"),
+    }
+}
+
+#[test]
+fn funasr_nano_build_model_config_propagates_hotwords_and_itn() {
+    let model_path = Path::new("C:/models/funasr-nano");
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.onnx".to_string()),
+        llm: Some("llm.onnx".to_string()),
+        embedding: Some("embedding.onnx".to_string()),
+        tokenizer: Some("tokenizer".to_string()),
+        ..Default::default()
+    });
+
+    let model = build_model_config(
+        model_path,
+        "funasr-nano",
+        &file_config,
+        true,
+        "zh",
+        Some("hotwords.txt".to_string()),
+    )
+    .expect("funasr-nano model should build");
+
+    match model {
+        ModelType::OfflineFunASRNano { hotwords, itn, .. } => {
+            assert_eq!(hotwords, Some("hotwords.txt".to_string()));
+            assert!(itn);
         }
         other => panic!("expected OfflineFunASRNano, got {other:?}"),
     }
