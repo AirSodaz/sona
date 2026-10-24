@@ -334,6 +334,7 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
                 text,
                 tokens: None,
                 timestamps: None,
+                durations: None,
             }))
         }
     }

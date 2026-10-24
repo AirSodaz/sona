@@ -38,28 +38,31 @@ export interface ModelRatings {
  */
 export type ModelLabel = 'accurate' | 'lite';
 
+export type ModelCatalogModelType =
+  | 'zipformer'
+  | 'sensevoice'
+  | 'paraformer'
+  | 'punctuation'
+  | 'vad'
+  | 'itn'
+  | 'whisper'
+  | 'funasr-nano'
+  | 'fire-red-asr'
+  | 'dolphin'
+  | 'qwen3-asr'
+  | 'parakeet-tdt'
+  | 'moonshine'
+  | 'speaker-segmentation'
+  | 'speaker-embedding'
+  | 'omnilingual'
+  | 'alignment'
+  | 'canary';
+
 export interface ModelInfo {
   id: string;
   name: string;
   description: string;
-  type:
-    | 'zipformer'
-    | 'sensevoice'
-    | 'paraformer'
-    | 'punctuation'
-    | 'vad'
-    | 'itn'
-    | 'whisper'
-    | 'funasr-nano'
-    | 'fire-red-asr'
-    | 'dolphin'
-    | 'qwen3-asr'
-    | 'parakeet-tdt'
-    | 'moonshine'
-    | 'speaker-segmentation'
-    | 'speaker-embedding'
-    | 'omnilingual'
-    | 'alignment';
+  type: ModelCatalogModelType;
   modes?: ModelMode[];
   /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
   languages: string[];

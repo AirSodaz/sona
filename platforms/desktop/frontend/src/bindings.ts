@@ -1754,7 +1754,7 @@ export type ModelCatalogMode = "live" | "streaming" | "batch";
 
 export type ModelCatalogModel = ModelCatalogModel_Serialize | ModelCatalogModel_Deserialize;
 
-export type ModelCatalogModelType = "zipformer" | "sensevoice" | "paraformer" | "punctuation" | "vad" | "itn" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr" | "parakeet-tdt" | "moonshine" | "speaker-segmentation" | "speaker-embedding" | "omnilingual" | "alignment";
+export type ModelCatalogModelType = "zipformer" | "sensevoice" | "paraformer" | "punctuation" | "vad" | "itn" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr" | "parakeet-tdt" | "moonshine" | "speaker-segmentation" | "speaker-embedding" | "omnilingual" | "alignment" | "canary";
 
 export type ModelCatalogModel_Deserialize = {
 	id: string,

@@ -393,6 +393,8 @@ fn asr_catalog_sections_follow_specified_display_order() {
             "parakeet-tdt",
             "dolphin",
             "moonshine-v2",
+            "canary-180m-flash",
+            "canary-1b",
         ]
     );
 }
@@ -1073,7 +1075,46 @@ fn resolves_canonical_aliases_and_suggestions() {
         canonical_preset_model_id("confucius4-r2t2-f16"),
         Some("confucius4-r2t2-f16-gguf")
     );
-
+    assert_eq!(
+        canonical_preset_model_id("canary"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-int8"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-fp32"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-int8"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-fp16"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-fp32"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punct"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punctuation"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
     let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");
     assert_eq!(whisper.id, "sherpa-onnx-whisper-turbo");
 
@@ -1140,4 +1181,44 @@ fn all_preset_models_have_valid_catalog_enums() {
     let snapshot =
         build_model_catalog_snapshot_with_installed_ids(Path::new("/dummy"), &HashSet::new());
     assert_eq!(snapshot.models.len(), presets.len());
+}
+
+#[test]
+fn canary_presets_are_verified_bundles() {
+    for (id, expected_encoder, expected_decoder) in [
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+            "encoder.onnx",
+            "decoder.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr",
+            "encoder.fp16.onnx",
+            "decoder.fp16.onnx",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "canary");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert_eq!(model.languages, vec!["de", "en", "es", "fr"]);
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+    }
 }

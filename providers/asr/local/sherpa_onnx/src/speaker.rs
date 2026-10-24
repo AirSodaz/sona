@@ -2,7 +2,7 @@ use hound::SampleFormat;
 use sherpa_onnx::{
     FastClusteringConfig, OfflineSpeakerDiarization, OfflineSpeakerDiarizationConfig,
     OfflineSpeakerSegmentationModelConfig, OfflineSpeakerSegmentationPyannoteModelConfig,
-    SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig, SpeakerEmbeddingManager,
+    SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig,
 };
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::collections::HashMap;
@@ -65,11 +65,169 @@ pub fn clear_speaker_caches() {
 }
 const SAMPLE_RATE: i32 = 16_000;
 
+unsafe extern "C" {
+    fn SherpaOnnxSpeakerEmbeddingManagerGetEmbedding(
+        p: *const sherpa_onnx_sys::SpeakerEmbeddingManager,
+        name: *const std::os::raw::c_char,
+    ) -> *const std::os::raw::c_float;
+    fn SherpaOnnxSpeakerEmbeddingManagerDestroyEmbedding(v: *const std::os::raw::c_float);
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct SpeakerDiarizationSegment {
     pub start: f32,
     pub end: f32,
     pub speaker: i32,
+    pub confidence: f32,
+}
+
+pub struct SafeSpeakerEmbeddingManager {
+    ptr: *const sherpa_onnx_sys::SpeakerEmbeddingManager,
+    dim: i32,
+    lock: Mutex<()>,
+}
+
+unsafe impl Send for SafeSpeakerEmbeddingManager {}
+unsafe impl Sync for SafeSpeakerEmbeddingManager {}
+
+impl Drop for SafeSpeakerEmbeddingManager {
+    fn drop(&mut self) {
+        if !self.ptr.is_null() {
+            let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+            unsafe {
+                sherpa_onnx_sys::SherpaOnnxDestroySpeakerEmbeddingManager(self.ptr);
+            }
+        }
+    }
+}
+
+impl SafeSpeakerEmbeddingManager {
+    pub fn create(dim: i32) -> Option<Self> {
+        if dim <= 0 {
+            return None;
+        }
+        let ptr = unsafe { sherpa_onnx_sys::SherpaOnnxCreateSpeakerEmbeddingManager(dim) };
+        if ptr.is_null() {
+            None
+        } else {
+            Some(Self {
+                ptr,
+                dim,
+                lock: Mutex::new(()),
+            })
+        }
+    }
+
+    pub fn dim(&self) -> i32 {
+        self.dim
+    }
+
+    pub fn add(&self, name: &str, embedding: &[f32]) -> bool {
+        if embedding.len() != self.dim as usize {
+            return false;
+        }
+
+        let c_name = match std::ffi::CString::new(name) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerAdd(
+                self.ptr,
+                c_name.as_ptr(),
+                embedding.as_ptr(),
+            ) == 1
+        }
+    }
+
+    pub fn add_list(&self, name: &str, embeddings: &[Vec<f32>]) -> bool {
+        if embeddings.is_empty() || embeddings.iter().any(|v| v.len() != self.dim as usize) {
+            return false;
+        }
+
+        let c_name = match std::ffi::CString::new(name) {
+            Ok(v) => v,
+            Err(_) => return false,
+        };
+
+        let mut ptrs: Vec<*const f32> = embeddings.iter().map(|v| v.as_ptr()).collect();
+        ptrs.push(std::ptr::null());
+
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerAddList(
+                self.ptr,
+                c_name.as_ptr(),
+                ptrs.as_ptr(),
+            ) == 1
+        }
+    }
+
+    pub fn get_best_matches(
+        &self,
+        embedding: &[f32],
+        threshold: f32,
+        n: i32,
+    ) -> Vec<SpeakerEmbeddingMatch> {
+        if embedding.len() != self.dim as usize {
+            return Vec::new();
+        }
+
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            let r = sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerGetBestMatches(
+                self.ptr,
+                embedding.as_ptr(),
+                threshold,
+                n,
+            );
+            if r.is_null() {
+                return Vec::new();
+            }
+
+            let result = &*r;
+            if result.count <= 0 || result.matches.is_null() {
+                sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerFreeBestMatches(r);
+                return Vec::new();
+            }
+            let matches = std::slice::from_raw_parts(result.matches, result.count as usize)
+                .iter()
+                .map(|m| SpeakerEmbeddingMatch {
+                    score: m.score,
+                    name: if m.name.is_null() {
+                        String::new()
+                    } else {
+                        std::ffi::CStr::from_ptr(m.name)
+                            .to_string_lossy()
+                            .into_owned()
+                    },
+                })
+                .collect::<Vec<_>>();
+            sherpa_onnx_sys::SherpaOnnxSpeakerEmbeddingManagerFreeBestMatches(r);
+            matches
+        }
+    }
+
+    pub fn get_embedding(&self, name: &str) -> Option<Vec<f32>> {
+        let c_name = match std::ffi::CString::new(name) {
+            Ok(v) => v,
+            Err(_) => return None,
+        };
+
+        let _guard = self.lock.lock().unwrap_or_else(|e| e.into_inner());
+        unsafe {
+            let ptr = SherpaOnnxSpeakerEmbeddingManagerGetEmbedding(self.ptr, c_name.as_ptr());
+            if ptr.is_null() {
+                return None;
+            }
+            let slice = std::slice::from_raw_parts(ptr, self.dim as usize);
+            let vec = slice.to_vec();
+            SherpaOnnxSpeakerEmbeddingManagerDestroyEmbedding(ptr);
+            Some(vec)
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -204,14 +362,14 @@ impl SpeakerModelThresholds {
 
 pub struct SpeakerEmbeddingIndex {
     pub(crate) model_path: PathBuf,
-    extractor: Arc<SafeSpeakerEmbeddingExtractor>,
-    manager: SpeakerEmbeddingManager,
+    extractor: Option<Arc<SafeSpeakerEmbeddingExtractor>>,
+    manager: SafeSpeakerEmbeddingManager,
 }
 
 impl SpeakerEmbeddingIndex {
     pub fn new(embedding_model: &Path) -> Result<Self, AsrPortError> {
         let extractor = preload_speaker_embedding_extractor(embedding_model)?;
-        let manager = SpeakerEmbeddingManager::create(extractor.0.dim()).ok_or_else(|| {
+        let manager = SafeSpeakerEmbeddingManager::create(extractor.0.dim()).ok_or_else(|| {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
                 "Failed to create speaker embedding manager",
@@ -220,9 +378,17 @@ impl SpeakerEmbeddingIndex {
 
         Ok(Self {
             model_path: embedding_model.to_path_buf(),
-            extractor,
+            extractor: Some(extractor),
             manager,
         })
+    }
+
+    pub fn get_embedding(&self, name: &str) -> Option<Vec<f32>> {
+        self.manager.get_embedding(name)
+    }
+
+    pub fn dim(&self) -> i32 {
+        self.manager.dim()
     }
 
     pub fn add_profile_embeddings(
@@ -319,18 +485,22 @@ impl SpeakerEmbeddingIndex {
             return Ok(None);
         }
 
-        let stream =
-            self.extractor.0.create_stream().ok_or_else(|| {
-                AsrPortError::runtime("Failed to create speaker embedding stream")
-            })?;
+        let extractor = self
+            .extractor
+            .as_ref()
+            .ok_or_else(|| AsrPortError::runtime("Speaker embedding extractor not initialized"))?;
+        let stream = extractor
+            .0
+            .create_stream()
+            .ok_or_else(|| AsrPortError::runtime("Failed to create speaker embedding stream"))?;
         stream.accept_waveform(SAMPLE_RATE, samples);
         stream.input_finished();
 
-        if !self.extractor.0.is_ready(&stream) {
+        if !extractor.0.is_ready(&stream) {
             return Ok(None);
         }
 
-        Ok(self.extractor.0.compute(&stream))
+        Ok(extractor.0.compute(&stream))
     }
 }
 
@@ -357,7 +527,8 @@ pub fn run_speaker_diarization(
         },
         clustering: FastClusteringConfig {
             num_clusters: -1,
-            ..Default::default()
+            threshold: 0.5,
+            compute_confidence: true,
         },
         ..Default::default()
     };
@@ -379,6 +550,7 @@ pub fn run_speaker_diarization(
             start: segment.start,
             end: segment.end,
             speaker: segment.speaker,
+            confidence: segment.confidence,
         })
         .collect())
 }
@@ -446,5 +618,40 @@ mod tests {
         clear_speaker_caches();
         assert_eq!(EXTRACTOR_CACHE.lock().unwrap().len(), 0);
         assert_eq!(SAMPLE_EMBEDDING_CACHE.lock().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn speaker_embedding_export_returns_vector_and_none_for_missing() {
+        let manager = SafeSpeakerEmbeddingManager::create(4).expect("create manager");
+        let test_vec = vec![0.5, 0.5, 0.5, 0.5];
+        assert!(manager.add_list("spk1", std::slice::from_ref(&test_vec)));
+
+        let index = SpeakerEmbeddingIndex {
+            model_path: PathBuf::new(),
+            extractor: None,
+            manager,
+        };
+        assert_eq!(index.dim(), 4);
+
+        let retrieved = index.get_embedding("spk1").expect("embedding should exist");
+        assert_eq!(retrieved.len(), 4);
+
+        let dot: f32 = retrieved.iter().zip(&test_vec).map(|(a, b)| a * b).sum();
+        let norm_a: f32 = retrieved.iter().map(|a| a * a).sum::<f32>().sqrt();
+        let norm_b: f32 = test_vec.iter().map(|b| b * b).sum::<f32>().sqrt();
+        let sim = dot / (norm_a * norm_b);
+        assert!(
+            (sim - 1.0).abs() < 1e-4,
+            "similarity should be close to 1.0, got {sim}"
+        );
+
+        assert!(index.get_embedding("non_existent").is_none());
+    }
+
+    #[test]
+    fn speaker_embedding_manager_rejects_non_positive_dim() {
+        assert!(SafeSpeakerEmbeddingManager::create(0).is_none());
+        assert!(SafeSpeakerEmbeddingManager::create(-1).is_none());
+        assert!(SafeSpeakerEmbeddingManager::create(-512).is_none());
     }
 }

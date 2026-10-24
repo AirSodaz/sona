@@ -497,9 +497,14 @@ fn transcribe_samples(
                     .map(|timestamp| *timestamp + segment.start_time)
                     .collect::<Vec<_>>()
             });
-            let durations = timestamps_abs
-                .as_ref()
-                .and_then(|timestamps| synthesize_durations(timestamps, segment.end_time()));
+            let durations = result
+                .durations
+                .filter(|d| !d.is_empty() && d.len() == result.tokens.len())
+                .or_else(|| {
+                    timestamps_abs
+                        .as_ref()
+                        .and_then(|timestamps| synthesize_durations(timestamps, segment.end_time()))
+                });
 
             let mut transcript_segment = TranscriptSegment {
                 id: uuid::Uuid::new_v4().to_string(),
@@ -721,5 +726,38 @@ mod tests {
         assert!(OFFLINE_RECOGNIZER_CACHE.lock().unwrap().is_none());
         assert!(PUNCTUATION_CACHE.lock().unwrap().is_none());
         assert!(ALIGNER_CACHE.lock().unwrap().is_none());
+    }
+    #[test]
+    fn batch_segment_transcription_prioritizes_native_durations_over_synthesized() {
+        let raw_result = crate::recognizer::OfflineDecodeResult {
+            text: "test segment".to_string(),
+            tokens: vec!["test".to_string(), "segment".to_string()],
+            timestamps: Some(vec![0.1, 0.6]),
+            durations: Some(vec![0.42, 0.38]),
+        };
+
+        let timestamps_abs = raw_result
+            .timestamps
+            .as_ref()
+            .map(|timestamps| timestamps.iter().map(|t| *t + 10.0).collect::<Vec<_>>());
+
+        let fallback_durations = timestamps_abs
+            .as_ref()
+            .and_then(|ts| synthesize_durations(ts, 11.5));
+        let final_durations = raw_result
+            .durations
+            .filter(|d| !d.is_empty())
+            .or_else(|| fallback_durations.clone());
+
+        assert_eq!(final_durations, Some(vec![0.42, 0.38]));
+        assert_ne!(final_durations, fallback_durations);
+
+        // An empty duration vector (produced by models without native duration support)
+        // must not bypass synthesize_durations.
+        let empty_result_durations: Option<Vec<f32>> = Some(Vec::new());
+        let fallback_for_empty = empty_result_durations
+            .filter(|d| !d.is_empty())
+            .or_else(|| fallback_durations.clone());
+        assert_eq!(fallback_for_empty, fallback_durations);
     }
 }

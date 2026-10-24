@@ -7,6 +7,7 @@ use std::sync::Arc;
 pub enum PunctuationEngineKind {
     #[default]
     CtTransformerOnnx,
+    CnnBiLstmOnnx,
 }
 
 /// A loaded punctuation model instance, ready for repeated calls.

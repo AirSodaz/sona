@@ -193,6 +193,34 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
         "moonshine-base-zh",
         "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
     ),
+    (
+        "canary",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m-int8",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m-fp32",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+    ),
+    ("canary-1b", "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8"),
+    (
+        "canary-1b-int8",
+        "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+    ),
+    ("canary-1b-fp16", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
+    ("canary-1b-fp32", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
+    ("online-punct", "sherpa-onnx-online-punct-en-2024-08-06"),
+    (
+        "online-punctuation",
+        "sherpa-onnx-online-punct-en-2024-08-06",
+    ),
     ("punctuation", DEFAULT_PUNCTUATION_MODEL_ID),
     ("punct", DEFAULT_PUNCTUATION_MODEL_ID),
     ("vad", DEFAULT_SILERO_VAD_MODEL_ID),
@@ -375,6 +403,7 @@ pub enum ModelCatalogModelType {
     SpeakerEmbedding,
     Omnilingual,
     Alignment,
+    Canary,
 }
 
 impl ModelCatalogModelType {
@@ -397,6 +426,7 @@ impl ModelCatalogModelType {
             Self::SpeakerEmbedding => "speaker-embedding",
             Self::Omnilingual => "omnilingual",
             Self::Alignment => "alignment",
+            Self::Canary => "canary",
         }
     }
 }
@@ -429,6 +459,7 @@ impl std::str::FromStr for ModelCatalogModelType {
             "speaker-embedding" => Ok(Self::SpeakerEmbedding),
             "omnilingual" => Ok(Self::Omnilingual),
             "alignment" => Ok(Self::Alignment),
+            "canary" => Ok(Self::Canary),
             _ => Err(format!("Unknown ModelCatalogModelType: {s}")),
         }
     }

@@ -31,6 +31,8 @@ pub struct PseudoStreamDecodeResult {
     pub tokens: Option<Vec<String>>,
     /// Optional relative timestamp offsets in seconds for tokens/words.
     pub timestamps: Option<Vec<f32>>,
+    /// Optional token durations in seconds.
+    pub durations: Option<Vec<f32>>,
 }
 
 /// Engine-neutral decoder trait for pseudo-streaming ASR.
