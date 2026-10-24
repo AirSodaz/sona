@@ -3,6 +3,7 @@ import {
   resetTranscriptStores,
   useTranscriptStore,
 } from '../../test-utils/transcriptStoreTestUtils';
+import type { TranscriptSegment } from '../../types/transcript';
 import { DEFAULT_CONFIG, useConfigStore } from '../configStore';
 import { getEffectiveConfigSnapshot, useEffectiveConfigStore } from '../effectiveConfigStore';
 import { useProjectStore } from '../projectStore';
@@ -423,14 +424,14 @@ describe('Transcript Stores', () => {
     expect(realStore.getState().activeSessionId).toBe('live-rec-123');
   });
 
-  it('retains completed recording session across mode and focus switches', () => {
+  it('resets activeSessionId to default when switching to live focus if not recording', () => {
     const realStore = useCanonicalTranscriptStore;
 
-    // Set up a completed recording session (recordingSessionId is null)
+    // Set up a session where a document was active but recordingSessionId is null
     realStore.setState({
       activeSessionId: 'completed-rec-456',
       recordingSessionId: null,
-      ingestionFocus: 'live',
+      ingestionFocus: 'batch',
       sessions: {
         default: { ...DEFAULT_SESSION_DATA },
         'completed-rec-456': {
@@ -445,14 +446,69 @@ describe('Transcript Stores', () => {
     realStore.getState().setMode('projects');
     expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
 
-    // Returning to create mode with live focus retains the completed recording session
+    // Returning to create mode with live focus sets activeSessionId to default
     realStore.getState().setMode('create', 'live');
     expect(realStore.getState().mode).toBe('create');
     expect(realStore.getState().ingestionFocus).toBe('live');
-    expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
+    expect(realStore.getState().activeSessionId).toBe('default');
 
-    // Calling setIngestionFocus('live') retains the completed recording session
+    // Calling setIngestionFocus('live') with an active document sets activeSessionId to default
+    realStore.setState({ activeSessionId: 'completed-rec-456' });
     realStore.getState().setIngestionFocus('live');
-    expect(realStore.getState().activeSessionId).toBe('completed-rec-456');
+    expect(realStore.getState().activeSessionId).toBe('default');
+  });
+
+  it('isolates background recording writes from active foreground session', () => {
+    const realStore = useCanonicalTranscriptStore;
+    const recSessionId = 'bg-rec-789';
+    const activeDocId = 'foreground-doc-123';
+
+    realStore.setState({
+      activeSessionId: activeDocId,
+      recordingSessionId: recSessionId,
+      sessions: {
+        default: { ...DEFAULT_SESSION_DATA },
+        [activeDocId]: {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: activeDocId,
+          title: 'Foreground Document',
+          audioUrl: 'asset://foreground.wav',
+          segments: [{ id: 'fg-1', text: 'Foreground segment', start: 0, end: 1, isFinal: true }],
+        },
+        [recSessionId]: {
+          ...DEFAULT_SESSION_DATA,
+          sourceHistoryId: recSessionId,
+          title: 'Background Recording',
+          audioUrl: null,
+          segments: [],
+        },
+      },
+    });
+
+    const newAudioUrl = 'asset://recorded.wav';
+    const newSegments: TranscriptSegment[] = [
+      { id: 'rec-1', text: 'Recorded segment', start: 0, end: 2, isFinal: true },
+    ];
+
+    realStore.setState((state) => ({
+      sessions: {
+        ...state.sessions,
+        [recSessionId]: {
+          ...(state.sessions[recSessionId] || DEFAULT_SESSION_DATA),
+          audioUrl: newAudioUrl,
+        },
+      },
+    }));
+    realStore.getState().setSegmentsForSession(recSessionId, newSegments);
+
+    const fgSession = realStore.getState().sessions[activeDocId];
+    expect(fgSession.audioUrl).toBe('asset://foreground.wav');
+    expect(fgSession.segments).toHaveLength(1);
+    expect(fgSession.segments[0].text).toBe('Foreground segment');
+
+    const bgSession = realStore.getState().sessions[recSessionId];
+    expect(bgSession.audioUrl).toBe('asset://recorded.wav');
+    expect(bgSession.segments).toHaveLength(1);
+    expect(bgSession.segments[0].text).toBe('Recorded segment');
   });
 });

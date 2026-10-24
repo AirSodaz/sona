@@ -84,7 +84,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
   useEffect(() => {
     if (!status?.running) {
-      setPingLatency(null);
+      setPingLatency((prev) => (prev !== null && prev >= 0 ? null : prev));
     }
   }, [status?.running]);
 
@@ -305,7 +305,7 @@ export function SettingsMcpTab(): React.JSX.Element {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              disabled={!config.mcpEnabled}
+              disabled={!isEnabled}
               onClick={() => void handleRestart()}
               title={t('settings.mcp.btn_restart_service', { defaultValue: 'Restart Service' })}
             >

@@ -54,7 +54,9 @@ export function TabNavigation({ className = '' }: TabNavigationProps): React.JSX
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'Tab') {
         // Check if any modal/dialog is open
-        const isModalOpen = !!document.querySelector('.settings-overlay, .panel-modal-overlay');
+        const isModalOpen = !!document.querySelector(
+          '.settings-overlay, .panel-modal-overlay, .shared-modal-overlay'
+        );
         if (isModalOpen || isAnyDialogOpen()) return;
 
         e.preventDefault();

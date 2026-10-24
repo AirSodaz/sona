@@ -1,4 +1,4 @@
-import { Eye, SlidersHorizontal, Subtitles } from 'lucide-react';
+import { AlertTriangle, Eye, SlidersHorizontal, Subtitles } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -12,6 +12,8 @@ import { ColorSwatchPicker } from '../../ColorSwatchPicker';
 import { Switch } from '../../Switch';
 import { SettingsItem, SettingsSection, SettingsTabContainer } from '../../settings/SettingsLayout';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
+
+const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4ade80', '#f87171'];
 
 export function ToolSubtitlesPanel(): React.JSX.Element {
   const { t } = useTranslation();
@@ -66,6 +68,21 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
       />
 
       <div className="tools-panel-body">
+        {!isCaptionConfigured && isCaptionMode && (
+          <div
+            className="settings-warning-notice"
+            role="alert"
+            style={{ marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}
+          >
+            <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+            <span>
+              {t('tools.subtitles_missing_model_warning', {
+                defaultValue:
+                  'Live Subtitles requires a streaming ASR model. Please configure a streaming model in Model Settings.',
+              })}
+            </span>
+          </div>
+        )}
         <SettingsSection
           id="tools-subtitle-window"
           title={t('settings.subtitle_behavior_title', { defaultValue: 'Window Behavior' })}
@@ -165,6 +182,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <ColorSwatchPicker
               value={captionFontColor}
               onChange={(color) => updateConfig({ captionFontColor: color })}
+              presets={SUBTITLE_COLOR_PRESETS}
               aria-label={t('live.font_color', { defaultValue: 'Font Color' })}
             />
           </SettingsItem>
@@ -173,6 +191,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <ColorSwatchPicker
               value={captionBackgroundColor}
               onChange={(color) => updateConfig({ captionBackgroundColor: color })}
+              presets={SUBTITLE_COLOR_PRESETS}
               aria-label={t('live.background_color', { defaultValue: 'Background Color' })}
             />
           </SettingsItem>

@@ -117,11 +117,15 @@ export function VoiceTypingSettingsSection({
     [i18n?.language]
   );
   const isAvailable = readiness.state === 'ready';
+  const isMissingDependency =
+    readiness.state === 'needs_shortcut' ||
+    readiness.state === 'needs_live_model' ||
+    readiness.state === 'needs_vad';
   const hasFailureReason = readiness.state === 'failed' && Boolean(readiness.lastErrorMessage);
   const failureSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
   const availabilityTone: AvailabilityTone = isAvailable
     ? 'ready'
-    : hasFailureReason
+    : hasFailureReason || isMissingDependency
       ? 'missing'
       : 'off';
 
@@ -479,6 +483,16 @@ export function VoiceTypingSettingsSection({
             defaultValue: 'Availability',
           })}
           hint={(() => {
+            if (isMissingDependency) {
+              const key =
+                readiness.state === 'needs_shortcut'
+                  ? 'settings.voice_typing_status_summary_missing_shortcut'
+                  : readiness.state === 'needs_vad'
+                    ? 'settings.voice_typing_status_summary_missing_vad'
+                    : 'settings.voice_typing_status_summary_missing_model';
+              return t(key, { defaultValue: 'Voice Typing still needs setup before it can run.' });
+            }
+
             if (!hasFailureReason) {
               return undefined;
             }

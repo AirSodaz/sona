@@ -283,4 +283,36 @@ describe('SettingsApiServerTab', () => {
 
     expect(writeTextMock).toHaveBeenCalledWith('http://127.0.0.1:14200');
   });
+
+  it('does not restart the server on mount when server is already running with unchanged config', async () => {
+    vi.useFakeTimers();
+    vi.mocked(invokeTauri).mockResolvedValue({
+      health: { status: 'ok', uptime: 100, activeJobs: 0, pendingJobs: 0, cacheSpaceBytes: 0 },
+      info: {
+        platform: 'win32',
+        gpuAvailable: true,
+        models: [],
+        vadInstalled: true,
+        punctuationInstalled: true,
+      },
+      jobs: {},
+    } as never);
+
+    currentConfig = buildTestConfig({
+      httpServerEnabled: true,
+      httpServerHost: '127.0.0.1',
+      httpServerPort: 14200,
+      httpServerApiKey: 'original-key',
+    });
+
+    await act(async () => {
+      render(<SettingsApiServerTab />);
+    });
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1000);
+    });
+
+    expect(invokeTauri).not.toHaveBeenCalledWith(TauriCommand.apiServer.start, expect.anything());
+    vi.useRealTimers();
+  });
 });

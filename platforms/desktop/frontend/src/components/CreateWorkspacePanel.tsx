@@ -32,11 +32,22 @@ export function CreateWorkspacePanel({
   const activeIndex = isLiveActive ? 0 : 1;
 
   const handleTabKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === 'ArrowLeft' || e.key === 'ArrowUp' || e.key === 'Home') {
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const currentActiveIsBatch =
+        document.activeElement?.id === 'create-tab-batch' ||
+        (!isLiveActive && document.activeElement?.id !== 'create-tab-live');
+      const nextFocus = currentActiveIsBatch ? 'live' : 'batch';
+      setIngestionFocus(nextFocus);
+      const targetId = nextFocus === 'live' ? 'create-tab-live' : 'create-tab-batch';
+      document.getElementById(targetId)?.focus();
+    } else if (e.key === 'ArrowUp' || e.key === 'Home') {
       e.preventDefault();
       setIngestionFocus('live');
       document.getElementById('create-tab-live')?.focus();
-    } else if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === 'End') {
+    } else if (e.key === 'ArrowDown' || e.key === 'End') {
       e.preventDefault();
       setIngestionFocus('batch');
       document.getElementById('create-tab-batch')?.focus();
@@ -53,6 +64,7 @@ export function CreateWorkspacePanel({
           className="create-tab-navigation"
           role="tablist"
           aria-label={t('panel.mode_selection', { defaultValue: 'Mode Selection' })}
+          aria-orientation="horizontal"
           onKeyDown={handleTabKeyDown}
         >
           <div

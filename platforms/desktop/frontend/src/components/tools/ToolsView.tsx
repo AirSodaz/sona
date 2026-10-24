@@ -24,10 +24,14 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
       ? activeTool
       : 'subtitles';
   const detailPaneRef = useRef<HTMLDivElement>(null);
+  const prevToolRef = useRef(resolvedTool);
 
   useEffect(() => {
-    if (isActive && resolvedTool && detailPaneRef.current) {
-      detailPaneRef.current.scrollTop = 0;
+    if (prevToolRef.current !== resolvedTool) {
+      if (isActive && detailPaneRef.current) {
+        prevToolRef.current = resolvedTool;
+        detailPaneRef.current.scrollTop = 0;
+      }
     }
   }, [isActive, resolvedTool]);
 
@@ -41,10 +45,18 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
     >
       <ToolsSidebar />
       <div ref={detailPaneRef} className="tools-detail-pane panel-right" tabIndex={-1}>
-        {resolvedTool === 'subtitles' && <ToolSubtitlesPanel />}
-        {resolvedTool === 'voice_typing' && <ToolVoiceTypingPanel />}
-        {resolvedTool === 'api_server' && <ToolApiServerPanel />}
-        {resolvedTool === 'mcp' && <ToolMcpPanel />}
+        <div style={{ display: resolvedTool === 'subtitles' ? 'block' : 'none' }}>
+          <ToolSubtitlesPanel />
+        </div>
+        <div style={{ display: resolvedTool === 'voice_typing' ? 'block' : 'none' }}>
+          <ToolVoiceTypingPanel />
+        </div>
+        <div style={{ display: resolvedTool === 'api_server' ? 'block' : 'none' }}>
+          <ToolApiServerPanel />
+        </div>
+        <div style={{ display: resolvedTool === 'mcp' ? 'block' : 'none' }}>
+          <ToolMcpPanel />
+        </div>
       </div>
     </div>
   );

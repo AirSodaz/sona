@@ -20,13 +20,14 @@ vi.mock('react-i18next', async (importOriginal) => {
     }),
   };
 });
+const mockTransport = {
+  invoke: vi.fn().mockResolvedValue({}),
+};
 vi.mock('../../../platform', async (importOriginal) => {
   const actual = await importOriginal<typeof Platform>();
   return {
     ...actual,
-    useTransport: () => ({
-      invoke: vi.fn().mockResolvedValue({}),
-    }),
+    useTransport: () => mockTransport,
   };
 });
 vi.mock('../../../services/tauri/invoke', () => ({
@@ -113,11 +114,35 @@ describe('ToolsView', () => {
     expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-mcp');
     expect(sidebarTabs[3].getAttribute('tabindex')).toBe('-1');
 
-    // Check default subtitles panel is mounted and unselected panels are unmounted
-    expect(document.getElementById('tools-panel-subtitles')).not.toBeNull();
-    expect(document.getElementById('tools-panel-voice_typing')).toBeNull();
-    expect(document.getElementById('tools-panel-api_server')).toBeNull();
-    expect(document.getElementById('tools-panel-mcp')).toBeNull();
+    // Check default subtitles panel is visible and unselected panels are hidden
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-voice_typing')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-api_server')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-mcp')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
   });
 
   it('switches to voice typing panel when clicking voice typing in sidebar', () => {
@@ -127,8 +152,20 @@ describe('ToolsView', () => {
     fireEvent.click(sidebarTabs[1]); // voice typing is index 1
 
     expect(useToolsStore.getState().activeTool).toBe('voice_typing');
-    expect(document.getElementById('tools-panel-voice_typing')).not.toBeNull();
-    expect(document.getElementById('tools-panel-subtitles')).toBeNull();
+    expect(
+      (
+        document
+          .getElementById('tools-panel-voice_typing')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
   });
 
   it('toggles caption mode when clicking caption switch in subtitles panel', () => {
@@ -236,5 +273,41 @@ describe('ToolsView', () => {
 
     fireEvent.keyDown(tablist, { key: 'ArrowDown', metaKey: true });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
+  });
+
+  it('preserves scroll position when toggling isActive between true and false without tool change', () => {
+    const { rerender, container } = render(<ToolsView isActive={true} />);
+    const detailPane = container.querySelector('.tools-detail-pane') as HTMLElement;
+    expect(detailPane).not.toBeNull();
+
+    detailPane.scrollTop = 350;
+
+    rerender(<ToolsView isActive={false} />);
+    rerender(<ToolsView isActive={true} />);
+
+    expect(detailPane.scrollTop).toBe(350);
+  });
+
+  it('falls back to subtitles panel when activeTool is invalid or unknown', () => {
+    useToolsStore.setState({ activeTool: 'unknown_tool' as never });
+    render(<ToolsView />);
+
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+  });
+
+  it('renders warning alert in subtitles panel when caption mode is enabled without streaming ASR', () => {
+    useTranscriptRuntimeStore.setState({ isCaptionMode: true });
+    render(<ToolsView />);
+
+    const warningAlert = screen.getByRole('alert');
+    expect(warningAlert).not.toBeNull();
+    expect(warningAlert.className).toContain('settings-warning-notice');
+    expect(warningAlert.textContent).toContain('Live Subtitles requires a streaming ASR model');
   });
 });

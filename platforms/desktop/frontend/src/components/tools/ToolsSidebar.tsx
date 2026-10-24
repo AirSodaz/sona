@@ -102,7 +102,7 @@ export function ToolsSidebar(): React.JSX.Element {
       Icon: Server,
       statusText: isApiActive
         ? `:${apiConfig.httpServerPort ?? 14200}`
-        : t('tools.status_stopped', { defaultValue: 'Stopped' }),
+        : t('tools.status_disabled', { defaultValue: 'Disabled' }),
       statusType: isApiActive ? 'active' : 'inactive',
     },
     {
@@ -122,7 +122,14 @@ export function ToolsSidebar(): React.JSX.Element {
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
   ];
-  const selectedIndex = tools.findIndex((tool) => tool.id === activeTool);
+  const resolvedTool: ToolId =
+    activeTool === 'subtitles' ||
+    activeTool === 'voice_typing' ||
+    activeTool === 'api_server' ||
+    activeTool === 'mcp'
+      ? activeTool
+      : 'subtitles';
+  const selectedIndex = tools.findIndex((tool) => tool.id === resolvedTool);
   const effectiveIndex = Math.max(selectedIndex, 0);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -162,7 +169,7 @@ export function ToolsSidebar(): React.JSX.Element {
         onKeyDown={handleKeyDown}
       >
         {tools.map((tool, index) => {
-          const isSelected = activeTool === tool.id;
+          const isSelected = resolvedTool === tool.id;
           const Icon = tool.Icon;
 
           return (
@@ -171,6 +178,8 @@ export function ToolsSidebar(): React.JSX.Element {
               id={`tools-tab-${tool.id}`}
               type="button"
               role="tab"
+              aria-label={t(tool.nameKey, { defaultValue: tool.defaultName })}
+              aria-describedby={`tools-tab-status-${tool.id} tools-tab-desc-${tool.id}`}
               aria-selected={isSelected}
               aria-controls={`tools-panel-${tool.id}`}
               tabIndex={index === effectiveIndex ? 0 : -1}
@@ -185,12 +194,15 @@ export function ToolsSidebar(): React.JSX.Element {
                   <span className="tools-sidebar-item-name">
                     {t(tool.nameKey, { defaultValue: tool.defaultName })}
                   </span>
-                  <span className={`tools-status-badge tools-status-${tool.statusType}`}>
+                  <span
+                    id={`tools-tab-status-${tool.id}`}
+                    className={`tools-status-badge tools-status-${tool.statusType}`}
+                  >
                     <span className="tools-status-dot" aria-hidden="true" />
                     <span>{tool.statusText}</span>
                   </span>
                 </div>
-                <span className="tools-sidebar-item-desc">
+                <span id={`tools-tab-desc-${tool.id}`} className="tools-sidebar-item-desc">
                   {t(tool.descKey, { defaultValue: tool.defaultDesc })}
                 </span>
               </div>

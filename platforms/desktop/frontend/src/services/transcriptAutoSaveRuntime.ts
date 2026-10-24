@@ -4,6 +4,7 @@ import { addHistoryTranscriptUpdateListener, useHistoryStore } from '../stores/h
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { computeSegmentsFingerprint } from '../utils/segmentUtils';
@@ -242,7 +243,8 @@ class TranscriptAutoSaveRuntime {
       this.lastFingerprint = currentFingerprint;
       const runtimeState = useTranscriptRuntimeStore.getState();
       const isLiveIngestion =
-        runtimeState.isRecording ||
+        (runtimeState.isRecording &&
+          state.sourceHistoryId === useTranscriptStore.getState().recordingSessionId) ||
         (runtimeState.mode === 'create' && runtimeState.ingestionFocus === 'live');
       const delayMs = isLiveIngestion ? LIVE_DRAFT_AUTO_SAVE_DELAY_MS : DEFAULT_AUTO_SAVE_DELAY_MS;
       this.queueSave(currentId, state.segments, delayMs);

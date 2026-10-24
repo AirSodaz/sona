@@ -91,4 +91,20 @@ describe('ProjectsRail', () => {
       expect.objectContaining({ invocation: 'pointer', point: { x: 150, y: 200 } })
     );
   });
+
+  it('calls onOpenProjectContextMenu when menu button receives contextmenu or context menu key', () => {
+    const onOpenProjectContextMenu = vi.fn();
+    render(<ProjectsRail {...defaultProps} onOpenProjectContextMenu={onOpenProjectContextMenu} />);
+
+    const menuBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.contextMenu(menuBtn);
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith('proj-1', expect.anything());
+
+    onOpenProjectContextMenu.mockClear();
+    fireEvent.keyDown(menuBtn, { key: 'F10', shiftKey: true });
+    expect(onOpenProjectContextMenu).toHaveBeenCalledWith(
+      'proj-1',
+      expect.objectContaining({ invocation: 'keyboard' })
+    );
+  });
 });

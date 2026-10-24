@@ -33,6 +33,7 @@ import { clearActiveTranscriptSession } from './stores/transcriptCoordinator';
 import { useTranscriptPlaybackStore } from './stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from './stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from './stores/transcriptSessionStore';
+import { useTranscriptStore } from './stores/transcriptStore';
 import type { SettingsTab } from './types/settings';
 import type { LlmProvider } from './types/transcript';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from './utils/settingsPerf';
@@ -208,7 +209,12 @@ function App(): React.JSX.Element | null {
   };
 
   const closeTranscriptSession = () => {
-    if (mode === 'create' && ingestionFocus === 'batch') {
+    const activeBatchId = useBatchQueueStore.getState().activeItemId;
+    if (
+      activeBatchId &&
+      (useTranscriptStore.getState().activeSessionId === activeBatchId ||
+        (mode === 'create' && ingestionFocus === 'batch'))
+    ) {
       useBatchQueueStore.getState().setActiveItem(null);
     } else {
       clearActiveTranscriptSession({ clearAudio: true });

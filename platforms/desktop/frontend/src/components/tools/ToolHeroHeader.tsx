@@ -44,7 +44,7 @@ export function ToolHeroHeader({
       <div className="tool-hero-control">
         {actions && <div className="tool-hero-actions">{actions}</div>}
         <div className="tool-hero-status">
-          <span className={`tools-status-badge tools-status-${statusTone}`}>
+          <span className={`tools-status-badge tools-status-${statusTone}`} role="status">
             <span className="tools-status-dot" aria-hidden="true" />
             <span>{statusText}</span>
           </span>
@@ -53,7 +53,9 @@ export function ToolHeroHeader({
           checked={enabled}
           disabled={disabled}
           onChange={(val) => {
-            void onToggle(val);
+            Promise.resolve(onToggle(val)).catch(() => {
+              // Rejection handled by caller
+            });
           }}
           aria-label={switchAriaLabel}
         />

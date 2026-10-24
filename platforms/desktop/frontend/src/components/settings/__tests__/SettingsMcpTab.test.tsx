@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { TauriCommand } from '../../../services/tauri/commands';
 import { invokeTauri } from '../../../services/tauri/invoke';
 import { useConfigStore } from '../../../stores/configStore';
@@ -29,6 +29,10 @@ vi.mock('../../../services/configPersistenceService', () => ({
 const mockInvokeTauri = vi.mocked(invokeTauri);
 
 describe('SettingsMcpTab', () => {
+  afterEach(() => {
+    useMcpStore.setState({ fetchStatus: useMcpStore.getInitialState().fetchStatus });
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     useConfigStore.setState({

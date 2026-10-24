@@ -274,13 +274,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setMode: (mode, focus) => {
     if ((mode as string) === 'live') {
       const recId = get().recordingSessionId;
-      const currentActiveId = get().activeSessionId;
-      const targetSessionId =
-        recId && get().sessions[recId]
-          ? recId
-          : currentActiveId && currentActiveId !== 'default' && get().sessions[currentActiveId]
-            ? currentActiveId
-            : 'default';
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       set({
         mode: 'create',
         ingestionFocus: 'live',
@@ -300,13 +294,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let targetSessionId = 'default';
       if (nextFocus === 'live') {
         const recId = get().recordingSessionId;
-        const currentActiveId = get().activeSessionId;
-        targetSessionId =
-          recId && get().sessions[recId]
-            ? recId
-            : currentActiveId && currentActiveId !== 'default' && get().sessions[currentActiveId]
-              ? currentActiveId
-              : 'default';
+        targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       } else if (nextFocus === 'batch') {
         const activeItemId = activeBatchItemIdResolver?.();
         targetSessionId = activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
@@ -323,13 +311,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   setIngestionFocus: (ingestionFocus) => {
     if (ingestionFocus === 'live') {
       const recId = get().recordingSessionId;
-      const currentActiveId = get().activeSessionId;
-      const targetSessionId =
-        recId && get().sessions[recId]
-          ? recId
-          : currentActiveId && currentActiveId !== 'default' && get().sessions[currentActiveId]
-            ? currentActiveId
-            : 'default';
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
       set({
         ingestionFocus,
         activeSessionId: targetSessionId,

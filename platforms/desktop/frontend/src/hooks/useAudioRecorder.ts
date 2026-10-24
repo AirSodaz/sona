@@ -27,7 +27,7 @@ import {
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
@@ -186,8 +186,34 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           return {
             config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
             segments: recordingSegments ?? useTranscriptSessionStore.getState().segments,
-            setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
-            setSegments: setTranscriptSegments,
+            setAudioUrl: (url: string | null) => {
+              if (recSessionId) {
+                useTranscriptStore.setState((state) => ({
+                  sessions: {
+                    ...state.sessions,
+                    [recSessionId]: {
+                      ...(state.sessions[recSessionId] || DEFAULT_SESSION_DATA),
+                      audioUrl: url,
+                    },
+                  },
+                }));
+                if (useTranscriptStore.getState().activeSessionId === recSessionId) {
+                  useTranscriptPlaybackStore.getState().setAudioUrl(url);
+                }
+              } else {
+                useTranscriptPlaybackStore.getState().setAudioUrl(url);
+              }
+            },
+            setSegments: (segments: TranscriptSegment[]) => {
+              if (recSessionId) {
+                useTranscriptStore.getState().setSegmentsForSession(recSessionId, segments);
+                if (useTranscriptStore.getState().activeSessionId === recSessionId) {
+                  setTranscriptSegments(segments);
+                }
+              } else {
+                setTranscriptSegments(segments);
+              }
+            },
             activeSessionId:
               recordSessionIdRef.current ||
               useTranscriptStore.getState().recordingSessionId ||

@@ -329,16 +329,18 @@ export function Settings({
   const { activeTab, setActiveTab } = useSettingsLogic(isOpen, onClose, effectiveInitialTab);
   const renderedTab = isPrewarming ? 'general' : activeTab;
   const isRenderedTabInList = (SETTINGS_TABS as readonly string[]).includes(renderedTab);
+  const [prevInitialTab, setPrevInitialTab] = useState(initialTab);
   const [migratedSubtitleTool, setMigratedSubtitleTool] = useState<ToolId>(() =>
     initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles'
   );
-  useEffect(() => {
+  if (prevInitialTab !== initialTab) {
+    setPrevInitialTab(initialTab);
     if (initialTab === 'voice_typing') {
       setMigratedSubtitleTool('voice_typing');
     } else if (initialTab === 'subtitle') {
       setMigratedSubtitleTool('subtitles');
     }
-  }, [initialTab]);
+  }
   const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
   const renderedMountedTabs = useMemo(
     () => (shouldRender ? addMountedSettingsTab(mountedTabs, renderedTab) : mountedTabs),

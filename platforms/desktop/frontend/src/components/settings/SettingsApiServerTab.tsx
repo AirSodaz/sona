@@ -32,7 +32,10 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const config = useApiServerConfig();
   const setConfig = useSetConfig();
   const transport = useTransport();
-
+  const transportRef = useRef(transport);
+  useEffect(() => {
+    transportRef.current = transport;
+  }, [transport]);
   const [copied, setCopied] = useState(false);
   const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [health, setHealth] = useState<ApiServerHealth | null>(null);
@@ -41,7 +44,43 @@ export function SettingsApiServerTab(): React.JSX.Element {
   const [lastError, setLastError] = useState<string | null>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const healthRef = useRef<ApiServerHealth | null>(null);
-  healthRef.current = health;
+  const isMountedRef = useRef(true);
+  const inFlightSnapshotRef = useRef<Promise<ApiServerDashboardSnapshot> | null>(null);
+  const prevConfigRef = useRef<{
+    host: string;
+    port: number;
+    apiKey: string;
+    maxConcurrent: number;
+    maxQueueSize: number;
+    maxUploadSizeMb: number;
+    jobTtlMinutes: number;
+    ipWhitelist: string;
+    gpuAcceleration: string;
+    enabled: boolean;
+  } | null>(null);
+  const mountConfigRef = useRef<{
+    host: string;
+    port: number;
+    apiKey: string;
+    maxConcurrent: number;
+    maxQueueSize: number;
+    maxUploadSizeMb: number;
+    jobTtlMinutes: number;
+    ipWhitelist: string;
+    gpuAcceleration: string;
+    enabled: boolean;
+  } | null>(null);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    healthRef.current = health;
+  }, [health]);
 
   useEffect(() => {
     if (copied) {
@@ -73,14 +112,18 @@ export function SettingsApiServerTab(): React.JSX.Element {
     if (!config.httpServerEnabled) return;
 
     try {
-      const snapshot = await transport.invoke<ApiServerDashboardSnapshot>(
+      const promise = transportRef.current.invoke<ApiServerDashboardSnapshot>(
         TauriCommand.apiServer.dashboardSnapshot
       );
+      inFlightSnapshotRef.current = promise;
+      const snapshot = await promise;
+      if (!isMountedRef.current) return;
       setHealth(snapshot?.health ?? null);
       setInfo(snapshot?.info ?? null);
       setJobs(snapshot?.jobs ?? {});
       setLastError(null);
     } catch (err) {
+      if (!isMountedRef.current) return;
       setHealth(null);
       setInfo(null);
       setJobs({});
@@ -88,8 +131,10 @@ export function SettingsApiServerTab(): React.JSX.Element {
       if (!(healthRef.current === null && errMsg.toLowerCase().includes('not running'))) {
         setLastError(errMsg);
       }
+    } finally {
+      inFlightSnapshotRef.current = null;
     }
-  }, [config.httpServerEnabled, transport.invoke]);
+  }, [config.httpServerEnabled]);
 
   useEffect(() => {
     if (config.httpServerEnabled) {
@@ -174,32 +219,101 @@ export function SettingsApiServerTab(): React.JSX.Element {
   }, [config.httpServerApiKey]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      if (!isMountedRef.current) return;
+
+      const currentSnapshot = {
+        host: config.httpServerHost ?? '127.0.0.1',
+        port: config.httpServerPort ?? 14200,
+        apiKey: config.httpServerApiKey ?? '',
+        maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+        maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+        maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
+        jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+        ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+        gpuAcceleration: config.gpuAcceleration ?? 'auto',
+        enabled: Boolean(config.httpServerEnabled),
+      };
+
+      if (!mountConfigRef.current) {
+        mountConfigRef.current = currentSnapshot;
+      }
+      const isFirstRun = prevConfigRef.current === null;
+      const prev = prevConfigRef.current;
+      prevConfigRef.current = currentSnapshot;
+
       if (config.httpServerEnabled) {
-        transport
+        if (isFirstRun) {
+          const configChanged =
+            mountConfigRef.current.host !== currentSnapshot.host ||
+            mountConfigRef.current.port !== currentSnapshot.port ||
+            mountConfigRef.current.apiKey !== currentSnapshot.apiKey ||
+            mountConfigRef.current.maxConcurrent !== currentSnapshot.maxConcurrent ||
+            mountConfigRef.current.maxQueueSize !== currentSnapshot.maxQueueSize ||
+            mountConfigRef.current.maxUploadSizeMb !== currentSnapshot.maxUploadSizeMb ||
+            mountConfigRef.current.jobTtlMinutes !== currentSnapshot.jobTtlMinutes ||
+            mountConfigRef.current.ipWhitelist !== currentSnapshot.ipWhitelist ||
+            mountConfigRef.current.gpuAcceleration !== currentSnapshot.gpuAcceleration;
+
+          let isRunning = healthRef.current?.status === 'ok';
+          if (!isRunning && inFlightSnapshotRef.current) {
+            try {
+              const snapshot = await inFlightSnapshotRef.current;
+              if (snapshot?.health?.status === 'ok') {
+                isRunning = true;
+              }
+            } catch {
+              isRunning = false;
+            }
+          }
+          if (isRunning && !configChanged) {
+            return;
+          }
+        } else if (
+          prev &&
+          prev.enabled === currentSnapshot.enabled &&
+          prev.host === currentSnapshot.host &&
+          prev.port === currentSnapshot.port &&
+          prev.apiKey === currentSnapshot.apiKey &&
+          prev.maxConcurrent === currentSnapshot.maxConcurrent &&
+          prev.maxQueueSize === currentSnapshot.maxQueueSize &&
+          prev.maxUploadSizeMb === currentSnapshot.maxUploadSizeMb &&
+          prev.jobTtlMinutes === currentSnapshot.jobTtlMinutes &&
+          prev.ipWhitelist === currentSnapshot.ipWhitelist &&
+          prev.gpuAcceleration === currentSnapshot.gpuAcceleration
+        ) {
+          return;
+        }
+
+        transportRef.current
           .invoke<string>(TauriCommand.apiServer.start, {
-            host: config.httpServerHost ?? '127.0.0.1',
-            port: config.httpServerPort ?? 14200,
-            apiKey: config.httpServerApiKey ?? '',
-            maxConcurrent: config.httpServerMaxConcurrent ?? 2,
-            maxQueueSize: config.httpServerMaxQueueSize ?? 100,
-            maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
-            jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+            host: currentSnapshot.host,
+            port: currentSnapshot.port,
+            apiKey: currentSnapshot.apiKey,
+            maxConcurrent: currentSnapshot.maxConcurrent,
+            maxQueueSize: currentSnapshot.maxQueueSize,
+            maxUploadSizeMb: currentSnapshot.maxUploadSizeMb,
+            jobTtlMinutes: currentSnapshot.jobTtlMinutes,
             maxStreaming: 2,
-            ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
-            gpuAcceleration: config.gpuAcceleration ?? 'auto',
+            ipWhitelist: currentSnapshot.ipWhitelist,
+            gpuAcceleration: currentSnapshot.gpuAcceleration,
           })
           .then((normalizedWhitelist) => {
+            if (!isMountedRef.current) return;
             setLastError(null);
             void fetchData();
             if (
               typeof normalizedWhitelist === 'string' &&
               normalizedWhitelist !== config.httpServerIpWhitelist
             ) {
+              if (prevConfigRef.current) {
+                prevConfigRef.current.ipWhitelist = normalizedWhitelist;
+              }
               setConfig({ httpServerIpWhitelist: normalizedWhitelist });
             }
           })
           .catch((e) => {
+            if (!isMountedRef.current) return;
             logger.error('[ApiServer] Failed to start server:', e);
             const errMsg = extractErrorMessage(e);
             setLastError(errMsg);
@@ -214,8 +328,16 @@ export function SettingsApiServerTab(): React.JSX.Element {
             });
           });
       } else {
+        if (isFirstRun) {
+          const isRunning = healthRef.current?.status === 'ok';
+          if (!isRunning) {
+            return;
+          }
+        } else if (prev && !prev.enabled) {
+          return;
+        }
         setLastError(null);
-        transport.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
+        transportRef.current.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
           logger.error('[ApiServer] Failed to stop server:', e);
         });
       }
@@ -235,7 +357,6 @@ export function SettingsApiServerTab(): React.JSX.Element {
     fetchData,
     setConfig,
     t,
-    transport.invoke,
   ]);
   const handleToggleEnabled = async (checked: boolean) => {
     if (!checked) {

@@ -219,4 +219,19 @@ describe('TabNavigation', () => {
       overlay.remove();
     }
   });
+
+  it('suppresses Ctrl+Tab when shared modal overlay is open', () => {
+    testContext.runtimeState.mode = 'create';
+    const overlay = document.createElement('div');
+    overlay.className = 'shared-modal-overlay';
+    document.body.appendChild(overlay);
+
+    try {
+      render(<TabNavigation />);
+      fireEvent.keyDown(window, { key: 'Tab', ctrlKey: true });
+      expect(testContext.runtimeState.setMode).not.toHaveBeenCalled();
+    } finally {
+      overlay.remove();
+    }
+  });
 });

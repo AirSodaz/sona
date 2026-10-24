@@ -145,6 +145,18 @@ function SortableProjectItem({
               : createPointerContextMenuRequest(event)
           );
         }}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          onOpenContextMenu(project.id, createPointerContextMenuRequest(event));
+        }}
+        onKeyDown={(event) => {
+          if (isContextMenuKeyboardEvent(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            onOpenContextMenu(project.id, createKeyboardContextMenuRequest(event.currentTarget));
+          }
+        }}
         onPointerDown={(event) => {
           event.stopPropagation();
         }}
@@ -263,7 +275,7 @@ export function ProjectsRail({
           </span>
           <button
             type="button"
-            className="btn btn-icon projects-rail-create"
+            className="projects-rail-create"
             onClick={onOpenCreateModal}
             aria-label={t('projects.new_project_button', { defaultValue: 'New Project' })}
             data-tooltip={t('projects.new_project_button', { defaultValue: 'New Project' })}

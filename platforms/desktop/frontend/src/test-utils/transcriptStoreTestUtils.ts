@@ -1,6 +1,7 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useToolsStore } from '../stores/toolsStore';
 import {
   applyTranscriptUpdate,
   clearActiveTranscriptSession,
@@ -235,6 +236,7 @@ export function resetTranscriptStores(): void {
     isLoading: false,
     error: null,
   }));
+  useToolsStore.setState({ activeTool: 'subtitles' });
 
   const store = useRealTranscriptStore;
 

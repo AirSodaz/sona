@@ -64,9 +64,6 @@ vi.mock('../settings/SettingsDashboardTab', () => ({
 vi.mock('../settings/SettingsMicrophoneTab', () => ({
   SettingsMicrophoneTab: () => <div>Microphone Tab</div>,
 }));
-vi.mock('../settings/SettingsSubtitleTab', () => ({
-  SettingsSubtitleTab: () => <div>Subtitle Tab</div>,
-}));
 vi.mock('../settings/SettingsModelsTab', () => ({
   SettingsModelsTab: () => <div>Models Tab</div>,
 }));
