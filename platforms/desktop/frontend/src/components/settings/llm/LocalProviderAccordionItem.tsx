@@ -357,7 +357,10 @@ export function LocalProviderAccordionItem({
 
   const cardsRef = useRef(cards);
   cardsRef.current = cards;
-  const installedCards = useMemo(() => cards.filter((c) => c.isInstalled), [cards]);
+  const installedCards = useMemo(() => {
+    const allCards = [...(llmData?.cards ?? []), ...(nmtData?.cards ?? [])];
+    return allCards.filter((c) => c.isInstalled);
+  }, [llmData?.cards, nmtData?.cards]);
   const hasInstalled = installedCards.length > 0;
   const isAnyDownloading = Object.keys(downloads).length > 0;
   const isAnyTesting = useMemo(
@@ -406,11 +409,11 @@ export function LocalProviderAccordionItem({
     try {
       let speed: number | undefined;
       if (card.backend === 'onnx-nmt') {
-        const testInput = card.id.includes('-en')
-          ? '你好，世界！'
-          : card.id.includes('-ja')
+        const srcLang = card.id.replace(/^opus-mt-/, '').split('-')[0];
+        const testInput =
+          srcLang === 'zh'
             ? '你好，世界！'
-            : card.id.includes('ja-')
+            : srcLang === 'ja'
               ? 'こんにちは、世界！'
               : 'Hello, world!';
         const translated = await testLocalNmtModel(card.id, testInput);

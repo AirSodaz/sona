@@ -15,7 +15,7 @@ pub struct PieceEntry {
 pub struct SentencePieceTokenizer {
     pub pieces: Vec<PieceEntry>,
     pub piece_to_id: HashMap<String, u32>,
-    pub pad_id: u32,
+    pub pad_id: Option<u32>,
     pub eos_id: u32,
     pub unk_id: u32,
     max_piece_len: usize,
@@ -62,7 +62,7 @@ impl SentencePieceTokenizer {
 
         let eos_id = piece_to_id.get("</s>").copied().unwrap_or(0);
         let unk_id = piece_to_id.get("<unk>").copied().unwrap_or(1);
-        let pad_id = piece_to_id.get("<pad>").copied().unwrap_or(0);
+        let pad_id = piece_to_id.get("<pad>").copied();
 
         Ok(Self {
             pieces,
@@ -148,12 +148,12 @@ impl SentencePieceTokenizer {
         let mut byte_buf: Vec<u8> = Vec::new();
 
         for &id in token_ids {
+            if id == self.eos_id as i64 || self.pad_id.is_some_and(|pad| id == pad as i64) {
+                break;
+            }
             let idx = id as usize;
             if idx >= self.pieces.len() {
                 continue;
-            }
-            if id == self.eos_id as i64 || id == self.pad_id as i64 {
-                break;
             }
             let piece = &self.pieces[idx].piece;
             if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
@@ -312,7 +312,7 @@ mod tests {
         }
         tokenizer.eos_id = 0;
         tokenizer.unk_id = 1;
-        tokenizer.pad_id = 0;
+        tokenizer.pad_id = Some(0);
         tokenizer.max_piece_len = 10;
 
         let tokens = tokenizer.encode("Hello world!");
@@ -343,7 +343,7 @@ mod tests {
         }
         tokenizer.eos_id = 0;
         tokenizer.unk_id = 1;
-        tokenizer.pad_id = 0;
+        tokenizer.pad_id = Some(0);
         tokenizer.max_piece_len = 10;
 
         // <0xE4><0xBD><0xA0> is UTF-8 for "你"

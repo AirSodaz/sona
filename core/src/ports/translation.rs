@@ -22,7 +22,7 @@ pub enum TranslationPortErrorKind {
     EngineFailed,
 }
 
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
 #[error("{message}")]
 pub struct TranslationPortError {
     pub kind: TranslationPortErrorKind,

@@ -192,7 +192,7 @@ mod tests {
         let chunk = vec![0.0f32; 1600];
         for _ in 0..1200 {
             detector.accept_samples(&chunk);
-            let _ = detector.is_speech_detected();
+            assert!(!detector.is_speech_detected());
         }
     }
 }

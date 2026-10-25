@@ -185,9 +185,16 @@ impl OnnxNmtModel {
                 ));
             };
 
-            let last_token_logits_start = (target_len - 1) * vocab_size;
-            let last_token_logits =
-                &logits_data[last_token_logits_start..last_token_logits_start + vocab_size];
+            let seq_len = logits_shape[1] as usize;
+            let last_step = if seq_len > 0 { seq_len - 1 } else { 0 };
+            let last_token_logits_start = last_step * vocab_size;
+            let last_token_logits_end = last_token_logits_start + vocab_size;
+            if last_token_logits_end > logits_data.len() {
+                return Err(TranslationPortError::inference_failed(
+                    "Logits tensor buffer length mismatch",
+                ));
+            }
+            let last_token_logits = &logits_data[last_token_logits_start..last_token_logits_end];
 
             let mut best_id = 0;
             let mut best_val = f32::NEG_INFINITY;
@@ -199,9 +206,12 @@ impl OnnxNmtModel {
             }
 
             let next_token = best_id as i64;
-            if next_token == self.target_tokenizer.eos_id as i64
-                || next_token == self.target_tokenizer.pad_id as i64
-            {
+            let is_stop = next_token == self.target_tokenizer.eos_id as i64
+                || self
+                    .target_tokenizer
+                    .pad_id
+                    .is_some_and(|pad| next_token == pad as i64);
+            if is_stop {
                 break;
             }
 

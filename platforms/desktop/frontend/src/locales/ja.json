@@ -1923,7 +1923,11 @@
       "qwen3_5_4b": "Alibaba Qwen チーム開発。262K 長文コンテキストとハイブリッド線形アテンションを備えた次世代 4B エッジ LLM。推敲、翻訳、要約、対話で高精度を実現。",
       "qwen3_1_7b": "Alibaba Qwen チーム開発。ネイティブのデュアルモード思考（Thinking / Non-thinking）と 32K コンテキストを備えた次世代 1.7B 超軽量エッジ LLM。高速な推論、推敲、翻訳、要約に対応。",
       "gemma_4_e2b": "Google DeepMind が開発した次世代エッジ最適化超軽量マルチモーダルモデル。2B 有効パラメータ、極小メモリフットプリント、128K コンテキスト、優れたオンデバイス推論性能を備えています。",
-      "custom_local_model": "ローカルにインポートまたは検出された GGUF 形式モデルファイル。"
+      "custom_local_model": "ローカルにインポートまたは検出された GGUF 形式モデルファイル。",
+      "opus_mt_en_zh": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 英語→中国語ニューラル機械翻訳モデル。",
+      "opus_mt_zh_en": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 中国語→英語ニューラル機械翻訳モデル。",
+      "opus_mt_ja_zh": "ONNX Runtime 上でローカル動作する拾音 Opus-MT 日本語→中国語ニューラル機械翻訳モデル。",
+      "opus_mt_zh_ja": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 中国語→日本語ニューラル機械翻訳モデル。"
     },
     "recognition_models": "認識モデル",
     "recognition_path_label": "モデルの選択",
@@ -2402,6 +2406,8 @@
     "llm": {
       "title": "LLM サービス",
       "description": "文字起こしの Polish、翻訳、要約に使う LLM プロバイダーとモデルを設定します。",
+      "subtab_llm": "大規模言語モデル (LLM)",
+      "subtab_nmt": "ニューラル機械翻訳 (NMT)",
       "timeout_label": "リクエストタイムアウト (秒)",
       "timeout_hint": "LLM リクエストが完了するまでに許容される最大時間 (秒単位)。デフォルトは 180 です。",
       "service_type": "LLM サービス タイプ",

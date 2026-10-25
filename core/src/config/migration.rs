@@ -315,6 +315,22 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     {
         return true;
     }
+    if existing.get("captionDisplayMode") != normalized.get("captionDisplayMode")
+        || existing.get("captionBilingualOrder") != normalized.get("captionBilingualOrder")
+        || existing.get("realtimeTranslationEnabled")
+            != normalized.get("realtimeTranslationEnabled")
+        || existing.get("realtimeTranslationSourceLanguage")
+            != normalized.get("realtimeTranslationSourceLanguage")
+        || existing.get("realtimeTranslationTargetLanguage")
+            != normalized.get("realtimeTranslationTargetLanguage")
+        || existing.get("realtimeTranslationEngine") != normalized.get("realtimeTranslationEngine")
+        || existing.get("realtimeTranslationModelId")
+            != normalized.get("realtimeTranslationModelId")
+        || existing.get("voiceTypingRealtimePreview")
+            != normalized.get("voiceTypingRealtimePreview")
+    {
+        return true;
+    }
     existing.get("logLevel") != normalized.get("logLevel")
 }
 

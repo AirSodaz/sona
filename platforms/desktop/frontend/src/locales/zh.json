@@ -1923,7 +1923,11 @@
       "qwen3_5_4b": "由阿里巴巴 Qwen 团队开发。最新一代 4B 端侧大模型，支持 262K 长上下文与混合线性注意力架构，具备卓越的润色、翻译、总结与多语言对话能力。",
       "qwen3_1_7b": "由阿里巴巴 Qwen 团队开发。新一代 1.7B 超轻量端侧大模型，支持原生双模思考（Thinking / Non-thinking）与 32K 上下文，具备极快的推理速度与出色的润色、翻译、总结能力。",
       "gemma_4_e2b": "由 Google DeepMind 开发的新一代超轻量端侧多模态架构模型，2B 有效参数量，极小内存占用，支持 128K 上下文，具备优秀的轻量推理与多任务处理能力。",
-      "custom_local_model": "本地导入或扫描发现的 GGUF 格式模型文件。"
+      "custom_local_model": "本地导入或扫描发现的 GGUF 格式模型文件。",
+      "opus_mt_en_zh": "基于 ONNX Runtime 本地运行的 Helsinki-NLP Opus-MT 英语到中文神经机器翻译模型。",
+      "opus_mt_zh_en": "基于 ONNX Runtime 本地运行的 Helsinki-NLP Opus-MT 中文到英语神经机器翻译模型。",
+      "opus_mt_ja_zh": "基于 ONNX Runtime 本地运行的拾音 Opus-MT 日语到中文神经机器翻译模型。",
+      "opus_mt_zh_ja": "基于 ONNX Runtime 本地运行的 Helsinki-NLP Opus-MT 中文到日语神经机器翻译模型。"
     },
     "recognition_models": "识别模型",
     "recognition_path_label": "选择模型",
@@ -2364,6 +2368,8 @@
     "llm": {
       "title": "大模型服务",
       "description": "配置用于润色、翻译和生成摘要的 LLM 供应商及模型。",
+      "subtab_llm": "大语言模型 (LLM)",
+      "subtab_nmt": "神经机器翻译 (NMT)",
       "timeout_label": "请求超时 (秒)",
       "timeout_hint": "允许 LLM 请求的最长执行时间（秒）。默认：180。",
       "service_type": "LLM 服务类型",

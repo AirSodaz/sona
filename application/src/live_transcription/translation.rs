@@ -100,6 +100,8 @@ impl StreamingTranslationCoordinator {
                             let frozen = state.stabilizer.frozen_prefix().to_string();
                             if !frozen.is_empty() {
                                 segment.translation = Some(frozen);
+                            } else {
+                                segment.translation = state.last_draft_translation;
                             }
                         }
                         segment.draft_translation = None;
@@ -109,13 +111,17 @@ impl StreamingTranslationCoordinator {
                 let should_translate = {
                     let states = self.states.lock();
                     if let Some(state) = states.get(&segment.id) {
-                        let char_delta = text
-                            .chars()
-                            .count()
-                            .saturating_sub(state.last_text.chars().count());
-                        let elapsed = state.last_translate_time.elapsed();
-                        char_delta >= self.min_char_delta
-                            || elapsed >= Duration::from_millis(self.debounce_ms)
+                        if text == state.last_text {
+                            false
+                        } else {
+                            let char_delta = text
+                                .chars()
+                                .count()
+                                .saturating_sub(state.last_text.chars().count());
+                            let elapsed = state.last_translate_time.elapsed();
+                            char_delta >= self.min_char_delta
+                                || elapsed >= Duration::from_millis(self.debounce_ms)
+                        }
                     } else {
                         true
                     }

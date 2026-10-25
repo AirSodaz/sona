@@ -10,6 +10,14 @@ import type { TranscriptSegment } from '../types/transcript';
 import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
 
+function needsWordBoundarySpace(prefix?: string | null, tail?: string | null): boolean {
+  if (!prefix || !tail) return false;
+  if (prefix.endsWith(' ') || tail.startsWith(' ')) return false;
+  const lastChar = prefix.slice(-1);
+  const firstChar = tail.slice(0, 1);
+  const cjkRegex = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff]/;
+  return !cjkRegex.test(lastChar) && !cjkRegex.test(firstChar);
+}
 /**
  * Root component for the always-on-top caption window.
  * Manages its own state by listening to Tauri events from the main window.
@@ -158,7 +166,18 @@ export function CaptionWindow() {
           : displaySegments.map((segment) => {
               const hasTranslation = Boolean(segment.translation || segment.draftTranslation);
               const originalLine = (
-                <div className="caption-original-line" style={{ color: captionState.style.color }}>
+                <div
+                  className="caption-original-line"
+                  style={{
+                    color: captionState.style.color,
+                    marginTop:
+                      bilingualOrder === 'translation_first' &&
+                      displayMode === 'bilingual' &&
+                      hasTranslation
+                        ? '2px'
+                        : 0,
+                  }}
+                >
                   {segment.speaker && (
                     <span className="live-caption-speaker">[{segment.speaker.label}]</span>
                   )}
@@ -172,14 +191,19 @@ export function CaptionWindow() {
                   style={{
                     fontSize: `${translationFontSize}px`,
                     color: translationColor,
-                    marginTop: '2px',
+                    marginTop: bilingualOrder === 'translation_first' ? 0 : '2px',
                   }}
                 >
                   <span>{segment.translation ?? ''}</span>
                   {segment.draftTranslation && (
-                    <span className="caption-draft-tail" style={{ opacity: 0.6 }}>
-                      {segment.draftTranslation}
-                    </span>
+                    <>
+                      {needsWordBoundarySpace(segment.translation, segment.draftTranslation)
+                        ? ' '
+                        : null}
+                      <span className="caption-draft-tail" style={{ opacity: 0.6 }}>
+                        {segment.draftTranslation}
+                      </span>
+                    </>
                   )}
                 </div>
               ) : null;
@@ -191,7 +215,7 @@ export function CaptionWindow() {
                   style={{ marginBottom: displayMode === 'bilingual' ? '8px' : '4px' }}
                 >
                   {displayMode === 'original' && originalLine}
-                  {displayMode === 'translation' && (translationLine || originalLine)}
+                  {displayMode === 'translation' && translationLine}
                   {displayMode === 'bilingual' &&
                     (bilingualOrder === 'translation_first' ? (
                       <>

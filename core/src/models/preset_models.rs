@@ -902,6 +902,7 @@ impl PresetModel {
             && self.model_type != "speaker-segmentation"
             && self.model_type != "speaker-embedding"
             && self.model_type != "alignment"
+            && self.model_type != "onnx-nmt"
     }
 
     /// Returns the human-readable selection label for this preset model.

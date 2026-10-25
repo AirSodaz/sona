@@ -25,6 +25,14 @@ import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
 
+function needsWordBoundarySpace(prefix?: string | null, tail?: string | null): boolean {
+  if (!prefix || !tail) return false;
+  if (prefix.endsWith(' ') || tail.startsWith(' ')) return false;
+  const lastChar = prefix.slice(-1);
+  const firstChar = tail.slice(0, 1);
+  const cjkRegex = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff]/;
+  return !cjkRegex.test(lastChar) && !cjkRegex.test(firstChar);
+}
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
   segment: TranscriptSegment;
@@ -615,9 +623,14 @@ export function SegmentItem({
               >
                 <span className="segment-translation-text">{segment.translation}</span>
                 {segment.draftTranslation && (
-                  <span className="segment-draft-tail" style={{ opacity: 0.6 }}>
-                    {segment.draftTranslation}
-                  </span>
+                  <>
+                    {needsWordBoundarySpace(segment.translation, segment.draftTranslation)
+                      ? ' '
+                      : null}
+                    <span className="segment-draft-tail" style={{ opacity: 0.6 }}>
+                      {segment.draftTranslation}
+                    </span>
+                  </>
                 )}
                 {!isLocked && (
                   <button

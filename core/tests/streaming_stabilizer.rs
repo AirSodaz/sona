@@ -30,12 +30,12 @@ fn test_streaming_stabilizer_local_agreement_and_finalization() {
     // LCP of ("I like to", "I like to read books") is "I like to"
     let out2 = stabilizer.update("I like to read books", false);
     assert_eq!(out2.frozen_prefix, Some("I like to".to_string()));
-    assert_eq!(out2.draft_tail, Some("read books".to_string()));
+    assert_eq!(out2.draft_tail, Some(" read books".to_string()));
 
     // Third hypothesis extending further: "I like to read books every day"
     let out3 = stabilizer.update("I like to read books every day", false);
     assert_eq!(out3.frozen_prefix, Some("I like to read books".to_string()));
-    assert_eq!(out3.draft_tail, Some("every day".to_string()));
+    assert_eq!(out3.draft_tail, Some(" every day".to_string()));
     // Final hypothesis: is_final = true
     let out_final = stabilizer.update("I like to read books every day.", true);
     assert_eq!(
@@ -84,7 +84,7 @@ fn test_streaming_stabilizer_hypothesis_contraction_no_duplication() {
     stabilizer.update("I like to read books", false);
     let out = stabilizer.update("I like to read books more", false);
     assert_eq!(out.frozen_prefix, Some("I like to read books".to_string()));
-    assert_eq!(out.draft_tail, Some("more".to_string()));
+    assert_eq!(out.draft_tail, Some(" more".to_string()));
 
     // Hypothesis contracts due to stream rollback/correction
     let out_contracted = stabilizer.update("I like to read", false);
@@ -98,4 +98,15 @@ fn test_streaming_stabilizer_hypothesis_contraction_no_duplication() {
     let out_smaller = stabilizer.update("I like", false);
     assert_eq!(out_smaller.frozen_prefix, Some("I like".to_string()));
     assert_eq!(out_smaller.draft_tail, None);
+}
+
+#[test]
+fn test_korean_word_boundary_and_unicode_punctuation() {
+    // Hangul should NOT be treated as single-character CJK boundaries; words split on spaces
+    let lcp_ko = calculate_longest_common_prefix("안녕하세요 반갑", "안녕하세요 반갑습니다");
+    assert_eq!(lcp_ko, "안녕하세요 ");
+
+    // Latin-1 and Unicode punctuation boundaries
+    let lcp_guillemet = calculate_longest_common_prefix("«bonjour", "«bonjour tout le monde");
+    assert_eq!(lcp_guillemet, "«bonjour");
 }

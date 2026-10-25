@@ -56,12 +56,6 @@ impl TranslationModelPool {
             }
         }
 
-        // Slow path: write lock
-        let mut cache = self.cache.write();
-        if let Some(adapter) = cache.get(&key) {
-            return Ok(Arc::clone(adapter));
-        }
-
         let model_id = format!("opus-mt-{src}-{tgt}");
         let Some(preset) = sona_core::models::preset_models::find_preset_model(&model_id) else {
             return Err(TranslationPortError::invalid_language(format!(
@@ -91,8 +85,13 @@ impl TranslationModelPool {
         let adapter = Arc::new(OnnxNmtAdapter::new(Some(model_dir), 2));
         adapter.ensure_loaded()?;
 
-        cache.insert(key, Arc::clone(&adapter));
-        Ok(adapter)
+        let mut cache = self.cache.write();
+        if let Some(existing) = cache.get(&key) {
+            Ok(Arc::clone(existing))
+        } else {
+            cache.insert(key, Arc::clone(&adapter));
+            Ok(adapter)
+        }
     }
 
     pub fn unload_all(&self) {

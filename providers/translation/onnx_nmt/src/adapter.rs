@@ -33,11 +33,12 @@ impl OnnxNmtAdapter {
     }
 
     pub fn ensure_loaded(&self) -> Result<(), TranslationPortError> {
-        let read = self.model.read();
-        if read.is_some() {
-            return Ok(());
+        {
+            let read = self.model.read();
+            if read.is_some() {
+                return Ok(());
+            }
         }
-        drop(read);
 
         let Some(dir) = &self.model_dir else {
             return Err(TranslationPortError::model_not_ready(
@@ -45,8 +46,12 @@ impl OnnxNmtAdapter {
             ));
         };
 
-        let loaded = OnnxNmtModel::load(dir, self.num_threads)?;
         let mut write = self.model.write();
+        if write.is_some() {
+            return Ok(());
+        }
+
+        let loaded = OnnxNmtModel::load(dir, self.num_threads)?;
         *write = Some(loaded);
         Ok(())
     }

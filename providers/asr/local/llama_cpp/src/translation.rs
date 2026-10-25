@@ -1,17 +1,16 @@
 //! LlamaCpp translation adapter implementing TranslationEnginePort.
 
+use crate::llm::LlamaCppLlmEngine;
 use async_trait::async_trait;
 use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
-use sona_core::llm::runtime::LlmCompletionRequest;
+use sona_core::llm::runtime::{LlmCompletionOptions, LlmCompletionRequest};
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::LlmCompletionPort;
+use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind};
 use sona_core::ports::translation::{
     TranslationEngineKind, TranslationEnginePort, TranslationPortError,
 };
 use std::sync::Arc;
-
-use crate::llm::LlamaCppLlmEngine;
 
 pub struct LlamaCppTranslationAdapter {
     engine: Arc<LlamaCppLlmEngine>,
@@ -36,10 +35,9 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
         target_lang: &str,
     ) -> Result<String, TranslationPortError> {
         let trimmed = text.trim();
-        if trimmed.is_empty() {
-            return Ok(String::new());
+        if trimmed.is_empty() || source_lang.eq_ignore_ascii_case(target_lang) {
+            return Ok(trimmed.to_string());
         }
-
         let system_prompt = format!(
             "You are a professional real-time translator. Translate the following text from {source_lang} to {target_lang}. Output only the translation without any explanation, markdown formatting, or commentary."
         );
@@ -60,16 +58,34 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
             },
             system_prompt: Some(system_prompt),
             input: trimmed.to_string(),
-            options: Default::default(),
+            options: LlmCompletionOptions {
+                max_output_tokens: Some(256),
+                ..Default::default()
+            },
             source: None,
         };
 
-        let response = self
-            .engine
-            .complete(request)
-            .await
-            .map_err(TranslationPortError::inference_failed)?;
-
+        let response = match tokio::time::timeout(
+            std::time::Duration::from_secs(10),
+            self.engine.complete(request),
+        )
+        .await
+        {
+            Ok(Ok(resp)) => resp,
+            Ok(Err(llm_err)) => {
+                return Err(match llm_err.kind {
+                    LlmPortErrorKind::Unavailable => {
+                        TranslationPortError::model_not_ready(llm_err.message)
+                    }
+                    _ => TranslationPortError::inference_failed(llm_err.message),
+                });
+            }
+            Err(_) => {
+                return Err(TranslationPortError::engine_failed(
+                    "Translation timed out after 10 seconds",
+                ));
+            }
+        };
         Ok(response.text.trim().to_string())
     }
 

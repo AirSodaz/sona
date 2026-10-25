@@ -125,18 +125,18 @@ export function getFeatureLlmConfig(
     setting,
     config.llmSettings?.customProviders
   );
+  const rawModel = modelEntry.model ?? '';
+  const isAutoNmt =
+    rawModel === 'auto' || rawModel.includes('Auto-Match NMT') || rawModel.includes('本地 NMT');
   const isLocalNmt =
     modelEntry.provider === 'local' &&
     feature === 'translation' &&
-    (modelEntry.model === 'auto' ||
-      modelEntry.model.toLowerCase().includes('opus') ||
-      modelEntry.model.includes('本地 NMT') ||
-      modelEntry.model.includes('Auto-Match NMT'));
+    (isAutoNmt || rawModel.toLowerCase().includes('opus'));
 
   return {
     ...baseConfig,
     strategy: isLocalNmt ? 'local_nmt' : baseConfig.strategy,
-    model: modelEntry.model === '本地 NMT 自动匹配 (Auto-Match NMT)' ? 'auto' : modelEntry.model,
+    model: isAutoNmt ? 'auto' : rawModel,
     temperature: getFeatureTemperature(config, feature),
     reasoningEnabled,
     reasoningLevel: reasoningEnabled ? effectiveReasoningLevel : undefined,

@@ -10,9 +10,9 @@ async fn test_onnx_nmt_adapter_mock_inference() {
 
     // Mock tokens
     src_tok.eos_id = 0;
-    src_tok.pad_id = 1;
+    src_tok.pad_id = Some(1);
     tgt_tok.eos_id = 0;
-    tgt_tok.pad_id = 1;
+    tgt_tok.pad_id = Some(1);
 
     let model = OnnxNmtModel::new_mock(src_tok, tgt_tok);
     let adapter = OnnxNmtAdapter::with_model(model);
@@ -70,7 +70,7 @@ fn test_leading_prompt_token_slice_decoding() {
         },
     ];
     tgt_tok.eos_id = 0;
-    tgt_tok.pad_id = 1;
+    tgt_tok.pad_id = Some(1);
 
     // Simulated raw decoder_input_ids generated during auto-regression:
     // Index 0 is the start prompt token (eos_id = 0), followed by actual generated tokens [2, 3]

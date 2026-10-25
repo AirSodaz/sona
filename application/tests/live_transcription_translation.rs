@@ -51,12 +51,10 @@ impl TranslationEnginePort for MockTranslationEngine {
         _source_lang: &str,
         _target_lang: &str,
     ) -> Result<String, TranslationPortError> {
-        if let Some(target) = self.fail_on.lock().unwrap().as_ref() {
-            if text == target {
-                return Err(TranslationPortError::inference_failed(
-                    "mock translation error",
-                ));
-            }
+        if self.fail_on.lock().unwrap().as_deref() == Some(text) {
+            return Err(TranslationPortError::inference_failed(
+                "mock translation error",
+            ));
         }
         let map = self.translations.lock().unwrap();
         if let Some(trans) = map.get(text) {

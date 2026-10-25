@@ -119,6 +119,7 @@ struct CoordinatorInner {
     factory: Arc<dyn StreamingAsrFactoryPort>,
     telemetry: Arc<dyn AsrRuntimeObserver>,
     translation: parking_lot::RwLock<Option<Arc<StreamingTranslationCoordinator>>>,
+    partial_versions: parking_lot::Mutex<HashMap<String, u64>>,
     state: AsyncMutex<CoordinatorState>,
     lifecycle_guard: AsyncMutex<()>,
     feed_guard: AsyncMutex<()>,
@@ -383,6 +384,7 @@ impl LiveTranscriptionCoordinator {
                 factory,
                 telemetry,
                 translation: parking_lot::RwLock::new(translation),
+                partial_versions: parking_lot::Mutex::new(HashMap::new()),
                 state: AsyncMutex::new(CoordinatorState::default()),
                 lifecycle_guard: AsyncMutex::new(()),
                 feed_guard: AsyncMutex::new(()),
@@ -947,11 +949,7 @@ impl CoordinatorInner {
         }
     }
 
-    async fn dispatch_transcript(&self, mut event: AsrTranscriptUpdateEvent) {
-        let translator = self.translation.read().clone();
-        if let Some(translator) = translator {
-            translator.enrich_update(&mut event.update).await;
-        }
+    async fn broadcast_transcript(&self, event: AsrTranscriptUpdateEvent) {
         let mut state = self.state.lock().await;
         let Some(pipeline) = state.pipelines.get_mut(&event.instance_id) else {
             return;
@@ -973,6 +971,61 @@ impl CoordinatorInner {
                     stage: event.stage.clone(),
                     update,
                 });
+        }
+    }
+
+    async fn dispatch_transcript(self: &Arc<Self>, mut event: AsrTranscriptUpdateEvent) {
+        let translator = self.translation.read().clone();
+        let Some(translator) = translator else {
+            self.broadcast_transcript(event).await;
+            return;
+        };
+
+        let has_final = event.update.upsert_segments.iter().any(|s| s.is_final)
+            || !event.update.remove_ids.is_empty();
+
+        if has_final {
+            {
+                let mut versions = self.partial_versions.lock();
+                for s in &event.update.upsert_segments {
+                    if s.is_final {
+                        versions.remove(&s.id);
+                    }
+                }
+                for id in &event.update.remove_ids {
+                    versions.remove(id);
+                }
+            }
+            translator.enrich_update(&mut event.update).await;
+            self.broadcast_transcript(event).await;
+        } else {
+            let segment_versions: Vec<(String, u64)> = {
+                let mut versions = self.partial_versions.lock();
+                event
+                    .update
+                    .upsert_segments
+                    .iter()
+                    .map(|s| {
+                        let v = versions.entry(s.id.clone()).or_insert(0);
+                        *v += 1;
+                        (s.id.clone(), *v)
+                    })
+                    .collect()
+            };
+
+            let this = Arc::clone(self);
+            tokio::spawn(async move {
+                translator.enrich_update(&mut event.update).await;
+                let is_stale = {
+                    let versions = this.partial_versions.lock();
+                    segment_versions
+                        .iter()
+                        .any(|(id, v)| versions.get(id).is_some_and(|current_v| *current_v > *v))
+                };
+                if !is_stale {
+                    this.broadcast_transcript(event).await;
+                }
+            });
         }
     }
 

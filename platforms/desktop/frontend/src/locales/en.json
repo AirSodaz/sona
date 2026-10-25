@@ -1923,7 +1923,11 @@
       "qwen3_5_4b": "Developed by Alibaba Qwen team. Next-gen 4B edge LLM featuring 262K context window and hybrid linear attention, excelling at polish, translation, summary, and dialogue.",
       "qwen3_1_7b": "Developed by Alibaba Qwen team. Next-gen 1.7B ultra-lightweight edge LLM featuring native dual-mode thinking (Thinking / Non-thinking) and 32K context, delivering fast inference, polish, translation, and summary.",
       "gemma_4_e2b": "Developed by Google DeepMind. Next-gen edge-optimized lightweight multimodal model with 2B effective parameters, ultra-low memory footprint, 128K context, and strong on-device reasoning.",
-      "custom_local_model": "Locally imported or scanned GGUF model file."
+      "custom_local_model": "Locally imported or scanned GGUF model file.",
+      "opus_mt_en_zh": "Helsinki-NLP Opus-MT English-to-Chinese neural machine translation model running locally on ONNX Runtime.",
+      "opus_mt_zh_en": "Helsinki-NLP Opus-MT Chinese-to-English neural machine translation model running locally on ONNX Runtime.",
+      "opus_mt_ja_zh": "Shiyin Opus-MT Japanese-to-Chinese neural machine translation model running locally on ONNX Runtime.",
+      "opus_mt_zh_ja": "Helsinki-NLP Opus-MT Chinese-to-Japanese neural machine translation model running locally on ONNX Runtime."
     },
     "recognition_models": "Recognition Models",
     "recognition_path_label": "Select Model",
@@ -2364,6 +2368,8 @@
     "llm": {
       "title": "LLM Service",
       "description": "Configure LLM providers and models used for polishing, translating, and summarizing transcripts.",
+      "subtab_llm": "Large Language Model (LLM)",
+      "subtab_nmt": "Neural Machine Translation (NMT)",
       "timeout_label": "Request Timeout (s)",
       "timeout_hint": "Maximum time allowed for an LLM request to complete, in seconds. Default is 180.",
       "service_type": "LLM Service Type",

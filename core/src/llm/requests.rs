@@ -170,6 +170,22 @@ pub fn validate_translate_segments_request(
         ));
     }
 
+    if let Some(source_language) = &request.source_language {
+        let trimmed_src = source_language.trim();
+        if trimmed_src.is_empty() {
+            return Err(LlmRequestValidationError::new(
+                "source_language",
+                "Source language cannot be empty when provided",
+            ));
+        }
+        if trimmed_src.eq_ignore_ascii_case(request.target_language.trim()) {
+            return Err(LlmRequestValidationError::new(
+                "source_language",
+                "Source language cannot be the same as target language",
+            ));
+        }
+    }
+
     Ok(())
 }
 
@@ -310,6 +326,7 @@ impl TranscriptLlmJobRequest {
                 self.chunk_char_budget = None;
             }
             LlmTaskType::Polish => {
+                self.source_language = None;
                 self.target_language = None;
                 self.target_language_name = None;
                 self.template = None;
@@ -317,6 +334,7 @@ impl TranscriptLlmJobRequest {
                 self.chunk_char_budget = None;
             }
             LlmTaskType::Summary => {
+                self.source_language = None;
                 self.target_language = None;
                 self.target_language_name = None;
                 self.context = None;

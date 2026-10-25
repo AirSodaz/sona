@@ -173,9 +173,9 @@ pub struct FfiTranslateSegmentsRequest {
     pub chunk_size: Option<u64>,
     pub target_language: String,
     pub target_language_name: Option<String>,
-    pub source_language: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
+    pub source_language: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -352,9 +352,9 @@ pub fn translate_segments_request_to_ffi(
         chunk_size: request.chunk_size.map(|value| value as u64),
         target_language: request.target_language,
         target_language_name: request.target_language_name,
-        source_language: request.source_language,
         context: request.context,
         keywords: request.keywords,
+        source_language: request.source_language,
     }
 }
 

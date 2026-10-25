@@ -6,8 +6,7 @@ pub fn is_cjk_char(c: char) -> bool {
         '\u{3400}'..='\u{4DBF}' | // CJK Extension A
         '\u{F900}'..='\u{FAFF}' | // CJK Compatibility Ideographs
         '\u{3040}'..='\u{309F}' | // Hiragana
-        '\u{30A0}'..='\u{30FF}' | // Katakana
-        '\u{AC00}'..='\u{D7AF}'   // Hangul Syllables
+        '\u{30A0}'..='\u{30FF}'   // Katakana
     )
 }
 
@@ -22,7 +21,14 @@ pub fn is_cjk_punctuation(c: char) -> bool {
 }
 
 pub fn is_boundary_char(c: char) -> bool {
-    c.is_whitespace() || c.is_ascii_punctuation() || is_cjk_char(c) || is_cjk_punctuation(c)
+    c.is_whitespace()
+        || c.is_ascii_punctuation()
+        || matches!(
+            c,
+            '\u{2000}'..='\u{206F}' | '\u{00AB}' | '\u{00BB}' | '\u{00BF}' | '\u{00A1}'
+        )
+        || is_cjk_char(c)
+        || is_cjk_punctuation(c)
 }
 
 /// Computes the longest common prefix of `prev` and `curr` truncated at word or punctuation boundaries.
@@ -174,11 +180,15 @@ impl StreamingStabilizer {
         }
         let draft_tail = if trimmed_hypothesis.starts_with(&self.frozen_prefix) {
             let tail = &trimmed_hypothesis[self.frozen_prefix.len()..];
-            let trimmed_tail = tail.trim_start();
-            if trimmed_tail.is_empty() {
+            let effective_tail = if self.frozen_prefix.ends_with(char::is_whitespace) {
+                tail.trim_start()
+            } else {
+                tail
+            };
+            if effective_tail.is_empty() {
                 None
             } else {
-                Some(trimmed_tail.to_string())
+                Some(effective_tail.to_string())
             }
         } else {
             Some(trimmed_hypothesis.to_string())

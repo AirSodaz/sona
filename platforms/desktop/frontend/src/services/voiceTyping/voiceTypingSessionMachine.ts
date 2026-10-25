@@ -437,7 +437,9 @@ export class VoiceTypingSessionMachine {
 
         // 2. Translate step: reuse stream translation only when non-polish and single segment
         const canReuseStreamTranslation =
-          mode !== 'polish' && this.accumulatedPolishText.length === 1;
+          mode !== 'polish' &&
+          this.accumulatedPolishText.length === 1 &&
+          this.currentSegmentId === null;
         let translatedText = canReuseStreamTranslation
           ? this.latestStreamTranslation?.trim()
           : undefined;
@@ -641,6 +643,9 @@ export class VoiceTypingSessionMachine {
     this.activeSessionId = null;
     this.currentSegmentId = null;
     this.currentText = '';
+    this.latestStreamTranslation = null;
+    this.latestStreamDraftTranslation = null;
+    this.isTranslateSession = false;
     this.accumulatedPolishText = [];
     this.selectionContext = null;
     this.currentContext = null;
@@ -712,13 +717,15 @@ export class VoiceTypingSessionMachine {
     } = analyzeCandidateText(segment.text, enableCjkSpacing);
 
     const mode = this.options.getProcessingMode?.() || 'raw';
-    if (segment.translation) {
-      this.latestStreamTranslation = segment.translation;
-    }
-    if (segment.isFinal) {
-      this.latestStreamDraftTranslation = null;
-    } else if (segment.draftTranslation !== undefined) {
-      this.latestStreamDraftTranslation = segment.draftTranslation;
+    if (this.isTranslateSession) {
+      if (segment.translation) {
+        this.latestStreamTranslation = segment.translation;
+      }
+      if (segment.isFinal) {
+        this.latestStreamDraftTranslation = null;
+      } else if (segment.draftTranslation !== undefined) {
+        this.latestStreamDraftTranslation = segment.draftTranslation;
+      }
     }
 
     if (this.selectionContext || mode === 'polish' || this.isTranslateSession) {
@@ -1049,6 +1056,9 @@ export class VoiceTypingSessionMachine {
     this.activeSessionId = null;
     this.currentSegmentId = null;
     this.currentText = '';
+    this.latestStreamTranslation = null;
+    this.latestStreamDraftTranslation = null;
+    this.isTranslateSession = false;
     this.selectionContext = null;
     this.currentContext = null;
     this.manualStopPending = false;

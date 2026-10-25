@@ -271,6 +271,13 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
   'captionFontColor',
   'captionBackgroundColor',
   'captionBackgroundOpacity',
+  'captionDisplayMode',
+  'captionBilingualOrder',
+  'realtimeTranslationEnabled',
+  'realtimeTranslationSourceLanguage',
+  'realtimeTranslationTargetLanguage',
+  'realtimeTranslationEngine',
+  'realtimeTranslationModelId',
 ];
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [

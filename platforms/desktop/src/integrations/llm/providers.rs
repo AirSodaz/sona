@@ -43,7 +43,6 @@ fn detect_source_language(texts: &[String]) -> &'static str {
                 return "zh";
             }
         }
-        return "en";
     }
     "en"
 }

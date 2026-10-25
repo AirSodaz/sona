@@ -216,6 +216,9 @@ pub async fn start_native_live_transcription(
                     services.asr.live_coordinator().set_translation(None);
                 }
             }
+        } else {
+            log::warn!("[ASR] Failed to resolve active models directory for realtime translation");
+            services.asr.live_coordinator().set_translation(None);
         }
     } else {
         services.asr.live_coordinator().set_translation(None);
