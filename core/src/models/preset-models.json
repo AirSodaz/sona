@@ -3093,7 +3093,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~78 MB",
+    "size": "~447 MB",
     "ratings": {
       "accuracy": 4,
       "speed": 5
@@ -3105,24 +3105,24 @@
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh/resolve/main/encoder_model.onnx",
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/encoder_model.onnx",
         "filename": "encoder_model.onnx",
-        "sizeBytes": 31457280
+        "sizeBytes": 209942461
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh/resolve/main/decoder_model.onnx",
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/decoder_model.onnx",
         "filename": "decoder_model.onnx",
-        "sizeBytes": 48234496
+        "sizeBytes": 235591974
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh/resolve/main/source.spm",
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/source.spm",
         "filename": "source.spm",
-        "sizeBytes": 802119
+        "sizeBytes": 806435
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-en-zh/resolve/main/target.spm",
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/target.spm",
         "filename": "target.spm",
-        "sizeBytes": 802119
+        "sizeBytes": 804600
       }
     ],
     "fileConfig": {
@@ -3143,7 +3143,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~78 MB",
+    "size": "~447 MB",
     "ratings": {
       "accuracy": 4,
       "speed": 5
@@ -3155,24 +3155,24 @@
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en/resolve/main/encoder_model.onnx",
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/encoder_model.onnx",
         "filename": "encoder_model.onnx",
-        "sizeBytes": 31457280
+        "sizeBytes": 209942461
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en/resolve/main/decoder_model.onnx",
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/decoder_model.onnx",
         "filename": "decoder_model.onnx",
-        "sizeBytes": 48234496
+        "sizeBytes": 235591974
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en/resolve/main/source.spm",
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/source.spm",
         "filename": "source.spm",
-        "sizeBytes": 802119
+        "sizeBytes": 804677
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-en/resolve/main/target.spm",
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/target.spm",
         "filename": "target.spm",
-        "sizeBytes": 802119
+        "sizeBytes": 806530
       }
     ],
     "fileConfig": {
@@ -3193,7 +3193,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~82 MB",
+    "size": "~225 MB",
     "ratings": {
       "accuracy": 4,
       "speed": 5
@@ -3205,24 +3205,24 @@
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-zh/resolve/main/encoder_model.onnx",
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/encoder_model.onnx",
         "filename": "encoder_model.onnx",
-        "sizeBytes": 33554432
+        "sizeBytes": 105020768
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-zh/resolve/main/decoder_model.onnx",
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/decoder_model.onnx",
         "filename": "decoder_model.onnx",
-        "sizeBytes": 50331648
+        "sizeBytes": 117946490
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-zh/resolve/main/source.spm",
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/source.spm",
         "filename": "source.spm",
-        "sizeBytes": 842500
+        "sizeBytes": 1312134
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-ja-zh/resolve/main/target.spm",
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/target.spm",
         "filename": "target.spm",
-        "sizeBytes": 842500
+        "sizeBytes": 1312134
       }
     ],
     "fileConfig": {
@@ -3243,7 +3243,7 @@
       "zh"
     ],
     "languageMode": "selectable",
-    "size": "~82 MB",
+    "size": "~1.1 GB",
     "ratings": {
       "accuracy": 4,
       "speed": 5
@@ -3255,24 +3255,24 @@
     },
     "artifacts": [
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-ja/resolve/main/encoder_model.onnx",
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/encoder_model.onnx",
         "filename": "encoder_model.onnx",
-        "sizeBytes": 33554432
+        "sizeBytes": 437653279
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-ja/resolve/main/decoder_model.onnx",
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/decoder_model.onnx",
         "filename": "decoder_model.onnx",
-        "sizeBytes": 50331648
+        "sizeBytes": 669794801
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-ja/resolve/main/source.spm",
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/source.spm",
         "filename": "source.spm",
-        "sizeBytes": 842500
+        "sizeBytes": 719585
       },
       {
-        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-zh-ja/resolve/main/target.spm",
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/target.spm",
         "filename": "target.spm",
-        "sizeBytes": 842500
+        "sizeBytes": 802604
       }
     ],
     "fileConfig": {
