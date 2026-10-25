@@ -9,6 +9,7 @@ import {
 } from '../../services/audioDeviceService';
 import { getPathStatuses, getRuntimeEnvironmentStatus } from '../../services/tauri/app';
 import {
+  audioDeleteRecordingFile,
   startMicrophoneCapture,
   startSystemAudioCapture,
   stopMicrophoneCapture,
@@ -17,7 +18,6 @@ import {
 import { TauriEvent } from '../../services/tauri/events';
 import { openDialog } from '../../services/tauri/platform/dialog';
 import { listen, type UnlistenFn } from '../../services/tauri/platform/events';
-import { remove } from '../../services/tauri/platform/fs';
 import { storageOpenPath } from '../../services/tauri/storage';
 import { useAudioConfig, useSetConfig, useVoiceTypingConfig } from '../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
@@ -182,7 +182,7 @@ export function SettingsMicrophoneTab({
           ? await stopMicrophoneCapture(instanceId)
           : await stopSystemAudioCapture(instanceId);
       if (path) {
-        await remove(path).catch(logger.error);
+        await audioDeleteRecordingFile(path).catch(logger.error);
       }
     },
     []

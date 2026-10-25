@@ -330,6 +330,10 @@ type ManualTauriCommandContractMap = {
     args: SetCapturePausedArgs;
     result: undefined;
   };
+  [TauriCommand.audio.deleteRecordingFile]: {
+    args: { filePath: string };
+    result: undefined;
+  };
   [TauriCommand.storage.getUsageSnapshot]: {
     args: undefined;
     result: StorageUsageSnapshot_Serialize;

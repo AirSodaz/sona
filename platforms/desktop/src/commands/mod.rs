@@ -160,6 +160,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::audio::start_microphone_capture,
         crate::commands::audio::stop_microphone_capture,
         crate::commands::audio::set_microphone_capture_paused,
+        crate::commands::audio::audio_delete_recording_file,
         crate::commands::llm::complete_llm,
         crate::commands::llm::describe_llm_model,
         crate::commands::llm::generate_llm_text,

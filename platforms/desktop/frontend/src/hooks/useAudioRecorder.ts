@@ -9,8 +9,9 @@ import { pipelineExecutionEngine } from '../services/pipeline/pipelineExecutionE
 import { resolveItemPipeline } from '../services/projectPipeline';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
+import { audioDeleteRecordingFile } from '../services/tauri/audio';
 import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
-import { remove, writeFile } from '../services/tauri/platform/fs';
+import { writeFile } from '../services/tauri/platform/fs';
 import { transcriptionService } from '../services/transcriptionService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -271,7 +272,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         syncSavedRecordingMeta: (title, historyId, icon) =>
           syncTranscriptSavedRecordingMeta(title, historyId, icon),
         writeFile: (filePath, contents) => writeFile(filePath, contents),
-        removeFile: (filePath) => remove(filePath),
+        removeFile: (filePath) => audioDeleteRecordingFile(filePath),
         fileSrcFromPath: convertManagedAudioFileSrc,
       }),
     []

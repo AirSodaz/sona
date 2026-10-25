@@ -46,6 +46,7 @@ export const TauriCommand = {
     startMicrophoneCapture: 'start_microphone_capture',
     stopMicrophoneCapture: 'stop_microphone_capture',
     setMicrophoneCapturePaused: 'set_microphone_capture_paused',
+    deleteRecordingFile: 'audio_delete_recording_file',
   },
   history: {
     listItems: 'history_list_items',
