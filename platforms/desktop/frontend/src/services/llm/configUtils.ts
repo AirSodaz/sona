@@ -130,7 +130,8 @@ export function getFeatureLlmConfig(
   const isAutoNmt =
     isLocalTranslation &&
     (rawModel === 'auto' || rawModel.includes('Auto-Match NMT') || rawModel.includes('本地 NMT'));
-  const isLocalNmt = isLocalTranslation && (isAutoNmt || rawModel.toLowerCase().includes('opus'));
+  const isLocalNmt =
+    isLocalTranslation && (isAutoNmt || rawModel.toLowerCase().startsWith('opus-mt-'));
 
   return {
     ...baseConfig,

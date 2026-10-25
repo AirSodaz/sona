@@ -931,6 +931,8 @@ export function SettingsSubtitleTab({
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 24;
   const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionTranslationFontSize = config.captionTranslationFontSize ?? 18;
+  const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
   const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
@@ -1119,6 +1121,10 @@ export function SettingsSubtitleTab({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <Dropdown
+                      id="translation-source-language"
+                      aria-label={t('settings.translation_source_language', {
+                        defaultValue: 'Translation Source Language',
+                      })}
                       options={translationLanguages}
                       value={realtimeTranslationSourceLanguage}
                       onChange={(val) => updateConfig({ realtimeTranslationSourceLanguage: val })}
@@ -1126,6 +1132,10 @@ export function SettingsSubtitleTab({
                     />
                     <button
                       type="button"
+                      id="swap-translation-languages"
+                      aria-label={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
                       className="btn btn-secondary"
                       onClick={() =>
                         updateConfig({
@@ -1146,6 +1156,10 @@ export function SettingsSubtitleTab({
                       <ArrowLeftRight size={14} />
                     </button>
                     <Dropdown
+                      id="translation-target-language"
+                      aria-label={t('settings.translation_target_language', {
+                        defaultValue: 'Translation Target Language',
+                      })}
                       options={translationLanguages}
                       value={realtimeTranslationTargetLanguage}
                       onChange={(val) => updateConfig({ realtimeTranslationTargetLanguage: val })}
@@ -1234,6 +1248,44 @@ export function SettingsSubtitleTab({
                 value={captionFontColor}
                 onChange={(color) => updateConfig({ captionFontColor: color })}
                 aria-label={t('live.font_color')}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_size', {
+                defaultValue: 'Translation Font Size',
+              })}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="number"
+                  min="12"
+                  max="72"
+                  step="1"
+                  value={captionTranslationFontSize}
+                  onChange={(e) =>
+                    updateConfig({ captionTranslationFontSize: Number(e.target.value) })
+                  }
+                  className="settings-input"
+                  style={{ width: '100px', textAlign: 'center' }}
+                  aria-label={t('live.translation_font_size', {
+                    defaultValue: 'Translation Font Size',
+                  })}
+                />
+              </div>
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_color', {
+                defaultValue: 'Translation Font Color',
+              })}
+            >
+              <ColorSwatchPicker
+                value={captionTranslationFontColor}
+                onChange={(color) => updateConfig({ captionTranslationFontColor: color })}
+                aria-label={t('live.translation_font_color', {
+                  defaultValue: 'Translation Font Color',
+                })}
               />
             </SettingsItem>
 

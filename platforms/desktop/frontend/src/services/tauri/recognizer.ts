@@ -54,6 +54,7 @@ function normalizeModelFileConfig(
     mergedDecoder: config.mergedDecoder ?? null,
     sourceSpm: config.sourceSpm ?? null,
     targetSpm: config.targetSpm ?? null,
+    vocab: config.vocab ?? null,
   };
 }
 

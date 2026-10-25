@@ -134,7 +134,7 @@ impl StreamingTranslationCoordinator {
                             let char_delta = text
                                 .chars()
                                 .count()
-                                .saturating_sub(state.last_text.chars().count());
+                                .abs_diff(state.last_text.chars().count());
                             let elapsed = state.last_translate_time.elapsed();
                             let eligible = char_delta >= self.min_char_delta
                                 || elapsed >= Duration::from_millis(self.debounce_ms);
@@ -170,10 +170,18 @@ impl StreamingTranslationCoordinator {
                         Ok(translated_text) => {
                             let mut states = self.states.lock();
                             if let Some(entry) = states.get_mut(&segment.id) {
-                                let out = entry.stabilizer.update(&translated_text, false);
-                                entry.last_draft_translation = out.draft_tail.clone();
-                                segment.translation = out.frozen_prefix;
-                                segment.draft_translation = out.draft_tail;
+                                if entry.last_text == text {
+                                    let out = entry.stabilizer.update(&translated_text, false);
+                                    entry.last_draft_translation = out.draft_tail.clone();
+                                    segment.translation = out.frozen_prefix;
+                                    segment.draft_translation = out.draft_tail;
+                                } else {
+                                    segment.translation =
+                                        Some(entry.stabilizer.frozen_prefix().to_string())
+                                            .filter(|s| !s.is_empty());
+                                    segment.draft_translation =
+                                        entry.last_draft_translation.clone();
+                                }
                             }
                         }
                         Err(err) => {

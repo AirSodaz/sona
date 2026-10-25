@@ -620,6 +620,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             parsed
                 .get("realtimeTranslationModelId")
                 .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())
                 .map_or(Value::Null, |v| json!(v)),
         ),
         ("llmSettings", ensure_llm_state(&parsed)),
@@ -1034,7 +1035,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
             .is_some_and(|engine| matches!(engine, "onnx" | "llama-cpp"))
     });
     repair_field_type(config, &defaults, "realtimeTranslationModelId", |value| {
-        value.is_null() || value.as_str().is_some()
+        value.is_null() || value.as_str().is_some_and(|s| !s.trim().is_empty())
     });
 }
 

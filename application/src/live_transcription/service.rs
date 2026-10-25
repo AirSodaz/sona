@@ -998,11 +998,8 @@ impl CoordinatorInner {
                     versions.remove(id);
                 }
             }
-            let this = Arc::clone(self);
-            tokio::spawn(async move {
-                translator.enrich_update(&mut event.update).await;
-                this.broadcast_transcript(event).await;
-            });
+            translator.enrich_update(&mut event.update).await;
+            self.broadcast_transcript(event).await;
         } else {
             // 1. Fill cached translation immediately so partials display existing translations
             translator.fill_cached(&mut event.update);

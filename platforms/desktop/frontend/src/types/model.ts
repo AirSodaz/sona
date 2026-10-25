@@ -16,4 +16,5 @@ export interface ModelFileConfig {
   mergedDecoder?: string;
   sourceSpm?: string;
   targetSpm?: string;
+  vocab?: string;
 }

@@ -168,6 +168,7 @@ export function FeatureCard({
   const modelEntryHasTemp = modelEntry?.metadata?.supportsTemperature !== undefined;
 
   useEffect(() => {
+    if (isAutoNmtSelected) return;
     if (!modelEntryId || !selectedModel || !selectedProvider) return;
     if (selectedProvider === 'google_translate' || selectedProvider === 'google_translate_free') {
       return;
@@ -206,6 +207,7 @@ export function FeatureCard({
       .catch(() => {});
   }, [
     applyTrackedLlmSettings,
+    isAutoNmtSelected,
     modelEntryHasReasoning,
     modelEntryHasTemp,
     modelEntryId,

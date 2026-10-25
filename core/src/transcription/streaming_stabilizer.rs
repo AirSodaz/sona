@@ -36,25 +36,23 @@ pub fn calculate_longest_common_prefix(prev: &str, curr: &str) -> String {
     if prev.is_empty() || curr.is_empty() {
         return String::new();
     }
+    let common_byte_len = prev
+        .char_indices()
+        .zip(curr.chars())
+        .take_while(|((_, cp), cc)| cp == cc)
+        .last()
+        .map(|((idx, ch), _)| idx + ch.len_utf8())
+        .unwrap_or(0);
 
-    let mut common_chars = Vec::new();
-    for (cp, cc) in prev.chars().zip(curr.chars()) {
-        if cp == cc {
-            common_chars.push(cp);
-        } else {
-            break;
-        }
-    }
-
-    if common_chars.is_empty() {
+    if common_byte_len == 0 {
         return String::new();
     }
 
-    let raw_lcp: String = common_chars.into_iter().collect();
+    let raw_lcp = &prev[..common_byte_len];
 
     // If completely identical to both, return raw_lcp
     if raw_lcp == prev && raw_lcp == curr {
-        return raw_lcp;
+        return raw_lcp.to_string();
     }
 
     let lcp_len = raw_lcp.len();
@@ -63,26 +61,25 @@ pub fn calculate_longest_common_prefix(prev: &str, curr: &str) -> String {
 
     // Rule 1: If raw_lcp is exactly prev and curr continues at a boundary
     if raw_lcp == prev && next_curr_char.is_some_and(is_boundary_char) {
-        return raw_lcp;
+        return raw_lcp.to_string();
     }
 
     // Rule 2: If raw_lcp is exactly curr and prev continues at a boundary
     if raw_lcp == curr && next_prev_char.is_some_and(is_boundary_char) {
-        return raw_lcp;
+        return raw_lcp.to_string();
     }
 
     // Rule 3: Check if raw_lcp already ends at a boundary character
     let last_char = raw_lcp.chars().last().unwrap();
     if is_boundary_char(last_char) {
-        return raw_lcp;
+        return raw_lcp.to_string();
     }
 
     // Rule 4: If both next_curr_char and next_prev_char are boundary characters
     if next_curr_char.is_some_and(is_boundary_char) && next_prev_char.is_some_and(is_boundary_char)
     {
-        return raw_lcp;
+        return raw_lcp.to_string();
     }
-
     // Otherwise, raw_lcp cut in the middle of a token.
     // Scan backwards in raw_lcp for the latest boundary char.
     let mut boundary_byte_end = None;

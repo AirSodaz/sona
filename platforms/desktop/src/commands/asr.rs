@@ -137,6 +137,7 @@ pub async fn start_native_live_transcription(
         .to_path_buf();
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
+    configure_realtime_translation(&services, &app);
     let lease = crate::integrations::audio::start_native_live_capture(
         audio_arc,
         asr_arc,
@@ -170,8 +171,6 @@ pub async fn start_native_live_transcription(
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
     let asr_request_for_session = asr_request.clone();
-
-    configure_realtime_translation(&services, &app);
 
     match services
         .asr
@@ -456,6 +455,9 @@ pub async fn stop_native_live_transcription(
     } else {
         Ok(())
     };
+    if !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+    }
     {
         let mut guard = services.recording_session.lock().await;
         if let Some(session) = guard.as_ref()

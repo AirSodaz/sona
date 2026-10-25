@@ -116,9 +116,9 @@ export function SegmentItem({
 
   const handleStartTranslationEdit = useCallback(() => {
     if (isLocked) return;
-    setTranslationDraft(segment.translation || '');
+    setTranslationDraft(segment.translation || segment.draftTranslation || '');
     setIsEditingTranslation(true);
-  }, [isLocked, segment.translation]);
+  }, [isLocked, segment.translation, segment.draftTranslation]);
 
   const handleSaveTranslation = useCallback(
     (text: string) => {
@@ -126,7 +126,7 @@ export function SegmentItem({
       if (onSaveTranslation) {
         onSaveTranslation(segment.id, trimmed);
       } else {
-        updateTranscriptSegment(segment.id, { translation: trimmed });
+        updateTranscriptSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
       }
       setIsEditingTranslation(false);
     },

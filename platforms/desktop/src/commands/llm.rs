@@ -133,12 +133,9 @@ pub async fn test_local_nmt_model(
     text: String,
 ) -> Result<String, String> {
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
-    let clean_id = model_id.trim();
-    let parts: Vec<&str> = if clean_id.starts_with("opus-mt-") {
-        clean_id.trim_start_matches("opus-mt-").split('-').collect()
-    } else {
-        clean_id.split('-').collect()
-    };
+    let lower_id = model_id.trim().to_lowercase();
+    let stripped = lower_id.strip_prefix("opus-mt-").unwrap_or(&lower_id);
+    let parts: Vec<&str> = stripped.split('-').collect();
     if parts.len() < 2 {
         return Err(format!(
             "Cannot determine language pair from model ID: {model_id}"

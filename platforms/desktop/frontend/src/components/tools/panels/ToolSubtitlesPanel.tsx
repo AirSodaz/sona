@@ -119,7 +119,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
       }}
     >
       {t('tools.subtitles_preview_text_primary', {
-        defaultValue: 'Sona 实时语音识别与双语字幕预览',
+        defaultValue: 'Sona Live Speech Recognition and Subtitles',
       })}
     </p>
   );

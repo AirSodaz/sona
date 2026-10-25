@@ -149,9 +149,17 @@ impl SentencePieceTokenizer {
                 continue;
             }
 
-            let max_l = self.max_piece_len.min(n - i);
+            let effective_max_l = if self.max_piece_len > 0 {
+                self.max_piece_len
+            } else {
+                self.piece_to_id
+                    .keys()
+                    .map(|k| k.chars().count())
+                    .max()
+                    .unwrap_or(1)
+            };
+            let max_l = effective_max_l.min(n - i);
             let mut matched = false;
-
             for len in 1..=max_l {
                 let sub: String = chars[i..i + len].iter().collect();
                 if let Some(&token_id) = self.piece_to_id.get(&sub) {
@@ -255,7 +263,12 @@ impl SentencePieceTokenizer {
                     continue;
                 }
                 let piece = &self.pieces[idx].piece;
-                if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
+                if piece.is_empty()
+                    || piece == "<unk>"
+                    || piece == "<s>"
+                    || piece == "</s>"
+                    || piece == "<pad>"
+                {
                     if !byte_buf.is_empty() {
                         result.push_str(&String::from_utf8_lossy(&byte_buf));
                         byte_buf.clear();
@@ -263,6 +276,9 @@ impl SentencePieceTokenizer {
                     continue;
                 }
 
+                if piece.starts_with(">>") && piece.ends_with("<<") {
+                    continue;
+                }
                 if let Some(b) = parse_hex_byte(piece) {
                     byte_buf.push(b);
                 } else {

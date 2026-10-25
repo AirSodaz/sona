@@ -186,10 +186,26 @@ impl LlmTranslationPort for DesktopLlmAdapter {
             let src_lang = request
                 .source_language
                 .as_deref()
-                .filter(|s| !s.trim().is_empty())
+                .filter(|s| {
+                    let trimmed = s.trim();
+                    !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("auto")
+                })
                 .map(|s| s.to_string())
+                .or_else(|| {
+                    let detected = detect_source_language(&request.texts).to_string();
+                    let norm_detected =
+                        crate::integrations::translation::normalize_language_code(&detected);
+                    let norm_target = crate::integrations::translation::normalize_language_code(
+                        &request.target_language,
+                    );
+                    if norm_detected.eq_ignore_ascii_case(norm_target) {
+                        model_src.clone()
+                    } else {
+                        Some(detected)
+                    }
+                })
                 .or(model_src)
-                .unwrap_or_else(|| detect_source_language(&request.texts).to_string());
+                .unwrap_or_else(|| "en".to_string());
             let tgt_lang = if !request.target_language.trim().is_empty() {
                 request.target_language.clone()
             } else if let Some(mt) = model_tgt {

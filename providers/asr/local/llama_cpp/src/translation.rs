@@ -34,8 +34,16 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
         source_lang: &str,
         target_lang: &str,
     ) -> Result<String, TranslationPortError> {
+        let src = source_lang.trim();
+        let tgt = target_lang.trim();
+        if src.is_empty() || tgt.is_empty() {
+            return Err(TranslationPortError::invalid_language(
+                "Source and target languages cannot be empty",
+            ));
+        }
+
         let trimmed = text.trim();
-        if trimmed.is_empty() || source_lang.eq_ignore_ascii_case(target_lang) {
+        if trimmed.is_empty() || src.eq_ignore_ascii_case(tgt) {
             return Ok(trimmed.to_string());
         }
         let system_prompt = format!(
@@ -54,7 +62,7 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
                 temperature: Some(0.0),
                 reasoning_enabled: Some(false),
                 reasoning_level: None,
-                timeout_seconds: Some(10),
+                timeout_seconds: Some(30),
             },
             system_prompt: Some(system_prompt),
             input: trimmed.to_string(),
@@ -66,7 +74,7 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
         };
 
         let response = match tokio::time::timeout(
-            std::time::Duration::from_secs(10),
+            std::time::Duration::from_secs(30),
             self.engine.complete(request),
         )
         .await
@@ -82,7 +90,7 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
             }
             Err(_) => {
                 return Err(TranslationPortError::engine_failed(
-                    "Translation timed out after 10 seconds",
+                    "Translation timed out after 30 seconds",
                 ));
             }
         };
@@ -91,5 +99,41 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
 
     fn engine_kind(&self) -> TranslationEngineKind {
         TranslationEngineKind::LlamaCpp
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use sona_core::ports::translation::TranslationPortErrorKind;
+    use std::sync::Arc;
+
+    #[tokio::test]
+    async fn test_adapter_properties_and_passthrough() {
+        let engine = Arc::new(LlamaCppLlmEngine::new());
+        let adapter = LlamaCppTranslationAdapter::new(engine, "test-model");
+
+        // engine_kind
+        assert_eq!(adapter.engine_kind(), TranslationEngineKind::LlamaCpp);
+
+        // empty language error
+        let err1 = adapter.translate("hello", "", "zh").await.unwrap_err();
+        assert_eq!(err1.kind, TranslationPortErrorKind::InvalidLanguage);
+
+        let err2 = adapter.translate("hello", "en", "   ").await.unwrap_err();
+        assert_eq!(err2.kind, TranslationPortErrorKind::InvalidLanguage);
+
+        // whitespace passthrough
+        let res = adapter.translate("   ", "en", "zh").await.unwrap();
+        assert_eq!(res, "");
+
+        // identical language passthrough
+        let res2 = adapter.translate("Hello world", "en", "EN").await.unwrap();
+        assert_eq!(res2, "Hello world");
+
+        let res3 = adapter
+            .translate("Hello world", "  en  ", "en")
+            .await
+            .unwrap();
+        assert_eq!(res3, "Hello world");
     }
 }

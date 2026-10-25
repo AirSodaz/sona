@@ -150,6 +150,7 @@ impl From<FfiLocalAsrModelFiles> for ModelFileConfig {
             merged_decoder: value.merged_decoder,
             source_spm: None,
             target_spm: None,
+            vocab: None,
         }
     }
 }

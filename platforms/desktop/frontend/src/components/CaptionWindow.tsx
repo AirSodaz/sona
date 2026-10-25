@@ -183,9 +183,15 @@ export function CaptionWindow() {
                   style={{
                     fontSize: `${translationFontSize}px`,
                     color: translationColor,
-                    marginTop: bilingualOrder === 'translation_first' ? 0 : '2px',
+                    marginTop:
+                      displayMode === 'bilingual' && bilingualOrder !== 'translation_first'
+                        ? '2px'
+                        : 0,
                   }}
                 >
+                  {displayMode === 'translation' && segment.speaker && (
+                    <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                  )}
                   <span>{segment.translation ?? ''}</span>
                   {segment.draftTranslation && (
                     <>

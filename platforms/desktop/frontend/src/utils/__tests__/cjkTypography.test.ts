@@ -82,5 +82,8 @@ describe('needsWordBoundarySpace', () => {
     expect(needsWordBoundarySpace('你好', '世界')).toBe(false);
     expect(needsWordBoundarySpace('你好', 'world')).toBe(false);
     expect(needsWordBoundarySpace('hello', '世界')).toBe(false);
+    expect(needsWordBoundarySpace('안녕', '하세요')).toBe(false);
+    expect(needsWordBoundarySpace('안녕', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '안녕')).toBe(false);
   });
 });

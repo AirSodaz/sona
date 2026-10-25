@@ -44,14 +44,16 @@ impl OnnxNmtModel {
         let decoder_path = model_dir.join("decoder_model.onnx");
         let source_spm = model_dir.join("source.spm");
         let target_spm = model_dir.join("target.spm");
+        let vocab_path = model_dir.join("vocab.json");
 
         if !encoder_path.exists()
             || !decoder_path.exists()
             || !source_spm.exists()
             || !target_spm.exists()
+            || !vocab_path.is_file()
         {
             return Err(TranslationPortError::model_not_ready(format!(
-                "Missing ONNX NMT model files in {}",
+                "Missing ONNX NMT model files or vocab.json in {}",
                 model_dir.display()
             )));
         }
@@ -61,15 +63,12 @@ impl OnnxNmtModel {
         let mut target_tokenizer = SentencePieceTokenizer::load(&target_spm)
             .map_err(TranslationPortError::tokenization_failed)?;
 
-        let vocab_path = model_dir.join("vocab.json");
-        if vocab_path.is_file() {
-            source_tokenizer
-                .load_vocab(&vocab_path)
-                .map_err(TranslationPortError::tokenization_failed)?;
-            target_tokenizer
-                .load_vocab(&vocab_path)
-                .map_err(TranslationPortError::tokenization_failed)?;
-        }
+        source_tokenizer
+            .load_vocab(&vocab_path)
+            .map_err(TranslationPortError::tokenization_failed)?;
+        target_tokenizer
+            .load_vocab(&vocab_path)
+            .map_err(TranslationPortError::tokenization_failed)?;
         let encoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
@@ -187,6 +186,23 @@ impl OnnxNmtModel {
         }];
         let mut completed_hypotheses: Vec<(Vec<i64>, f32)> = Vec::new();
 
+        let greedy_encoder_tensors = if beam_size == 1 {
+            let hidden_states_array = ndarray::Array3::from_shape_vec(
+                (1, seq_len, hidden_dim),
+                last_hidden_data.to_vec(),
+            )
+            .map_err(TranslationPortError::inference_failed)?;
+            let hidden_val = Value::from_array(hidden_states_array)
+                .map_err(TranslationPortError::inference_failed)?;
+            let enc_attn_array = ndarray::Array2::from_shape_vec((1, seq_len), vec![1i64; seq_len])
+                .map_err(TranslationPortError::inference_failed)?;
+            let enc_attn_val = Value::from_array(enc_attn_array)
+                .map_err(TranslationPortError::inference_failed)?;
+            Some((hidden_val, enc_attn_val))
+        } else {
+            None
+        };
+
         for _ in 0..self.max_length {
             let b = active_beams.len();
             let target_len = active_beams[0].tokens.len();
@@ -200,21 +216,34 @@ impl OnnxNmtModel {
             let dec_ids_val =
                 Value::from_array(dec_ids_array).map_err(TranslationPortError::inference_failed)?;
 
-            let mut b_hidden_data = Vec::with_capacity(b * seq_len * hidden_dim);
-            for _ in 0..b {
-                b_hidden_data.extend_from_slice(last_hidden_data);
-            }
-            let hidden_states_array =
-                ndarray::Array3::from_shape_vec((b, seq_len, hidden_dim), b_hidden_data)
-                    .map_err(TranslationPortError::inference_failed)?;
-            let hidden_val = Value::from_array(hidden_states_array)
-                .map_err(TranslationPortError::inference_failed)?;
+            let (hidden_session_val, enc_attn_session_val) = match &greedy_encoder_tensors {
+                Some((hidden_val, enc_attn_val)) => (
+                    ort::session::SessionInputValue::from(hidden_val.view()),
+                    ort::session::SessionInputValue::from(enc_attn_val.view()),
+                ),
+                None => {
+                    let mut b_hidden_data = Vec::with_capacity(b * seq_len * hidden_dim);
+                    for _ in 0..b {
+                        b_hidden_data.extend_from_slice(last_hidden_data);
+                    }
+                    let hidden_states_array =
+                        ndarray::Array3::from_shape_vec((b, seq_len, hidden_dim), b_hidden_data)
+                            .map_err(TranslationPortError::inference_failed)?;
+                    let hidden_val = Value::from_array(hidden_states_array)
+                        .map_err(TranslationPortError::inference_failed)?;
 
-            let enc_attn_array =
-                ndarray::Array2::from_shape_vec((b, seq_len), vec![1i64; b * seq_len])
-                    .map_err(TranslationPortError::inference_failed)?;
-            let enc_attn_val = Value::from_array(enc_attn_array)
-                .map_err(TranslationPortError::inference_failed)?;
+                    let enc_attn_array =
+                        ndarray::Array2::from_shape_vec((b, seq_len), vec![1i64; b * seq_len])
+                            .map_err(TranslationPortError::inference_failed)?;
+                    let enc_attn_val = Value::from_array(enc_attn_array)
+                        .map_err(TranslationPortError::inference_failed)?;
+
+                    (
+                        ort::session::SessionInputValue::from(hidden_val),
+                        ort::session::SessionInputValue::from(enc_attn_val),
+                    )
+                }
+            };
 
             let decoder_outputs = decoder
                 .run(vec![
@@ -222,14 +251,8 @@ impl OnnxNmtModel {
                         "input_ids",
                         ort::session::SessionInputValue::from(dec_ids_val),
                     ),
-                    (
-                        "encoder_hidden_states",
-                        ort::session::SessionInputValue::from(hidden_val),
-                    ),
-                    (
-                        "encoder_attention_mask",
-                        ort::session::SessionInputValue::from(enc_attn_val),
-                    ),
+                    ("encoder_hidden_states", hidden_session_val),
+                    ("encoder_attention_mask", enc_attn_session_val),
                 ])
                 .map_err(TranslationPortError::inference_failed)?;
 
