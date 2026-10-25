@@ -126,12 +126,11 @@ export function getFeatureLlmConfig(
     config.llmSettings?.customProviders
   );
   const rawModel = modelEntry.model ?? '';
+  const isLocalTranslation = modelEntry.provider === 'local' && feature === 'translation';
   const isAutoNmt =
-    rawModel === 'auto' || rawModel.includes('Auto-Match NMT') || rawModel.includes('本地 NMT');
-  const isLocalNmt =
-    modelEntry.provider === 'local' &&
-    feature === 'translation' &&
-    (isAutoNmt || rawModel.toLowerCase().includes('opus'));
+    isLocalTranslation &&
+    (rawModel === 'auto' || rawModel.includes('Auto-Match NMT') || rawModel.includes('本地 NMT'));
+  const isLocalNmt = isLocalTranslation && (isAutoNmt || rawModel.toLowerCase().includes('opus'));
 
   return {
     ...baseConfig,

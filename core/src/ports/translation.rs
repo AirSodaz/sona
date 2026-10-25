@@ -23,7 +23,7 @@ pub enum TranslationPortErrorKind {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-#[error("{message}")]
+#[error("{message}{}", .cause.as_ref().map(|c| format!(": {c}")).unwrap_or_default())]
 pub struct TranslationPortError {
     pub kind: TranslationPortErrorKind,
     pub message: String,
@@ -94,4 +94,21 @@ pub trait TranslationEnginePort: Send + Sync {
     ) -> Result<String, TranslationPortError>;
 
     fn engine_kind(&self) -> TranslationEngineKind;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_translation_port_error_display() {
+        let err_without_cause = TranslationPortError::model_not_ready("Model not loaded");
+        assert_eq!(err_without_cause.to_string(), "Model not loaded");
+
+        let err_with_cause = TranslationPortError::engine_failed("onnxruntime runtime exception");
+        assert_eq!(
+            err_with_cause.to_string(),
+            "Translation engine error: onnxruntime runtime exception"
+        );
+    }
 }

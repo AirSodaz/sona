@@ -18,6 +18,7 @@ import {
   VOICE_TYPING_WINDOW_WIDTH,
 } from '../services/voiceTypingWindowService';
 import { useVoiceTypingHistoryStore } from '../stores/voiceTypingHistoryStore';
+import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { logger } from '../utils/logger';
 
 const WAVEFORM_WEIGHTS = [0.45, 0.75, 1.0, 0.75, 0.45] as const;
@@ -678,7 +679,12 @@ export function VoiceTypingOverlay() {
               >
                 <span>{overlayState.translation ?? ''}</span>
                 {overlayState.draftTranslation && (
-                  <span style={{ opacity: 0.6 }}>{overlayState.draftTranslation}</span>
+                  <>
+                    {needsWordBoundarySpace(overlayState.translation, overlayState.draftTranslation)
+                      ? ' '
+                      : null}
+                    <span style={{ opacity: 0.6 }}>{overlayState.draftTranslation}</span>
+                  </>
                 )}
               </span>
             )}

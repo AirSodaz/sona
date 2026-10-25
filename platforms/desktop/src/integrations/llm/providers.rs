@@ -159,6 +159,10 @@ impl LlmTranslationPort for DesktopLlmAdapter {
         &self,
         request: LlmTranslationRequest,
     ) -> Result<Vec<String>, LlmPortError> {
+        if request.texts.is_empty() {
+            return Ok(request.texts);
+        }
+
         let is_nmt = request.config.strategy == LlmProviderStrategy::LocalNmt
             || (Self::is_local_config(&request.config)
                 && (request.config.model.to_lowercase().contains("opus")
@@ -166,6 +170,41 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                     || request.config.model.is_empty()));
 
         if is_nmt {
+            let (model_src, model_tgt) = if let Some(stripped) =
+                request.config.model.to_lowercase().strip_prefix("opus-mt-")
+            {
+                let parts: Vec<&str> = stripped.split('-').collect();
+                if parts.len() == 2 {
+                    (Some(parts[0].to_string()), Some(parts[1].to_string()))
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
+
+            let src_lang = request
+                .source_language
+                .as_deref()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.to_string())
+                .or(model_src)
+                .unwrap_or_else(|| detect_source_language(&request.texts).to_string());
+            let tgt_lang = if !request.target_language.trim().is_empty() {
+                request.target_language.clone()
+            } else if let Some(mt) = model_tgt {
+                mt
+            } else {
+                request.target_language.clone()
+            };
+
+            let norm_src = crate::integrations::translation::normalize_language_code(&src_lang);
+            let norm_tgt = crate::integrations::translation::normalize_language_code(&tgt_lang);
+
+            if norm_src.eq_ignore_ascii_case(norm_tgt) {
+                return Ok(request.texts);
+            }
+
             let Some(models_dir) = &self.models_dir else {
                 return Err(LlmPortError::new(
                     LlmPortErrorKind::Unavailable,
@@ -175,20 +214,12 @@ impl LlmTranslationPort for DesktopLlmAdapter {
             let pool = self.translation_pool.clone().unwrap_or_else(|| {
                 std::sync::Arc::new(crate::integrations::translation::TranslationModelPool::new())
             });
-
-            let src_lang = request
-                .source_language
-                .as_deref()
-                .filter(|s| !s.trim().is_empty())
-                .unwrap_or_else(|| detect_source_language(&request.texts));
-            let tgt_lang = &request.target_language;
-
             let adapter = pool
-                .get_or_load(src_lang, tgt_lang, models_dir)
+                .get_or_load(norm_src, norm_tgt, models_dir)
                 .map_err(|e| {
                     LlmPortError::new(
                         LlmPortErrorKind::Unavailable,
-                        format!("Failed to load local NMT model for {src_lang}->{tgt_lang}: {e}"),
+                        format!("Failed to load local NMT model for {norm_src}->{norm_tgt}: {e}"),
                     )
                 })?;
 
@@ -197,7 +228,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
             for text in &request.texts {
                 let translated =
                     adapter
-                        .translate(text, src_lang, tgt_lang)
+                        .translate(text, norm_src, norm_tgt)
                         .await
                         .map_err(|e| {
                             LlmPortError::new(

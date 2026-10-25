@@ -236,6 +236,53 @@ describe('VoiceTypingSessionMachine', () => {
     expect((machine as any).latestStreamDraftTranslation).toBeNull();
   });
 
+  it('resets latestStreamDraftTranslation to null on interim partial update without draft', async () => {
+    await machine.start({ isTranslate: true });
+    interface TestMachineInternals {
+      enqueueSegmentUpdate: (
+        sessionId: string,
+        requestId: number,
+        update: { removeIds: string[]; upsertSegments: TranscriptSegment[] }
+      ) => void;
+      segmentProcessingChain: Promise<void>;
+      latestStreamDraftTranslation: string | null;
+    }
+    const internals = machine as unknown as TestMachineInternals;
+
+    const partialWithDraft: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Hello',
+      start: 0,
+      end: 1,
+      isFinal: false,
+      draftTranslation: '草稿',
+    };
+
+    internals.enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [partialWithDraft],
+    });
+    await internals.segmentProcessingChain;
+    expect(internals.latestStreamDraftTranslation).toBe('草稿');
+
+    const partialWithoutDraft: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Hello world',
+      start: 0,
+      end: 2,
+      isFinal: false,
+      translation: '你好世界',
+      draftTranslation: undefined,
+    };
+
+    internals.enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [partialWithoutDraft],
+    });
+    await internals.segmentProcessingChain;
+    expect(internals.latestStreamDraftTranslation).toBeNull();
+  });
+
   it('does not reuse stream translation when no segments have finalized', async () => {
     await machine.start({ isTranslate: true });
 

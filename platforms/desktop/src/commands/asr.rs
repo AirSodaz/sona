@@ -273,6 +273,7 @@ pub async fn start_native_live_transcription(
             })
         }
         Err(error) => {
+            services.asr.live_coordinator().set_translation(None);
             let _ = crate::integrations::audio::stop_native_live_capture(
                 &services.audio,
                 &source_kind,

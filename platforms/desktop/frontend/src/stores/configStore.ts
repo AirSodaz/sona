@@ -331,6 +331,7 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingContextAwarenessEnabled',
   'voiceTypingContextPreset',
   'voiceTypingContextRules',
+  'voiceTypingRealtimePreview',
 ];
 
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [

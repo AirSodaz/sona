@@ -7,15 +7,23 @@ use std::sync::Arc;
 
 pub fn normalize_language_code(code: &str) -> &str {
     let trimmed = code.trim();
-    if trimmed.starts_with("zh") || trimmed.starts_with("ZH") || trimmed.starts_with("cmn") {
-        "zh"
-    } else if trimmed.starts_with("en") || trimmed.starts_with("EN") {
-        "en"
-    } else if trimmed.starts_with("ja") || trimmed.starts_with("JA") {
-        "ja"
-    } else {
-        trimmed
+    if trimmed.len() >= 2 {
+        let prefix = &trimmed[..2];
+        if prefix.eq_ignore_ascii_case("zh")
+            || (trimmed.len() >= 3 && trimmed[..3].eq_ignore_ascii_case("cmn"))
+        {
+            return "zh";
+        }
+        if prefix.eq_ignore_ascii_case("en") {
+            return "en";
+        }
+        if prefix.eq_ignore_ascii_case("ja")
+            || (trimmed.len() >= 3 && trimmed[..3].eq_ignore_ascii_case("jpn"))
+        {
+            return "ja";
+        }
     }
+    trimmed
 }
 
 type TranslationModelCache = Arc<RwLock<HashMap<(String, String), Arc<OnnxNmtAdapter>>>>;
@@ -109,9 +117,14 @@ mod tests {
         assert_eq!(normalize_language_code("en-US"), "en");
         assert_eq!(normalize_language_code("en"), "en");
         assert_eq!(normalize_language_code("EN"), "en");
+        assert_eq!(normalize_language_code("En-GB"), "en");
         assert_eq!(normalize_language_code("zh-CN"), "zh");
+        assert_eq!(normalize_language_code("ZH"), "zh");
         assert_eq!(normalize_language_code("cmn-Hans"), "zh");
+        assert_eq!(normalize_language_code("CMN"), "zh");
         assert_eq!(normalize_language_code("ja-JP"), "ja");
+        assert_eq!(normalize_language_code("JA"), "ja");
+        assert_eq!(normalize_language_code("jpn"), "ja");
         assert_eq!(normalize_language_code("fr"), "fr");
     }
 

@@ -43,10 +43,12 @@ impl SentencePieceTokenizer {
             if field_num == 1 && wire_type == 2 {
                 let (len, new_idx) = read_varint(bytes, idx)?;
                 idx = new_idx;
-                let sub_end = idx + len as usize;
-                if sub_end > bytes.len() {
-                    return Err("Unexpected EOF reading SentencePiece entry".into());
-                }
+                let sub_end = idx
+                    .checked_add(len as usize)
+                    .filter(|&end| end <= bytes.len())
+                    .ok_or_else(|| {
+                        "Unexpected EOF or overflow reading SentencePiece entry".to_string()
+                    })?;
                 let piece_bytes = &bytes[idx..sub_end];
                 idx = sub_end;
 
@@ -62,7 +64,7 @@ impl SentencePieceTokenizer {
 
         let eos_id = piece_to_id.get("</s>").copied().unwrap_or(0);
         let unk_id = piece_to_id.get("<unk>").copied().unwrap_or(1);
-        let pad_id = piece_to_id.get("<pad>").copied();
+        let pad_id = piece_to_id.get("<pad>").copied().or(Some(65000));
 
         Ok(Self {
             pieces,
@@ -199,20 +201,21 @@ fn parse_sentencepiece_entry(bytes: &[u8]) -> Result<PieceEntry, String> {
             (1, 2) => {
                 let (len, new_idx) = read_varint(bytes, idx)?;
                 idx = new_idx;
-                let end = idx + len as usize;
-                if end > bytes.len() {
-                    return Err("Invalid piece length".into());
-                }
+                let end = idx
+                    .checked_add(len as usize)
+                    .filter(|&end| end <= bytes.len())
+                    .ok_or_else(|| "Invalid piece length or overflow".to_string())?;
                 piece = String::from_utf8_lossy(&bytes[idx..end]).into_owned();
                 idx = end;
             }
             (2, 5) => {
-                if idx + 4 > bytes.len() {
-                    return Err("Invalid score bytes".into());
-                }
+                let end = idx
+                    .checked_add(4)
+                    .filter(|&end| end <= bytes.len())
+                    .ok_or_else(|| "Invalid score bytes".to_string())?;
                 let score_bytes = [bytes[idx], bytes[idx + 1], bytes[idx + 2], bytes[idx + 3]];
                 score = f32::from_le_bytes(score_bytes);
-                idx += 4;
+                idx = end;
             }
             (3, 0) => {
                 let (t, new_idx) = read_varint(bytes, idx)?;
@@ -256,26 +259,21 @@ fn skip_field(bytes: &[u8], idx: usize, wire_type: u64) -> Result<usize, String>
             let (_, new_idx) = read_varint(bytes, idx)?;
             Ok(new_idx)
         }
-        1 => {
-            if idx + 8 > bytes.len() {
-                return Err("Unexpected EOF in 64-bit field".into());
-            }
-            Ok(idx + 8)
-        }
+        1 => idx
+            .checked_add(8)
+            .filter(|&end| end <= bytes.len())
+            .ok_or_else(|| "Unexpected EOF in 64-bit field".to_string()),
         2 => {
             let (len, new_idx) = read_varint(bytes, idx)?;
-            let end = new_idx + len as usize;
-            if end > bytes.len() {
-                return Err("Unexpected EOF in length-delimited field".into());
-            }
-            Ok(end)
+            new_idx
+                .checked_add(len as usize)
+                .filter(|&end| end <= bytes.len())
+                .ok_or_else(|| "Unexpected EOF or overflow in length-delimited field".to_string())
         }
-        5 => {
-            if idx + 4 > bytes.len() {
-                return Err("Unexpected EOF in 32-bit field".into());
-            }
-            Ok(idx + 4)
-        }
+        5 => idx
+            .checked_add(4)
+            .filter(|&end| end <= bytes.len())
+            .ok_or_else(|| "Unexpected EOF in 32-bit field".to_string()),
         _ => Err(format!("Unsupported wire type: {wire_type}")),
     }
 }
@@ -383,5 +381,18 @@ mod tests {
         assert_eq!(tok.pieces.len(), 2);
         assert_eq!(tok.pieces[0].piece, "</s>");
         assert_eq!(tok.pieces[1].piece, "hello");
+    }
+
+    #[test]
+    fn test_sentencepiece_truncated_bytes_returns_error() {
+        // Tag indicates length of 100 bytes, but only 2 bytes follow
+        let truncated = vec![0x0A, 100, 0x01, 0x02];
+        assert!(SentencePieceTokenizer::from_bytes(&truncated).is_err());
+    }
+
+    #[test]
+    fn test_sentencepiece_default_pad_id() {
+        let tok = SentencePieceTokenizer::from_bytes(&[]).expect("empty bytes succeeds");
+        assert_eq!(tok.pad_id, Some(65000));
     }
 }

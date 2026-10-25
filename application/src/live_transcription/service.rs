@@ -767,10 +767,12 @@ impl LiveTranscriptionCoordinator {
     }
 
     pub fn set_translation(&self, translation: Option<Arc<StreamingTranslationCoordinator>>) {
+        self.inner.partial_versions.lock().clear();
         *self.inner.translation.write() = translation;
     }
 
     pub fn clear_translation(&self) {
+        self.inner.partial_versions.lock().clear();
         if let Some(translator) = self.inner.translation.read().as_ref() {
             translator.clear();
         }
@@ -996,8 +998,11 @@ impl CoordinatorInner {
                     versions.remove(id);
                 }
             }
-            translator.enrich_update(&mut event.update).await;
-            self.broadcast_transcript(event).await;
+            let this = Arc::clone(self);
+            tokio::spawn(async move {
+                translator.enrich_update(&mut event.update).await;
+                this.broadcast_transcript(event).await;
+            });
         } else {
             let segment_versions: Vec<(String, u64)> = {
                 let mut versions = self.partial_versions.lock();
@@ -1015,12 +1020,21 @@ impl CoordinatorInner {
 
             let this = Arc::clone(self);
             tokio::spawn(async move {
+                {
+                    let versions = this.partial_versions.lock();
+                    if segment_versions
+                        .iter()
+                        .any(|(id, v)| versions.get(id) != Some(v))
+                    {
+                        return;
+                    }
+                }
                 translator.enrich_update(&mut event.update).await;
                 let is_stale = {
                     let versions = this.partial_versions.lock();
                     segment_versions
                         .iter()
-                        .any(|(id, v)| versions.get(id).is_some_and(|current_v| *current_v > *v))
+                        .any(|(id, v)| versions.get(id) != Some(v))
                 };
                 if !is_stale {
                     this.broadcast_transcript(event).await;

@@ -721,11 +721,9 @@ export class VoiceTypingSessionMachine {
       if (segment.translation) {
         this.latestStreamTranslation = segment.translation;
       }
-      if (segment.isFinal) {
-        this.latestStreamDraftTranslation = null;
-      } else if (segment.draftTranslation !== undefined) {
-        this.latestStreamDraftTranslation = segment.draftTranslation;
-      }
+      this.latestStreamDraftTranslation = segment.isFinal
+        ? null
+        : (segment.draftTranslation ?? null);
     }
 
     if (this.selectionContext || mode === 'polish' || this.isTranslateSession) {

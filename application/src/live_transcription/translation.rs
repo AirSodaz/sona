@@ -109,8 +109,8 @@ impl StreamingTranslationCoordinator {
                 }
             } else {
                 let should_translate = {
-                    let states = self.states.lock();
-                    if let Some(state) = states.get(&segment.id) {
+                    let mut states = self.states.lock();
+                    if let Some(state) = states.get_mut(&segment.id) {
                         if text == state.last_text {
                             false
                         } else {
@@ -119,10 +119,27 @@ impl StreamingTranslationCoordinator {
                                 .count()
                                 .saturating_sub(state.last_text.chars().count());
                             let elapsed = state.last_translate_time.elapsed();
-                            char_delta >= self.min_char_delta
-                                || elapsed >= Duration::from_millis(self.debounce_ms)
+                            let eligible = char_delta >= self.min_char_delta
+                                || elapsed >= Duration::from_millis(self.debounce_ms);
+                            if eligible {
+                                state.last_text = text.to_string();
+                                state.last_translate_time = Instant::now();
+                                true
+                            } else {
+                                false
+                            }
                         }
                     } else {
+                        // Record immediately inside lock to avoid stampede from concurrent partials
+                        states.insert(
+                            segment.id.clone(),
+                            SegmentTranslationState {
+                                last_text: text.to_string(),
+                                last_translate_time: Instant::now(),
+                                stabilizer: StreamingStabilizer::new(),
+                                last_draft_translation: None,
+                            },
+                        );
                         true
                     }
                 };
@@ -135,20 +152,12 @@ impl StreamingTranslationCoordinator {
                     {
                         Ok(translated_text) => {
                             let mut states = self.states.lock();
-                            let entry = states.entry(segment.id.clone()).or_insert_with(|| {
-                                SegmentTranslationState {
-                                    last_text: String::new(),
-                                    last_translate_time: Instant::now(),
-                                    stabilizer: StreamingStabilizer::new(),
-                                    last_draft_translation: None,
-                                }
-                            });
-                            entry.last_text = text.to_string();
-                            entry.last_translate_time = Instant::now();
-                            let out = entry.stabilizer.update(&translated_text, false);
-                            entry.last_draft_translation = out.draft_tail.clone();
-                            segment.translation = out.frozen_prefix;
-                            segment.draft_translation = out.draft_tail;
+                            if let Some(entry) = states.get_mut(&segment.id) {
+                                let out = entry.stabilizer.update(&translated_text, false);
+                                entry.last_draft_translation = out.draft_tail.clone();
+                                segment.translation = out.frozen_prefix;
+                                segment.draft_translation = out.draft_tail;
+                            }
                         }
                         Err(err) => {
                             log::warn!(

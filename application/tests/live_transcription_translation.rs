@@ -21,6 +21,8 @@ use std::time::Duration;
 struct MockTranslationEngine {
     translations: Mutex<HashMap<String, String>>,
     fail_on: Mutex<Option<String>>,
+    call_count: Mutex<usize>,
+    delay: Mutex<Option<Duration>>,
 }
 
 impl MockTranslationEngine {
@@ -35,11 +37,21 @@ impl MockTranslationEngine {
         Self {
             translations: Mutex::new(t),
             fail_on: Mutex::new(None),
+            call_count: Mutex::new(0),
+            delay: Mutex::new(None),
         }
     }
 
     fn set_fail_on(&self, text: &str) {
         *self.fail_on.lock().unwrap() = Some(text.to_string());
+    }
+
+    fn set_delay(&self, delay: Duration) {
+        *self.delay.lock().unwrap() = Some(delay);
+    }
+
+    fn call_count(&self) -> usize {
+        *self.call_count.lock().unwrap()
     }
 }
 
@@ -51,6 +63,11 @@ impl TranslationEnginePort for MockTranslationEngine {
         _source_lang: &str,
         _target_lang: &str,
     ) -> Result<String, TranslationPortError> {
+        *self.call_count.lock().unwrap() += 1;
+        let delay = *self.delay.lock().unwrap();
+        if let Some(d) = delay {
+            tokio::time::sleep(d).await;
+        }
         if self.fail_on.lock().unwrap().as_deref() == Some(text) {
             return Err(TranslationPortError::inference_failed(
                 "mock translation error",
@@ -349,4 +366,98 @@ async fn test_live_transcription_final_failure_falls_back_to_frozen_prefix() {
         "Final translation failure must fall back to stabilized frozen prefix"
     );
     assert_eq!(update3.upsert_segments[0].draft_translation, None);
+}
+
+#[tokio::test]
+async fn test_stale_partial_after_finalization_does_not_overwrite() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(Arc::clone(&translation_engine) as _, "en", "zh")
+            .with_debounce(10, 1),
+    );
+
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-stale",
+            LiveSourceEpoch::new("src-stale", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Make partial translation take 80ms
+    translation_engine.set_delay(Duration::from_millis(80));
+
+    // Emit partial 1 - starts background translation task with 80ms delay
+    session.emit("I like to", 1.0, false);
+    tokio::time::sleep(Duration::from_millis(15)).await;
+
+    // Remove delay so final translation completes before partial
+    *translation_engine.delay.lock().unwrap() = None;
+
+    // Emit final segment for seg-1
+    session.emit("I like to read books every day.", 2.0, true);
+
+    // Wait for the slow 80ms partial task to complete
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    let last = updates.last().expect("must have updates");
+    let seg = &last.update.upsert_segments[0];
+    assert!(
+        seg.is_final,
+        "Last received segment must be final, got is_final={}",
+        seg.is_final
+    );
+    assert_eq!(seg.text, "I like to read books every day.");
+    assert_eq!(seg.translation, Some("我喜欢每天看书。".into()));
+}
+
+#[tokio::test]
+async fn test_concurrent_partial_updates_do_not_stampede() {
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    translation_engine.set_delay(Duration::from_millis(50));
+    let coord = Arc::new(
+        StreamingTranslationCoordinator::new(Arc::clone(&translation_engine) as _, "en", "zh")
+            .with_debounce(500, 10),
+    );
+
+    let mut update1 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-conc", "Hello", false)],
+        remove_ids: vec![],
+    };
+    let mut update2 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-conc", "Hello world", false)],
+        remove_ids: vec![],
+    };
+
+    let c1 = Arc::clone(&coord);
+    let c2 = Arc::clone(&coord);
+
+    tokio::join!(
+        async move { c1.enrich_update(&mut update1).await },
+        async move { c2.enrich_update(&mut update2).await }
+    );
+
+    assert_eq!(
+        translation_engine.call_count(),
+        1,
+        "Concurrent partials must not stampede translation engine"
+    );
 }

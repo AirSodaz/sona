@@ -140,7 +140,14 @@ impl OnnxNmtModel {
             ndarray::Array3::from_shape_vec((1, seq_len, hidden_dim), last_hidden_data.to_vec())
                 .map_err(TranslationPortError::inference_failed)?;
 
-        let mut decoder_input_ids = vec![self.target_tokenizer.eos_id as i64];
+        let enc_attn_array = ndarray::Array2::from_shape_vec((1, seq_len), vec![1i64; seq_len])
+            .map_err(TranslationPortError::inference_failed)?;
+        let enc_attn_val =
+            Value::from_array(enc_attn_array).map_err(TranslationPortError::inference_failed)?;
+        let hidden_val = Value::from_array(hidden_states_array)
+            .map_err(TranslationPortError::inference_failed)?;
+
+        let mut decoder_input_ids = vec![self.target_tokenizer.pad_id.unwrap_or(65000) as i64];
 
         for _ in 0..self.max_length {
             let target_len = decoder_input_ids.len();
@@ -148,25 +155,23 @@ impl OnnxNmtModel {
                 ndarray::Array2::from_shape_vec((1, target_len), decoder_input_ids.clone())
                     .map_err(TranslationPortError::inference_failed)?;
 
-            let enc_attn_array = ndarray::Array2::from_shape_vec((1, seq_len), vec![1i64; seq_len])
-                .map_err(TranslationPortError::inference_failed)?;
-
             let dec_ids_val =
                 Value::from_array(dec_ids_array).map_err(TranslationPortError::inference_failed)?;
-            let enc_attn_val = Value::from_array(enc_attn_array)
-                .map_err(TranslationPortError::inference_failed)?;
-            let hidden_val = Value::from_array(hidden_states_array.clone())
-                .map_err(TranslationPortError::inference_failed)?;
-
             let decoder_outputs = decoder
-                .run(
-                    ort::inputs![
-                        "input_ids" => dec_ids_val,
-                        "encoder_hidden_states" => hidden_val,
-                        "encoder_attention_mask" => enc_attn_val,
-                    ]
-                    .map_err(TranslationPortError::inference_failed)?,
-                )
+                .run(vec![
+                    (
+                        "input_ids",
+                        ort::session::SessionInputValue::from(dec_ids_val),
+                    ),
+                    (
+                        "encoder_hidden_states",
+                        ort::session::SessionInputValue::from(hidden_val.view()),
+                    ),
+                    (
+                        "encoder_attention_mask",
+                        ort::session::SessionInputValue::from(enc_attn_val.view()),
+                    ),
+                ])
                 .map_err(TranslationPortError::inference_failed)?;
 
             let logits_val = decoder_outputs.get("logits").ok_or_else(|| {

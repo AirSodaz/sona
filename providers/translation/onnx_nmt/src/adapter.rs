@@ -65,12 +65,36 @@ impl TranslationEnginePort for OnnxNmtAdapter {
         _source_lang: &str,
         _target_lang: &str,
     ) -> Result<String, TranslationPortError> {
-        self.ensure_loaded()?;
-        let read = self.model.read();
-        let model = read
-            .as_ref()
-            .ok_or_else(|| TranslationPortError::model_not_ready("ONNX NMT model is not loaded"))?;
-        model.translate(text)
+        let text = text.to_string();
+        let model_arc = Arc::clone(&self.model);
+        let model_dir = self.model_dir.clone();
+        let num_threads = self.num_threads;
+
+        tokio::task::spawn_blocking(move || {
+            {
+                let read = model_arc.read();
+                if read.is_none() {
+                    drop(read);
+                    let Some(dir) = &model_dir else {
+                        return Err(TranslationPortError::model_not_ready(
+                            "No model directory configured",
+                        ));
+                    };
+                    let mut write = model_arc.write();
+                    if write.is_none() {
+                        let loaded = OnnxNmtModel::load(dir, num_threads)?;
+                        *write = Some(loaded);
+                    }
+                }
+            }
+            let read = model_arc.read();
+            let model = read.as_ref().ok_or_else(|| {
+                TranslationPortError::model_not_ready("ONNX NMT model is not loaded")
+            })?;
+            model.translate(&text)
+        })
+        .await
+        .map_err(|e| TranslationPortError::engine_failed(e.to_string()))?
     }
 
     fn engine_kind(&self) -> TranslationEngineKind {

@@ -18,21 +18,13 @@ import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../../types/transcript';
+import { needsWordBoundarySpace } from '../../utils/cjkTypography';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { CheckIcon, CloseIcon, EditIcon, MergeIcon, TrashIcon } from '../Icons';
 import { SegmentEditor } from './SegmentEditor';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
-
-function needsWordBoundarySpace(prefix?: string | null, tail?: string | null): boolean {
-  if (!prefix || !tail) return false;
-  if (prefix.endsWith(' ') || tail.startsWith(' ')) return false;
-  const lastChar = prefix.slice(-1);
-  const firstChar = tail.slice(0, 1);
-  const cjkRegex = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff]/;
-  return !cjkRegex.test(lastChar) && !cjkRegex.test(firstChar);
-}
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
   segment: TranscriptSegment;

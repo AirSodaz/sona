@@ -7,17 +7,9 @@ import {
 } from '../services/captionWindowService';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
+import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
-
-function needsWordBoundarySpace(prefix?: string | null, tail?: string | null): boolean {
-  if (!prefix || !tail) return false;
-  if (prefix.endsWith(' ') || tail.startsWith(' ')) return false;
-  const lastChar = prefix.slice(-1);
-  const firstChar = tail.slice(0, 1);
-  const cjkRegex = /[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\u3040-\u30ff]/;
-  return !cjkRegex.test(lastChar) && !cjkRegex.test(firstChar);
-}
 /**
  * Root component for the always-on-top caption window.
  * Manages its own state by listening to Tauri events from the main window.

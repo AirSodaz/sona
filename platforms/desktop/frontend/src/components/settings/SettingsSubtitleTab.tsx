@@ -944,11 +944,6 @@ export function SettingsSubtitleTab({
       { value: 'zh', label: '中文 (Chinese)' },
       { value: 'en', label: 'English' },
       { value: 'ja', label: '日本語 (Japanese)' },
-      { value: 'ko', label: '한국어 (Korean)' },
-      { value: 'fr', label: 'Français (French)' },
-      { value: 'es', label: 'Español (Spanish)' },
-      { value: 'de', label: 'Deutsch (German)' },
-      { value: 'ru', label: 'Русский (Russian)' },
     ],
     []
   );
@@ -1118,7 +1113,8 @@ export function SettingsSubtitleTab({
                     defaultValue: 'Language Pair',
                   })}
                   hint={t('settings.translation_language_pair_hint', {
-                    defaultValue: 'Translate from source language to target language.',
+                    defaultValue:
+                      'Translate from source language to target language (supports Chinese, English, Japanese).',
                   })}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
