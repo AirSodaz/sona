@@ -18,9 +18,10 @@ pub struct SentencePieceTokenizer {
     pub pad_id: Option<u32>,
     pub eos_id: u32,
     pub unk_id: u32,
+    pub vocab_to_id: Option<HashMap<String, u32>>,
+    pub id_to_vocab: Option<Vec<String>>,
     max_piece_len: usize,
 }
-
 impl SentencePieceTokenizer {
     pub fn load(path: &Path) -> Result<Self, String> {
         let bytes =
@@ -72,8 +73,44 @@ impl SentencePieceTokenizer {
             pad_id,
             eos_id,
             unk_id,
+            vocab_to_id: None,
+            id_to_vocab: None,
             max_piece_len: max_piece_len.max(1),
         })
+    }
+
+    pub fn load_vocab(&mut self, path: &Path) -> Result<(), String> {
+        let content = fs::read_to_string(path)
+            .map_err(|e| format!("Failed to read vocab file {}: {e}", path.display()))?;
+        let vocab: HashMap<String, u32> = serde_json::from_str(&content)
+            .map_err(|e| format!("Failed to parse vocab JSON {}: {e}", path.display()))?;
+        self.set_vocab(vocab);
+        Ok(())
+    }
+
+    pub fn set_vocab(&mut self, vocab: HashMap<String, u32>) {
+        let max_id = vocab.values().copied().max().unwrap_or(0);
+        let mut id_to_vocab = vec![String::new(); (max_id as usize) + 1];
+        for (token, &id) in &vocab {
+            if let Some(slot) = id_to_vocab.get_mut(id as usize) {
+                *slot = token.clone();
+            }
+        }
+
+        if let Some(&eos) = vocab.get("</s>") {
+            self.eos_id = eos;
+        }
+        if let Some(&unk) = vocab.get("<unk>") {
+            self.unk_id = unk;
+        }
+        if let Some(&pad) = vocab.get("<pad>") {
+            self.pad_id = Some(pad);
+        } else if self.pad_id.is_none() {
+            self.pad_id = Some(65000);
+        }
+
+        self.vocab_to_id = Some(vocab);
+        self.id_to_vocab = Some(id_to_vocab);
     }
 
     pub fn encode(&self, text: &str) -> Vec<i64> {
@@ -102,8 +139,9 @@ impl SentencePieceTokenizer {
             return vec![self.eos_id as i64];
         }
 
+        let spm_unk_id = self.piece_to_id.get("<unk>").copied().unwrap_or(1);
         let mut best_score = vec![f32::NEG_INFINITY; n + 1];
-        let mut best_prev = vec![(0usize, self.unk_id); n + 1];
+        let mut best_prev = vec![(0usize, spm_unk_id); n + 1];
         best_score[0] = 0.0;
 
         for i in 0..n {
@@ -118,7 +156,10 @@ impl SentencePieceTokenizer {
                 let sub: String = chars[i..i + len].iter().collect();
                 if let Some(&token_id) = self.piece_to_id.get(&sub) {
                     matched = true;
-                    let score = self.pieces[token_id as usize].score;
+                    let score = self
+                        .pieces
+                        .get(token_id as usize)
+                        .map_or(-100.0, |p| p.score);
                     let candidate = best_score[i] + score;
                     if candidate > best_score[i + len] {
                         best_score[i + len] = candidate;
@@ -129,18 +170,36 @@ impl SentencePieceTokenizer {
 
             if !matched && best_score[i + 1] == f32::NEG_INFINITY {
                 best_score[i + 1] = best_score[i] - 100.0;
-                best_prev[i + 1] = (i, self.unk_id);
+                best_prev[i + 1] = (i, spm_unk_id);
             }
         }
 
-        let mut tokens = Vec::new();
+        let mut piece_ids = Vec::new();
         let mut curr = n;
         while curr > 0 {
             let (prev, token_id) = best_prev[curr];
-            tokens.push(token_id as i64);
+            piece_ids.push(token_id);
             curr = prev;
         }
-        tokens.reverse();
+        piece_ids.reverse();
+
+        let mut tokens = Vec::with_capacity(piece_ids.len() + 1);
+        if let Some(vocab) = &self.vocab_to_id {
+            for spm_id in piece_ids {
+                let piece_str = self
+                    .pieces
+                    .get(spm_id as usize)
+                    .map(|p| p.piece.as_str())
+                    .unwrap_or("<unk>");
+                let id = vocab.get(piece_str).copied().unwrap_or(self.unk_id);
+                tokens.push(id as i64);
+            }
+        } else {
+            for spm_id in piece_ids {
+                tokens.push(spm_id as i64);
+            }
+        }
+
         tokens.push(self.eos_id as i64);
         tokens
     }
@@ -149,31 +208,70 @@ impl SentencePieceTokenizer {
         let mut result = String::new();
         let mut byte_buf: Vec<u8> = Vec::new();
 
-        for &id in token_ids {
-            if id == self.eos_id as i64 || self.pad_id.is_some_and(|pad| id == pad as i64) {
-                break;
-            }
-            let idx = id as usize;
-            if idx >= self.pieces.len() {
-                continue;
-            }
-            let piece = &self.pieces[idx].piece;
-            if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
-                if !byte_buf.is_empty() {
-                    result.push_str(&String::from_utf8_lossy(&byte_buf));
-                    byte_buf.clear();
+        if let Some(id_to_vocab) = &self.id_to_vocab {
+            for &id in token_ids {
+                if id == self.eos_id as i64 || self.pad_id.is_some_and(|pad| id == pad as i64) {
+                    break;
                 }
-                continue;
-            }
+                let idx = id as usize;
+                if idx >= id_to_vocab.len() {
+                    continue;
+                }
+                let piece = &id_to_vocab[idx];
+                if piece.is_empty()
+                    || piece == "<unk>"
+                    || piece == "<s>"
+                    || piece == "</s>"
+                    || piece == "<pad>"
+                {
+                    if !byte_buf.is_empty() {
+                        result.push_str(&String::from_utf8_lossy(&byte_buf));
+                        byte_buf.clear();
+                    }
+                    continue;
+                }
 
-            if let Some(b) = parse_hex_byte(piece) {
-                byte_buf.push(b);
-            } else {
-                if !byte_buf.is_empty() {
-                    result.push_str(&String::from_utf8_lossy(&byte_buf));
-                    byte_buf.clear();
+                if piece.starts_with(">>") && piece.ends_with("<<") {
+                    continue;
                 }
-                result.push_str(piece);
+
+                if let Some(b) = parse_hex_byte(piece) {
+                    byte_buf.push(b);
+                } else {
+                    if !byte_buf.is_empty() {
+                        result.push_str(&String::from_utf8_lossy(&byte_buf));
+                        byte_buf.clear();
+                    }
+                    result.push_str(piece);
+                }
+            }
+        } else {
+            for &id in token_ids {
+                if id == self.eos_id as i64 || self.pad_id.is_some_and(|pad| id == pad as i64) {
+                    break;
+                }
+                let idx = id as usize;
+                if idx >= self.pieces.len() {
+                    continue;
+                }
+                let piece = &self.pieces[idx].piece;
+                if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
+                    if !byte_buf.is_empty() {
+                        result.push_str(&String::from_utf8_lossy(&byte_buf));
+                        byte_buf.clear();
+                    }
+                    continue;
+                }
+
+                if let Some(b) = parse_hex_byte(piece) {
+                    byte_buf.push(b);
+                } else {
+                    if !byte_buf.is_empty() {
+                        result.push_str(&String::from_utf8_lossy(&byte_buf));
+                        byte_buf.clear();
+                    }
+                    result.push_str(piece);
+                }
             }
         }
 
@@ -394,5 +492,63 @@ mod tests {
     fn test_sentencepiece_default_pad_id() {
         let tok = SentencePieceTokenizer::from_bytes(&[]).expect("empty bytes succeeds");
         assert_eq!(tok.pad_id, Some(65000));
+    }
+
+    #[test]
+    fn test_sentencepiece_with_vocab_mapping() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        let pieces = vec![
+            ("</s>", 0.0),
+            ("<unk>", 0.0),
+            ("\u{2581}Good", -1.0),
+            ("\u{2581}morning", -1.0),
+            (".", -0.5),
+        ];
+        for (i, (p, s)) in pieces.into_iter().enumerate() {
+            tokenizer.pieces.push(PieceEntry {
+                piece: p.to_string(),
+                score: s,
+                piece_type: 0,
+            });
+            tokenizer.piece_to_id.insert(p.to_string(), i as u32);
+        }
+        tokenizer.eos_id = 0;
+        tokenizer.unk_id = 1;
+        tokenizer.pad_id = Some(65000);
+        tokenizer.max_piece_len = 10;
+
+        // Setup mock vocab mapping with merged vocabulary IDs
+        let mut vocab = HashMap::new();
+        vocab.insert("</s>".to_string(), 0);
+        vocab.insert("<unk>".to_string(), 1);
+        vocab.insert("\u{2581}Good".to_string(), 1050);
+        vocab.insert("\u{2581}morning".to_string(), 2340);
+        vocab.insert(".".to_string(), 6);
+        vocab.insert("<pad>".to_string(), 65000);
+        tokenizer.set_vocab(vocab);
+
+        let tokens = tokenizer.encode("Good morning.");
+        // Output should be mapped vocab IDs rather than raw SPM piece indices (2, 3, 4, 0)
+        assert_eq!(tokens, vec![1050, 2340, 6, 0]);
+    }
+
+    #[test]
+    fn test_sentencepiece_decode_with_vocab_mapping_and_tags() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        let mut vocab = HashMap::new();
+        vocab.insert("</s>".to_string(), 0);
+        vocab.insert("<unk>".to_string(), 1);
+        vocab.insert(">>cmn_Hans<<".to_string(), 5);
+        vocab.insert("。".to_string(), 10);
+        vocab.insert("\u{2581}早".to_string(), 50000);
+        vocab.insert("上".to_string(), 50001);
+        vocab.insert("好".to_string(), 50002);
+        vocab.insert("<pad>".to_string(), 65000);
+        tokenizer.set_vocab(vocab);
+
+        // Tokens include language tag >>cmn_Hans<< (5), tokens >= 32000, and punctuation
+        let token_ids = vec![5, 50000, 50001, 50002, 10, 0];
+        let decoded = tokenizer.decode(&token_ids);
+        assert_eq!(decoded, "早上好。");
     }
 }

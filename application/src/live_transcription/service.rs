@@ -1004,6 +1004,13 @@ impl CoordinatorInner {
                 this.broadcast_transcript(event).await;
             });
         } else {
+            // 1. Fill cached translation immediately so partials display existing translations
+            translator.fill_cached(&mut event.update);
+
+            // 2. Broadcast partial transcript update immediately without waiting for translation
+            self.broadcast_transcript(event.clone()).await;
+
+            // 3. Track version and spawn background translation to refine translation
             let segment_versions: Vec<(String, u64)> = {
                 let mut versions = self.partial_versions.lock();
                 event
@@ -1020,15 +1027,6 @@ impl CoordinatorInner {
 
             let this = Arc::clone(self);
             tokio::spawn(async move {
-                {
-                    let versions = this.partial_versions.lock();
-                    if segment_versions
-                        .iter()
-                        .any(|(id, v)| versions.get(id) != Some(v))
-                    {
-                        return;
-                    }
-                }
                 translator.enrich_update(&mut event.update).await;
                 let is_stale = {
                     let versions = this.partial_versions.lock();

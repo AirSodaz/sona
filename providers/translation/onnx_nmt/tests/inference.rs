@@ -89,3 +89,34 @@ fn test_leading_prompt_token_slice_decoding() {
     let stripped = tgt_tok.decode(output_tokens);
     assert_eq!(stripped, "你好 世界");
 }
+
+#[tokio::test]
+async fn test_onnx_nmt_real_opus_mt_en_zh() {
+    let model_path = Path::new("D:/projects/models/opus-mt-en-zh");
+    if !model_path.join("encoder_model.onnx").exists() || !model_path.join("vocab.json").exists() {
+        return;
+    }
+    let adapter = OnnxNmtAdapter::new(Some(model_path.to_path_buf()), 2);
+    let r1 = adapter
+        .translate("Good morning.", "en", "zh")
+        .await
+        .expect("translation should succeed");
+    println!("Translated 'Good morning.' -> {:?}", r1);
+    let r2 = adapter
+        .translate("Thank you very much.", "en", "zh")
+        .await
+        .expect("translation should succeed");
+    println!("Translated 'Thank you very much.' -> {:?}", r2);
+
+    let r3 = adapter
+        .translate("What is your name?", "en", "zh")
+        .await
+        .expect("translation should succeed");
+    println!("Translated 'What is your name?' -> {:?}", r3);
+
+    assert_eq!(r1, "早上好");
+    assert!(!r1.contains("和呢报表"));
+    assert!(!r1.contains("我刚从你家回来"));
+    assert_eq!(r2, "非常感谢");
+    assert!(r3.contains("叫什么") || r3.contains("名字"));
+}

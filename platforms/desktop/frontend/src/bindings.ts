@@ -328,6 +328,7 @@ export type AsrEngineConfig_Deserialize =
 	mergedDecoder: string | null,
 	sourceSpm: string | null,
 	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
 /**
  *  Local offline transcription through a provider-crate engine.
@@ -353,6 +354,7 @@ export type AsrEngineConfig_Deserialize =
 	mergedDecoder: string | null,
 	sourceSpm: string | null,
 	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
@@ -380,6 +382,7 @@ export type AsrEngineConfig_Serialize =
 	mergedDecoder: string | null,
 	sourceSpm: string | null,
 	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; enablePartialDecoding: boolean | null; ffmpegEnabled: boolean | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
@@ -1966,6 +1969,7 @@ export type ModelFileConfig = {
 	mergedDecoder: string | null,
 	sourceSpm: string | null,
 	targetSpm: string | null,
+	vocab: string | null,
 };
 
 export type ModelRuleInput = {

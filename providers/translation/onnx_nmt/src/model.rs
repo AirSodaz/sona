@@ -4,12 +4,37 @@ use ort::value::Value;
 use sona_core::ports::translation::TranslationPortError;
 use std::path::Path;
 
+#[derive(Clone, Debug)]
+struct BeamHypothesis {
+    tokens: Vec<i64>,
+    score: f32,
+}
+
+fn log_softmax(logits: &[f32]) -> Vec<f32> {
+    let mut max_val = f32::NEG_INFINITY;
+    for &v in logits {
+        if v > max_val {
+            max_val = v;
+        }
+    }
+    if max_val.is_infinite() {
+        return vec![0.0; logits.len()];
+    }
+    let mut sum_exp = 0.0f32;
+    for &v in logits {
+        sum_exp += (v - max_val).exp();
+    }
+    let log_sum_exp = max_val + sum_exp.ln();
+    logits.iter().map(|&v| v - log_sum_exp).collect()
+}
+
 pub struct OnnxNmtModel {
     encoder_session: Option<Session>,
     decoder_session: Option<Session>,
     source_tokenizer: SentencePieceTokenizer,
     target_tokenizer: SentencePieceTokenizer,
     max_length: usize,
+    beam_size: usize,
     mock_mode: bool,
 }
 
@@ -31,11 +56,20 @@ impl OnnxNmtModel {
             )));
         }
 
-        let source_tokenizer = SentencePieceTokenizer::load(&source_spm)
+        let mut source_tokenizer = SentencePieceTokenizer::load(&source_spm)
             .map_err(TranslationPortError::tokenization_failed)?;
-        let target_tokenizer = SentencePieceTokenizer::load(&target_spm)
+        let mut target_tokenizer = SentencePieceTokenizer::load(&target_spm)
             .map_err(TranslationPortError::tokenization_failed)?;
 
+        let vocab_path = model_dir.join("vocab.json");
+        if vocab_path.is_file() {
+            source_tokenizer
+                .load_vocab(&vocab_path)
+                .map_err(TranslationPortError::tokenization_failed)?;
+            target_tokenizer
+                .load_vocab(&vocab_path)
+                .map_err(TranslationPortError::tokenization_failed)?;
+        }
         let encoder_session = Session::builder()
             .map_err(TranslationPortError::engine_failed)?
             .with_optimization_level(GraphOptimizationLevel::Level3)
@@ -59,6 +93,7 @@ impl OnnxNmtModel {
             source_tokenizer,
             target_tokenizer,
             max_length: 256,
+            beam_size: 4,
             mock_mode: false,
         })
     }
@@ -73,8 +108,14 @@ impl OnnxNmtModel {
             source_tokenizer,
             target_tokenizer,
             max_length: 256,
+            beam_size: 4,
             mock_mode: true,
         }
+    }
+
+    pub fn with_beam_size(mut self, beam_size: usize) -> Self {
+        self.beam_size = beam_size.max(1);
+        self
     }
 
     pub fn translate(&self, text: &str) -> Result<String, TranslationPortError> {
@@ -136,27 +177,45 @@ impl OnnxNmtModel {
             512
         };
 
-        let hidden_states_array =
-            ndarray::Array3::from_shape_vec((1, seq_len, hidden_dim), last_hidden_data.to_vec())
-                .map_err(TranslationPortError::inference_failed)?;
+        let start_pad = self.target_tokenizer.pad_id.unwrap_or(65000) as i64;
+        let eos_id = self.target_tokenizer.eos_id as i64;
+        let beam_size = self.beam_size.max(1);
 
-        let enc_attn_array = ndarray::Array2::from_shape_vec((1, seq_len), vec![1i64; seq_len])
-            .map_err(TranslationPortError::inference_failed)?;
-        let enc_attn_val =
-            Value::from_array(enc_attn_array).map_err(TranslationPortError::inference_failed)?;
-        let hidden_val = Value::from_array(hidden_states_array)
-            .map_err(TranslationPortError::inference_failed)?;
-
-        let mut decoder_input_ids = vec![self.target_tokenizer.pad_id.unwrap_or(65000) as i64];
+        let mut active_beams = vec![BeamHypothesis {
+            tokens: vec![start_pad],
+            score: 0.0,
+        }];
+        let mut completed_hypotheses: Vec<(Vec<i64>, f32)> = Vec::new();
 
         for _ in 0..self.max_length {
-            let target_len = decoder_input_ids.len();
-            let dec_ids_array =
-                ndarray::Array2::from_shape_vec((1, target_len), decoder_input_ids.clone())
-                    .map_err(TranslationPortError::inference_failed)?;
+            let b = active_beams.len();
+            let target_len = active_beams[0].tokens.len();
 
+            let mut flattened_ids = Vec::with_capacity(b * target_len);
+            for beam in &active_beams {
+                flattened_ids.extend_from_slice(&beam.tokens);
+            }
+            let dec_ids_array = ndarray::Array2::from_shape_vec((b, target_len), flattened_ids)
+                .map_err(TranslationPortError::inference_failed)?;
             let dec_ids_val =
                 Value::from_array(dec_ids_array).map_err(TranslationPortError::inference_failed)?;
+
+            let mut b_hidden_data = Vec::with_capacity(b * seq_len * hidden_dim);
+            for _ in 0..b {
+                b_hidden_data.extend_from_slice(last_hidden_data);
+            }
+            let hidden_states_array =
+                ndarray::Array3::from_shape_vec((b, seq_len, hidden_dim), b_hidden_data)
+                    .map_err(TranslationPortError::inference_failed)?;
+            let hidden_val = Value::from_array(hidden_states_array)
+                .map_err(TranslationPortError::inference_failed)?;
+
+            let enc_attn_array =
+                ndarray::Array2::from_shape_vec((b, seq_len), vec![1i64; b * seq_len])
+                    .map_err(TranslationPortError::inference_failed)?;
+            let enc_attn_val = Value::from_array(enc_attn_array)
+                .map_err(TranslationPortError::inference_failed)?;
+
             let decoder_outputs = decoder
                 .run(vec![
                     (
@@ -165,11 +224,11 @@ impl OnnxNmtModel {
                     ),
                     (
                         "encoder_hidden_states",
-                        ort::session::SessionInputValue::from(hidden_val.view()),
+                        ort::session::SessionInputValue::from(hidden_val),
                     ),
                     (
                         "encoder_attention_mask",
-                        ort::session::SessionInputValue::from(enc_attn_val.view()),
+                        ort::session::SessionInputValue::from(enc_attn_val),
                     ),
                 ])
                 .map_err(TranslationPortError::inference_failed)?;
@@ -190,41 +249,97 @@ impl OnnxNmtModel {
                 ));
             };
 
-            let seq_len = logits_shape[1] as usize;
-            let last_step = if seq_len > 0 { seq_len - 1 } else { 0 };
-            let last_token_logits_start = last_step * vocab_size;
-            let last_token_logits_end = last_token_logits_start + vocab_size;
-            if last_token_logits_end > logits_data.len() {
-                return Err(TranslationPortError::inference_failed(
-                    "Logits tensor buffer length mismatch",
-                ));
-            }
-            let last_token_logits = &logits_data[last_token_logits_start..last_token_logits_end];
+            let current_seq_len = logits_shape[1] as usize;
+            let last_step = if current_seq_len > 0 {
+                current_seq_len - 1
+            } else {
+                0
+            };
 
-            let mut best_id = 0;
-            let mut best_val = f32::NEG_INFINITY;
-            for (idx, &v) in last_token_logits.iter().enumerate() {
-                if v > best_val {
-                    best_val = v;
-                    best_id = idx;
+            let mut all_candidates: Vec<BeamHypothesis> = Vec::new();
+
+            for (beam_idx, beam) in active_beams.iter().enumerate() {
+                let beam_offset = beam_idx * current_seq_len * vocab_size + last_step * vocab_size;
+                let beam_end = beam_offset + vocab_size;
+                if beam_end > logits_data.len() {
+                    return Err(TranslationPortError::inference_failed(
+                        "Logits tensor buffer length mismatch",
+                    ));
+                }
+                let beam_logits = &logits_data[beam_offset..beam_end];
+                let log_probs = log_softmax(beam_logits);
+
+                let mut token_scores: Vec<(usize, f32)> = Vec::with_capacity(vocab_size);
+                for (token_id, &lp) in log_probs.iter().enumerate() {
+                    if token_id as i64 == start_pad {
+                        continue;
+                    }
+                    token_scores.push((token_id, lp));
+                }
+
+                let k = (2 * beam_size).min(token_scores.len());
+                if k > 0 {
+                    token_scores.select_nth_unstable_by(k - 1, |a, b| {
+                        b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+                    });
+                    token_scores.truncate(k);
+                }
+
+                for (token_id, lp) in token_scores {
+                    let total_score = beam.score + lp;
+                    let token_i64 = token_id as i64;
+                    if token_i64 == eos_id {
+                        let gen_len = beam.tokens.len().saturating_sub(1).max(1);
+                        let length_penalty = ((5.0 + gen_len as f32) / 6.0).powf(1.0);
+                        let normalized_score = total_score / length_penalty;
+                        completed_hypotheses.push((beam.tokens.clone(), normalized_score));
+                    } else {
+                        let mut next_tokens = beam.tokens.clone();
+                        next_tokens.push(token_i64);
+                        all_candidates.push(BeamHypothesis {
+                            tokens: next_tokens,
+                            score: total_score,
+                        });
+                    }
                 }
             }
 
-            let next_token = best_id as i64;
-            let is_stop = next_token == self.target_tokenizer.eos_id as i64
-                || self
-                    .target_tokenizer
-                    .pad_id
-                    .is_some_and(|pad| next_token == pad as i64);
-            if is_stop {
+            if all_candidates.is_empty() {
                 break;
             }
 
-            decoder_input_ids.push(next_token);
+            all_candidates.sort_by(|a, b| {
+                b.score
+                    .partial_cmp(&a.score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            });
+            all_candidates.truncate(beam_size);
+            active_beams = all_candidates;
+
+            if completed_hypotheses.len() >= beam_size {
+                let best_completed_score = completed_hypotheses
+                    .iter()
+                    .map(|c| c.1)
+                    .fold(f32::NEG_INFINITY, f32::max);
+                let active_len = active_beams[0].tokens.len().saturating_sub(1).max(1);
+                let active_penalty = ((5.0 + active_len as f32) / 6.0).powf(1.0);
+                let best_active_potential = active_beams[0].score / active_penalty;
+                if best_completed_score >= best_active_potential {
+                    break;
+                }
+            }
         }
 
-        let output_tokens = if decoder_input_ids.len() > 1 {
-            &decoder_input_ids[1..]
+        let best_tokens = if !completed_hypotheses.is_empty() {
+            completed_hypotheses
+                .sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            completed_hypotheses[0].0.clone()
+        } else {
+            active_beams[0].tokens.clone()
+        };
+
+        let output_tokens = if best_tokens.len() > 1 {
+            &best_tokens[1..]
         } else {
             &[]
         };

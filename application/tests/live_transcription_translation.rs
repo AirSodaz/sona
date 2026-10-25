@@ -243,19 +243,32 @@ async fn test_live_transcription_translation_enrichment() {
     tokio::time::sleep(Duration::from_millis(80)).await;
 
     let updates = observer.updates.lock().unwrap().clone();
-    assert!(updates.len() >= 3, "expected at least 3 updates");
+    assert!(
+        updates.len() >= 5,
+        "expected at least 5 updates (immediate + enriched + final)"
+    );
 
-    // Partial 1
-    let p1 = &updates[0].update.upsert_segments[0];
-    assert_eq!(p1.text, "I like to");
-    assert_eq!(p1.draft_translation, Some("我喜欢".into()));
-    assert_eq!(p1.translation, None);
+    // Partial 1 (immediate transcript broadcast with 0 latency)
+    let p1_immediate = &updates[0].update.upsert_segments[0];
+    assert_eq!(p1_immediate.text, "I like to");
+    assert_eq!(p1_immediate.translation, None);
 
-    // Partial 2
-    let p2 = &updates[1].update.upsert_segments[0];
-    assert_eq!(p2.text, "I like to read books");
-    assert_eq!(p2.translation, Some("我喜欢".into()));
-    assert_eq!(p2.draft_translation, Some("看书".into()));
+    // Partial 1 (translation enriched in background)
+    let p1_enriched = &updates[1].update.upsert_segments[0];
+    assert_eq!(p1_enriched.text, "I like to");
+    assert_eq!(p1_enriched.draft_translation, Some("我喜欢".into()));
+    assert_eq!(p1_enriched.translation, None);
+
+    // Partial 2 (immediate transcript broadcast with cached draft translation)
+    let p2_immediate = &updates[2].update.upsert_segments[0];
+    assert_eq!(p2_immediate.text, "I like to read books");
+    assert_eq!(p2_immediate.draft_translation, Some("我喜欢".into()));
+
+    // Partial 2 (translation enriched in background)
+    let p2_enriched = &updates[3].update.upsert_segments[0];
+    assert_eq!(p2_enriched.text, "I like to read books");
+    assert_eq!(p2_enriched.translation, Some("我喜欢".into()));
+    assert_eq!(p2_enriched.draft_translation, Some("看书".into()));
 
     // Final
     let f = updates

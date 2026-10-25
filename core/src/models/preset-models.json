@@ -3127,13 +3127,20 @@
         "filename": "target.spm",
         "sha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052",
         "sizeBytes": 804600
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "22c957348eed495ee925afc40a36da3e387c8a34a734c8486967c2dca271613e",
+        "sizeBytes": 1747795
       }
     ],
     "fileConfig": {
       "encoder": "encoder_model.onnx",
       "decoder": "decoder_model.onnx",
       "sourceSpm": "source.spm",
-      "targetSpm": "target.spm"
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
     }
   },
   {
@@ -3181,13 +3188,20 @@
         "filename": "target.spm",
         "sha256": "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855",
         "sizeBytes": 806530
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "08a119a1defd522fa047cb5e3bfe3e89633e96caa38ced0dc9cee7ef1021a011",
+        "sizeBytes": 1747906
       }
     ],
     "fileConfig": {
       "encoder": "encoder_model.onnx",
       "decoder": "decoder_model.onnx",
       "sourceSpm": "source.spm",
-      "targetSpm": "target.spm"
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
     }
   },
   {
@@ -3235,13 +3249,20 @@
         "filename": "target.spm",
         "sha256": "fe81460cde65383464718c26789ff8c5d818719c3f2c2c3cd36f42532579c56e",
         "sizeBytes": 1312134
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "475501ee1f35876ec50894ef34ef88e949cc92c688da24ccb26abcc3281c0256",
+        "sizeBytes": 1871214
       }
     ],
     "fileConfig": {
       "encoder": "encoder_model.onnx",
       "decoder": "decoder_model.onnx",
       "sourceSpm": "source.spm",
-      "targetSpm": "target.spm"
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
     }
   },
   {
@@ -3289,13 +3310,20 @@
         "filename": "target.spm",
         "sha256": "04bcec8d949fc7b2aacc38e428f297160457b373f3f85ad7c8faf391138d937b",
         "sizeBytes": 802604
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "113d3e0e68fab82b3061b2cd2fef598dbcfe2c3e5de71cd43d7b5b985243ddb8",
+        "sizeBytes": 938547
       }
     ],
     "fileConfig": {
       "encoder": "encoder_model.onnx",
       "decoder": "decoder_model.onnx",
       "sourceSpm": "source.spm",
-      "targetSpm": "target.spm"
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
     }
   }
 ]

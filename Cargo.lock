@@ -6873,6 +6873,7 @@ dependencies = [
  "ort",
  "ort-sys",
  "parking_lot",
+ "serde_json",
  "sona-core",
  "thiserror 2.0.21",
  "tokio",

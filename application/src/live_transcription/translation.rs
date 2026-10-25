@@ -59,6 +59,23 @@ impl StreamingTranslationCoordinator {
         self.states.lock().clear();
     }
 
+    pub fn fill_cached(&self, update: &mut TranscriptUpdate) {
+        let states = self.states.lock();
+        for segment in &mut update.upsert_segments {
+            if let Some(state) = states.get(&segment.id) {
+                if segment.translation.is_none() {
+                    let frozen = state.stabilizer.frozen_prefix();
+                    if !frozen.is_empty() {
+                        segment.translation = Some(frozen.to_string());
+                    }
+                }
+                if segment.draft_translation.is_none() {
+                    segment.draft_translation = state.last_draft_translation.clone();
+                }
+            }
+        }
+    }
+
     pub async fn enrich_update(&self, update: &mut TranscriptUpdate) {
         if !update.remove_ids.is_empty() {
             let mut states = self.states.lock();
