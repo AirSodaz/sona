@@ -137,7 +137,7 @@ impl StreamingTranslationCoordinator {
                                 .abs_diff(state.last_text.chars().count());
                             let elapsed = state.last_translate_time.elapsed();
                             let eligible = char_delta >= self.min_char_delta
-                                || elapsed >= Duration::from_millis(self.debounce_ms);
+                                && elapsed >= Duration::from_millis(self.debounce_ms);
                             if eligible {
                                 state.last_text = text.to_string();
                                 state.last_translate_time = Instant::now();
@@ -170,18 +170,11 @@ impl StreamingTranslationCoordinator {
                         Ok(translated_text) => {
                             let mut states = self.states.lock();
                             if let Some(entry) = states.get_mut(&segment.id) {
-                                if entry.last_text == text {
-                                    let out = entry.stabilizer.update(&translated_text, false);
-                                    entry.last_draft_translation = out.draft_tail.clone();
-                                    segment.translation = out.frozen_prefix;
-                                    segment.draft_translation = out.draft_tail;
-                                } else {
-                                    segment.translation =
-                                        Some(entry.stabilizer.frozen_prefix().to_string())
-                                            .filter(|s| !s.is_empty());
-                                    segment.draft_translation =
-                                        entry.last_draft_translation.clone();
-                                }
+                                let out = entry.stabilizer.update(&translated_text, false);
+                                entry.last_draft_translation = out.draft_tail.clone();
+                                entry.last_translate_time = Instant::now();
+                                segment.translation = out.frozen_prefix;
+                                segment.draft_translation = out.draft_tail;
                             }
                         }
                         Err(err) => {

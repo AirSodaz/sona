@@ -89,8 +89,20 @@ impl SentencePieceTokenizer {
     }
 
     pub fn set_vocab(&mut self, vocab: HashMap<String, u32>) {
+        const MAX_SUPPORTED_VOCAB_ID: u32 = 500_000;
         let max_id = vocab.values().copied().max().unwrap_or(0);
-        let mut id_to_vocab = vec![String::new(); (max_id as usize) + 1];
+        if max_id > MAX_SUPPORTED_VOCAB_ID {
+            log::error!(
+                "vocab max_id {} exceeds MAX_SUPPORTED_VOCAB_ID {}",
+                max_id,
+                MAX_SUPPORTED_VOCAB_ID
+            );
+            return;
+        }
+        let cap = (max_id as usize)
+            .checked_add(1)
+            .unwrap_or(MAX_SUPPORTED_VOCAB_ID as usize);
+        let mut id_to_vocab = vec![String::new(); cap];
         for (token, &id) in &vocab {
             if let Some(slot) = id_to_vocab.get_mut(id as usize) {
                 *slot = token.clone();
@@ -159,11 +171,9 @@ impl SentencePieceTokenizer {
                     .unwrap_or(1)
             };
             let max_l = effective_max_l.min(n - i);
-            let mut matched = false;
             for len in 1..=max_l {
                 let sub: String = chars[i..i + len].iter().collect();
                 if let Some(&token_id) = self.piece_to_id.get(&sub) {
-                    matched = true;
                     let score = self
                         .pieces
                         .get(token_id as usize)
@@ -176,8 +186,13 @@ impl SentencePieceTokenizer {
                 }
             }
 
-            if !matched && best_score[i + 1] == f32::NEG_INFINITY {
-                best_score[i + 1] = best_score[i] - 100.0;
+            let unk_score = self
+                .pieces
+                .get(spm_unk_id as usize)
+                .map_or(-100.0, |p| if p.score < 0.0 { p.score } else { -100.0 });
+            let unk_candidate = best_score[i] + unk_score;
+            if unk_candidate > best_score[i + 1] {
+                best_score[i + 1] = unk_candidate;
                 best_prev[i + 1] = (i, spm_unk_id);
             }
         }
@@ -566,5 +581,46 @@ mod tests {
         let token_ids = vec![5, 50000, 50001, 50002, 10, 0];
         let decoded = tokenizer.decode(&token_ids);
         assert_eq!(decoded, "早上好。");
+    }
+
+    #[test]
+    fn test_set_vocab_caps_at_max_supported() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        let mut vocab = HashMap::new();
+        vocab.insert("huge_id".to_string(), 1_000_000);
+        tokenizer.set_vocab(vocab);
+        assert!(tokenizer.id_to_vocab.is_none());
+        assert!(tokenizer.vocab_to_id.is_none());
+    }
+
+    #[test]
+    fn test_sentencepiece_unk_fallback_dp() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        tokenizer.pieces.push(PieceEntry {
+            piece: "</s>".to_string(),
+            score: 0.0,
+            piece_type: 0,
+        });
+        tokenizer.pieces.push(PieceEntry {
+            piece: "<unk>".to_string(),
+            score: -20.0,
+            piece_type: 0,
+        });
+        tokenizer.pieces.push(PieceEntry {
+            piece: "\u{2581}A".to_string(),
+            score: -1.0,
+            piece_type: 0,
+        });
+        tokenizer.piece_to_id.insert("</s>".to_string(), 0);
+        tokenizer.piece_to_id.insert("<unk>".to_string(), 1);
+        tokenizer.piece_to_id.insert("\u{2581}A".to_string(), 2);
+        tokenizer.eos_id = 0;
+        tokenizer.unk_id = 1;
+
+        // 'Z' is not in vocabulary, so it should fallback to <unk> via DP
+        let tokens = tokenizer.encode("A Z");
+        // Expect \u{2581}A (2), \u{2581} (unk: 1), Z (unk: 1), eos: 0
+        assert!(tokens.contains(&1));
+        assert_eq!(*tokens.last().unwrap(), 0);
     }
 }

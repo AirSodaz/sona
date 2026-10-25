@@ -116,7 +116,7 @@ export function TranscriptEditor(): React.JSX.Element {
   );
 
   const handleSaveTranslation = useCallback((id: string, translation: string) => {
-    updateTranscriptSegment(id, { translation });
+    updateTranscriptSegment(id, { translation, draftTranslation: undefined });
   }, []);
 
   const handleDelete = useCallback(

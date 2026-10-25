@@ -33,6 +33,14 @@ fn is_same_segment_content(
         && snapshot_segment.timing == current_segment.timing
         && snapshot_segment.translation.as_deref().unwrap_or_default()
             == current_segment.translation.as_deref().unwrap_or_default()
+        && snapshot_segment
+            .draft_translation
+            .as_deref()
+            .unwrap_or_default()
+            == current_segment
+                .draft_translation
+                .as_deref()
+                .unwrap_or_default()
 }
 
 fn segment_time_distance(

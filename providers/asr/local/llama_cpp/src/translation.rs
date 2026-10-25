@@ -47,7 +47,7 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
             return Ok(trimmed.to_string());
         }
         let system_prompt = format!(
-            "You are a professional real-time translator. Translate the following text from {source_lang} to {target_lang}. Output only the translation without any explanation, markdown formatting, or commentary."
+            "You are a professional real-time translator. Translate the text inside <text_to_translate> from {src} to {tgt}. Output only the translation without any explanation, markdown formatting, or commentary."
         );
 
         let request = LlmCompletionRequest {
@@ -65,9 +65,9 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
                 timeout_seconds: Some(30),
             },
             system_prompt: Some(system_prompt),
-            input: trimmed.to_string(),
+            input: format!("<text_to_translate>\n{trimmed}\n</text_to_translate>"),
             options: LlmCompletionOptions {
-                max_output_tokens: Some(256),
+                max_output_tokens: Some((trimmed.len() as u64).saturating_mul(2).clamp(256, 2048)),
                 ..Default::default()
             },
             source: None,

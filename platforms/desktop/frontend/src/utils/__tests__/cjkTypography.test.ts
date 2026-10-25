@@ -86,4 +86,11 @@ describe('needsWordBoundarySpace', () => {
     expect(needsWordBoundarySpace('안녕', 'world')).toBe(false);
     expect(needsWordBoundarySpace('hello', '안녕')).toBe(false);
   });
+
+  it('handles astral CJK characters and surrogate pairs without splitting', () => {
+    expect(needsWordBoundarySpace('𠮷', '野')).toBe(false);
+    expect(needsWordBoundarySpace('𠮷', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '𠮷')).toBe(false);
+    expect(needsWordBoundarySpace('𠮷', '𠮷')).toBe(false);
+  });
 });

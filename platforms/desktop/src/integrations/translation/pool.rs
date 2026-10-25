@@ -7,10 +7,14 @@ use std::sync::Arc;
 
 pub fn normalize_language_code(code: &str) -> &str {
     let trimmed = code.trim();
-    if trimmed.len() >= 2 {
-        let prefix = &trimmed[..2];
+    if trimmed.starts_with("中文") {
+        return "zh";
+    }
+    if let Some(prefix) = trimmed.get(..2) {
         if prefix.eq_ignore_ascii_case("zh")
-            || (trimmed.len() >= 3 && trimmed[..3].eq_ignore_ascii_case("cmn"))
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("cmn"))
         {
             return "zh";
         }
@@ -18,7 +22,9 @@ pub fn normalize_language_code(code: &str) -> &str {
             return "en";
         }
         if prefix.eq_ignore_ascii_case("ja")
-            || (trimmed.len() >= 3 && trimmed[..3].eq_ignore_ascii_case("jpn"))
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("jpn"))
         {
             return "ja";
         }
@@ -26,7 +32,12 @@ pub fn normalize_language_code(code: &str) -> &str {
     trimmed
 }
 
-type TranslationModelCache = Arc<RwLock<HashMap<(String, String), Arc<OnnxNmtAdapter>>>>;
+struct TranslationModelCacheInner {
+    models: HashMap<(String, String), Arc<OnnxNmtAdapter>>,
+    order: Vec<(String, String)>,
+}
+
+type TranslationModelCache = Arc<RwLock<TranslationModelCacheInner>>;
 
 pub struct TranslationModelPool {
     cache: TranslationModelCache,
@@ -41,7 +52,10 @@ impl Default for TranslationModelPool {
 impl TranslationModelPool {
     pub fn new() -> Self {
         Self {
-            cache: Arc::new(RwLock::new(HashMap::new())),
+            cache: Arc::new(RwLock::new(TranslationModelCacheInner {
+                models: HashMap::new(),
+                order: Vec::new(),
+            })),
         }
     }
 
@@ -59,7 +73,7 @@ impl TranslationModelPool {
         // Fast path: read lock
         {
             let cache = self.cache.read();
-            if let Some(adapter) = cache.get(&key) {
+            if let Some(adapter) = cache.models.get(&key) {
                 return Ok(Arc::clone(adapter));
             }
         }
@@ -103,17 +117,30 @@ impl TranslationModelPool {
         adapter.ensure_loaded()?;
 
         let mut cache = self.cache.write();
-        if let Some(existing) = cache.get(&key) {
-            Ok(Arc::clone(existing))
+        if let Some(existing) = cache.models.get(&key).cloned() {
+            if let Some(pos) = cache.order.iter().position(|k| k == &key) {
+                let k = cache.order.remove(pos);
+                cache.order.insert(0, k);
+            }
+            Ok(existing)
         } else {
-            cache.insert(key, Arc::clone(&adapter));
+            while cache.models.len() >= 2 {
+                if let Some(oldest) = cache.order.pop() {
+                    cache.models.remove(&oldest);
+                } else {
+                    break;
+                }
+            }
+            cache.order.insert(0, key.clone());
+            cache.models.insert(key, Arc::clone(&adapter));
             Ok(adapter)
         }
     }
 
     pub fn unload_all(&self) {
         let mut cache = self.cache.write();
-        cache.clear();
+        cache.models.clear();
+        cache.order.clear();
     }
 }
 
@@ -187,6 +214,7 @@ mod tests {
         assert_eq!(normalize_language_code("JA"), "ja");
         assert_eq!(normalize_language_code("jpn"), "ja");
         assert_eq!(normalize_language_code("fr"), "fr");
+        assert_eq!(normalize_language_code("中文"), "zh");
     }
 
     #[test]
@@ -215,5 +243,23 @@ mod tests {
             sona_core::ports::translation::TranslationPortErrorKind::InvalidLanguage
         );
         assert!(err.message.contains("No preset translation model found"));
+    }
+
+    #[test]
+    fn test_pool_unload_all() {
+        let pool = TranslationModelPool::new();
+        {
+            let mut cache = pool.cache.write();
+            cache.models.insert(
+                ("en".into(), "zh".into()),
+                Arc::new(OnnxNmtAdapter::new(None, 1)),
+            );
+            cache.order.push(("en".into(), "zh".into()));
+            assert_eq!(cache.models.len(), 1);
+        }
+        pool.unload_all();
+        let cache = pool.cache.read();
+        assert!(cache.models.is_empty());
+        assert!(cache.order.is_empty());
     }
 }

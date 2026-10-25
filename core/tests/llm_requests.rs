@@ -501,6 +501,7 @@ fn transcript_job_request_sanitize_for_task() {
     assert!(summary_req.target_language_name.is_none());
     assert_eq!(summary_req.source_language, None);
     assert!(summary_req.context.is_none());
+    assert!(summary_req.keywords.is_none());
     assert!(summary_req.mode.is_none());
     assert_eq!(
         summary_req.template.as_ref().map(|t| t.id.as_str()),

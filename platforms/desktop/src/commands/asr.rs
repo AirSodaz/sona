@@ -138,7 +138,7 @@ pub async fn start_native_live_transcription(
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
     configure_realtime_translation(&services, &app);
-    let lease = crate::integrations::audio::start_native_live_capture(
+    let lease = match crate::integrations::audio::start_native_live_capture(
         audio_arc,
         asr_arc,
         emitter,
@@ -149,7 +149,13 @@ pub async fn start_native_live_transcription(
         output_path,
     )
     .await
-    .map_err(AsrPortError::runtime)?;
+    {
+        Ok(lease) => lease,
+        Err(err) => {
+            services.asr.live_coordinator().set_translation(None);
+            return Err(AsrPortError::runtime(err));
+        }
+    };
     let segments_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
     let observer_inner =
         TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store());
@@ -269,6 +275,7 @@ pub async fn stop_live_transcription(
     };
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
     }
     {
         let mut guard = services.recording_session.lock().await;
@@ -335,6 +342,10 @@ pub async fn pause_native_live_transcription(
             session.paused_at_instant = Some(std::time::Instant::now());
             session.coordinator_released = true;
         }
+    }
+    if !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
     }
     res
 }

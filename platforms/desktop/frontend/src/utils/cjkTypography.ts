@@ -96,11 +96,11 @@ export function formatCjkTypography(text: string): string {
 export function needsWordBoundarySpace(prefix?: string | null, tail?: string | null): boolean {
   if (!prefix || !tail) return false;
   if (/\s$/.test(prefix) || /^\s/.test(tail)) return false;
-  const lastChar = prefix.slice(-1);
-  const firstChar = tail.slice(0, 1);
+  const lastChar = Array.from(prefix).pop() ?? '';
+  const firstChar = Array.from(tail)[0] ?? '';
   if (/^[.,!?;:)'"\]}、。，！？；：）】》」』”’]/.test(firstChar)) return false;
   if (/^[('"[{\u3008\u300a\u300c\u300e\uff08\u3010“‘]/.test(lastChar)) return false;
   const cjkRegex =
-    /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef\uac00-\ud7af\u1100-\u11ff\u3130-\u318f]/;
+    /[\u3000-\u303f\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uff00-\uffef\uac00-\ud7af\u1100-\u11ff\u3130-\u318f\p{Unified_Ideograph}\p{Script=Han}]/u;
   return !cjkRegex.test(lastChar) && !cjkRegex.test(firstChar);
 }

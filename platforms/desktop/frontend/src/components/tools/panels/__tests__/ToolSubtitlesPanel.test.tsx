@@ -64,6 +64,25 @@ describe('ToolSubtitlesPanel', () => {
 
     expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(true);
   });
+  it('falls back to bilingual mode when realtime translation is disabled while in translation mode', () => {
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        realtimeTranslationEnabled: true,
+        captionDisplayMode: 'translation',
+      },
+    }));
+
+    render(<ToolSubtitlesPanel />);
+
+    const switchBtn = screen.getByRole('switch', {
+      name: 'settings.enable_realtime_translation',
+    });
+    fireEvent.click(switchBtn);
+
+    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
+    expect(useConfigStore.getState().config.captionDisplayMode).toBe('bilingual');
+  });
 
   it('renders translation language pairs and swaps them on button click', () => {
     useConfigStore.setState((state) => ({
@@ -104,9 +123,9 @@ describe('ToolSubtitlesPanel', () => {
     expect(sourceDropdownTrigger).toBeDefined();
 
     fireEvent.click(sourceDropdownTrigger);
-    const jaOption = screen.getByText('日本語 (Japanese)');
-    fireEvent.click(jaOption);
-    expect(useConfigStore.getState().config.realtimeTranslationSourceLanguage).toBe('ja');
+    const zhOption = screen.getByRole('option', { name: '中文 (Chinese)' });
+    fireEvent.click(zhOption);
+    expect(useConfigStore.getState().config.realtimeTranslationSourceLanguage).toBe('zh');
 
     const targetDropdownTrigger = screen.getByRole('button', {
       name: 'settings.translation_target_language',
@@ -114,7 +133,7 @@ describe('ToolSubtitlesPanel', () => {
     expect(targetDropdownTrigger).toBeDefined();
 
     fireEvent.click(targetDropdownTrigger);
-    const enOption = screen.getByText('English');
+    const enOption = screen.getByRole('option', { name: 'English' });
     fireEvent.click(enOption);
     expect(useConfigStore.getState().config.realtimeTranslationTargetLanguage).toBe('en');
   });

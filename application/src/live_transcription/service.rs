@@ -992,6 +992,9 @@ impl CoordinatorInner {
                 for s in &event.update.upsert_segments {
                     if s.is_final {
                         versions.remove(&s.id);
+                    } else {
+                        let v = versions.entry(s.id.clone()).or_insert(0);
+                        *v += 1;
                     }
                 }
                 for id in &event.update.remove_ids {

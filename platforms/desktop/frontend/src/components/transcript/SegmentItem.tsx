@@ -123,10 +123,9 @@ export function SegmentItem({
   const handleSaveTranslation = useCallback(
     (text: string) => {
       const trimmed = text.trim();
+      updateTranscriptSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
       if (onSaveTranslation) {
         onSaveTranslation(segment.id, trimmed);
-      } else {
-        updateTranscriptSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
       }
       setIsEditingTranslation(false);
     },

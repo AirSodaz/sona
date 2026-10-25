@@ -132,6 +132,14 @@ impl TestSession {
                 },
             });
     }
+    fn emit_update(&self, update: TranscriptUpdate, is_final: bool) {
+        self.observer
+            .on_transcript_update(&AsrTranscriptUpdateEvent {
+                instance_id: self.id.clone(),
+                stage: if is_final { "final" } else { "partial" }.to_string(),
+                update,
+            });
+    }
 }
 
 #[async_trait]
@@ -472,5 +480,83 @@ async fn test_concurrent_partial_updates_do_not_stampede() {
         translation_engine.call_count(),
         1,
         "Concurrent partials must not stampede translation engine"
+    );
+}
+
+#[tokio::test]
+async fn test_mixed_update_invalidates_stale_partial() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(Arc::clone(&translation_engine) as _, "en", "zh")
+            .with_debounce(10, 1),
+    );
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-mixed",
+            LiveSourceEpoch::new("src-mixed", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Make partial translation take 80ms
+    translation_engine.set_delay(Duration::from_millis(80));
+
+    // 1. Emit partial for seg-2: "Hello" (triggers background worker with 80ms delay)
+    session.emit_update(
+        TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: vec![make_segment("seg-2", "Hello", false)],
+        },
+        false,
+    );
+    tokio::time::sleep(Duration::from_millis(15)).await;
+
+    // 2. Remove delay so subsequent translations are fast
+    *translation_engine.delay.lock().unwrap() = None;
+
+    // 3. Emit mixed update: seg-1 (final) and seg-2 (new partial "Hello world")
+    session.emit_update(
+        TranscriptUpdate {
+            remove_ids: Vec::new(),
+            upsert_segments: vec![
+                make_segment("seg-1", "I like to read books every day.", true),
+                make_segment("seg-2", "Hello world", false),
+            ],
+        },
+        true,
+    );
+
+    // 4. Wait for the initial 80ms partial task to finish
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    // Find any updates emitted after the mixed update
+    // seg-2 must NOT have reverted to "Hello"
+    let last_seg2 = updates
+        .iter()
+        .rev()
+        .find_map(|u| u.update.upsert_segments.iter().find(|s| s.id == "seg-2"))
+        .expect("seg-2 must exist");
+
+    assert_eq!(
+        last_seg2.text, "Hello world",
+        "seg-2 must not be reverted to stale partial 'Hello'"
     );
 }

@@ -198,7 +198,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                     let norm_target = crate::integrations::translation::normalize_language_code(
                         &request.target_language,
                     );
-                    if norm_detected.eq_ignore_ascii_case(norm_target) {
+                    if norm_detected.eq_ignore_ascii_case(norm_target) && model_src.is_some() {
                         model_src.clone()
                     } else {
                         Some(detected)

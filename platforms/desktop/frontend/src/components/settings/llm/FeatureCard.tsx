@@ -168,7 +168,7 @@ export function FeatureCard({
   const modelEntryHasTemp = modelEntry?.metadata?.supportsTemperature !== undefined;
 
   useEffect(() => {
-    if (isAutoNmtSelected) return;
+    if (isAutoNmtSelected || modelEntry?.model?.startsWith('opus-mt-')) return;
     if (!modelEntryId || !selectedModel || !selectedProvider) return;
     if (selectedProvider === 'google_translate' || selectedProvider === 'google_translate_free') {
       return;
@@ -208,6 +208,7 @@ export function FeatureCard({
   }, [
     applyTrackedLlmSettings,
     isAutoNmtSelected,
+    modelEntry?.model,
     modelEntryHasReasoning,
     modelEntryHasTemp,
     modelEntryId,
@@ -553,7 +554,9 @@ export function FeatureCard({
     if (localProvider === 'local' && hasLoadedCandidates && !isLoadingCandidates) {
       const isAutoNmt =
         featureId === 'translation' &&
-        (modelEntry?.model === 'auto' || modelEntry?.model === AUTO_NMT_LABEL);
+        (modelEntry?.model === 'auto' ||
+          modelEntry?.model === AUTO_NMT_LABEL ||
+          modelEntry?.model?.startsWith('opus-mt-'));
       if (
         modelEntry?.provider === 'local' &&
         modelEntry.model &&
@@ -568,7 +571,9 @@ export function FeatureCard({
         localModelName &&
         !(
           featureId === 'translation' &&
-          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto')
+          (localModelName === AUTO_NMT_LABEL ||
+            localModelName === 'auto' ||
+            localModelName.startsWith('opus-mt-'))
         ) &&
         !modelCandidates.includes(localModelName)
       ) {
@@ -602,12 +607,14 @@ export function FeatureCard({
     const isAutoNmt =
       providerToSave === 'local' &&
       featureId === 'translation' &&
-      (trimmedModel === AUTO_NMT_LABEL || trimmedModel === 'auto');
+      (trimmedModel === AUTO_NMT_LABEL ||
+        trimmedModel === 'auto' ||
+        trimmedModel.startsWith('opus-mt-'));
 
     if (providerToSave === 'local' && !isAutoNmt && !modelCandidates.includes(trimmedModel)) {
       return;
     }
-    const modelToPersist = isAutoNmt ? 'auto' : trimmedModel;
+    const modelToPersist = trimmedModel === AUTO_NMT_LABEL ? 'auto' : trimmedModel;
     const latestLlmState = latestLlmStateRef.current;
     let nextState = addLlmModel(latestLlmState, {
       provider: providerToSave,
@@ -697,7 +704,9 @@ export function FeatureCard({
       if (localProvider === 'local') {
         const isAutoNmt =
           featureId === 'translation' &&
-          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto');
+          (localModelName === AUTO_NMT_LABEL ||
+            localModelName === 'auto' ||
+            localModelName.startsWith('opus-mt-'));
         if (!isAutoNmt && !modelCandidates.includes(localModelName)) {
           setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
           return;
@@ -749,7 +758,9 @@ export function FeatureCard({
       if (localProvider === 'local') {
         const isAutoNmt =
           featureId === 'translation' &&
-          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto');
+          (localModelName === AUTO_NMT_LABEL ||
+            localModelName === 'auto' ||
+            localModelName.startsWith('opus-mt-'));
         if (!isAutoNmt && !modelCandidates.includes(localModelName)) {
           setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
           return;

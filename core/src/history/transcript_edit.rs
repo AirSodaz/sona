@@ -51,6 +51,7 @@ pub fn apply_transcript_edit(
         } => {
             let segment = find_segment_mut(&mut segments, &segment_id)?;
             segment.translation = optional_text(translation);
+            segment.draft_translation = None;
         }
         TranscriptEditOperation::Delete { segment_id } => {
             let index = find_segment_index(&segments, &segment_id)?;

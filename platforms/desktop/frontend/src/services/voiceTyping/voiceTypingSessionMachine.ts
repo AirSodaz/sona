@@ -403,7 +403,7 @@ export class VoiceTypingSessionMachine {
     }
 
     if (this.isTranslateSession) {
-      const rawFullText = this.accumulatedPolishText.join('').trim() || this.currentText.trim();
+      const rawFullText = this.currentText.trim() || this.accumulatedPolishText.join('').trim();
       if (rawFullText) {
         const mode = this.options.getProcessingMode?.() || 'raw';
         let intermediateText = rawFullText;
@@ -718,12 +718,15 @@ export class VoiceTypingSessionMachine {
 
     const mode = this.options.getProcessingMode?.() || 'raw';
     if (this.isTranslateSession) {
-      if (segment.translation) {
-        this.latestStreamTranslation = segment.translation;
+      if (segment.isFinal) {
+        this.latestStreamTranslation = segment.translation ?? null;
+        this.latestStreamDraftTranslation = null;
+      } else {
+        if (segment.translation) {
+          this.latestStreamTranslation = segment.translation;
+        }
+        this.latestStreamDraftTranslation = segment.draftTranslation ?? null;
       }
-      this.latestStreamDraftTranslation = segment.isFinal
-        ? null
-        : (segment.draftTranslation ?? null);
     }
 
     if (this.selectionContext || mode === 'polish' || this.isTranslateSession) {

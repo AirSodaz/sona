@@ -941,7 +941,7 @@ export function SettingsSubtitleTab({
   const captionDisplayMode = config.captionDisplayMode || 'bilingual';
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
-  const translationLanguages = useMemo(
+  const sourceLanguages = useMemo(
     () => [
       { value: 'zh', label: '中文 (Chinese)' },
       { value: 'en', label: 'English' },
@@ -949,6 +949,40 @@ export function SettingsSubtitleTab({
     ],
     []
   );
+
+  const targetLanguages = useMemo(() => {
+    if (realtimeTranslationSourceLanguage === 'zh') {
+      return [
+        { value: 'en', label: 'English' },
+        { value: 'ja', label: '日本語 (Japanese)' },
+      ];
+    }
+    return [{ value: 'zh', label: '中文 (Chinese)' }];
+  }, [realtimeTranslationSourceLanguage]);
+
+  const handleSourceLanguageChange = (val: string) => {
+    const updates: Record<string, unknown> = { realtimeTranslationSourceLanguage: val };
+    if (val === 'en' || val === 'ja') {
+      updates.realtimeTranslationTargetLanguage = 'zh';
+    } else if (val === 'zh' && realtimeTranslationTargetLanguage === 'zh') {
+      updates.realtimeTranslationTargetLanguage = 'en';
+    }
+    updateConfig(updates);
+  };
+
+  const handleSwapLanguages = () => {
+    const nextSrc = realtimeTranslationTargetLanguage;
+    let nextTgt = realtimeTranslationSourceLanguage;
+    if (nextSrc === 'en' || nextSrc === 'ja') {
+      nextTgt = 'zh';
+    } else if (nextSrc === 'zh' && nextTgt === 'zh') {
+      nextTgt = 'en';
+    }
+    updateConfig({
+      realtimeTranslationSourceLanguage: nextSrc,
+      realtimeTranslationTargetLanguage: nextTgt,
+    });
+  };
 
   const displayModeOptions = useMemo(
     () => [
@@ -1104,7 +1138,16 @@ export function SettingsSubtitleTab({
             >
               <Switch
                 checked={realtimeTranslationEnabled}
-                onChange={(enabled) => updateConfig({ realtimeTranslationEnabled: enabled })}
+                onChange={(enabled) => {
+                  if (!enabled && captionDisplayMode === 'translation') {
+                    updateConfig({
+                      realtimeTranslationEnabled: false,
+                      captionDisplayMode: 'bilingual',
+                    });
+                  } else {
+                    updateConfig({ realtimeTranslationEnabled: enabled });
+                  }
+                }}
               />
             </SettingsItem>
 
@@ -1125,9 +1168,9 @@ export function SettingsSubtitleTab({
                       aria-label={t('settings.translation_source_language', {
                         defaultValue: 'Translation Source Language',
                       })}
-                      options={translationLanguages}
+                      options={sourceLanguages}
                       value={realtimeTranslationSourceLanguage}
-                      onChange={(val) => updateConfig({ realtimeTranslationSourceLanguage: val })}
+                      onChange={handleSourceLanguageChange}
                       style={{ width: '150px' }}
                     />
                     <button
@@ -1137,12 +1180,7 @@ export function SettingsSubtitleTab({
                         defaultValue: 'Swap languages',
                       })}
                       className="btn btn-secondary"
-                      onClick={() =>
-                        updateConfig({
-                          realtimeTranslationSourceLanguage: realtimeTranslationTargetLanguage,
-                          realtimeTranslationTargetLanguage: realtimeTranslationSourceLanguage,
-                        })
-                      }
+                      onClick={handleSwapLanguages}
                       title={t('settings.swap_translation_languages', {
                         defaultValue: 'Swap languages',
                       })}
@@ -1160,8 +1198,14 @@ export function SettingsSubtitleTab({
                       aria-label={t('settings.translation_target_language', {
                         defaultValue: 'Translation Target Language',
                       })}
-                      options={translationLanguages}
-                      value={realtimeTranslationTargetLanguage}
+                      options={targetLanguages}
+                      value={
+                        targetLanguages.some(
+                          (opt) => opt.value === realtimeTranslationTargetLanguage
+                        )
+                          ? realtimeTranslationTargetLanguage
+                          : targetLanguages[0].value
+                      }
                       onChange={(val) => updateConfig({ realtimeTranslationTargetLanguage: val })}
                       style={{ width: '150px' }}
                     />
@@ -1263,9 +1307,14 @@ export function SettingsSubtitleTab({
                   max="72"
                   step="1"
                   value={captionTranslationFontSize}
-                  onChange={(e) =>
-                    updateConfig({ captionTranslationFontSize: Number(e.target.value) })
-                  }
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (!Number.isNaN(parsed)) {
+                      updateConfig({
+                        captionTranslationFontSize: Math.max(12, Math.min(72, parsed)),
+                      });
+                    }
+                  }}
                   className="settings-input"
                   style={{ width: '100px', textAlign: 'center' }}
                   aria-label={t('live.translation_font_size', {

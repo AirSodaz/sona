@@ -134,7 +134,13 @@ impl OnnxNmtModel {
             ));
         };
 
-        let input_ids = self.source_tokenizer.encode(trimmed);
+        let mut input_ids = self.source_tokenizer.encode(trimmed);
+        const MAX_POS_EMBED: usize = 512;
+        if input_ids.len() > MAX_POS_EMBED {
+            let eos = self.source_tokenizer.eos_id as i64;
+            input_ids.truncate(MAX_POS_EMBED - 1);
+            input_ids.push(eos);
+        }
         let seq_len = input_ids.len();
 
         let input_ids_array = ndarray::Array2::from_shape_vec((1, seq_len), input_ids.clone())
@@ -339,7 +345,7 @@ impl OnnxNmtModel {
             all_candidates.truncate(beam_size);
             active_beams = all_candidates;
 
-            if completed_hypotheses.len() >= beam_size {
+            if !completed_hypotheses.is_empty() {
                 let best_completed_score = completed_hypotheses
                     .iter()
                     .map(|c| c.1)
@@ -347,7 +353,9 @@ impl OnnxNmtModel {
                 let active_len = active_beams[0].tokens.len().saturating_sub(1).max(1);
                 let active_penalty = ((5.0 + active_len as f32) / 6.0).powf(1.0);
                 let best_active_potential = active_beams[0].score / active_penalty;
-                if best_completed_score >= best_active_potential {
+                if completed_hypotheses.len() >= beam_size
+                    || best_completed_score >= best_active_potential
+                {
                     break;
                 }
             }
