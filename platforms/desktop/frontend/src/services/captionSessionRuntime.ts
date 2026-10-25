@@ -108,7 +108,7 @@ async function closeCaptionWindow(): Promise<void> {
   try {
     await captionWindowService.close();
   } catch (error) {
-    logger.error('Error:', error);
+    logger.debug('[CaptionSession] Failed to close caption window:', error);
   }
 }
 
@@ -332,7 +332,11 @@ class CaptionSessionRuntime {
 
     await closeCaptionWindow();
 
-    await this.activeService.stop();
+    try {
+      await this.activeService.stop();
+    } catch (error) {
+      logger.warn('[CaptionSession] Error while stopping active service:', error);
+    }
     this.usingNativeCapture = false;
 
     clearNativePeakListener(this.systemAudioUnlisten);
@@ -352,6 +356,11 @@ class CaptionSessionRuntime {
   }
 
   async restartRecognizer(): Promise<void> {
+    if (!this.isRunning()) {
+      logger.debug('[CaptionSession] Skipping restartRecognizer because session is not running');
+      return;
+    }
+
     const captionService = captionTranscriptionService;
     this.activeService = captionService;
     await captionService.restartStream();

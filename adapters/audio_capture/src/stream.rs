@@ -131,7 +131,7 @@ pub fn open_device_stream(
 mod tests {
     use super::*;
     use cpal::traits::HostTrait;
-    use ringbuf::traits::Split;
+    use ringbuf::traits::{Consumer, Split};
 
     #[test]
     fn test_build_stream_rejects_zero_or_excessive_channels() {
@@ -156,6 +156,31 @@ mod tests {
                 ),
                 Err(AudioCaptureError::ConfigFailed(_))
             ));
+        }
+    }
+
+    #[test]
+    fn test_loopback_output_capture() {
+        use cpal::traits::StreamTrait;
+        let host = cpal::default_host();
+        if let Some(device) = host.default_output_device() {
+            let rb = ringbuf::HeapRb::<f32>::new(4096);
+            let (prod, mut cons) = rb.split();
+            let res = open_device_stream(
+                &device,
+                CaptureDirection::Output,
+                prod,
+                || {},
+                |_err| {},
+                Arc::new(AtomicBool::new(false)),
+            );
+            if let Ok((stream, _config, _format)) = res {
+                assert!(stream.play().is_ok());
+                std::thread::sleep(std::time::Duration::from_millis(150));
+                let mut buf = [0.0f32; 256];
+                let popped = cons.pop_slice(&mut buf);
+                assert!(popped > 0);
+            }
         }
     }
 }

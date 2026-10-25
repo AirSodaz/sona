@@ -3,6 +3,7 @@ import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
+import { logger } from '../utils/logger';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import type { AsrTranscriptionRequest } from './asrConfigService';
 import { buildRecognizerOutputEvent, TauriEvent } from './tauri/events';
@@ -187,6 +188,11 @@ export class TranscriptionService {
     if (this.transport === 'external') {
       try {
         await this.lifecycle.stopExternal();
+      } catch (error) {
+        logger.warn(
+          `[TranscriptionService] Failed to stop external transcription for ${this.instanceId}:`,
+          error
+        );
       } finally {
         this.runningConfig = null;
         this.transport = 'idle';
@@ -196,6 +202,11 @@ export class TranscriptionService {
     if (this.transport === 'native' && this.nativeSourceKind) {
       try {
         await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+      } catch (error) {
+        logger.warn(
+          `[TranscriptionService] Failed to stop native live transcription for ${this.instanceId}:`,
+          error
+        );
       } finally {
         this.lifecycle.markStopped();
         this.runningConfig = null;
@@ -287,16 +298,28 @@ export class TranscriptionService {
     }
     await prepareLiveTranscription(config);
     if (this.transport === 'native' && this.nativeSourceKind) {
-      await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
-      this.lifecycle.markStopped();
-      this.runningConfig = config;
-      await resumeNativeLiveTranscription({
-        consumerId: this.instanceId,
-        sourceKind: this.nativeSourceKind,
-        gain: this.nativeGain,
-        asrRequest: config,
-      });
-      this.lifecycle.markNativeRunning();
+      try {
+        await pauseNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
+        this.lifecycle.markStopped();
+        this.runningConfig = config;
+        await resumeNativeLiveTranscription({
+          consumerId: this.instanceId,
+          sourceKind: this.nativeSourceKind,
+          gain: this.nativeGain,
+          asrRequest: config,
+        });
+        this.lifecycle.markNativeRunning();
+      } catch (error) {
+        this.lifecycle.markStopped();
+        this.runningConfig = null;
+        this.transport = 'idle';
+        this.nativeSourceKind = null;
+        logger.warn(
+          `[TranscriptionService] Failed to restart native stream for ${this.instanceId}:`,
+          error
+        );
+        throw error;
+      }
       return;
     }
     if (this.transport === 'external') {

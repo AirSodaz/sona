@@ -264,7 +264,7 @@ describe('useCaptionSession', () => {
     );
 
     await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
-    transcriptionServiceMocks.captionRestart.mockClear();
+    expect(transcriptionServiceMocks.captionRestart).not.toHaveBeenCalled();
 
     const updatedConfig = {
       ...defaultConfig,
@@ -285,7 +285,7 @@ describe('useCaptionSession', () => {
     );
 
     await waitFor(() => expect(captionWindowService.open).toHaveBeenCalled());
-    captionWindowService.updateStyle.mockClear();
+    vi.mocked(captionWindowService.updateStyle).mockClear();
 
     const updatedConfig = {
       ...defaultConfig,

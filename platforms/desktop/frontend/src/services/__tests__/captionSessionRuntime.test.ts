@@ -164,4 +164,8 @@ describe('captionSessionRuntime', () => {
     expect(unlisten).toHaveBeenCalledTimes(1);
     expect(captionWindowService.close).toHaveBeenCalledTimes(1);
   });
+  it('skips restartRecognizer when the caption session is not running', async () => {
+    await captionSessionRuntime.restartRecognizer();
+    expect(transcriptionServiceMocks.captionRestart).not.toHaveBeenCalled();
+  });
 });

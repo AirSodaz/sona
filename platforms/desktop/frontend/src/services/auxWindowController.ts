@@ -147,7 +147,14 @@ export class AuxWindowController<T extends object> {
               error,
             }
           );
-          await windowInstance.setFocus();
+          try {
+            await windowInstance.setFocus();
+          } catch (fallbackError) {
+            logger.warn('[AuxWindowController] Failed to focus window via setFocus fallback', {
+              label: this.options.label,
+              error: fallbackError,
+            });
+          }
         }
       }
       return;
@@ -182,7 +189,14 @@ export class AuxWindowController<T extends object> {
             label: this.options.label,
             error,
           });
-          await resolvedWindow.windowInstance.setFocus();
+          try {
+            await resolvedWindow.windowInstance.setFocus();
+          } catch (fallbackError) {
+            logger.warn('[AuxWindowController] Failed to focus new window via setFocus fallback', {
+              label: this.options.label,
+              error: fallbackError,
+            });
+          }
         }
       }
       return resolvedWindow.windowInstance;
@@ -205,10 +219,17 @@ export class AuxWindowController<T extends object> {
     if (!windowInstance) {
       return;
     }
-
-    await windowInstance.close();
-    if (this.windowInstance === windowInstance) {
-      this.windowInstance = null;
+    try {
+      await windowInstance.close();
+    } catch (error) {
+      logger.debug('[AuxWindowController] Window close ignored or failed', {
+        label: this.options.label,
+        error,
+      });
+    } finally {
+      if (this.windowInstance === windowInstance) {
+        this.windowInstance = null;
+      }
     }
   }
 

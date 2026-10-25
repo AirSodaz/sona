@@ -486,6 +486,11 @@ pub async fn stop_native_live_transcription(
                 };
                 if let Some(path) = cached_path {
                     Ok(path)
+                } else if err.contains("is not active") {
+                    log::warn!(
+                        "[ASR] Stop native live capture for '{consumer_id}' found instance already inactive: {err}"
+                    );
+                    Ok(String::new())
                 } else {
                     Err(AsrPortError::runtime(err))
                 }
