@@ -56,7 +56,8 @@ export type ModelCatalogModelType =
   | 'speaker-embedding'
   | 'omnilingual'
   | 'alignment'
-  | 'canary';
+  | 'canary'
+  | 'onnx-nmt';
 
 export interface ModelInfo {
   id: string;
@@ -72,7 +73,7 @@ export interface ModelInfo {
   isRecommended?: boolean;
   isArchive?: boolean;
   filename?: string;
-  engine: 'sherpa-onnx' | 'llama-cpp';
+  engine: 'sherpa-onnx' | 'llama-cpp' | 'onnx-nmt';
   ratings?: ModelRatings;
   labels?: ModelLabel[];
   rules?: ModelRules;

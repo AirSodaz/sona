@@ -187,6 +187,7 @@ mod tests {
             timestamps: Some(vec![0.0, 0.5, 1.0, 1.5]),
             durations: Some(vec![0.5; 4]),
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         };
@@ -220,6 +221,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         };

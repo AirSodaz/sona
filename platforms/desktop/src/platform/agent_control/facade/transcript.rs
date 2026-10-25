@@ -107,6 +107,7 @@ pub async fn edit_transcript(
                 timestamps,
                 durations,
                 translation,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             }
@@ -245,6 +246,7 @@ pub async fn patch_segments(
             timestamps: None,
             durations: None,
             translation,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         });

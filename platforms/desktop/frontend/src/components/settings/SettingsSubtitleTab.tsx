@@ -1,9 +1,11 @@
 import {
   Activity,
+  ArrowLeftRight,
   Check,
   Copy,
   History,
   Keyboard,
+  Languages,
   Layers,
   Plus,
   Search,
@@ -931,7 +933,61 @@ export function SettingsSubtitleTab({
   const captionFontColor = config.captionFontColor || '#ffffff';
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
+  const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
+  const realtimeTranslationSourceLanguage = config.realtimeTranslationSourceLanguage || 'en';
+  const realtimeTranslationTargetLanguage = config.realtimeTranslationTargetLanguage || 'zh';
+  const captionDisplayMode = config.captionDisplayMode || 'bilingual';
+  const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
+  const translationLanguages = useMemo(
+    () => [
+      { value: 'zh', label: '中文 (Chinese)' },
+      { value: 'en', label: 'English' },
+      { value: 'ja', label: '日本語 (Japanese)' },
+      { value: 'ko', label: '한국어 (Korean)' },
+      { value: 'fr', label: 'Français (French)' },
+      { value: 'es', label: 'Español (Spanish)' },
+      { value: 'de', label: 'Deutsch (German)' },
+      { value: 'ru', label: 'Русский (Russian)' },
+    ],
+    []
+  );
+
+  const displayModeOptions = useMemo(
+    () => [
+      {
+        value: 'bilingual',
+        label: t('settings.caption_mode_bilingual', {
+          defaultValue: 'Bilingual (Original & Translation)',
+        }),
+      },
+      {
+        value: 'translation',
+        label: t('settings.caption_mode_translation', { defaultValue: 'Translation Only' }),
+      },
+      {
+        value: 'original',
+        label: t('settings.caption_mode_original', { defaultValue: 'Original Only' }),
+      },
+    ],
+    [t]
+  );
+
+  const bilingualOrderOptions = useMemo(
+    () => [
+      {
+        value: 'original_first',
+        label: t('settings.caption_order_original_first', { defaultValue: 'Original on Top' }),
+      },
+      {
+        value: 'translation_first',
+        label: t('settings.caption_order_translation_first', {
+          defaultValue: 'Translation on Top',
+        }),
+      },
+    ],
+    [t]
+  );
   return (
     <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
       <SettingsPageHeader
@@ -1028,6 +1084,117 @@ export function SettingsSubtitleTab({
                 onChange={(enabled) => updateConfig({ lockWindow: enabled })}
               />
             </SettingsItem>
+          </SettingsSection>
+
+          <SettingsSection
+            id="settings-subtitle-translation"
+            title={t('settings.subtitle_realtime_translation_title', {
+              defaultValue: 'Real-time Bilingual Translation',
+            })}
+            icon={<Languages size={20} />}
+            description={t('settings.subtitle_realtime_translation_desc', {
+              defaultValue:
+                'On-device neural translation for live captions with local agreement stabilization.',
+            })}
+          >
+            <SettingsItem
+              title={t('settings.enable_realtime_translation', {
+                defaultValue: 'Enable Real-time Translation',
+              })}
+              hint={t('settings.enable_realtime_translation_hint', {
+                defaultValue: 'Translate spoken subtitles in real time as speech is recognized.',
+              })}
+            >
+              <Switch
+                checked={realtimeTranslationEnabled}
+                onChange={(enabled) => updateConfig({ realtimeTranslationEnabled: enabled })}
+              />
+            </SettingsItem>
+
+            {realtimeTranslationEnabled && (
+              <>
+                <SettingsItem
+                  title={t('settings.translation_language_pair', {
+                    defaultValue: 'Language Pair',
+                  })}
+                  hint={t('settings.translation_language_pair_hint', {
+                    defaultValue: 'Translate from source language to target language.',
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Dropdown
+                      options={translationLanguages}
+                      value={realtimeTranslationSourceLanguage}
+                      onChange={(val) => updateConfig({ realtimeTranslationSourceLanguage: val })}
+                      style={{ width: '150px' }}
+                    />
+                    <button
+                      type="button"
+                      className="btn btn-secondary"
+                      onClick={() =>
+                        updateConfig({
+                          realtimeTranslationSourceLanguage: realtimeTranslationTargetLanguage,
+                          realtimeTranslationTargetLanguage: realtimeTranslationSourceLanguage,
+                        })
+                      }
+                      title={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
+                      style={{
+                        padding: '6px 10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <ArrowLeftRight size={14} />
+                    </button>
+                    <Dropdown
+                      options={translationLanguages}
+                      value={realtimeTranslationTargetLanguage}
+                      onChange={(val) => updateConfig({ realtimeTranslationTargetLanguage: val })}
+                      style={{ width: '150px' }}
+                    />
+                  </div>
+                </SettingsItem>
+
+                <SettingsItem
+                  title={t('settings.caption_display_mode', {
+                    defaultValue: 'Display Mode',
+                  })}
+                >
+                  <Dropdown
+                    options={displayModeOptions}
+                    value={captionDisplayMode}
+                    onChange={(val) =>
+                      updateConfig({
+                        captionDisplayMode: val as 'bilingual' | 'translation' | 'original',
+                      })
+                    }
+                    style={{ width: '260px' }}
+                  />
+                </SettingsItem>
+
+                {captionDisplayMode === 'bilingual' && (
+                  <SettingsItem
+                    title={t('settings.caption_bilingual_order', {
+                      defaultValue: 'Bilingual Order',
+                    })}
+                  >
+                    <Dropdown
+                      options={bilingualOrderOptions}
+                      value={captionBilingualOrder}
+                      onChange={(val) =>
+                        updateConfig({
+                          captionBilingualOrder: val as 'original_first' | 'translation_first',
+                        })
+                      }
+                      style={{ width: '200px' }}
+                    />
+                  </SettingsItem>
+                )}
+              </>
+            )}
           </SettingsSection>
 
           <SettingsSection

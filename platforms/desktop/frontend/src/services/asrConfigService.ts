@@ -1,6 +1,7 @@
 import type {
   AsrTranscriptionRequest,
   AsrTranscriptionRequestBase,
+  LocalAsrEngine,
   OnlineAsrProviderRequest,
   TranscriptPostprocessOptions,
 } from '../types/asr';
@@ -260,7 +261,9 @@ export class AsrConfigService {
     return {
       ...baseRequest,
       engine: 'local',
-      localEngine: modelInfo?.engine ?? 'sherpa-onnx',
+      localEngine: (modelInfo?.engine === 'llama-cpp'
+        ? 'llama-cpp'
+        : 'sherpa-onnx') as LocalAsrEngine,
       modelId: selection.modelId ?? modelInfo?.id ?? null,
       modelPath: selection.modelPath,
       numThreads: 4,

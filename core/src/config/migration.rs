@@ -539,6 +539,57 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
                 0.6
             )),
         ),
+        (
+            "captionDisplayMode",
+            json!(string_or_default(
+                &parsed,
+                "captionDisplayMode",
+                "bilingual"
+            )),
+        ),
+        (
+            "captionBilingualOrder",
+            json!(string_or_default(
+                &parsed,
+                "captionBilingualOrder",
+                "original_first"
+            )),
+        ),
+        (
+            "realtimeTranslationEnabled",
+            json!(bool_at(&parsed, "realtimeTranslationEnabled").unwrap_or(false)),
+        ),
+        (
+            "realtimeTranslationSourceLanguage",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationSourceLanguage",
+                "en"
+            )),
+        ),
+        (
+            "realtimeTranslationTargetLanguage",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationTargetLanguage",
+                "zh"
+            )),
+        ),
+        (
+            "realtimeTranslationEngine",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationEngine",
+                "onnx"
+            )),
+        ),
+        (
+            "realtimeTranslationModelId",
+            parsed
+                .get("realtimeTranslationModelId")
+                .and_then(Value::as_str)
+                .map_or(Value::Null, |v| json!(v)),
+        ),
         ("llmSettings", ensure_llm_state(&parsed)),
         (
             "summaryEnabled",
@@ -635,6 +686,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "voiceTypingMode",
             json!(string_or_default(&parsed, "voiceTypingMode", "hold")),
+        ),
+        (
+            "voiceTypingRealtimePreview",
+            json!(bool_at(&parsed, "voiceTypingRealtimePreview").unwrap_or(true)),
         ),
         (
             "httpServerEnabled",
@@ -864,6 +919,8 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "mcpAllowModelManagement",
         "mcpNotifyOnMutation",
         "mcpAuditLogEnabled",
+        "realtimeTranslationEnabled",
+        "voiceTypingRealtimePreview",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }
@@ -914,6 +971,19 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         value
             .as_str()
             .is_some_and(|mode| matches!(mode, "full" | "read_only" | "granular"))
+    });
+    repair_field_type(config, &defaults, "captionDisplayMode", |value| {
+        value
+            .as_str()
+            .is_some_and(|m| matches!(m, "bilingual" | "translation" | "original"))
+    });
+    repair_field_type(config, &defaults, "captionBilingualOrder", |value| {
+        value
+            .as_str()
+            .is_some_and(|o| matches!(o, "original_first" | "translation_first"))
+    });
+    repair_field_type(config, &defaults, "realtimeTranslationModelId", |value| {
+        value.is_null() || value.as_str().is_some()
     });
 }
 

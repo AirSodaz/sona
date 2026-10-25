@@ -111,6 +111,13 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionFontColor: '#ffffff',
   captionBackgroundColor: '#000000',
   captionBackgroundOpacity: 0.6,
+  captionDisplayMode: 'bilingual',
+  captionBilingualOrder: 'original_first',
+  realtimeTranslationEnabled: false,
+  realtimeTranslationSourceLanguage: 'en',
+  realtimeTranslationTargetLanguage: 'zh',
+  realtimeTranslationEngine: 'onnx',
+  realtimeTranslationModelId: null,
 
   // Transcription
   language: 'auto',
@@ -153,6 +160,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingContextAwarenessEnabled: true,
   voiceTypingContextPreset: 'auto',
   voiceTypingContextRules: DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  voiceTypingRealtimePreview: true,
   // API Server
   httpServerEnabled: false,
   httpServerHost: '127.0.0.1',

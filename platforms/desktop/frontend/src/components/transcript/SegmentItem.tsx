@@ -542,6 +542,8 @@ export function SegmentItem({
           )}
           {isTranslationVisible &&
             ((typeof segment.translation === 'string' && segment.translation.length > 0) ||
+              (typeof segment.draftTranslation === 'string' &&
+                segment.draftTranslation.length > 0) ||
               isEditingTranslation) &&
             (isEditingTranslation ? (
               <div
@@ -612,6 +614,11 @@ export function SegmentItem({
                 }}
               >
                 <span className="segment-translation-text">{segment.translation}</span>
+                {segment.draftTranslation && (
+                  <span className="segment-draft-tail" style={{ opacity: 0.6 }}>
+                    {segment.draftTranslation}
+                  </span>
+                )}
                 {!isLocked && (
                   <button
                     type="button"

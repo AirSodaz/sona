@@ -9,6 +9,7 @@ pub mod segmentation;
 pub mod speaker;
 pub mod speaker_correction;
 pub mod speaker_review;
+pub mod streaming_stabilizer;
 pub mod text_alignment;
 pub mod transcript;
 

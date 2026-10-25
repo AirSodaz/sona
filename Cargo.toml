@@ -11,6 +11,7 @@ members = [
     "providers/asr/local/vad",
     "providers/asr/local/punct",
     "providers/asr/local/llama_cpp",
+    "providers/translation/onnx_nmt",
     "adapters/media_detector",
     "adapters/model_downloads",
     "adapters/online_llm",
@@ -59,6 +60,7 @@ sona-punct = { path = "providers/asr/local/punct" }
 sona-recovery-fs = { path = "adapters/recovery_fs" }
 sona-runtime-fs = { path = "adapters/runtime_fs" }
 sona-sherpa-onnx = { path = "providers/asr/local/sherpa_onnx" }
+sona-translation-onnx = { path = "providers/translation/onnx_nmt" }
 sona-sqlite = { path = "adapters/sqlite" }
 sona-sync = { path = "application/sync" }
 sona-sync-webdav = { path = "adapters/sync_webdav" }

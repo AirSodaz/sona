@@ -189,6 +189,7 @@ fn transcript_segment(
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker,
         speaker_attribution: None,
     }

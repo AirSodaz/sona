@@ -644,17 +644,45 @@ export function VoiceTypingOverlay() {
           ) : null}
           {isPolishing && <Sparkles size={14} color="#a855f7" style={{ flexShrink: 0 }} />}
           {isTranslating && <Sparkles size={14} color="#3b82f6" style={{ flexShrink: 0 }} />}
-          <span
+          <div
             style={{
-              whiteSpace: 'nowrap',
+              display: 'flex',
+              flexDirection: 'column',
               overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              fontWeight: isSegment ? 600 : 500,
-              letterSpacing: isSegment ? '0.01em' : 'normal',
+              flexGrow: 1,
+              minWidth: 0,
             }}
           >
-            {displayText}
-          </span>
+            <span
+              style={{
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                fontWeight: isSegment ? 600 : 500,
+                letterSpacing: isSegment ? '0.01em' : 'normal',
+              }}
+            >
+              {displayText}
+            </span>
+            {(overlayState.translation || overlayState.draftTranslation) && (
+              <span
+                data-testid="voice-typing-realtime-translation"
+                style={{
+                  fontSize: '12px',
+                  color: 'var(--color-primary, #3b82f6)',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  marginTop: '1px',
+                }}
+              >
+                <span>{overlayState.translation ?? ''}</span>
+                {overlayState.draftTranslation && (
+                  <span style={{ opacity: 0.6 }}>{overlayState.draftTranslation}</span>
+                )}
+              </span>
+            )}
+          </div>
           {/* Quick cancel button */}
           <button
             type="button"

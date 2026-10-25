@@ -1051,6 +1051,7 @@ describe('tauri boundary wrappers', () => {
           timestamps: null,
           durations: null,
           translation: null,
+          draftTranslation: null,
           speaker: null,
           speakerAttribution: null,
         },
@@ -1093,6 +1094,7 @@ describe('tauri boundary wrappers', () => {
       timestamps: null,
       durations: null,
       translation: null,
+      draftTranslation: null,
       speaker: null,
       speakerAttribution: null,
     };

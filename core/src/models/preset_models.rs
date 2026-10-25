@@ -404,6 +404,7 @@ pub enum ModelCatalogModelType {
     Omnilingual,
     Alignment,
     Canary,
+    OnnxNmt,
 }
 
 impl ModelCatalogModelType {
@@ -427,6 +428,7 @@ impl ModelCatalogModelType {
             Self::Omnilingual => "omnilingual",
             Self::Alignment => "alignment",
             Self::Canary => "canary",
+            Self::OnnxNmt => "onnx-nmt",
         }
     }
 }
@@ -460,6 +462,7 @@ impl std::str::FromStr for ModelCatalogModelType {
             "omnilingual" => Ok(Self::Omnilingual),
             "alignment" => Ok(Self::Alignment),
             "canary" => Ok(Self::Canary),
+            "onnx-nmt" => Ok(Self::OnnxNmt),
             _ => Err(format!("Unknown ModelCatalogModelType: {s}")),
         }
     }
@@ -527,6 +530,8 @@ pub enum ModelEngine {
     SherpaOnnx,
     #[serde(rename = "llama-cpp")]
     LlamaCpp,
+    #[serde(rename = "onnx-nmt")]
+    OnnxNmt,
 }
 
 impl ModelEngine {
@@ -534,6 +539,7 @@ impl ModelEngine {
         match self {
             Self::SherpaOnnx => "sherpa-onnx",
             Self::LlamaCpp => "llama-cpp",
+            Self::OnnxNmt => "onnx-nmt",
         }
     }
 }
@@ -551,6 +557,7 @@ impl std::str::FromStr for ModelEngine {
         match s {
             "sherpa-onnx" => Ok(Self::SherpaOnnx),
             "llama-cpp" => Ok(Self::LlamaCpp),
+            "onnx-nmt" => Ok(Self::OnnxNmt),
             _ => Err(format!("Unknown ModelEngine: {s}")),
         }
     }
@@ -961,6 +968,7 @@ fn model_matches_section(model: &ModelCatalogModel, section_type: ModelCatalogSe
                 | ModelCatalogModelType::SpeakerSegmentation
                 | ModelCatalogModelType::SpeakerEmbedding
                 | ModelCatalogModelType::Alignment
+                | ModelCatalogModelType::OnnxNmt
         ),
     }
 }
@@ -1246,6 +1254,7 @@ impl ModelCatalogModel {
                     | ModelCatalogModelType::SpeakerSegmentation
                     | ModelCatalogModelType::SpeakerEmbedding
                     | ModelCatalogModelType::Alignment
+                    | ModelCatalogModelType::OnnxNmt
             )
     }
 

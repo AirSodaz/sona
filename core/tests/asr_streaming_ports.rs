@@ -266,6 +266,7 @@ fn output_policy_applies_timeline_and_replacements_per_consumer() {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         }],

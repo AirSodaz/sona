@@ -324,6 +324,7 @@ pub(super) fn run_offline_inference(
                 timestamps: timestamps_abs,
                 durations,
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             };

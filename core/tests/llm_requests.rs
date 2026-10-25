@@ -40,6 +40,7 @@ fn sample_transcript_segment() -> TranscriptSegment {
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }

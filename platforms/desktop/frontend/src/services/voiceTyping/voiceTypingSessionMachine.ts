@@ -130,6 +130,8 @@ export class VoiceTypingSessionMachine {
   private selectionContext: string | null = null;
   private currentContext: VoiceTypingContextState | null = null;
   private isTranslateSession = false;
+  private latestStreamTranslation: string | null = null;
+  private latestStreamDraftTranslation: string | null = null;
   private manualStopPending = false;
   private revision = 0;
   private readonly committedSegmentIds = new Set<string>();
@@ -145,7 +147,8 @@ export class VoiceTypingSessionMachine {
     this.clearSilenceCommitTimer();
 
     this.isTranslateSession = Boolean(options?.isTranslate);
-
+    this.latestStreamTranslation = null;
+    this.latestStreamDraftTranslation = null;
     const requestId = ++this.startRequestId;
     const sessionId = `voice-typing-${requestId}`;
     this.sessionState = 'preparing';
@@ -432,32 +435,34 @@ export class VoiceTypingSessionMachine {
           }
         }
 
-        // 2. Translate step
-        await this.publishOverlay({
-          sessionId,
-          phase: 'translating',
-          text: intermediateText,
-        });
+        // 2. Translate step: reuse stream translation if already available
+        let translatedText = this.latestStreamTranslation?.trim();
+        if (!translatedText) {
+          await this.publishOverlay({
+            sessionId,
+            phase: 'translating',
+            text: intermediateText,
+          });
 
-        let translatedText = intermediateText;
-        const targetLanguage = this.options.getTargetLanguage?.() || 'en';
-        if (this.options.translateText) {
-          try {
-            translatedText = await this.options.translateText(
-              intermediateText,
-              targetLanguage,
-              (err) => {
-                logger.warn('[VoiceTypingSessionMachine] Translation failed', err);
-              }
-            );
-          } catch (err) {
-            logger.warn(
-              '[VoiceTypingSessionMachine] Translation failed, using intermediate text',
-              err
-            );
+          translatedText = intermediateText;
+          const targetLanguage = this.options.getTargetLanguage?.() || 'en';
+          if (this.options.translateText) {
+            try {
+              translatedText = await this.options.translateText(
+                intermediateText,
+                targetLanguage,
+                (err) => {
+                  logger.warn('[VoiceTypingSessionMachine] Translation failed', err);
+                }
+              );
+            } catch (err) {
+              logger.warn(
+                '[VoiceTypingSessionMachine] Translation failed, using intermediate text',
+                err
+              );
+            }
           }
         }
-
         const finalText = this.formatFinalText(translatedText);
         this.options.onTextCommitted?.({
           rawText: rawFullText,
@@ -562,6 +567,8 @@ export class VoiceTypingSessionMachine {
     this.manualStopPending = true;
     this.isTranslateSession = false;
     this.currentText = '';
+    this.latestStreamTranslation = null;
+    this.latestStreamDraftTranslation = null;
     this.currentSegmentId = null;
     this.options.overlayPresenter.clearListeningReset();
 
@@ -701,6 +708,13 @@ export class VoiceTypingSessionMachine {
     } = analyzeCandidateText(segment.text, enableCjkSpacing);
 
     const mode = this.options.getProcessingMode?.() || 'raw';
+    if (segment.translation) {
+      this.latestStreamTranslation = segment.translation;
+    }
+    if (segment.draftTranslation !== undefined) {
+      this.latestStreamDraftTranslation = segment.draftTranslation;
+    }
+
     if (this.selectionContext || mode === 'polish' || this.isTranslateSession) {
       if (segment.isFinal) {
         if (text) {
@@ -726,6 +740,8 @@ export class VoiceTypingSessionMachine {
           sessionId,
           phase: 'segment',
           text: this.currentText,
+          translation: this.latestStreamTranslation ?? undefined,
+          draftTranslation: this.latestStreamDraftTranslation ?? undefined,
           segmentId: segment.id,
           isFinal: segment.isFinal,
         },

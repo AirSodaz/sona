@@ -21,6 +21,8 @@ pub struct ModelFileConfig {
     pub uncached_decoder: Option<String>,
     pub cached_decoder: Option<String>,
     pub merged_decoder: Option<String>,
+    pub source_spm: Option<String>,
+    pub target_spm: Option<String>,
 }
 
 impl ModelFileConfig {
@@ -42,6 +44,8 @@ impl ModelFileConfig {
             self.uncached_decoder.as_deref(),
             self.cached_decoder.as_deref(),
             self.merged_decoder.as_deref(),
+            self.source_spm.as_deref(),
+            self.target_spm.as_deref(),
         ]
         .into_iter()
         .flatten()

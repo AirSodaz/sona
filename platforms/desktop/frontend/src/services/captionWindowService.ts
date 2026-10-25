@@ -18,6 +18,10 @@ export interface CaptionWindowStyle {
   color: string;
   backgroundColor: string;
   backgroundOpacity: number;
+  displayMode?: 'bilingual' | 'translation' | 'original';
+  bilingualOrder?: 'original_first' | 'translation_first';
+  translationColor?: string;
+  translationFontSize?: number;
 }
 
 export interface CaptionWindowState {
@@ -46,7 +50,11 @@ function areCaptionStylesEqual(left: CaptionWindowStyle, right: CaptionWindowSty
     left.fontSize === right.fontSize &&
     left.color === right.color &&
     left.backgroundColor === right.backgroundColor &&
-    left.backgroundOpacity === right.backgroundOpacity
+    left.backgroundOpacity === right.backgroundOpacity &&
+    left.displayMode === right.displayMode &&
+    left.bilingualOrder === right.bilingualOrder &&
+    left.translationColor === right.translationColor &&
+    left.translationFontSize === right.translationFontSize
   );
 }
 
@@ -157,6 +165,26 @@ export class CaptionWindowService {
       color: options?.color ?? this.state.style.color,
       backgroundColor: options?.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
+      ...((options as Partial<CaptionWindowStyle>)?.displayMode !== undefined
+        ? { displayMode: (options as Partial<CaptionWindowStyle>).displayMode }
+        : this.state.style.displayMode !== undefined
+          ? { displayMode: this.state.style.displayMode }
+          : {}),
+      ...((options as Partial<CaptionWindowStyle>)?.bilingualOrder !== undefined
+        ? { bilingualOrder: (options as Partial<CaptionWindowStyle>).bilingualOrder }
+        : this.state.style.bilingualOrder !== undefined
+          ? { bilingualOrder: this.state.style.bilingualOrder }
+          : {}),
+      ...((options as Partial<CaptionWindowStyle>)?.translationColor !== undefined
+        ? { translationColor: (options as Partial<CaptionWindowStyle>).translationColor }
+        : this.state.style.translationColor !== undefined
+          ? { translationColor: this.state.style.translationColor }
+          : {}),
+      ...((options as Partial<CaptionWindowStyle>)?.translationFontSize !== undefined
+        ? { translationFontSize: (options as Partial<CaptionWindowStyle>).translationFontSize }
+        : this.state.style.translationFontSize !== undefined
+          ? { translationFontSize: this.state.style.translationFontSize }
+          : {}),
     };
 
     await this.commitState({ style: nextStyle });
@@ -239,6 +267,10 @@ export class CaptionWindowService {
     color?: string;
     backgroundColor?: string;
     backgroundOpacity?: number;
+    displayMode?: 'bilingual' | 'translation' | 'original';
+    bilingualOrder?: 'original_first' | 'translation_first';
+    translationColor?: string;
+    translationFontSize?: number;
   }) {
     const nextStyle: CaptionWindowStyle = {
       width: style.width ?? this.state.style.width,
@@ -246,6 +278,26 @@ export class CaptionWindowService {
       color: style.color ?? this.state.style.color,
       backgroundColor: style.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: style.backgroundOpacity ?? this.state.style.backgroundOpacity,
+      ...(style.displayMode !== undefined
+        ? { displayMode: style.displayMode }
+        : this.state.style.displayMode !== undefined
+          ? { displayMode: this.state.style.displayMode }
+          : {}),
+      ...(style.bilingualOrder !== undefined
+        ? { bilingualOrder: style.bilingualOrder }
+        : this.state.style.bilingualOrder !== undefined
+          ? { bilingualOrder: this.state.style.bilingualOrder }
+          : {}),
+      ...(style.translationColor !== undefined
+        ? { translationColor: style.translationColor }
+        : this.state.style.translationColor !== undefined
+          ? { translationColor: this.state.style.translationColor }
+          : {}),
+      ...(style.translationFontSize !== undefined
+        ? { translationFontSize: style.translationFontSize }
+        : this.state.style.translationFontSize !== undefined
+          ? { translationFontSize: this.state.style.translationFontSize }
+          : {}),
     };
 
     if (areCaptionStylesEqual(nextStyle, this.state.style)) {

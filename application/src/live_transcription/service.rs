@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
+use super::translation::StreamingTranslationCoordinator;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct LiveSourceEpoch {
     pub source_id: String,
@@ -117,6 +118,7 @@ pub struct LiveTranscriptionCoordinator {
 struct CoordinatorInner {
     factory: Arc<dyn StreamingAsrFactoryPort>,
     telemetry: Arc<dyn AsrRuntimeObserver>,
+    translation: Option<Arc<StreamingTranslationCoordinator>>,
     state: AsyncMutex<CoordinatorState>,
     lifecycle_guard: AsyncMutex<()>,
     feed_guard: AsyncMutex<()>,
@@ -368,10 +370,19 @@ impl LiveTranscriptionCoordinator {
         factory: Arc<dyn StreamingAsrFactoryPort>,
         telemetry: Arc<dyn AsrRuntimeObserver>,
     ) -> Self {
+        Self::with_optional_translation(factory, telemetry, None)
+    }
+
+    pub fn with_optional_translation(
+        factory: Arc<dyn StreamingAsrFactoryPort>,
+        telemetry: Arc<dyn AsrRuntimeObserver>,
+        translation: Option<Arc<StreamingTranslationCoordinator>>,
+    ) -> Self {
         Self {
             inner: Arc::new(CoordinatorInner {
                 factory,
                 telemetry,
+                translation,
                 state: AsyncMutex::new(CoordinatorState::default()),
                 lifecycle_guard: AsyncMutex::new(()),
                 feed_guard: AsyncMutex::new(()),
@@ -918,7 +929,10 @@ impl CoordinatorInner {
         }
     }
 
-    async fn dispatch_transcript(&self, event: AsrTranscriptUpdateEvent) {
+    async fn dispatch_transcript(&self, mut event: AsrTranscriptUpdateEvent) {
+        if let Some(translator) = &self.translation {
+            translator.enrich_update(&mut event.update).await;
+        }
         let mut state = self.state.lock().await;
         let Some(pipeline) = state.pipelines.get_mut(&event.instance_id) else {
             return;

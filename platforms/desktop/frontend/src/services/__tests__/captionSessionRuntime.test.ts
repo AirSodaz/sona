@@ -140,6 +140,8 @@ describe('captionSessionRuntime', () => {
       color: config.captionFontColor,
       backgroundColor: config.captionBackgroundColor,
       backgroundOpacity: config.captionBackgroundOpacity,
+      displayMode: config.captionDisplayMode,
+      bilingualOrder: config.captionBilingualOrder,
     });
   });
 

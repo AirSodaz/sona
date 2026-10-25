@@ -291,6 +291,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker,
             speaker_attribution,
         }

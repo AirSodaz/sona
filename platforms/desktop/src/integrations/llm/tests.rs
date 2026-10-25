@@ -85,6 +85,7 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::integrations::asr::
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }

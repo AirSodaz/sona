@@ -45,12 +45,20 @@ function buildCaptionWindowStyle({
   color,
   backgroundColor,
   backgroundOpacity,
+  displayMode,
+  bilingualOrder,
+  translationColor,
+  translationFontSize,
 }: {
   width?: number;
   fontSize?: number;
   color?: string;
   backgroundColor?: string;
   backgroundOpacity?: number;
+  displayMode?: 'bilingual' | 'translation' | 'original';
+  bilingualOrder?: 'original_first' | 'translation_first';
+  translationColor?: string;
+  translationFontSize?: number;
 }): CaptionWindowStyleOptions {
   return {
     width,
@@ -58,6 +66,10 @@ function buildCaptionWindowStyle({
     color,
     backgroundColor,
     backgroundOpacity,
+    ...(displayMode !== undefined ? { displayMode } : {}),
+    ...(bilingualOrder !== undefined ? { bilingualOrder } : {}),
+    ...(translationColor !== undefined ? { translationColor } : {}),
+    ...(translationFontSize !== undefined ? { translationFontSize } : {}),
   };
 }
 
@@ -349,6 +361,8 @@ class CaptionSessionRuntime {
         color: config.captionFontColor,
         backgroundColor: config.captionBackgroundColor,
         backgroundOpacity: config.captionBackgroundOpacity,
+        displayMode: config.captionDisplayMode,
+        bilingualOrder: config.captionBilingualOrder,
       })
     );
   }

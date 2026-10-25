@@ -1,0 +1,297 @@
+//! Pure Rust SentencePiece protobuf reader and Unigram tokenizer for MarianMT / Opus-MT models.
+
+use std::collections::HashMap;
+use std::fs;
+use std::path::Path;
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct PieceEntry {
+    pub piece: String,
+    pub score: f32,
+    pub piece_type: u32,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct SentencePieceTokenizer {
+    pub pieces: Vec<PieceEntry>,
+    pub piece_to_id: HashMap<String, u32>,
+    pub pad_id: u32,
+    pub eos_id: u32,
+    pub unk_id: u32,
+    max_piece_len: usize,
+}
+
+impl SentencePieceTokenizer {
+    pub fn load(path: &Path) -> Result<Self, String> {
+        let bytes =
+            fs::read(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+        Self::from_bytes(&bytes)
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+        let mut idx = 0;
+        let mut pieces = Vec::new();
+        let mut piece_to_id = HashMap::new();
+        let mut max_piece_len = 0;
+
+        while idx < bytes.len() {
+            let (tag, new_idx) = read_varint(bytes, idx)?;
+            idx = new_idx;
+            let wire_type = tag & 0x7;
+            let field_num = tag >> 3;
+
+            if field_num == 3 && wire_type == 2 {
+                let (len, new_idx) = read_varint(bytes, idx)?;
+                idx = new_idx;
+                let sub_end = idx + len as usize;
+                if sub_end > bytes.len() {
+                    return Err("Unexpected EOF reading SentencePiece entry".into());
+                }
+                let piece_bytes = &bytes[idx..sub_end];
+                idx = sub_end;
+
+                let entry = parse_sentencepiece_entry(piece_bytes)?;
+                let token_id = pieces.len() as u32;
+                max_piece_len = max_piece_len.max(entry.piece.chars().count());
+                piece_to_id.insert(entry.piece.clone(), token_id);
+                pieces.push(entry);
+            } else {
+                idx = skip_field(bytes, idx, wire_type)?;
+            }
+        }
+
+        let eos_id = piece_to_id.get("</s>").copied().unwrap_or(0);
+        let unk_id = piece_to_id.get("<unk>").copied().unwrap_or(1);
+        let pad_id = piece_to_id.get("<pad>").copied().unwrap_or(0);
+
+        Ok(Self {
+            pieces,
+            piece_to_id,
+            pad_id,
+            eos_id,
+            unk_id,
+            max_piece_len: max_piece_len.max(1),
+        })
+    }
+
+    pub fn encode(&self, text: &str) -> Vec<i64> {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            return vec![self.eos_id as i64];
+        }
+
+        let mut normalized = String::new();
+        for ch in trimmed.chars() {
+            if ch.is_whitespace() {
+                if !normalized.ends_with('\u{2581}') {
+                    normalized.push('\u{2581}');
+                }
+            } else {
+                if normalized.is_empty() {
+                    normalized.push('\u{2581}');
+                }
+                normalized.push(ch);
+            }
+        }
+
+        let chars: Vec<char> = normalized.chars().collect();
+        let n = chars.len();
+        if n == 0 {
+            return vec![self.eos_id as i64];
+        }
+
+        let mut best_score = vec![f32::NEG_INFINITY; n + 1];
+        let mut best_prev = vec![(0usize, self.unk_id); n + 1];
+        best_score[0] = 0.0;
+
+        for i in 0..n {
+            if best_score[i] == f32::NEG_INFINITY {
+                continue;
+            }
+
+            let max_l = self.max_piece_len.min(n - i);
+            let mut matched = false;
+
+            for len in 1..=max_l {
+                let sub: String = chars[i..i + len].iter().collect();
+                if let Some(&token_id) = self.piece_to_id.get(&sub) {
+                    matched = true;
+                    let score = self.pieces[token_id as usize].score;
+                    let candidate = best_score[i] + score;
+                    if candidate > best_score[i + len] {
+                        best_score[i + len] = candidate;
+                        best_prev[i + len] = (i, token_id);
+                    }
+                }
+            }
+
+            if !matched && best_score[i + 1] == f32::NEG_INFINITY {
+                best_score[i + 1] = best_score[i] - 100.0;
+                best_prev[i + 1] = (i, self.unk_id);
+            }
+        }
+
+        let mut tokens = Vec::new();
+        let mut curr = n;
+        while curr > 0 {
+            let (prev, token_id) = best_prev[curr];
+            tokens.push(token_id as i64);
+            curr = prev;
+        }
+        tokens.reverse();
+        tokens.push(self.eos_id as i64);
+        tokens
+    }
+
+    pub fn decode(&self, token_ids: &[i64]) -> String {
+        let mut result = String::new();
+        for &id in token_ids {
+            let idx = id as usize;
+            if idx >= self.pieces.len() {
+                continue;
+            }
+            if id == self.eos_id as i64 || id == self.pad_id as i64 {
+                break;
+            }
+            let piece = &self.pieces[idx].piece;
+            if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
+                continue;
+            }
+            result.push_str(piece);
+        }
+
+        result.replace('\u{2581}', " ").trim().to_string()
+    }
+}
+
+fn parse_sentencepiece_entry(bytes: &[u8]) -> Result<PieceEntry, String> {
+    let mut idx = 0;
+    let mut piece = String::new();
+    let mut score = 0.0f32;
+    let mut piece_type = 0u32;
+
+    while idx < bytes.len() {
+        let (tag, new_idx) = read_varint(bytes, idx)?;
+        idx = new_idx;
+        let wire_type = tag & 0x7;
+        let field_num = tag >> 3;
+
+        match (field_num, wire_type) {
+            (1, 2) => {
+                let (len, new_idx) = read_varint(bytes, idx)?;
+                idx = new_idx;
+                let end = idx + len as usize;
+                if end > bytes.len() {
+                    return Err("Invalid piece length".into());
+                }
+                piece = String::from_utf8_lossy(&bytes[idx..end]).into_owned();
+                idx = end;
+            }
+            (2, 5) => {
+                if idx + 4 > bytes.len() {
+                    return Err("Invalid score bytes".into());
+                }
+                let score_bytes = [bytes[idx], bytes[idx + 1], bytes[idx + 2], bytes[idx + 3]];
+                score = f32::from_le_bytes(score_bytes);
+                idx += 4;
+            }
+            (3, 0) => {
+                let (t, new_idx) = read_varint(bytes, idx)?;
+                idx = new_idx;
+                piece_type = t as u32;
+            }
+            _ => {
+                idx = skip_field(bytes, idx, wire_type)?;
+            }
+        }
+    }
+
+    Ok(PieceEntry {
+        piece,
+        score,
+        piece_type,
+    })
+}
+
+fn read_varint(bytes: &[u8], mut idx: usize) -> Result<(u64, usize), String> {
+    let mut result = 0u64;
+    let mut shift = 0;
+    while idx < bytes.len() {
+        let byte = bytes[idx];
+        idx += 1;
+        result |= ((byte & 0x7F) as u64) << shift;
+        if (byte & 0x80) == 0 {
+            return Ok((result, idx));
+        }
+        shift += 7;
+        if shift >= 64 {
+            return Err("Varint overflow".into());
+        }
+    }
+    Err("Unexpected EOF reading varint".into())
+}
+
+fn skip_field(bytes: &[u8], idx: usize, wire_type: u64) -> Result<usize, String> {
+    match wire_type {
+        0 => {
+            let (_, new_idx) = read_varint(bytes, idx)?;
+            Ok(new_idx)
+        }
+        1 => {
+            if idx + 8 > bytes.len() {
+                return Err("Unexpected EOF in 64-bit field".into());
+            }
+            Ok(idx + 8)
+        }
+        2 => {
+            let (len, new_idx) = read_varint(bytes, idx)?;
+            let end = new_idx + len as usize;
+            if end > bytes.len() {
+                return Err("Unexpected EOF in length-delimited field".into());
+            }
+            Ok(end)
+        }
+        5 => {
+            if idx + 4 > bytes.len() {
+                return Err("Unexpected EOF in 32-bit field".into());
+            }
+            Ok(idx + 4)
+        }
+        _ => Err(format!("Unsupported wire type: {wire_type}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sentencepiece_synthetic_roundtrip() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        let pieces = vec![
+            ("</s>", 0.0),
+            ("<unk>", 0.0),
+            ("\u{2581}Hello", -1.0),
+            ("\u{2581}world", -1.0),
+            ("!", -0.5),
+        ];
+        for (i, (p, s)) in pieces.into_iter().enumerate() {
+            tokenizer.pieces.push(PieceEntry {
+                piece: p.to_string(),
+                score: s,
+                piece_type: 0,
+            });
+            tokenizer.piece_to_id.insert(p.to_string(), i as u32);
+        }
+        tokenizer.eos_id = 0;
+        tokenizer.unk_id = 1;
+        tokenizer.pad_id = 0;
+        tokenizer.max_piece_len = 10;
+
+        let tokens = tokenizer.encode("Hello world!");
+        assert_eq!(tokens, vec![2, 3, 4, 0]);
+
+        let decoded = tokenizer.decode(&tokens);
+        assert_eq!(decoded, "Hello world!");
+    }
+}

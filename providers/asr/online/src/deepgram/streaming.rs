@@ -240,6 +240,7 @@ pub fn deepgram_streaming_segments_from_response(
         timestamps: (!timestamps.is_empty()).then_some(timestamps),
         durations: (!durations.is_empty()).then_some(durations),
         translation: None,
+        draft_translation: None,
         speaker,
         speaker_attribution,
     };

@@ -314,6 +314,7 @@ mod tests {
             timestamps: Some(vec![1.25, 1.75]),
             durations: Some(vec![0.5, 0.75]),
             translation: Some("你好，世界".into()),
+            draft_translation: None,
             speaker: Some(SpeakerTag {
                 id: "speaker-1".into(),
                 label: "Speaker 1".into(),
@@ -483,6 +484,7 @@ mod tests {
                     timestamps: None,
                     durations: None,
                     translation: None,
+                    draft_translation: None,
                     speaker: None,
                     speaker_attribution: None,
                 }],

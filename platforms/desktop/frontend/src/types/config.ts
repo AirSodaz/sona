@@ -191,6 +191,20 @@ export interface CaptionConfig {
   captionBackgroundColor?: string;
   /** Background opacity of the caption window (0.0 to 1.0). Default: 0.6. */
   captionBackgroundOpacity?: number;
+  /** Caption display mode: bilingual, translation only, or original only. */
+  captionDisplayMode?: 'bilingual' | 'translation' | 'original';
+  /** Bilingual order: original first or translation first. */
+  captionBilingualOrder?: 'original_first' | 'translation_first';
+  /** Whether real-time translation is enabled. */
+  realtimeTranslationEnabled?: boolean;
+  /** Source language for real-time translation. */
+  realtimeTranslationSourceLanguage?: string;
+  /** Target language for real-time translation. */
+  realtimeTranslationTargetLanguage?: string;
+  /** Real-time translation engine: onnx or llama-cpp. */
+  realtimeTranslationEngine?: string;
+  /** Selected translation model ID. */
+  realtimeTranslationModelId?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -413,6 +427,8 @@ export interface VoiceTypingConfig {
   voiceTypingContextPreset?: VoiceTypingContextPreset;
   /** Customizable contextual situation rules with per-platform software mapping. */
   voiceTypingContextRules?: VoiceTypingContextRule[];
+  /** Whether to show real-time translation preview in voice typing overlay. Default: true. */
+  voiceTypingRealtimePreview?: boolean;
 }
 
 // ---------------------------------------------------------------------------
