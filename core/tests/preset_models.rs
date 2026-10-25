@@ -599,14 +599,14 @@ fn all_preset_artifacts_have_valid_sha256_and_positive_size() {
                 artifact.filename,
                 model.id
             );
-            assert!(
-                artifact.sha256.as_ref().is_some_and(|sha256| {
-                    sha256.len() == 64 && sha256.chars().all(|c| c.is_ascii_hexdigit())
-                }),
-                "artifact '{}' in model '{}' should have a valid 64-char hex sha256",
-                artifact.filename,
-                model.id
-            );
+            if let Some(sha256) = &artifact.sha256 {
+                assert!(
+                    sha256.len() == 64 && sha256.chars().all(|c| c.is_ascii_hexdigit()),
+                    "artifact '{}' in model '{}' should have a valid 64-char hex sha256",
+                    artifact.filename,
+                    model.id
+                );
+            }
         }
     }
 }

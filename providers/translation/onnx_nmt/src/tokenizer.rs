@@ -40,7 +40,7 @@ impl SentencePieceTokenizer {
             let wire_type = tag & 0x7;
             let field_num = tag >> 3;
 
-            if field_num == 3 && wire_type == 2 {
+            if field_num == 1 && wire_type == 2 {
                 let (len, new_idx) = read_varint(bytes, idx)?;
                 idx = new_idx;
                 let sub_end = idx + len as usize;
@@ -145,6 +145,8 @@ impl SentencePieceTokenizer {
 
     pub fn decode(&self, token_ids: &[i64]) -> String {
         let mut result = String::new();
+        let mut byte_buf: Vec<u8> = Vec::new();
+
         for &id in token_ids {
             let idx = id as usize;
             if idx >= self.pieces.len() {
@@ -155,9 +157,26 @@ impl SentencePieceTokenizer {
             }
             let piece = &self.pieces[idx].piece;
             if piece == "<unk>" || piece == "<s>" || piece == "</s>" || piece == "<pad>" {
+                if !byte_buf.is_empty() {
+                    result.push_str(&String::from_utf8_lossy(&byte_buf));
+                    byte_buf.clear();
+                }
                 continue;
             }
-            result.push_str(piece);
+
+            if let Some(b) = parse_hex_byte(piece) {
+                byte_buf.push(b);
+            } else {
+                if !byte_buf.is_empty() {
+                    result.push_str(&String::from_utf8_lossy(&byte_buf));
+                    byte_buf.clear();
+                }
+                result.push_str(piece);
+            }
+        }
+
+        if !byte_buf.is_empty() {
+            result.push_str(&String::from_utf8_lossy(&byte_buf));
         }
 
         result.replace('\u{2581}', " ").trim().to_string()
@@ -261,6 +280,14 @@ fn skip_field(bytes: &[u8], idx: usize, wire_type: u64) -> Result<usize, String>
     }
 }
 
+fn parse_hex_byte(piece: &str) -> Option<u8> {
+    if piece.starts_with("<0x") && piece.ends_with('>') && piece.len() == 6 {
+        u8::from_str_radix(&piece[3..5], 16).ok()
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -293,5 +320,68 @@ mod tests {
 
         let decoded = tokenizer.decode(&tokens);
         assert_eq!(decoded, "Hello world!");
+    }
+
+    #[test]
+    fn test_sentencepiece_byte_fallback() {
+        let mut tokenizer = SentencePieceTokenizer::default();
+        let pieces = vec![
+            ("</s>", 0.0),
+            ("<unk>", 0.0),
+            ("<0xE4>", -5.0),
+            ("<0xBD>", -5.0),
+            ("<0xA0>", -5.0),
+            ("好", -1.0),
+        ];
+        for (i, (p, s)) in pieces.into_iter().enumerate() {
+            tokenizer.pieces.push(PieceEntry {
+                piece: p.to_string(),
+                score: s,
+                piece_type: 0,
+            });
+            tokenizer.piece_to_id.insert(p.to_string(), i as u32);
+        }
+        tokenizer.eos_id = 0;
+        tokenizer.unk_id = 1;
+        tokenizer.pad_id = 0;
+        tokenizer.max_piece_len = 10;
+
+        // <0xE4><0xBD><0xA0> is UTF-8 for "你"
+        let decoded = tokenizer.decode(&[2, 3, 4, 5]);
+        assert_eq!(decoded, "你好");
+    }
+
+    #[test]
+    fn test_sentencepiece_protobuf_field_1_parsing() {
+        // Construct a binary protobuf message matching sentencepiece_model.proto:
+        // ModelProto { repeated SentencePiece pieces = 1; }
+        // SentencePiece { string piece = 1; float score = 2; }
+        let mut raw = Vec::new();
+
+        // Piece 1: "</s>"
+        let mut piece1 = Vec::new();
+        piece1.push(0x0A); // field 1, wire 2
+        piece1.push(4); // length 4
+        piece1.extend_from_slice(b"</s>");
+
+        // Outer field 1, wire 2
+        raw.push(0x0A);
+        raw.push(piece1.len() as u8);
+        raw.extend_from_slice(&piece1);
+
+        // Piece 2: "hello"
+        let mut piece2 = Vec::new();
+        piece2.push(0x0A);
+        piece2.push(5);
+        piece2.extend_from_slice(b"hello");
+
+        raw.push(0x0A);
+        raw.push(piece2.len() as u8);
+        raw.extend_from_slice(&piece2);
+
+        let tok = SentencePieceTokenizer::from_bytes(&raw).expect("from_bytes should succeed");
+        assert_eq!(tok.pieces.len(), 2);
+        assert_eq!(tok.pieces[0].piece, "</s>");
+        assert_eq!(tok.pieces[1].piece, "hello");
     }
 }

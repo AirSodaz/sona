@@ -13,6 +13,7 @@ struct SegmentTranslationState {
     last_text: String,
     last_translate_time: Instant,
     stabilizer: StreamingStabilizer,
+    last_draft_translation: Option<String>,
 }
 
 pub struct StreamingTranslationCoordinator {
@@ -54,6 +55,10 @@ impl StreamingTranslationCoordinator {
         &self.target_lang
     }
 
+    pub fn clear(&self) {
+        self.states.lock().clear();
+    }
+
     pub async fn enrich_update(&self, update: &mut TranscriptUpdate) {
         if !update.remove_ids.is_empty() {
             let mut states = self.states.lock();
@@ -65,6 +70,10 @@ impl StreamingTranslationCoordinator {
         for segment in &mut update.upsert_segments {
             let text = segment.text.trim();
             if text.is_empty() {
+                if segment.is_final {
+                    let mut states = self.states.lock();
+                    states.remove(&segment.id);
+                }
                 continue;
             }
 
@@ -87,7 +96,13 @@ impl StreamingTranslationCoordinator {
                     Err(err) => {
                         log::warn!("Final translation failed for segment {}: {err}", segment.id);
                         let mut states = self.states.lock();
-                        states.remove(&segment.id);
+                        if let Some(state) = states.remove(&segment.id) {
+                            let frozen = state.stabilizer.frozen_prefix().to_string();
+                            if !frozen.is_empty() {
+                                segment.translation = Some(frozen);
+                            }
+                        }
+                        segment.draft_translation = None;
                     }
                 }
             } else {
@@ -119,11 +134,13 @@ impl StreamingTranslationCoordinator {
                                     last_text: String::new(),
                                     last_translate_time: Instant::now(),
                                     stabilizer: StreamingStabilizer::new(),
+                                    last_draft_translation: None,
                                 }
                             });
                             entry.last_text = text.to_string();
                             entry.last_translate_time = Instant::now();
                             let out = entry.stabilizer.update(&translated_text, false);
+                            entry.last_draft_translation = out.draft_tail.clone();
                             segment.translation = out.frozen_prefix;
                             segment.draft_translation = out.draft_tail;
                         }
@@ -137,6 +154,7 @@ impl StreamingTranslationCoordinator {
                                 segment.translation =
                                     Some(state.stabilizer.frozen_prefix().to_string())
                                         .filter(|s| !s.is_empty());
+                                segment.draft_translation = state.last_draft_translation.clone();
                             }
                         }
                     }
@@ -145,6 +163,7 @@ impl StreamingTranslationCoordinator {
                     if let Some(state) = states.get(&segment.id) {
                         segment.translation = Some(state.stabilizer.frozen_prefix().to_string())
                             .filter(|s| !s.is_empty());
+                        segment.draft_translation = state.last_draft_translation.clone();
                     }
                 }
             }

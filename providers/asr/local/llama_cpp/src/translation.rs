@@ -68,7 +68,7 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
             .engine
             .complete(request)
             .await
-            .map_err(|e| TranslationPortError::inference_failed(e))?;
+            .map_err(TranslationPortError::inference_failed)?;
 
         Ok(response.text.trim().to_string())
     }

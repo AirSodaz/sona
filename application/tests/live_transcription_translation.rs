@@ -20,6 +20,7 @@ use std::time::Duration;
 
 struct MockTranslationEngine {
     translations: Mutex<HashMap<String, String>>,
+    fail_on: Mutex<Option<String>>,
 }
 
 impl MockTranslationEngine {
@@ -33,7 +34,12 @@ impl MockTranslationEngine {
         );
         Self {
             translations: Mutex::new(t),
+            fail_on: Mutex::new(None),
         }
+    }
+
+    fn set_fail_on(&self, text: &str) {
+        *self.fail_on.lock().unwrap() = Some(text.to_string());
     }
 }
 
@@ -45,6 +51,13 @@ impl TranslationEnginePort for MockTranslationEngine {
         _source_lang: &str,
         _target_lang: &str,
     ) -> Result<String, TranslationPortError> {
+        if let Some(target) = self.fail_on.lock().unwrap().as_ref() {
+            if text == target {
+                return Err(TranslationPortError::inference_failed(
+                    "mock translation error",
+                ));
+            }
+        }
         let map = self.translations.lock().unwrap();
         if let Some(trans) = map.get(text) {
             Ok(trans.clone())
@@ -240,4 +253,102 @@ async fn test_live_transcription_translation_enrichment() {
     assert_eq!(f.text, "I like to read books every day.");
     assert_eq!(f.translation, Some("我喜欢每天看书。".into()));
     assert_eq!(f.draft_translation, None);
+}
+fn make_segment(id: &str, text: &str, is_final: bool) -> TranscriptSegment {
+    TranscriptSegment {
+        id: id.to_string(),
+        text: text.to_string(),
+        start: 0.0,
+        end: 1.0,
+        is_final,
+        timing: None,
+        tokens: None,
+        timestamps: None,
+        durations: None,
+        translation: None,
+        draft_translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    }
+}
+
+#[tokio::test]
+async fn test_live_transcription_translation_debounce_preserves_draft() {
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let coord = StreamingTranslationCoordinator::new(translation_engine, "en", "zh")
+        .with_debounce(1000, 10);
+
+    // Frame 1: initial text triggers translation
+    let mut update1 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-1", "Hello", false)],
+        remove_ids: vec![],
+    };
+    coord.enrich_update(&mut update1).await;
+    assert_eq!(
+        update1.upsert_segments[0].draft_translation,
+        Some("译:[Hello]".into())
+    );
+
+    // Frame 2: minor increment (delta < 10 chars, elapsed < 1000ms) - should debounce
+    let mut update2 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-1", "Hello ", false)],
+        remove_ids: vec![],
+    };
+    coord.enrich_update(&mut update2).await;
+    // Draft translation MUST be preserved from state, not cleared to None
+    assert_eq!(
+        update2.upsert_segments[0].draft_translation,
+        Some("译:[Hello]".into()),
+        "Debounced frame must preserve previous draft translation"
+    );
+}
+
+#[tokio::test]
+async fn test_live_transcription_final_failure_falls_back_to_frozen_prefix() {
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let coord =
+        StreamingTranslationCoordinator::new(Arc::clone(&translation_engine) as _, "en", "zh")
+            .with_debounce(10, 1);
+
+    // Frame 1: partial 1
+    let mut update1 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-2", "I like to", false)],
+        remove_ids: vec![],
+    };
+    coord.enrich_update(&mut update1).await;
+
+    tokio::time::sleep(Duration::from_millis(20)).await;
+
+    // Frame 2: partial 2, locks frozen_prefix = "我喜欢"
+    let mut update2 = TranscriptUpdate {
+        upsert_segments: vec![make_segment("seg-2", "I like to read books", false)],
+        remove_ids: vec![],
+    };
+    coord.enrich_update(&mut update2).await;
+    assert_eq!(
+        update2.upsert_segments[0].translation,
+        Some("我喜欢".into())
+    );
+
+    // Simulate translation engine failure on final text
+    translation_engine.set_fail_on("I like to read books every day.");
+
+    // Frame 3: final segment fails to translate
+    let mut update3 = TranscriptUpdate {
+        upsert_segments: vec![make_segment(
+            "seg-2",
+            "I like to read books every day.",
+            true,
+        )],
+        remove_ids: vec![],
+    };
+    coord.enrich_update(&mut update3).await;
+
+    // Should gracefully fall back to the previously stabilized frozen_prefix
+    assert_eq!(
+        update3.upsert_segments[0].translation,
+        Some("我喜欢".into()),
+        "Final translation failure must fall back to stabilized frozen prefix"
+    );
+    assert_eq!(update3.upsert_segments[0].draft_translation, None);
 }

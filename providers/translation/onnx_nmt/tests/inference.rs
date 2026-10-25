@@ -41,3 +41,51 @@ async fn test_onnx_nmt_adapter_unloaded_error() {
     let result = adapter.translate("Hello", "en", "zh").await;
     assert!(result.is_err());
 }
+
+#[test]
+fn test_leading_prompt_token_slice_decoding() {
+    use sona_translation_onnx::PieceEntry;
+
+    let mut tgt_tok = SentencePieceTokenizer::default();
+    tgt_tok.pieces = vec![
+        PieceEntry {
+            piece: "</s>".to_string(),
+            score: 0.0,
+            piece_type: 0,
+        },
+        PieceEntry {
+            piece: "<pad>".to_string(),
+            score: 0.0,
+            piece_type: 0,
+        },
+        PieceEntry {
+            piece: "\u{2581}你好".to_string(),
+            score: -1.0,
+            piece_type: 0,
+        },
+        PieceEntry {
+            piece: "\u{2581}世界".to_string(),
+            score: -1.0,
+            piece_type: 0,
+        },
+    ];
+    tgt_tok.eos_id = 0;
+    tgt_tok.pad_id = 1;
+
+    // Simulated raw decoder_input_ids generated during auto-regression:
+    // Index 0 is the start prompt token (eos_id = 0), followed by actual generated tokens [2, 3]
+    let raw_decoder_input_ids = vec![0i64, 2i64, 3i64];
+
+    // If not sliced, decoding stops immediately at index 0 because 0 == eos_id
+    let unstripped = tgt_tok.decode(&raw_decoder_input_ids);
+    assert_eq!(unstripped, "");
+
+    // When sliced &[1..], it decodes the actual translated tokens
+    let output_tokens = if raw_decoder_input_ids.len() > 1 {
+        &raw_decoder_input_ids[1..]
+    } else {
+        &[]
+    };
+    let stripped = tgt_tok.decode(output_tokens);
+    assert_eq!(stripped, "你好 世界");
+}

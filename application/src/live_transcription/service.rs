@@ -666,7 +666,11 @@ impl LiveTranscriptionCoordinator {
                 observer.drain().await;
                 let mut state = self.inner.state.lock().await;
                 state.pipelines.remove(&pipeline_id);
+                let has_no_pipelines = state.pipelines.is_empty();
                 drop(state);
+                if has_no_pipelines {
+                    self.clear_translation();
+                }
                 mailbox.close_and_drain().await;
                 flush_result.and(stop_result)
             }
@@ -749,12 +753,22 @@ impl LiveTranscriptionCoordinator {
             }
         }
 
+        let state = self.inner.state.lock().await;
+        if state.pipelines.is_empty() {
+            self.clear_translation();
+        }
+
         match first_error {
             Some(error) => Err(error),
             None => Ok(()),
         }
     }
 
+    pub fn clear_translation(&self) {
+        if let Some(translator) = &self.inner.translation {
+            translator.clear();
+        }
+    }
     pub async fn metrics(&self) -> LiveTranscriptionMetrics {
         let state = self.inner.state.lock().await;
         let active_consumers = state.consumer_to_pipeline.len();

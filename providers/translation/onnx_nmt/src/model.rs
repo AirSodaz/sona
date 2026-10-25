@@ -208,7 +208,12 @@ impl OnnxNmtModel {
             decoder_input_ids.push(next_token);
         }
 
-        let decoded = self.target_tokenizer.decode(&decoder_input_ids);
+        let output_tokens = if decoder_input_ids.len() > 1 {
+            &decoder_input_ids[1..]
+        } else {
+            &[]
+        };
+        let decoded = self.target_tokenizer.decode(output_tokens);
         Ok(decoded)
     }
 }

@@ -55,36 +55,25 @@ pub fn calculate_longest_common_prefix(prev: &str, curr: &str) -> String {
     let next_curr_char = curr[lcp_len..].chars().next();
     let next_prev_char = prev[lcp_len..].chars().next();
 
-    // If prev ended at a word boundary and curr continues with whitespace,
-    // include the whitespace in the boundary prefix.
-    if raw_lcp == prev && next_curr_char.is_some_and(|c| c.is_whitespace()) {
-        let ws = next_curr_char.unwrap();
-        let mut s = raw_lcp;
-        s.push(ws);
-        return s;
+    // Rule 1: If raw_lcp is exactly prev and curr continues at a boundary
+    if raw_lcp == prev && next_curr_char.is_some_and(is_boundary_char) {
+        return raw_lcp;
     }
 
-    // If curr ended at a word boundary and prev continues with whitespace
-    if raw_lcp == curr && next_prev_char.is_some_and(|c| c.is_whitespace()) {
-        let ws = next_prev_char.unwrap();
-        let mut s = raw_lcp;
-        s.push(ws);
-        return s;
+    // Rule 2: If raw_lcp is exactly curr and prev continues at a boundary
+    if raw_lcp == curr && next_prev_char.is_some_and(is_boundary_char) {
+        return raw_lcp;
     }
 
-    // Check if raw_lcp already ends at a boundary character
+    // Rule 3: Check if raw_lcp already ends at a boundary character
     let last_char = raw_lcp.chars().last().unwrap();
     if is_boundary_char(last_char) {
         return raw_lcp;
     }
 
-    // If the next character in curr is a boundary char
-    if let Some(nc) = next_curr_char.filter(|&nc| is_boundary_char(nc)) {
-        if nc.is_whitespace() {
-            let mut s = raw_lcp;
-            s.push(nc);
-            return s;
-        }
+    // Rule 4: If both next_curr_char and next_prev_char are boundary characters
+    if next_curr_char.is_some_and(is_boundary_char) && next_prev_char.is_some_and(is_boundary_char)
+    {
         return raw_lcp;
     }
 
@@ -179,6 +168,10 @@ impl StreamingStabilizer {
 
         self.last_hypothesis = trimmed_hypothesis.to_string();
 
+        if !trimmed_hypothesis.starts_with(&self.frozen_prefix) {
+            self.frozen_prefix =
+                calculate_longest_common_prefix(&self.frozen_prefix, trimmed_hypothesis);
+        }
         let draft_tail = if trimmed_hypothesis.starts_with(&self.frozen_prefix) {
             let tail = &trimmed_hypothesis[self.frozen_prefix.len()..];
             let trimmed_tail = tail.trim_start();

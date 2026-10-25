@@ -982,6 +982,23 @@ fn sanitize_typed_config_fields(config: &mut Value) {
             .as_str()
             .is_some_and(|o| matches!(o, "original_first" | "translation_first"))
     });
+    repair_field_type(
+        config,
+        &defaults,
+        "realtimeTranslationSourceLanguage",
+        |value| value.as_str().is_some_and(|s| !s.trim().is_empty()),
+    );
+    repair_field_type(
+        config,
+        &defaults,
+        "realtimeTranslationTargetLanguage",
+        |value| value.as_str().is_some_and(|s| !s.trim().is_empty()),
+    );
+    repair_field_type(config, &defaults, "realtimeTranslationEngine", |value| {
+        value
+            .as_str()
+            .is_some_and(|engine| matches!(engine, "onnx" | "llama-cpp"))
+    });
     repair_field_type(config, &defaults, "realtimeTranslationModelId", |value| {
         value.is_null() || value.as_str().is_some()
     });

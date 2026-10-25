@@ -24,6 +24,20 @@ export interface CaptionWindowStyle {
   translationFontSize?: number;
 }
 
+export interface CaptionWindowOpenOptions {
+  alwaysOnTop?: boolean;
+  lockWindow?: boolean;
+  width?: number;
+  fontSize?: number;
+  color?: string;
+  backgroundColor?: string;
+  backgroundOpacity?: number;
+  displayMode?: 'bilingual' | 'translation' | 'original';
+  bilingualOrder?: 'original_first' | 'translation_first';
+  translationColor?: string;
+  translationFontSize?: number;
+}
+
 export interface CaptionWindowState {
   revision: number;
   segments: TranscriptSegment[];
@@ -140,15 +154,7 @@ export class CaptionWindowService {
     return nextState;
   }
 
-  async open(options?: {
-    alwaysOnTop?: boolean;
-    lockWindow?: boolean;
-    width?: number;
-    fontSize?: number;
-    color?: string;
-    backgroundColor?: string;
-    backgroundOpacity?: number;
-  }) {
+  async open(options?: CaptionWindowOpenOptions) {
     logger.info('[CaptionWindowService] Opening caption window', {
       width: options?.width ?? this.state.style.width,
       fontSize: options?.fontSize ?? this.state.style.fontSize,
@@ -165,23 +171,23 @@ export class CaptionWindowService {
       color: options?.color ?? this.state.style.color,
       backgroundColor: options?.backgroundColor ?? this.state.style.backgroundColor,
       backgroundOpacity: options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
-      ...((options as Partial<CaptionWindowStyle>)?.displayMode !== undefined
-        ? { displayMode: (options as Partial<CaptionWindowStyle>).displayMode }
+      ...(options?.displayMode !== undefined
+        ? { displayMode: options.displayMode }
         : this.state.style.displayMode !== undefined
           ? { displayMode: this.state.style.displayMode }
           : {}),
-      ...((options as Partial<CaptionWindowStyle>)?.bilingualOrder !== undefined
-        ? { bilingualOrder: (options as Partial<CaptionWindowStyle>).bilingualOrder }
+      ...(options?.bilingualOrder !== undefined
+        ? { bilingualOrder: options.bilingualOrder }
         : this.state.style.bilingualOrder !== undefined
           ? { bilingualOrder: this.state.style.bilingualOrder }
           : {}),
-      ...((options as Partial<CaptionWindowStyle>)?.translationColor !== undefined
-        ? { translationColor: (options as Partial<CaptionWindowStyle>).translationColor }
+      ...(options?.translationColor !== undefined
+        ? { translationColor: options.translationColor }
         : this.state.style.translationColor !== undefined
           ? { translationColor: this.state.style.translationColor }
           : {}),
-      ...((options as Partial<CaptionWindowStyle>)?.translationFontSize !== undefined
-        ? { translationFontSize: (options as Partial<CaptionWindowStyle>).translationFontSize }
+      ...(options?.translationFontSize !== undefined
+        ? { translationFontSize: options.translationFontSize }
         : this.state.style.translationFontSize !== undefined
           ? { translationFontSize: this.state.style.translationFontSize }
           : {}),

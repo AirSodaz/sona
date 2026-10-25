@@ -110,4 +110,156 @@ describe('VoiceTypingSessionMachine', () => {
     expect(mockTranslateText).toHaveBeenCalledWith('Good morning', 'zh', expect.any(Function));
     expect(mockInjectText).toHaveBeenCalledWith('slow_fallback_translation');
   });
+
+  it('does not reuse stream translation and translates full text when multiple segments exist', async () => {
+    await machine.start({ isTranslate: true });
+
+    const segment1: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Hello ',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      translation: '你好',
+    };
+
+    const segment2: TranscriptSegment = {
+      id: 'seg-2',
+      text: 'world',
+      start: 1,
+      end: 2,
+      isFinal: true,
+      translation: '世界',
+    };
+
+    (machine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [segment1],
+    });
+    await (machine as any).segmentProcessingChain;
+
+    (machine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [segment2],
+    });
+    await (machine as any).segmentProcessingChain;
+
+    await machine.stop();
+
+    // When multiple segments exist, stream translation must NOT be reused; full text is translated
+    expect(mockTranslateText).toHaveBeenCalledWith('Helloworld', 'zh', expect.any(Function));
+    expect(mockInjectText).toHaveBeenCalledWith('slow_fallback_translation');
+  });
+
+  it('does not reuse stream translation in polish mode', async () => {
+    const mockPolishText = vi.fn().mockResolvedValue('Polished Hello World');
+    const polishMachine = new VoiceTypingSessionMachine({
+      transcriptionService: mockTranscriptionService,
+      overlayPresenter: mockOverlayPresenter,
+      resolveOverlayPosition: vi.fn().mockResolvedValue([100, 100]),
+      resolveOverlayPositionAfterCommit: vi.fn().mockResolvedValue([100, 100]),
+      ensureMicrophoneStarted: vi.fn().mockResolvedValue(undefined),
+      resolveMicrophoneGain: () => 1.0,
+      injectText: mockInjectText,
+      translateText: mockTranslateText,
+      polishText: mockPolishText,
+      getTargetLanguage: () => 'zh',
+      onTextCommitted: mockOnTextCommitted,
+      getProcessingMode: () => 'polish',
+      isSoundEnabled: () => false,
+      isCjkSpacingEnabled: () => false,
+    });
+
+    await polishMachine.start({ isTranslate: true });
+
+    const segment: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'hello world',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      translation: '你好世界',
+    };
+
+    (polishMachine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [segment],
+    });
+    await (polishMachine as any).segmentProcessingChain;
+
+    await polishMachine.stop();
+
+    expect(mockPolishText).toHaveBeenCalledWith('hello world', null, expect.any(Function));
+    // translateText must be called on the polished text, NOT using the unpolished stream translation
+    expect(mockTranslateText).toHaveBeenCalledWith(
+      'Polished Hello World',
+      'zh',
+      expect.any(Function)
+    );
+    expect(mockInjectText).toHaveBeenCalledWith('slow_fallback_translation');
+  });
+
+  it('clears latestStreamDraftTranslation on final segment', async () => {
+    await machine.start({ isTranslate: true });
+
+    const partialSegment: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Hello',
+      start: 0,
+      end: 1,
+      isFinal: false,
+      draftTranslation: '草稿',
+    };
+
+    (machine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [partialSegment],
+    });
+    await (machine as any).segmentProcessingChain;
+    expect((machine as any).latestStreamDraftTranslation).toBe('草稿');
+
+    const finalSegment: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Hello',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      translation: '你好',
+      draftTranslation: undefined,
+    };
+
+    (machine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [finalSegment],
+    });
+    await (machine as any).segmentProcessingChain;
+    expect((machine as any).latestStreamDraftTranslation).toBeNull();
+  });
+
+  it('does not reuse stream translation when no segments have finalized', async () => {
+    await machine.start({ isTranslate: true });
+
+    // Only a partial segment is received before stop
+    const partialSegment: TranscriptSegment = {
+      id: 'seg-1',
+      text: 'Good evening',
+      start: 0,
+      end: 1,
+      isFinal: false,
+      translation: '晚上', // Partial/incomplete stream translation
+    };
+
+    (machine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [partialSegment],
+    });
+    await (machine as any).segmentProcessingChain;
+
+    await machine.stop();
+
+    // Because the segment was never finalized (accumulatedPolishText.length === 0),
+    // the partial stream translation must NOT be reused; full text is translated via translateText
+    expect(mockTranslateText).toHaveBeenCalledWith('Good evening', 'zh', expect.any(Function));
+    expect(mockInjectText).toHaveBeenCalledWith('slow_fallback_translation');
+  });
 });

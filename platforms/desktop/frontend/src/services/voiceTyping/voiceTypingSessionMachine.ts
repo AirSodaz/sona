@@ -136,7 +136,7 @@ export class VoiceTypingSessionMachine {
   private revision = 0;
   private readonly committedSegmentIds = new Set<string>();
   private segmentProcessingChain: Promise<void> = Promise.resolve();
-  private silenceCommitTimer: number | null = null;
+  private silenceCommitTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly options: VoiceTypingSessionMachineOptions) {}
 
@@ -435,8 +435,12 @@ export class VoiceTypingSessionMachine {
           }
         }
 
-        // 2. Translate step: reuse stream translation if already available
-        let translatedText = this.latestStreamTranslation?.trim();
+        // 2. Translate step: reuse stream translation only when non-polish and single segment
+        const canReuseStreamTranslation =
+          mode !== 'polish' && this.accumulatedPolishText.length === 1;
+        let translatedText = canReuseStreamTranslation
+          ? this.latestStreamTranslation?.trim()
+          : undefined;
         if (!translatedText) {
           await this.publishOverlay({
             sessionId,
@@ -711,7 +715,9 @@ export class VoiceTypingSessionMachine {
     if (segment.translation) {
       this.latestStreamTranslation = segment.translation;
     }
-    if (segment.draftTranslation !== undefined) {
+    if (segment.isFinal) {
+      this.latestStreamDraftTranslation = null;
+    } else if (segment.draftTranslation !== undefined) {
       this.latestStreamDraftTranslation = segment.draftTranslation;
     }
 
@@ -1057,7 +1063,7 @@ export class VoiceTypingSessionMachine {
 
   private clearSilenceCommitTimer() {
     if (this.silenceCommitTimer !== null) {
-      window.clearTimeout(this.silenceCommitTimer);
+      clearTimeout(this.silenceCommitTimer);
       this.silenceCommitTimer = null;
     }
   }
@@ -1065,8 +1071,7 @@ export class VoiceTypingSessionMachine {
   private armSilenceCommitTimer(sessionId: string, requestId: number) {
     this.clearSilenceCommitTimer();
     const timeoutMs = this.options.silenceTimeoutMs ?? DEFAULT_BATCH_SILENCE_TIMEOUT_MS;
-    this.silenceCommitTimer = window.setTimeout(() => {
-      this.silenceCommitTimer = null;
+    this.silenceCommitTimer = setTimeout(() => {
       if (
         this.isCurrentSession(sessionId, requestId) &&
         !this.manualStopPending &&
