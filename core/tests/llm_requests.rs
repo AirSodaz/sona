@@ -276,6 +276,7 @@ fn translate_request_validation_requires_target_language() {
         chunk_size: None,
         target_language: "  ".to_string(),
         target_language_name: None,
+        source_language: None,
         context: None,
         keywords: None,
     };
@@ -385,6 +386,7 @@ fn transcript_job_request_uses_core_transcript_segments() {
         segments: vec![sample_transcript_segment()],
         target_language: Some("fr".to_string()),
         target_language_name: Some("French".to_string()),
+        source_language: None,
         context: None,
         keywords: None,
         mode: None,
@@ -447,6 +449,7 @@ fn transcript_job_request_sanitize_for_task() {
         segments: vec![sample_transcript_segment()],
         target_language: Some("es".to_string()),
         target_language_name: Some("Spanish".to_string()),
+        source_language: None,
         context: Some("Meeting notes".to_string()),
         keywords: Some("AI, Rust".to_string()),
         mode: Some(sona_core::llm::tasks::PolishMode::Clean),

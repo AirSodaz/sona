@@ -120,9 +120,23 @@ export function getFeatureLlmConfig(
   const effectiveBudget = isBudgetMode ? reasoningBudget : undefined;
   const effectiveReasoningLevel = effectiveBudget ? String(effectiveBudget) : reasoningLevel;
 
+  const baseConfig = buildLlmConfig(
+    modelEntry.provider,
+    setting,
+    config.llmSettings?.customProviders
+  );
+  const isLocalNmt =
+    modelEntry.provider === 'local' &&
+    feature === 'translation' &&
+    (modelEntry.model === 'auto' ||
+      modelEntry.model.toLowerCase().includes('opus') ||
+      modelEntry.model.includes('本地 NMT') ||
+      modelEntry.model.includes('Auto-Match NMT'));
+
   return {
-    ...buildLlmConfig(modelEntry.provider, setting, config.llmSettings?.customProviders),
-    model: modelEntry.model,
+    ...baseConfig,
+    strategy: isLocalNmt ? 'local_nmt' : baseConfig.strategy,
+    model: modelEntry.model === '本地 NMT 自动匹配 (Auto-Match NMT)' ? 'auto' : modelEntry.model,
     temperature: getFeatureTemperature(config, feature),
     reasoningEnabled,
     reasoningLevel: reasoningEnabled ? effectiveReasoningLevel : undefined,

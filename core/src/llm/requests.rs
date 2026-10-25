@@ -140,11 +140,18 @@ pub fn validate_polish_segments_request(
 
     if matches!(
         request.config.strategy,
-        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+        LlmProviderStrategy::GoogleTranslate
+            | LlmProviderStrategy::GoogleTranslateFree
+            | LlmProviderStrategy::LocalNmt
     ) {
+        let name = if request.config.strategy == LlmProviderStrategy::LocalNmt {
+            "Local NMT"
+        } else {
+            "Google Translate"
+        };
         return Err(LlmRequestValidationError::new(
             "strategy",
-            "Google Translate does not support transcript polishing",
+            format!("{name} does not support transcript polishing"),
         ));
     }
 
@@ -239,6 +246,8 @@ pub struct TranslateSegmentsRequest {
     pub target_language: String,
     pub target_language_name: Option<String>,
     #[serde(default)]
+    pub source_language: Option<String>,
+    #[serde(default)]
     pub context: Option<String>,
     #[serde(default)]
     pub keywords: Option<String>,
@@ -270,6 +279,8 @@ pub struct TranscriptLlmJobRequest {
     pub segments: Vec<TranscriptSegment>,
     pub target_language: Option<String>,
     pub target_language_name: Option<String>,
+    #[serde(default)]
+    pub source_language: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
     #[serde(default)]

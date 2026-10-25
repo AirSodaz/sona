@@ -84,7 +84,9 @@ impl LlmModelCapabilities {
         // 1. Translation-only providers
         if matches!(
             strategy,
-            LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+            LlmProviderStrategy::GoogleTranslate
+                | LlmProviderStrategy::GoogleTranslateFree
+                | LlmProviderStrategy::LocalNmt
         ) {
             return Self {
                 reasoning: false,

@@ -36,6 +36,8 @@ import {
   isProviderConfiguredForConfig,
 } from './helpers';
 
+const AUTO_NMT_LABEL = '本地 NMT 自动匹配 (Auto-Match NMT)';
+
 interface FeatureCardProps {
   stepNumber: number;
   featureId: LlmFeature;
@@ -128,7 +130,11 @@ export function FeatureCard({
     }
     return raw;
   }, [configuredProvider, featureId, modelEntry?.provider]);
-  const selectedModel = modelEntry?.model || '';
+  const isAutoNmtSelected =
+    featureId === 'translation' &&
+    modelEntry?.provider === 'local' &&
+    (modelEntry.model === 'auto' || modelEntry.model === AUTO_NMT_LABEL);
+  const selectedModel = isAutoNmtSelected ? AUTO_NMT_LABEL : modelEntry?.model || '';
   const temperature =
     featureId === 'polish'
       ? (currentLlmState.selections.polishTemperature ?? DEFAULT_LLM_TEMPERATURE)
@@ -464,13 +470,16 @@ export function FeatureCard({
           baseUrl: setting.apiHost,
           apiKey: setting.apiKey,
         });
-        const models = Array.isArray(result)
+        let models = Array.isArray(result)
           ? result
               .map((entry) => (typeof entry === 'string' ? entry : entry.model))
               .filter(
                 (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
               )
           : [];
+        if (provider === 'local' && featureId === 'translation') {
+          models = [AUTO_NMT_LABEL, ...models];
+        }
         setModelCandidates(models);
         if (provider !== 'local') {
           applyTrackedLlmSettings(
@@ -480,7 +489,11 @@ export function FeatureCard({
       } catch {
         const latestLlmState = latestLlmStateRef.current;
         const persistedModels = getProviderLlmModels(latestLlmState, provider);
-        setModelCandidates(persistedModels.map((entry) => entry.model));
+        let models = persistedModels.map((entry) => entry.model);
+        if (provider === 'local' && featureId === 'translation') {
+          models = [AUTO_NMT_LABEL, ...models];
+        }
+        setModelCandidates(models);
       } finally {
         setIsLoadingCandidates(false);
         setHasLoadedCandidates(true);
@@ -536,16 +549,27 @@ export function FeatureCard({
 
   useEffect(() => {
     if (localProvider === 'local' && hasLoadedCandidates && !isLoadingCandidates) {
+      const isAutoNmt =
+        featureId === 'translation' &&
+        (modelEntry?.model === 'auto' || modelEntry?.model === AUTO_NMT_LABEL);
       if (
         modelEntry?.provider === 'local' &&
         modelEntry.model &&
+        !isAutoNmt &&
         !modelCandidates.includes(modelEntry.model)
       ) {
         applyTrackedLlmSettings(
           setFeatureModelSelection(latestLlmStateRef.current, featureId, undefined)
         );
       }
-      if (localModelName && !modelCandidates.includes(localModelName)) {
+      if (
+        localModelName &&
+        !(
+          featureId === 'translation' &&
+          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto')
+        ) &&
+        !modelCandidates.includes(localModelName)
+      ) {
         setLocalModelName('');
       }
     }
@@ -573,15 +597,23 @@ export function FeatureCard({
     ) {
       return;
     }
+    const isAutoNmt =
+      providerToSave === 'local' &&
+      featureId === 'translation' &&
+      (trimmedModel === AUTO_NMT_LABEL || trimmedModel === 'auto');
 
-    if (providerToSave === 'local' && !modelCandidates.includes(trimmedModel)) {
+    if (providerToSave === 'local' && !isAutoNmt && !modelCandidates.includes(trimmedModel)) {
       return;
     }
+    const modelToPersist = isAutoNmt ? 'auto' : trimmedModel;
     const latestLlmState = latestLlmStateRef.current;
-    let nextState = addLlmModel(latestLlmState, { provider: providerToSave, model: trimmedModel });
+    let nextState = addLlmModel(latestLlmState, {
+      provider: providerToSave,
+      model: modelToPersist,
+    });
     const entryId = nextState.modelOrder.find((id) => {
       const existing = nextState.models[id];
-      return existing?.provider === providerToSave && existing.model === trimmedModel;
+      return existing?.provider === providerToSave && existing.model === modelToPersist;
     });
 
     if (!entryId) {
@@ -595,6 +627,7 @@ export function FeatureCard({
       (providerToSave === 'local' ? { apiHost: '', apiKey: '' } : undefined);
     if (
       !providerSetting ||
+      isAutoNmt ||
       providerToSave === 'google_translate' ||
       providerToSave === 'google_translate_free'
     ) {
@@ -642,6 +675,9 @@ export function FeatureCard({
     ) {
       setLocalModelName('default');
       commitModelChange(p, 'default');
+    } else if (featureId === 'translation' && p === 'local') {
+      setLocalModelName(AUTO_NMT_LABEL);
+      commitModelChange(p, AUTO_NMT_LABEL);
     } else {
       setLocalModelName('');
     }
@@ -657,7 +693,10 @@ export function FeatureCard({
     if (!candidateContainerRef.current?.contains(e.relatedTarget as Node)) {
       setIsCandidateMenuOpen(false);
       if (localProvider === 'local') {
-        if (!modelCandidates.includes(localModelName)) {
+        const isAutoNmt =
+          featureId === 'translation' &&
+          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto');
+        if (!isAutoNmt && !modelCandidates.includes(localModelName)) {
           setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
           return;
         }
@@ -706,7 +745,10 @@ export function FeatureCard({
       }
       setIsCandidateMenuOpen(false);
       if (localProvider === 'local') {
-        if (!modelCandidates.includes(localModelName)) {
+        const isAutoNmt =
+          featureId === 'translation' &&
+          (localModelName === AUTO_NMT_LABEL || localModelName === 'auto');
+        if (!isAutoNmt && !modelCandidates.includes(localModelName)) {
           setLocalModelName(modelCandidates.includes(selectedModel) ? selectedModel : '');
           return;
         }

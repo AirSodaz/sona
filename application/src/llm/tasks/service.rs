@@ -262,13 +262,16 @@ where
             request.config.strategy,
             sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
                 | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
+                | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
         );
+        let source_language = request.source_language.clone();
         let mut pending = stream::iter(chunks.into_iter().enumerate())
             .map(|(chunk_index, planned)| {
                 let chunk = segments[planned.start..planned.end].to_vec();
                 let config = config.clone();
                 let target_language = target_language.clone();
                 let target_language_name = target_language_name.clone();
+                let source_language = source_language.clone();
                 let lookbehind_start = planned.start.saturating_sub(4);
                 let lookbehind = segments[lookbehind_start..planned.start].to_vec();
                 let prompt = if planned.start == 0 {
@@ -287,8 +290,14 @@ where
                 };
                 async move {
                     let result = if direct_translation {
-                        self.translate_direct_chunk(config, chunk, target_language, chunk_index + 1)
-                            .await
+                        self.translate_direct_chunk(
+                            config,
+                            chunk,
+                            target_language,
+                            chunk_index + 1,
+                            source_language,
+                        )
+                        .await
                     } else {
                         self.complete_translate_chunk(
                             config,
@@ -563,6 +572,7 @@ where
         expected: Vec<sona_core::llm::tasks::LlmSegmentInput>,
         target_language: String,
         chunk_number: usize,
+        source_language: Option<String>,
     ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
         let texts = expected
             .iter()
@@ -573,6 +583,7 @@ where
                 config,
                 texts,
                 target_language,
+                source_language,
             })
             .await
             .map_err(|source| runtime_error(&format!("translate chunk {chunk_number}"), source))?;

@@ -1587,7 +1587,7 @@ export type LlmPromptCachePolicy = "disabled" | "automatic";
 
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
 
-export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local";
+export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local" | "local_nmt";
 
 export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
@@ -2999,6 +2999,7 @@ export type TranscriptLlmJobRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	targetLanguage: string | null,
 	targetLanguageName: string | null,
+	sourceLanguage?: string | null,
 	context: string | null,
 	keywords: string | null,
 	mode?: PolishMode | null,
@@ -3015,6 +3016,7 @@ export type TranscriptLlmJobRequest_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 	targetLanguage: string | null,
 	targetLanguageName: string | null,
+	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
 	mode: PolishMode | null,
@@ -3156,6 +3158,7 @@ export type TranslateSegmentsRequest_Deserialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	sourceLanguage?: string | null,
 	context?: string | null,
 	keywords?: string | null,
 };
@@ -3167,6 +3170,7 @@ export type TranslateSegmentsRequest_Serialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
 };

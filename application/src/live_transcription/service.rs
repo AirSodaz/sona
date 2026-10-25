@@ -118,7 +118,7 @@ pub struct LiveTranscriptionCoordinator {
 struct CoordinatorInner {
     factory: Arc<dyn StreamingAsrFactoryPort>,
     telemetry: Arc<dyn AsrRuntimeObserver>,
-    translation: Option<Arc<StreamingTranslationCoordinator>>,
+    translation: parking_lot::RwLock<Option<Arc<StreamingTranslationCoordinator>>>,
     state: AsyncMutex<CoordinatorState>,
     lifecycle_guard: AsyncMutex<()>,
     feed_guard: AsyncMutex<()>,
@@ -382,7 +382,7 @@ impl LiveTranscriptionCoordinator {
             inner: Arc::new(CoordinatorInner {
                 factory,
                 telemetry,
-                translation,
+                translation: parking_lot::RwLock::new(translation),
                 state: AsyncMutex::new(CoordinatorState::default()),
                 lifecycle_guard: AsyncMutex::new(()),
                 feed_guard: AsyncMutex::new(()),
@@ -764,8 +764,12 @@ impl LiveTranscriptionCoordinator {
         }
     }
 
+    pub fn set_translation(&self, translation: Option<Arc<StreamingTranslationCoordinator>>) {
+        *self.inner.translation.write() = translation;
+    }
+
     pub fn clear_translation(&self) {
-        if let Some(translator) = &self.inner.translation {
+        if let Some(translator) = self.inner.translation.read().as_ref() {
             translator.clear();
         }
     }
@@ -944,7 +948,8 @@ impl CoordinatorInner {
     }
 
     async fn dispatch_transcript(&self, mut event: AsrTranscriptUpdateEvent) {
-        if let Some(translator) = &self.translation {
+        let translator = self.translation.read().clone();
+        if let Some(translator) = translator {
             translator.enrich_update(&mut event.update).await;
         }
         let mut state = self.state.lock().await;

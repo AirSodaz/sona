@@ -418,6 +418,14 @@ type ManualTauriCommandContractMap = {
     args: undefined;
     result: LocalLlmCardsResponse;
   };
+  [TauriCommand.llm.listLocalNmtCards]: {
+    args: undefined;
+    result: LocalLlmCardsResponse;
+  };
+  [TauriCommand.llm.testLocalNmtModel]: {
+    args: { modelId: string; text: string };
+    result: string;
+  };
   [TauriCommand.llm.importLocalLlmFile]: {
     args: { sourcePath: string };
     result: string;

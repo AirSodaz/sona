@@ -200,6 +200,7 @@ export function normalizeTranscriptJobRequest(
     targetLanguage: 'targetLanguage' in request ? request.targetLanguage : null,
     targetLanguageName:
       'targetLanguageName' in request ? (request.targetLanguageName ?? null) : null,
+    sourceLanguage: 'sourceLanguage' in request ? (request.sourceLanguage ?? null) : null,
     context: 'context' in request ? (request.context ?? null) : null,
     keywords: 'keywords' in request ? (request.keywords ?? null) : null,
     mode: 'mode' in request ? (request.mode ?? null) : null,

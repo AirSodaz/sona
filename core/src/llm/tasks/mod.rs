@@ -84,6 +84,8 @@ pub enum LlmProviderStrategy {
     OpenAiCompatibleCustomPath,
     #[serde(rename = "local")]
     Local,
+    #[serde(rename = "local_nmt")]
+    LocalNmt,
 }
 
 impl LlmProviderStrategy {
@@ -184,6 +186,7 @@ impl<'de> Deserialize<'de> for LlmProviderStrategy {
                 Self::OpenAiCompatibleCustomPath
             }
             "local" | "llama_cpp" | "local_model" => Self::Local,
+            "local_nmt" | "onnx_nmt" => Self::LocalNmt,
             _ => Self::OpenAiCompatible,
         })
     }

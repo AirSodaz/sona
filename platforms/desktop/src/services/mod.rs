@@ -107,6 +107,7 @@ pub struct DesktopServices {
     pub downloads: Arc<DownloadState>,
     pub emitter: Arc<dyn EventEmitterPort>,
     pub recording_session: DesktopRecordingSessionTracker,
+    pub translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
 }
 
 #[derive(Default)]
@@ -119,6 +120,7 @@ pub struct DesktopServicesBuilder {
     audio: Option<Arc<AudioState>>,
     asr: Option<Arc<AsrState>>,
     downloads: Option<Arc<DownloadState>>,
+    translation_pool: Option<Arc<crate::integrations::translation::TranslationModelPool>>,
 }
 
 impl DesktopServicesBuilder {
@@ -166,6 +168,13 @@ impl DesktopServicesBuilder {
         self
     }
 
+    pub fn translation_pool(
+        mut self,
+        translation_pool: Arc<crate::integrations::translation::TranslationModelPool>,
+    ) -> Self {
+        self.translation_pool = Some(translation_pool);
+        self
+    }
     pub fn build(self) -> Result<DesktopServices, String> {
         let sqlite = self
             .sqlite
@@ -197,6 +206,9 @@ impl DesktopServicesBuilder {
             .downloads
             .unwrap_or_else(|| Arc::new(DownloadState::new()));
         let recording_session = DesktopRecordingSessionTracker::new();
+        let translation_pool = self.translation_pool.unwrap_or_else(|| {
+            Arc::new(crate::integrations::translation::TranslationModelPool::new())
+        });
 
         Ok(DesktopServices {
             sqlite,
@@ -210,6 +222,7 @@ impl DesktopServicesBuilder {
             downloads,
             emitter,
             recording_session,
+            translation_pool,
         })
     }
 }

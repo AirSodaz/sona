@@ -173,6 +173,7 @@ async fn run_translate_job(
                 chunk_size: req.chunk_size,
                 target_language: req.target_language.unwrap_or_else(|| "zh".to_string()),
                 target_language_name: req.target_language_name,
+                source_language: req.source_language,
                 context: req.context,
                 keywords: req.keywords,
             };

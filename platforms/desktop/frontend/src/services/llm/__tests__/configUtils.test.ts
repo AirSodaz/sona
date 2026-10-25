@@ -285,4 +285,19 @@ describe('llm runtime', () => {
       })
     );
   });
+
+  it('resolves local NMT translation config with local_nmt strategy and auto model', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'auto' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+
+    const config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        provider: 'local',
+        strategy: 'local_nmt',
+        model: 'auto',
+      })
+    );
+  });
 });
