@@ -76,6 +76,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
       config.livePunctuationModelPath,
       config.liveVadModelPath,
       config.liveVadBufferSize,
+      config.realtimeTranslationEnabled,
+      config.realtimeTranslationSourceLanguage,
+      config.realtimeTranslationTargetLanguage,
     ];
     void _recognizerConfig;
 
@@ -96,6 +99,9 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.livePunctuationModelPath,
     config.liveVadModelPath,
     config.liveVadBufferSize,
+    config.realtimeTranslationEnabled,
+    config.realtimeTranslationSourceLanguage,
+    config.realtimeTranslationTargetLanguage,
     isCaptionMode,
     isInitializing,
   ]);
@@ -113,6 +119,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.captionFontColor,
     config.captionBackgroundColor,
     config.captionBackgroundOpacity,
+    config.captionTranslationFontSize,
+    config.captionTranslationFontColor,
+    config.captionDisplayMode,
+    config.captionBilingualOrder,
     isCaptionMode,
     isInitializing,
   ]);

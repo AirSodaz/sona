@@ -38,6 +38,8 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
     backgroundOpacity: config.captionBackgroundOpacity,
     displayMode: config.captionDisplayMode,
     bilingualOrder: config.captionBilingualOrder,
+    translationColor: config.captionTranslationFontColor,
+    translationFontSize: config.captionTranslationFontSize,
   };
 }
 
@@ -365,6 +367,8 @@ class CaptionSessionRuntime {
         backgroundOpacity: config.captionBackgroundOpacity,
         displayMode: config.captionDisplayMode,
         bilingualOrder: config.captionBilingualOrder,
+        translationColor: config.captionTranslationFontColor,
+        translationFontSize: config.captionTranslationFontSize,
       })
     );
   }

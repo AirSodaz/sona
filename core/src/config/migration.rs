@@ -317,6 +317,10 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     }
     if existing.get("captionDisplayMode") != normalized.get("captionDisplayMode")
         || existing.get("captionBilingualOrder") != normalized.get("captionBilingualOrder")
+        || existing.get("captionTranslationFontSize")
+            != normalized.get("captionTranslationFontSize")
+        || existing.get("captionTranslationFontColor")
+            != normalized.get("captionTranslationFontColor")
         || existing.get("realtimeTranslationEnabled")
             != normalized.get("realtimeTranslationEnabled")
         || existing.get("realtimeTranslationSourceLanguage")
@@ -538,6 +542,18 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "captionFontColor",
             json!(string_or_default(&parsed, "captionFontColor", "#ffffff")),
+        ),
+        (
+            "captionTranslationFontSize",
+            json!(number_or_default(&parsed, "captionTranslationFontSize", 18)),
+        ),
+        (
+            "captionTranslationFontColor",
+            json!(string_or_default(
+                &parsed,
+                "captionTranslationFontColor",
+                "#6ee7b7"
+            )),
         ),
         (
             "captionBackgroundColor",
@@ -895,6 +911,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "batchAlignmentModelPath",
         "modelDownloadMirror",
         "captionFontColor",
+        "captionTranslationFontColor",
         "captionBackgroundColor",
         "language",
         "summaryTemplateId",
@@ -959,6 +976,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "microphoneBoost",
         "captionWindowWidth",
         "captionFontSize",
+        "captionTranslationFontSize",
         "captionBackgroundOpacity",
         "liveVadBufferSize",
         "batchVadBufferSize",

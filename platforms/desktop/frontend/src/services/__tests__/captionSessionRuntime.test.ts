@@ -142,6 +142,8 @@ describe('captionSessionRuntime', () => {
       backgroundOpacity: config.captionBackgroundOpacity,
       displayMode: config.captionDisplayMode,
       bilingualOrder: config.captionBilingualOrder,
+      translationColor: config.captionTranslationFontColor,
+      translationFontSize: config.captionTranslationFontSize,
     });
   });
 

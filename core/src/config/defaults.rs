@@ -48,6 +48,8 @@ pub fn default_config() -> Value {
         ("captionWindowWidth", json!(800)),
         ("captionFontSize", json!(24)),
         ("captionFontColor", json!("#ffffff")),
+        ("captionTranslationFontSize", json!(18)),
+        ("captionTranslationFontColor", json!("#6ee7b7")),
         ("captionBackgroundColor", json!("#000000")),
         ("captionBackgroundOpacity", json!(0.6)),
         ("captionDisplayMode", json!("bilingual")),
