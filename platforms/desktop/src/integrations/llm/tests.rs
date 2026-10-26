@@ -85,6 +85,7 @@ fn sample_transcript_segment(id: &str, text: &str) -> crate::integrations::asr::
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }
@@ -927,4 +928,102 @@ async fn desktop_llm_adapter_fails_informative_error_when_model_missing() {
 
     assert!(err.message.contains("Local model"));
     assert!(err.message.contains("Qwen3.5-4B-Q4_K_M.gguf"));
+}
+
+#[tokio::test]
+async fn test_desktop_llm_adapter_translate_batch_empty_texts() {
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+
+    let adapter = DesktopLlmAdapter::new(None);
+    let result = adapter
+        .translate_batch(LlmTranslationRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::LocalNmt,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "opus-mt-zh-en".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: None,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            texts: vec![],
+            source_language: Some("zh".to_string()),
+            target_language: "en".to_string(),
+        })
+        .await
+        .expect("empty texts should return Ok immediately");
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_desktop_llm_adapter_translate_batch_same_language_identity() {
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+
+    let adapter = DesktopLlmAdapter::new(None);
+    let texts = vec!["Hello world".to_string(), "Testing".to_string()];
+    let result = adapter
+        .translate_batch(LlmTranslationRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::LocalNmt,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "auto".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: None,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            texts: texts.clone(),
+            source_language: Some("en-US".to_string()),
+            target_language: "EN".to_string(),
+        })
+        .await
+        .expect("same language pair should return Ok immediately without loading model");
+
+    assert_eq!(result, texts);
+}
+
+#[tokio::test]
+async fn test_desktop_llm_adapter_translate_batch_extracts_model_languages() {
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+
+    let adapter = DesktopLlmAdapter::new(None);
+    let texts = vec!["Hello world".to_string()];
+    let result = adapter
+        .translate_batch(LlmTranslationRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::LocalNmt,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "opus-mt-en-en".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: None,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            texts: texts.clone(),
+            source_language: None,
+            target_language: "".to_string(),
+        })
+        .await
+        .expect("opus-mt-en-en should extract en->en and succeed via identity");
+
+    assert_eq!(result, texts);
 }

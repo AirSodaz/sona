@@ -1945,6 +1945,7 @@ fn rebuild_speaker_segments(
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: group.assignment.speaker.clone(),
             speaker_attribution: Some(group.assignment.attribution.clone()),
         };
@@ -2203,6 +2204,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         }

@@ -477,6 +477,7 @@ pub async fn execute_aimux_batch(
                 timestamps: None,
                 durations: None,
                 translation: None,
+                draft_translation: None,
                 speaker: None,
                 speaker_attribution: None,
             })
@@ -496,6 +497,7 @@ pub async fn execute_aimux_batch(
                 timestamps: None,
                 durations: None,
                 translation: None,
+                draft_translation: None,
                 speaker: None,
                 speaker_attribution: None,
             });
@@ -643,6 +645,7 @@ pub fn parse_assemblyai_raw_segments(body: &Value) -> Option<Vec<TranscriptSegme
             timestamps: (!timestamps.is_empty()).then_some(timestamps),
             durations: (!durations.is_empty()).then_some(durations),
             translation: None,
+            draft_translation: None,
             speaker,
             speaker_attribution,
         });
@@ -748,6 +751,7 @@ pub fn parse_deepgram_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment
                 timestamps: (!timestamps.is_empty()).then_some(timestamps),
                 durations: (!durations.is_empty()).then_some(durations),
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             });
@@ -804,6 +808,7 @@ pub fn parse_deepgram_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment
                 timestamps: None,
                 durations: None,
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             });
@@ -862,6 +867,7 @@ pub fn parse_deepgram_raw_segments(body: &Value) -> Option<Vec<TranscriptSegment
                     timestamps: (!timestamps.is_empty()).then_some(std::mem::take(timestamps)),
                     durations: (!durations.is_empty()).then_some(std::mem::take(durations)),
                     translation: None,
+                    draft_translation: None,
                     speaker,
                     speaker_attribution,
                 });
@@ -990,6 +996,7 @@ pub fn parse_elevenlabs_raw_segments(body: &Value) -> Option<Vec<TranscriptSegme
                 timestamps: (!timestamps.is_empty()).then_some(std::mem::take(timestamps)),
                 durations: (!durations.is_empty()).then_some(std::mem::take(durations)),
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             });
@@ -1109,6 +1116,7 @@ pub fn parse_openai_compatible_raw_segments(body: &Value) -> Option<Vec<Transcri
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker,
             speaker_attribution,
         });

@@ -39,6 +39,7 @@ pub async fn create_external_live_source(
 
 #[tauri::command(async)]
 pub async fn start_external_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_token: String,
@@ -65,7 +66,8 @@ pub async fn start_external_live_transcription(
         );
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
-    services
+    configure_realtime_translation(&services, &app);
+    let acquire_res = services
         .asr
         .live_coordinator()
         .acquire(
@@ -76,7 +78,12 @@ pub async fn start_external_live_transcription(
             asr_request,
             observer,
         )
-        .await
+        .await;
+    if acquire_res.is_err() && !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
+    }
+    acquire_res
 }
 
 #[tauri::command(async)]
@@ -135,7 +142,8 @@ pub async fn start_native_live_transcription(
         .to_path_buf();
     let capture_source_kind = source_kind.clone();
     let capture_consumer_id = consumer_id.clone();
-    let lease = crate::integrations::audio::start_native_live_capture(
+    configure_realtime_translation(&services, &app);
+    let lease = match crate::integrations::audio::start_native_live_capture(
         audio_arc,
         asr_arc,
         emitter,
@@ -146,7 +154,13 @@ pub async fn start_native_live_transcription(
         output_path,
     )
     .await
-    .map_err(AsrPortError::runtime)?;
+    {
+        Ok(lease) => lease,
+        Err(err) => {
+            services.asr.live_coordinator().set_translation(None);
+            return Err(AsrPortError::runtime(err));
+        }
+    };
     let segments_arc = Arc::new(std::sync::Mutex::new(Vec::new()));
     let observer_inner =
         TauriAsrRuntimeObserver::new(services.emitter.clone(), services.asr.metrics_store());
@@ -168,6 +182,7 @@ pub async fn start_native_live_transcription(
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
     let asr_request_for_session = asr_request.clone();
+
     match services
         .asr
         .live_coordinator()
@@ -217,6 +232,7 @@ pub async fn start_native_live_transcription(
             })
         }
         Err(error) => {
+            services.asr.live_coordinator().set_translation(None);
             let _ = crate::integrations::audio::stop_native_live_capture(
                 &services.audio,
                 &source_kind,
@@ -262,6 +278,10 @@ pub async fn stop_live_transcription(
     } else {
         Ok(())
     };
+    if !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
+    }
     {
         let mut guard = services.recording_session.lock().await;
         if let Some(session) = guard.as_ref()
@@ -328,11 +348,13 @@ pub async fn pause_native_live_transcription(
             session.coordinator_released = true;
         }
     }
+
     res
 }
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn resume_native_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
@@ -350,6 +372,7 @@ pub async fn resume_native_live_transcription(
         services.emitter.clone(),
         services.asr.metrics_store(),
     )) as Arc<dyn AsrRuntimeObserver>;
+    configure_realtime_translation(&services, &app);
     match services
         .asr
         .live_coordinator()
@@ -426,6 +449,11 @@ pub async fn stop_native_live_transcription(
                 };
                 if let Some(path) = cached_path {
                     Ok(path)
+                } else if err.contains("is not active") {
+                    log::warn!(
+                        "[ASR] Stop native live capture for '{consumer_id}' found instance already inactive: {err}"
+                    );
+                    Ok(String::new())
                 } else {
                     Err(AsrPortError::runtime(err))
                 }
@@ -442,6 +470,10 @@ pub async fn stop_native_live_transcription(
     } else {
         Ok(())
     };
+    if !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
+    }
     {
         let mut guard = services.recording_session.lock().await;
         if let Some(session) = guard.as_ref()
@@ -501,6 +533,63 @@ pub async fn test_online_asr_provider(
     config: serde_json::Value,
 ) -> Result<u64, AsrPortError> {
     sona_online_asr::test_online_asr_provider(&provider_id, &config).await
+}
+
+pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &tauri::AppHandle) {
+    let realtime_translation_enabled = services
+        .config
+        .get_setting("realtimeTranslationEnabled")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    if realtime_translation_enabled {
+        let src = services
+            .config
+            .get_setting("realtimeTranslationSourceLanguage")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "en".to_string());
+        let tgt = services
+            .config
+            .get_setting("realtimeTranslationTargetLanguage")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "zh".to_string());
+
+        if let Ok(models_dir) =
+            crate::platform::storage_location::resolve_active_models_dir_for_app(app)
+        {
+            match services
+                .translation_pool
+                .get_or_load(&src, &tgt, &models_dir)
+            {
+                Ok(adapter) => {
+                    let coordinator = Arc::new(
+                        sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                            adapter, src, tgt,
+                        ),
+                    );
+                    services
+                        .asr
+                        .live_coordinator()
+                        .set_translation(Some(coordinator));
+                }
+                Err(e) => {
+                    log::warn!("[ASR] Realtime translation model could not be loaded: {e}");
+                    services.asr.live_coordinator().set_translation(None);
+                }
+            }
+        } else {
+            log::warn!("[ASR] Failed to resolve active models directory for realtime translation");
+            services.asr.live_coordinator().set_translation(None);
+        }
+    } else {
+        services.asr.live_coordinator().set_translation(None);
+    }
 }
 
 #[cfg(test)]

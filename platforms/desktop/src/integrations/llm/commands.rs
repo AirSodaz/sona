@@ -11,7 +11,7 @@ use sona_core::ports::llm::{
 };
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone)]
 struct CommandEventEmitter {
@@ -101,8 +101,11 @@ impl DesktopTaskRuntime {
     fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
         let models_dir =
             crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+        let translation_pool = app
+            .try_state::<crate::services::DesktopServices>()
+            .map(|s| s.translation_pool.clone());
         Self {
-            inner: DesktopLlmAdapter::new(models_dir),
+            inner: DesktopLlmAdapter::with_pool(models_dir, translation_pool),
             usage: UsageRecorder::new(app, config, category),
         }
     }

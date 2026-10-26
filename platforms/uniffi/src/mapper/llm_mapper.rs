@@ -68,6 +68,7 @@ pub enum FfiLlmProviderStrategy {
     OpenAiCompatible,
     OpenAiCompatibleCustomPath,
     Local,
+    LocalNmt,
 }
 
 /// `api_key` is an opaque handle so the generated Kotlin `data class`
@@ -174,6 +175,7 @@ pub struct FfiTranslateSegmentsRequest {
     pub target_language_name: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
+    pub source_language: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, uniffi::Record)]
@@ -245,6 +247,7 @@ pub fn llm_provider_strategy_to_ffi(strategy: LlmProviderStrategy) -> FfiLlmProv
             FfiLlmProviderStrategy::OpenAiCompatibleCustomPath
         }
         LlmProviderStrategy::Local => FfiLlmProviderStrategy::Local,
+        LlmProviderStrategy::LocalNmt => FfiLlmProviderStrategy::LocalNmt,
     }
 }
 
@@ -351,6 +354,7 @@ pub fn translate_segments_request_to_ffi(
         target_language_name: request.target_language_name,
         context: request.context,
         keywords: request.keywords,
+        source_language: request.source_language,
     }
 }
 
@@ -479,6 +483,7 @@ fn llm_provider_strategy_from_ffi(strategy: FfiLlmProviderStrategy) -> LlmProvid
             LlmProviderStrategy::OpenAiCompatibleCustomPath
         }
         FfiLlmProviderStrategy::Local => LlmProviderStrategy::Local,
+        FfiLlmProviderStrategy::LocalNmt => LlmProviderStrategy::LocalNmt,
     }
 }
 
@@ -514,6 +519,7 @@ pub(crate) fn translate_segments_request_from_ffi(
         chunk_size: optional_u64_to_usize(request.chunk_size, "chunk size")?,
         target_language: request.target_language,
         target_language_name: request.target_language_name,
+        source_language: request.source_language,
         context: request.context,
         keywords: request.keywords,
     })
@@ -711,6 +717,7 @@ mod tests {
             LlmProviderStrategy::Volcengine,
             LlmProviderStrategy::GoogleTranslateFree,
             LlmProviderStrategy::OpenAiCompatibleCustomPath,
+            LlmProviderStrategy::LocalNmt,
         ] {
             let ffi = llm_provider_strategy_to_ffi(strategy);
             assert_eq!(llm_provider_strategy_from_ffi(ffi), strategy);

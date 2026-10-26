@@ -442,6 +442,7 @@ pub fn models_dev_provider_id(strategy: LlmProviderStrategy) -> Option<&'static 
         LlmProviderStrategy::Cerebras => "cerebras",
         LlmProviderStrategy::Llamafile
         | LlmProviderStrategy::Local
+        | LlmProviderStrategy::LocalNmt
         | LlmProviderStrategy::Volcengine
         | LlmProviderStrategy::GoogleTranslate
         | LlmProviderStrategy::GoogleTranslateFree

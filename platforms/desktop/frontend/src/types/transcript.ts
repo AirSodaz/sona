@@ -35,6 +35,7 @@ export interface TranscriptSegment {
   timestamps?: number[];
   durations?: number[];
   translation?: string;
+  draftTranslation?: string;
   speaker?: SpeakerTag;
   speakerAttribution?: SpeakerAttribution;
 }

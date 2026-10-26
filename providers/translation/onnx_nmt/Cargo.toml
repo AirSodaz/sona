@@ -1,0 +1,25 @@
+[package]
+name = "sona-translation-onnx"
+version.workspace = true
+description = "Lightweight on-device ONNX NMT translation provider for Sona"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.sona]
+role = "provider"
+
+[dependencies]
+async-trait = { workspace = true }
+log = { workspace = true }
+sona-core = { workspace = true }
+ort = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "ndarray"] }
+ndarray = { version = "0.16", default-features = false }
+parking_lot = { workspace = true }
+ort-sys = { version = "=2.0.0-rc.9", default-features = false, features = ["download-binaries", "copy-dylibs"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "rt"] }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

@@ -574,6 +574,7 @@ async fn flush_session_impl_inner(
                 timestamps: timestamps_abs,
                 durations,
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             };
@@ -960,6 +961,7 @@ async fn feed_audio_samples_inner(
                     timestamps: timestamps_abs,
                     durations,
                     translation: None,
+                    draft_translation: None,
                     speaker: None,
                     speaker_attribution: None,
                 };
@@ -1059,6 +1061,7 @@ async fn feed_audio_samples_inner(
                     timestamps: timestamps_abs,
                     durations,
                     translation: None,
+                    draft_translation: None,
                     speaker,
                     speaker_attribution,
                 };

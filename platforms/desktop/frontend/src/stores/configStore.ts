@@ -109,8 +109,17 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionWindowWidth: 800,
   captionFontSize: 24,
   captionFontColor: '#ffffff',
+  captionTranslationFontSize: 18,
+  captionTranslationFontColor: '#6ee7b7',
   captionBackgroundColor: '#000000',
   captionBackgroundOpacity: 0.6,
+  captionDisplayMode: 'bilingual',
+  captionBilingualOrder: 'original_first',
+  realtimeTranslationEnabled: false,
+  realtimeTranslationSourceLanguage: 'en',
+  realtimeTranslationTargetLanguage: 'zh',
+  realtimeTranslationEngine: 'onnx',
+  realtimeTranslationModelId: null,
 
   // Transcription
   language: 'auto',
@@ -153,6 +162,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   voiceTypingContextAwarenessEnabled: true,
   voiceTypingContextPreset: 'auto',
   voiceTypingContextRules: DEFAULT_VOICE_TYPING_CONTEXT_RULES,
+  voiceTypingRealtimePreview: true,
   // API Server
   httpServerEnabled: false,
   httpServerHost: '127.0.0.1',
@@ -261,8 +271,17 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
   'captionWindowWidth',
   'captionFontSize',
   'captionFontColor',
+  'captionTranslationFontSize',
+  'captionTranslationFontColor',
   'captionBackgroundColor',
   'captionBackgroundOpacity',
+  'captionDisplayMode',
+  'captionBilingualOrder',
+  'realtimeTranslationEnabled',
+  'realtimeTranslationSourceLanguage',
+  'realtimeTranslationTargetLanguage',
+  'realtimeTranslationEngine',
+  'realtimeTranslationModelId',
 ];
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
@@ -316,6 +335,7 @@ const VOICE_TYPING_KEYS: (keyof VoiceTypingConfig)[] = [
   'voiceTypingContextAwarenessEnabled',
   'voiceTypingContextPreset',
   'voiceTypingContextRules',
+  'voiceTypingRealtimePreview',
 ];
 
 const API_SERVER_KEYS: (keyof ApiServerConfig)[] = [

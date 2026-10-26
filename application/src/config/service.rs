@@ -75,10 +75,19 @@ impl<'a> AppConfigRepositoryService<'a> {
     }
 
     pub fn get_setting(&self, key: &str) -> Result<Option<Value>, ConfigError> {
-        self.store
-            .load_setting_json(key)?
-            .map(|json| serde_json::from_str(&json).map_err(ConfigError::Serialization))
-            .transpose()
+        if let Some(json) = self.store.load_setting_json(key)? {
+            return serde_json::from_str(&json)
+                .map(Some)
+                .map_err(ConfigError::Serialization);
+        }
+
+        if let Some(payload) = self.load_app_config_payload()?
+            && let Some(val) = payload.get(key)
+        {
+            return Ok(Some(val.clone()));
+        }
+
+        Ok(None)
     }
 
     pub fn set_setting(&self, key: &str, value: &Value) -> Result<(), ConfigError> {

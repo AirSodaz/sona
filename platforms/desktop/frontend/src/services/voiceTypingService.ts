@@ -102,6 +102,7 @@ export class VoiceTypingService {
         this.ports.getConfig().voiceTypingTargetLanguage ||
         this.ports.getConfig().translationLanguage ||
         'en',
+      getStreamTargetLanguage: () => this.ports.getConfig().realtimeTranslationTargetLanguage,
       onPolishFailed: () => {
         const now = Date.now();
         void useTaskLedgerStore.getState().upsertTask({

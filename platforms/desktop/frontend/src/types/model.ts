@@ -14,4 +14,7 @@ export interface ModelFileConfig {
   uncachedDecoder?: string;
   cachedDecoder?: string;
   mergedDecoder?: string;
+  sourceSpm?: string;
+  targetSpm?: string;
+  vocab?: string;
 }

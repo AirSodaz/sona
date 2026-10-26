@@ -43,6 +43,7 @@ pub fn apply_transcript_edit(
         TranscriptEditOperation::UpdateText { segment_id, text } => {
             let segment = find_segment_mut(&mut segments, &segment_id)?;
             segment.text = required_text("Transcript text", text)?;
+            segment.draft_translation = None;
             reset_timing(segment);
         }
         TranscriptEditOperation::UpdateTranslation {
@@ -51,6 +52,7 @@ pub fn apply_transcript_edit(
         } => {
             let segment = find_segment_mut(&mut segments, &segment_id)?;
             segment.translation = optional_text(translation);
+            segment.draft_translation = None;
         }
         TranscriptEditOperation::Delete { segment_id } => {
             let index = find_segment_index(&segments, &segment_id)?;
@@ -77,6 +79,7 @@ pub fn apply_transcript_edit(
             merged.text = join_text(&first.text, &second.text);
             merged.translation =
                 join_optional_text(first.translation.as_deref(), second.translation.as_deref());
+            merged.draft_translation = None;
             merged.start = first.start.min(second.start);
             merged.end = first.end.max(second.end);
             reset_timing(&mut merged);
@@ -118,6 +121,7 @@ pub fn apply_transcript_edit(
             let mut left = original.clone();
             left.text = left_text;
             left.translation = left_translation;
+            left.draft_translation = None;
             left.end = boundary;
             reset_timing(&mut left);
 
@@ -125,6 +129,7 @@ pub fn apply_transcript_edit(
             right.id = new_segment_id;
             right.text = right_text;
             right.translation = right_translation;
+            right.draft_translation = None;
             right.start = boundary;
             reset_timing(&mut right);
             segments.splice(index..=index, [left, right]);
@@ -260,6 +265,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         }

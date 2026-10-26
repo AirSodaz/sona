@@ -36,6 +36,7 @@ fn segment(group_id: &str) -> TranscriptSegment {
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: Some(SpeakerTag {
             id: group_id.to_string(),
             label: "Speaker 1".to_string(),

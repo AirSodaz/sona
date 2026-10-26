@@ -249,9 +249,20 @@ fn run_capture_worker<F>(
     let capture_failure = CaptureFailure::default();
     let callback_failure = capture_failure.clone();
     let error_notifier = notifier.clone();
-    let stream_error = move |error| {
-        callback_failure.record(format!("Audio stream failed: {error}"));
-        error_notifier.notify();
+    let stream_error = move |error: cpal::Error| match error.kind() {
+        cpal::ErrorKind::Xrun => {
+            log::warn!("Audio capture buffer underrun/overrun (xrun): {error}");
+        }
+        cpal::ErrorKind::DeviceChanged => {
+            log::info!("Audio capture route changed; stream automatically rerouted: {error}");
+        }
+        cpal::ErrorKind::RealtimeDenied => {
+            log::warn!("Audio capture real-time scheduling denied: {error}");
+        }
+        _ => {
+            callback_failure.record(format!("Audio stream failed: {error}"));
+            error_notifier.notify();
+        }
     };
 
     let data_notifier = {
@@ -398,5 +409,43 @@ mod tests {
             CaptureEvent::Error("fail".into()),
             CaptureEvent::Error("fail".into())
         );
+    }
+
+    #[test]
+    fn live_audio_capture_pipeline_loopback_survives_transient_xrun() {
+        use cpal::traits::HostTrait;
+        let host = cpal::default_host();
+        if let Some(device) = host.default_output_device() {
+            let chunks_received = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let errors_received = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let chunks_clone = chunks_received.clone();
+            let errors_clone = errors_received.clone();
+            let res = LiveAudioCapturePipeline::start(
+                &device,
+                "default_output",
+                CaptureDirection::Output,
+                LiveCaptureConfig::default(),
+                move |event| match event {
+                    CaptureEvent::Chunk(_) => {
+                        chunks_clone.fetch_add(1, Ordering::Relaxed);
+                        true
+                    }
+                    CaptureEvent::Error(_) => {
+                        errors_clone.fetch_add(1, Ordering::Relaxed);
+                        false
+                    }
+                    CaptureEvent::Eof => false,
+                },
+            );
+            if let Ok(handle) = res {
+                std::thread::sleep(Duration::from_millis(300));
+                assert_eq!(
+                    errors_received.load(Ordering::Relaxed),
+                    0,
+                    "Loopback capture must not terminate on transient Xrun"
+                );
+                handle.stop();
+            }
+        }
     }
 }

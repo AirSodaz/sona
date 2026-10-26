@@ -148,6 +148,9 @@ impl From<FfiLocalAsrModelFiles> for ModelFileConfig {
             uncached_decoder: value.uncached_decoder,
             cached_decoder: value.cached_decoder,
             merged_decoder: value.merged_decoder,
+            source_spm: None,
+            target_spm: None,
+            vocab: None,
         }
     }
 }
@@ -399,6 +402,7 @@ mod tests {
                 timestamps: Some(vec![0.25]),
                 durations: Some(vec![1.25]),
                 translation: Some("hola".to_string()),
+                draft_translation: None,
                 speaker: None,
                 speaker_attribution: None,
             }],

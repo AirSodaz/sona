@@ -3081,5 +3081,249 @@
         "sizeBytes": 2313101
       }
     ]
+  },
+  {
+    "id": "opus-mt-en-zh",
+    "name": "Opus-MT (EN -> ZH)",
+    "description": "settings.descriptions.opus_mt_en_zh",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~447 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "57b664dad9511c1ad0c51164eab0144f289d7dd75c0327615ded328c04b57525",
+        "sizeBytes": 209942461
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "aecdf193206d433ef3725ac4ce2104058f0a3550066a8747da14e7fc69d48cc2",
+        "sizeBytes": 235591974
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8",
+        "sizeBytes": 806435
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052",
+        "sizeBytes": 804600
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "22c957348eed495ee925afc40a36da3e387c8a34a734c8486967c2dca271613e",
+        "sizeBytes": 1747795
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-zh-en",
+    "name": "Opus-MT (ZH -> EN)",
+    "description": "settings.descriptions.opus_mt_zh_en",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~447 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "92257f4246886bae8cc9c98dddb41224058a6bba11794d12c6c85dbdb7389d52",
+        "sizeBytes": 209942461
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "56c5a3663baa93e5351d47e1bcd1614c8ba565f5d96024f3c07d653fc58174ff",
+        "sizeBytes": 235591974
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203",
+        "sizeBytes": 804677
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855",
+        "sizeBytes": 806530
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "08a119a1defd522fa047cb5e3bfe3e89633e96caa38ced0dc9cee7ef1021a011",
+        "sizeBytes": 1747906
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-ja-zh",
+    "name": "Opus-MT (JA -> ZH)",
+    "description": "settings.descriptions.opus_mt_ja_zh",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "ja",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~225 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "b98e850b37d960295a23158e47db13633286d2e11c575d69475bf3bf6689f993",
+        "sizeBytes": 105020768
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "9380a66e508b9b1a6630b3b47c06a8a183c669b3674cb24446e3f84c4408b2aa",
+        "sizeBytes": 117946490
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "25103859c8bbbe317e69b07551c55c53dc7943eebf078c56fbf5bc7f96d63289",
+        "sizeBytes": 1312134
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "fe81460cde65383464718c26789ff8c5d818719c3f2c2c3cd36f42532579c56e",
+        "sizeBytes": 1312134
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "475501ee1f35876ec50894ef34ef88e949cc92c688da24ccb26abcc3281c0256",
+        "sizeBytes": 1871214
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-zh-ja",
+    "name": "Opus-MT (ZH -> JA)",
+    "description": "settings.descriptions.opus_mt_zh_ja",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "ja",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~1.1 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "5c7cff61be56dcb3cb7456d3725ffcf3606cbc49b3f0f9ececb8d0288ca58116",
+        "sizeBytes": 437653279
+      },
+      {
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "22b23ef8b08de264e56303f1ab7783c0715c3d1b16451bd418e1ade840599d3c",
+        "sizeBytes": 669794801
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "ccc8f70bef6e04fc6a57119b2a4a59556d5c5b9f9f04b88be2f0656c6d7d192d",
+        "sizeBytes": 719585
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "04bcec8d949fc7b2aacc38e428f297160457b373f3f85ad7c8faf391138d937b",
+        "sizeBytes": 802604
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "113d3e0e68fab82b3061b2cd2fef598dbcfe2c3e5de71cd43d7b5b985243ddb8",
+        "sizeBytes": 938547
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
   }
 ]

@@ -42,6 +42,7 @@ export interface TranslateSegmentsRequest {
   chunkSize?: number;
   targetLanguage: string;
   targetLanguageName?: string;
+  sourceLanguage?: string;
   context?: string;
   keywords?: string;
 }
@@ -75,6 +76,7 @@ export interface TranslateTranscriptLlmJobRequest extends TranscriptLlmJobReques
   taskType: 'translate';
   targetLanguage: string;
   targetLanguageName?: string;
+  sourceLanguage?: string;
 }
 
 export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {

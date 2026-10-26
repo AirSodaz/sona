@@ -37,8 +37,14 @@ pub fn get_foreground_window_info()
     crate::platform::system::get_foreground_window_info()
 }
 
-#[tauri::command]
-pub fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
+#[tauri::command(async)]
+pub async fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
+    for _ in 0..20 {
+        if app.get_webview_window(&label).is_some() {
+            return crate::platform::system::focus_window(&app, &label);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
     crate::platform::system::focus_window(&app, &label)
 }
 #[tauri::command]

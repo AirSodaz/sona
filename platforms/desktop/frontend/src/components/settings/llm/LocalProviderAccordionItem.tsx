@@ -13,7 +13,13 @@ import {
   downloadPresetModel,
 } from '../../../services/tauri/app';
 import { TauriEvent } from '../../../services/tauri/events';
-import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
+import {
+  completeLlm,
+  importLocalLlmFile,
+  listLocalLlmCards,
+  listLocalNmtCards,
+  testLocalNmtModel,
+} from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
 import { useConfigStore } from '../../../stores/configStore';
@@ -21,6 +27,7 @@ import { useDialogStore } from '../../../stores/dialogStore';
 import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import { normalizeError } from '../../../utils/errorUtils';
+import { SegmentedSubTabs } from '../SecondaryTabs';
 import { SettingsAccordion } from '../SettingsLayout';
 import {
   type LocalDownloadProgressState,
@@ -45,7 +52,9 @@ export function LocalProviderAccordionItem({
   t,
 }: LocalProviderAccordionItemProps): React.JSX.Element {
   const modelDownloadMirror = useConfigStore((state) => state.config.modelDownloadMirror);
-  const [data, setData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
+  const [activeSubTab, setActiveSubTab] = useState<'llm' | 'nmt'>('llm');
+  const [llmData, setLlmData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
+  const [nmtData, setNmtData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [downloads, setDownloads] = useState<Record<string, LocalDownloadProgressState>>({});
   const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
@@ -53,26 +62,40 @@ export function LocalProviderAccordionItem({
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
   const inFlightDownloadsRef = useRef<Set<string>>(new Set());
-  const cardsRef = useRef(data?.cards);
-  cardsRef.current = data?.cards;
 
   const confirm = useDialogStore((state) => state.confirm);
   const showError = useDialogStore((state) => state.showError);
 
-  const fetchCards = useCallback(async () => {
-    setIsLoading(true);
+  const fetchLlmCards = useCallback(async () => {
     try {
       const response = await listLocalLlmCards();
       if (response && Array.isArray(response.cards)) {
-        setData(response);
+        setLlmData(response);
       }
     } catch (err) {
       console.error('Failed to list local LLM cards:', err);
-    } finally {
-      setIsLoading(false);
     }
   }, []);
 
+  const fetchNmtCards = useCallback(async () => {
+    try {
+      const response = await listLocalNmtCards();
+      if (response && Array.isArray(response.cards)) {
+        setNmtData(response);
+      }
+    } catch (err) {
+      console.error('Failed to list local NMT cards:', err);
+    }
+  }, []);
+
+  const fetchCards = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      await Promise.all([fetchLlmCards(), fetchNmtCards()]);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchLlmCards, fetchNmtCards]);
   useEffect(() => {
     fetchCards();
   }, [fetchCards]);
@@ -320,9 +343,13 @@ export function LocalProviderAccordionItem({
     }
   }, [fetchCards]);
 
+  const currentData = activeSubTab === 'llm' ? llmData : nmtData;
   const cards = useMemo(() => {
-    if (data?.cards && data.cards.length > 0) {
-      return data.cards;
+    if (currentData?.cards && currentData.cards.length > 0) {
+      return currentData.cards;
+    }
+    if (activeSubTab === 'nmt') {
+      return [];
     }
     return [
       {
@@ -348,9 +375,17 @@ export function LocalProviderAccordionItem({
         downloadSizeBytes: null,
       },
     ];
-  }, [data?.cards]);
+  }, [activeSubTab, currentData?.cards]);
 
-  const installedCards = useMemo(() => cards.filter((c) => c.isInstalled), [cards]);
+  const allCards = useMemo(() => {
+    return [...(llmData?.cards ?? []), ...(nmtData?.cards ?? [])];
+  }, [llmData?.cards, nmtData?.cards]);
+
+  const cardsRef = useRef(allCards);
+  cardsRef.current = allCards;
+  const installedCards = useMemo(() => {
+    return allCards.filter((c) => c.isInstalled);
+  }, [allCards]);
   const hasInstalled = installedCards.length > 0;
   const isAnyDownloading = Object.keys(downloads).length > 0;
   const isAnyTesting = useMemo(
@@ -397,24 +432,39 @@ export function LocalProviderAccordionItem({
 
     const startTime = performance.now();
     try {
-      const res = await completeLlm({
-        config: {
-          provider: 'local',
-          strategy: 'local',
-          model: card.model || card.id,
-          baseUrl: '',
-          apiKey: '',
-          temperature: 0.7,
-        },
-        input: '你好，请用一句话做自我介绍。',
-        source: 'connection_test',
-      });
+      let speed: number | undefined;
+      if (card.backend === 'onnx-nmt') {
+        const srcLang = card.id.replace(/^opus-mt-/, '').split('-')[0];
+        const testInput =
+          srcLang === 'zh'
+            ? '你好，世界！'
+            : srcLang === 'ja'
+              ? 'こんにちは、世界！'
+              : 'Hello, world!';
+        const translated = await testLocalNmtModel(card.id, testInput);
+        const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
+        const chars = translated ? translated.length : 0;
+        speed = Math.round((chars / durationSec) * 10) / 10;
+      } else {
+        const res = await completeLlm({
+          config: {
+            provider: 'local',
+            strategy: 'local',
+            model: card.model || card.id,
+            baseUrl: '',
+            apiKey: '',
+            temperature: 0.7,
+          },
+          input: '你好，请用一句话做自我介绍。',
+          source: 'connection_test',
+        });
 
-      const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
-      const tokens =
-        res.usage?.completionTokens ??
-        (res.text ? Math.max(1, Math.round(res.text.length * 0.75)) : 0);
-      const speed = Math.round((tokens / durationSec) * 10) / 10;
+        const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
+        const tokens =
+          res.usage?.completionTokens ??
+          (res.text ? Math.max(1, Math.round(res.text.length * 0.75)) : 0);
+        speed = Math.round((tokens / durationSec) * 10) / 10;
+      }
 
       setModelTestStates((prev) => ({
         ...prev,
@@ -464,41 +514,60 @@ export function LocalProviderAccordionItem({
       contentTestId="provider-accordion-content-local"
     >
       <div className="local-model-cards-container">
-        {/* Actions bar */}
+        {/* SubTabs and Actions */}
         <div
           style={{
             display: 'flex',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '8px',
-            gap: '8px',
+            marginBottom: '16px',
           }}
         >
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleImportCustomFile}
-            data-tooltip={t('settings.llm.import_custom_model_hint', {
-              defaultValue: '导入本地已有的 GGUF 格式模型文件',
-            })}
-            data-tooltip-pos="top"
-          >
-            <Plus size={14} />
-            <span>{t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}</span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary-soft btn-sm"
-            onClick={fetchCards}
-            disabled={isLoading}
-            data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-            data-tooltip-pos="top"
-            aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-          >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
+          <SegmentedSubTabs<'llm' | 'nmt'>
+            items={[
+              {
+                value: 'llm',
+                label: t('settings.llm.subtab_llm', { defaultValue: '大语言模型 (LLM)' }),
+              },
+              {
+                value: 'nmt',
+                label: t('settings.llm.subtab_nmt', { defaultValue: '翻译模型 (NMT)' }),
+              },
+            ]}
+            activeTab={activeSubTab}
+            onChange={setActiveSubTab}
+            idPrefix="local-model-subtab"
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeSubTab === 'llm' && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleImportCustomFile}
+                data-tooltip={t('settings.llm.import_custom_model_hint', {
+                  defaultValue: '导入本地已有的 GGUF 格式模型文件',
+                })}
+                data-tooltip-pos="top"
+              >
+                <Plus size={14} />
+                <span>
+                  {t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-icon btn-secondary-soft btn-sm"
+              onClick={fetchCards}
+              disabled={isLoading}
+              data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+              data-tooltip-pos="top"
+              aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+            >
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
-        {/* Model Cards List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {cards.map((card) => (
             <LocalModelCard

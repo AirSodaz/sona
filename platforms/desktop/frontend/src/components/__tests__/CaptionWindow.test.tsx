@@ -337,4 +337,95 @@ describe('CaptionWindow', () => {
     const body = container.querySelector('.caption-window-body') as HTMLElement;
     expect(body.style.background).toBe('rgba(255, 0, 0, 0.8)');
   });
+
+  it('renders bilingual subtitle with translation prefix and draft tail', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-1',
+              text: 'Hello world',
+              translation: '你好',
+              draftTranslation: '世界',
+              start: 0,
+              end: 1,
+              isFinal: false,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayMode: 'bilingual',
+            bilingualOrder: 'original_first',
+          },
+        },
+      });
+    });
+
+    expect(screen.getByText('Hello world')).toBeDefined();
+    expect(screen.getByText('你好')).toBeDefined();
+    expect(screen.getByText('世界')).toBeDefined();
+    const draftTail = container.querySelector('.caption-draft-tail');
+    expect(draftTail).not.toBeNull();
+    expect(draftTail?.textContent).toBe('世界');
+  });
+
+  it('respects displayMode translation only and original only', async () => {
+    render(<CaptionWindow />);
+
+    // Translation only
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-1',
+              text: 'Good morning',
+              translation: '早上好',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayMode: 'translation',
+          },
+        },
+      });
+    });
+
+    expect(screen.getByText('早上好')).toBeDefined();
+    expect(screen.queryByText('Good morning')).toBeNull();
+
+    // Original only
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 2,
+          segments: [
+            {
+              id: 'seg-2',
+              text: 'Good morning',
+              translation: '早上好',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayMode: 'original',
+          },
+        },
+      });
+    });
+
+    expect(screen.getByText('Good morning')).toBeDefined();
+    expect(screen.queryByText('早上好')).toBeNull();
+  });
 });

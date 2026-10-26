@@ -76,6 +76,7 @@ pub struct LlmTranslationRequest {
     pub config: LlmConfig,
     pub texts: Vec<String>,
     pub target_language: String,
+    pub source_language: Option<String>,
 }
 
 #[async_trait]

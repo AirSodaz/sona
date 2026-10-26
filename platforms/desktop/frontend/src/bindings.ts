@@ -103,8 +103,17 @@ export type AppConfig_Deserialize = {
 	captionWindowWidth?: number | null,
 	captionFontSize?: number | null,
 	captionFontColor?: string | null,
+	captionTranslationFontSize?: number | null,
+	captionTranslationFontColor?: string | null,
 	captionBackgroundColor?: string | null,
 	captionBackgroundOpacity?: number | null,
+	captionDisplayMode?: string | null,
+	captionBilingualOrder?: string | null,
+	realtimeTranslationEnabled?: boolean | null,
+	realtimeTranslationSourceLanguage?: string | null,
+	realtimeTranslationTargetLanguage?: string | null,
+	realtimeTranslationEngine?: string | null,
+	realtimeTranslationModelId?: string | null,
 	language?: string | null,
 	enableTimeline?: boolean | null,
 	batchVadEnabled?: boolean | null,
@@ -139,6 +148,7 @@ export type AppConfig_Deserialize = {
 	voiceTypingCjkSpacingEnabled?: boolean | null,
 	voiceTypingPolishPrompt?: string | null,
 	voiceTypingPlacement?: VoiceTypingPlacement | null,
+	voiceTypingRealtimePreview?: boolean | null,
 	voiceTypingQuickRecallShortcut?: string | null,
 	voiceTypingContextAwarenessEnabled?: boolean | null,
 	voiceTypingContextPreset?: string | null,
@@ -208,8 +218,17 @@ export type AppConfig_Serialize = {
 	captionWindowWidth?: number | null,
 	captionFontSize?: number | null,
 	captionFontColor?: string | null,
+	captionTranslationFontSize?: number | null,
+	captionTranslationFontColor?: string | null,
 	captionBackgroundColor?: string | null,
 	captionBackgroundOpacity?: number | null,
+	captionDisplayMode?: string | null,
+	captionBilingualOrder?: string | null,
+	realtimeTranslationEnabled?: boolean | null,
+	realtimeTranslationSourceLanguage?: string | null,
+	realtimeTranslationTargetLanguage?: string | null,
+	realtimeTranslationEngine?: string | null,
+	realtimeTranslationModelId?: string | null,
 	language?: string | null,
 	enableTimeline?: boolean | null,
 	enableITN?: boolean | null,
@@ -245,6 +264,7 @@ export type AppConfig_Serialize = {
 	voiceTypingCjkSpacingEnabled?: boolean | null,
 	voiceTypingPolishPrompt?: string | null,
 	voiceTypingPlacement?: VoiceTypingPlacement | null,
+	voiceTypingRealtimePreview?: boolean | null,
 	voiceTypingQuickRecallShortcut?: string | null,
 	voiceTypingContextAwarenessEnabled?: boolean | null,
 	voiceTypingContextPreset?: string | null,
@@ -306,6 +326,9 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
+	sourceSpm: string | null,
+	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } |
 /**
  *  Local offline transcription through a provider-crate engine.
@@ -329,6 +352,9 @@ export type AsrEngineConfig_Deserialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
+	sourceSpm: string | null,
+	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration?: string | null; initialRefreshRateMs?: number | null; enablePartialDecoding?: boolean | null; ffmpegEnabled?: boolean | null; ffmpegPath?: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngineConfig_Serialize =
@@ -354,6 +380,9 @@ export type AsrEngineConfig_Serialize =
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
+	sourceSpm: string | null,
+	targetSpm: string | null,
+	vocab: string | null,
 } | null; gpuAcceleration: string | null; initialRefreshRateMs: number | null; enablePartialDecoding: boolean | null; ffmpegEnabled: boolean | null; ffmpegPath: string | null }) & { onlineProvider?: never } | ({ engine: "online"; onlineProvider: OnlineAsrProviderRequest }) & { alignmentModel?: never; batchSegmentationMode?: never; enablePartialDecoding?: never; ffmpegEnabled?: never; ffmpegPath?: never; fileConfig?: never; gpuAcceleration?: never; initialRefreshRateMs?: never; localEngine?: never; modelId?: never; modelPath?: never; modelType?: never; numThreads?: never; punctuationModel?: never; vadBuffer?: never; vadModel?: never };
 
 export type AsrEngine_Deserialize =
@@ -1565,7 +1594,7 @@ export type LlmPromptCachePolicy = "disabled" | "automatic";
 
 export type LlmProvider = LlmProvider_Serialize | LlmProvider_Deserialize;
 
-export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local";
+export type LlmProviderStrategy = "open_ai" | "open_ai_responses" | "azure_openai" | "anthropic" | "gemini" | "ollama" | "deep_seek" | "moonshot_ai" | "moonshot_cn" | "xiaomi" | "kimi" | "silicon_flow" | "qwen" | "qwen_portal" | "minimax_global" | "minimax_cn" | "open_router" | "lm_studio" | "groq" | "x_ai" | "mistral_ai" | "perplexity" | "volcengine" | "chatglm" | "copilot" | "cohere" | "together" | "venice" | "hyperbolic" | "llamafile" | "baidu" | "tencent" | "stepfun" | "lingyiwanwu" | "cerebras" | "google_translate" | "google_translate_free" | "open_ai_compatible" | "open_ai_compatible_custom_path" | "local" | "local_nmt";
 
 export type LlmProvider_Deserialize = ({ Builtin: BuiltinLlmProvider_Deserialize }) & { Custom?: never } | ({ Custom: string }) & { Builtin?: never };
 
@@ -1754,7 +1783,7 @@ export type ModelCatalogMode = "live" | "streaming" | "batch";
 
 export type ModelCatalogModel = ModelCatalogModel_Serialize | ModelCatalogModel_Deserialize;
 
-export type ModelCatalogModelType = "zipformer" | "sensevoice" | "paraformer" | "punctuation" | "vad" | "itn" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr" | "parakeet-tdt" | "moonshine" | "speaker-segmentation" | "speaker-embedding" | "omnilingual" | "alignment" | "canary";
+export type ModelCatalogModelType = "zipformer" | "sensevoice" | "paraformer" | "punctuation" | "vad" | "itn" | "whisper" | "funasr-nano" | "fire-red-asr" | "dolphin" | "qwen3-asr" | "parakeet-tdt" | "moonshine" | "speaker-segmentation" | "speaker-embedding" | "omnilingual" | "alignment" | "canary" | "onnx-nmt";
 
 export type ModelCatalogModel_Deserialize = {
 	id: string,
@@ -1920,7 +1949,7 @@ export type ModelDependencyRequest = {
 	isInstalled: boolean,
 };
 
-export type ModelEngine = "sherpa-onnx" | "llama-cpp";
+export type ModelEngine = "sherpa-onnx" | "llama-cpp" | "onnx-nmt";
 
 export type ModelFileConfig = {
 	encoder: string | null,
@@ -1938,6 +1967,9 @@ export type ModelFileConfig = {
 	uncachedDecoder: string | null,
 	cachedDecoder: string | null,
 	mergedDecoder: string | null,
+	sourceSpm: string | null,
+	targetSpm: string | null,
+	vocab: string | null,
 };
 
 export type ModelRuleInput = {
@@ -2975,6 +3007,7 @@ export type TranscriptLlmJobRequest_Deserialize = {
 	segments: TranscriptSegment_Deserialize[],
 	targetLanguage: string | null,
 	targetLanguageName: string | null,
+	sourceLanguage?: string | null,
 	context: string | null,
 	keywords: string | null,
 	mode?: PolishMode | null,
@@ -2991,6 +3024,7 @@ export type TranscriptLlmJobRequest_Serialize = {
 	segments: TranscriptSegment_Serialize[],
 	targetLanguage: string | null,
 	targetLanguageName: string | null,
+	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
 	mode: PolishMode | null,
@@ -3021,6 +3055,7 @@ export type TranscriptSegment_Deserialize = {
 	timestamps: number[] | null,
 	durations: number[] | null,
 	translation: string | null,
+	draftTranslation: string | null,
 	speaker: SpeakerTag_Deserialize | null,
 	speakerAttribution: SpeakerAttribution | null,
 };
@@ -3036,6 +3071,7 @@ export type TranscriptSegment_Serialize = {
 	timestamps?: number[] | null,
 	durations?: number[] | null,
 	translation?: string | null,
+	draftTranslation?: string | null,
 	speaker?: SpeakerTag_Serialize | null,
 	speakerAttribution?: SpeakerAttribution | null,
 };
@@ -3130,6 +3166,7 @@ export type TranslateSegmentsRequest_Deserialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	sourceLanguage?: string | null,
 	context?: string | null,
 	keywords?: string | null,
 };
@@ -3141,6 +3178,7 @@ export type TranslateSegmentsRequest_Serialize = {
 	chunkSize: number | null,
 	targetLanguage: string,
 	targetLanguageName: string | null,
+	sourceLanguage: string | null,
 	context: string | null,
 	keywords: string | null,
 };

@@ -153,6 +153,7 @@ async fn live_adapter_translate_batch_succeeds() {
             "Thank you very much".to_string(),
         ],
         target_language: "zh-CN".to_string(),
+        source_language: None,
     };
 
     let result = adapter.translate_batch(request).await;

@@ -157,6 +157,7 @@ pub fn mistral_streaming_segments_from_response(
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         };
@@ -184,6 +185,7 @@ pub fn mistral_streaming_segments_from_response(
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         };

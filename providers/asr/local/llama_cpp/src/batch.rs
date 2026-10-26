@@ -501,6 +501,7 @@ fn transcribe_segment(
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     };
@@ -531,6 +532,7 @@ fn emit_partial_transcript(
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     };

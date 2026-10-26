@@ -256,4 +256,52 @@ describe('useCaptionSession', () => {
 
     expect(tauriFsMocks.remove).not.toHaveBeenCalled();
   });
+
+  it('restarts caption recognizer when translation settings change', async () => {
+    const { rerender } = renderHook(
+      (props) => useCaptionSession(props.config, props.isCaptionMode),
+      { initialProps: { config: defaultConfig, isCaptionMode: true } }
+    );
+
+    await waitFor(() => expect(transcriptionServiceMocks.captionStart).toHaveBeenCalled());
+    expect(transcriptionServiceMocks.captionRestart).not.toHaveBeenCalled();
+
+    const updatedConfig = {
+      ...defaultConfig,
+      realtimeTranslationEnabled: true,
+      realtimeTranslationSourceLanguage: 'ja',
+      realtimeTranslationTargetLanguage: 'en',
+    };
+
+    rerender({ config: updatedConfig, isCaptionMode: true });
+
+    await waitFor(() => expect(transcriptionServiceMocks.captionRestart).toHaveBeenCalled());
+  });
+
+  it('updates caption window style when translation font styling changes', async () => {
+    const { rerender } = renderHook(
+      (props) => useCaptionSession(props.config, props.isCaptionMode),
+      { initialProps: { config: defaultConfig, isCaptionMode: true } }
+    );
+
+    await waitFor(() => expect(captionWindowService.open).toHaveBeenCalled());
+    vi.mocked(captionWindowService.updateStyle).mockClear();
+
+    const updatedConfig = {
+      ...defaultConfig,
+      captionTranslationFontSize: 22,
+      captionTranslationFontColor: '#ff0000',
+    };
+
+    rerender({ config: updatedConfig, isCaptionMode: true });
+
+    await waitFor(() =>
+      expect(captionWindowService.updateStyle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          translationFontSize: 22,
+          translationColor: '#ff0000',
+        })
+      )
+    );
+  });
 });

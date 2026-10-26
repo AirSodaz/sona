@@ -1,9 +1,11 @@
 import {
   Activity,
+  ArrowLeftRight,
   Check,
   Copy,
   History,
   Keyboard,
+  Languages,
   Layers,
   Plus,
   Search,
@@ -929,9 +931,94 @@ export function SettingsSubtitleTab({
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 24;
   const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionTranslationFontSize = config.captionTranslationFontSize ?? 18;
+  const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
+  const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
+  const realtimeTranslationSourceLanguage = config.realtimeTranslationSourceLanguage || 'en';
+  const realtimeTranslationTargetLanguage = config.realtimeTranslationTargetLanguage || 'zh';
+  const captionDisplayMode = config.captionDisplayMode || 'bilingual';
+  const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
+  const sourceLanguages = useMemo(
+    () => [
+      { value: 'zh', label: '中文 (Chinese)' },
+      { value: 'en', label: 'English' },
+      { value: 'ja', label: '日本語 (Japanese)' },
+    ],
+    []
+  );
+
+  const targetLanguages = useMemo(() => {
+    if (realtimeTranslationSourceLanguage === 'zh') {
+      return [
+        { value: 'en', label: 'English' },
+        { value: 'ja', label: '日本語 (Japanese)' },
+      ];
+    }
+    return [{ value: 'zh', label: '中文 (Chinese)' }];
+  }, [realtimeTranslationSourceLanguage]);
+
+  const handleSourceLanguageChange = (val: string) => {
+    const updates: Record<string, unknown> = { realtimeTranslationSourceLanguage: val };
+    if (val === 'en' || val === 'ja') {
+      updates.realtimeTranslationTargetLanguage = 'zh';
+    } else if (val === 'zh' && realtimeTranslationTargetLanguage === 'zh') {
+      updates.realtimeTranslationTargetLanguage = 'en';
+    }
+    updateConfig(updates);
+  };
+
+  const handleSwapLanguages = () => {
+    const nextSrc = realtimeTranslationTargetLanguage;
+    let nextTgt = realtimeTranslationSourceLanguage;
+    if (nextSrc === 'en' || nextSrc === 'ja') {
+      nextTgt = 'zh';
+    } else if (nextSrc === 'zh' && nextTgt === 'zh') {
+      nextTgt = 'en';
+    }
+    updateConfig({
+      realtimeTranslationSourceLanguage: nextSrc,
+      realtimeTranslationTargetLanguage: nextTgt,
+    });
+  };
+
+  const displayModeOptions = useMemo(
+    () => [
+      {
+        value: 'bilingual',
+        label: t('settings.caption_mode_bilingual', {
+          defaultValue: 'Bilingual (Original & Translation)',
+        }),
+      },
+      {
+        value: 'translation',
+        label: t('settings.caption_mode_translation', { defaultValue: 'Translation Only' }),
+      },
+      {
+        value: 'original',
+        label: t('settings.caption_mode_original', { defaultValue: 'Original Only' }),
+      },
+    ],
+    [t]
+  );
+
+  const bilingualOrderOptions = useMemo(
+    () => [
+      {
+        value: 'original_first',
+        label: t('settings.caption_order_original_first', { defaultValue: 'Original on Top' }),
+      },
+      {
+        value: 'translation_first',
+        label: t('settings.caption_order_translation_first', {
+          defaultValue: 'Translation on Top',
+        }),
+      },
+    ],
+    [t]
+  );
   return (
     <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
       <SettingsPageHeader
@@ -1031,6 +1118,140 @@ export function SettingsSubtitleTab({
           </SettingsSection>
 
           <SettingsSection
+            id="settings-subtitle-translation"
+            title={t('settings.subtitle_realtime_translation_title', {
+              defaultValue: 'Real-time Bilingual Translation',
+            })}
+            icon={<Languages size={20} />}
+            description={t('settings.subtitle_realtime_translation_desc', {
+              defaultValue:
+                'On-device neural translation for live captions with local agreement stabilization.',
+            })}
+          >
+            <SettingsItem
+              title={t('settings.enable_realtime_translation', {
+                defaultValue: 'Enable Real-time Translation',
+              })}
+              hint={t('settings.enable_realtime_translation_hint', {
+                defaultValue: 'Translate spoken subtitles in real time as speech is recognized.',
+              })}
+            >
+              <Switch
+                checked={realtimeTranslationEnabled}
+                onChange={(enabled) => {
+                  if (!enabled && captionDisplayMode === 'translation') {
+                    updateConfig({
+                      realtimeTranslationEnabled: false,
+                      captionDisplayMode: 'bilingual',
+                    });
+                  } else {
+                    updateConfig({ realtimeTranslationEnabled: enabled });
+                  }
+                }}
+              />
+            </SettingsItem>
+
+            {realtimeTranslationEnabled && (
+              <>
+                <SettingsItem
+                  title={t('settings.translation_language_pair', {
+                    defaultValue: 'Language Pair',
+                  })}
+                  hint={t('settings.translation_language_pair_hint', {
+                    defaultValue:
+                      'Translate from source language to target language (supports Chinese, English, Japanese).',
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Dropdown
+                      id="translation-source-language"
+                      aria-label={t('settings.translation_source_language', {
+                        defaultValue: 'Translation Source Language',
+                      })}
+                      options={sourceLanguages}
+                      value={realtimeTranslationSourceLanguage}
+                      onChange={handleSourceLanguageChange}
+                      style={{ width: '150px' }}
+                    />
+                    <button
+                      type="button"
+                      id="swap-translation-languages"
+                      aria-label={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
+                      className="btn btn-secondary"
+                      onClick={handleSwapLanguages}
+                      title={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
+                      style={{
+                        padding: '6px 10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <ArrowLeftRight size={14} />
+                    </button>
+                    <Dropdown
+                      id="translation-target-language"
+                      aria-label={t('settings.translation_target_language', {
+                        defaultValue: 'Translation Target Language',
+                      })}
+                      options={targetLanguages}
+                      value={
+                        targetLanguages.some(
+                          (opt) => opt.value === realtimeTranslationTargetLanguage
+                        )
+                          ? realtimeTranslationTargetLanguage
+                          : targetLanguages[0].value
+                      }
+                      onChange={(val) => updateConfig({ realtimeTranslationTargetLanguage: val })}
+                      style={{ width: '150px' }}
+                    />
+                  </div>
+                </SettingsItem>
+
+                <SettingsItem
+                  title={t('settings.caption_display_mode', {
+                    defaultValue: 'Display Mode',
+                  })}
+                >
+                  <Dropdown
+                    options={displayModeOptions}
+                    value={captionDisplayMode}
+                    onChange={(val) =>
+                      updateConfig({
+                        captionDisplayMode: val as 'bilingual' | 'translation' | 'original',
+                      })
+                    }
+                    style={{ width: '260px' }}
+                  />
+                </SettingsItem>
+
+                {captionDisplayMode === 'bilingual' && (
+                  <SettingsItem
+                    title={t('settings.caption_bilingual_order', {
+                      defaultValue: 'Bilingual Order',
+                    })}
+                  >
+                    <Dropdown
+                      options={bilingualOrderOptions}
+                      value={captionBilingualOrder}
+                      onChange={(val) =>
+                        updateConfig({
+                          captionBilingualOrder: val as 'original_first' | 'translation_first',
+                        })
+                      }
+                      style={{ width: '200px' }}
+                    />
+                  </SettingsItem>
+                )}
+              </>
+            )}
+          </SettingsSection>
+
+          <SettingsSection
             id="settings-subtitle-appearance"
             title={t('settings.subtitle_appearance_title')}
             icon={<Subtitles size={20} />}
@@ -1071,6 +1292,52 @@ export function SettingsSubtitleTab({
                 value={captionFontColor}
                 onChange={(color) => updateConfig({ captionFontColor: color })}
                 aria-label={t('live.font_color')}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_size', {
+                defaultValue: 'Translation Font Size',
+              })}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="number"
+                  min="12"
+                  max="72"
+                  step="1"
+                  value={captionTranslationFontSize}
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (!Number.isNaN(parsed)) {
+                      updateConfig({ captionTranslationFontSize: parsed });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const parsed = Number(e.target.value);
+                    const clamped = Number.isNaN(parsed) ? 18 : Math.max(12, Math.min(72, parsed));
+                    updateConfig({ captionTranslationFontSize: clamped });
+                  }}
+                  className="settings-input"
+                  style={{ width: '100px', textAlign: 'center' }}
+                  aria-label={t('live.translation_font_size', {
+                    defaultValue: 'Translation Font Size',
+                  })}
+                />
+              </div>
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_color', {
+                defaultValue: 'Translation Font Color',
+              })}
+            >
+              <ColorSwatchPicker
+                value={captionTranslationFontColor}
+                onChange={(color) => updateConfig({ captionTranslationFontColor: color })}
+                aria-label={t('live.translation_font_color', {
+                  defaultValue: 'Translation Font Color',
+                })}
               />
             </SettingsItem>
 

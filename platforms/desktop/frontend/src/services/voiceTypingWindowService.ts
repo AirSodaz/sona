@@ -32,6 +32,8 @@ export interface VoiceTypingOverlayPayload {
   revision: number;
   segmentId?: string;
   isFinal?: boolean;
+  translation?: string;
+  draftTranslation?: string;
   hasSelection?: boolean;
   selectionLength?: number;
   contextMode?: string;

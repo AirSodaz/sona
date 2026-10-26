@@ -9,6 +9,7 @@ import { LanguageBadges } from '../LanguageBadges';
 const ENGINE_LABEL: Record<ModelInfo['engine'], string> = {
   'sherpa-onnx': 'ONNX',
   'llama-cpp': 'GGUF',
+  'onnx-nmt': 'NMT',
 };
 
 type ModelStatus =

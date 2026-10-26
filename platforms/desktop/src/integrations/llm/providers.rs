@@ -18,17 +18,51 @@ use sona_online_llm::OnlineLlmAdapter;
 use std::path::PathBuf;
 use std::time::Duration;
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct DesktopLlmAdapter {
     online: OnlineLlmAdapter,
     local: LlamaCppLlmEngine,
+    models_dir: Option<PathBuf>,
+    translation_pool:
+        Option<std::sync::Arc<crate::integrations::translation::TranslationModelPool>>,
+}
+
+fn detect_source_language(texts: &[String]) -> &'static str {
+    for text in texts {
+        let trimmed = text.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        for ch in trimmed.chars() {
+            if ('\u{3040}'..='\u{309F}').contains(&ch) || ('\u{30A0}'..='\u{30FF}').contains(&ch) {
+                return "ja";
+            }
+        }
+        for ch in trimmed.chars() {
+            if ('\u{4E00}'..='\u{9FFF}').contains(&ch) {
+                return "zh";
+            }
+        }
+    }
+    "en"
 }
 
 impl DesktopLlmAdapter {
     pub(crate) fn new(models_dir: Option<PathBuf>) -> Self {
+        Self::with_pool(models_dir, None)
+    }
+
+    pub(crate) fn with_pool(
+        models_dir: Option<PathBuf>,
+        translation_pool: Option<
+            std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
+        >,
+    ) -> Self {
         Self {
             online: OnlineLlmAdapter,
-            local: LlamaCppLlmEngine::with_models_dir(models_dir),
+            local: LlamaCppLlmEngine::with_models_dir(models_dir.clone()),
+            models_dir,
+            translation_pool,
         }
     }
 
@@ -37,6 +71,7 @@ impl DesktopLlmAdapter {
             config.provider,
             LlmProvider::Builtin(BuiltinLlmProvider::Local)
         ) || config.strategy == LlmProviderStrategy::Local
+            || config.strategy == LlmProviderStrategy::LocalNmt
     }
 }
 
@@ -124,10 +159,98 @@ impl LlmTranslationPort for DesktopLlmAdapter {
         &self,
         request: LlmTranslationRequest,
     ) -> Result<Vec<String>, LlmPortError> {
-        if Self::is_local_config(&request.config) {
+        if request.texts.is_empty() {
+            return Ok(request.texts);
+        }
+
+        let is_nmt = request.config.strategy == LlmProviderStrategy::LocalNmt
+            || (Self::is_local_config(&request.config)
+                && (request.config.model.to_lowercase().contains("opus")
+                    || request.config.model.to_lowercase() == "auto"
+                    || request.config.model.is_empty()));
+
+        if is_nmt {
+            let (_model_src, model_tgt) = if let Some(stripped) =
+                request.config.model.to_lowercase().strip_prefix("opus-mt-")
+            {
+                let parts: Vec<&str> = stripped.split('-').collect();
+                if parts.len() == 2 {
+                    (Some(parts[0].to_string()), Some(parts[1].to_string()))
+                } else {
+                    (None, None)
+                }
+            } else {
+                (None, None)
+            };
+
+            let tgt_lang = if !request.target_language.trim().is_empty() {
+                request.target_language.clone()
+            } else if let Some(mt) = model_tgt {
+                mt
+            } else {
+                request.target_language.clone()
+            };
+            let norm_tgt = crate::integrations::translation::normalize_language_code(&tgt_lang);
+
+            let src_lang = if let Some(source_language) =
+                request.source_language.as_deref().filter(|s| {
+                    let trimmed = s.trim();
+                    !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("auto")
+                }) {
+                source_language.to_string()
+            } else {
+                let detected = detect_source_language(&request.texts);
+                let norm_detected =
+                    crate::integrations::translation::normalize_language_code(detected);
+                if norm_detected.eq_ignore_ascii_case(norm_tgt) {
+                    return Ok(request.texts);
+                }
+                detected.to_string()
+            };
+
+            let norm_src = crate::integrations::translation::normalize_language_code(&src_lang);
+            if norm_src.eq_ignore_ascii_case(norm_tgt) {
+                return Ok(request.texts);
+            }
+
+            let Some(models_dir) = &self.models_dir else {
+                return Err(LlmPortError::new(
+                    LlmPortErrorKind::Unavailable,
+                    "Models directory not configured for local NMT",
+                ));
+            };
+            let pool = self.translation_pool.clone().unwrap_or_else(|| {
+                std::sync::Arc::new(crate::integrations::translation::TranslationModelPool::new())
+            });
+            let adapter = pool
+                .get_or_load(norm_src, norm_tgt, models_dir)
+                .map_err(|e| {
+                    LlmPortError::new(
+                        LlmPortErrorKind::Unavailable,
+                        format!("Failed to load local NMT model for {norm_src}->{norm_tgt}: {e}"),
+                    )
+                })?;
+
+            use sona_core::ports::translation::TranslationEnginePort;
+            let mut results = Vec::with_capacity(request.texts.len());
+            for text in &request.texts {
+                let translated =
+                    adapter
+                        .translate(text, norm_src, norm_tgt)
+                        .await
+                        .map_err(|e| {
+                            LlmPortError::new(
+                                LlmPortErrorKind::Unavailable,
+                                format!("Local NMT translation failed: {e}"),
+                            )
+                        })?;
+                results.push(translated);
+            }
+            Ok(results)
+        } else if Self::is_local_config(&request.config) {
             Err(LlmPortError::new(
                 LlmPortErrorKind::Unsupported,
-                "Local models use prompt-based translation",
+                "Local LLM models use prompt-based translation",
             ))
         } else {
             self.online.translate_batch(request).await

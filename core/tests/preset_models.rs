@@ -1222,3 +1222,28 @@ fn canary_presets_are_verified_bundles() {
         assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
     }
 }
+#[test]
+fn opus_mt_presets_are_verified_bundles() {
+    for id in [
+        "opus-mt-en-zh",
+        "opus-mt-zh-en",
+        "opus-mt-ja-zh",
+        "opus-mt-zh-ja",
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "onnx-nmt");
+        assert_eq!(model.engine.as_deref(), Some("onnx-nmt"));
+        assert_eq!(model.artifacts.len(), 5);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some("encoder_model.onnx"));
+        assert_eq!(file_config.decoder.as_deref(), Some("decoder_model.onnx"));
+        assert_eq!(file_config.source_spm.as_deref(), Some("source.spm"));
+        assert_eq!(file_config.target_spm.as_deref(), Some("target.spm"));
+        assert_eq!(file_config.vocab.as_deref(), Some("vocab.json"));
+        for artifact in &model.artifacts {
+            assert!(artifact.url.starts_with("https://huggingface.co/"));
+            assert!(artifact.size_bytes.is_some_and(|s| s > 100_000));
+        }
+    }
+}

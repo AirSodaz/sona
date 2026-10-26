@@ -258,9 +258,27 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_font_color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_translation_font_size: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_translation_font_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_background_color: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_background_opacity: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_display_mode: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_bilingual_order: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime_translation_enabled: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime_translation_source_language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime_translation_target_language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime_translation_engine: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub realtime_translation_model_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -348,6 +366,8 @@ pub struct AppConfig {
     pub voice_typing_polish_prompt: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_placement: Option<VoiceTypingPlacement>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voice_typing_realtime_preview: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub voice_typing_quick_recall_shortcut: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

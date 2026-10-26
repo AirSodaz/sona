@@ -213,8 +213,9 @@ function downloadSherpaOnnxCuda({
 
   if (cudaVersion.startsWith('11')) {
     console.warn('[sherpa-onnx CUDA] Warning: sherpa-onnx 2.0.0 does not publish CUDA 11 prebuilt assets.');
+    return null;
   }
-  const cuMajor = cudaVersion.startsWith('11') ? '11' : (cudaVersion.startsWith('13') ? '13' : '12');
+  const cuMajor = cudaVersion.startsWith('13') ? '13' : '12';
 
   if (normPlatform === 'windows-x86_64') {
     const archiveName = `sherpa-onnx-v${version}-cuda-${cuMajor}.x-cudnn-9.x-onnxruntime${ortVersion}-win-x64-cuda.tar.bz2`;

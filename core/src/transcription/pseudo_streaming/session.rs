@@ -230,6 +230,7 @@ fn execute_inference_pass(
         timestamps: timestamps_abs,
         durations,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     };

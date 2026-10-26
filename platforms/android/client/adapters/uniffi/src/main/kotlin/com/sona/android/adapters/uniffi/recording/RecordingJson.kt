@@ -142,6 +142,7 @@ private fun transcriptSegmentJson(segment: TranscriptSegment): JsonObject = buil
     segment.timestamps?.let { values -> put("timestamps", floatArray(values)) }
     segment.durations?.let { values -> put("durations", floatArray(values)) }
     segment.translation?.let { put("translation", it) }
+    segment.draftTranslation?.let { put("draftTranslation", it) }
     segment.speaker?.let { put("speaker", speakerJson(it)) }
     segment.speakerAttribution?.let { put("speakerAttribution", speakerAttributionJson(it)) }
 }

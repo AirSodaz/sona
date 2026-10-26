@@ -36,6 +36,10 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
     color: config.captionFontColor,
     backgroundColor: config.captionBackgroundColor,
     backgroundOpacity: config.captionBackgroundOpacity,
+    displayMode: config.captionDisplayMode,
+    bilingualOrder: config.captionBilingualOrder,
+    translationColor: config.captionTranslationFontColor,
+    translationFontSize: config.captionTranslationFontSize,
   };
 }
 
@@ -45,12 +49,20 @@ function buildCaptionWindowStyle({
   color,
   backgroundColor,
   backgroundOpacity,
+  displayMode,
+  bilingualOrder,
+  translationColor,
+  translationFontSize,
 }: {
   width?: number;
   fontSize?: number;
   color?: string;
   backgroundColor?: string;
   backgroundOpacity?: number;
+  displayMode?: 'bilingual' | 'translation' | 'original';
+  bilingualOrder?: 'original_first' | 'translation_first';
+  translationColor?: string;
+  translationFontSize?: number;
 }): CaptionWindowStyleOptions {
   return {
     width,
@@ -58,6 +70,10 @@ function buildCaptionWindowStyle({
     color,
     backgroundColor,
     backgroundOpacity,
+    ...(displayMode !== undefined ? { displayMode } : {}),
+    ...(bilingualOrder !== undefined ? { bilingualOrder } : {}),
+    ...(translationColor !== undefined ? { translationColor } : {}),
+    ...(translationFontSize !== undefined ? { translationFontSize } : {}),
   };
 }
 
@@ -92,7 +108,7 @@ async function closeCaptionWindow(): Promise<void> {
   try {
     await captionWindowService.close();
   } catch (error) {
-    logger.error('Error:', error);
+    logger.debug('[CaptionSession] Failed to close caption window:', error);
   }
 }
 
@@ -316,7 +332,11 @@ class CaptionSessionRuntime {
 
     await closeCaptionWindow();
 
-    await this.activeService.stop();
+    try {
+      await this.activeService.stop();
+    } catch (error) {
+      logger.warn('[CaptionSession] Error while stopping active service:', error);
+    }
     this.usingNativeCapture = false;
 
     clearNativePeakListener(this.systemAudioUnlisten);
@@ -336,6 +356,11 @@ class CaptionSessionRuntime {
   }
 
   async restartRecognizer(): Promise<void> {
+    if (!this.isRunning()) {
+      logger.debug('[CaptionSession] Skipping restartRecognizer because session is not running');
+      return;
+    }
+
     const captionService = captionTranscriptionService;
     this.activeService = captionService;
     await captionService.restartStream();
@@ -349,6 +374,10 @@ class CaptionSessionRuntime {
         color: config.captionFontColor,
         backgroundColor: config.captionBackgroundColor,
         backgroundOpacity: config.captionBackgroundOpacity,
+        displayMode: config.captionDisplayMode,
+        bilingualOrder: config.captionBilingualOrder,
+        translationColor: config.captionTranslationFontColor,
+        translationFontSize: config.captionTranslationFontSize,
       })
     );
   }

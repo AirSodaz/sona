@@ -111,6 +111,8 @@ pub struct TranscriptSegment {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub translation: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub draft_translation: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker: Option<SpeakerTag>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub speaker_attribution: Option<SpeakerAttribution>,
@@ -481,6 +483,7 @@ where
                 timestamps: current_timestamps,
                 durations: current_durations,
                 translation: segment.translation.clone(),
+                draft_translation: None,
                 speaker: segment.speaker.clone(),
                 speaker_attribution: segment.speaker_attribution.clone(),
             };
@@ -552,6 +555,7 @@ where
             timestamps: current_timestamps,
             durations: current_durations,
             translation: segment.translation.clone(),
+            draft_translation: None,
             speaker: segment.speaker.clone(),
             speaker_attribution: segment.speaker_attribution.clone(),
         };
@@ -935,6 +939,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         };
@@ -957,6 +962,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         }
