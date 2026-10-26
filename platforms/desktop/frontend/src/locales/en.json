@@ -2023,6 +2023,7 @@
     "update_error": "Update failed: {{error}}",
     "update_btn_install": "Install Update",
     "update_btn_relaunch": "Relaunch",
+    "update_disabled_for_channel": "Auto-update is disabled for {{channel}} builds.",
     "update_download_manually": "Download Manually",
     "about_built_with": "Built with",
     "about_built_with_desc": "Tauri · React · Sherpa-ONNX",

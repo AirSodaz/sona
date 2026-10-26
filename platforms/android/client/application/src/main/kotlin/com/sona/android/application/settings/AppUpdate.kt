@@ -5,7 +5,12 @@ const val MAXIMUM_ANDROID_VERSION_CODE = 2_100_000_000
 enum class AppUpdateChannel(val wireValue: String) {
     STABLE("stable"),
     NIGHTLY("nightly"),
+    CI("ci"),
+    DEV("dev"),
     ;
+
+    val isUpdateSupported: Boolean
+        get() = this == STABLE || this == NIGHTLY
 
     companion object {
         fun fromWireValue(value: String): AppUpdateChannel =

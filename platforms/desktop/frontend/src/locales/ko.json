@@ -2023,6 +2023,7 @@
     "update_error": "업데이트 실패: {{error}}",
     "update_btn_install": "Install 업데이트",
     "update_btn_relaunch": "Relaunch",
+    "update_disabled_for_channel": "{{channel}} 빌드에서는 자동 업데이트가 비활성화되어 있습니다.",
     "update_download_manually": "Download 수동으로",
     "about_built_with": "Built with",
     "about_built_with_desc": "Tauri · React · Sherpa-ONNX",

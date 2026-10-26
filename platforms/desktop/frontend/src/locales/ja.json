@@ -2023,6 +2023,7 @@
     "update_error": "更新に失敗しました: {{error}}",
     "update_btn_install": "アップデートのインストール",
     "update_btn_relaunch": "再起動",
+    "update_disabled_for_channel": "{{channel}} ビルドでは自動更新が無効化されています。",
     "update_download_manually": "手動でダウンロードする",
     "about_built_with": "で構築",
     "about_built_with_desc": "Tauri · React · Sherpa-ONNX",

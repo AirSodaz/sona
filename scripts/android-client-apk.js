@@ -31,10 +31,12 @@ function parseAndroidVersionCode(value) {
   return versionCode;
 }
 
+const validAndroidChannels = new Set(['stable', 'nightly', 'ci', 'dev']);
+
 function resolveAndroidClientBuildIdentity(environment = process.env) {
   const channel = trimmedEnvironmentValue(environment, 'SONA_ANDROID_CHANNEL') || 'stable';
-  if (channel !== 'stable' && channel !== 'nightly') {
-    throw new Error('SONA_ANDROID_CHANNEL must be stable or nightly');
+  if (!validAndroidChannels.has(channel)) {
+    throw new Error('SONA_ANDROID_CHANNEL must be one of: stable, nightly, ci, dev');
   }
 
   const suppliedVersionName = trimmedEnvironmentValue(

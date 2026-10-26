@@ -10,9 +10,10 @@ val maximumAndroidVersionCode = 2_100_000_000L
 fun environmentValue(name: String): String =
     providers.environmentVariable(name).orNull?.trim().orEmpty()
 
+val validAndroidChannels = setOf("stable", "nightly", "ci", "dev")
 val sonaAndroidChannel = environmentValue("SONA_ANDROID_CHANNEL").ifEmpty { "stable" }
-require(sonaAndroidChannel == "stable" || sonaAndroidChannel == "nightly") {
-    "SONA_ANDROID_CHANNEL must be stable or nightly"
+require(sonaAndroidChannel in validAndroidChannels) {
+    "SONA_ANDROID_CHANNEL must be one of: ${validAndroidChannels.joinToString(", ")}"
 }
 
 val suppliedAndroidVersionName = environmentValue("SONA_ANDROID_VERSION_NAME")

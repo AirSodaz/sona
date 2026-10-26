@@ -36,12 +36,14 @@ class AboutSettingsViewModel(
     private var automaticCheckStarted = false
 
     fun checkIfNeeded() {
+        if (!mutableState.value.build.channel.isUpdateSupported) return
         if (automaticCheckStarted) return
         automaticCheckStarted = true
         checkForUpdates()
     }
 
     fun checkForUpdates() {
+        if (!mutableState.value.build.channel.isUpdateSupported) return
         if (mutableState.value.updateStatus is AboutUpdateStatus.Checking) return
         automaticCheckStarted = true
         mutableState.update { it.copy(updateStatus = AboutUpdateStatus.Checking) }

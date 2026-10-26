@@ -109,12 +109,7 @@ internal fun AboutSettingsPane(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = stringResource(
-                                when (state.build.channel) {
-                                    AppUpdateChannel.STABLE -> R.string.about_channel_stable
-                                    AppUpdateChannel.NIGHTLY -> R.string.about_channel_nightly
-                                },
-                            ),
+                            text = stringResource(state.build.channel.labelRes),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.primary,
                         )
@@ -133,11 +128,20 @@ internal fun AboutSettingsPane(
                         fontWeight = FontWeight.SemiBold,
                         color = MaterialTheme.colorScheme.primary,
                     )
-                    UpdateStatus(
-                        status = state.updateStatus,
-                        onCheckForUpdates = onCheckForUpdates,
-                        onOpenRelease = { url -> uriHandler.openUri(url) },
-                    )
+                    if (state.build.channel.isUpdateSupported) {
+                        UpdateStatus(
+                            status = state.updateStatus,
+                            onCheckForUpdates = onCheckForUpdates,
+                            onOpenRelease = { url -> uriHandler.openUri(url) },
+                        )
+                    } else {
+                        val channelLabel = stringResource(state.build.channel.labelRes)
+                        Text(
+                            text = stringResource(R.string.about_update_disabled_for_channel, channelLabel),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
                 }
             }
 
@@ -237,3 +241,11 @@ private fun UpdateStatus(
     }
     Spacer(Modifier.height(4.dp))
 }
+
+private val AppUpdateChannel.labelRes: Int
+    get() = when (this) {
+        AppUpdateChannel.STABLE -> R.string.about_channel_stable
+        AppUpdateChannel.NIGHTLY -> R.string.about_channel_nightly
+        AppUpdateChannel.CI -> R.string.about_channel_ci
+        AppUpdateChannel.DEV -> R.string.about_channel_dev
+    }

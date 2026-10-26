@@ -15,6 +15,7 @@ const getAppReleaseChannelMock = vi.fn(() => 'stable');
 
 vi.mock('../../utils/channel', () => ({
   getAppReleaseChannel: () => getAppReleaseChannelMock(),
+  isUpdateSupported: (ch: string) => ch === 'stable' || ch === 'nightly',
 }));
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
@@ -261,5 +262,11 @@ describe('appUpdaterStore', () => {
     expect(openUrlMock).toHaveBeenCalledWith(
       'https://github.com/AirSodaz/sona/releases/tag/nightly'
     );
+  });
+
+  it('does not check updates when channel is dev or ci', async () => {
+    getAppReleaseChannelMock.mockReturnValue('dev');
+    await useAppUpdaterStore.getState().checkUpdate(true);
+    expect(checkMock).not.toHaveBeenCalled();
   });
 });

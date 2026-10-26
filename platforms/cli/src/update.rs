@@ -182,6 +182,13 @@ pub fn resolve_update_channel(
 }
 
 pub async fn run_update(args: UpdateArgs, io: &mut (dyn CliIo + Send)) -> CliResult<CliOutput> {
+    let build_channel = env!("SONA_BUILD_CHANNEL");
+    if args.current_version_override.is_none() && (build_channel == "dev" || build_channel == "ci")
+    {
+        return Err(CliError::Other(format!(
+            "Auto-update is disabled for {build_channel} builds.\nPlease download an official release or nightly build from https://github.com/AirSodaz/sona/releases"
+        )));
+    }
     let client = DownloadClient::try_new().map_err(map_download_error)?;
     let mirror = args
         .mirror

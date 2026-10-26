@@ -2023,6 +2023,7 @@
     "update_error": "更新失敗：{{error}}",
     "update_btn_install": "安裝更新",
     "update_btn_relaunch": "立即重啟",
+    "update_disabled_for_channel": "{{channel}} 組建已停用自動更新。",
     "update_download_manually": "手動下載",
     "about_built_with": "開發環境",
     "about_built_with_desc": "Tauri · React · Sherpa-ONNX",

@@ -148,6 +148,27 @@ test('Android build identity resolves stable defaults and explicit nightly value
     versionCode: 123,
     versionName: testNightlyVersion,
   });
+  assert.deepEqual(resolveAndroidClientBuildIdentity({
+    SONA_ANDROID_CHANNEL: 'ci',
+    SONA_ANDROID_VERSION_NAME: '0.9.8+ci.12.abcdef1',
+  }), {
+    channel: 'ci',
+    applicationId: 'com.sona.android',
+    appName: 'Sona',
+    versionCode: 1,
+    versionName: '0.9.8+ci.12.abcdef1',
+  });
+
+  assert.deepEqual(resolveAndroidClientBuildIdentity({
+    SONA_ANDROID_CHANNEL: 'dev',
+    SONA_ANDROID_VERSION_NAME: '0.9.8+dev.abcdef1.dirty',
+  }), {
+    channel: 'dev',
+    applicationId: 'com.sona.android',
+    appName: 'Sona',
+    versionCode: 1,
+    versionName: '0.9.8+dev.abcdef1.dirty',
+  });
 });
 
 test('Android build identity rejects invalid channel and version values', async () => {
@@ -155,7 +176,7 @@ test('Android build identity rejects invalid channel and version values', async 
 
   assert.throws(
     () => resolveAndroidClientBuildIdentity({ SONA_ANDROID_CHANNEL: 'preview' }),
-    /SONA_ANDROID_CHANNEL must be stable or nightly/u,
+    /SONA_ANDROID_CHANNEL must be one of/u,
   );
   assert.throws(
     () => resolveAndroidClientBuildIdentity({
