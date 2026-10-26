@@ -149,6 +149,7 @@ export const TauriCommand = {
     processBatchFile: 'process_batch_file',
     cancelBatchTask: 'cancel_batch_task',
     testOnlineAsrProvider: 'test_online_asr_provider',
+    toggleLiveTranslation: 'toggle_live_translation',
   },
   recovery: {
     loadSnapshot: 'recovery_load_snapshot',

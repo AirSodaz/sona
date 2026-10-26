@@ -2,6 +2,7 @@ import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
@@ -20,6 +21,7 @@ import type {
 import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { translateTranscriptSegments } from './tauri/llm';
+import { toggleLiveTranslation } from './tauri/recognizer';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryTranslateTranscriptJobOptions {
@@ -59,6 +61,7 @@ export interface TranslationServicePorts {
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   translateTranscriptSegments: typeof translateTranscriptSegments;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+  toggleLiveTranslation?: typeof toggleLiveTranslation;
   rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
 
@@ -112,6 +115,21 @@ export class TranslationService {
   }
 
   async translateCurrentTranscript(targetLanguageOverride?: string) {
+    const isRecording = useTranscriptRuntimeStore.getState().isRecording;
+    if (isRecording) {
+      const sessionStore = this.ports.getTranscriptSessionStore();
+      const currentHistoryId = sessionStore.sourceHistoryId || 'current';
+      const sidecarStore = this.ports.getTranscriptSidecarStore();
+      sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
+      const toggleFn = this.ports.toggleLiveTranslation ?? toggleLiveTranslation;
+      await toggleFn({
+        enabled: true,
+        targetLang: targetLanguageOverride,
+        catchupSegments: sessionStore.segments,
+      });
+      return;
+    }
+
     const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retryTranslateTranscriptJob({
       segments: sessionStore.segments,
@@ -286,7 +304,14 @@ export class TranslationService {
       return;
     }
 
-    this.ports.getTranscriptSessionStore().setSegments(payload.segments);
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    for (const seg of payload.segments) {
+      if (seg.translation) {
+        sessionStore.updateSegment(seg.id, { translation: seg.translation });
+      }
+    }
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
   }
 }
 
@@ -303,6 +328,7 @@ export const translationService = createTranslationService({
   runTranscriptLlmJob,
   translateTranscriptSegments,
   listenToTranscriptLlmJobUpdates,
+  toggleLiveTranslation,
   rebaselineTranscriptAutoSave: (historyId, segments) =>
     transcriptAutoSaveRuntime.rebaseline(historyId, segments),
 });

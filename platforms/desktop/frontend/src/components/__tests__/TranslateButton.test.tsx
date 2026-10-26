@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { translationService } from '../../services/translationService';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { TranslateButton } from '../TranslateButton';
@@ -33,11 +34,24 @@ vi.mock('../../services/translationService', () => ({
   },
 }));
 
+const mockToggleLiveTranslation = vi.fn().mockResolvedValue(undefined);
+vi.mock('../../services/tauri/recognizer', () => ({
+  toggleLiveTranslation: (...args: unknown[]) => mockToggleLiveTranslation(...args),
+}));
+
+const mockIsModelInstalled = vi.fn().mockResolvedValue(true);
+vi.mock('../../services/modelService', () => ({
+  modelService: {
+    isModelInstalled: (...args: unknown[]) => mockIsModelInstalled(...args),
+  },
+}));
+
 describe('TranslateButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
 
+    useProjectStore.setState({ activeProjectId: null, projects: [] });
     // Reset store
     useTranscriptStore
       .getState()
@@ -225,5 +239,77 @@ describe('TranslateButton', () => {
     fireEvent.click(startBtn);
 
     expect(translationService.translateCurrentTranscript).toHaveBeenCalledWith('es');
+  });
+
+  it('renders A => B language selector and swaps languages when clicking swap button', () => {
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const swapBtn = screen.getByRole('button', { name: 'translation.swap_languages' });
+    expect(swapBtn).toBeDefined();
+
+    fireEvent.click(swapBtn);
+    const config = useConfigStore.getState().config;
+    expect(config.realtimeTranslationSourceLanguage).toBe('zh');
+  });
+
+  it('renders realtime translation toggle card during active recording and calls toggleLiveTranslation', async () => {
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    screen.getByText('translation.realtime_toggle');
+    screen.getByText('translation.realtime_toggle_desc');
+    expect(screen.queryByText('translation.start')).toBeNull();
+
+    const toggleSwitch = screen.getByRole('switch');
+    fireEvent.click(toggleSwitch);
+
+    await waitFor(() => {
+      expect(mockToggleLiveTranslation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          enabled: true,
+        })
+      );
+    });
+
+    useTranscriptRuntimeStore.setState({ isRecording: false });
+  });
+
+  it('displays download badge for uninstalled local ONNX models', async () => {
+    mockIsModelInstalled.mockImplementation(async (id: unknown) => id === 'opus-mt-zh-en');
+    useConfigStore.setState({
+      config: {
+        ...useConfigStore.getState().config,
+        realtimeTranslationEngine: 'onnx',
+        realtimeTranslationSourceLanguage: 'zh',
+        translationLanguage: 'ja',
+        llmSettings: {
+          activeProvider: 'local',
+          providers: {},
+          models: {
+            local_nmt: {
+              id: 'local_nmt',
+              provider: 'local',
+              model: 'opus-mt-zh-en',
+            },
+          },
+          modelOrder: ['local_nmt'],
+          selections: {
+            translationModelId: 'local_nmt',
+          },
+        },
+      },
+    });
+    useTranscriptStore.setState({
+      config: useConfigStore.getState().config,
+    });
+
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    await waitFor(() => {
+      screen.getByText('models.not_downloaded');
+    });
   });
 });

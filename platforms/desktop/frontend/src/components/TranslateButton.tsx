@@ -7,13 +7,16 @@ import {
   getFeatureLlmConfig,
   isLlmConfigComplete,
 } from '../services/llm/configUtils';
+import { modelService } from '../services/modelService';
 import { resolveItemPipeline } from '../services/projectPipeline';
+import { toggleLiveTranslation } from '../services/tauri/recognizer';
 import { translationService } from '../services/translationService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
@@ -30,6 +33,27 @@ import {
   ViewOffIcon,
 } from './Icons';
 
+function SwapIcon(props?: React.SVGProps<SVGSVGElement>): React.JSX.Element {
+  return (
+    <svg
+      aria-hidden="true"
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      {...props}
+    >
+      <path d="m8 3 4 4-4 4" />
+      <path d="M12 7H4" />
+      <path d="m16 21-4-4 4-4" />
+      <path d="M12 17h8" />
+    </svg>
+  );
+}
 const STATIC_COMMON_LANGUAGES = ['zh', 'en', 'ja', 'ko', 'fr', 'de', 'es', 'pt', 'ru', 'it'];
 
 /** Props for TranslateButton. */
@@ -76,6 +100,7 @@ export function TranslateButton({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
+  const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
 
   // LLM state
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
@@ -98,11 +123,43 @@ export function TranslateButton({
   const projectId = currentItem?.projectId ?? activeProjectId;
   const projectPipeline = resolveItemPipeline(projectId, projects, config);
   const effectiveTargetLang = projectPipeline.targetLanguage || config.translationLanguage || 'zh';
+  const effectiveSourceLang = config.realtimeTranslationSourceLanguage || 'auto';
+  const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
+
+  const [selectingMode, setSelectingMode] = useState<'source' | 'target'>('target');
+  const [installedModels, setInstalledModels] = useState<Record<string, boolean>>({});
+
+  const llm = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
+  const isLocalOnnx =
+    llm?.strategy === 'local_nmt' || (!llm && config.realtimeTranslationEngine === 'onnx');
+
+  useEffect(() => {
+    let active = true;
+    if (isOpen && isLocalOnnx && typeof modelService?.isModelInstalled === 'function') {
+      const pairs = ['opus-mt-en-zh', 'opus-mt-zh-en', 'opus-mt-ja-zh', 'opus-mt-zh-ja'];
+      Promise.all(
+        pairs.map(async (id) => {
+          try {
+            const installed = await modelService.isModelInstalled(id);
+            return [id, installed] as const;
+          } catch {
+            return [id, false] as const;
+          }
+        })
+      ).then((results) => {
+        if (active) {
+          setInstalledModels(Object.fromEntries(results));
+        }
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [isOpen, isLocalOnnx]);
 
   const hasTranslation = segments.some(
     (seg) => typeof seg.translation === 'string' && seg.translation.trim().length > 0
   );
-
   // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -217,6 +274,70 @@ export function TranslateButton({
     triggerRef.current?.focus();
   };
 
+  const handleSwapLanguages = () => {
+    const oldSrc = effectiveSourceLang === 'auto' ? 'zh' : effectiveSourceLang;
+    const oldTgt = effectiveTargetLang;
+    const newSrc = oldTgt;
+    const newTgt = oldSrc;
+
+    setConfig({
+      realtimeTranslationSourceLanguage: newSrc,
+      realtimeTranslationTargetLanguage: newTgt,
+      translationLanguage: newTgt,
+    });
+
+    if (projectId && projectPipeline.isProjectPipeline) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+      if (project) {
+        void useProjectStore.getState().updateProjectPipeline(projectId, {
+          ...(project.pipeline ?? DEFAULT_PROJECT_PIPELINE),
+          targetLanguage: newTgt,
+        });
+      }
+    }
+
+    if (isRecording && realtimeTranslationEnabled) {
+      void toggleLiveTranslation({
+        enabled: true,
+        sourceLang: newSrc,
+        targetLang: newTgt,
+        catchupSegments: segments,
+      });
+    }
+  };
+
+  const handleToggleRealtime = async () => {
+    const nextEnabled = !realtimeTranslationEnabled;
+    setConfig({ realtimeTranslationEnabled: nextEnabled });
+    try {
+      await toggleLiveTranslation({
+        enabled: nextEnabled,
+        sourceLang: effectiveSourceLang,
+        targetLang: effectiveTargetLang,
+        catchupSegments: nextEnabled ? segments : null,
+      });
+    } catch (error) {
+      await showError({
+        code: 'translation.failed',
+        messageKey: 'errors.translation.failed',
+        cause: error,
+      });
+    }
+  };
+
+  const handleSourceSelect = (langCode: string) => {
+    setConfig({ realtimeTranslationSourceLanguage: langCode });
+    if (isRecording && realtimeTranslationEnabled) {
+      void toggleLiveTranslation({
+        enabled: true,
+        sourceLang: langCode,
+        targetLang: effectiveTargetLang,
+        catchupSegments: segments,
+      });
+    }
+    setSelectingMode('target');
+  };
+
   const handleLanguageSelect = async (langCode: string) => {
     // Update state & localStorage for recently used languages
     setRecentLanguages((prev) => {
@@ -238,12 +359,23 @@ export function TranslateButton({
       }
     }
 
-    setConfig({ translationLanguage: langCode });
-    // Or close it to indicate selection made. Let's close it.
+    setConfig({
+      translationLanguage: langCode,
+      realtimeTranslationTargetLanguage: langCode,
+    });
+
+    if (isRecording && realtimeTranslationEnabled) {
+      void toggleLiveTranslation({
+        enabled: true,
+        sourceLang: effectiveSourceLang,
+        targetLang: langCode,
+        catchupSegments: segments,
+      });
+    }
+
     closeMenu();
     triggerRef.current?.focus();
   };
-
   const commonLanguages = Array.from(
     new Set([...recentLanguages, ...STATIC_COMMON_LANGUAGES])
   ).slice(0, 10);
@@ -317,25 +449,62 @@ export function TranslateButton({
           aria-labelledby="translate-menu-button"
           style={{ minWidth: '250px' }}
         >
-          <button
-            type="button"
-            className="export-dropdown-item"
-            onClick={handleStartTranslation}
-            disabled={isTranslating}
-            role="menuitem"
-            tabIndex={-1}
-          >
-            {hasTranslation ? <EditIcon /> : <PlayIcon />}
-            <span>
-              {(() => {
-                if (isTranslating)
-                  return t('translation.translating', { defaultValue: 'Translating...' });
-                if (hasTranslation)
-                  return t('translation.retranslate', { defaultValue: 'Retranslate' });
-                return t('translation.start', { defaultValue: 'Start Translation' });
-              })()}
-            </span>
-          </button>
+          {isRecording ? (
+            <div
+              style={{
+                padding: '8px 12px',
+                margin: '4px 6px',
+                background: 'var(--color-bg-secondary)',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--color-border)',
+              }}
+            >
+              <div
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
+                    {t('translation.realtime_toggle', { defaultValue: '实时双语翻译' })}
+                  </span>
+                  <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
+                    {t('translation.realtime_toggle_desc', {
+                      defaultValue: '实时跟随语音 · 自动补齐已录分段',
+                    })}
+                  </span>
+                </div>
+                <label className="toggle-switch" style={{ cursor: 'pointer', margin: 0 }}>
+                  <input
+                    type="checkbox"
+                    checked={realtimeTranslationEnabled}
+                    onChange={handleToggleRealtime}
+                    role="switch"
+                    aria-checked={realtimeTranslationEnabled}
+                  />
+                  <span className="toggle-slider round" />
+                </label>
+              </div>
+            </div>
+          ) : (
+            <button
+              type="button"
+              className="export-dropdown-item"
+              onClick={handleStartTranslation}
+              disabled={isTranslating}
+              role="menuitem"
+              tabIndex={-1}
+            >
+              {hasTranslation ? <EditIcon /> : <PlayIcon />}
+              <span>
+                {(() => {
+                  if (isTranslating)
+                    return t('translation.translating', { defaultValue: 'Translating...' });
+                  if (hasTranslation)
+                    return t('translation.retranslate', { defaultValue: 'Retranslate' });
+                  return t('translation.start', { defaultValue: 'Start Translation' });
+                })()}
+              </span>
+            </button>
+          )}
           <button
             type="button"
             className="export-dropdown-item"
@@ -354,176 +523,403 @@ export function TranslateButton({
           <div style={{ height: 1, background: 'var(--color-border)', margin: '4px 0' }} />
           <div
             style={{
-              padding: '8px 12px 4px 12px',
+              padding: '6px 12px 2px 12px',
               fontSize: '0.75rem',
               fontWeight: 600,
               color: 'var(--color-text-secondary)',
             }}
           >
-            {t('translation.target_language', { defaultValue: 'Target Language' })}
+            {selectingMode === 'source'
+              ? t('translation.source_language', { defaultValue: 'Source Language' })
+              : t('translation.target_language', { defaultValue: 'Target Language' })}
           </div>
 
-          <div style={{ padding: '4px 8px 8px 8px' }}>
-            <input
-              type="text"
-              placeholder={t('translation.search_placeholder', {
-                defaultValue: 'Search languages...',
-              })}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  if (menuRef.current) {
-                    const buttons = Array.from(menuRef.current.querySelectorAll('button'));
-                    if (buttons.length > 2) {
-                      buttons[2].focus();
-                    }
-                  }
-                } else if (e.key === 'Escape') {
-                  e.preventDefault();
-                  closeMenu();
-                  triggerRef.current?.focus();
-                } else {
-                  e.stopPropagation();
-                }
-              }}
+          <div
+            style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 8px 6px 8px' }}
+          >
+            <button
+              type="button"
+              onClick={() => setSelectingMode('source')}
               style={{
-                width: '100%',
+                flex: 1,
                 padding: '6px 8px',
-                fontSize: '0.8rem',
-                border: '1px solid var(--color-border)',
-                borderRadius: 'var(--radius-md)',
-                background: 'var(--color-bg-primary)',
+                fontSize: '0.75rem',
+                fontWeight: selectingMode === 'source' ? 600 : 400,
+                background:
+                  selectingMode === 'source'
+                    ? 'var(--color-bg-hover)'
+                    : 'var(--color-bg-secondary)',
+                border:
+                  selectingMode === 'source'
+                    ? '1px solid var(--color-accent-primary)'
+                    : '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
                 color: 'var(--color-text-primary)',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
-          </div>
-
-          {!searchQuery && (
-            <div style={{ padding: '0 8px 8px 8px' }}>
-              <div
-                style={{
-                  fontSize: '0.7rem',
-                  fontWeight: 600,
-                  color: 'var(--color-text-secondary)',
-                  marginBottom: '6px',
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.05em',
-                }}
-              >
-                {t('translation.commonly_used', { defaultValue: 'Commonly Used' })}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}>
-                {commonLanguages.map((lang) => {
-                  const isSelected = effectiveTargetLang === lang;
-                  return (
-                    <button
-                      key={`common-${lang}`}
-                      type="button"
-                      onClick={() => void handleLanguageSelect(lang)}
-                      style={{
-                        padding: '4px 6px',
-                        fontSize: '0.75rem',
-                        background: isSelected
-                          ? 'var(--color-bg-hover)'
-                          : 'var(--color-bg-secondary)',
-                        border: isSelected
-                          ? '1px solid var(--color-accent-primary)'
-                          : '1px solid var(--color-border)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: isSelected
-                          ? 'var(--color-text-primary)'
-                          : 'var(--color-text-secondary)',
-                        cursor: 'pointer',
-                        textAlign: 'center',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        whiteSpace: 'nowrap',
-                        fontWeight: isSelected ? '600' : 'normal',
-                        transition: 'all 0.15s ease',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background = 'var(--color-bg-hover)';
-                        e.currentTarget.style.color = 'var(--color-text-primary)';
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isSelected) {
-                          e.currentTarget.style.background = 'var(--color-bg-secondary)';
-                          e.currentTarget.style.color = 'var(--color-text-secondary)';
-                        }
-                      }}
-                      title={getLocalizedLanguageName(lang, i18n.language)}
-                    >
-                      {getLocalizedLanguageName(lang, i18n.language)}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '6px' }}>
-            <div
-              style={{
-                padding: '4px 12px 6px 12px',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                color: 'var(--color-text-secondary)',
-                textTransform: 'uppercase',
-                letterSpacing: '0.05em',
+                cursor: 'pointer',
+                textAlign: 'center',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
               }}
             >
-              {searchQuery
-                ? t('translation.search_results', { defaultValue: 'Search Results' })
-                : t('translation.all_languages', { defaultValue: 'All Languages' })}
+              {effectiveSourceLang === 'auto'
+                ? t('translation.auto_detect', { defaultValue: 'Auto Detect' })
+                : getLocalizedLanguageName(effectiveSourceLang, i18n.language)}
+            </button>
+            <button
+              type="button"
+              aria-label={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
+              title={t('translation.swap_languages', { defaultValue: 'Swap languages' })}
+              onClick={handleSwapLanguages}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: 28,
+                height: 28,
+                borderRadius: 'var(--radius-sm)',
+                border: '1px solid var(--color-border)',
+                background: 'var(--color-bg-secondary)',
+                color: 'var(--color-text-primary)',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <SwapIcon />
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectingMode('target')}
+              style={{
+                flex: 1,
+                padding: '6px 8px',
+                fontSize: '0.75rem',
+                fontWeight: selectingMode === 'target' ? 600 : 400,
+                background:
+                  selectingMode === 'target'
+                    ? 'var(--color-bg-hover)'
+                    : 'var(--color-bg-secondary)',
+                border:
+                  selectingMode === 'target'
+                    ? '1px solid var(--color-accent-primary)'
+                    : '1px solid var(--color-border)',
+                borderRadius: 'var(--radius-sm)',
+                color: 'var(--color-text-primary)',
+                cursor: 'pointer',
+                textAlign: 'center',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {getLocalizedLanguageName(effectiveTargetLang, i18n.language)}
+            </button>
+          </div>
+          {isLocalOnnx ? (
+            <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 0' }}>
+              {selectingMode === 'source'
+                ? ['auto', 'zh', 'en', 'ja'].map((code) => {
+                    const isSelected = effectiveSourceLang === code;
+                    const label =
+                      code === 'auto'
+                        ? t('translation.auto_detect', { defaultValue: 'Auto Detect' })
+                        : getLocalizedLanguageName(code, i18n.language);
+                    return (
+                      <button
+                        key={code}
+                        type="button"
+                        className="export-dropdown-item"
+                        onClick={() => handleSourceSelect(code)}
+                        role="menuitem"
+                        tabIndex={-1}
+                        style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}
+                      >
+                        <span
+                          style={{
+                            width: 16,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {isSelected && <CheckIcon />}
+                        </span>
+                        <span>{label}</span>
+                      </button>
+                    );
+                  })
+                : (() => {
+                    const candidates =
+                      effectiveSourceLang === 'zh'
+                        ? ['en', 'ja']
+                        : effectiveSourceLang === 'en' || effectiveSourceLang === 'ja'
+                          ? ['zh']
+                          : ['zh', 'en', 'ja'];
+                    return candidates.map((code) => {
+                      const isSelected = effectiveTargetLang === code;
+                      const pairModelId = `opus-mt-${effectiveSourceLang === 'auto' ? 'en' : effectiveSourceLang}-${code}`;
+                      const isInstalled = installedModels[pairModelId] ?? true;
+                      return (
+                        <button
+                          key={code}
+                          type="button"
+                          className="export-dropdown-item"
+                          onClick={() => void handleLanguageSelect(code)}
+                          role="menuitem"
+                          tabIndex={-1}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            width: '100%',
+                            gap: '8px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 16,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isSelected && <CheckIcon />}
+                          </span>
+                          <span>{getLocalizedLanguageName(code, i18n.language)}</span>
+                          {!isInstalled && (
+                            <span
+                              style={{
+                                marginLeft: 'auto',
+                                fontSize: '0.65rem',
+                                padding: '1px 5px',
+                                borderRadius: 4,
+                                background: 'var(--color-bg-secondary)',
+                                color: 'var(--color-text-secondary)',
+                                border: '1px solid var(--color-border)',
+                              }}
+                            >
+                              {t('models.not_downloaded', { defaultValue: '未下载' })}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    });
+                  })()}
             </div>
-            <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '2px 0' }}>
-              {filteredLanguages.length === 0 ? (
-                <div
+          ) : selectingMode === 'source' ? (
+            <div style={{ maxHeight: '220px', overflowY: 'auto', padding: '4px 0' }}>
+              <button
+                type="button"
+                className="export-dropdown-item"
+                onClick={() => handleSourceSelect('auto')}
+                role="menuitem"
+                tabIndex={-1}
+                style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}
+              >
+                <span
                   style={{
-                    padding: '8px 12px',
-                    fontSize: '0.8rem',
-                    color: 'var(--color-text-muted)',
-                    textAlign: 'center',
+                    width: 16,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
                   }}
                 >
-                  {t('translation.no_results', { defaultValue: 'No languages found' })}
-                </div>
-              ) : (
-                filteredLanguages.map((lang) => {
-                  const isSelected = effectiveTargetLang === lang.code;
-                  return (
-                    <button
-                      key={lang.code}
-                      type="button"
-                      className="export-dropdown-item"
-                      onClick={() => void handleLanguageSelect(lang.code)}
-                      role="menuitem"
-                      tabIndex={-1}
-                      style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}
+                  {effectiveSourceLang === 'auto' && <CheckIcon />}
+                </span>
+                <span>{t('translation.auto_detect', { defaultValue: 'Auto Detect' })}</span>
+              </button>
+              {filteredLanguages.map((lang) => {
+                const isSelected = effectiveSourceLang === lang.code;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    className="export-dropdown-item"
+                    onClick={() => handleSourceSelect(lang.code)}
+                    role="menuitem"
+                    tabIndex={-1}
+                    style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '8px' }}
+                  >
+                    <span
+                      style={{
+                        width: 16,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                      }}
                     >
-                      <span
-                        style={{
-                          width: 16,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          flexShrink: 0,
-                        }}
-                      >
-                        {isSelected && <CheckIcon />}
-                      </span>
-                      <span>{getLocalizedLanguageName(lang.code, i18n.language)}</span>
-                    </button>
-                  );
-                })
-              )}
+                      {isSelected && <CheckIcon />}
+                    </span>
+                    <span>{getLocalizedLanguageName(lang.code, i18n.language)}</span>
+                  </button>
+                );
+              })}
             </div>
-          </div>
+          ) : (
+            <>
+              <div style={{ padding: '4px 8px 8px 8px' }}>
+                <input
+                  type="text"
+                  placeholder={t('translation.search_placeholder', {
+                    defaultValue: 'Search languages...',
+                  })}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  onClick={(e) => e.stopPropagation()}
+                  onKeyDown={(e) => {
+                    if (e.key === 'ArrowDown') {
+                      e.preventDefault();
+                      if (menuRef.current) {
+                        const buttons = Array.from(menuRef.current.querySelectorAll('button'));
+                        if (buttons.length > 2) {
+                          buttons[2].focus();
+                        }
+                      }
+                    } else if (e.key === 'Escape') {
+                      e.preventDefault();
+                      closeMenu();
+                      triggerRef.current?.focus();
+                    } else {
+                      e.stopPropagation();
+                    }
+                  }}
+                  style={{
+                    width: '100%',
+                    padding: '6px 8px',
+                    fontSize: '0.8rem',
+                    border: '1px solid var(--color-border)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'var(--color-bg-primary)',
+                    color: 'var(--color-text-primary)',
+                    outline: 'none',
+                    boxSizing: 'border-box',
+                  }}
+                />
+              </div>
+
+              {!searchQuery && (
+                <div style={{ padding: '0 8px 8px 8px' }}>
+                  <div
+                    style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 600,
+                      color: 'var(--color-text-secondary)',
+                      marginBottom: '6px',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}
+                  >
+                    {t('translation.commonly_used', { defaultValue: 'Commonly Used' })}
+                  </div>
+                  <div
+                    style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '4px' }}
+                  >
+                    {commonLanguages.map((lang) => {
+                      const isSelected = effectiveTargetLang === lang;
+                      return (
+                        <button
+                          key={`common-${lang}`}
+                          type="button"
+                          onClick={() => void handleLanguageSelect(lang)}
+                          style={{
+                            padding: '4px 6px',
+                            fontSize: '0.75rem',
+                            background: isSelected
+                              ? 'var(--color-bg-hover)'
+                              : 'var(--color-bg-secondary)',
+                            border: isSelected
+                              ? '1px solid var(--color-accent-primary)'
+                              : '1px solid var(--color-border)',
+                            borderRadius: 'var(--radius-sm)',
+                            color: isSelected
+                              ? 'var(--color-text-primary)'
+                              : 'var(--color-text-secondary)',
+                            cursor: 'pointer',
+                            textAlign: 'center',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontWeight: isSelected ? '600' : 'normal',
+                            transition: 'all 0.15s ease',
+                          }}
+                          title={getLocalizedLanguageName(lang, i18n.language)}
+                        >
+                          {getLocalizedLanguageName(lang, i18n.language)}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '6px' }}>
+                <div
+                  style={{
+                    padding: '4px 12px 6px 12px',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    color: 'var(--color-text-secondary)',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  {searchQuery
+                    ? t('translation.search_results', { defaultValue: 'Search Results' })
+                    : t('translation.all_languages', { defaultValue: 'All Languages' })}
+                </div>
+                <div style={{ maxHeight: '180px', overflowY: 'auto', padding: '2px 0' }}>
+                  {filteredLanguages.length === 0 ? (
+                    <div
+                      style={{
+                        padding: '8px 12px',
+                        fontSize: '0.8rem',
+                        color: 'var(--color-text-muted)',
+                        textAlign: 'center',
+                      }}
+                    >
+                      {t('translation.no_results', { defaultValue: 'No languages found' })}
+                    </div>
+                  ) : (
+                    filteredLanguages.map((lang) => {
+                      const isSelected = effectiveTargetLang === lang.code;
+                      return (
+                        <button
+                          key={lang.code}
+                          type="button"
+                          className="export-dropdown-item"
+                          onClick={() => void handleLanguageSelect(lang.code)}
+                          role="menuitem"
+                          tabIndex={-1}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            width: '100%',
+                            gap: '8px',
+                          }}
+                        >
+                          <span
+                            style={{
+                              width: 16,
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                            }}
+                          >
+                            {isSelected && <CheckIcon />}
+                          </span>
+                          <span>{getLocalizedLanguageName(lang.code, i18n.language)}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
     </div>

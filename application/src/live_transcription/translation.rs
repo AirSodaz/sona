@@ -77,10 +77,22 @@ impl StreamingTranslationCoordinator {
     pub fn clear(&self) {
         self.states.lock().clear();
     }
-
     pub fn fill_cached(&self, update: &mut TranscriptUpdate) {
         let states = self.states.lock();
         for segment in &mut update.upsert_segments {
+            let text = segment.text.trim();
+            let effective_source = if self.source_lang.trim().is_empty()
+                || self.source_lang.eq_ignore_ascii_case("auto")
+            {
+                detect_script_language(text)
+            } else {
+                normalize_language_code(&self.source_lang)
+            };
+            let effective_target = normalize_language_code(&self.target_lang);
+            if effective_source.eq_ignore_ascii_case(effective_target) {
+                continue;
+            }
+
             if let Some(state) = states.get(&segment.id) {
                 if segment.translation.is_none() {
                     let frozen = state.stabilizer.frozen_prefix();
@@ -113,13 +125,31 @@ impl StreamingTranslationCoordinator {
                 continue;
             }
 
+            let effective_source = if self.source_lang.trim().is_empty()
+                || self.source_lang.eq_ignore_ascii_case("auto")
+            {
+                detect_script_language(text)
+            } else {
+                normalize_language_code(&self.source_lang)
+            };
+            let effective_target = normalize_language_code(&self.target_lang);
+
+            if effective_source.eq_ignore_ascii_case(effective_target) {
+                segment.translation = None;
+                segment.draft_translation = None;
+                if segment.is_final {
+                    let mut states = self.states.lock();
+                    states.remove(&segment.id);
+                }
+                continue;
+            }
+
             if segment.is_final {
-                match self
+                let translate_fut = self
                     .engine
-                    .translate(text, &self.source_lang, &self.target_lang)
-                    .await
-                {
-                    Ok(translated_text) => {
+                    .translate(text, effective_source, effective_target);
+                match tokio::time::timeout(Duration::from_millis(5000), translate_fut).await {
+                    Ok(Ok(translated_text)) => {
                         let mut states = self.states.lock();
                         let mut stabilizer = states
                             .remove(&segment.id)
@@ -129,8 +159,24 @@ impl StreamingTranslationCoordinator {
                         segment.translation = out.frozen_prefix;
                         segment.draft_translation = None;
                     }
-                    Err(err) => {
+                    Ok(Err(err)) => {
                         log::warn!("Final translation failed for segment {}: {err}", segment.id);
+                        let mut states = self.states.lock();
+                        if let Some(state) = states.remove(&segment.id) {
+                            let frozen = state.stabilizer.frozen_prefix().to_string();
+                            if !frozen.is_empty() {
+                                segment.translation = Some(frozen);
+                            } else {
+                                segment.translation = state.last_draft_translation;
+                            }
+                        }
+                        segment.draft_translation = None;
+                    }
+                    Err(_timeout) => {
+                        log::warn!(
+                            "Final translation timed out (5000ms) for segment {}",
+                            segment.id
+                        );
                         let mut states = self.states.lock();
                         if let Some(state) = states.remove(&segment.id) {
                             let frozen = state.stabilizer.frozen_prefix().to_string();
@@ -183,12 +229,11 @@ impl StreamingTranslationCoordinator {
                 };
 
                 if should_translate {
-                    match self
-                        .engine
-                        .translate(text, &self.source_lang, &self.target_lang)
-                        .await
-                    {
-                        Ok(translated_text) => {
+                    let translate_fut =
+                        self.engine
+                            .translate(text, effective_source, effective_target);
+                    match tokio::time::timeout(Duration::from_millis(3000), translate_fut).await {
+                        Ok(Ok(translated_text)) => {
                             let mut states = self.states.lock();
                             if let Some(entry) = states.get_mut(&segment.id) {
                                 if entry.last_text == text {
@@ -206,9 +251,22 @@ impl StreamingTranslationCoordinator {
                                 }
                             }
                         }
-                        Err(err) => {
+                        Ok(Err(err)) => {
                             log::warn!(
                                 "Streaming translation failed for segment {}: {err}",
+                                segment.id
+                            );
+                            let states = self.states.lock();
+                            if let Some(state) = states.get(&segment.id) {
+                                segment.translation =
+                                    Some(state.stabilizer.frozen_prefix().to_string())
+                                        .filter(|s| !s.is_empty());
+                                segment.draft_translation = state.last_draft_translation.clone();
+                            }
+                        }
+                        Err(_timeout) => {
+                            log::warn!(
+                                "Streaming translation timed out (3000ms) for segment {}",
                                 segment.id
                             );
                             let states = self.states.lock();
@@ -231,4 +289,59 @@ impl StreamingTranslationCoordinator {
             }
         }
     }
+}
+
+/// Detect script language when source language is "auto" or empty.
+/// Japanese hiragana/katakana -> "ja"
+/// CJK ideographs -> "zh"
+/// Others -> "en"
+pub fn detect_script_language(text: &str) -> &'static str {
+    let has_kana = text
+        .chars()
+        .any(|c| matches!(c, '\u{3040}'..='\u{309F}' | '\u{30A0}'..='\u{30FF}'));
+    if has_kana {
+        return "ja";
+    }
+    let has_cjk_ideograph = text.chars().any(|c| {
+        matches!(
+            c,
+            '\u{4E00}'..='\u{9FFF}'
+                | '\u{3400}'..='\u{4DBF}'
+                | '\u{F900}'..='\u{FAFF}'
+                | '\u{20000}'..='\u{2FA1F}'
+                | '\u{30000}'..='\u{323AF}'
+        )
+    });
+    if has_cjk_ideograph {
+        return "zh";
+    }
+    "en"
+}
+
+/// Normalize language codes (e.g. "zh-CN" -> "zh", "en-US" -> "en", "ja-JP" -> "ja", "中文" -> "zh").
+pub fn normalize_language_code(code: &str) -> &str {
+    let trimmed = code.trim();
+    if trimmed.starts_with("中文") {
+        return "zh";
+    }
+    if let Some(prefix) = trimmed.get(..2) {
+        if prefix.eq_ignore_ascii_case("zh")
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("cmn"))
+        {
+            return "zh";
+        }
+        if prefix.eq_ignore_ascii_case("en") {
+            return "en";
+        }
+        if prefix.eq_ignore_ascii_case("ja")
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("jpn"))
+        {
+            return "ja";
+        }
+    }
+    trimmed
 }

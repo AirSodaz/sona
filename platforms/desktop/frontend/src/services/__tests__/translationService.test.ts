@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import {
   buildTestConfig as buildBaseTestConfig,
   type DeepPartial,
@@ -11,6 +12,7 @@ import {
 } from '../../test-utils/transcriptStoreTestUtils';
 import type { AppConfig } from '../../types/config';
 import { historyService } from '../historyService';
+import type { TranscriptLlmJobResult } from '../llmTaskTypes';
 import { translationService } from '../translationService';
 
 const mockListenToLlmTaskChunks = vi.fn();
@@ -407,5 +409,91 @@ describe('TranslationService', () => {
         segments: [{ id: '1', text: 'Hello, world!' }],
       }),
     });
+  });
+
+  it('toggles live translation and catches up existing segments when recording is active', async () => {
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+
+    useTranscriptStore.setState({
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
+        { id: '2', start: 1, end: 2, text: 'World', isFinal: false },
+      ],
+      sourceHistoryId: 'rec-session-1',
+    });
+
+    vi.mocked(invoke).mockResolvedValue(undefined);
+
+    await translationService.translateCurrentTranscript('zh');
+
+    expect(invoke).toHaveBeenCalledWith('toggle_live_translation', {
+      enabled: true,
+      sourceLang: null,
+      targetLang: 'zh',
+      catchupSegments: expect.arrayContaining([
+        expect.objectContaining({ id: '1', text: 'Hello' }),
+        expect.objectContaining({ id: '2', text: 'World' }),
+      ]),
+    });
+
+    expect(useTranscriptStore.getState().getLlmState('rec-session-1').isTranslationVisible).toBe(
+      true
+    );
+
+    useTranscriptRuntimeStore.setState({ isRecording: false });
+  });
+
+  it('patches translations incrementally without overwriting newly added segments', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({ translationLanguage: 'zh' }),
+      segments: [{ id: '1', start: 0, end: 1, text: 'Segment 1', isFinal: true }],
+      sourceHistoryId: 'history-123',
+    });
+
+    let updateCallback: ((result: TranscriptLlmJobResult) => void) | undefined;
+    mockListenToTranscriptLlmJobUpdates.mockImplementation(async (_taskId, _taskType, cb) => {
+      updateCallback = cb;
+      return () => {};
+    });
+    vi.mocked(invoke).mockImplementation(async (cmd) => {
+      if (cmd === 'run_transcript_llm_job') {
+        // While the job is running, a new segment is added to the store (e.g. from ASR)
+        useTranscriptStore.getState().addSegment({
+          start: 1,
+          end: 2,
+          text: 'Segment 2 (newly arrived)',
+          isFinal: false,
+        });
+
+        // Job completes with translation for segment 1
+        updateCallback?.({
+          taskId: 'task-1',
+          taskType: 'translate',
+          jobHistoryId: 'history-123',
+          segments: [
+            { id: '1', start: 0, end: 1, text: 'Segment 1', isFinal: true, translation: '分段 1' },
+          ],
+        });
+
+        return {
+          taskId: 'task-1',
+          taskType: 'translate',
+          jobHistoryId: 'history-123',
+          segments: [
+            { id: '1', start: 0, end: 1, text: 'Segment 1', isFinal: true, translation: '分段 1' },
+          ],
+        };
+      }
+      return null;
+    });
+
+    await translationService.translateCurrentTranscript();
+
+    const segments = useTranscriptStore.getState().segments;
+    // Both segment 1 and segment 2 must still exist! Segment 2 was not wiped out.
+    expect(segments.length).toBe(2);
+    expect(segments[0].id).toBe('1');
+    expect(segments[0].translation).toBe('分段 1');
+    expect(segments[1].text).toBe('Segment 2 (newly arrived)');
   });
 });

@@ -23,6 +23,7 @@ struct MockTranslationEngine {
     fail_on: Mutex<Option<String>>,
     call_count: Mutex<usize>,
     delay: Mutex<Option<Duration>>,
+    last_languages: Mutex<Option<(String, String)>>,
 }
 
 impl MockTranslationEngine {
@@ -39,6 +40,7 @@ impl MockTranslationEngine {
             fail_on: Mutex::new(None),
             call_count: Mutex::new(0),
             delay: Mutex::new(None),
+            last_languages: Mutex::new(None),
         }
     }
 
@@ -53,6 +55,10 @@ impl MockTranslationEngine {
     fn call_count(&self) -> usize {
         *self.call_count.lock().unwrap()
     }
+
+    fn last_languages(&self) -> Option<(String, String)> {
+        self.last_languages.lock().unwrap().clone()
+    }
 }
 
 #[async_trait]
@@ -60,10 +66,12 @@ impl TranslationEnginePort for MockTranslationEngine {
     async fn translate(
         &self,
         text: &str,
-        _source_lang: &str,
-        _target_lang: &str,
+        source_lang: &str,
+        target_lang: &str,
     ) -> Result<String, TranslationPortError> {
         *self.call_count.lock().unwrap() += 1;
+        *self.last_languages.lock().unwrap() =
+            Some((source_lang.to_string(), target_lang.to_string()));
         let delay = *self.delay.lock().unwrap();
         if let Some(d) = delay {
             tokio::time::sleep(d).await;
@@ -620,4 +628,157 @@ async fn test_word_correction_zero_char_delta_translates_after_debounce() {
     coordinator.enrich_update(&mut update2).await;
     // Word correction with char_delta == 0 should translate after debounce!
     assert_eq!(engine.call_count(), 2);
+}
+
+#[tokio::test]
+async fn test_slow_final_translation_does_not_block_release_or_hang() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    // Simulate slow translation (500ms delay)
+    translation_engine.set_delay(Duration::from_millis(500));
+
+    let streaming_coord = Arc::new(
+        StreamingTranslationCoordinator::new(
+            Arc::clone(&translation_engine) as Arc<dyn TranslationEnginePort>,
+            "en",
+            "zh",
+        )
+        .with_debounce(100, 3),
+    );
+    let coordinator = Arc::new(LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(streaming_coord),
+    ));
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-slow-final",
+            LiveSourceEpoch::new("src-slow-final", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit final segment
+    session.emit("I like to read books every day.", 3.0, true);
+
+    // The un-translated final segment must be broadcast with zero latency (< 60ms)
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    {
+        let updates = observer.updates.lock().unwrap().clone();
+        assert!(
+            !updates.is_empty(),
+            "Immediate final update should have been broadcast"
+        );
+        let immediate_final = &updates[0].update.upsert_segments[0];
+        assert_eq!(immediate_final.text, "I like to read books every day.");
+        assert_eq!(immediate_final.translation, None);
+    }
+
+    // Call release immediately while translation is still pending in background
+    let start_release = std::time::Instant::now();
+    let release_res = coordinator.release("consumer-slow-final").await;
+    assert!(release_res.is_ok());
+    assert!(
+        start_release.elapsed() < Duration::from_millis(150),
+        "Release took {:?}, should not block on slow translation",
+        start_release.elapsed()
+    );
+
+    // Wait for the slow translation background task to settle cleanly without panic
+    tokio::time::sleep(Duration::from_millis(600)).await;
+}
+
+#[tokio::test]
+async fn test_language_detection_and_same_language_skip() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "auto",
+        "en",
+    );
+
+    // 1. Japanese text with "auto" source -> detects "ja"
+    let mut ja_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-ja", "こんにちは世界", true)],
+    };
+    coordinator.enrich_update(&mut ja_update).await;
+    assert_eq!(
+        engine.last_languages(),
+        Some(("ja".to_string(), "en".to_string()))
+    );
+    assert!(ja_update.upsert_segments[0].translation.is_some());
+
+    // 2. Chinese text with "auto" source -> detects "zh"
+    let mut zh_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-zh", "你好世界", true)],
+    };
+    coordinator.enrich_update(&mut zh_update).await;
+    assert_eq!(
+        engine.last_languages(),
+        Some(("zh".to_string(), "en".to_string()))
+    );
+    assert!(zh_update.upsert_segments[0].translation.is_some());
+
+    // 3. English text with target "en" -> detected "en" equals target "en", skips translation
+    let initial_calls = engine.call_count();
+    let mut en_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-en", "Hello world", true)],
+    };
+    coordinator.enrich_update(&mut en_update).await;
+    // Skipped!
+    assert_eq!(engine.call_count(), initial_calls);
+    assert_eq!(en_update.upsert_segments[0].translation, None);
+
+    // 4. Explicit same language ("zh" to "zh-CN") skips translation
+    let same_lang_coord = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "zh",
+        "zh-CN",
+    );
+    let mut zh_same_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-zh-same", "测试内容", true)],
+    };
+    same_lang_coord.enrich_update(&mut zh_same_update).await;
+    assert_eq!(engine.call_count(), initial_calls);
+    assert_eq!(zh_same_update.upsert_segments[0].translation, None);
+}
+
+#[tokio::test]
+async fn test_final_translation_timeout_falls_back_gracefully() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    // Delay 5200ms (> 5000ms timeout)
+    engine.set_delay(Duration::from_millis(5200));
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "en",
+        "zh",
+    );
+
+    let mut update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-timeout", "Timeout test text", true)],
+    };
+    let start = std::time::Instant::now();
+    coordinator.enrich_update(&mut update).await;
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed >= Duration::from_millis(4900) && elapsed < Duration::from_millis(5600),
+        "enrich_update took {:?}",
+        elapsed
+    );
+    assert_eq!(update.upsert_segments[0].draft_translation, None);
 }

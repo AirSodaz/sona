@@ -646,6 +646,149 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &t
     }
 }
 
+#[tauri::command(async)]
+pub async fn toggle_live_translation(
+    services: State<'_, DesktopServices>,
+    app: tauri::AppHandle,
+    enabled: bool,
+    source_lang: Option<String>,
+    target_lang: Option<String>,
+    catchup_segments: Option<Vec<sona_core::transcription::transcript::TranscriptSegment>>,
+) -> Result<(), String> {
+    if !enabled {
+        services.asr.live_coordinator().set_translation(None);
+        return Ok(());
+    }
+
+    let src = source_lang
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            services
+                .config
+                .get_setting("realtimeTranslationSourceLanguage")
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_else(|| "auto".to_string())
+        });
+    let tgt = target_lang
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or_else(|| {
+            services
+                .config
+                .get_setting("realtimeTranslationTargetLanguage")
+                .ok()
+                .flatten()
+                .and_then(|v| v.as_str().map(String::from))
+                .unwrap_or_else(|| "zh".to_string())
+        });
+
+    let engine_str = services
+        .config
+        .get_setting("realtimeTranslationEngine")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_str().map(String::from))
+        .unwrap_or_else(|| "onnx".to_string());
+
+    let engine_kind = match engine_str.to_ascii_lowercase().as_str() {
+        "llama-cpp" | "llama_cpp" | "llamacpp" => {
+            sona_core::ports::translation::TranslationEngineKind::LlamaCpp
+        }
+        _ => sona_core::ports::translation::TranslationEngineKind::OnnxNmt,
+    };
+
+    let model_id = services
+        .config
+        .get_setting("realtimeTranslationModelId")
+        .ok()
+        .flatten()
+        .and_then(|v| v.as_str().map(String::from));
+
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)
+        .map_err(|e| format!("Failed to resolve models directory: {e}"))?;
+
+    let engine = crate::integrations::translation::TranslationEngineFactory::create_engine(
+        &services,
+        engine_kind,
+        model_id.as_deref(),
+        &src,
+        &tgt,
+        &models_dir,
+    )
+    .map_err(|e| format!("Failed to create translation engine: {e}"))?;
+
+    let debounce_ms = match engine_kind {
+        sona_core::ports::translation::TranslationEngineKind::LlamaCpp => 1000,
+        _ => 300,
+    };
+
+    let coordinator = Arc::new(
+        sona_application::live_transcription::StreamingTranslationCoordinator::new(
+            Arc::clone(&engine),
+            src.clone(),
+            tgt.clone(),
+        )
+        .with_debounce(debounce_ms, 3),
+    );
+
+    services
+        .asr
+        .live_coordinator()
+        .set_translation(Some(coordinator));
+
+    if let Some(segments) = catchup_segments.filter(|s| !s.is_empty()) {
+        let live_coord = services.asr.live_coordinator().clone();
+        let app_handle = app.clone();
+        let active_consumer = {
+            let guard = services.recording_session.lock().await;
+            guard.as_ref().map(|s| s.consumer_id.clone())
+        };
+        tokio::spawn(async move {
+            for mut seg in segments {
+                let text = seg.text.trim();
+                if text.is_empty() {
+                    continue;
+                }
+                let eff_src = if src.trim().is_empty() || src.eq_ignore_ascii_case("auto") {
+                    sona_application::live_transcription::detect_script_language(text)
+                } else {
+                    sona_application::live_transcription::normalize_language_code(&src)
+                };
+                let eff_tgt = sona_application::live_transcription::normalize_language_code(&tgt);
+                if eff_src.eq_ignore_ascii_case(eff_tgt) {
+                    continue;
+                }
+
+                match engine.translate(text, eff_src, eff_tgt).await {
+                    Ok(translated) => {
+                        seg.translation = Some(translated);
+                        seg.draft_translation = None;
+                        let update = sona_core::transcription::transcript::TranscriptUpdate {
+                            remove_ids: Vec::new(),
+                            upsert_segments: vec![seg],
+                        };
+                        live_coord.broadcast_transcript_update(update.clone()).await;
+                        if let Some(consumer_id) = &active_consumer {
+                            let event_name =
+                                crate::integrations::asr::recognizer_output_event(consumer_id);
+                            let _ = app_handle.emit(&event_name, &update);
+                        }
+                    }
+                    Err(e) => {
+                        log::warn!(
+                            "[ASR] Catchup translation failed for segment {}: {e}",
+                            seg.id
+                        );
+                    }
+                }
+            }
+        });
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
 

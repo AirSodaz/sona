@@ -4,6 +4,7 @@ use sona_core::ports::asr::{
     StreamingAsrFactoryPort, StreamingInferenceSpec, StreamingOutputPolicy,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -111,6 +112,7 @@ struct CoordinatorState {
     avoided_feed_count: u64,
 }
 
+#[derive(Clone)]
 pub struct LiveTranscriptionCoordinator {
     inner: Arc<CoordinatorInner>,
 }
@@ -777,6 +779,22 @@ impl LiveTranscriptionCoordinator {
             translator.clear();
         }
     }
+
+    pub async fn broadcast_transcript_update(&self, update: TranscriptUpdate) {
+        let state = self.inner.state.lock().await;
+        for pipeline in state.pipelines.values() {
+            for (consumer_id, subscriber) in &pipeline.subscribers {
+                let processed_update = subscriber.output_policy.process_update(update.clone());
+                subscriber
+                    .mailbox
+                    .push_transcript(AsrTranscriptUpdateEvent {
+                        instance_id: consumer_id.clone(),
+                        stage: "catchup_translation".to_string(),
+                        update: processed_update,
+                    });
+            }
+        }
+    }
     pub async fn metrics(&self) -> LiveTranscriptionMetrics {
         let state = self.inner.state.lock().await;
         let active_consumers = state.consumer_to_pipeline.len();
@@ -1001,8 +1019,112 @@ impl CoordinatorInner {
                     versions.remove(id);
                 }
             }
-            translator.enrich_update(&mut event.update).await;
-            self.broadcast_transcript(event).await;
+
+            // 1. Fill cached translations so partials display existing translations if any
+            translator.fill_cached(&mut event.update);
+
+            // 2. Broadcast original transcript event immediately so ASR text appears with zero latency
+            self.broadcast_transcript(event.clone()).await;
+
+            // 3. Decouple final segment translation into an asynchronous background task
+            let final_segments: Vec<TranscriptSegment> = event
+                .update
+                .upsert_segments
+                .iter()
+                .filter(|s| s.is_final)
+                .cloned()
+                .collect();
+
+            if !final_segments.is_empty() {
+                let this = Arc::clone(self);
+                let translator_clone = Arc::clone(&translator);
+                let instance_id = event.instance_id.clone();
+                let stage = event.stage.clone();
+                tokio::spawn(async move {
+                    let mut update = TranscriptUpdate {
+                        remove_ids: Vec::new(),
+                        upsert_segments: final_segments,
+                    };
+                    translator_clone.enrich_update(&mut update).await;
+
+                    let enrichment_segments: Vec<TranscriptSegment> = update
+                        .upsert_segments
+                        .into_iter()
+                        .filter(|s| s.translation.is_some())
+                        .collect();
+
+                    if !enrichment_segments.is_empty() {
+                        let enrichment_event = AsrTranscriptUpdateEvent {
+                            instance_id,
+                            stage,
+                            update: TranscriptUpdate {
+                                remove_ids: Vec::new(),
+                                upsert_segments: enrichment_segments,
+                            },
+                        };
+                        this.broadcast_transcript(enrichment_event).await;
+                    }
+                });
+            }
+
+            // 4. If there were also partial segments in this mixed update, handle them
+            let partial_segments: Vec<TranscriptSegment> = event
+                .update
+                .upsert_segments
+                .iter()
+                .filter(|s| !s.is_final)
+                .cloned()
+                .collect();
+
+            if !partial_segments.is_empty() {
+                let segment_versions: Vec<(String, u64)> = {
+                    let versions = self.partial_versions.lock();
+                    partial_segments
+                        .iter()
+                        .filter_map(|s| versions.get(&s.id).map(|v| (s.id.clone(), *v)))
+                        .collect()
+                };
+
+                let partial_update = TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: partial_segments,
+                };
+                let delay = translator.debounce_delay(&partial_update);
+                let this = Arc::clone(self);
+                let translator_clone = Arc::clone(&translator);
+                let instance_id = event.instance_id.clone();
+                let stage = event.stage.clone();
+                tokio::spawn(async move {
+                    if !delay.is_zero() {
+                        tokio::time::sleep(delay).await;
+                        let is_stale = {
+                            let versions = this.partial_versions.lock();
+                            segment_versions
+                                .iter()
+                                .any(|(id, v)| versions.get(id) != Some(v))
+                        };
+                        if is_stale {
+                            return;
+                        }
+                    }
+                    let mut update = partial_update;
+                    translator_clone.enrich_update(&mut update).await;
+                    let is_stale = {
+                        let versions = this.partial_versions.lock();
+                        segment_versions
+                            .iter()
+                            .any(|(id, v)| versions.get(id) != Some(v))
+                    };
+                    if !is_stale {
+                        this.broadcast_transcript(AsrTranscriptUpdateEvent {
+                            instance_id,
+                            stage,
+                            update,
+                        })
+                        .await;
+                    }
+                });
+            }
         } else {
             // 1. Fill cached translation immediately so partials display existing translations
             translator.fill_cached(&mut event.update);
@@ -1027,6 +1149,7 @@ impl CoordinatorInner {
 
             let delay = translator.debounce_delay(&event.update);
             let this = Arc::clone(self);
+            let translator_clone = Arc::clone(&translator);
             tokio::spawn(async move {
                 if !delay.is_zero() {
                     tokio::time::sleep(delay).await;
@@ -1040,7 +1163,7 @@ impl CoordinatorInner {
                         return;
                     }
                 }
-                translator.enrich_update(&mut event.update).await;
+                translator_clone.enrich_update(&mut event.update).await;
                 let is_stale = {
                     let versions = this.partial_versions.lock();
                     segment_versions

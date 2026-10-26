@@ -153,6 +153,7 @@ export interface TranscriptStore {
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
+  patchSegmentTranslation: (id: string, translation: string) => void;
   updateSegmentForSession: (
     sessionId: string,
     id: string,
@@ -447,6 +448,11 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       segments: session.segments.map((s) =>
         s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
       ),
+    }));
+  },
+  patchSegmentTranslation: (id, translation) => {
+    updateActiveSession(set, (session) => ({
+      segments: session.segments.map((s) => (s.id === id ? { ...s, translation } : s)),
     }));
   },
   updateSegmentForSession: (sessionId, id, updates) => {
@@ -810,6 +816,10 @@ export const updateTranscriptSegmentForSession = (
   updates: Partial<Omit<TranscriptSegment, 'id'>>
 ): void => {
   useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
+};
+
+export const patchSegmentTranslation = (id: string, translation: string): void => {
+  useTranscriptStore.getState().patchSegmentTranslation(id, translation);
 };
 
 export const setRecordingSessionId = (id: string | null): void => {
