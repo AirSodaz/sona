@@ -8,6 +8,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
   }),
+  initReactI18next: {
+    type: '3rdParty',
+    init: () => undefined,
+  },
 }));
 
 const mockUpdateConfig = vi.fn();
@@ -60,13 +64,29 @@ vi.mock('../../stores/configStore', () => ({
     voiceTypingMode: 'hold',
   }),
   useSetConfig: () => mockUpdateConfig,
-  useConfigStore: {
-    getState: () => ({
-      config: {
-        hotwordSets: [],
-      },
-    }),
-  },
+  useConfigStore: Object.assign(
+    (
+      selector?: (state: {
+        config: { hotwordSets: unknown[]; realtimeTranslationEnabled: boolean };
+      }) => unknown
+    ) => {
+      const state = {
+        config: {
+          hotwordSets: [],
+          realtimeTranslationEnabled: false,
+        },
+      };
+      return typeof selector === 'function' ? selector(state) : state;
+    },
+    {
+      getState: () => ({
+        config: {
+          hotwordSets: [],
+          realtimeTranslationEnabled: false,
+        },
+      }),
+    }
+  ),
 }));
 
 describe('SettingsSubtitleTab', () => {
