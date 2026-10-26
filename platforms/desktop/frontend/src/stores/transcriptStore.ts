@@ -160,7 +160,13 @@ export interface TranscriptStore {
   ) => void;
   deleteSegment: (id: string) => void;
   mergeSegments: (id1: string, id2: string) => void;
-  splitTranscriptSegment: (id: string, leftText: string, rightText: string) => string | null;
+  splitTranscriptSegment: (
+    id: string,
+    leftText: string,
+    rightText: string,
+    leftTranslation?: string,
+    rightTranslation?: string
+  ) => string | null;
   finalizeLastSegment: () => void;
   applyTranscriptUpdate: (update: TranscriptUpdate, activeSegmentId?: string | null) => void;
   applyTranscriptUpdateToSession: (
@@ -499,7 +505,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       };
     });
   },
-  splitTranscriptSegment: (id, leftText, rightText) => {
+  splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) => {
     const session = getActiveSession(get());
     const segment = session.segments.find((s) => s.id === id);
     if (!segment) return null;
@@ -512,7 +518,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       plainText,
       leftText,
       rightText,
-      newSegmentId
+      newSegmentId,
+      leftTranslation,
+      rightTranslation
     );
 
     const nextSegments = [...session.segments];

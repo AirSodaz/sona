@@ -52,8 +52,10 @@ export const sessionActions: SessionStoreActions = {
   updateSegment: (id, updates) => useTranscriptStore.getState().updateSegment(id, updates),
   deleteSegment: (id) => useTranscriptStore.getState().deleteSegment(id),
   mergeSegments: (id1, id2) => useTranscriptStore.getState().mergeSegments(id1, id2),
-  splitTranscriptSegment: (id, leftText, rightText) =>
-    useTranscriptStore.getState().splitTranscriptSegment(id, leftText, rightText),
+  splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) =>
+    useTranscriptStore
+      .getState()
+      .splitTranscriptSegment(id, leftText, rightText, leftTranslation, rightTranslation),
   finalizeLastSegment: () => useTranscriptStore.getState().finalizeLastSegment(),
   applyTranscriptUpdate: (update, activeSegmentId) =>
     useTranscriptStore.getState().applyTranscriptUpdate(update, activeSegmentId),

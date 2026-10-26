@@ -87,9 +87,52 @@ fn test_leading_prompt_token_slice_decoding() {
         &[]
     };
     let stripped = tgt_tok.decode(output_tokens);
-    assert_eq!(stripped, "你好 世界");
+    assert_eq!(stripped, "你好世界");
 }
 
+#[test]
+fn test_sentencepiece_cjk_aware_decoding() {
+    use sona_translation_onnx::tokenizer::decode_sentencepiece_text;
+
+    // Pure CJK without spaces
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}你好\u{2581}世界"),
+        "你好世界"
+    );
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}你好\u{2581}，\u{2581}世界\u{2581}！"),
+        "你好，世界！"
+    );
+
+    // Pure Latin with word boundary spaces preserved
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}Hello\u{2581}world"),
+        "Hello world"
+    );
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}Hello\u{2581}world\u{2581}!"),
+        "Hello world !"
+    );
+
+    // Mixed CJK and Latin
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}你好\u{2581}Sona"),
+        "你好 Sona"
+    );
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}Sona\u{2581}你好"),
+        "Sona 你好"
+    );
+    assert_eq!(
+        decode_sentencepiece_text("\u{2581}模型\u{2581}v2\u{2581}发布"),
+        "模型 v2 发布"
+    );
+
+    // Edge cases: empty, single chars, only markers
+    assert_eq!(decode_sentencepiece_text(""), "");
+    assert_eq!(decode_sentencepiece_text("\u{2581}\u{2581}\u{2581}"), "");
+    assert_eq!(decode_sentencepiece_text("\u{2581}中\u{2581}"), "中");
+}
 #[tokio::test]
 async fn test_onnx_nmt_real_opus_mt_en_zh() {
     let model_path = Path::new("D:/projects/models/opus-mt-en-zh");

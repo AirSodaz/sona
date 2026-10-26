@@ -1,5 +1,6 @@
 import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
 import type { TranscriptSegment } from '../../types/transcript';
+import { formatCjkTypography } from '../../utils/cjkTypography';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
@@ -169,9 +170,13 @@ export class PipelineExecutionEngine {
           translateConfig,
           currentSegments,
           async (translatedChunk) => {
+            const formattedChunk = translatedChunk.map((chunk) => ({
+              ...chunk,
+              translation: formatCjkTypography(chunk.translation),
+            }));
             currentSegments = this.ports.translationService.applyTranslationsInMemory(
               currentSegments,
-              translatedChunk
+              formattedChunk
             );
             await onSegmentsUpdated?.(currentSegments);
           }

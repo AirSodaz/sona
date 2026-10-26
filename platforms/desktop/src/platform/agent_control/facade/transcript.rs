@@ -39,7 +39,9 @@ pub async fn read_transcript(
     let translation_text = if translations.is_empty() {
         None
     } else {
-        Some(translations.join(" "))
+        Some(sona_core::text::cjk::join_segments_with_boundary_space(
+            &translations,
+        ))
     };
 
     Ok(ReadTranscriptResult {

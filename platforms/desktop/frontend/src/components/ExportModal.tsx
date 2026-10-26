@@ -4,6 +4,7 @@ import { useExportActions } from '../hooks/useExportActions';
 import { useConfigStore } from '../stores/configStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { TranscriptSegment } from '../types/transcript';
+import { formatCjkTypography } from '../utils/cjkTypography';
 import type { ExportFormat } from '../utils/exportFormats';
 import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
@@ -38,7 +39,7 @@ function formatSegmentsToPlainText(
     .map((seg) => {
       const speakerLabel = seg.speaker?.label?.trim();
       const originalText = htmlToPlainText(seg.text || '');
-      const translationText = htmlToPlainText(seg.translation || '');
+      const translationText = formatCjkTypography(htmlToPlainText(seg.translation || ''));
 
       let text: string;
       if (mode === 'translation') {

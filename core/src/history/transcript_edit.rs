@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::transcription::streaming_stabilizer::is_cjk_char;
+use crate::text::cjk::join_text_with_boundary_space;
 use crate::transcription::transcript::{TranscriptSegment, ensure_transcript_segment_timing};
 
 use super::mutation_repository::HistoryMutationError;
@@ -207,36 +207,8 @@ fn speaker_identity(segment: &TranscriptSegment) -> Option<(&str, Option<&str>)>
     })
 }
 
-fn needs_word_boundary_space(left: &str, right: &str) -> bool {
-    let Some(last) = left.chars().last() else {
-        return false;
-    };
-    let Some(first) = right.chars().next() else {
-        return false;
-    };
-    if last.is_whitespace() || first.is_whitespace() {
-        return false;
-    }
-    if is_cjk_char(last) || is_cjk_char(first) {
-        return false;
-    }
-    true
-}
-
 fn join_text(left: &str, right: &str) -> String {
-    let left = left.trim();
-    let right = right.trim();
-    if left.is_empty() {
-        return right.to_string();
-    }
-    if right.is_empty() {
-        return left.to_string();
-    }
-    if needs_word_boundary_space(left, right) {
-        format!("{left} {right}")
-    } else {
-        format!("{left}{right}")
-    }
+    join_text_with_boundary_space(left, right)
 }
 
 fn join_optional_text(left: Option<&str>, right: Option<&str>) -> Option<String> {

@@ -224,7 +224,7 @@ describe('performSegmentSplit', () => {
     expect(segmentLeft.end).toBe(13.0); // 10.0 + 0.3 * 10
     expect(segmentRight.start).toBe(13.0);
   });
-  it('clears translation and draftTranslation on split halves by default', () => {
+  it('retains translation on segmentLeft and clears draftTranslation on split halves by default', () => {
     const segment: TranscriptSegment = {
       id: 'seg-4',
       start: 0,
@@ -244,7 +244,7 @@ describe('performSegmentSplit', () => {
       'new-id-split'
     );
 
-    expect(segmentLeft.translation).toBeUndefined();
+    expect(segmentLeft.translation).toBe('Complete sentence translation');
     expect(segmentLeft.draftTranslation).toBeUndefined();
     expect(segmentRight.translation).toBeUndefined();
     expect(segmentRight.draftTranslation).toBeUndefined();

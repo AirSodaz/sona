@@ -166,16 +166,7 @@ fn normalize_search_text(text: &str) -> String {
         .collect()
 }
 
-pub fn is_cjk_char(ch: char) -> bool {
-    matches!(
-        ch,
-        '\u{3400}'..='\u{4DBF}'
-            | '\u{4E00}'..='\u{9FFF}'
-            | '\u{3040}'..='\u{309F}'
-            | '\u{30A0}'..='\u{30FF}'
-            | '\u{AC00}'..='\u{D7AF}'
-    )
-}
+pub use crate::text::cjk::is_cjk_char;
 
 #[cfg(test)]
 mod tests {

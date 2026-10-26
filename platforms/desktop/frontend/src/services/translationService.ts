@@ -6,6 +6,7 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
+import { formatCjkTypography } from '../utils/cjkTypography';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../utils/textProcessing';
 import { getActiveLlmConfig, getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
@@ -43,7 +44,9 @@ function applyTranslatedChunkToSegments(
   // other segment fields instead of replacing transcript rows wholesale.
   return segments.map((segment) => {
     const translated = translationMap.get(segment.id);
-    return translated ? { ...segment, translation: translated.translation } : segment;
+    return translated
+      ? { ...segment, translation: formatCjkTypography(translated.translation) }
+      : segment;
   });
 }
 
@@ -104,7 +107,8 @@ export class TranslationService {
       targetLanguageName: langOpt ? langOpt.englishName : undefined,
       sourceLanguage: options?.sourceLanguage,
     });
-    return results[0]?.translation ?? trimmed;
+    const result = results[0]?.translation ?? trimmed;
+    return formatCjkTypography(result);
   }
 
   async translateCurrentTranscript(targetLanguageOverride?: string) {
@@ -123,7 +127,7 @@ export class TranslationService {
   }: RetryTranslateTranscriptJobOptions): Promise<void> {
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     const config = this.ports.getEffectiveConfigSnapshot();
-    const llm = getFeatureLlmConfig(config, 'translation');
+    const llm = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
 
     if (!isLlmConfigComplete(llm)) {
       throw new Error('LLM Service not fully configured.');
@@ -183,31 +187,40 @@ export class TranslationService {
           if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
             return;
           }
-          if (
-            llm.strategy === 'local_nmt' &&
-            pipeline.customTerms &&
-            pipeline.customTerms.length > 0 &&
-            result.segments
-          ) {
-            const replacements = extractReplacementsFromTerms(pipeline.customTerms);
-            if (replacements.length > 0) {
-              const ruleSets = [
-                {
-                  id: 'pipeline-custom-terms',
-                  name: 'Pipeline Custom Terms',
-                  enabled: true,
-                  ignoreCase: false,
-                  rules: replacements,
-                },
-              ];
-              result.segments = result.segments.map((seg) => {
-                if (!seg.translation) return seg;
-                return {
-                  ...seg,
-                  translation: applyTextReplacements(seg.translation, ruleSets),
-                };
-              });
+          if (result.segments) {
+            let processedSegments = result.segments;
+            if (
+              llm.strategy === 'local_nmt' &&
+              pipeline.customTerms &&
+              pipeline.customTerms.length > 0
+            ) {
+              const replacements = extractReplacementsFromTerms(pipeline.customTerms);
+              if (replacements.length > 0) {
+                const ruleSets = [
+                  {
+                    id: 'pipeline-custom-terms',
+                    name: 'Pipeline Custom Terms',
+                    enabled: true,
+                    ignoreCase: false,
+                    rules: replacements,
+                  },
+                ];
+                processedSegments = processedSegments.map((seg) => {
+                  if (!seg.translation) return seg;
+                  return {
+                    ...seg,
+                    translation: applyTextReplacements(seg.translation, ruleSets),
+                  };
+                });
+              }
             }
+            result.segments = processedSegments.map((seg) => {
+              if (!seg.translation) return seg;
+              return {
+                ...seg,
+                translation: formatCjkTypography(seg.translation),
+              };
+            });
           }
           this.applyTranscriptJobUpdate(result);
           if (result.segments && jobHistoryId && jobHistoryId !== 'current') {

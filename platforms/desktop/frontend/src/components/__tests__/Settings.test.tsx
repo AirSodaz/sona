@@ -261,6 +261,7 @@ vi.mock('../../services/audioDeviceService', () => ({
 
 vi.mock('../../services/tauri/llm', () => ({
   listLlmModels: (...args: unknown[]) => mockListLlmModels(...args),
+  translateTranscriptSegments: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({

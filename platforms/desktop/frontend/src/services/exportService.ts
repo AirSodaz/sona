@@ -1,4 +1,5 @@
 import type { TranscriptSegment } from '../types/transcript';
+import { formatCjkTypography } from '../utils/cjkTypography';
 import type { ExportFormat, ExportMode } from '../utils/exportFormats';
 import { getFileExtension } from '../utils/exportFormats';
 import { exportTranscriptFile } from './tauri/export';
@@ -33,8 +34,17 @@ export class ExportService {
       options.directory,
       `${this.sanitizeExportFileName(options.baseFileName)}${extension}`
     );
+    const segments = options.segments.map((seg) => {
+      if (!seg.translation) {
+        return seg;
+      }
+      return {
+        ...seg,
+        translation: formatCjkTypography(seg.translation),
+      };
+    });
     const result = await this.ports.exportTranscriptFile({
-      segments: options.segments,
+      segments,
       format: options.format,
       mode: options.mode,
       outputPath: fullPath,

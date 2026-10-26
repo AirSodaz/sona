@@ -86,7 +86,17 @@ impl TranslationModelPool {
 
         let key = (src.to_string(), tgt.to_string());
 
-        // Fast path: upgradable read lock
+        // Fast path: shared read lock when model is already top of LRU
+        {
+            let cache = self.cache.read();
+            if let Some(adapter) = cache.models.get(&key)
+                && cache.order.first() == Some(&key)
+            {
+                return Ok(Arc::clone(adapter));
+            }
+        }
+
+        // Cache hit but LRU reordering needed: acquire upgradable read lock
         {
             let cache = self.cache.upgradable_read();
             if let Some(adapter) = cache.models.get(&key) {
@@ -106,6 +116,14 @@ impl TranslationModelPool {
         let (lock, cvar) = &*self.loading;
         let mut in_flight = lock.lock();
         loop {
+            {
+                let cache = self.cache.read();
+                if let Some(adapter) = cache.models.get(&key)
+                    && cache.order.first() == Some(&key)
+                {
+                    return Ok(Arc::clone(adapter));
+                }
+            }
             {
                 let cache = self.cache.upgradable_read();
                 if let Some(adapter) = cache.models.get(&key) {
@@ -127,7 +145,6 @@ impl TranslationModelPool {
             cvar.wait(&mut in_flight);
         }
         drop(in_flight);
-
         let _guard = InFlightGuard {
             loading: &self.loading,
             key: key.clone(),
@@ -151,18 +168,9 @@ impl TranslationModelPool {
         // Check artifacts presence
         for artifact in &preset.artifacts {
             let file = model_dir.join(&artifact.filename);
-            if !file.is_file()
-                && artifact.filename == "vocab.json"
-                && let Some(expected_sha) = &artifact.sha256
-                && let Err(e) = try_download_vocab(&artifact.url, &file, expected_sha)
-            {
-                log::warn!(
-                    "[TranslationModelPool] Failed to auto-download missing vocab.json: {e}"
-                );
-            }
             if !file.is_file() {
                 return Err(TranslationPortError::model_not_ready(format!(
-                    "Missing model file: {}. Please download vocab.json or update the model in settings.",
+                    "Missing model file: {}. Please download the model in settings.",
                     file.display()
                 )));
             }
@@ -196,58 +204,6 @@ impl TranslationModelPool {
         let mut cache = self.cache.write();
         cache.models.clear();
         cache.order.clear();
-    }
-}
-
-fn try_download_vocab(url: &str, target_path: &Path, expected_sha256: &str) -> Result<(), String> {
-    log::info!(
-        "[TranslationModelPool] Attempting auto-heal download of vocab.json to {}",
-        target_path.display()
-    );
-    let temp_path = sona_model_downloads::temporary_download_path(target_path);
-    let cancel = std::sync::Arc::new(tokio::sync::Notify::new());
-    let client = sona_model_downloads::DownloadClient::try_new()
-        .map_err(|e| format!("Failed to create download client: {e}"))?;
-
-    let fut = async {
-        client
-            .download_file(url, &temp_path, cancel, None)
-            .await
-            .map_err(|e| format!("Download error: {e}"))?;
-        sona_model_downloads::complete_download_file(
-            &temp_path,
-            target_path,
-            Some(expected_sha256),
-        )
-        .await
-        .map_err(|e| format!("Verification error: {e}"))?;
-        Ok::<(), String>(())
-    };
-
-    match tokio::runtime::Handle::try_current() {
-        Ok(handle) => match handle.runtime_flavor() {
-            tokio::runtime::RuntimeFlavor::MultiThread => {
-                tokio::task::block_in_place(|| handle.block_on(fut))
-            }
-            _ => std::thread::scope(|s| {
-                s.spawn(|| {
-                    let rt = tokio::runtime::Builder::new_current_thread()
-                        .enable_all()
-                        .build()
-                        .map_err(|e| format!("Failed to create worker runtime: {e}"))?;
-                    rt.block_on(fut)
-                })
-                .join()
-                .unwrap_or_else(|_| Err("Worker thread panicked".to_string()))
-            }),
-        },
-        Err(_) => {
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map_err(|e| format!("Failed to create runtime: {e}"))?;
-            rt.block_on(fut)
-        }
     }
 }
 
@@ -346,5 +302,28 @@ mod tests {
         let cache = pool.cache.read();
         assert_eq!(cache.order.first(), Some(&key2));
         assert_eq!(cache.order.get(1), Some(&key1));
+    }
+
+    #[test]
+    fn test_pool_fast_path_read_hit() {
+        let pool = TranslationModelPool::new();
+        let key = ("en".to_string(), "zh".to_string());
+        {
+            let mut cache = pool.cache.write();
+            cache
+                .models
+                .insert(key.clone(), Arc::new(OnnxNmtAdapter::new(None, 1)));
+            cache.order.push(key.clone());
+        }
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let adapter = pool.get_or_load("en", "zh", temp_dir.path()).unwrap();
+        assert_eq!(
+            adapter.engine_kind(),
+            sona_core::ports::translation::TranslationEngineKind::OnnxNmt
+        );
+
+        let cache = pool.cache.read();
+        assert_eq!(cache.order.first(), Some(&key));
     }
 }

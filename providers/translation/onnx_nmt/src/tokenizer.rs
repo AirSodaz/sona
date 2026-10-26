@@ -333,8 +333,58 @@ impl SentencePieceTokenizer {
             result.push_str(&String::from_utf8_lossy(&byte_buf));
         }
 
-        result.replace('\u{2581}', " ").trim().to_string()
+        decode_sentencepiece_text(&result)
     }
+}
+
+/// Decodes raw SentencePiece text containing `\u{2581}` boundary markers into
+/// properly spaced text with CJK-aware whitespace synthesis.
+pub fn decode_sentencepiece_text(raw: &str) -> String {
+    use sona_core::text::cjk::{is_cjk_char, is_cjk_punctuation};
+
+    let chars: Vec<char> = raw.chars().collect();
+    let mut output = String::with_capacity(raw.len());
+
+    for (i, &c) in chars.iter().enumerate() {
+        if c == '\u{2581}' {
+            let prev = output.chars().rev().find(|&ch| ch != '\u{2581}');
+            let next = chars[i + 1..].iter().copied().find(|&ch| ch != '\u{2581}');
+
+            match (prev, next) {
+                (Some(p), Some(n)) => {
+                    if p.is_whitespace() || n.is_whitespace() {
+                        // Whitespace already present, do nothing
+                    } else {
+                        let p_cjk = is_cjk_char(p);
+                        let p_punct = is_cjk_punctuation(p);
+                        let n_cjk = is_cjk_char(n);
+                        let n_punct = is_cjk_punctuation(n);
+
+                        let involves_cjk = p_cjk || p_punct || n_cjk || n_punct;
+
+                        if involves_cjk {
+                            // Only emit space when transitioning strictly between a CJK character and an ASCII alphanumeric character
+                            if ((p_cjk && n.is_ascii_alphanumeric())
+                                || (p.is_ascii_alphanumeric() && n_cjk))
+                                && !output.ends_with(' ')
+                            {
+                                output.push(' ');
+                            }
+                        } else if !output.ends_with(' ') {
+                            output.push(' ');
+                        }
+                    }
+                }
+                _ => {
+                    // At boundary, omit marker
+                }
+            }
+        } else {
+            output.push(c);
+        }
+    }
+
+    output.trim().to_string()
 }
 
 fn parse_sentencepiece_entry(bytes: &[u8]) -> Result<PieceEntry, String> {

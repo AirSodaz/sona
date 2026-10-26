@@ -2,8 +2,10 @@
 
 mod adapter;
 mod model;
-mod tokenizer;
+pub mod tokenizer;
 
 pub use adapter::OnnxNmtAdapter;
 pub use model::OnnxNmtModel;
-pub use tokenizer::{PieceEntry, SentencePieceTokenizer, TokenizerError};
+pub use tokenizer::{
+    PieceEntry, SentencePieceTokenizer, TokenizerError, decode_sentencepiece_text,
+};

@@ -63,6 +63,23 @@ export function CaptionWindow() {
       return () => clearTimeout(timer);
     }
   }, [captionState.revision, displaySegments.length]);
+  // Reset error when revision increments after window was cleared or on session restart
+  useEffect(() => {
+    if (clearedRevision !== null && captionState.revision !== clearedRevision) {
+      setClearedRevision(null);
+      setTranslationError(null);
+    }
+  }, [captionState.revision, clearedRevision]);
+
+  // Clear error state when new translations arrive successfully
+  useEffect(() => {
+    if (
+      translationError &&
+      displaySegments.some((seg) => Boolean(seg.translation || seg.draftTranslation))
+    ) {
+      setTranslationError(null);
+    }
+  }, [displaySegments, translationError]);
 
   // Listen for realtime translation model loading errors from backend
   useEffect(() => {

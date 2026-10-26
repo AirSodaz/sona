@@ -128,6 +128,7 @@ vi.mock('../../services/tauri/llm', () => ({
   listLlmModels: vi.fn().mockResolvedValue(['gpt-4o']),
   runTranscriptLlmJob: vi.fn(),
   runTranscriptLlmTaskJob: vi.fn(),
+  translateTranscriptSegments: vi.fn().mockResolvedValue([]),
 }));
 
 vi.mock('@tauri-apps/plugin-dialog', () => ({

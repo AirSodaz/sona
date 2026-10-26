@@ -2,7 +2,11 @@ import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../constants/languages';
-import { getFeatureLlmConfig, isLlmConfigComplete } from '../services/llm/configUtils';
+import {
+  getActiveLlmConfig,
+  getFeatureLlmConfig,
+  isLlmConfigComplete,
+} from '../services/llm/configUtils';
 import { resolveItemPipeline } from '../services/projectPipeline';
 import { translationService } from '../services/translationService';
 import { useConfigStore } from '../stores/configStore';
@@ -183,7 +187,7 @@ export function TranslateButton({
   const handleStartTranslation = async () => {
     if (isTranslating) return;
 
-    const llm = getFeatureLlmConfig(config, 'translation');
+    const llm = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
     if (!isLlmConfigComplete(llm)) {
       await showError({
         code: 'config.translation_model_missing',

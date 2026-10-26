@@ -723,11 +723,22 @@ export function performSegmentSplit(
   // Bound splitTime safety
   splitTime = Math.min(segment.end, Math.max(segment.start, splitTime));
 
+  let resolvedLeftTranslation = leftTranslation;
+  let resolvedRightTranslation = rightTranslation;
+  if (
+    resolvedLeftTranslation === undefined &&
+    resolvedRightTranslation === undefined &&
+    segment.translation
+  ) {
+    resolvedLeftTranslation = segment.translation;
+    resolvedRightTranslation = undefined;
+  }
+
   const segmentLeft: TranscriptSegment = {
     ...segment,
     end: splitTime,
     text: leftText,
-    translation: leftTranslation,
+    translation: resolvedLeftTranslation,
     draftTranslation: undefined,
     timing: segment.timing
       ? {
@@ -748,7 +759,7 @@ export function performSegmentSplit(
     isFinal: true,
     speaker: segment.speaker,
     speakerAttribution: segment.speakerAttribution,
-    translation: rightTranslation,
+    translation: resolvedRightTranslation,
     draftTranslation: undefined,
     timing: segment.timing
       ? {

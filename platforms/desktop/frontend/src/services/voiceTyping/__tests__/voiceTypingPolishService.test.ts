@@ -9,6 +9,7 @@ import {
 
 vi.mock('../../tauri/llm', () => ({
   completeLlm: vi.fn(),
+  translateTranscriptSegments: vi.fn().mockResolvedValue([]),
 }));
 
 describe('voiceTypingPolishService', () => {

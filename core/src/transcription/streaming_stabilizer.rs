@@ -1,38 +1,6 @@
 //! Streaming translation stabilizer implementing Local Agreement prefix locking and draft tail management.
 
-pub fn is_cjk_char(c: char) -> bool {
-    matches!(c,
-        '\u{4E00}'..='\u{9FFF}' | // CJK Unified Ideographs
-        '\u{3400}'..='\u{4DBF}' | // CJK Extension A
-        '\u{F900}'..='\u{FAFF}' | // CJK Compatibility Ideographs
-        '\u{20000}'..='\u{2FA1F}' | // CJK Extension B/C/D/E/F & Compatibility Supplement
-        '\u{30000}'..='\u{323AF}' | // CJK Extension G/H/I
-        '\u{3040}'..='\u{309F}' | // Hiragana
-        '\u{30A0}'..='\u{30FF}'   // Katakana
-    )
-}
-
-pub fn is_cjk_punctuation(c: char) -> bool {
-    matches!(c,
-        '\u{3000}'..='\u{303F}' | // CJK Symbols and Punctuation (，、。 etc)
-        '\u{FF01}'..='\u{FF0F}' | // Fullwidth ! " # $ % & ' ( ) * + , - . /
-        '\u{FF1A}'..='\u{FF20}' | // Fullwidth : ; < = > ? @
-        '\u{FF3B}'..='\u{FF40}' | // Fullwidth [ \ ] ^ _ `
-        '\u{FF5B}'..='\u{FF65}'   // Fullwidth { | } ~
-    )
-}
-
-pub fn is_boundary_char(c: char) -> bool {
-    c.is_whitespace()
-        || c.is_ascii_punctuation()
-        || matches!(
-            c,
-            '\u{2000}'
-                ..='\u{206F}' | '\u{00AB}' | '\u{00BB}' | '\u{00BF}' | '\u{00A1}' | '\u{00B7}'
-        )
-        || is_cjk_char(c)
-        || is_cjk_punctuation(c)
-}
+pub use crate::text::cjk::{is_boundary_char, is_cjk_char, is_cjk_punctuation};
 
 /// Computes the longest common prefix of `prev` and `curr` truncated at word or punctuation boundaries.
 pub fn calculate_longest_common_prefix(prev: &str, curr: &str) -> String {

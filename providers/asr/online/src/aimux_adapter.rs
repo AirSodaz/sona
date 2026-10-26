@@ -528,11 +528,8 @@ fn append_word_to_sentence(sentence: &mut String, word: &str) {
     let last_char = sentence.chars().last().unwrap_or(' ');
     let first_char = word_trimmed.chars().next().unwrap_or(' ');
 
-    let is_cjk = |c: char| -> bool {
-        matches!(c, '\u{4e00}'..='\u{9fff}' | '\u{3040}'..='\u{30ff}' | '\u{ac00}'..='\u{d7af}')
-    };
-
-    if (is_cjk(last_char) && is_cjk(first_char))
+    if (sona_core::text::cjk::is_cjk_char(last_char)
+        && sona_core::text::cjk::is_cjk_char(first_char))
         || matches!(
             first_char,
             ',' | '.' | '!' | '?' | ';' | ':' | '\'' | ')' | ']' | '}'

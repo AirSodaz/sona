@@ -24,4 +24,5 @@ pub mod storage_usage;
 pub mod sync;
 pub mod tag;
 pub mod task_ledger;
+pub mod text;
 pub mod transcription;

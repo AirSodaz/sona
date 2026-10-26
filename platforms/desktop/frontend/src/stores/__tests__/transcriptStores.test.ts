@@ -586,7 +586,7 @@ describe('Transcript Stores', () => {
       expect(segments[0].translation).toBe('Translated part');
     });
 
-    it('clears undivided translation on split segments in sessionStore', () => {
+    it('retains undivided translation on segmentLeft on split segments in sessionStore', () => {
       const sessionStore = useTranscriptSessionStore.getState();
       const segId = sessionStore.addSegment({
         text: '<p>First half Second half</p>',
@@ -601,7 +601,7 @@ describe('Transcript Stores', () => {
 
       const segments = useTranscriptSessionStore.getState().segments;
       expect(segments).toHaveLength(2);
-      expect(segments[0].translation).toBeUndefined();
+      expect(segments[0].translation).toBe('前半段 后半段');
       expect(segments[0].draftTranslation).toBeUndefined();
       expect(segments[1].translation).toBeUndefined();
       expect(segments[1].draftTranslation).toBeUndefined();
