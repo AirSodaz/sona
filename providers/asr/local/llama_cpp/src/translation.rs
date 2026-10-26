@@ -6,7 +6,7 @@ use sona_core::domain::{BuiltinLlmProvider, LlmProvider};
 use sona_core::llm::requests::LlmConfig;
 use sona_core::llm::runtime::{LlmCompletionOptions, LlmCompletionRequest};
 use sona_core::llm::tasks::LlmProviderStrategy;
-use sona_core::ports::llm::{LlmCompletionPort, LlmPortErrorKind};
+use sona_core::ports::llm::LlmPortErrorKind;
 use sona_core::ports::translation::{
     TranslationEngineKind, TranslationEnginePort, TranslationPortError,
 };

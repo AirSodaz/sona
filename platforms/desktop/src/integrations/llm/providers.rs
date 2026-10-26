@@ -170,7 +170,7 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                     || request.config.model.is_empty()));
 
         if is_nmt {
-            let (model_src, model_tgt) = if let Some(stripped) =
+            let (_model_src, model_tgt) = if let Some(stripped) =
                 request.config.model.to_lowercase().strip_prefix("opus-mt-")
             {
                 let parts: Vec<&str> = stripped.split('-').collect();

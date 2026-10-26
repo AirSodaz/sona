@@ -6,4 +6,4 @@ mod tokenizer;
 
 pub use adapter::OnnxNmtAdapter;
 pub use model::OnnxNmtModel;
-pub use tokenizer::{PieceEntry, SentencePieceTokenizer};
+pub use tokenizer::{PieceEntry, SentencePieceTokenizer, TokenizerError};

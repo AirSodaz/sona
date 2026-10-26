@@ -437,7 +437,7 @@ mod tests {
                     CaptureEvent::Eof => false,
                 },
             );
-            if let Ok(mut handle) = res {
+            if let Ok(handle) = res {
                 std::thread::sleep(Duration::from_millis(300));
                 assert_eq!(
                     errors_received.load(Ordering::Relaxed),

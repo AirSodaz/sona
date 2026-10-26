@@ -10,7 +10,27 @@ pub struct PieceEntry {
     pub score: f32,
     pub piece_type: u32,
 }
+#[derive(Debug, thiserror::Error)]
+pub enum TokenizerError {
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
+    #[error("Tokenizer format error: {0}")]
+    Format(String),
+}
 
+impl From<&str> for TokenizerError {
+    fn from(s: &str) -> Self {
+        Self::Format(s.to_string())
+    }
+}
+
+impl From<String> for TokenizerError {
+    fn from(s: String) -> Self {
+        Self::Format(s)
+    }
+}
 #[derive(Clone, Debug, Default)]
 pub struct SentencePieceTokenizer {
     pub pieces: Vec<PieceEntry>,
@@ -23,13 +43,12 @@ pub struct SentencePieceTokenizer {
     max_piece_len: usize,
 }
 impl SentencePieceTokenizer {
-    pub fn load(path: &Path) -> Result<Self, String> {
-        let bytes =
-            fs::read(path).map_err(|e| format!("Failed to read {}: {e}", path.display()))?;
+    pub fn load(path: &Path) -> Result<Self, TokenizerError> {
+        let bytes = fs::read(path)?;
         Self::from_bytes(&bytes)
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, String> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, TokenizerError> {
         let mut idx = 0;
         let mut pieces = Vec::new();
         let mut piece_to_id = HashMap::new();
@@ -79,17 +98,15 @@ impl SentencePieceTokenizer {
         })
     }
 
-    pub fn load_vocab(&mut self, path: &Path) -> Result<(), String> {
-        let content = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read vocab file {}: {e}", path.display()))?;
-        let vocab: HashMap<String, u32> = serde_json::from_str(&content)
-            .map_err(|e| format!("Failed to parse vocab JSON {}: {e}", path.display()))?;
+    pub fn load_vocab(&mut self, path: &Path) -> Result<(), TokenizerError> {
+        let content = fs::read_to_string(path)?;
+        let vocab: HashMap<String, u32> = serde_json::from_str(&content)?;
         self.set_vocab(vocab);
         if self.vocab_to_id.is_none() {
-            return Err(format!(
+            return Err(TokenizerError::Format(format!(
                 "Vocabulary in {} exceeds MAX_SUPPORTED_VOCAB_ID",
                 path.display()
-            ));
+            )));
         }
         Ok(())
     }

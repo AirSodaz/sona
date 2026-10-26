@@ -38,9 +38,9 @@ struct TranslationModelCacheInner {
 }
 
 type TranslationModelCache = Arc<RwLock<TranslationModelCacheInner>>;
-
+type LoadingNotifier = (Mutex<HashSet<(String, String)>>, Condvar);
 struct InFlightGuard<'a> {
-    loading: &'a (Mutex<HashSet<(String, String)>>, Condvar),
+    loading: &'a LoadingNotifier,
     key: (String, String),
 }
 
@@ -55,7 +55,7 @@ impl<'a> Drop for InFlightGuard<'a> {
 
 pub struct TranslationModelPool {
     cache: TranslationModelCache,
-    loading: Arc<(Mutex<HashSet<(String, String)>>, Condvar)>,
+    loading: Arc<LoadingNotifier>,
 }
 
 impl Default for TranslationModelPool {
