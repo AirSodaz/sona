@@ -56,6 +56,7 @@ data class TranscriptSegment(
     val timestamps: List<Float>? = null,
     val durations: List<Float>? = null,
     val translation: String? = null,
+    val draftTranslation: String? = null,
     val speaker: SpeakerTag? = null,
     val speakerAttribution: SpeakerAttribution? = null,
 )

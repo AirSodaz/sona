@@ -35,6 +35,7 @@ internal fun TranscriptSegment.toFfi(): FfiTranscriptSegment = FfiTranscriptSegm
     timestamps = timestamps,
     durations = durations,
     translation = translation,
+    draftTranslation = draftTranslation,
     speaker = speaker?.toFfi(),
     speakerAttribution = speakerAttribution?.toFfi(),
 )
@@ -50,6 +51,7 @@ internal fun FfiTranscriptSegment.toApplication(): TranscriptSegment = Transcrip
     timestamps = timestamps,
     durations = durations,
     translation = translation,
+    draftTranslation = draftTranslation,
     speaker = speaker?.toApplication(),
     speakerAttribution = speakerAttribution?.toApplication(),
 )

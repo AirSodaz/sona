@@ -262,6 +262,7 @@ class UniffiStreamingTranscriptionAdapterTest {
                     timestamps = listOf(1.25f, 1.75f),
                     durations = listOf(0.5f, 0.75f),
                     translation = "\u4f60\u597d",
+                    draftTranslation = null,
                     speaker = FfiSpeakerTag(
                         id = "speaker-1",
                         label = "Speaker 1",
