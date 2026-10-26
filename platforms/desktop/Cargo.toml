@@ -81,7 +81,8 @@ tauri-plugin-window-state = "2"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 rfd = { version = "0.17", default-features = false, features = ["gtk3"] }
-
+# Pinned to 0.21.1: rust-ini >= 0.21.2 added fields to ParseOption breaking tauri-plugin-deep-link 2.6.2 on Linux
+rust-ini = "=0.21.1"
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = [
     "Win32_Foundation",
