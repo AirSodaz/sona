@@ -642,7 +642,9 @@ export function performSegmentSplit(
   plainText: string,
   leftText: string,
   rightText: string,
-  newSegmentId: string
+  newSegmentId: string,
+  leftTranslation?: string,
+  rightTranslation?: string
 ): { segmentLeft: TranscriptSegment; segmentRight: TranscriptSegment } {
   const totalLength = plainText.length;
 
@@ -725,6 +727,8 @@ export function performSegmentSplit(
     ...segment,
     end: splitTime,
     text: leftText,
+    translation: leftTranslation,
+    draftTranslation: undefined,
     timing: segment.timing
       ? {
           ...segment.timing,
@@ -744,6 +748,8 @@ export function performSegmentSplit(
     isFinal: true,
     speaker: segment.speaker,
     speakerAttribution: segment.speakerAttribution,
+    translation: rightTranslation,
+    draftTranslation: undefined,
     timing: segment.timing
       ? {
           ...segment.timing,

@@ -27,6 +27,7 @@ import type {
 } from '../../bindings';
 import type { ApiServerDashboardSnapshot } from '../../types/apiServer';
 import type { BackupManifestV1, PreparedBackupImport } from '../../types/backup';
+import type { AppBuildInfo } from '../../types/build';
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import type {
@@ -293,6 +294,10 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.app.checkMediaFormats]: {
     args: { paths: string[] };
     result: boolean[];
+  };
+  [TauriCommand.app.getAppBuildInfo]: {
+    args: undefined;
+    result: AppBuildInfo;
   };
   [TauriCommand.audio.setSystemAudioMute]: {
     args: { mute: boolean };

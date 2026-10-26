@@ -77,6 +77,24 @@ class AboutSettingsViewModelTest {
 
         assertTrue(viewModel.state.value.updateStatus is AboutUpdateStatus.UpToDate)
     }
+    @Test
+    fun `update check is skipped when channel does not support updates`() = runTest {
+        val updates = FakeUpdatePort(release())
+        val devBuild = build().copy(channel = AppUpdateChannel.DEV)
+        val viewModel = AboutSettingsViewModel(
+            build = devBuild,
+            checkForAppUpdate = CheckForAppUpdate(updates),
+        )
+
+        viewModel.checkIfNeeded()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertEquals(0, updates.calls)
+
+        viewModel.checkForUpdates()
+        mainDispatcherRule.dispatcher.scheduler.runCurrent()
+        assertEquals(0, updates.calls)
+    }
+
 
     private fun viewModel(updates: AppUpdatePort) = AboutSettingsViewModel(
         build = build(),

@@ -767,6 +767,22 @@
   border-color: color-mix(in srgb, #8b5cf6 30%, var(--color-border));
 }
 
+.about-version-badge.channel-ci .about-channel-text {
+  color: #3b82f6;
+}
+
+.about-version-badge.channel-ci {
+  border-color: color-mix(in srgb, #3b82f6 30%, var(--color-border));
+}
+
+.about-version-badge.channel-dev .about-channel-text {
+  color: #f59e0b;
+}
+
+.about-version-badge.channel-dev {
+  border-color: color-mix(in srgb, #f59e0b 30%, var(--color-border));
+}
+
 .about-description {
   color: var(--color-text-muted);
   font-size: 0.8rem;

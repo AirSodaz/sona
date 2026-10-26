@@ -352,7 +352,7 @@ Options:
 #[derive(Debug, Parser)]
 #[command(
     name = "sona-cli",
-    version,
+    version = env!("SONA_DISPLAY_VERSION"),
     about = "Standalone CLI backed by sona-core",
     help_template = CLI_HELP_TEMPLATE,
     after_help = "Quick Start:\n  1. Inspect & download a local ASR model:\n       sona-cli models list\n       sona-cli models download whisper-turbo\n  2. Transcribe an audio or video file:\n       sona-cli transcribe ./sample.wav -m whisper-turbo\n       sona-cli transcribe ./sample.wav -m whisper-turbo -o ./transcript.srt\n  3. Transcribe via cloud provider:\n       export GROQ_API_KEY=\"...\"\n       sona-cli transcribe ./sample.wav --online-provider groq-whisper\n  4. Live streaming transcription:\n       sona-cli live -m sensevoice\n       ffmpeg -i audio.wav -f s16le -ac 1 -ar 16000 - | \\\n         sona-cli live --input stdin -m sensevoice\n  5. Generate shell completion:\n       sona-cli completion bash > /etc/bash_completion.d/sona-cli\n\nUse 'sona-cli <COMMAND> --help' for command-specific options."

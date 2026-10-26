@@ -9,7 +9,7 @@ on:
         type: string
         default: android-client
       channel:
-        description: Android build channel (stable or nightly)
+        description: Android build channel (stable, nightly, ci, or dev)
         required: false
         type: string
         default: stable
@@ -31,7 +31,7 @@ on:
         type: string
         default: android-client
       channel:
-        description: Android build channel (stable or nightly)
+        description: Android build channel (stable, nightly, ci, or dev)
         required: false
         type: string
         default: stable

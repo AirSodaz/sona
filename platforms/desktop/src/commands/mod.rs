@@ -204,6 +204,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::server::get_api_server_dashboard_snapshot,
         crate::commands::server::has_active_api_server_jobs,
         crate::commands::system::check_media_formats,
+        crate::commands::system::get_app_build_info,
         crate::commands::mcp::mcp_get_status,
         crate::commands::mcp::mcp_set_enabled,
         crate::commands::mcp::mcp_disconnect_all,

@@ -119,13 +119,16 @@ async fn test_models_dev_disk_cache_persistence() {
 
     tokio::spawn(async move {
         if let Ok((mut stream, _)) = listener.accept().await {
-            use tokio::io::AsyncWriteExt;
+            use tokio::io::{AsyncReadExt, AsyncWriteExt};
+            let mut buf = [0u8; 1024];
+            let _ = stream.read(&mut buf).await;
             let response = format!(
                 "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
                 CATALOG.len(),
                 CATALOG
             );
             let _ = stream.write_all(response.as_bytes()).await;
+            let _ = stream.shutdown().await;
         }
     });
 

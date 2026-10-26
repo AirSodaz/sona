@@ -171,12 +171,15 @@
     <string name="about_version_value">버전 %1$s (%2$d)</string>
     <string name="about_channel_stable">안정 버전</string>
     <string name="about_channel_nightly">Nightly</string>
+    <string name="about_channel_ci">CI</string>
+    <string name="about_channel_dev">Dev</string>
     <string name="about_update_heading">업데이트</string>
     <string name="about_update_idle">새 버전이 있는지 확인합니다</string>
     <string name="about_update_checking">업데이트 확인 중</string>
     <string name="about_update_current">최신 버전입니다</string>
     <string name="about_update_available">버전 %1$s을 사용할 수 있습니다</string>
     <string name="about_update_failed">업데이트를 확인할 수 없습니다</string>
+    <string name="about_update_disabled_for_channel">%1$s 빌드에서는 자동 업데이트가 비활성화되어 있습니다.</string>
     <string name="about_check_updates">확인</string>
     <string name="about_view_update">업데이트 보기</string>
     <string name="about_project_page">GitHub 프로젝트</string>

@@ -9,6 +9,7 @@ import {
 import type React from 'react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useRealtimeTranslationConfig } from '../../../hooks/useRealtimeTranslationConfig';
 import {
   isAsrRequestConfigured,
   resolveAsrTranscriptionRequest,
@@ -55,54 +56,19 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
-  const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
-  const realtimeTranslationSourceLanguage = config.realtimeTranslationSourceLanguage || 'en';
-  const realtimeTranslationTargetLanguage = config.realtimeTranslationTargetLanguage || 'zh';
-  const captionDisplayMode = config.captionDisplayMode || 'bilingual';
+  const {
+    realtimeTranslationEnabled,
+    realtimeTranslationSourceLanguage,
+    captionDisplayMode,
+    sourceLanguages,
+    targetLanguages,
+    targetLanguageValue,
+    handleSourceLanguageChange,
+    handleTargetLanguageChange,
+    handleSwapLanguages,
+    handleToggleRealtimeTranslation,
+  } = useRealtimeTranslationConfig();
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
-
-  const sourceLanguages = useMemo(
-    () => [
-      { value: 'zh', label: '中文 (Chinese)' },
-      { value: 'en', label: 'English' },
-      { value: 'ja', label: '日本語 (Japanese)' },
-    ],
-    []
-  );
-
-  const targetLanguages = useMemo(() => {
-    if (realtimeTranslationSourceLanguage === 'zh') {
-      return [
-        { value: 'en', label: 'English' },
-        { value: 'ja', label: '日本語 (Japanese)' },
-      ];
-    }
-    return [{ value: 'zh', label: '中文 (Chinese)' }];
-  }, [realtimeTranslationSourceLanguage]);
-
-  const handleSourceLanguageChange = (val: string) => {
-    const updates: Record<string, unknown> = { realtimeTranslationSourceLanguage: val };
-    if (val === 'en' || val === 'ja') {
-      updates.realtimeTranslationTargetLanguage = 'zh';
-    } else if (val === 'zh' && realtimeTranslationTargetLanguage === 'zh') {
-      updates.realtimeTranslationTargetLanguage = 'en';
-    }
-    updateConfig(updates);
-  };
-
-  const handleSwapLanguages = () => {
-    const nextSrc = realtimeTranslationTargetLanguage;
-    let nextTgt = realtimeTranslationSourceLanguage;
-    if (nextSrc === 'en' || nextSrc === 'ja') {
-      nextTgt = 'zh';
-    } else if (nextSrc === 'zh' && nextTgt === 'zh') {
-      nextTgt = 'en';
-    }
-    updateConfig({
-      realtimeTranslationSourceLanguage: nextSrc,
-      realtimeTranslationTargetLanguage: nextTgt,
-    });
-  };
 
   const displayModeOptions = useMemo(
     () => [
@@ -278,16 +244,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
           >
             <Switch
               checked={realtimeTranslationEnabled}
-              onChange={(enabled) => {
-                if (!enabled && captionDisplayMode === 'translation') {
-                  updateConfig({
-                    realtimeTranslationEnabled: false,
-                    captionDisplayMode: 'bilingual',
-                  });
-                } else {
-                  updateConfig({ realtimeTranslationEnabled: enabled });
-                }
-              }}
+              onChange={handleToggleRealtimeTranslation}
               aria-label={t('settings.enable_realtime_translation', {
                 defaultValue: 'Enable Real-time Translation',
               })}
@@ -340,12 +297,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                       defaultValue: 'Target Language',
                     })}
                     options={targetLanguages}
-                    value={
-                      targetLanguages.some((opt) => opt.value === realtimeTranslationTargetLanguage)
-                        ? realtimeTranslationTargetLanguage
-                        : targetLanguages[0].value
-                    }
-                    onChange={(val) => updateConfig({ realtimeTranslationTargetLanguage: val })}
+                    value={targetLanguageValue}
+                    onChange={handleTargetLanguageChange}
                     style={{ width: '150px' }}
                   />
                 </div>

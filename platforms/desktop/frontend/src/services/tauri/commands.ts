@@ -35,6 +35,7 @@ export const TauriCommand = {
     setLogLevel: 'set_log_level',
     setWindowTheme: 'set_window_theme',
     checkMediaFormats: 'check_media_formats',
+    getAppBuildInfo: 'get_app_build_info',
   },
   audio: {
     setSystemAudioMute: 'set_system_audio_mute',

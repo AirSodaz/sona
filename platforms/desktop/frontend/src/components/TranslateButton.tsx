@@ -13,6 +13,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { DEFAULT_PROJECT_PIPELINE } from '../types/project';
 import { getLocalizedLanguageName } from '../utils/languageUtils';
 import {
   CheckIcon,
@@ -196,7 +197,7 @@ export function TranslateButton({
     triggerRef.current?.focus();
 
     try {
-      await translationService.translateCurrentTranscript();
+      await translationService.translateCurrentTranscript(effectiveTargetLang);
     } catch (error) {
       await showError({
         code: 'translation.failed',
@@ -223,9 +224,17 @@ export function TranslateButton({
       }
       return updated;
     });
+    if (projectId && projectPipeline.isProjectPipeline) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+      if (project) {
+        await useProjectStore.getState().updateProjectPipeline(projectId, {
+          ...(project.pipeline ?? DEFAULT_PROJECT_PIPELINE),
+          targetLanguage: langCode,
+        });
+      }
+    }
 
     setConfig({ translationLanguage: langCode });
-    // Don't close menu to allow quick translation start after selection?
     // Or close it to indicate selection made. Let's close it.
     closeMenu();
     triggerRef.current?.focus();
