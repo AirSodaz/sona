@@ -149,6 +149,7 @@ impl LocalLlmPreset {
             installed_size_bytes,
             download_url: self.download.as_ref().map(|d| d.url.clone()),
             download_size_bytes: self.download.as_ref().and_then(|d| d.size_bytes),
+            interrupted_download: None,
         }
     }
     /// Checks whether the preset model file exists in the specified models directory.
@@ -195,6 +196,8 @@ pub struct LocalLlmModelCard {
     pub download_url: Option<String>,
     #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
     pub download_size_bytes: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub interrupted_download: Option<crate::models::downloads::InterruptedDownloadInfo>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
@@ -305,6 +308,7 @@ pub fn is_non_llm_model_file(name_or_path: &str) -> bool {
         "silero",
         "punct",
         "diariz",
+        "r2t2",
     ];
 
     for indicator in speech_indicators {
@@ -362,7 +366,12 @@ pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
             .map(|m| m.len());
         let is_installed = found_path_buf.is_some();
         let found_path = found_path_buf.map(|p| p.to_string_lossy().into_owned());
-        cards.push(preset.to_model_card(is_installed, found_path, found_size));
+        let mut card = preset.to_model_card(is_installed, found_path, found_size);
+        if !is_installed {
+            card.interrupted_download =
+                crate::models::downloads::inspect_interrupted_download(models_dir, &preset.id);
+        }
+        cards.push(card);
     }
 
     // 2. Discover custom GGUF models in models_dir
@@ -425,9 +434,97 @@ pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
                     installed_size_bytes: Some(file_size),
                     download_url: None,
                     download_size_bytes: None,
+                    interrupted_download: None,
                 });
             }
         }
+    }
+
+    LocalLlmCardsResponse {
+        models_dir: models_dir.to_string_lossy().into_owned(),
+        cards,
+    }
+}
+
+pub const OPUS_MT_PRESET_IDS: &[&str] = &[
+    "opus-mt-en-zh",
+    "opus-mt-zh-en",
+    "opus-mt-ja-zh",
+    "opus-mt-zh-ja",
+];
+
+pub fn discover_local_nmt_cards(models_dir: &Path) -> LocalLlmCardsResponse {
+    let mut cards = Vec::new();
+
+    for id in OPUS_MT_PRESET_IDS {
+        let Some(preset) = crate::models::preset_models::find_preset_model(id) else {
+            continue;
+        };
+
+        let install_path = preset.resolve_install_path(models_dir);
+        let mut is_installed = install_path.is_dir();
+        let mut total_size = 0u64;
+
+        if is_installed {
+            for artifact in &preset.artifacts {
+                let file_path = install_path.join(&artifact.filename);
+                match std::fs::metadata(&file_path) {
+                    Ok(m) if m.is_file() && m.len() > 0 => {
+                        total_size += m.len();
+                    }
+                    _ => {
+                        is_installed = false;
+                        break;
+                    }
+                }
+            }
+        }
+
+        let download_size = preset
+            .artifacts
+            .iter()
+            .map(|a| a.size_bytes.unwrap_or(0))
+            .sum::<u64>();
+        let download_size_bytes = if download_size > 0 {
+            Some(download_size)
+        } else {
+            None
+        };
+
+        let interrupted_download = if !is_installed {
+            crate::models::downloads::inspect_interrupted_download(models_dir, &preset.id)
+        } else {
+            None
+        };
+
+        let card = LocalLlmModelCard {
+            id: preset.id.clone(),
+            name: preset.name.clone(),
+            model: preset.id.clone(),
+            filename: preset.id.clone(),
+            description: preset.description.clone(),
+            backend: "onnx-nmt".to_string(),
+            context_window: 512,
+            max_output_tokens: 512,
+            size: preset.size.clone(),
+            parameters: None,
+            quantization: None,
+            modalities: vec!["text".to_string()],
+            languages: preset.languages.clone(),
+            capabilities: vec!["translate".to_string()],
+            is_recommended: preset.is_recommended.unwrap_or(false),
+            is_installed,
+            installed_path: if is_installed {
+                Some(install_path.to_string_lossy().into_owned())
+            } else {
+                None
+            },
+            installed_size_bytes: if is_installed { Some(total_size) } else { None },
+            download_url: preset.artifacts.first().map(|a| a.url.clone()),
+            download_size_bytes,
+            interrupted_download,
+        };
+        cards.push(card);
     }
 
     LocalLlmCardsResponse {
@@ -544,6 +641,10 @@ mod tests {
         assert!(is_non_llm_model_file("Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("mmproj-Qwen3-ASR-1.7B-Q8_0.gguf"));
         assert!(is_non_llm_model_file("qwen3-asr-0.6b-q8-gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("mmproj-Confucius4-R2T2-Q8_0.gguf"));
+        assert!(is_non_llm_model_file("Confucius4-R2T2-f16.gguf"));
+        assert!(is_non_llm_model_file("confucius4-r2t2-q8-gguf"));
 
         // General ASR / speech indicators
         assert!(is_non_llm_model_file("custom-asr-model.gguf"));
@@ -558,6 +659,8 @@ mod tests {
         assert!(!is_non_llm_model_file("google/gemma-4-e2b"));
         assert!(!is_non_llm_model_file("Llama-3.2-3B-Instruct.gguf"));
         assert!(!is_non_llm_model_file("DeepSeek-R1-Distill-Qwen-7B.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO.gguf"));
+        assert!(!is_non_llm_model_file("Confucius4-T3PO-Q8_0.gguf"));
     }
 
     #[test]
@@ -637,6 +740,52 @@ mod tests {
             .iter()
             .find(|c| c.filename == "whisper-large-v3.gguf");
         assert!(whisper_card.is_none());
+    }
+
+    #[test]
+    fn test_discover_local_nmt_cards() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let path = temp_dir.path();
+
+        let response = discover_local_nmt_cards(path);
+        assert_eq!(response.models_dir, path.to_string_lossy());
+        assert_eq!(response.cards.len(), 4);
+        assert!(response.cards.iter().all(|c| !c.is_installed));
+        assert!(response.cards.iter().all(|c| c.backend == "onnx-nmt"));
+        assert!(
+            response
+                .cards
+                .iter()
+                .all(|c| c.capabilities == vec!["translate".to_string()])
+        );
+
+        // Fake install opus-mt-en-zh
+        let preset = crate::models::preset_models::find_preset_model("opus-mt-en-zh").unwrap();
+        let install_path = preset.resolve_install_path(path);
+        std::fs::create_dir_all(&install_path).unwrap();
+        for artifact in &preset.artifacts {
+            std::fs::write(install_path.join(&artifact.filename), b"dummy weights").unwrap();
+        }
+
+        let refreshed = discover_local_nmt_cards(path);
+        let en_zh_card = refreshed
+            .cards
+            .iter()
+            .find(|c| c.id == "opus-mt-en-zh")
+            .unwrap();
+        assert!(en_zh_card.is_installed);
+        assert!(en_zh_card.installed_size_bytes.unwrap() > 0);
+        assert_eq!(
+            en_zh_card.installed_path,
+            Some(install_path.to_string_lossy().into_owned())
+        );
+
+        let zh_en_card = refreshed
+            .cards
+            .iter()
+            .find(|c| c.id == "opus-mt-zh-en")
+            .unwrap();
+        assert!(!zh_en_card.is_installed);
     }
 
     #[test]

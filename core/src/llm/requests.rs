@@ -140,11 +140,18 @@ pub fn validate_polish_segments_request(
 
     if matches!(
         request.config.strategy,
-        LlmProviderStrategy::GoogleTranslate | LlmProviderStrategy::GoogleTranslateFree
+        LlmProviderStrategy::GoogleTranslate
+            | LlmProviderStrategy::GoogleTranslateFree
+            | LlmProviderStrategy::LocalNmt
     ) {
+        let name = if request.config.strategy == LlmProviderStrategy::LocalNmt {
+            "Local NMT"
+        } else {
+            "Google Translate"
+        };
         return Err(LlmRequestValidationError::new(
             "strategy",
-            "Google Translate does not support transcript polishing",
+            format!("{name} does not support transcript polishing"),
         ));
     }
 
@@ -161,6 +168,22 @@ pub fn validate_translate_segments_request(
             "target_language",
             "Target language cannot be empty",
         ));
+    }
+
+    if let Some(source_language) = &request.source_language {
+        let trimmed_src = source_language.trim();
+        if trimmed_src.is_empty() {
+            return Err(LlmRequestValidationError::new(
+                "source_language",
+                "Source language cannot be empty when provided",
+            ));
+        }
+        if trimmed_src.eq_ignore_ascii_case(request.target_language.trim()) {
+            return Err(LlmRequestValidationError::new(
+                "source_language",
+                "Source language cannot be the same as target language",
+            ));
+        }
     }
 
     Ok(())
@@ -239,6 +262,8 @@ pub struct TranslateSegmentsRequest {
     pub target_language: String,
     pub target_language_name: Option<String>,
     #[serde(default)]
+    pub source_language: Option<String>,
+    #[serde(default)]
     pub context: Option<String>,
     #[serde(default)]
     pub keywords: Option<String>,
@@ -270,6 +295,8 @@ pub struct TranscriptLlmJobRequest {
     pub segments: Vec<TranscriptSegment>,
     pub target_language: Option<String>,
     pub target_language_name: Option<String>,
+    #[serde(default)]
+    pub source_language: Option<String>,
     pub context: Option<String>,
     pub keywords: Option<String>,
     #[serde(default)]
@@ -299,6 +326,7 @@ impl TranscriptLlmJobRequest {
                 self.chunk_char_budget = None;
             }
             LlmTaskType::Polish => {
+                self.source_language = None;
                 self.target_language = None;
                 self.target_language_name = None;
                 self.template = None;
@@ -306,6 +334,7 @@ impl TranscriptLlmJobRequest {
                 self.chunk_char_budget = None;
             }
             LlmTaskType::Summary => {
+                self.source_language = None;
                 self.target_language = None;
                 self.target_language_name = None;
                 self.context = None;

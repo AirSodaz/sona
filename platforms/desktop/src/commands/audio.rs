@@ -136,3 +136,28 @@ pub fn set_microphone_capture_paused(
 pub async fn set_system_audio_mute(mute: bool) -> Result<(), String> {
     crate::platform::system_audio::set_system_audio_mute(mute).await
 }
+
+#[tauri::command]
+pub async fn audio_delete_recording_file(file_path: String) -> Result<(), String> {
+    let trimmed = file_path.trim();
+    if trimmed.is_empty() {
+        return Ok(());
+    }
+    let path = std::path::Path::new(trimmed);
+    let is_valid_audio = path
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .map(|ext| {
+            let ext = ext.to_ascii_lowercase();
+            matches!(ext.as_str(), "wav" | "webm" | "m4a" | "aac" | "ogg")
+        })
+        .unwrap_or(false);
+    if !is_valid_audio {
+        return Err(format!("Invalid recording file extension: {trimmed}"));
+    }
+    match std::fs::remove_file(path) {
+        Ok(()) => Ok(()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(error.to_string()),
+    }
+}

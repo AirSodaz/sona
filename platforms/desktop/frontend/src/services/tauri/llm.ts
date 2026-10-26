@@ -304,6 +304,7 @@ function normalizeTranslateRequest(
     chunkSize: nullableNonNegativeSafeInteger(request.chunkSize, 'request.chunkSize'),
     targetLanguage: request.targetLanguage,
     targetLanguageName: request.targetLanguageName ?? null,
+    sourceLanguage: request.sourceLanguage?.trim() ? request.sourceLanguage.trim() : null,
     context: request.context ?? null,
     keywords: request.keywords ?? null,
   };
@@ -408,6 +409,14 @@ export async function translateTranscriptSegments(
 
 export async function listLocalLlmCards(): Promise<LocalLlmCardsResponse> {
   return invokeTauri(TauriCommand.llm.listLocalCards);
+}
+
+export async function listLocalNmtCards(): Promise<LocalLlmCardsResponse> {
+  return invokeTauri(TauriCommand.llm.listLocalNmtCards);
+}
+
+export async function testLocalNmtModel(modelId: string, text: string): Promise<string> {
+  return invokeTauri(TauriCommand.llm.testLocalNmtModel, { modelId, text });
 }
 
 export async function importLocalLlmFile(sourcePath: string): Promise<string> {

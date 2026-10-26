@@ -5,12 +5,10 @@ import { useTranslation } from 'react-i18next';
 import type { CudaAddonInspection } from '../../bindings';
 import { useModelManagerContext } from '../../hooks/useModelManager';
 import {
+  buildModelSelectionPatch,
+  isBatchVadForced as checkBatchVadForced,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
-  syncLegacyAsrSelectionFields,
-  syncLiveAsrSelectionFields,
-  syncLiveOnlineAsrSelectionFields,
   syncOnlineAsrProviderConfig,
-  syncOnlineAsrSelectionFields,
   VOLCENGINE_DOUBAO_PROVIDER_ID,
 } from '../../services/asrConfigService';
 import { cudaAddonService } from '../../services/cudaAddonService';
@@ -18,9 +16,6 @@ import { modelService } from '../../services/modelService';
 import {
   getOnlineAsrProviderDefinition,
   getOnlineProviderConfig,
-  getProviderAddedModels,
-  isOnlineAsrProviderId,
-  ONLINE_ASR_PROVIDER_DEFAULT_NAMES,
   providerSupportsSpeakerDiarization,
 } from '../../services/onlineAsrProviders';
 import {
@@ -30,12 +25,13 @@ import {
   useTranscriptionConfig,
 } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
-import type {
-  ModelCatalogModel,
-  ModelCatalogSectionType,
-  ModelSelectionOption,
-} from '../../types/modelCatalog';
-import { PRESET_MODELS_MAP } from '../../types/modelCatalog';
+import type { AsrSelectionSlot } from '../../types/config';
+import type { ModelCatalogModel, ModelCatalogSectionType } from '../../types/modelCatalog';
+import {
+  buildAsrModelDropdownOptions,
+  resolveActiveAsrModelId,
+  toDropdownOptions,
+} from '../../utils/asrModelOptions';
 import { findSelectedModelByMode } from '../../utils/modelSelection';
 import {
   getScenarioVadBufferSize,
@@ -44,8 +40,7 @@ import {
 } from '../../utils/scenarioModels';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
-import { ModelIcon, OnlineIcon, RestoreIcon } from '../Icons';
-import { ModelBrandLogo } from '../icons/ModelLogos';
+import { ModelIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
 import { LocalModelManagementSection } from './LocalModelManagementSection';
@@ -60,16 +55,18 @@ import {
 } from './SettingsLayout';
 import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 
-type ModelScenario = 'live' | 'batch';
+export type ModelScenario = 'live' | 'batch';
 
-const VOLCENGINE_DOUBAO_OPTION_ID = ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
 const MODEL_DROPDOWN_CONTAINER_STYLE: React.CSSProperties = {
   width: '260px',
   maxWidth: '100%',
 };
 
-interface SettingsModelsTabProps {
+export interface SettingsModelsTabProps {
   isActive?: boolean;
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
+  initialScenario?: ModelScenario;
+  subTabRequestId?: number;
 }
 
 function scheduleAfterFrame(callback: () => void): () => void {
@@ -82,44 +79,26 @@ function scheduleAfterFrame(callback: () => void): () => void {
   return () => window.clearTimeout(timeoutId);
 }
 
-function toDropdownOptions(
-  options: ModelSelectionOption[],
-  selectedId: string,
-  withIcon = false
-): Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> {
-  return options
-    .filter((option) => option.isInstalled || option.id === selectedId)
-    .map((option) => ({
-      value: option.id,
-      ariaLabel: option.label,
-      label: withIcon ? (
-        <span className="model-dropdown-option">
-          <span className="model-dropdown-option-icon">
-            <ModelBrandLogo
-              model={{ id: option.id, name: option.label }}
-              size={16}
-              alt=""
-              aria-hidden="true"
-            />
-          </span>
-          <span className="model-dropdown-option-label">{option.label}</span>
-        </span>
-      ) : (
-        option.label
-      ),
-    }));
-}
-
 export function SettingsModelsTab({
   isActive: _isActive = true,
-}: SettingsModelsTabProps): React.JSX.Element {
+  initialScenario,
+  subTabRequestId,
+}: SettingsModelsTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const modelConfig = useModelConfig();
   const transcriptionConfig = useTranscriptionConfig();
   const updateConfig = useSetConfig();
   const speakerProfiles = useConfigStore((state) => state.config.speakerProfiles);
   const [showLocalModelContent, setShowLocalModelContent] = useState(false);
-  const [activeScenario, setActiveScenario] = useState<ModelScenario>('live');
+  const [activeScenario, setActiveScenario] = useState<ModelScenario>(initialScenario || 'live');
+  const [isAdvancedOpen, setIsAdvancedOpen] = useState(Boolean(initialScenario));
+
+  useEffect(() => {
+    if (initialScenario && subTabRequestId !== undefined) {
+      setActiveScenario(initialScenario);
+      setIsAdvancedOpen(true);
+    }
+  }, [initialScenario, subTabRequestId]);
   const {
     installedModels,
     modelCatalog,
@@ -130,6 +109,7 @@ export function SettingsModelsTab({
     handleDelete,
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
     restoreDefaultModelSettings,
   } = useModelManagerContext();
 
@@ -146,36 +126,7 @@ export function SettingsModelsTab({
     if (!isBatchScenario) {
       return false;
     }
-    const selection = modelConfig.asr?.selections.batch;
-    if (selection?.engine !== 'local') {
-      return false;
-    }
-    const modelInfo = selection.modelId
-      ? undefined
-      : findSelectedModelByMode(selection.modelPath, 'batch');
-    const modelId = selection.modelId ?? modelInfo?.id;
-    const preset = modelId ? PRESET_MODELS_MAP.get(modelId) : undefined;
-    const modelType = (preset?.type || modelInfo?.type || '').toLowerCase();
-    const idLower = (modelId || '').toLowerCase();
-    const pathLower = (selection.modelPath || '').toLowerCase();
-
-    if (!modelId && !pathLower) {
-      return false;
-    }
-
-    const isExempt =
-      modelType === 'qwen3-asr' ||
-      modelType === 'parakeet-tdt' ||
-      idLower.includes('qwen3-asr') ||
-      idLower.includes('qwen3_asr') ||
-      idLower.includes('parakeet-tdt') ||
-      idLower.includes('parakeet_tdt') ||
-      pathLower.includes('qwen3-asr') ||
-      pathLower.includes('qwen3_asr') ||
-      pathLower.includes('parakeet-tdt') ||
-      pathLower.includes('parakeet_tdt');
-
-    return !isExempt;
+    return checkBatchVadForced(modelConfig.asr?.selections.batch);
   }, [isBatchScenario, modelConfig.asr?.selections.batch]);
 
   const [cudaStatus, setCudaStatus] = useState<CudaAddonInspection | null>(null);
@@ -286,20 +237,20 @@ export function SettingsModelsTab({
   const selectedLiveModelId = useMemo(() => {
     const sel = modelConfig.asr?.selections.live;
     if (sel?.engine === 'online') {
-      const pid = sel.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID;
+      const pid = sel.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
       return sel.modelId ? `${pid}::${sel.modelId}` : pid;
     }
-    return selectedModelIds.streaming ?? '';
-  }, [modelConfig.asr?.selections.live, selectedModelIds.streaming]);
+    return selectedModelIds.streaming ?? resolveActiveAsrModelId(modelConfig, 'live', modelCatalog);
+  }, [modelConfig, modelCatalog, selectedModelIds.streaming]);
 
   const selectedBatchModelId = useMemo(() => {
     const sel = modelConfig.asr?.selections.batch;
     if (sel?.engine === 'online') {
-      const pid = sel.providerId ?? VOLCENGINE_DOUBAO_OPTION_ID;
+      const pid = sel.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
       return sel.modelId ? `${pid}::${sel.modelId}` : pid;
     }
-    return selectedModelIds.batch ?? '';
-  }, [modelConfig.asr?.selections.batch, selectedModelIds.batch]);
+    return selectedModelIds.batch ?? resolveActiveAsrModelId(modelConfig, 'batch', modelCatalog);
+  }, [modelConfig, modelCatalog, selectedModelIds.batch]);
   const selectedAsrModelId = isBatchScenario ? selectedBatchModelId : selectedLiveModelId;
   const activeOnlineSelection = useMemo(() => {
     const selection = isBatchScenario
@@ -338,97 +289,12 @@ export function SettingsModelsTab({
     },
     [activeOnlineProviderId, modelConfig, updateConfig]
   );
-  const applyDependencyRequests = (modelId: string) => {
-    const dependencyUpdates: Partial<typeof modelConfig> = {};
-    const dependencies = modelCatalog.dependencyRequestsByModelId[modelId] ?? [];
-    for (const dependency of dependencies) {
-      const fieldKeys = [
-        scenarioModelFieldKey(dependency.configKey, 'live'),
-        scenarioModelFieldKey(dependency.configKey, 'batch'),
-      ] as const;
-      if (fieldKeys.every((key) => modelConfig[key])) {
-        continue;
-      }
-      if (dependency.isInstalled) {
-        for (const key of fieldKeys) {
-          if (!modelConfig[key]) {
-            dependencyUpdates[key] = dependency.installPath;
-          }
-        }
-      } else {
-        document.dispatchEvent(
-          new CustomEvent('download-background-model', {
-            detail: { modelId: dependency.modelId },
-          })
-        );
-      }
-    }
-
-    if (Object.keys(dependencyUpdates).length > 0) {
-      updateConfig(dependencyUpdates);
-    }
-  };
-
   const handleModelChange = async (type: ModelScenario | 'streaming', modelId: string) => {
-    const isLive = type === 'live' || type === 'streaming';
-    if (!modelId) {
-      if (isLive) {
-        const patch = syncLiveAsrSelectionFields(modelConfig, {
-          modelId: null,
-          modelPath: '',
-        });
-        updateConfig(patch);
-        return;
-      }
-      updateConfig(
-        syncLegacyAsrSelectionFields(modelConfig, 'batch', {
-          modelId: null,
-          modelPath: '',
-        })
-      );
-      return;
-    }
-    if (modelId.includes('::')) {
-      const [providerId, subModelId] = modelId.split('::');
-      if (isLive) {
-        updateConfig(syncLiveOnlineAsrSelectionFields(modelConfig, providerId, subModelId));
-      } else {
-        updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', providerId, subModelId));
-      }
-      return;
-    }
-
-    if (isOnlineAsrProviderId(modelId)) {
-      if (isLive) {
-        updateConfig(syncLiveOnlineAsrSelectionFields(modelConfig, modelId));
-      } else {
-        updateConfig(syncOnlineAsrSelectionFields(modelConfig, 'batch', modelId));
-      }
-      return;
-    }
-
-    const path =
-      modelCatalog.modelPathById[modelId] ||
-      modelCatalog.models.find((model) => model.id === modelId)?.installPath ||
-      '';
-    if (!path) {
-      return;
-    }
-    if (isLive) {
-      const patch = syncLiveAsrSelectionFields(modelConfig, {
-        modelId,
-        modelPath: path,
-      });
+    const slot: AsrSelectionSlot = type === 'batch' ? 'batch' : 'live';
+    const patch = buildModelSelectionPatch(modelConfig, slot, modelId, modelCatalog);
+    if (Object.keys(patch).length > 0) {
       updateConfig(patch);
-    } else {
-      updateConfig(
-        syncLegacyAsrSelectionFields(modelConfig, 'batch', {
-          modelId,
-          modelPath: path,
-        })
-      );
     }
-    applyDependencyRequests(modelId);
   };
 
   const handleCompanionModelChange = (kind: ScenarioModelKind, modelId: string) => {
@@ -454,6 +320,7 @@ export function SettingsModelsTab({
     handleDelete,
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
   };
 
   const speakerDisabledOption = useMemo(
@@ -464,178 +331,29 @@ export function SettingsModelsTab({
     [t]
   );
 
-  const liveOptions = useMemo(() => {
-    const cloudOptions: Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> = [];
+  const liveOptions = useMemo(
+    () =>
+      buildAsrModelDropdownOptions({
+        slot: 'live',
+        snapshot: modelCatalog,
+        selectedModelId: selectedLiveModelId,
+        modelConfig,
+        t,
+      }),
+    [modelCatalog, selectedLiveModelId, modelConfig, t]
+  );
 
-    for (const provider of ONLINE_ASR_PROVIDER_DEFINITIONS) {
-      if (provider.manifestEntry.streaming?.supported === false) continue;
-      const providerConfig =
-        modelConfig.asr?.providers?.online?.[provider.id] ??
-        (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
-          ? modelConfig.asr?.providers?.volcengineDoubao
-          : undefined) ??
-        provider.defaultConfig;
-
-      const isConfigured = provider.isConfigured(
-        providerConfig as typeof provider.defaultConfig,
-        'streaming'
-      );
-      const isSelected =
-        selectedLiveModelId === provider.id || selectedLiveModelId?.startsWith(`${provider.id}::`);
-      if (!isConfigured && !isSelected) continue;
-
-      const addedModels = getProviderAddedModels(providerConfig, provider);
-      const streamingModels = provider.models.filter((m) => m.modes.includes('streaming'));
-      const activeModels = streamingModels.filter(
-        (m) =>
-          addedModels.includes(m.id) ||
-          selectedLiveModelId === `${provider.id}::${m.id}` ||
-          (selectedLiveModelId === provider.id && m.isDefault)
-      );
-
-      const providerLabel = t(provider.optionLabelKey, {
-        defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[provider.id] ?? provider.id,
-      });
-
-      if (activeModels.length === 0) {
-        if (isSelected) {
-          cloudOptions.push({
-            value: provider.id,
-            ariaLabel: providerLabel,
-            label: (
-              <span className="model-dropdown-option">
-                <span className="model-dropdown-option-icon">
-                  <ModelBrandLogo
-                    model={{ id: provider.id, name: providerLabel }}
-                    size={16}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
-                <span className="model-dropdown-option-label">{providerLabel}</span>
-                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
-              </span>
-            ),
-          });
-        }
-      } else {
-        for (const model of activeModels) {
-          const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
-          const optionLabel = `${model.name} · ${providerLabel}`;
-          cloudOptions.push({
-            value: optionValue,
-            ariaLabel: optionLabel,
-            label: (
-              <span className="model-dropdown-option">
-                <span className="model-dropdown-option-icon">
-                  <ModelBrandLogo
-                    model={{ id: provider.id, name: providerLabel }}
-                    size={16}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
-                <span className="model-dropdown-option-label">{optionLabel}</span>
-                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
-              </span>
-            ),
-          });
-        }
-      }
-    }
-
-    return [
-      ...toDropdownOptions(selectionOptions.streaming, selectedLiveModelId, true),
-      ...cloudOptions,
-    ];
-  }, [selectedLiveModelId, selectionOptions.streaming, t, modelConfig.asr?.providers]);
-
-  const batchOptions = useMemo(() => {
-    const cloudOptions: Array<{ value: string; label: React.ReactNode; ariaLabel?: string }> = [];
-
-    for (const provider of ONLINE_ASR_PROVIDER_DEFINITIONS) {
-      if (provider.manifestEntry.batch?.localFileMode?.supported === false) continue;
-      const providerConfig =
-        modelConfig.asr?.providers?.online?.[provider.id] ??
-        (provider.id === VOLCENGINE_DOUBAO_PROVIDER_ID
-          ? modelConfig.asr?.providers?.volcengineDoubao
-          : undefined) ??
-        provider.defaultConfig;
-
-      const isConfigured = provider.isConfigured(
-        providerConfig as typeof provider.defaultConfig,
-        'batch'
-      );
-      const isSelected =
-        selectedBatchModelId === provider.id ||
-        selectedBatchModelId?.startsWith(`${provider.id}::`);
-      if (!isConfigured && !isSelected) continue;
-
-      const addedModels = getProviderAddedModels(providerConfig, provider);
-      const batchModels = provider.models.filter((m) => m.modes.includes('batch'));
-      const activeModels = batchModels.filter(
-        (m) =>
-          addedModels.includes(m.id) ||
-          selectedBatchModelId === `${provider.id}::${m.id}` ||
-          (selectedBatchModelId === provider.id && m.isDefault)
-      );
-
-      const providerLabel = t(provider.optionLabelKey, {
-        defaultValue: ONLINE_ASR_PROVIDER_DEFAULT_NAMES[provider.id] ?? provider.id,
-      });
-
-      if (activeModels.length === 0) {
-        if (isSelected) {
-          cloudOptions.push({
-            value: provider.id,
-            ariaLabel: providerLabel,
-            label: (
-              <span className="model-dropdown-option">
-                <span className="model-dropdown-option-icon">
-                  <ModelBrandLogo
-                    model={{ id: provider.id, name: providerLabel }}
-                    size={16}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
-                <span className="model-dropdown-option-label">{providerLabel}</span>
-                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
-              </span>
-            ),
-          });
-        }
-      } else {
-        for (const model of activeModels) {
-          const optionValue = activeModels.length > 1 ? `${provider.id}::${model.id}` : provider.id;
-          const optionLabel = `${model.name} · ${providerLabel}`;
-          cloudOptions.push({
-            value: optionValue,
-            ariaLabel: optionLabel,
-            label: (
-              <span className="model-dropdown-option">
-                <span className="model-dropdown-option-icon">
-                  <ModelBrandLogo
-                    model={{ id: provider.id, name: providerLabel }}
-                    size={16}
-                    alt=""
-                    aria-hidden="true"
-                  />
-                </span>
-                <span className="model-dropdown-option-label">{optionLabel}</span>
-                <OnlineIcon className="model-dropdown-cloud-icon" width={14} height={14} />
-              </span>
-            ),
-          });
-        }
-      }
-    }
-
-    return [
-      ...toDropdownOptions(selectionOptions.batch, selectedBatchModelId, true),
-      ...cloudOptions,
-    ];
-  }, [selectedBatchModelId, selectionOptions.batch, t, modelConfig.asr?.providers]);
+  const batchOptions = useMemo(
+    () =>
+      buildAsrModelDropdownOptions({
+        slot: 'batch',
+        snapshot: modelCatalog,
+        selectedModelId: selectedBatchModelId,
+        modelConfig,
+        t,
+      }),
+    [modelCatalog, selectedBatchModelId, modelConfig, t]
+  );
 
   const isVolcengineSelected = Object.values(modelConfig.asr?.selections ?? {}).some(
     (selection) =>
@@ -780,6 +498,7 @@ export function SettingsModelsTab({
         description={t('settings.model_settings_description')}
       />
       <SettingsSection
+        id="settings-model-hub"
         title={t('settings.model_selection')}
         description={t('settings.model_selection_desc')}
         icon={<Settings2 size={20} />}
@@ -1287,6 +1006,8 @@ export function SettingsModelsTab({
         )}
 
         <SettingsAccordion
+          isOpen={isAdvancedOpen}
+          onToggle={() => setIsAdvancedOpen((prev) => !prev)}
           title={t('settings.advanced_settings_title', { defaultValue: 'Advanced Settings' })}
           status={
             activeAsrRulesBadge ? (
@@ -1382,6 +1103,7 @@ export function SettingsModelsTab({
 
               {isBatchScenario && (
                 <SettingsItem
+                  id="settings-batch-vad"
                   title={t('settings.batch_vad_enabled')}
                   hint={
                     isBatchVadForced

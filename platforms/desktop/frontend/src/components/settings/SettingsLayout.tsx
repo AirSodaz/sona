@@ -27,15 +27,16 @@ export function SettingsTabContainer({
 }
 
 export interface SettingsPageHeaderProps {
+  id?: string;
   title: string | ReactNode;
   description?: string | ReactNode;
   icon?: ReactNode;
 }
 
-export function SettingsPageHeader({ title, description, icon }: SettingsPageHeaderProps) {
+export function SettingsPageHeader({ id, title, description, icon }: SettingsPageHeaderProps) {
   return (
     <div className="settings-page-header">
-      <h2 className="settings-page-title">
+      <h2 id={id} className="settings-page-title">
         {icon && <span className="settings-page-icon">{icon}</span>}
         {title}
       </h2>
@@ -49,6 +50,7 @@ export function SettingsPageHeader({ title, description, icon }: SettingsPageHea
  * A grouped section of settings with an optional title, icon, and description.
  */
 interface SettingsSectionProps {
+  id?: string;
   title?: string;
   description?: string;
   icon?: ReactNode;
@@ -58,8 +60,8 @@ interface SettingsSectionProps {
   contentClassName?: string;
   children: ReactNode;
 }
-
 export function SettingsSection({
+  id,
   title,
   description,
   icon,
@@ -69,7 +71,7 @@ export function SettingsSection({
   children,
 }: SettingsSectionProps) {
   return (
-    <section className={`settings-section ${className}`.trim()}>
+    <section id={id} className={`settings-section ${className}`.trim()}>
       {(title || description) && (
         <div className="settings-section-header">
           <div className="settings-section-header-main">
@@ -93,6 +95,8 @@ export function SettingsSection({
  * A single setting row or block.
  */
 interface SettingsItemProps {
+  id?: string;
+  className?: string;
   title: string | ReactNode;
   hint?: string | ReactNode;
   layout?: 'horizontal' | 'vertical';
@@ -100,8 +104,9 @@ interface SettingsItemProps {
   indent?: boolean;
   style?: React.CSSProperties;
 }
-
 export function SettingsItem({
+  id,
+  className = '',
   title,
   hint,
   layout = 'horizontal',
@@ -111,7 +116,8 @@ export function SettingsItem({
 }: SettingsItemProps) {
   return (
     <div
-      className={`settings-item-container layout-${layout} ${indent ? 'indented' : ''}`}
+      id={id}
+      className={`settings-item-container layout-${layout} ${indent ? 'indented' : ''} ${className}`.trim()}
       style={{
         ...style,
         ...(indent ? { paddingLeft: '56px' } : {}),

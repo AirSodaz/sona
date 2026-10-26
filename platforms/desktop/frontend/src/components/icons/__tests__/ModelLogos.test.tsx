@@ -9,6 +9,7 @@ import {
   FunAsrNanoLogo,
   GenericModelLogo,
   GroqLogo,
+  isAsrModel,
   MetaLogo,
   MistralLogo,
   ModelBrandLogo,
@@ -17,6 +18,7 @@ import {
   OpenAILogo,
   ParaformerLogo,
   QwenLogo,
+  R2t2Logo,
   resolveModelBrand,
   SenseVoiceLogo,
   VolcengineLogo,
@@ -28,6 +30,38 @@ describe('ModelLogos - resolveModelBrand', () => {
   it('correctly resolves Qwen ASR models', () => {
     expect(resolveModelBrand({ id: 'qwen3-asr-0.6b-q8-gguf', groupId: 'qwen3-asr' })).toBe('qwen');
     expect(resolveModelBrand({ id: 'sherpa-onnx-qwen3-asr-0.6B-int8-2026-03-25' })).toBe('qwen');
+  });
+  it('correctly resolves Confucius4-R2T2 models', () => {
+    expect(
+      resolveModelBrand({
+        id: 'confucius4-r2t2-q8-gguf',
+        groupId: 'confucius4-r2t2',
+        type: 'qwen3-asr',
+      })
+    ).toBe('r2t2');
+  });
+
+  it('correctly classifies Confucius4-R2T2 as ASR even without an explicit ASR type', () => {
+    expect(isAsrModel({ id: 'confucius4-r2t2' })).toBe(true);
+    expect(isAsrModel({ id: 'Confucius4-R2T2-Q8_0.gguf' })).toBe(true);
+    expect(isAsrModel({ type: 'confucius4-r2t2' })).toBe(true);
+    expect(resolveModelBrand({ id: 'confucius4-r2t2' })).toBe('r2t2');
+  });
+  it('does not falsely classify non-R2T2 Confucius models as ASR or R2T2 brand', () => {
+    expect(
+      isAsrModel({
+        id: 'confucius4-t3po',
+        name: 'Confucius4-T3PO',
+        type: 'custom',
+      })
+    ).toBe(false);
+    expect(
+      resolveModelBrand({
+        id: 'confucius4-t3po',
+        name: 'Confucius4-T3PO',
+        type: 'custom',
+      })
+    ).toBeNull();
   });
 
   it('correctly resolves SenseVoice models', () => {
@@ -114,6 +148,17 @@ describe('ModelLogos - resolveModelBrand', () => {
         groupId: 'parakeet-tdt',
       })
     ).toBe('nvidia');
+  });
+
+  it('correctly resolves Canary (NVIDIA) models', () => {
+    expect(
+      resolveModelBrand({
+        id: 'sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8',
+        groupId: 'canary-180m-flash',
+        type: 'canary',
+      })
+    ).toBe('nvidia');
+    expect(isAsrModel({ type: 'canary' })).toBe(true);
   });
 
   it('correctly resolves Dolphin models', () => {
@@ -262,6 +307,14 @@ describe('ModelLogos - Component Rendering', () => {
     expect(img).toBeTruthy();
     expect(img?.getAttribute('width')).toBe('40');
     expect(img?.getAttribute('class')).toContain('test-badge');
+
+    const { container: r2t2Container } = render(
+      <ModelBrandLogo model={{ id: 'confucius4-r2t2-q8-gguf', type: 'qwen3-asr' }} size={36} />
+    );
+    const r2t2Img = r2t2Container.querySelector('img');
+    expect(r2t2Img).toBeTruthy();
+    expect(r2t2Img?.getAttribute('width')).toBe('36');
+    expect(r2t2Img?.getAttribute('alt')).toBe('Confucius4-R2T2');
   });
 
   it('renders via unified ModelBrandLogo with brand prop', () => {
@@ -269,6 +322,13 @@ describe('ModelLogos - Component Rendering', () => {
     const img = container.querySelector('img');
     expect(img).toBeTruthy();
     expect(img?.getAttribute('width')).toBe('24');
+  });
+  it('renders R2T2 logo image', () => {
+    const { container } = render(<R2t2Logo size={36} />);
+    const img = container.querySelector('img');
+    expect(img).toBeTruthy();
+    expect(img?.getAttribute('width')).toBe('36');
+    expect(img?.getAttribute('alt')).toBe('Confucius4-R2T2');
   });
 
   it('renders null via ModelBrandLogo for non-ASR models', () => {
@@ -296,6 +356,7 @@ describe('ModelLogos - Component Rendering', () => {
       'deepgram',
       'assemblyai',
       'elevenlabs',
+      'r2t2',
     ] as const;
 
     for (const brand of brands) {

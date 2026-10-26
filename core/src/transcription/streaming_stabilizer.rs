@@ -1,0 +1,206 @@
+//! Streaming translation stabilizer implementing Local Agreement prefix locking and draft tail management.
+
+pub fn is_cjk_char(c: char) -> bool {
+    matches!(c,
+        '\u{4E00}'..='\u{9FFF}' | // CJK Unified Ideographs
+        '\u{3400}'..='\u{4DBF}' | // CJK Extension A
+        '\u{F900}'..='\u{FAFF}' | // CJK Compatibility Ideographs
+        '\u{20000}'..='\u{2FA1F}' | // CJK Extension B/C/D/E/F & Compatibility Supplement
+        '\u{30000}'..='\u{323AF}' | // CJK Extension G/H/I
+        '\u{3040}'..='\u{309F}' | // Hiragana
+        '\u{30A0}'..='\u{30FF}'   // Katakana
+    )
+}
+
+pub fn is_cjk_punctuation(c: char) -> bool {
+    matches!(c,
+        '\u{3000}'..='\u{303F}' | // CJK Symbols and Punctuation (，、。 etc)
+        '\u{FF01}'..='\u{FF0F}' | // Fullwidth ! " # $ % & ' ( ) * + , - . /
+        '\u{FF1A}'..='\u{FF20}' | // Fullwidth : ; < = > ? @
+        '\u{FF3B}'..='\u{FF40}' | // Fullwidth [ \ ] ^ _ `
+        '\u{FF5B}'..='\u{FF65}'   // Fullwidth { | } ~
+    )
+}
+
+pub fn is_boundary_char(c: char) -> bool {
+    c.is_whitespace()
+        || c.is_ascii_punctuation()
+        || matches!(
+            c,
+            '\u{2000}'
+                ..='\u{206F}' | '\u{00AB}' | '\u{00BB}' | '\u{00BF}' | '\u{00A1}' | '\u{00B7}'
+        )
+        || is_cjk_char(c)
+        || is_cjk_punctuation(c)
+}
+
+/// Computes the longest common prefix of `prev` and `curr` truncated at word or punctuation boundaries.
+pub fn calculate_longest_common_prefix(prev: &str, curr: &str) -> String {
+    if prev.is_empty() || curr.is_empty() {
+        return String::new();
+    }
+    let common_byte_len = prev
+        .char_indices()
+        .zip(curr.chars())
+        .take_while(|((_, cp), cc)| cp == cc)
+        .last()
+        .map(|((idx, ch), _)| idx + ch.len_utf8())
+        .unwrap_or(0);
+
+    if common_byte_len == 0 {
+        return String::new();
+    }
+
+    let raw_lcp = &prev[..common_byte_len];
+
+    // If completely identical to both, return raw_lcp
+    if raw_lcp == prev && raw_lcp == curr {
+        return raw_lcp.to_string();
+    }
+
+    let lcp_len = raw_lcp.len();
+    let next_curr_char = curr[lcp_len..].chars().next();
+    let next_prev_char = prev[lcp_len..].chars().next();
+
+    // Rule 1: If raw_lcp is exactly prev and curr continues at a boundary
+    if raw_lcp == prev && next_curr_char.is_some_and(is_boundary_char) {
+        return raw_lcp.to_string();
+    }
+
+    // Rule 2: If raw_lcp is exactly curr and prev continues at a boundary
+    if raw_lcp == curr && next_prev_char.is_some_and(is_boundary_char) {
+        return raw_lcp.to_string();
+    }
+
+    // Rule 3: Check if raw_lcp already ends at a boundary character
+    let last_char = raw_lcp.chars().last().unwrap();
+    if is_boundary_char(last_char) {
+        return raw_lcp.to_string();
+    }
+
+    // Rule 4: If both next_curr_char and next_prev_char are boundary characters
+    if next_curr_char.is_some_and(is_boundary_char) && next_prev_char.is_some_and(is_boundary_char)
+    {
+        return raw_lcp.to_string();
+    }
+    // Otherwise, raw_lcp cut in the middle of a token.
+    // Scan backwards in raw_lcp for the latest boundary char.
+    let mut boundary_byte_end = None;
+    for (byte_idx, ch) in raw_lcp.char_indices() {
+        if is_boundary_char(ch) {
+            boundary_byte_end = Some(byte_idx + ch.len_utf8());
+        }
+    }
+
+    if let Some(end) = boundary_byte_end {
+        raw_lcp[..end].to_string()
+    } else {
+        String::new()
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Default)]
+pub struct StabilizerOutput {
+    pub frozen_prefix: Option<String>,
+    pub draft_tail: Option<String>,
+}
+
+impl StabilizerOutput {
+    pub fn translation(&self) -> Option<&str> {
+        self.frozen_prefix.as_deref()
+    }
+
+    pub fn draft_translation(&self) -> Option<&str> {
+        self.draft_tail.as_deref()
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct StreamingStabilizer {
+    frozen_prefix: String,
+    last_hypothesis: String,
+}
+
+impl StreamingStabilizer {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn reset(&mut self) {
+        self.frozen_prefix.clear();
+        self.last_hypothesis.clear();
+    }
+
+    pub fn frozen_prefix(&self) -> &str {
+        &self.frozen_prefix
+    }
+
+    pub fn update(&mut self, hypothesis: &str, is_final: bool) -> StabilizerOutput {
+        if is_final {
+            let final_text = hypothesis.trim().to_string();
+            self.frozen_prefix = final_text.clone();
+            self.last_hypothesis.clear();
+            return StabilizerOutput {
+                frozen_prefix: if final_text.is_empty() {
+                    None
+                } else {
+                    Some(final_text)
+                },
+                draft_tail: None,
+            };
+        }
+
+        let trimmed_hypothesis = hypothesis.trim();
+        if trimmed_hypothesis.is_empty() {
+            return StabilizerOutput {
+                frozen_prefix: if self.frozen_prefix.is_empty() {
+                    None
+                } else {
+                    Some(self.frozen_prefix.clone())
+                },
+                draft_tail: None,
+            };
+        }
+
+        if !self.last_hypothesis.is_empty() {
+            let candidate_lcp =
+                calculate_longest_common_prefix(&self.last_hypothesis, trimmed_hypothesis);
+            if candidate_lcp.len() > self.frozen_prefix.len()
+                && candidate_lcp.starts_with(&self.frozen_prefix)
+            {
+                self.frozen_prefix = candidate_lcp;
+            }
+        }
+
+        self.last_hypothesis = trimmed_hypothesis.to_string();
+
+        if !trimmed_hypothesis.starts_with(&self.frozen_prefix) {
+            self.frozen_prefix =
+                calculate_longest_common_prefix(&self.frozen_prefix, trimmed_hypothesis);
+        }
+        let draft_tail = if trimmed_hypothesis.starts_with(&self.frozen_prefix) {
+            let tail = &trimmed_hypothesis[self.frozen_prefix.len()..];
+            let effective_tail = if self.frozen_prefix.ends_with(char::is_whitespace) {
+                tail.trim_start()
+            } else {
+                tail
+            };
+            if effective_tail.is_empty() {
+                None
+            } else {
+                Some(effective_tail.to_string())
+            }
+        } else {
+            Some(trimmed_hypothesis.to_string())
+        };
+
+        StabilizerOutput {
+            frozen_prefix: if self.frozen_prefix.is_empty() {
+                None
+            } else {
+                Some(self.frozen_prefix.clone())
+            },
+            draft_tail,
+        }
+    }
+}

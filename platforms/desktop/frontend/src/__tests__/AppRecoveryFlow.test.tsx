@@ -21,8 +21,10 @@ vi.mock('../components/TranslateButton', () => ({
   TranslateButton: () => <div>TranslateButton</div>,
 }));
 vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
-vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
-vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
+vi.mock('../components/CreateWorkspacePanel', () => ({
+  CreateWorkspacePanel: () => <div>CreateWorkspacePanel</div>,
+}));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => null }));
 vi.mock('../components/settings/settingsLoaders', () => ({
@@ -36,6 +38,8 @@ vi.mock('../components/FirstRunGuide', () => ({ FirstRunGuide: () => <div>FirstR
 vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBanner: () => null }));
 vi.mock('../components/Icons', () => ({
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/NotificationCenter', () => ({

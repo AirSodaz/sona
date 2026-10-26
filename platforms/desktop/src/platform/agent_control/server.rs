@@ -1018,15 +1018,34 @@ mod tests {
             cancel_batch_hit.get("success").and_then(|v| v.as_bool()),
             Some(true)
         );
-        let cancel_dl = dispatch_rpc_call(
+        // Cancel non-existent download returns false
+        let cancel_dl_miss = dispatch_rpc_call(
             "sona_cancel_download",
-            Some(serde_json::json!({ "download_id": "dl-1" })),
+            Some(serde_json::json!({ "download_id": "dl-miss" })),
             &facade,
         )
         .await
         .unwrap();
         assert_eq!(
-            cancel_dl.get("success").and_then(|v| v.as_bool()),
+            cancel_dl_miss.get("success").and_then(|v| v.as_bool()),
+            Some(false)
+        );
+
+        // Register an active download in downloads and cancel it -> returns true
+        let notify = std::sync::Arc::new(tokio::sync::Notify::new());
+        let _guard = facade
+            .services
+            .downloads
+            .register_download("dl-active".to_string(), notify);
+        let cancel_dl_hit = dispatch_rpc_call(
+            "sona_cancel_download",
+            Some(serde_json::json!({ "download_id": "dl-active" })),
+            &facade,
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            cancel_dl_hit.get("success").and_then(|v| v.as_bool()),
             Some(true)
         );
     }

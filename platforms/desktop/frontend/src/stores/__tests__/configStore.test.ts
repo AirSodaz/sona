@@ -39,4 +39,9 @@ describe('configStore - useApiServerConfig', () => {
     expect(CURRENT_CONFIG_VERSION).toBe(8);
     expect(DEFAULT_CONFIG.configVersion).toBe(8);
   });
+
+  it('includes captionTranslationFontSize and captionTranslationFontColor in DEFAULT_CONFIG', () => {
+    expect(DEFAULT_CONFIG.captionTranslationFontSize).toBe(18);
+    expect(DEFAULT_CONFIG.captionTranslationFontColor).toBe('#6ee7b7');
+  });
 });

@@ -96,6 +96,7 @@ export function SettingsSummaryTemplateSection(): React.JSX.Element {
   return (
     <>
       <SettingsSection
+        id="settings-vocabulary-summary-templates"
         title={t('settings.summary_templates_default_title', {
           defaultValue: 'Summary Automation & Templates',
         })}

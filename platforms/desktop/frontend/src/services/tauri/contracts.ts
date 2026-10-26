@@ -19,6 +19,7 @@ import type {
   DiagnosticsCoreSnapshot,
   ExportTranscriptFileRequest_Serialize,
   ExportTranscriptFileResult,
+  InterruptedDownloadInfo,
   LocalLlmCardsResponse,
   RustTauriCommandContractMap,
   StorageUsageSnapshot_Serialize,
@@ -26,6 +27,7 @@ import type {
 } from '../../bindings';
 import type { ApiServerDashboardSnapshot } from '../../types/apiServer';
 import type { BackupManifestV1, PreparedBackupImport } from '../../types/backup';
+import type { AppBuildInfo } from '../../types/build';
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import type {
@@ -185,9 +187,17 @@ type ManualTauriCommandContractMap = {
     args: { modelId: string };
     result: undefined;
   };
+  [TauriCommand.app.checkInterruptedDownload]: {
+    args: { modelId: string };
+    result: InterruptedDownloadInfo | null;
+  };
+  [TauriCommand.app.cleanInterruptedDownload]: {
+    args: { modelId: string };
+    result: boolean;
+  };
   [TauriCommand.app.cancelDownload]: {
     args: { id: string };
-    result: undefined;
+    result: boolean;
   };
   [TauriCommand.app.openLogFolder]: {
     args: undefined;
@@ -286,6 +296,10 @@ type ManualTauriCommandContractMap = {
     args: { paths: string[] };
     result: boolean[];
   };
+  [TauriCommand.app.getAppBuildInfo]: {
+    args: undefined;
+    result: AppBuildInfo;
+  };
   [TauriCommand.audio.setSystemAudioMute]: {
     args: { mute: boolean };
     result: undefined;
@@ -320,6 +334,10 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.audio.setMicrophoneCapturePaused]: {
     args: SetCapturePausedArgs;
+    result: undefined;
+  };
+  [TauriCommand.audio.deleteRecordingFile]: {
+    args: { filePath: string };
     result: undefined;
   };
   [TauriCommand.storage.getUsageSnapshot]: {
@@ -405,6 +423,14 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.llm.listLocalCards]: {
     args: undefined;
     result: LocalLlmCardsResponse;
+  };
+  [TauriCommand.llm.listLocalNmtCards]: {
+    args: undefined;
+    result: LocalLlmCardsResponse;
+  };
+  [TauriCommand.llm.testLocalNmtModel]: {
+    args: { modelId: string; text: string };
+    result: string;
   };
   [TauriCommand.llm.importLocalLlmFile]: {
     args: { sourcePath: string };

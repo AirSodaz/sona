@@ -11,7 +11,7 @@ use crate::mirror::{DownloadMirror, download_candidates};
 use crate::models::{ModelDownloadProgress, ModelDownloadStage};
 use sona_core::runtime::cuda_addon::{CudaAddonInspection, activate_cuda_addon_directory};
 
-const DEFAULT_CUDA_ADDON_VERSION: &str = "0.1.0";
+const DEFAULT_CUDA_ADDON_VERSION: &str = "0.2.0";
 const DEFAULT_CUDA_REPO: &str = "AirSodaz/sona";
 
 pub fn default_cuda_addon_download_url(

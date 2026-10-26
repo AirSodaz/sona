@@ -244,9 +244,15 @@ pub fn validate_summary_strategy(
         strategy,
         super::LlmProviderStrategy::GoogleTranslate
             | super::LlmProviderStrategy::GoogleTranslateFree
+            | super::LlmProviderStrategy::LocalNmt
     ) {
+        let name = if strategy == super::LlmProviderStrategy::LocalNmt {
+            "Local NMT"
+        } else {
+            "Google Translate"
+        };
         return Err(super::LlmTaskError::InvalidRequest {
-            reason: "Google Translate does not support transcript summaries".to_string(),
+            reason: format!("{name} does not support transcript summaries"),
         });
     }
 

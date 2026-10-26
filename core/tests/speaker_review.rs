@@ -15,6 +15,7 @@ fn segment(id: &str, group_id: &str, state: &str, confidence: &str) -> Transcrip
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: Some(SpeakerTag {
             id: group_id.to_string(),
             label: "Speaker".to_string(),

@@ -171,12 +171,15 @@
     <string name="about_version_value">版本 %1$s（%2$d）</string>
     <string name="about_channel_stable">稳定版</string>
     <string name="about_channel_nightly">Nightly</string>
+    <string name="about_channel_ci">CI</string>
+    <string name="about_channel_dev">Dev</string>
     <string name="about_update_heading">更新</string>
     <string name="about_update_idle">检查是否有新版本</string>
     <string name="about_update_checking">正在检查更新</string>
     <string name="about_update_current">当前已是最新版本</string>
     <string name="about_update_available">发现新版本 %1$s</string>
     <string name="about_update_failed">无法检查更新</string>
+    <string name="about_update_disabled_for_channel">%1$s 构建已禁用自动更新。</string>
     <string name="about_check_updates">检查</string>
     <string name="about_view_update">查看更新</string>
     <string name="about_project_page">GitHub 项目主页</string>

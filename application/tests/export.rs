@@ -20,6 +20,7 @@ fn sample_segments() -> Vec<TranscriptSegment> {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: Some(SpeakerTag {
                 id: "speaker-1".to_string(),
                 label: "Alice".to_string(),
@@ -39,6 +40,7 @@ fn sample_segments() -> Vec<TranscriptSegment> {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: None,
             speaker_attribution: None,
         },

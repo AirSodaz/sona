@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCjkTypography } from '../cjkTypography';
+import { formatCjkTypography, needsWordBoundarySpace } from '../cjkTypography';
 
 describe('formatCjkTypography', () => {
   it('handles empty or blank string', () => {
@@ -50,5 +50,47 @@ describe('formatCjkTypography', () => {
     expect(formatCjkTypography('안녕하세요. 오늘 1단계입니다.')).toBe(
       '안녕하세요. 오늘 1 단계입니다.'
     );
+  });
+});
+
+describe('needsWordBoundarySpace', () => {
+  it('returns false for empty or null prefix/tail', () => {
+    expect(needsWordBoundarySpace('', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '')).toBe(false);
+    expect(needsWordBoundarySpace(null, 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', null)).toBe(false);
+  });
+
+  it('returns false if prefix ends with space or tail starts with space', () => {
+    expect(needsWordBoundarySpace('hello ', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', ' world')).toBe(false);
+  });
+
+  it('returns true between Latin words without boundary spaces', () => {
+    expect(needsWordBoundarySpace('Hello', 'world')).toBe(true);
+    expect(needsWordBoundarySpace('test', '123')).toBe(true);
+  });
+
+  it('returns false when punctuation is adjacent to boundary', () => {
+    expect(needsWordBoundarySpace('Hello', ', world')).toBe(false);
+    expect(needsWordBoundarySpace('Hello', '.')).toBe(false);
+    expect(needsWordBoundarySpace('Hello', '! world')).toBe(false);
+    expect(needsWordBoundarySpace('(', 'hello')).toBe(false);
+  });
+
+  it('returns false when CJK characters are at boundary', () => {
+    expect(needsWordBoundarySpace('你好', '世界')).toBe(false);
+    expect(needsWordBoundarySpace('你好', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '世界')).toBe(false);
+    expect(needsWordBoundarySpace('안녕', '하세요')).toBe(false);
+    expect(needsWordBoundarySpace('안녕', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '안녕')).toBe(false);
+  });
+
+  it('handles astral CJK characters and surrogate pairs without splitting', () => {
+    expect(needsWordBoundarySpace('𠮷', '野')).toBe(false);
+    expect(needsWordBoundarySpace('𠮷', 'world')).toBe(false);
+    expect(needsWordBoundarySpace('hello', '𠮷')).toBe(false);
+    expect(needsWordBoundarySpace('𠮷', '𠮷')).toBe(false);
   });
 });

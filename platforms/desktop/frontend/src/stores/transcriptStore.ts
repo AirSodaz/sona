@@ -13,11 +13,13 @@ import { areSpeakerTagsEqual } from '../types/speakerNormalization';
 import type {
   AppMode,
   HistorySummaryPayload,
+  IngestionFocus,
   ProcessingStatus,
   TranscriptSegment,
   TranscriptSummaryState,
   TranscriptUpdate,
 } from '../types/transcript';
+import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import {
   findSegmentAndIndexForTime,
   performSegmentSplit,
@@ -38,6 +40,12 @@ import {
   rekeyCurrentSummaryState as rekeyCurrentSummaryStateEntry,
   resolveTranscriptHistoryKey,
 } from './transcriptSidecarState';
+
+let activeBatchItemIdResolver: (() => string | null) | null = null;
+
+export function registerBatchActiveItemIdResolver(resolver: () => string | null): void {
+  activeBatchItemIdResolver = resolver;
+}
 
 export interface SessionData {
   // Session fields
@@ -84,6 +92,7 @@ export interface TranscriptStore {
 
   // --- Runtime (Global) ---
   mode: AppMode;
+  ingestionFocus: IngestionFocus;
   processingStatus: ProcessingStatus;
   processingProgress: number;
   isRecording: boolean;
@@ -127,7 +136,8 @@ export interface TranscriptStore {
   ) => void;
 
   // Runtime
-  setMode: (mode: AppMode) => void;
+  setMode: (mode: AppMode, focus?: IngestionFocus) => void;
+  setIngestionFocus: (focus: IngestionFocus) => void;
   setProcessingStatus: (status: ProcessingStatus) => void;
   setProcessingProgress: (progress: number) => void;
   setIsRecording: (isRecording: boolean) => void;
@@ -248,7 +258,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   recordingSessionId: null,
   sessions: { default: { ...DEFAULT_SESSION_DATA } },
 
-  mode: 'live',
+  mode: 'create',
+  ingestionFocus: 'live',
   processingStatus: 'idle',
   processingProgress: 0,
   isRecording: false,
@@ -261,7 +272,66 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   autoSaveStates: {},
 
   // --- Runtime ---
-  setMode: (mode) => set({ mode }),
+  setMode: (mode, focus) => {
+    if ((mode as string) === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      set({
+        mode: 'create',
+        ingestionFocus: 'live',
+        activeSessionId: targetSessionId,
+      });
+      return;
+    }
+    if ((mode as string) === 'batch') {
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({ mode: 'create', ingestionFocus: 'batch', activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'create') {
+      const nextFocus = focus ?? get().ingestionFocus;
+      let targetSessionId = 'default';
+      if (nextFocus === 'live') {
+        const recId = get().recordingSessionId;
+        targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      } else if (nextFocus === 'batch') {
+        const activeItemId = activeBatchItemIdResolver?.();
+        targetSessionId = activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      }
+      set({ mode: 'create', ingestionFocus: nextFocus, activeSessionId: targetSessionId });
+      return;
+    }
+    if (mode === 'projects' || mode === 'tools') {
+      set({ mode });
+      return;
+    }
+    set({ mode });
+  },
+  setIngestionFocus: (ingestionFocus) => {
+    const isCreateMode = get().mode === 'create';
+    if (ingestionFocus === 'live') {
+      const recId = get().recordingSessionId;
+      const targetSessionId = recId && get().sessions[recId] ? recId : 'default';
+      set({
+        ingestionFocus,
+        ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
+      });
+      return;
+    }
+    if (ingestionFocus === 'batch') {
+      const activeItemId = activeBatchItemIdResolver?.();
+      const targetSessionId =
+        activeItemId && get().sessions[activeItemId] ? activeItemId : 'default';
+      set({
+        ingestionFocus,
+        ...(isCreateMode ? { activeSessionId: targetSessionId } : {}),
+      });
+      return;
+    }
+    set({ ingestionFocus });
+  },
   setProcessingStatus: (processingStatus) => set({ processingStatus }),
   setProcessingProgress: (processingProgress) => set({ processingProgress }),
   setIsRecording: (isRecording) => set({ isRecording }),
@@ -404,6 +474,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
       if (!areSpeakerTagsEqual(first.speaker, second.speaker)) return {};
       const stripParagraph = (t: string) => t.replace(/<\/?p[^>]*>/gi, '');
+      const t1 = first.translation?.trim();
+      const t2 = second.translation?.trim();
+      const mergedTranslation =
+        t1 && t2 ? `${t1}${needsWordBoundarySpace(t1, t2) ? ' ' : ''}${t2}` : t1 || t2 || undefined;
       const merged: TranscriptSegment = {
         id: first.id,
         start: first.start,
@@ -412,6 +486,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         isFinal: first.isFinal && second.isFinal,
         speaker: first.speaker,
         speakerAttribution: first.speakerAttribution,
+        translation: mergedTranslation,
+        draftTranslation: undefined,
       };
       return {
         segments: session.segments

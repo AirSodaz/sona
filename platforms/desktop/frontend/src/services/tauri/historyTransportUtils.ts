@@ -23,6 +23,7 @@ export function normalizeTranscriptSegment(
     timestamps: segment.timestamps ?? undefined,
     durations: segment.durations ?? undefined,
     translation: segment.translation ?? undefined,
+    draftTranslation: segment.draftTranslation ?? undefined,
     speaker: normalizeSpeakerTag(segment.speaker) ?? undefined,
     speakerAttribution: normalizeSpeakerAttribution(segment.speakerAttribution) ?? undefined,
   };
@@ -42,6 +43,7 @@ export function toTranscriptSegmentTransport(
     timestamps: segment.timestamps ?? null,
     durations: segment.durations ?? null,
     translation: segment.translation ?? null,
+    draftTranslation: segment.draftTranslation ?? null,
     speaker: segment.speaker ?? null,
     speakerAttribution: segment.speakerAttribution ?? null,
   };

@@ -5,20 +5,29 @@ import type {
   LocalLlmCardsResponse,
   LocalLlmModelCard as LocalLlmModelCardType,
 } from '../../../bindings';
+import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { parseDownloadProgressPayload } from '../../../services/modelDownloadService';
 import {
-  cancelDownload,
+  cleanInterruptedDownload,
   deletePresetModel,
   downloadPresetModel,
 } from '../../../services/tauri/app';
 import { TauriEvent } from '../../../services/tauri/events';
-import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
+import {
+  completeLlm,
+  importLocalLlmFile,
+  listLocalLlmCards,
+  listLocalNmtCards,
+  testLocalNmtModel,
+} from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
 import { listen } from '../../../services/tauri/platform/events';
 import { useConfigStore } from '../../../stores/configStore';
 import { useDialogStore } from '../../../stores/dialogStore';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import { normalizeError } from '../../../utils/errorUtils';
+import { SegmentedSubTabs } from '../SecondaryTabs';
 import { SettingsAccordion } from '../SettingsLayout';
 import {
   type LocalDownloadProgressState,
@@ -43,29 +52,50 @@ export function LocalProviderAccordionItem({
   t,
 }: LocalProviderAccordionItemProps): React.JSX.Element {
   const modelDownloadMirror = useConfigStore((state) => state.config.modelDownloadMirror);
-  const [data, setData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
+  const [activeSubTab, setActiveSubTab] = useState<'llm' | 'nmt'>('llm');
+  const [llmData, setLlmData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
+  const [nmtData, setNmtData] = useState<LocalLlmCardsResponse>({ modelsDir: '', cards: [] });
   const [isLoading, setIsLoading] = useState(false);
   const [downloads, setDownloads] = useState<Record<string, LocalDownloadProgressState>>({});
   const [modelTestStates, setModelTestStates] = useState<Record<string, LocalModelTestState>>({});
+  const [inFlightActionIds, setInFlightActionIds] = useState<Set<string>>(new Set());
   const activeDownloadsRef = useRef(downloads);
   activeDownloadsRef.current = downloads;
+  const inFlightDownloadsRef = useRef<Set<string>>(new Set());
 
   const confirm = useDialogStore((state) => state.confirm);
+  const showError = useDialogStore((state) => state.showError);
+
+  const fetchLlmCards = useCallback(async () => {
+    try {
+      const response = await listLocalLlmCards();
+      if (response && Array.isArray(response.cards)) {
+        setLlmData(response);
+      }
+    } catch (err) {
+      console.error('Failed to list local LLM cards:', err);
+    }
+  }, []);
+
+  const fetchNmtCards = useCallback(async () => {
+    try {
+      const response = await listLocalNmtCards();
+      if (response && Array.isArray(response.cards)) {
+        setNmtData(response);
+      }
+    } catch (err) {
+      console.error('Failed to list local NMT cards:', err);
+    }
+  }, []);
 
   const fetchCards = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await listLocalLlmCards();
-      if (response && Array.isArray(response.cards)) {
-        setData(response);
-      }
-    } catch (err) {
-      console.error('Failed to list local LLM cards:', err);
+      await Promise.all([fetchLlmCards(), fetchNmtCards()]);
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
+  }, [fetchLlmCards, fetchNmtCards]);
   useEffect(() => {
     fetchCards();
   }, [fetchCards]);
@@ -82,6 +112,12 @@ export function LocalProviderAccordionItem({
       const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
       if (!id || total <= 0) return;
 
+      const storeItem =
+        useModelDownloadStore.getState().downloads[id] ??
+        Object.values(useModelDownloadStore.getState().downloads).find(
+          (item) => item.downloadId === id || item.modelId === id
+        );
+      const storeSpeed = storeItem?.speed;
       setDownloads((prev) => {
         if (!prev[id]) return prev;
         const progress = Math.min(100, Math.round((downloaded / total) * 100));
@@ -92,6 +128,8 @@ export function LocalProviderAccordionItem({
             progress,
             downloadedBytes: downloaded,
             totalBytes: total,
+            speed: storeSpeed ?? prev[id].speed,
+            statusText: undefined,
           },
         };
       });
@@ -111,14 +149,58 @@ export function LocalProviderAccordionItem({
     };
   }, []);
 
+  const handleCancelDownload = useCallback(
+    async (cardId: string) => {
+      try {
+        await useModelDownloadStore.getState().cancelDownload(cardId);
+      } catch (err) {
+        console.error(`Failed to cancel download for ${cardId}:`, err);
+      } finally {
+        setDownloads((prev) => {
+          const next = { ...prev };
+          delete next[cardId];
+          return next;
+        });
+        await fetchCards();
+      }
+    },
+    [fetchCards]
+  );
+
   const handleDownload = useCallback(
     async (card: LocalLlmModelCardType) => {
       const downloadId = card.id;
-      if (activeDownloadsRef.current[downloadId]) return;
+      if (
+        inFlightDownloadsRef.current.has(downloadId) ||
+        activeDownloadsRef.current[downloadId] ||
+        useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading'
+      ) {
+        return;
+      }
+      inFlightDownloadsRef.current.add(downloadId);
+
+      useModelDownloadStore.getState().startDownload({
+        modelId: card.id,
+        modelName: card.name,
+        modelType: 'llm',
+        downloadId,
+        onRetry: () => {
+          const freshCard = cardsRef.current?.find((c) => c.id === card.id) ?? card;
+          void handleDownload(freshCard);
+        },
+        onCancel: () => {
+          setDownloads((prev) => {
+            if (!prev[downloadId]) return prev;
+            const next = { ...prev };
+            delete next[downloadId];
+            return next;
+          });
+        },
+      });
 
       setDownloads((prev) => ({
         ...prev,
-        [downloadId]: { progress: 0, statusText: t('settings.llm.status_downloading') },
+        [downloadId]: { progress: 0 },
       }));
 
       try {
@@ -127,10 +209,24 @@ export function LocalProviderAccordionItem({
           downloadId,
           mirror: modelDownloadMirror,
         });
-        await fetchCards();
+        useModelDownloadStore.getState().completeDownload(card.id, downloadId);
+        try {
+          await fetchCards();
+        } catch (cardErr) {
+          console.warn('Failed to refresh cards after download:', cardErr);
+        }
       } catch (err) {
-        console.error(`Failed to download model ${card.id}:`, err);
+        const errorMsg = normalizeError(err).message;
+        if (errorMsg === 'Download cancelled') {
+          void useModelDownloadStore.getState().cancelDownload(card.id, downloadId);
+        } else {
+          console.error(`Failed to download model ${card.id}:`, err);
+          useModelDownloadStore.getState().failDownload(card.id, errorMsg, downloadId);
+        }
+        await fetchCards();
+        return;
       } finally {
+        inFlightDownloadsRef.current.delete(downloadId);
         setDownloads((prev) => {
           const next = { ...prev };
           delete next[downloadId];
@@ -138,22 +234,8 @@ export function LocalProviderAccordionItem({
         });
       }
     },
-    [fetchCards, modelDownloadMirror, t]
+    [fetchCards, modelDownloadMirror]
   );
-
-  const handleCancelDownload = useCallback(async (cardId: string) => {
-    try {
-      await cancelDownload(cardId);
-    } catch (err) {
-      console.error(`Failed to cancel download for ${cardId}:`, err);
-    } finally {
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[cardId];
-        return next;
-      });
-    }
-  }, []);
 
   const handleDelete = useCallback(
     async (card: LocalLlmModelCardType) => {
@@ -180,6 +262,80 @@ export function LocalProviderAccordionItem({
     [confirm, fetchCards, t]
   );
 
+  const handleDiscardDownload = useCallback(
+    async (card: LocalLlmModelCardType) => {
+      if (
+        activeDownloadsRef.current[card.id] ||
+        inFlightDownloadsRef.current.has(card.id) ||
+        useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading' ||
+        !card.interruptedDownload
+      ) {
+        return;
+      }
+
+      inFlightDownloadsRef.current.add(card.id);
+      setInFlightActionIds((prev) => new Set(prev).add(card.id));
+      try {
+        const { downloadedBytes, totalBytes, percentage } = card.interruptedDownload;
+        const downloadedFormatted = formatBytes(downloadedBytes) || '0 MB';
+        const totalFormatted = totalBytes ? formatBytes(totalBytes) : '';
+        const sizeText = totalFormatted
+          ? `${downloadedFormatted} / ${totalFormatted}`
+          : downloadedFormatted;
+        const pctText = percentage != null ? `${Math.round(percentage)}%` : '';
+        const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+        const confirmed = await confirm(
+          t('settings.discard_download_confirm_message', {
+            name: card.name,
+            progress: progressDetail,
+            defaultValue: `Are you sure you want to discard the incomplete download for ${card.name} (${progressDetail})? This will delete partial files and free up disk space.`,
+          }),
+          {
+            title: t('settings.discard_download_confirm_title', {
+              defaultValue: 'Discard Incomplete Download',
+            }),
+            confirmLabel: t('settings.discard_download_confirm_button', {
+              defaultValue: 'Discard Files',
+            }),
+            cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+            variant: 'warning',
+          }
+        );
+
+        if (!confirmed) return;
+
+        if (
+          activeDownloadsRef.current[card.id] ||
+          useModelDownloadStore.getState().downloads[card.id]?.status === 'downloading'
+        ) {
+          return;
+        }
+
+        try {
+          await cleanInterruptedDownload(card.id);
+          useModelDownloadStore.getState().dismissDownload(card.id);
+          await fetchCards();
+        } catch (cleanErr) {
+          console.warn('Failed to clean interrupted download:', cleanErr);
+          await showError({
+            code: 'model.clean_failed',
+            messageKey: 'errors.model.clean_failed',
+            cause: cleanErr,
+          });
+        }
+      } finally {
+        inFlightDownloadsRef.current.delete(card.id);
+        setInFlightActionIds((prev) => {
+          const next = new Set(prev);
+          next.delete(card.id);
+          return next;
+        });
+      }
+    },
+    [confirm, fetchCards, showError, t]
+  );
+
   const handleImportCustomFile = useCallback(async () => {
     try {
       const selected = await openDialog({
@@ -195,9 +351,13 @@ export function LocalProviderAccordionItem({
     }
   }, [fetchCards]);
 
+  const currentData = activeSubTab === 'llm' ? llmData : nmtData;
   const cards = useMemo(() => {
-    if (data?.cards && data.cards.length > 0) {
-      return data.cards;
+    if (currentData?.cards && currentData.cards.length > 0) {
+      return currentData.cards;
+    }
+    if (activeSubTab === 'nmt') {
+      return [];
     }
     return [
       {
@@ -223,9 +383,17 @@ export function LocalProviderAccordionItem({
         downloadSizeBytes: null,
       },
     ];
-  }, [data?.cards]);
+  }, [activeSubTab, currentData?.cards]);
 
-  const installedCards = useMemo(() => cards.filter((c) => c.isInstalled), [cards]);
+  const allCards = useMemo(() => {
+    return [...(llmData?.cards ?? []), ...(nmtData?.cards ?? [])];
+  }, [llmData?.cards, nmtData?.cards]);
+
+  const cardsRef = useRef(allCards);
+  cardsRef.current = allCards;
+  const installedCards = useMemo(() => {
+    return allCards.filter((c) => c.isInstalled);
+  }, [allCards]);
   const hasInstalled = installedCards.length > 0;
   const isAnyDownloading = Object.keys(downloads).length > 0;
   const isAnyTesting = useMemo(
@@ -241,7 +409,7 @@ export function LocalProviderAccordionItem({
             size={12}
             style={{ display: 'inline', marginRight: 4 }}
           />
-          {t('settings.llm.status_downloading', { defaultValue: '正在下载' })}
+          {t('settings.llm.status_downloading', { defaultValue: 'Downloading' })}
         </span>
       );
     }
@@ -249,13 +417,13 @@ export function LocalProviderAccordionItem({
       return (
         <span className="status-badge ready">
           <Check size={12} style={{ display: 'inline', marginRight: 4 }} />
-          {t('settings.llm.installed_ready', { defaultValue: '已就绪' })} ({installedCards.length})
+          {t('settings.llm.installed_ready', { defaultValue: 'Ready' })} ({installedCards.length})
         </span>
       );
     }
     return (
       <span className="status-badge off">
-        {t('settings.llm.status_off', { defaultValue: '待下载模型' })}
+        {t('settings.llm.status_off', { defaultValue: 'No models downloaded' })}
       </span>
     );
   }, [hasInstalled, installedCards.length, isAnyDownloading, t]);
@@ -272,24 +440,39 @@ export function LocalProviderAccordionItem({
 
     const startTime = performance.now();
     try {
-      const res = await completeLlm({
-        config: {
-          provider: 'local',
-          strategy: 'local',
-          model: card.model || card.id,
-          baseUrl: '',
-          apiKey: '',
-          temperature: 0.7,
-        },
-        input: '你好，请用一句话做自我介绍。',
-        source: 'connection_test',
-      });
+      let speed: number | undefined;
+      if (card.backend === 'onnx-nmt') {
+        const srcLang = card.id.replace(/^opus-mt-/, '').split('-')[0];
+        const testInput =
+          srcLang === 'zh'
+            ? '你好，世界！'
+            : srcLang === 'ja'
+              ? 'こんにちは、世界！'
+              : 'Hello, world!';
+        const translated = await testLocalNmtModel(card.id, testInput);
+        const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
+        const chars = translated ? translated.length : 0;
+        speed = Math.round((chars / durationSec) * 10) / 10;
+      } else {
+        const res = await completeLlm({
+          config: {
+            provider: 'local',
+            strategy: 'local',
+            model: card.model || card.id,
+            baseUrl: '',
+            apiKey: '',
+            temperature: 0.7,
+          },
+          input: '你好，请用一句话做自我介绍。',
+          source: 'connection_test',
+        });
 
-      const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
-      const tokens =
-        res.usage?.completionTokens ??
-        (res.text ? Math.max(1, Math.round(res.text.length * 0.75)) : 0);
-      const speed = Math.round((tokens / durationSec) * 10) / 10;
+        const durationSec = Math.max(0.001, (performance.now() - startTime) / 1000);
+        const tokens =
+          res.usage?.completionTokens ??
+          (res.text ? Math.max(1, Math.round(res.text.length * 0.75)) : 0);
+        speed = Math.round((tokens / durationSec) * 10) / 10;
+      }
 
       setModelTestStates((prev) => ({
         ...prev,
@@ -327,9 +510,9 @@ export function LocalProviderAccordionItem({
     <SettingsAccordion
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{t('settings.llm_providers.local', { defaultValue: '本地模型' })}</span>
+          <span>{t('settings.llm_providers.local', { defaultValue: 'Local Models' })}</span>
           <span className="local-model-badge local-model-badge-rec" style={{ fontSize: '0.7rem' }}>
-            {t('settings.llm.local_engine_badge', { defaultValue: '离线端侧' })}
+            {t('settings.llm.local_engine_badge', { defaultValue: 'On-Device' })}
           </span>
         </div>
       }
@@ -339,41 +522,60 @@ export function LocalProviderAccordionItem({
       contentTestId="provider-accordion-content-local"
     >
       <div className="local-model-cards-container">
-        {/* Actions bar */}
+        {/* SubTabs and Actions */}
         <div
           style={{
             display: 'flex',
-            justifyContent: 'flex-end',
+            justifyContent: 'space-between',
             alignItems: 'center',
-            marginBottom: '8px',
-            gap: '8px',
+            marginBottom: '16px',
           }}
         >
-          <button
-            type="button"
-            className="btn btn-secondary btn-sm"
-            onClick={handleImportCustomFile}
-            data-tooltip={t('settings.llm.import_custom_model_hint', {
-              defaultValue: '导入本地已有的 GGUF 格式模型文件',
-            })}
-            data-tooltip-pos="top"
-          >
-            <Plus size={14} />
-            <span>{t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}</span>
-          </button>
-          <button
-            type="button"
-            className="btn btn-icon btn-secondary-soft btn-sm"
-            onClick={fetchCards}
-            disabled={isLoading}
-            data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-            data-tooltip-pos="top"
-            aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
-          >
-            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
-          </button>
+          <SegmentedSubTabs<'llm' | 'nmt'>
+            items={[
+              {
+                value: 'llm',
+                label: t('settings.llm.subtab_llm', { defaultValue: 'Large Language Model (LLM)' }),
+              },
+              {
+                value: 'nmt',
+                label: t('settings.llm.subtab_nmt', { defaultValue: 'Translation Model (NMT)' }),
+              },
+            ]}
+            activeTab={activeSubTab}
+            onChange={setActiveSubTab}
+            idPrefix="local-model-subtab"
+          />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {activeSubTab === 'llm' && (
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleImportCustomFile}
+                data-tooltip={t('settings.llm.import_custom_model_hint', {
+                  defaultValue: 'Import existing local GGUF model files',
+                })}
+                data-tooltip-pos="top"
+              >
+                <Plus size={14} />
+                <span>
+                  {t('settings.llm.import_custom_model', { defaultValue: 'Import Local GGUF' })}
+                </span>
+              </button>
+            )}
+            <button
+              type="button"
+              className="btn btn-icon btn-secondary-soft btn-sm"
+              onClick={fetchCards}
+              disabled={isLoading}
+              data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
+              data-tooltip-pos="top"
+              aria-label={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
+            >
+              <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            </button>
+          </div>
         </div>
-        {/* Model Cards List */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {cards.map((card) => (
             <LocalModelCard
@@ -381,11 +583,13 @@ export function LocalProviderAccordionItem({
               card={card}
               downloadState={downloads[card.id]}
               testState={modelTestStates[card.id]}
+              disabled={inFlightActionIds.has(card.id) || !!downloads[card.id]}
               onTest={handleTestModel}
               isAnyTesting={isAnyTesting}
               onDownload={handleDownload}
               onCancelDownload={handleCancelDownload}
               onDelete={handleDelete}
+              onDiscardDownload={handleDiscardDownload}
               t={t}
             />
           ))}

@@ -11,7 +11,7 @@ use sona_core::ports::llm::{
 };
 use std::sync::Mutex;
 use std::time::Duration;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 #[derive(Clone)]
 struct CommandEventEmitter {
@@ -101,8 +101,12 @@ impl DesktopTaskRuntime {
     fn new(app: AppHandle, config: LlmConfig, category: LlmUsageCategory) -> Self {
         let models_dir =
             crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
+        let cache_dir = app.path().app_cache_dir().ok();
+        let translation_pool = app
+            .try_state::<crate::services::DesktopServices>()
+            .map(|s| s.translation_pool.clone());
         Self {
-            inner: DesktopLlmAdapter::new(models_dir),
+            inner: DesktopLlmAdapter::with_pool(models_dir, cache_dir, translation_pool),
             usage: UsageRecorder::new(app, config, category),
         }
     }
@@ -253,7 +257,8 @@ pub(crate) async fn complete_llm_command(
     let usage = UsageRecorder::new(app.clone(), request.config.clone(), category);
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    let adapter = DesktopLlmAdapter::new(models_dir);
+    let cache_dir = app.path().app_cache_dir().ok();
+    let adapter = DesktopLlmAdapter::new(models_dir, cache_dir);
     let response = complete_llm_with_port(request, adapter).await?;
     usage.record_usage(response.usage.clone());
     Ok(response)
@@ -343,11 +348,12 @@ pub(crate) async fn list_llm_models_command(
     list_llm_models_with_models_dir(request, None).await
 }
 
-pub(crate) async fn list_llm_models_with_models_dir(
+pub(crate) async fn list_llm_models_with_dirs(
     request: LlmModelsRequest,
     models_dir: Option<std::path::PathBuf>,
+    cache_dir: Option<std::path::PathBuf>,
 ) -> Result<Vec<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter::new(models_dir);
+    let adapter = DesktopLlmAdapter::new(models_dir, cache_dir);
     LlmRuntimeService::new(&adapter, adapter.clone())
         .list_models(request)
         .await
@@ -355,19 +361,36 @@ pub(crate) async fn list_llm_models_with_models_dir(
 }
 
 #[allow(dead_code)]
+pub(crate) async fn list_llm_models_with_models_dir(
+    request: LlmModelsRequest,
+    models_dir: Option<std::path::PathBuf>,
+) -> Result<Vec<LlmModelSummary>, String> {
+    list_llm_models_with_dirs(request, models_dir, None).await
+}
+
+#[allow(dead_code)]
 pub(crate) async fn describe_llm_model_command(
     config: LlmConfig,
 ) -> Result<Option<LlmModelSummary>, String> {
-    describe_llm_model_with_models_dir(config, None).await
+    describe_llm_model_with_dirs(config, None, None).await
 }
 
-pub(crate) async fn describe_llm_model_with_models_dir(
+pub(crate) async fn describe_llm_model_with_dirs(
     config: LlmConfig,
     models_dir: Option<std::path::PathBuf>,
+    cache_dir: Option<std::path::PathBuf>,
 ) -> Result<Option<LlmModelSummary>, String> {
-    let adapter = DesktopLlmAdapter::new(models_dir);
+    let adapter = DesktopLlmAdapter::new(models_dir, cache_dir);
     LlmRuntimeService::new(&adapter, adapter.clone())
         .describe_model(&config)
         .await
         .map_err(|error| error.to_string())
+}
+
+#[allow(dead_code)]
+pub(crate) async fn describe_llm_model_with_models_dir(
+    config: LlmConfig,
+    models_dir: Option<std::path::PathBuf>,
+) -> Result<Option<LlmModelSummary>, String> {
+    describe_llm_model_with_dirs(config, models_dir, None).await
 }

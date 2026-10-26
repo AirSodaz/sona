@@ -58,6 +58,9 @@ edition = "2024"
             productName: 'Sona',
             version: '1.0.0',
             identifier: 'com.asoda.sona',
+            bundle: {
+              targets: ['deb', 'rpm', 'appimage', 'msi', 'nsis'],
+            },
             plugins: {
               updater: {
                 endpoints: ['https://example.com/stable/updater.json'],
@@ -87,7 +90,7 @@ edition = "2024"
       fs.copyFileSync(scriptPath, destScriptPath);
 
       // Execute patching script
-      execSync(`node "${destScriptPath}" --channel nightly --version 1.0.0-45`, {
+      execSync(`node "${destScriptPath}" --channel nightly --version 1.0.0-nightly.45`, {
         cwd: tempDir,
         stdio: 'pipe',
       });
@@ -96,25 +99,26 @@ edition = "2024"
       const patchedPackage = JSON.parse(
         fs.readFileSync(path.join(frontendDir, 'package.json'), 'utf8')
       );
-      expect(patchedPackage.version).toBe('1.0.0-45');
+      expect(patchedPackage.version).toBe('1.0.0-nightly.45');
 
       const patchedCargo = fs.readFileSync(path.join(tempDir, 'Cargo.toml'), 'utf8');
-      expect(patchedCargo).toContain('version = "1.0.0-45"');
+      expect(patchedCargo).toContain('version = "1.0.0-nightly.45"');
 
       const patchedTauri = JSON.parse(
         fs.readFileSync(path.join(tauriDir, 'tauri.conf.json'), 'utf8')
       );
-      expect(patchedTauri.version).toBe('1.0.0-45');
+      expect(patchedTauri.version).toBe('1.0.0-nightly.45');
       expect(patchedTauri.identifier).toBe('com.asoda.sona.nightly');
       expect(patchedTauri.productName).toBe('Sona-Nightly');
       expect(patchedTauri.plugins.updater.endpoints[0]).toBe(
         'https://github.com/AirSodaz/sona/releases/download/nightly/updater.json'
       );
+      expect(patchedTauri.bundle.targets).toEqual(['deb', 'appimage', 'nsis']);
 
       const patchedTauriWindows = JSON.parse(
         fs.readFileSync(path.join(tauriDir, 'tauri.windows.conf.json'), 'utf8')
       );
-      expect(patchedTauriWindows.version).toBe('1.0.0-45');
+      expect(patchedTauriWindows.version).toBe('1.0.0-nightly.45');
       expect(patchedTauriWindows.identifier).toBe('com.asoda.sona.nightly');
 
       // Assert that mock icon file was correctly copied to the mock icons directory

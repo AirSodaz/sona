@@ -194,19 +194,22 @@ impl LlmApiUrl {
         let key = (self.https_only, timeout_seconds);
 
         {
-            let lock = map.lock().unwrap();
+            let lock = map.lock().unwrap_or_else(|p| p.into_inner());
             if let Some(client) = lock.get(&key) {
                 return Ok(client.clone());
             }
         }
 
         let mut builder = Client::builder();
+        if self.https_only {
+            builder = builder.https_only(true);
+        }
         if let Some(secs) = timeout_seconds {
             builder = builder.timeout(Duration::from_secs(secs));
         }
         let client = builder.build().map_err(reqwest_port_error)?;
 
-        let mut lock = map.lock().unwrap();
+        let mut lock = map.lock().unwrap_or_else(|p| p.into_inner());
         lock.insert(key, client.clone());
         Ok(client)
     }

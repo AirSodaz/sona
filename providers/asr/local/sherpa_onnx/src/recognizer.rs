@@ -40,6 +40,8 @@ pub enum ModelType {
         tokenizer: PathBuf,
         tokens: Option<PathBuf>,
         language: String,
+        hotwords: Option<String>,
+        itn: bool,
     },
     OfflineFireRedAsr {
         encoder: PathBuf,
@@ -75,10 +77,18 @@ pub enum ModelType {
         model: PathBuf,
         tokens: PathBuf,
     },
+    OfflineCanary {
+        encoder: PathBuf,
+        decoder: PathBuf,
+        tokens: PathBuf,
+        src_lang: String,
+        tgt_lang: String,
+        use_pnc: bool,
+    },
 }
 
 impl ModelType {
-    fn model_type_name(&self) -> &'static str {
+    pub fn model_type_name(&self) -> &'static str {
         match self {
             ModelType::OnlineTransducer { .. } => "zipformer",
             ModelType::OnlineParaformer { .. } => "paraformer",
@@ -91,10 +101,11 @@ impl ModelType {
             ModelType::OfflineParakeetTdt { .. } => "parakeet-tdt",
             ModelType::OfflineMoonshine { .. } => "moonshine",
             ModelType::OfflineOmnilingual { .. } => "omnilingual",
+            ModelType::OfflineCanary { .. } => "canary",
         }
     }
 
-    fn is_offline(&self) -> bool {
+    pub fn is_offline(&self) -> bool {
         matches!(
             self,
             ModelType::OfflineSenseVoice { .. }
@@ -106,6 +117,7 @@ impl ModelType {
                 | ModelType::OfflineParakeetTdt { .. }
                 | ModelType::OfflineMoonshine { .. }
                 | ModelType::OfflineOmnilingual { .. }
+                | ModelType::OfflineCanary { .. }
         )
     }
 }
@@ -122,6 +134,7 @@ fn is_offline_model_type(model_type: &str) -> bool {
             | "parakeet-tdt"
             | "moonshine"
             | "omnilingual"
+            | "canary"
     )
 }
 
@@ -232,6 +245,8 @@ pub fn build_model_config(
                 tokenizer,
                 tokens,
                 language,
+                hotwords,
+                itn: enable_itn,
             })
         }
         "fire-red-asr" => {
@@ -308,6 +323,33 @@ pub fn build_model_config(
             let tokens = get_path(&fc.tokens)?;
             Ok(ModelType::OfflineOmnilingual { model, tokens })
         }
+        "canary" => {
+            let encoder = get_path(&fc.encoder)?;
+            let decoder = get_path(&fc.decoder)?;
+            let tokens = get_path(&fc.tokens)?;
+            let normalized_lang = language
+                .split(['-', '_'])
+                .next()
+                .unwrap_or(language)
+                .trim()
+                .to_ascii_lowercase();
+            let (src_lang, tgt_lang) = if normalized_lang == "auto"
+                || normalized_lang == "multilingual"
+                || normalized_lang.is_empty()
+            {
+                (String::new(), String::new())
+            } else {
+                (normalized_lang.clone(), normalized_lang)
+            };
+            Ok(ModelType::OfflineCanary {
+                encoder,
+                decoder,
+                tokens,
+                src_lang,
+                tgt_lang,
+                use_pnc: true,
+            })
+        }
         _ => Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             format!("Unsupported model type: {model_type}"),
@@ -359,6 +401,7 @@ pub struct OfflineDecodeResult {
     pub text: String,
     pub tokens: Vec<String>,
     pub timestamps: Option<Vec<f32>>,
+    pub durations: Option<Vec<f32>>,
 }
 
 impl OfflineDecodeResult {
@@ -581,6 +624,8 @@ impl Recognizer {
                 tokenizer,
                 tokens,
                 language,
+                hotwords,
+                itn,
             } => {
                 info!("[Recognizer::new] branch=OfflineFunASRNano");
                 let mut config =
@@ -593,10 +638,11 @@ impl Recognizer {
                 config.model_config.funasr_nano.tokenizer =
                     Some(tokenizer.to_string_lossy().to_string());
                 config.model_config.funasr_nano.language = Some(language);
+                config.model_config.funasr_nano.itn = itn as i32;
+                config.model_config.funasr_nano.hotwords = hotwords;
                 config.model_config.funasr_nano.temperature = 1e-6;
                 config.model_config.funasr_nano.top_p = 0.8;
                 config.model_config.funasr_nano.max_new_tokens = 512;
-
                 debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineFunASRNano)");
                 let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
                     AsrPortError::new(
@@ -744,6 +790,37 @@ impl Recognizer {
                 debug!("Successfully created OfflineRecognizer (OfflineOmnilingual)");
                 RecognizerInner::Offline(make_safe_offline(recognizer))
             }
+            ModelType::OfflineCanary {
+                encoder,
+                decoder,
+                tokens,
+                src_lang,
+                tgt_lang,
+                use_pnc,
+            } => {
+                info!("[Recognizer::new] branch=OfflineCanary");
+                let mut config =
+                    get_base_offline_config(num_threads, Some(&tokens), provider.clone());
+                config.model_config.canary.encoder = Some(encoder.to_string_lossy().to_string());
+                config.model_config.canary.decoder = Some(decoder.to_string_lossy().to_string());
+                if !src_lang.is_empty() {
+                    config.model_config.canary.src_lang = Some(src_lang);
+                }
+                if !tgt_lang.is_empty() {
+                    config.model_config.canary.tgt_lang = Some(tgt_lang);
+                }
+                config.model_config.canary.use_pnc = use_pnc;
+
+                debug!("Calling OfflineRecognizer::create from sherpa_onnx (OfflineCanary)");
+                let recognizer = OfflineRecognizer::create(&config).ok_or_else(|| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        "Failed to create OfflineRecognizer",
+                    )
+                })?;
+                debug!("Successfully created OfflineRecognizer (OfflineCanary)");
+                RecognizerInner::Offline(make_safe_offline(recognizer))
+            }
         };
         Ok(Self { inner: rec })
     }
@@ -827,6 +904,7 @@ pub fn decode_offline_samples(
         text: result.text,
         tokens: result.tokens,
         timestamps: result.timestamps,
+        durations: result.durations.filter(|d| !d.is_empty()),
     })
 }
 
@@ -841,7 +919,9 @@ fn decode_offline_samples_chunked(
     let mut combined_text = String::new();
     let mut combined_tokens = Vec::new();
     let mut combined_timestamps = Vec::new();
+    let mut combined_durations = Vec::new();
     let mut has_timestamps = false;
+    let mut has_durations = false;
     let mut any_success = false;
 
     for (i, chunk) in samples.chunks(split_size).enumerate() {
@@ -858,18 +938,37 @@ fn decode_offline_samples_chunked(
                 has_timestamps = true;
                 combined_timestamps.extend(ts.into_iter().map(|t| t + chunk_offset_sec));
             }
+            if let Some(durs) = result.durations
+                && !durs.is_empty()
+            {
+                has_durations = true;
+                combined_durations.extend(durs);
+            }
         }
     }
 
     if any_success {
+        let durations = if has_durations
+            && !combined_durations.is_empty()
+            && combined_durations.len() == combined_tokens.len()
+        {
+            Some(combined_durations)
+        } else {
+            None
+        };
+        let timestamps = if has_timestamps
+            && !combined_timestamps.is_empty()
+            && combined_timestamps.len() == combined_tokens.len()
+        {
+            Some(combined_timestamps)
+        } else {
+            None
+        };
         Some(OfflineDecodeResult {
             text: combined_text,
             tokens: combined_tokens,
-            timestamps: if has_timestamps {
-                Some(combined_timestamps)
-            } else {
-                None
-            },
+            timestamps,
+            durations,
         })
     } else {
         None

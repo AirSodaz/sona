@@ -10,6 +10,8 @@ export const TauriCommand = {
     downloadFile: 'download_file',
     downloadPresetModel: 'download_preset_model',
     deletePresetModel: 'delete_preset_model',
+    checkInterruptedDownload: 'check_interrupted_download',
+    cleanInterruptedDownload: 'clean_interrupted_download',
     cancelDownload: 'cancel_download',
     openLogFolder: 'open_log_folder',
     getModelCatalogSnapshot: 'get_model_catalog_snapshot',
@@ -33,6 +35,7 @@ export const TauriCommand = {
     setLogLevel: 'set_log_level',
     setWindowTheme: 'set_window_theme',
     checkMediaFormats: 'check_media_formats',
+    getAppBuildInfo: 'get_app_build_info',
   },
   audio: {
     setSystemAudioMute: 'set_system_audio_mute',
@@ -44,6 +47,7 @@ export const TauriCommand = {
     startMicrophoneCapture: 'start_microphone_capture',
     stopMicrophoneCapture: 'stop_microphone_capture',
     setMicrophoneCapturePaused: 'set_microphone_capture_paused',
+    deleteRecordingFile: 'audio_delete_recording_file',
   },
   history: {
     listItems: 'history_list_items',
@@ -122,6 +126,8 @@ export const TauriCommand = {
     generateText: 'generate_llm_text',
     listModels: 'list_llm_models',
     listLocalCards: 'list_local_llm_cards',
+    listLocalNmtCards: 'list_local_nmt_cards',
+    testLocalNmtModel: 'test_local_nmt_model',
     importLocalLlmFile: 'import_local_llm_file',
     polishTranscriptSegments: 'polish_transcript_segments',
     runTranscriptJob: 'run_transcript_llm_job',

@@ -215,6 +215,7 @@ fn update_event(stage: &str, is_final: bool) -> AsrTranscriptUpdateEvent {
                 timestamps: None,
                 durations: None,
                 translation: None,
+                draft_translation: None,
                 speaker: None,
                 speaker_attribution: None,
             }],
@@ -583,6 +584,7 @@ fn final_transcript_respects_bilingual_and_translation_mode() {
         timestamps: None,
         durations: None,
         translation: Some("bonjour".to_string()),
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }];

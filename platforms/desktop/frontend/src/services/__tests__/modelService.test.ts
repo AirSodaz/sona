@@ -145,6 +145,7 @@ describe('ModelService', () => {
         installPath: '/app/data/models/silero_vad.onnx',
       });
       expect(snapshot.restoreDefaults.streamingModelPath).toBe('/app/data/models/catalog-model');
+      expect(modelService.latestCatalogSnapshot).toEqual(snapshot);
     });
 
     it('resolves paths and rules from the latest Rust catalog snapshot', async () => {
@@ -562,6 +563,42 @@ describe('ModelService', () => {
       expect(batchModelIds).toContain(qwen3ModelId);
       expect(streamingModelIds).toContain(qwen3ModelId);
       expect(modelService.getModelRules(qwen3ModelId)).toEqual({
+        requiresVad: true,
+        requiresPunctuation: false,
+        timestampSupportHint: 'segment',
+        initialRefreshRateMs: 400,
+      });
+    });
+  });
+  describe('Confucius4-R2T2 metadata', () => {
+    const r2t2ModelId = 'confucius4-r2t2-q8-gguf';
+
+    it('registers Confucius4-R2T2 GGUF as a llama.cpp streaming and batch model', () => {
+      const r2t2Model = PRESET_MODELS.find((model) => model.id === r2t2ModelId);
+      const batchModelIds = PRESET_MODELS.filter((model) => model.modes?.includes('batch')).map(
+        (model) => model.id
+      );
+      const streamingModelIds = PRESET_MODELS.filter((model) =>
+        model.modes?.includes('streaming')
+      ).map((model) => model.id);
+
+      expect(r2t2Model).toMatchObject({
+        id: r2t2ModelId,
+        type: 'qwen3-asr',
+        modes: ['streaming', 'batch'],
+        fileConfig: {
+          model: 'Confucius4-R2T2-Q8_0.gguf',
+          mmproj: 'mmproj-Confucius4-R2T2-Q8_0.gguf',
+        },
+        engine: 'llama-cpp',
+        artifacts: expect.arrayContaining([
+          expect.objectContaining({ filename: 'Confucius4-R2T2-Q8_0.gguf' }),
+          expect.objectContaining({ filename: 'mmproj-Confucius4-R2T2-Q8_0.gguf' }),
+        ]),
+      });
+      expect(batchModelIds).toContain(r2t2ModelId);
+      expect(streamingModelIds).toContain(r2t2ModelId);
+      expect(modelService.getModelRules(r2t2ModelId)).toEqual({
         requiresVad: true,
         requiresPunctuation: false,
         timestampSupportHint: 'segment',

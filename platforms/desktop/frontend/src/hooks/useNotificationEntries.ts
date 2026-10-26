@@ -5,11 +5,13 @@ import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useModelDownloadStore } from '../stores/modelDownloadStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import type { NotificationEntry, NotificationGroup } from '../types/notification';
 import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/onboarding';
+import { adaptModelDownloadsEntries } from './notifications/modelDownloadAdapter';
 import { adaptModelDownloadEntry, adaptOnboardingEntry } from './notifications/onboardingAdapter';
 import { adaptTaskLedgerEntries } from './notifications/taskLedgerAdapter';
 import { adaptUpdateEntry } from './notifications/updateAdapter';
@@ -55,6 +57,7 @@ export function useNotificationEntries({
   const isRecoveryLoaded = useRecoveryStore((state) => state.isLoaded);
   const config = useConfigStore((state) => state.config);
   const confirm = useDialogStore((state) => state.confirm);
+  const modelDownloads = useModelDownloadStore((state) => state.downloads);
 
   const {
     isOpen: isOnboardingOpen,
@@ -118,27 +121,41 @@ export function useNotificationEntries({
     },
   });
 
-  // --- Ledger clear counts ---
-  const succeededCount = useMemo(
-    () => tasks.filter((task) => task.status === 'succeeded').length,
-    [tasks]
-  );
+  // --- Ledger & download clear counts ---
+  const succeededCount = useMemo(() => {
+    const taskSucceeded = tasks.filter((task) => task.status === 'succeeded').length;
+    const modelSucceeded = Object.values(modelDownloads).filter(
+      (item) => item.status === 'completed'
+    ).length;
+    return taskSucceeded + modelSucceeded;
+  }, [tasks, modelDownloads]);
+
   const totalClearableCount = useMemo(() => {
     const activeStatuses: Record<string, true> = {
       pending: true,
       running: true,
       cancelRequested: true,
     };
-    return tasks.filter((task) => !activeStatuses[task.status]).length;
-  }, [tasks]);
+    const taskClearable = tasks.filter((task) => !activeStatuses[task.status]).length;
+    const modelClearable = Object.values(modelDownloads).filter(
+      (item) => item.status !== 'downloading'
+    ).length;
+    return taskClearable + modelClearable;
+  }, [tasks, modelDownloads]);
 
   const handleClear = (scope: 'succeeded' | 'all') => {
     if (scope === 'succeeded') {
       if (typeof useBatchQueueStore.getState === 'function') {
         useBatchQueueStore.getState().clearCompleted();
       }
+      if (typeof useModelDownloadStore.getState === 'function') {
+        useModelDownloadStore.getState().clearCompleted();
+      }
       void clearSucceededTasks();
     } else {
+      if (typeof useModelDownloadStore.getState === 'function') {
+        useModelDownloadStore.getState().clearAllNonActive();
+      }
       const activeStatuses: Record<string, true> = {
         pending: true,
         running: true,
@@ -227,6 +244,14 @@ export function useNotificationEntries({
       result.push(downloadEntry);
     }
 
+    // 5. Model downloads (Settings / Background)
+    const modelDownloadEntries = adaptModelDownloadsEntries(modelDownloads, t, {
+      cancelDownload: (modelId, downloadId) =>
+        void useModelDownloadStore.getState().cancelDownload(modelId, downloadId),
+      dismissDownload: (id) => useModelDownloadStore.getState().dismissDownload(id),
+    });
+    result.push(...modelDownloadEntries);
+
     // Sort by timestamp descending (newest first)
     result.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -238,6 +263,7 @@ export function useNotificationEntries({
     modelDownloadError,
     modelDownloadProgress,
     modelDownloadStatus,
+    modelDownloads,
     notificationVisible,
     onboardingState,
     reopenOnboarding,

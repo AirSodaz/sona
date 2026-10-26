@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import { formatModelModeTag, ModelCard, resolveUniqueModeTags } from '../ModelCard';
@@ -163,5 +163,151 @@ describe('ModelCard mode tags', () => {
     expect(formatModelModeTag('live')).toBe('Live');
     expect(formatModelModeTag('batch')).toBe('Batch');
     expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
+  });
+});
+
+describe('ModelCard interrupted download', () => {
+  it('renders interrupted chip and resume tooltip for single-version model', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).toContain('50%');
+
+    const downloadBtn = screen.getByRole('button', { name: /SenseVoice/i });
+    expect(downloadBtn.getAttribute('data-tooltip')).toContain('50%');
+  });
+
+  it('renders interrupted chip in version row for multi-version model', () => {
+    const int8Interrupted: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+    const fp32Model: ModelInfo = {
+      ...mockModel,
+      id: 'sherpa-onnx-sense-voice-zh-en-ja-ko-yue-2024-07-17',
+      versionLabel: 'Fp32',
+      interruptedDownload: undefined,
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[int8Interrupted, fp32Model]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chips = container.querySelectorAll('.model-version-row .model-status-interrupted');
+    expect(chips.length).toBeGreaterThanOrEqual(1);
+    expect(chips[0].textContent).toContain('50%');
+  });
+
+  it('renders interrupted chip without percentage when percentage is null', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: null,
+        percentage: null,
+      },
+    };
+
+    const { container } = render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+      />
+    );
+
+    const chip = container.querySelector('.model-status-interrupted');
+    expect(chip).toBeTruthy();
+    expect(chip?.textContent).not.toContain('0%');
+    expect(chip?.textContent).toContain('Paused');
+  });
+
+  it('renders discard button and fires onDiscardDownload on click', () => {
+    const interruptedModel: ModelInfo = {
+      ...mockModel,
+      interruptedDownload: {
+        modelId: mockModel.id,
+        downloadedBytes: 114000000,
+        totalBytes: 228000000,
+        percentage: 50,
+      },
+    };
+    const onDiscardDownload = vi.fn();
+
+    render(
+      <ModelCard
+        models={[interruptedModel]}
+        installedModels={new Set()}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onDiscardDownload={onDiscardDownload}
+      />
+    );
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download SenseVoice/i,
+    });
+    expect(discardBtn).toBeTruthy();
+    fireEvent.click(discardBtn);
+    expect(onDiscardDownload).toHaveBeenCalledWith(interruptedModel);
+  });
+
+  it('renders cancel button with model-action-cancel and fires onCancelDownload on click', () => {
+    const onCancelDownload = vi.fn();
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set()}
+        downloads={{ [mockModel.id]: { progress: 45, status: 'downloading' } }}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={onCancelDownload}
+      />
+    );
+
+    const cancelBtn = screen.getByRole('button', { name: /cancel/i });
+    expect(cancelBtn).toBeTruthy();
+    expect(cancelBtn.classList.contains('model-action-cancel')).toBe(true);
+    expect(cancelBtn.classList.contains('model-action-delete')).toBe(false);
+    fireEvent.click(cancelBtn);
+    expect(onCancelDownload).toHaveBeenCalledWith(mockModel.id);
   });
 });

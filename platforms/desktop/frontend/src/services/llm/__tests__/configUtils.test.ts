@@ -285,4 +285,47 @@ describe('llm runtime', () => {
       })
     );
   });
+
+  it('resolves local NMT translation config with local_nmt strategy and auto model', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'auto' });
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+
+    const config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        provider: 'local',
+        strategy: 'local_nmt',
+        model: 'auto',
+      })
+    );
+  });
+
+  it('strictly routes opus-mt-* models to local_nmt and custom GGUFs containing opus to local', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'test-opus-model.gguf' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'opus-mt-en-zh' });
+
+    // Custom GGUF model with 'opus' in the name -> should NOT route to local_nmt
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+    let config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        provider: 'local',
+        strategy: 'local',
+        model: 'test-opus-model.gguf',
+      })
+    );
+
+    // Exact opus-mt- prefix model -> routes to local_nmt
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[1]);
+    config = buildLlmConfigPatch(llmSettings);
+    expect(getFeatureLlmConfig(config, 'translation')).toEqual(
+      expect.objectContaining({
+        provider: 'local',
+        strategy: 'local_nmt',
+        model: 'opus-mt-en-zh',
+      })
+    );
+  });
 });

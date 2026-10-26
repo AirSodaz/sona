@@ -518,6 +518,7 @@ mod tests {
             timestamps: None,
             durations: None,
             translation: None,
+            draft_translation: None,
             speaker: Some(SpeakerTag {
                 id: if state == "identified" {
                     format!("profile-{group_id}")

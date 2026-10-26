@@ -189,4 +189,36 @@ describe('AuxWindowController', () => {
       { revision: 2 }
     );
   });
+  it('gracefully handles focus failures when opening a window', async () => {
+    mocks.invoke.mockRejectedValueOnce(new Error("Window 'caption' not found (0xFFFFFFFF)"));
+    const controller = new AuxWindowController<{ revision: number }>({
+      label: 'caption',
+      eventName: 'caption:state',
+      createWindow: (_displayState, creationState) => {
+        const win = new mocks.MockWebviewWindow('caption', {
+          visible: creationState.visible,
+        });
+        win.setFocus.mockRejectedValueOnce(new Error('window.set_focus not allowed'));
+        return win as any;
+      },
+    });
+
+    const windowInstance = await controller.open({ focus: true });
+    expect(windowInstance).toBeTruthy();
+  });
+
+  it('gracefully handles close failures when window is already destroyed or not found', async () => {
+    const existingWindow = new mocks.MockWebviewWindow('caption', {});
+    existingWindow.close.mockRejectedValueOnce(new Error('window not found'));
+    mocks.getByLabel.mockResolvedValue(existingWindow);
+
+    const controller = new AuxWindowController<{ revision: number }>({
+      label: 'caption',
+      eventName: 'caption:state',
+      createWindow: () => new mocks.MockWebviewWindow('caption', {}) as any,
+    });
+
+    await expect(controller.close()).resolves.toBeUndefined();
+    expect(existingWindow.close).toHaveBeenCalledTimes(1);
+  });
 });

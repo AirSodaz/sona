@@ -90,7 +90,8 @@ export type LlmProviderStrategy =
   | 'venice'
   | 'hyperbolic'
   | 'llamafile'
-  | 'local';
+  | 'local'
+  | 'local_nmt';
 
 export type CustomLlmProviderStrategy =
   | 'openai_compatible'

@@ -1,24 +1,28 @@
 import { render, screen } from '@testing-library/react';
+import type * as ReactI18Next from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceTypingRuntimeStore } from '../../../stores/voiceTypingRuntimeStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
-import { SettingsSubtitleTab } from '../SettingsSubtitleTab';
+import { SettingsSubtitleTab, VoiceTypingSettingsSection } from '../SettingsSubtitleTab';
 
 function interpolate(template: string, options?: Record<string, unknown>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
 }
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => {
-      if (typeof options?.defaultValue === 'string') {
-        return interpolate(options.defaultValue, options);
-      }
-
-      return key;
-    },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactI18Next>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, options?: Record<string, unknown>) => {
+        if (typeof options?.defaultValue === 'string') {
+          return interpolate(options.defaultValue, options);
+        }
+        return key;
+      },
+    }),
+  };
+});
 
 vi.mock('../../../services/modelService', () => ({
   PRESET_MODELS: [
@@ -110,5 +114,10 @@ describe('SettingsSubtitleTab voice typing section', () => {
     expect(screen.queryByText('Voice Typing hit a runtime problem.')).toBeNull();
     expect(screen.queryByText('Source: Input device')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open Input Device' })).toBeNull();
+  });
+
+  it('omits enable switch when hideEnableSwitch is true', () => {
+    const { container } = render(<VoiceTypingSettingsSection hideEnableSwitch={true} />);
+    expect(container.querySelector('#settings-voice-typing-enable')).toBeNull();
   });
 });

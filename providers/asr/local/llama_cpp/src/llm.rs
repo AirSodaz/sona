@@ -832,7 +832,7 @@ fn run_llama_generation(
 }
 
 impl LlamaCppLlmEngine {
-    async fn execute_completion_internal(
+    pub(crate) async fn execute_completion_internal(
         &self,
         request: LlmCompletionRequest,
         delta_sender: Option<tokio::sync::mpsc::UnboundedSender<String>>,

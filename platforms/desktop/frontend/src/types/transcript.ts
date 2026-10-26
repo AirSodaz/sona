@@ -35,6 +35,7 @@ export interface TranscriptSegment {
   timestamps?: number[];
   durations?: number[];
   translation?: string;
+  draftTranslation?: string;
   speaker?: SpeakerTag;
   speakerAttribution?: SpeakerAttribution;
 }
@@ -47,7 +48,12 @@ export interface TranscriptUpdate {
 /**
  * Application operation mode.
  */
-export type AppMode = 'live' | 'batch' | 'projects';
+export type AppMode = 'create' | 'projects' | 'tools';
+
+/**
+ * Ingestion focus within the unified create mode.
+ */
+export type IngestionFocus = 'live' | 'batch';
 
 /**
  * Processing status for batch imports.

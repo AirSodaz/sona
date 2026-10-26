@@ -4,7 +4,7 @@ import { runGuardedQuit } from '../services/quitGuard';
 import { openUrl } from '../services/tauri/platform/opener';
 import { relaunch } from '../services/tauri/platform/process';
 import { check, type Update } from '../services/tauri/platform/updater';
-import { getAppReleaseChannel } from '../utils/channel';
+import { getAppReleaseChannel, isUpdateSupported } from '../utils/channel';
 import { buildErrorDialogViewModel, extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { useErrorDialogStore } from './errorDialogStore';
@@ -90,6 +90,10 @@ export const useAppUpdaterStore = create<AppUpdaterState>((set, get) => ({
   },
 
   checkUpdate: async (manual = false) => {
+    if (!isUpdateSupported(getAppReleaseChannel())) {
+      return;
+    }
+
     const state = get();
 
     if (state.status === 'checking') {

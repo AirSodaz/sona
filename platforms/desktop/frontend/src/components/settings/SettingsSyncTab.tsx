@@ -43,18 +43,22 @@ import {
   SettingsTabContainer,
 } from './SettingsLayout';
 import { SyncConflictCenter } from './sync/SyncConflictCenter';
-import { SyncConnectedPanel } from './sync/SyncConnectedPanel';
+import { type SettingsSyncNavRequest, SyncConnectedPanel } from './sync/SyncConnectedPanel';
 import { SyncSetupPanel } from './sync/SyncSetupPanel';
 import './sync/SyncSettings.css';
+
+export type { SettingsSyncNavRequest };
 
 interface SettingsSyncTabProps {
   isVisible?: boolean;
   isPrewarming?: boolean;
+  navRequest?: SettingsSyncNavRequest;
 }
 
 export function SettingsSyncTab({
   isVisible = true,
   isPrewarming = false,
+  navRequest,
 }: SettingsSyncTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const alert = useDialogStore((state) => state.alert);
@@ -264,6 +268,7 @@ export function SettingsSyncTab({
       {/* Feature Switch Section */}
       <SettingsSection>
         <SettingsItem
+          id="settings-sync-toggle"
           title={t('settings.sync.enable_cloud_sync', { defaultValue: 'Enable Cloud Sync' })}
           hint={t('settings.sync.enable_cloud_sync_hint', {
             defaultValue:
@@ -314,6 +319,7 @@ export function SettingsSyncTab({
           busyAction={busyAction}
           recoveryKey={recoveryKey}
           status={status}
+          navRequest={navRequest}
           onChangeMasterPassword={handleChangeMasterPassword}
           onChangePreset={handleChangePreset}
           onCopyRecoveryKey={handleCopyRecoveryKey}

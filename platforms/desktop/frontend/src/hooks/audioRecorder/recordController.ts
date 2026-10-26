@@ -1,5 +1,5 @@
 import type { LiveRecordingDraftHandle } from '../../services/historyService';
-import { remove } from '../../services/tauri/platform/fs';
+import { audioDeleteRecordingFile } from '../../services/tauri/audio';
 import { transcriptionService } from '../../services/transcriptionService';
 import {
   finalizeLastTranscriptSegment,
@@ -293,7 +293,7 @@ export function createRecordController({
 
         if (savedWavPath) {
           try {
-            await remove(savedWavPath);
+            await audioDeleteRecordingFile(savedWavPath);
           } catch (error) {
             logger.warn(
               '[useAudioRecorder] Failed to remove discarded native recording file:',

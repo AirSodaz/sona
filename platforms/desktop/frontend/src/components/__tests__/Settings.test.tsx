@@ -384,7 +384,7 @@ describe('Settings', () => {
 
     await waitFor(
       () => {
-        expect(container.querySelector('[data-settings-tab-pane="mcp"]')).not.toBeNull();
+        expect(container.querySelector('[data-settings-tab-pane="sync"]')).not.toBeNull();
       },
       { timeout: MODEL_TAB_LOAD_TIMEOUT_MS }
     );
@@ -466,7 +466,8 @@ describe('Settings', () => {
           'test-model',
           expect.any(Function),
           expect.any(AbortSignal),
-          undefined
+          undefined,
+          expect.stringContaining('test-model')
         );
       });
     },

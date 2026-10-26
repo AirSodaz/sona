@@ -34,6 +34,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-punct', 'provider'],
   ['sona-llama-cpp', 'provider'],
   ['sona-online-asr', 'provider'],
+  ['sona-translation-onnx', 'provider'],
   ['sona', 'host'],
   ['sona-cli', 'host'],
   ['sona-uniffi-bind', 'host'],

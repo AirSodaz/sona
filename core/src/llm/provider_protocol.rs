@@ -163,7 +163,8 @@ pub fn strategy_supports_structured_output(strategy: LlmProviderStrategy) -> Opt
         | LlmProviderStrategy::Venice
         | LlmProviderStrategy::Hyperbolic
         | LlmProviderStrategy::Llamafile
-        | LlmProviderStrategy::Local => Some(false),
+        | LlmProviderStrategy::Local
+        | LlmProviderStrategy::LocalNmt => Some(false),
         _ => None,
     }
 }
@@ -177,6 +178,7 @@ pub fn strategy_supports_model_listing(strategy: LlmProviderStrategy) -> bool {
             | LlmProviderStrategy::OpenAiCompatibleCustomPath
             | LlmProviderStrategy::GoogleTranslate
             | LlmProviderStrategy::GoogleTranslateFree
+            | LlmProviderStrategy::LocalNmt
     )
 }
 

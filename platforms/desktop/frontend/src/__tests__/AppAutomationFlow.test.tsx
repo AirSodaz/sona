@@ -16,14 +16,10 @@ vi.mock('../components/TabNavigation', () => ({ TabNavigation: () => <div>TabNav
 vi.mock('../components/transcript/TranscriptWorkbench', () => ({
   TranscriptWorkbench: () => <div>TranscriptWorkbench</div>,
 }));
-vi.mock('../components/ExportButton', () => ({ ExportButton: () => <div>ExportButton</div> }));
-vi.mock('../components/TranslateButton', () => ({
-  TranslateButton: () => <div>TranslateButton</div>,
-}));
-vi.mock('../components/PolishButton', () => ({ PolishButton: () => <div>PolishButton</div> }));
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/DiagnosticsModal', () => ({ DiagnosticsModal: () => null }));
 vi.mock('../components/RecoveryCenterModal', () => ({ RecoveryCenterModal: () => null }));
 vi.mock('../components/GlobalDialog', () => ({ GlobalDialog: () => <div>GlobalDialog</div> }));
@@ -33,6 +29,8 @@ vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBan
 vi.mock('../components/Icons', () => ({
   AutomationIcon: () => <span>AutomationIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/NotificationCenter', () => ({
@@ -84,11 +82,14 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App automation flow', () => {
   it('opens settings on the automation tab from the notification center entry', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
-      selector({
-        mode: 'live',
-        setMode: vi.fn(),
-      })
+    mockUseTranscriptRuntimeStore.mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          mode: 'create',
+          ingestionFocus: 'live',
+          isRecording: false,
+          setMode: vi.fn(),
+        })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
       selector({
@@ -109,12 +110,15 @@ describe('App automation flow', () => {
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
   });
 
-  it('shows a batch-header automation button that opens automation settings', async () => {
-    mockUseTranscriptRuntimeStore.mockImplementation((selector: any) =>
-      selector({
-        mode: 'batch',
-        setMode: vi.fn(),
-      })
+  it('does not render an automation shortcut button in the batch panel header', async () => {
+    mockUseTranscriptRuntimeStore.mockImplementation(
+      (selector: (state: Record<string, unknown>) => unknown) =>
+        selector({
+          mode: 'create',
+          ingestionFocus: 'batch',
+          isRecording: false,
+          setMode: vi.fn(),
+        })
     );
     mockUseProjectStore.mockImplementation((selector: any) =>
       selector({
@@ -130,8 +134,8 @@ describe('App automation flow', () => {
 
     render(<App />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'automation.open_settings' }));
-
+    expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Open Automation Notification' }));
     expect(await screen.findByText('Settings Tab: automation')).toBeDefined();
   });
 });

@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LiveRecordingDraftHandle } from '../../../services/historyService';
+import { audioDeleteRecordingFile } from '../../../services/tauri/audio';
 import {
   registerActiveRecorderStopHandler,
   stopActiveRecording,
@@ -8,8 +9,8 @@ import { useTranscriptSessionStore } from '../../../stores/transcriptSessionStor
 import { createRecordController } from '../recordController';
 import type { MutableRefLike } from '../types';
 
-vi.mock('@tauri-apps/plugin-fs', () => ({
-  remove: vi.fn().mockResolvedValue(undefined),
+vi.mock('../../../services/tauri/audio', () => ({
+  audioDeleteRecordingFile: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../../services/transcriptionService', () => ({
@@ -112,6 +113,7 @@ describe('recordController stopRecording and coordinator delegation', () => {
     expect(stopped).toBe(true);
     expect(persistNativeRecording).toHaveBeenCalledWith(liveDraft, 'C:/history/draft-1.wav', 5.2);
     expect(discardLiveRecordingDraft).not.toHaveBeenCalled();
+    expect(audioDeleteRecordingFile).not.toHaveBeenCalled();
     expect(liveDraftRef.current).toBeNull();
     expect(usingNativeCaptureRef.current).toBe(false);
   });
@@ -172,6 +174,7 @@ describe('recordController stopRecording and coordinator delegation', () => {
     expect(stopped).toBe(true);
     expect(discardLiveRecordingDraft).toHaveBeenCalledWith(liveDraft);
     expect(persistNativeRecording).not.toHaveBeenCalled();
+    expect(audioDeleteRecordingFile).toHaveBeenCalledWith('C:/history/draft-2.wav');
     expect(liveDraftRef.current).toBeNull();
   });
 });

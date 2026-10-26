@@ -40,6 +40,7 @@ fn sample_transcript_segment() -> TranscriptSegment {
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }
@@ -275,6 +276,7 @@ fn translate_request_validation_requires_target_language() {
         chunk_size: None,
         target_language: "  ".to_string(),
         target_language_name: None,
+        source_language: None,
         context: None,
         keywords: None,
     };
@@ -384,6 +386,7 @@ fn transcript_job_request_uses_core_transcript_segments() {
         segments: vec![sample_transcript_segment()],
         target_language: Some("fr".to_string()),
         target_language_name: Some("French".to_string()),
+        source_language: None,
         context: None,
         keywords: None,
         mode: None,
@@ -446,6 +449,7 @@ fn transcript_job_request_sanitize_for_task() {
         segments: vec![sample_transcript_segment()],
         target_language: Some("es".to_string()),
         target_language_name: Some("Spanish".to_string()),
+        source_language: Some("en".to_string()),
         context: Some("Meeting notes".to_string()),
         keywords: Some("AI, Rust".to_string()),
         mode: Some(sona_core::llm::tasks::PolishMode::Clean),
@@ -466,6 +470,7 @@ fn transcript_job_request_sanitize_for_task() {
         translate_req.target_language_name.as_deref(),
         Some("Spanish")
     );
+    assert_eq!(translate_req.source_language.as_deref(), Some("en"));
     assert!(translate_req.context.is_none());
     assert!(translate_req.keywords.is_none());
     assert!(translate_req.mode.is_none());
@@ -478,6 +483,7 @@ fn transcript_job_request_sanitize_for_task() {
     polish_req.sanitize_for_task();
     assert!(polish_req.target_language.is_none());
     assert!(polish_req.target_language_name.is_none());
+    assert_eq!(polish_req.source_language, None);
     assert_eq!(polish_req.context.as_deref(), Some("Meeting notes"));
     assert_eq!(polish_req.keywords.as_deref(), Some("AI, Rust"));
     assert_eq!(
@@ -493,6 +499,7 @@ fn transcript_job_request_sanitize_for_task() {
     summary_req.sanitize_for_task();
     assert!(summary_req.target_language.is_none());
     assert!(summary_req.target_language_name.is_none());
+    assert_eq!(summary_req.source_language, None);
     assert!(summary_req.context.is_none());
     assert!(summary_req.keywords.is_none());
     assert!(summary_req.mode.is_none());

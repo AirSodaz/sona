@@ -232,24 +232,41 @@ where
             sona_core::llm::tasks::DEFAULT_SEGMENT_PROMPT_CHAR_BUDGET,
             sona_core::llm::tasks::estimate_structured_output_tokens(&request.segments),
         );
-        let free_translation = request.config.strategy
-            == sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree;
+        let direct_translation = matches!(
+            request.config.strategy,
+            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
+                | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
+                | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
+        );
+        let single_segment_direct = matches!(
+            request.config.strategy,
+            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
+                | sona_core::llm::tasks::LlmProviderStrategy::LocalNmt
+        );
         let chunks = sona_core::llm::tasks::plan_segment_chunks_with_budget(
             &request.segments,
-            if free_translation {
+            if single_segment_direct {
                 Some(1)
             } else {
                 request.chunk_size
             },
             budget,
             |segments| {
-                sona_core::llm::tasks::build_translate_task_input_with_context(
-                    segments,
-                    &request.target_language,
-                    request.target_language_name.as_deref(),
-                    request.context.as_deref(),
-                    request.keywords.as_deref(),
-                )
+                if direct_translation {
+                    segments
+                        .iter()
+                        .map(|s| s.text.as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    sona_core::llm::tasks::build_translate_task_input_with_context(
+                        segments,
+                        &request.target_language,
+                        request.target_language_name.as_deref(),
+                        request.context.as_deref(),
+                        request.keywords.as_deref(),
+                    )
+                }
             },
         )?;
         let total_chunks = chunks.len();
@@ -258,20 +275,19 @@ where
         let target_language = request.target_language.clone();
         let target_language_name = request.target_language_name.clone();
         let segments = &request.segments;
-        let direct_translation = matches!(
-            request.config.strategy,
-            sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslate
-                | sona_core::llm::tasks::LlmProviderStrategy::GoogleTranslateFree
-        );
+        let source_language = request.source_language.clone();
         let mut pending = stream::iter(chunks.into_iter().enumerate())
             .map(|(chunk_index, planned)| {
                 let chunk = segments[planned.start..planned.end].to_vec();
                 let config = config.clone();
                 let target_language = target_language.clone();
                 let target_language_name = target_language_name.clone();
+                let source_language = source_language.clone();
                 let lookbehind_start = planned.start.saturating_sub(4);
                 let lookbehind = segments[lookbehind_start..planned.start].to_vec();
-                let prompt = if planned.start == 0 {
+                let prompt = if direct_translation {
+                    String::new()
+                } else if planned.start == 0 {
                     planned.prompt
                 } else {
                     super::rewrite_agent::build_agent_chunk_input(
@@ -287,8 +303,14 @@ where
                 };
                 async move {
                     let result = if direct_translation {
-                        self.translate_direct_chunk(config, chunk, target_language, chunk_index + 1)
-                            .await
+                        self.translate_direct_chunk(
+                            config,
+                            chunk,
+                            target_language,
+                            chunk_index + 1,
+                            source_language,
+                        )
+                        .await
                     } else {
                         self.complete_translate_chunk(
                             config,
@@ -563,6 +585,7 @@ where
         expected: Vec<sona_core::llm::tasks::LlmSegmentInput>,
         target_language: String,
         chunk_number: usize,
+        source_language: Option<String>,
     ) -> Result<Vec<sona_core::llm::tasks::TranslatedSegment>, LlmTaskError> {
         let texts = expected
             .iter()
@@ -573,6 +596,7 @@ where
                 config,
                 texts,
                 target_language,
+                source_language,
             })
             .await
             .map_err(|source| runtime_error(&format!("translate chunk {chunk_number}"), source))?;

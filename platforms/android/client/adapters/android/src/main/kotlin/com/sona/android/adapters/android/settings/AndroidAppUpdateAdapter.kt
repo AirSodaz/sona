@@ -91,6 +91,8 @@ private fun endpointFor(channel: AppUpdateChannel): UpdateEndpoint = when (chann
         manifestUrl = "https://github.com/AirSodaz/sona/releases/download/nightly/android-update.json",
         releasePageUrl = "https://github.com/AirSodaz/sona/releases/tag/nightly",
     )
+    AppUpdateChannel.CI,
+    AppUpdateChannel.DEV -> throw IllegalArgumentException("Auto-update is not supported for ${channel.wireValue} channel")
 }
 
 internal fun parseUpdateManifest(

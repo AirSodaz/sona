@@ -18,7 +18,7 @@
 - **🗣️ Live Caption & Voice Typing**: Reuse the offline live transcription stack for floating system captions or system-wide dictation into other applications.
 - **📤 Smart Export**: Export in multiple formats (TXT, SRT, VTT, JSON, Markdown) with bilingual support and clipboard copy.
 - **🛟 Recovery, Backup & Storage**: Resume interrupted tasks via the Message Center, export lightweight backups, manage storage directories, set custom FFmpeg paths, and configure audio retention cleanup policies.
-- **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp, supporting both offline batch and streaming inference), **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
+- **🤖 Advanced AI Models**: Powered by state-of-the-art models including **Qwen3-ASR** (via llama.cpp, supporting both offline batch and streaming inference), **Confucius4-R2T2**, **FireRedASR2-AED**, **SenseVoice**, **Whisper**, **Paraformer**, and **Silero VAD v5**.
 
 ## 🚀 Getting Started
 

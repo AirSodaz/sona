@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 import type React from 'react';
 import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindings';
-import { DownloadIcon, TrashIcon, XIcon } from '../../Icons';
+import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
+import { DownloadIcon, StopIcon, TrashIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
 import './LocalModelCard.css';
 
@@ -21,6 +22,7 @@ export interface LocalDownloadProgressState {
   statusText?: string;
   downloadedBytes?: number;
   totalBytes?: number;
+  speed?: string;
 }
 
 export interface LocalModelTestState {
@@ -43,19 +45,13 @@ interface LocalModelCardProps {
   onDownload: (card: LocalLlmModelCardType) => void;
   onCancelDownload: (cardId: string) => void;
   onDelete: (card: LocalLlmModelCardType) => void;
+  onDiscardDownload?: (card: LocalLlmModelCardType) => void;
   onApplyFeature?: (
     card: LocalLlmModelCardType,
     feature: 'polish' | 'translation' | 'summary' | 'all'
   ) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
-}
-
-function formatBytes(bytes?: number): string {
-  if (!bytes || bytes <= 0) return '';
-  const gb = bytes / (1024 * 1024 * 1024);
-  if (gb >= 1) return `${gb.toFixed(2)} GB`;
-  const mb = bytes / (1024 * 1024);
-  return `${mb.toFixed(0)} MB`;
+  disabled?: boolean;
 }
 
 export type SupportedModality = 'text' | 'image' | 'audio' | 'video';
@@ -141,9 +137,11 @@ export function LocalModelCard({
   testState,
   onTest,
   isAnyTesting = false,
+  disabled = false,
   onDownload,
   onCancelDownload,
   onDelete,
+  onDiscardDownload,
   t,
 }: LocalModelCardProps): React.JSX.Element {
   const isDownloading = Boolean(downloadState);
@@ -151,14 +149,16 @@ export function LocalModelCard({
   const isTesting = testState?.status === 'loading';
   const modalities = resolveModelModalities(card);
   const testTooltip = !isInstalled
-    ? t('settings.llm.install_required_to_test', { defaultValue: '需先下载安装模型后方可测试' })
+    ? t('settings.llm.install_required_to_test', {
+        defaultValue: 'Download and install model first to test',
+      })
     : isTesting
-      ? t('settings.llm.testing', { defaultValue: '正在生成...' })
+      ? t('settings.llm.testing', { defaultValue: 'Generating...' })
       : testState?.status === 'success'
-        ? `✓ ${t('settings.llm.connection_success', { defaultValue: '推理成功' })}${testState.speed != null ? ` (${testState.speed} t/s)` : ''}`
+        ? `✓ ${t('settings.llm.connection_success', { defaultValue: 'Inference successful' })}${testState.speed != null ? ` (${testState.speed} t/s)` : ''}`
         : testState?.status === 'error'
-          ? `✕ ${testState.error || t('settings.llm.connection_failed', { defaultValue: '测试失败' })}`
-          : t('settings.llm.test_model', { defaultValue: '测试连接' });
+          ? `✕ ${testState.error || t('settings.llm.connection_failed', { defaultValue: 'Test failed' })}`
+          : t('settings.llm.test_model', { defaultValue: 'Test Connection' });
 
   const isQwen = card.id.toLowerCase().includes('qwen') || card.name.toLowerCase().includes('qwen');
   const isGemma =
@@ -225,18 +225,29 @@ export function LocalModelCard({
             <span className="model-status-chip model-status-downloading">
               <Loader2 className="animate-spin" size={11} />
               <span>
-                {t('settings.llm.status_downloading', { defaultValue: '正在下载' })}{' '}
+                {t('settings.llm.status_downloading', { defaultValue: 'Downloading' })}{' '}
                 {downloadState ? Math.round(downloadState.progress) : 0}%
               </span>
             </span>
           ) : isInstalled ? (
             <span className="model-status-chip model-status-installed">
               <Check size={11} />
-              <span>{t('settings.llm.installed_ready', { defaultValue: '已就绪' })}</span>
+              <span>{t('settings.llm.installed_ready', { defaultValue: 'Ready' })}</span>
+            </span>
+          ) : card.interruptedDownload ? (
+            <span className="model-status-chip model-status-interrupted">
+              <span>
+                {card.interruptedDownload.percentage != null
+                  ? t('settings.model_status_interrupted', {
+                      progress: Math.round(card.interruptedDownload.percentage),
+                      defaultValue: `Paused (${Math.round(card.interruptedDownload.percentage)}%)`,
+                    })
+                  : t('settings.model_status_interrupted_no_progress', { defaultValue: 'Paused' })}
+              </span>
             </span>
           ) : (
             <span className="model-status-chip model-status-not-installed">
-              {t('settings.not_installed', { defaultValue: '未安装' })}
+              {t('settings.not_installed', { defaultValue: 'Not installed' })}
             </span>
           )}
         </div>
@@ -249,7 +260,7 @@ export function LocalModelCard({
       <div className="model-tags">
         {card.isRecommended && (
           <span className="model-tag model-tag-recommended">
-            {t('settings.llm.recommended_model_tag', { defaultValue: '推荐' })}
+            {t('settings.llm.recommended_model_tag', { defaultValue: 'Recommended' })}
           </span>
         )}
         {card.parameters && <span className="model-tag model-tag-param">{card.parameters}</span>}
@@ -264,7 +275,7 @@ export function LocalModelCard({
             let icon = null;
             let label = cap;
             if (cap === 'reasoning') {
-              label = t('settings.llm.capability_reasoning', { defaultValue: '深度思考' });
+              label = t('settings.llm.capability_reasoning', { defaultValue: 'Reasoning' });
               icon = <BrainCircuit size={11} />;
             }
             return (
@@ -279,7 +290,7 @@ export function LocalModelCard({
       <div className="local-model-specs-grid">
         <div className="local-model-spec-item">
           <span className="local-model-spec-label">
-            {t('settings.llm.specs_context', { defaultValue: '上下文' })}
+            {t('settings.llm.specs_context', { defaultValue: 'Context' })}
           </span>
           <span className="local-model-spec-value">
             {Math.round(card.contextWindow / 1024)}K ({card.contextWindow.toLocaleString()} tokens)
@@ -287,13 +298,13 @@ export function LocalModelCard({
         </div>
         <div className="local-model-spec-item">
           <span className="local-model-spec-label">
-            {t('settings.llm.specs_size', { defaultValue: '文件大小' })}
+            {t('settings.llm.specs_size', { defaultValue: 'Size' })}
           </span>
           <span className="local-model-spec-value">{card.size}</span>
         </div>
         <div className="local-model-spec-item">
           <span className="local-model-spec-label">
-            {t('settings.llm.specs_quantization', { defaultValue: '量化' })}
+            {t('settings.llm.specs_quantization', { defaultValue: 'Quantization' })}
           </span>
           <span className="local-model-spec-value">{card.quantization || '-'}</span>
         </div>
@@ -304,11 +315,15 @@ export function LocalModelCard({
           <div className="progress-info-mini" aria-live="polite">
             <span className="progress-status-mini">
               {downloadState?.statusText ||
-                `${t('settings.llm.status_downloading', { defaultValue: '正在下载' })} ${
+                `${t('settings.llm.status_downloading', { defaultValue: 'Downloading' })} ${
                   downloadState?.downloadedBytes && downloadState.totalBytes
-                    ? `(${formatBytes(downloadState.downloadedBytes)} / ${formatBytes(downloadState.totalBytes)})`
-                    : ''
-                }`}
+                    ? `(${formatBytes(downloadState.downloadedBytes)} / ${formatBytes(downloadState.totalBytes)})${
+                        downloadState.speed ? ` (${downloadState.speed})` : ''
+                      }`
+                    : downloadState?.speed
+                      ? `(${downloadState.speed})`
+                      : ''
+                }`.trim()}
             </span>
             <span>{Math.round(downloadState?.progress ?? 0)}%</span>
           </div>
@@ -341,7 +356,7 @@ export function LocalModelCard({
             className={`model-action-icon model-action-test${testState?.status ? ` ${testState.status}` : ''}`}
             onClick={() => onTest?.(card)}
             disabled={isTesting || !isInstalled || isDownloading || (isAnyTesting && !isTesting)}
-            aria-label={`${t('settings.llm.test_model', { defaultValue: '测试连接' })} ${card.name}`}
+            aria-label={`${t('settings.llm.test_model', { defaultValue: 'Test Connection' })} ${card.name}`}
             data-tooltip={testTooltip}
             data-tooltip-pos="top"
           >
@@ -358,32 +373,70 @@ export function LocalModelCard({
           {isDownloading ? (
             <button
               type="button"
-              className="model-action-icon"
+              className="model-action-icon model-action-cancel"
               onClick={() => onCancelDownload(card.id)}
-              aria-label={t('common.cancel', { defaultValue: '取消' })}
-              data-tooltip={t('common.cancel', { defaultValue: '取消' })}
+              aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+              data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
               data-tooltip-pos="top"
             >
-              <XIcon />
+              <StopIcon />
             </button>
           ) : isInstalled ? (
             <button
               type="button"
               className="model-action-icon model-action-delete"
               onClick={() => onDelete(card)}
-              aria-label={`${t('common.delete', { defaultValue: '删除' })} ${card.name}`}
-              data-tooltip={t('common.delete', { defaultValue: '删除' })}
+              aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${card.name}`}
+              data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
               data-tooltip-pos="top"
             >
               <TrashIcon />
             </button>
+          ) : card.interruptedDownload ? (
+            <>
+              <button
+                type="button"
+                className="model-action-icon"
+                onClick={() => onDownload(card)}
+                disabled={disabled}
+                aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${card.name}`}
+                data-tooltip={
+                  card.interruptedDownload.percentage != null
+                    ? t('settings.resume_download_tooltip', {
+                        progress: Math.round(card.interruptedDownload.percentage),
+                        defaultValue: `Resume download (${Math.round(card.interruptedDownload.percentage)}% completed)`,
+                      })
+                    : t('settings.resume_download', { defaultValue: 'Resume download' })
+                }
+                data-tooltip-pos="top"
+              >
+                <DownloadIcon />
+              </button>
+              {onDiscardDownload && (
+                <button
+                  type="button"
+                  className="model-action-icon model-action-delete"
+                  onClick={() => onDiscardDownload(card)}
+                  disabled={disabled}
+                  aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${card.name}`}
+                  data-tooltip={t('settings.discard_download_tooltip', {
+                    size: formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB',
+                    defaultValue: `Discard incomplete download (${formatBytes(card.interruptedDownload.downloadedBytes) || '0 MB'})`,
+                  })}
+                  data-tooltip-pos="top"
+                >
+                  <TrashIcon />
+                </button>
+              )}
+            </>
           ) : (
             <button
               type="button"
               className="model-action-icon"
               onClick={() => onDownload(card)}
-              aria-label={`${t('common.download', { defaultValue: '下载' })} ${card.name}`}
-              data-tooltip={t('common.download', { defaultValue: '下载' })}
+              disabled={disabled}
+              aria-label={`${t('common.download', { defaultValue: 'Download' })} ${card.name}`}
+              data-tooltip={t('common.download', { defaultValue: 'Download' })}
               data-tooltip-pos="top"
             >
               <DownloadIcon />

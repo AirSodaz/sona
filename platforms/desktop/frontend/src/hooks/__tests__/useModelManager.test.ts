@@ -1,8 +1,10 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { modelService } from '../../services/modelService';
+import { cleanInterruptedDownload } from '../../services/tauri/app';
 import { useConfigStore } from '../../stores/configStore';
 import { useDialogStore } from '../../stores/dialogStore';
+import { useModelDownloadStore } from '../../stores/modelDownloadStore';
 import { setTestConfig } from '../../test-utils/configTestUtils';
 import { useModelManager } from '../useModelManager';
 
@@ -141,12 +143,26 @@ function buildInstalledCatalogSnapshot(installedIds: string[]): any {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (key === 'settings.model_download_status.downloading' && options) {
+        return `${options.label ?? 'Downloading'}... ${options.downloadedMB}MB / ${options.totalMB}MB (${options.speed})`;
+      }
+      if (typeof options?.defaultValue === 'string') {
+        return options.defaultValue;
+      }
+      return key;
+    },
   }),
   initReactI18next: {
     type: '3rdParty',
     init: () => undefined,
   },
+}));
+
+vi.mock('../../services/tauri/app', () => ({
+  cleanInterruptedDownload: vi.fn().mockResolvedValue(true),
+  checkInterruptedDownload: vi.fn().mockResolvedValue(null),
+  cancelDownload: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../services/modelService', () => ({
@@ -276,7 +292,7 @@ describe('useModelManager restoreDefaultModelSettings', () => {
     vi.mocked(modelService.resolveAsrSelectedModelIdsFromSnapshot).mockImplementation(
       (snapshot, paths) => {
         const resolve = (path: string, options: Array<{ id: string }>) => {
-          if (!path.trim()) return null;
+          if (!path?.trim()) return null;
           const normalizedPath = path.replace(/\\/g, '/').toLowerCase();
           const exact = snapshot.modelIdByNormalizedPath[normalizedPath];
           if (exact && options.some((option) => option.id === exact)) return exact;
@@ -536,6 +552,373 @@ describe('useModelManager restoreDefaultModelSettings', () => {
       liveVadBufferSize: 5,
       batchVadBufferSize: 5,
       maxConcurrent: 2,
+    });
+  });
+});
+
+describe('useModelManager download lifecycle and errors (H1-H8)', () => {
+  beforeEach(() => {
+    useModelDownloadStore.setState({ downloads: {} });
+    vi.mocked(modelService.downloadModel).mockReset();
+    vi.mocked(modelService.checkHardware).mockReset();
+    vi.mocked(modelService.getModelCatalogSnapshot).mockReset();
+    useDialogStore.setState({
+      alert: vi.fn(),
+      confirm: vi.fn(),
+      checkboxConfirm: vi.fn(),
+      showError: vi.fn(),
+    });
+  });
+
+  it('passes unified downloadId to downloadModel and registers onCancel (H1)', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+    let passedDownloadId = '';
+    let passedSignal: AbortSignal | undefined;
+    const { promise, resolve: resolveDownload } = Promise.withResolvers<string>();
+    vi.mocked(modelService.downloadModel).mockImplementation(
+      async (_id, _cb, sig, _mirror, downloadId) => {
+        passedDownloadId = downloadId ?? '';
+        passedSignal = sig;
+        return promise;
+      }
+    );
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    let downloadPromise: Promise<void> | undefined;
+    await act(async () => {
+      downloadPromise = result.current.handleDownload(catalogModel);
+    });
+
+    expect(passedDownloadId).toBeTruthy();
+    expect(passedDownloadId).toContain(catalogModel.id);
+    expect(modelService.downloadModel).toHaveBeenCalledTimes(1);
+
+    const item = useModelDownloadStore.getState().downloads[catalogModel.id];
+    expect(item).toBeDefined();
+    expect(item?.onCancel).toBeDefined();
+    expect(passedSignal?.aborted).toBe(false);
+    item?.onCancel?.();
+    expect(passedSignal?.aborted).toBe(true);
+
+    await act(async () => {
+      resolveDownload('/models/preset-a');
+      await downloadPromise;
+    });
+  });
+
+  it('cancels active background download via store when local activeDownloadsRef is empty', async () => {
+    const onCancel = vi.fn();
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-bg-123',
+      onCancel,
+    });
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      result.current.handleCancelDownload(catalogModel.id);
+    });
+
+    expect(onCancel).toHaveBeenCalledTimes(1);
+    expect(useModelDownloadStore.getState().downloads[catalogModel.id]?.status).toBe('cancelled');
+  });
+
+  it('guards against concurrent download triggers before running prompts (H6)', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+    let resolveDownload: (path: string) => void = () => {};
+    vi.mocked(modelService.downloadModel).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveDownload = resolve;
+        })
+    );
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    // First download starts
+    act(() => {
+      void result.current.handleDownload(catalogModel);
+    });
+
+    // Check hardware was called once
+    expect(modelService.checkHardware).toHaveBeenCalledTimes(1);
+
+    // Second download triggered concurrently for same model
+    await act(async () => {
+      await result.current.handleDownload(catalogModel);
+    });
+
+    // In-flight guard must prevent second download and prompt from running
+    expect(modelService.checkHardware).toHaveBeenCalledTimes(1);
+    expect(modelService.downloadModel).toHaveBeenCalledTimes(1);
+
+    // Finish first download
+    await act(async () => {
+      resolveDownload('/models/preset-a');
+    });
+  });
+
+  it('halts and shows error when cleanInterruptedDownload rejects in handleDiscardDownload (H3)', async () => {
+    const { cleanInterruptedDownload } = await import('../../services/tauri/app');
+    vi.mocked(cleanInterruptedDownload).mockRejectedValue(new Error('File is locked'));
+
+    const showErrorMock = vi.fn();
+    const confirmMock = vi.fn().mockResolvedValue(true);
+    useDialogStore.setState({
+      showError: showErrorMock,
+      confirm: confirmMock,
+    });
+
+    const interruptedModel = {
+      ...catalogModel,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: catalogModel.id,
+        downloadedBytes: 500,
+        totalBytes: 1000,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue({
+      ...modelCatalogSnapshot,
+      models: [interruptedModel],
+      sections: [{ type: 'asr', groups: [{ key: 'preset-a', models: [interruptedModel] }] }],
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      await result.current.handleDiscardDownload(interruptedModel);
+    });
+
+    expect(confirmMock).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith(catalogModel.id);
+    expect(showErrorMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('resumes download directly without prompt when model has interruptedDownload', async () => {
+    const { cleanInterruptedDownload } = await import('../../services/tauri/app');
+    const interruptedModel = {
+      ...catalogModel,
+      isInstalled: false,
+      interruptedDownload: {
+        modelId: catalogModel.id,
+        downloadedBytes: 500,
+        totalBytes: 1000,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue({
+      ...modelCatalogSnapshot,
+      models: [interruptedModel],
+      sections: [{ type: 'asr', groups: [{ key: 'preset-a', models: [interruptedModel] }] }],
+    });
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      await result.current.handleDownload(interruptedModel);
+    });
+
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(modelService.downloadModel).toHaveBeenCalledWith(
+      catalogModel.id,
+      expect.any(Function),
+      expect.any(AbortSignal),
+      expect.anything(),
+      expect.any(String)
+    );
+  });
+
+  it('does not flip download to failed when post-download snapshot refresh throws (H8)', async () => {
+    let callCount = 0;
+    vi.mocked(modelService.getModelCatalogSnapshot).mockImplementation(async () => {
+      callCount++;
+      if (callCount > 1) {
+        throw new Error('Post-download refresh network error');
+      }
+      return buildInstalledCatalogSnapshot([]);
+    });
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+    vi.mocked(modelService.downloadModel).mockResolvedValue('/models/preset-a');
+
+    const { useModelDownloadStore } = await import('../../stores/modelDownloadStore');
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await act(async () => {
+      await result.current.handleDownload(catalogModel);
+    });
+
+    // The download succeeded, so store item must be 'completed', NOT 'failed'
+    const item = useModelDownloadStore.getState().downloads[catalogModel.id];
+    expect(item).toBeDefined();
+    expect(item.status).toBe('completed');
+  });
+
+  it('refreshes catalog snapshot when download is cancelled (H4)', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+
+    let abortControllerSignal: AbortSignal | undefined;
+    const downloadStarted = new Promise<void>((resolve) => {
+      vi.mocked(modelService.downloadModel).mockImplementation(async (_id, _cb, sig) => {
+        abortControllerSignal = sig;
+        resolve();
+        return new Promise((_, reject) => {
+          sig?.addEventListener('abort', () => reject(new Error('Download cancelled')));
+        });
+      });
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    await waitFor(() => {
+      expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled();
+    });
+    vi.mocked(modelService.getModelCatalogSnapshot).mockClear();
+
+    void result.current.handleDownload(catalogModel);
+    await downloadStarted;
+
+    // Cancel download
+    await act(async () => {
+      result.current.handleCancelDownload(catalogModel.id);
+    });
+
+    expect(abortControllerSignal?.aborted).toBe(true);
+    // Snapshot must be refreshed after cancellation so resume chip appears
+    await waitFor(() => {
+      expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled();
+    });
+  });
+
+  it('synchronizes store downloading status into hook downloads return value', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-store-sync',
+    });
+    useModelDownloadStore.getState().updateProgress('dl-store-sync', { progress: 45 });
+
+    const { result } = renderHook(() => useModelManager(true));
+
+    expect(result.current.downloads[catalogModel.id]).toBeDefined();
+    expect(result.current.downloads[catalogModel.id]?.progress).toBe(45);
+  });
+
+  it('projects statusText and formats downloadedBytes, totalBytes, and speed in downloads status', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-status-projection',
+    });
+
+    // 1. With explicit statusText
+    useModelDownloadStore.getState().updateProgress('dl-status-projection', {
+      progress: 50,
+      statusText: 'Extracting files...',
+    });
+
+    const { result, rerender } = renderHook(() => useModelManager(true));
+    expect(result.current.downloads[catalogModel.id]?.status).toBe('Extracting files...');
+
+    // 2. Without statusText, formatted with bytes and speed
+    act(() => {
+      useModelDownloadStore.getState().updateProgress('dl-status-projection', {
+        progress: 60,
+        statusText: '',
+        downloadedBytes: 60 * 1024 * 1024,
+        totalBytes: 100 * 1024 * 1024,
+        speed: '3.5 MB/s',
+      });
+    });
+    rerender();
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('60');
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('100');
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('3.5 MB/s');
+  });
+
+  it('forwards statusText from downloadFn progress callback to store', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+    vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
+      onProgress?.(40, 'Downloading... 40MB / 100MB (2.0 MB/s)');
+      return '/models/preset-a';
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+    await act(async () => {
+      await result.current.handleDownload(catalogModel);
+    });
+
+    // downloadFn called updateProgress with statusText during download
+    expect(modelService.downloadModel).toHaveBeenCalled();
+  });
+
+  it('prevents handleDiscardDownload while download cancellation is actively unwinding', async () => {
+    vi.mocked(cleanInterruptedDownload).mockClear();
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+
+    let finishAbort: () => void = () => {};
+    const downloadStarted = new Promise<void>((resolve) => {
+      vi.mocked(modelService.downloadModel).mockImplementation(async (_id, _cb, sig) => {
+        resolve();
+        return new Promise((_, reject) => {
+          sig?.addEventListener('abort', () => {
+            finishAbort = () => reject(new Error('Download cancelled'));
+          });
+        });
+      });
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+    void result.current.handleDownload(catalogModel);
+    await downloadStarted;
+
+    act(() => {
+      result.current.handleCancelDownload(catalogModel.id);
+    });
+
+    await act(async () => {
+      await result.current.handleDiscardDownload({
+        ...catalogModel,
+        interruptedDownload: { downloadedBytes: 50, totalBytes: 100, percentage: 50 },
+      });
+    });
+
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishAbort();
     });
   });
 });

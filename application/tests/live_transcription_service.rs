@@ -205,6 +205,7 @@ fn segment(id: &str, text: &str, end: f64, is_final: bool) -> TranscriptSegment 
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }

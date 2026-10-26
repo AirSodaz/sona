@@ -1,6 +1,6 @@
 use super::{Database, DatabaseError};
 
-pub(crate) const CURRENT_SCHEMA_VERSION: i64 = 10;
+pub const CURRENT_SCHEMA_VERSION: i64 = 10;
 const MIN_SUPPORTED_SCHEMA_VERSION: i64 = 8;
 
 /// Initializes a new database at the current schema baseline or upgrades supported legacy databases.
@@ -722,13 +722,19 @@ fn migrate_v10(tx: &rusqlite::Transaction) -> Result<(), rusqlite::Error> {
     tx.execute_batch(
         "DROP TABLE IF EXISTS history_item_tags;
          DROP TABLE IF EXISTS tag_default_links;
-         DROP INDEX IF EXISTS idx_history_item_tags_tag_history;
-         UPDATE app_settings
-            SET key = 'sona-active-project-id'
-          WHERE key = 'sona-active-tag-id'
-            AND NOT EXISTS (SELECT 1 FROM app_settings WHERE key = 'sona-active-project-id');
-         DELETE FROM app_settings WHERE key = 'sona-active-tag-id';
-         CREATE INDEX IF NOT EXISTS idx_projects_sort_order ON projects(sort_order, id);
+         DROP INDEX IF EXISTS idx_history_item_tags_tag_history;",
+    )?;
+    if has_table(tx, "app_settings")? {
+        tx.execute_batch(
+            "UPDATE app_settings
+                SET key = 'sona-active-project-id'
+              WHERE key = 'sona-active-tag-id'
+                AND NOT EXISTS (SELECT 1 FROM app_settings WHERE key = 'sona-active-project-id');
+             DELETE FROM app_settings WHERE key = 'sona-active-tag-id';",
+        )?;
+    }
+    tx.execute_batch(
+        "CREATE INDEX IF NOT EXISTS idx_projects_sort_order ON projects(sort_order, id);
          CREATE INDEX IF NOT EXISTS idx_history_items_project_id ON history_items(project_id);
          CREATE INDEX IF NOT EXISTS idx_history_items_project_timestamp ON history_items(project_id, timestamp DESC);",
     )?;

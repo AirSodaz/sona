@@ -1,9 +1,341 @@
+use serde::{Deserialize, Serialize};
+#[cfg(feature = "specta")]
+use specta::Type;
 use std::path::{Path, PathBuf};
 
 use crate::models::preset_models::{
     DEFAULT_PUNCTUATION_MODEL_ID, DEFAULT_SILERO_VAD_MODEL_ID, PresetModel, find_preset_model,
 };
 use crate::runtime::error::RuntimeValidationError;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[cfg_attr(feature = "specta", derive(Type))]
+#[serde(rename_all = "camelCase")]
+pub struct InterruptedDownloadInfo {
+    pub model_id: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
+    pub downloaded_bytes: u64,
+    #[cfg_attr(feature = "specta", specta(type = Option<specta_typescript::Number>))]
+    pub total_bytes: Option<u64>,
+    pub percentage: Option<u8>,
+}
+
+pub fn temporary_download_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".download");
+    PathBuf::from(s)
+}
+
+pub fn staging_install_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".installing");
+    PathBuf::from(s)
+}
+
+pub fn install_lock_path(path: &Path) -> PathBuf {
+    let mut s = path.as_os_str().to_os_string();
+    s.push(".install.lock");
+    PathBuf::from(s)
+}
+
+pub fn is_file_locked(path: &Path) -> bool {
+    use fs3::FileExt;
+    if !path.is_file() {
+        return false;
+    }
+    match std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(path)
+    {
+        Ok(file) => {
+            if file.try_lock_exclusive().is_ok() {
+                let _ = file.unlock();
+                false
+            } else {
+                true
+            }
+        }
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => false,
+        Err(_) => true,
+    }
+}
+
+fn find_locked_download_file(dir: &Path) -> Option<PathBuf> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let is_dir = entry.file_type().is_ok_and(|ft| ft.is_dir());
+        let p = entry.path();
+        if is_dir {
+            if let Some(locked) = find_locked_download_file(&p) {
+                return Some(locked);
+            }
+        } else if p.extension().is_some_and(|ext| ext == "download") && is_file_locked(&p) {
+            return Some(p);
+        }
+    }
+    None
+}
+
+pub fn inspect_interrupted_download(
+    models_dir: &Path,
+    model_id: &str,
+) -> Option<InterruptedDownloadInfo> {
+    let resolved = resolve_model_download(model_id, models_dir).ok()?;
+
+    let lock_path = install_lock_path(&resolved.install_path);
+    if is_file_locked(&lock_path) {
+        return None;
+    }
+
+    let temp_download = temporary_download_path(&resolved.download_path);
+    if is_file_locked(&temp_download) {
+        return None;
+    }
+
+    if resolved.download_path != resolved.install_path
+        && resolved.download_path.exists()
+        && is_file_locked(&resolved.download_path)
+    {
+        return None;
+    }
+
+    let staging_path = staging_install_path(&resolved.install_path);
+    if find_locked_download_file(&staging_path).is_some() {
+        return None;
+    }
+
+    let mut downloaded_bytes = 0_u64;
+    let mut total_bytes = None;
+
+    if resolved.model.is_multi_file() {
+        let expected_total = resolved
+            .artifacts
+            .iter()
+            .map(|a| a.size_bytes.unwrap_or(0))
+            .sum::<u64>();
+        if expected_total > 0 {
+            total_bytes = Some(expected_total);
+        }
+
+        if staging_path.is_dir() {
+            for artifact in &resolved.artifacts {
+                let staged_path = staging_path.join(&artifact.filename);
+                let artifact_size = artifact.size_bytes.unwrap_or(0);
+                if staged_path.is_file() {
+                    let len = staged_path.metadata().map(|m| m.len()).unwrap_or(0);
+                    if len > 0 && (artifact_size == 0 || len == artifact_size) {
+                        downloaded_bytes = downloaded_bytes.saturating_add(len);
+                        continue;
+                    }
+                }
+                let temp_path = temporary_download_path(&staged_path);
+                if temp_path.is_file() {
+                    let len = temp_path.metadata().map(|m| m.len()).unwrap_or(0);
+                    downloaded_bytes = downloaded_bytes.saturating_add(len);
+                }
+            }
+        }
+    } else {
+        if temp_download.is_file() {
+            let len = temp_download.metadata().map(|m| m.len()).unwrap_or(0);
+            if len > 0 {
+                downloaded_bytes = len;
+            }
+        } else if resolved.download_path != resolved.install_path
+            && resolved.download_path.is_file()
+        {
+            let len = resolved
+                .download_path
+                .metadata()
+                .map(|m| m.len())
+                .unwrap_or(0);
+            if len > 0 {
+                downloaded_bytes = len;
+            }
+        } else if staging_path.exists() {
+            if staging_path.is_dir() {
+                if let Ok(entries) = std::fs::read_dir(&staging_path) {
+                    for entry in entries.flatten() {
+                        if let Ok(meta) = entry.metadata() {
+                            downloaded_bytes = downloaded_bytes.saturating_add(meta.len());
+                        }
+                    }
+                }
+            } else if let Ok(meta) = staging_path.metadata() {
+                downloaded_bytes = downloaded_bytes.saturating_add(meta.len());
+            }
+        }
+        total_bytes = resolved.artifacts.first().and_then(|a| a.size_bytes);
+    }
+
+    if let Some(total) = total_bytes
+        && total > 0
+    {
+        downloaded_bytes = downloaded_bytes.min(total);
+    }
+
+    let has_interrupted_artifacts = downloaded_bytes > 0
+        || temp_download.is_file()
+        || staging_path.exists()
+        || (resolved.download_path != resolved.install_path && resolved.download_path.is_file());
+
+    if has_interrupted_artifacts {
+        let percentage = total_bytes.map(|t| {
+            if t > 0 {
+                ((downloaded_bytes as f64 / t as f64) * 100.0)
+                    .round()
+                    .min(99.0) as u8
+            } else {
+                0
+            }
+        });
+        Some(InterruptedDownloadInfo {
+            model_id: model_id.to_string(),
+            downloaded_bytes,
+            total_bytes,
+            percentage,
+        })
+    } else {
+        None
+    }
+}
+
+struct CleanupLockGuard {
+    file: Option<std::fs::File>,
+    path: PathBuf,
+    existed_initially: bool,
+}
+
+impl CleanupLockGuard {
+    fn release_and_remove(mut self) -> bool {
+        drop(self.file.take());
+        let removed = if self.path.exists() && !is_file_locked(&self.path) {
+            std::fs::remove_file(&self.path).is_ok() && self.existed_initially
+        } else {
+            false
+        };
+        std::mem::forget(self);
+        removed
+    }
+}
+
+impl Drop for CleanupLockGuard {
+    fn drop(&mut self) {
+        drop(self.file.take());
+        if !self.existed_initially && self.path.exists() && !is_file_locked(&self.path) {
+            let _ = std::fs::remove_file(&self.path);
+        }
+    }
+}
+
+pub fn clean_interrupted_download(models_dir: &Path, model_id: &str) -> std::io::Result<bool> {
+    let Ok(resolved) = resolve_model_download(model_id, models_dir) else {
+        return Ok(false);
+    };
+
+    let lock_path = install_lock_path(&resolved.install_path);
+    let lock_existed_initially = lock_path.is_file();
+    if is_file_locked(&lock_path) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download is actively in progress: {model_id}"),
+        ));
+    }
+
+    if let Some(parent) = lock_path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    use fs3::FileExt;
+    let lock_file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(&lock_path)?;
+    if lock_file.try_lock_exclusive().is_err() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download is actively in progress: {model_id}"),
+        ));
+    }
+
+    let lock_guard = CleanupLockGuard {
+        file: Some(lock_file),
+        path: lock_path,
+        existed_initially: lock_existed_initially,
+    };
+
+    let temp_download = temporary_download_path(&resolved.download_path);
+    if is_file_locked(&temp_download) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download file is actively locked: {model_id}"),
+        ));
+    }
+
+    if resolved.download_path != resolved.install_path
+        && resolved.download_path.exists()
+        && is_file_locked(&resolved.download_path)
+    {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!("Model download archive file is actively locked: {model_id}"),
+        ));
+    }
+
+    let staging_path = staging_install_path(&resolved.install_path);
+    if let Some(locked) = find_locked_download_file(&staging_path) {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::ResourceBusy,
+            format!(
+                "Staged download file is actively locked: {}",
+                locked.display()
+            ),
+        ));
+    }
+
+    let mut removed = false;
+
+    match std::fs::symlink_metadata(&staging_path) {
+        Ok(meta) => {
+            if meta.file_type().is_dir() {
+                std::fs::remove_dir_all(&staging_path)?;
+            } else {
+                std::fs::remove_file(&staging_path)?;
+            }
+            removed = true;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+
+    match std::fs::symlink_metadata(&temp_download) {
+        Ok(_) => {
+            std::fs::remove_file(&temp_download)?;
+            removed = true;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(e),
+    }
+
+    if resolved.download_path != resolved.install_path {
+        match std::fs::symlink_metadata(&resolved.download_path) {
+            Ok(_) => {
+                std::fs::remove_file(&resolved.download_path)?;
+                removed = true;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(e),
+        }
+    }
+
+    if lock_guard.release_and_remove() {
+        removed = true;
+    }
+
+    Ok(removed)
+}
 
 #[derive(Debug, Clone)]
 pub struct ResolvedModelDownload {

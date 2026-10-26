@@ -290,9 +290,14 @@ pub(super) fn run_offline_inference(
                 .timestamps
                 .as_ref()
                 .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
-            let durations = timestamps_abs
-                .as_ref()
-                .and_then(|ts| synthesize_durations(ts, global_end as f32));
+            let durations = result
+                .durations
+                .filter(|d| !d.is_empty() && d.len() == result.tokens.len())
+                .or_else(|| {
+                    timestamps_abs
+                        .as_ref()
+                        .and_then(|ts| synthesize_durations(ts, global_end as f32))
+                });
 
             let (speaker, speaker_attribution) = if is_final {
                 if let Some(tracker) = speaker_tracker {
@@ -319,6 +324,7 @@ pub(super) fn run_offline_inference(
                 timestamps: timestamps_abs,
                 durations,
                 translation: None,
+                draft_translation: None,
                 speaker,
                 speaker_attribution,
             };

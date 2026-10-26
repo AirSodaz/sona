@@ -64,6 +64,51 @@ fn qwen_presets_are_verified_batch_bundles() {
     }
 }
 #[test]
+fn confucius4_r2t2_presets_are_verified_bundles() {
+    for (id, expected_version, expected_model, expected_mmproj) in [
+        (
+            "confucius4-r2t2-q8-gguf",
+            "Q8_0",
+            "Confucius4-R2T2-Q8_0.gguf",
+            "mmproj-Confucius4-R2T2-Q8_0.gguf",
+        ),
+        (
+            "confucius4-r2t2-f16-gguf",
+            "F16",
+            "Confucius4-R2T2-f16.gguf",
+            "mmproj-Confucius4-R2T2-f16.gguf",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "qwen3-asr");
+        assert_eq!(model.engine.as_deref(), Some("llama-cpp"));
+        assert!(model.supports_mode("batch"));
+        assert!(model.supports_mode("streaming"));
+        assert_eq!(model.languages.len(), 30);
+        assert_eq!(model.language_mode, LanguageMode::Auto);
+        assert_eq!(model.group_id.as_deref(), Some("confucius4-r2t2"));
+        assert_eq!(model.version_label.as_deref(), Some(expected_version));
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+        assert_eq!(rules.initial_refresh_rate_ms, Some(400));
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.model.as_deref(), Some(expected_model));
+        assert_eq!(file_config.mmproj.as_deref(), Some(expected_mmproj));
+        assert_eq!(model.artifacts.len(), 2);
+        assert!(model.artifacts.iter().all(|artifact| {
+            artifact.sha256.as_ref().is_some_and(|sha256| {
+                sha256.len() == 64
+                    && sha256
+                        .chars()
+                        .all(|character| character.is_ascii_hexdigit())
+            })
+        }));
+    }
+}
+#[test]
 fn parakeet_tdt_presets_are_verified_batch_bundles() {
     for (
         id,
@@ -337,6 +382,7 @@ fn asr_catalog_sections_follow_specified_display_order() {
         vec![
             "sensevoice",
             "qwen3-asr",
+            "confucius4-r2t2",
             "firered-asr2-aed",
             "whisper",
             "omnilingual-asr",
@@ -347,6 +393,8 @@ fn asr_catalog_sections_follow_specified_display_order() {
             "parakeet-tdt",
             "dolphin",
             "moonshine-v2",
+            "canary-180m-flash",
+            "canary-1b",
         ]
     );
 }
@@ -1011,7 +1059,62 @@ fn resolves_canonical_aliases_and_suggestions() {
         canonical_preset_model_id("paraformer"),
         Some("sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8")
     );
-
+    assert_eq!(
+        canonical_preset_model_id("confucius4-r2t2"),
+        Some("confucius4-r2t2-q8-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("r2t2"),
+        Some("confucius4-r2t2-q8-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("confucius4-r2t2-q8"),
+        Some("confucius4-r2t2-q8-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("confucius4-r2t2-f16"),
+        Some("confucius4-r2t2-f16-gguf")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-int8"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-180m-fp32"),
+        Some("sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-int8"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-fp16"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("canary-1b-fp32"),
+        Some("sherpa-onnx-nemo-canary-1b-en-es-de-fr")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punct"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
+    assert_eq!(
+        canonical_preset_model_id("online-punctuation"),
+        Some("sherpa-onnx-online-punct-en-2024-08-06")
+    );
     let whisper = find_preset_model("whisper-turbo").expect("alias whisper-turbo must resolve");
     assert_eq!(whisper.id, "sherpa-onnx-whisper-turbo");
 
@@ -1023,6 +1126,11 @@ fn resolves_canonical_aliases_and_suggestions() {
 
     let suggestions = suggest_preset_models("whispr");
     assert!(suggestions.contains(&"whisper-turbo"));
+    let confucius_suggestions = suggest_preset_models("confucius");
+    assert!(confucius_suggestions.contains(&"confucius4-r2t2"));
+
+    let r2t2_suggestions = suggest_preset_models("r2t2");
+    assert!(r2t2_suggestions.contains(&"confucius4-r2t2"));
 
     let error_msg = format_unknown_model_error("whispr");
     assert!(error_msg.contains("Did you mean"));
@@ -1073,4 +1181,69 @@ fn all_preset_models_have_valid_catalog_enums() {
     let snapshot =
         build_model_catalog_snapshot_with_installed_ids(Path::new("/dummy"), &HashSet::new());
     assert_eq!(snapshot.models.len(), presets.len());
+}
+
+#[test]
+fn canary_presets_are_verified_bundles() {
+    for (id, expected_encoder, expected_decoder) in [
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+            "encoder.onnx",
+            "decoder.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+            "encoder.int8.onnx",
+            "decoder.int8.onnx",
+        ),
+        (
+            "sherpa-onnx-nemo-canary-1b-en-es-de-fr",
+            "encoder.fp16.onnx",
+            "decoder.fp16.onnx",
+        ),
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "canary");
+        assert_eq!(model.engine.as_deref(), Some("sherpa-onnx"));
+        assert_eq!(model.languages, vec!["de", "en", "es", "fr"]);
+
+        let rules = model.resolved_rules();
+        assert!(rules.requires_vad);
+        assert!(!rules.requires_punctuation);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some(expected_encoder));
+        assert_eq!(file_config.decoder.as_deref(), Some(expected_decoder));
+        assert_eq!(file_config.tokens.as_deref(), Some("tokens.txt"));
+    }
+}
+#[test]
+fn opus_mt_presets_are_verified_bundles() {
+    for id in [
+        "opus-mt-en-zh",
+        "opus-mt-zh-en",
+        "opus-mt-ja-zh",
+        "opus-mt-zh-ja",
+    ] {
+        let model = find_preset_model(id).unwrap();
+        assert_eq!(model.model_type, "onnx-nmt");
+        assert_eq!(model.engine.as_deref(), Some("onnx-nmt"));
+        assert_eq!(model.artifacts.len(), 5);
+
+        let file_config = model.file_config.as_ref().unwrap();
+        assert_eq!(file_config.encoder.as_deref(), Some("encoder_model.onnx"));
+        assert_eq!(file_config.decoder.as_deref(), Some("decoder_model.onnx"));
+        assert_eq!(file_config.source_spm.as_deref(), Some("source.spm"));
+        assert_eq!(file_config.target_spm.as_deref(), Some("target.spm"));
+        assert_eq!(file_config.vocab.as_deref(), Some("vocab.json"));
+        for artifact in &model.artifacts {
+            assert!(artifact.url.starts_with("https://huggingface.co/"));
+            assert!(artifact.size_bytes.is_some_and(|s| s > 100_000));
+        }
+    }
 }

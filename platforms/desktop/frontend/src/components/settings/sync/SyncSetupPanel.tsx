@@ -496,7 +496,7 @@ export function SyncSetupPanel({
             'Configure your storage endpoint and credentials for encrypted data synchronization.',
         })}
       >
-        <div className="sync-pairing-banner">
+        <div id="settings-sync-pairing" className="sync-pairing-banner">
           <div className="sync-pairing-banner-text">
             <Link2 size={15} />
             <span>
@@ -516,6 +516,7 @@ export function SyncSetupPanel({
         </div>
 
         <SettingsItem
+          id="settings-sync-webdav"
           title={t('settings.sync.storage_type_label', { defaultValue: 'Storage protocol' })}
           hint={t('settings.sync.storage_type_hint', {
             defaultValue: 'Choose between S3-compatible bucket storage and WebDAV cloud storage',
@@ -853,6 +854,7 @@ export function SyncSetupPanel({
 
       {/* Section 2: End-to-End Encryption */}
       <SettingsSection
+        id={unlockMethod !== 'password' ? 'settings-sync-encryption' : undefined}
         title={t('settings.sync.section_encryption', { defaultValue: 'End-to-End Encryption' })}
         description={t('settings.sync.section_encryption_desc', {
           defaultValue:
@@ -877,6 +879,7 @@ export function SyncSetupPanel({
               </span>
             </button>
             <button
+              id="settings-sync-recovery-key"
               type="button"
               className={`sync-segmented-btn ${unlockMethod === 'recovery' ? 'is-active' : ''}`}
               onClick={() => setUnlockMethod('recovery')}
@@ -892,6 +895,7 @@ export function SyncSetupPanel({
         {unlockMethod === 'password' ? (
           <>
             <SettingsItem
+              id="settings-sync-encryption"
               title={t('settings.sync.master_password', { defaultValue: 'Master password' })}
               hint={t('settings.sync.master_password_hint', {
                 defaultValue:

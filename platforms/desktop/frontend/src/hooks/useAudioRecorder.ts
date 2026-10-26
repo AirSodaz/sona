@@ -9,8 +9,9 @@ import { pipelineExecutionEngine } from '../services/pipeline/pipelineExecutionE
 import { resolveItemPipeline } from '../services/projectPipeline';
 import { speakerService } from '../services/speakerService';
 import { summaryService } from '../services/summaryService';
+import { audioDeleteRecordingFile } from '../services/tauri/audio';
 import { convertManagedAudioFileSrc } from '../services/tauri/platform/assets';
-import { remove, writeFile } from '../services/tauri/platform/fs';
+import { writeFile } from '../services/tauri/platform/fs';
 import { transcriptionService } from '../services/transcriptionService';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
@@ -27,7 +28,7 @@ import {
 import { useTranscriptPlaybackStore } from '../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
-import { useTranscriptStore } from '../stores/transcriptStore';
+import { DEFAULT_SESSION_DATA, useTranscriptStore } from '../stores/transcriptStore';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
@@ -178,16 +179,51 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
           saveNativeRecording: (...args) => historyService.saveNativeRecording(...args),
           updateTranscript: (...args) => historyService.updateTranscript(...args),
         },
-        getTranscriptState: () => ({
-          config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
-          segments: useTranscriptSessionStore.getState().segments,
-          setAudioUrl: useTranscriptPlaybackStore.getState().setAudioUrl,
-          setSegments: setTranscriptSegments,
-          activeSessionId: useTranscriptStore.getState().activeSessionId,
-          setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => {
-            useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
-          },
-        }),
+        getTranscriptState: () => {
+          const recSessionId =
+            recordSessionIdRef.current || useTranscriptStore.getState().recordingSessionId;
+          const sessions = useTranscriptStore.getState().sessions;
+          const recordingSegments = recSessionId ? sessions[recSessionId]?.segments : undefined;
+          return {
+            config: recordingAutomationSnapshotRef.current?.config ?? getEffectiveConfigSnapshot(),
+            segments: recordingSegments ?? useTranscriptSessionStore.getState().segments,
+            setAudioUrl: (url: string | null) => {
+              if (recSessionId) {
+                useTranscriptStore.setState((state) => ({
+                  sessions: {
+                    ...state.sessions,
+                    [recSessionId]: {
+                      ...(state.sessions[recSessionId] || DEFAULT_SESSION_DATA),
+                      audioUrl: url,
+                    },
+                  },
+                }));
+                if (useTranscriptStore.getState().activeSessionId === recSessionId) {
+                  useTranscriptPlaybackStore.getState().setAudioUrl(url);
+                }
+              } else {
+                useTranscriptPlaybackStore.getState().setAudioUrl(url);
+              }
+            },
+            setSegments: (segments: TranscriptSegment[]) => {
+              if (recSessionId) {
+                useTranscriptStore.getState().setSegmentsForSession(recSessionId, segments);
+                if (useTranscriptStore.getState().activeSessionId === recSessionId) {
+                  setTranscriptSegments(segments);
+                }
+              } else {
+                setTranscriptSegments(segments);
+              }
+            },
+            activeSessionId:
+              recordSessionIdRef.current ||
+              useTranscriptStore.getState().recordingSessionId ||
+              useTranscriptStore.getState().activeSessionId,
+            setSegmentsForSession: (sessionId: string, segments: TranscriptSegment[]) => {
+              useTranscriptStore.getState().setSegmentsForSession(sessionId, segments);
+            },
+          };
+        },
         getActiveProjectId: () => useProjectStore.getState().activeProjectId,
         setActiveProjectId: (projectId) => useProjectStore.getState().setActiveProjectId(projectId),
         addHistoryItem: (item) => useHistoryStore.getState().addItem(item),
@@ -222,7 +258,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
               globalConfig: effectiveConfig,
               baseFileName: `Recording-${historyId}`,
               onSegmentsUpdated: (updatedSegments) => {
-                useTranscriptSessionStore.getState().setSegments(updatedSegments);
+                useTranscriptStore.getState().setSegmentsForSession(historyId, updatedSegments);
               },
             });
             return result.segments;
@@ -236,7 +272,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         syncSavedRecordingMeta: (title, historyId, icon) =>
           syncTranscriptSavedRecordingMeta(title, historyId, icon),
         writeFile: (filePath, contents) => writeFile(filePath, contents),
-        removeFile: (filePath) => remove(filePath),
+        removeFile: (filePath) => audioDeleteRecordingFile(filePath),
         fileSrcFromPath: convertManagedAudioFileSrc,
       }),
     []
@@ -413,7 +449,7 @@ export function useAudioRecorder({ inputSource, onSegment }: UseAudioRecorderPro
         return false;
       }
       const onboardingStore = useOnboardingStore.getState();
-      useTranscriptRuntimeStore.getState().setMode('live');
+      useTranscriptRuntimeStore.getState().setMode('create', 'live');
       onboardingStore.reopen(
         getResumeOnboardingStep(effectiveConfig, 'live_record', onboardingStore.persistedState),
         'live_record'

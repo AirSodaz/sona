@@ -3,6 +3,15 @@ use tauri::{Listener, Manager};
 use tauri_plugin_deep_link::DeepLinkExt;
 
 pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    log::info!(
+        "Sona Desktop starting | version={} | channel={} | commit={} | dirty={} | build_time={}",
+        env!("SONA_DISPLAY_VERSION"),
+        env!("SONA_BUILD_CHANNEL"),
+        env!("SONA_COMMIT_SHA"),
+        env!("SONA_IS_DIRTY"),
+        env!("SONA_BUILD_TIMESTAMP")
+    );
+
     let channel = crate::commands::system::detect_app_channel_from_config(
         &app.config().identifier,
         app.config().product_name.as_deref(),
@@ -20,7 +29,6 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         let exe_name = current_exe.file_name().and_then(|n| n.to_str());
         let _ = sona_shim::registry::register_channel(channel, install_dir, version_str, exe_name);
     }
-
     let app_handle_for_listener = app.handle().clone();
     crate::platform::storage_location::cleanup_pending_storage_locations_for_app(
         &app_handle_for_listener,

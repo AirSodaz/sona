@@ -14,6 +14,7 @@ fn sample_segments() -> Vec<TranscriptSegment> {
         timestamps: None,
         durations: None,
         translation: Some("Bonjour".to_string()),
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }]

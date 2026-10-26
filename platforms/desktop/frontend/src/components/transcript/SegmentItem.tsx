@@ -18,13 +18,13 @@ import { useTranscriptSessionStore } from '../../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../../stores/transcriptSidecarStore';
 import type { TranscriptSegment } from '../../types/transcript';
+import { needsWordBoundarySpace } from '../../utils/cjkTypography';
 import { formatDisplayTime } from '../../utils/exportFormats';
 import { CheckIcon, CloseIcon, EditIcon, MergeIcon, TrashIcon } from '../Icons';
 import { SegmentEditor } from './SegmentEditor';
 import { SegmentTimestamp } from './SegmentTimestamp';
 import { SegmentTokens } from './SegmentTokens';
 import { TranscriptUIContext } from './TranscriptUIContext';
-
 /** Props for SegmentItem component. */
 export interface SegmentItemProps {
   segment: TranscriptSegment;
@@ -113,12 +113,21 @@ export function SegmentItem({
     el.style.height = 'auto';
     el.style.height = `${Math.max(28, el.scrollHeight)}px`;
   }, []);
+  const getFullTranslation = useCallback(() => {
+    if (segment.translation && segment.draftTranslation) {
+      const space = needsWordBoundarySpace(segment.translation, segment.draftTranslation)
+        ? ' '
+        : '';
+      return `${segment.translation}${space}${segment.draftTranslation}`;
+    }
+    return segment.translation || segment.draftTranslation || '';
+  }, [segment.translation, segment.draftTranslation]);
 
   const handleStartTranslationEdit = useCallback(() => {
     if (isLocked) return;
-    setTranslationDraft(segment.translation || '');
+    setTranslationDraft(getFullTranslation());
     setIsEditingTranslation(true);
-  }, [isLocked, segment.translation]);
+  }, [isLocked, getFullTranslation]);
 
   const handleSaveTranslation = useCallback(
     (text: string) => {
@@ -126,7 +135,7 @@ export function SegmentItem({
       if (onSaveTranslation) {
         onSaveTranslation(segment.id, trimmed);
       } else {
-        updateTranscriptSegment(segment.id, { translation: trimmed });
+        updateTranscriptSegment(segment.id, { translation: trimmed, draftTranslation: undefined });
       }
       setIsEditingTranslation(false);
     },
@@ -135,8 +144,8 @@ export function SegmentItem({
 
   const handleCancelTranslation = useCallback(() => {
     setIsEditingTranslation(false);
-    setTranslationDraft(segment.translation || '');
-  }, [segment.translation]);
+    setTranslationDraft(getFullTranslation());
+  }, [getFullTranslation]);
 
   useEffect(() => {
     if (isEditingTranslation && translationInputRef.current) {
@@ -542,6 +551,8 @@ export function SegmentItem({
           )}
           {isTranslationVisible &&
             ((typeof segment.translation === 'string' && segment.translation.length > 0) ||
+              (typeof segment.draftTranslation === 'string' &&
+                segment.draftTranslation.length > 0) ||
               isEditingTranslation) &&
             (isEditingTranslation ? (
               <div
@@ -612,6 +623,16 @@ export function SegmentItem({
                 }}
               >
                 <span className="segment-translation-text">{segment.translation}</span>
+                {segment.draftTranslation && (
+                  <>
+                    {needsWordBoundarySpace(segment.translation, segment.draftTranslation)
+                      ? ' '
+                      : null}
+                    <span className="segment-draft-tail" style={{ opacity: 0.6 }}>
+                      {segment.draftTranslation}
+                    </span>
+                  </>
+                )}
                 {!isLocked && (
                   <button
                     type="button"

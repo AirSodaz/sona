@@ -3,9 +3,12 @@ import onlineAsrProviderManifest from '../../../../../../core/src/ports/online-a
 import { buildTestConfig } from '../../test-utils/configTestUtils';
 import type { AppConfig } from '../../types/config';
 import {
+  buildModelSelectionPatch,
   createVolcengineDoubaoSelection,
   DEFAULT_VOLCENGINE_DOUBAO_ASR_CONFIG,
   isAsrRequestConfigured,
+  isBatchVadExemptModel,
+  isBatchVadForced,
   isVolcengineFlashBatchMode,
   resolveAsrTranscriptionRequest,
   syncLegacyAsrSelectionFields,
@@ -51,6 +54,23 @@ const mocks = vi.hoisted(() => {
       },
       filename: 'local-batch',
     },
+    {
+      id: 'confucius4-r2t2-q8-gguf',
+      name: 'Confucius4-R2T2',
+      description: '',
+      url: '',
+      type: 'qwen3-asr',
+      modes: ['streaming', 'batch'],
+      language: 'zh',
+      size: '2 GB',
+      engine: 'llama-cpp',
+      rules: { requiresVad: true, requiresPunctuation: false },
+      fileConfig: {
+        model: 'Confucius4-R2T2-Q8_0.gguf',
+        mmproj: 'mmproj-Confucius4-R2T2-Q8_0.gguf',
+      },
+      filename: 'confucius4-r2t2-q8-gguf',
+    },
   ] as any[];
   return { presetModels };
 });
@@ -62,10 +82,14 @@ vi.mock('../modelService', async (importOriginal) => {
     PRESET_MODELS: mocks.presetModels,
     PRESET_MODELS_MAP: new Map(mocks.presetModels.map((model) => [model.id, model])),
     modelService: {
-      getModelRules: vi.fn((modelId: string) => ({
-        requiresVad: true,
-        requiresPunctuation: modelId === 'local-batch',
-      })),
+      getModelRules: vi.fn((modelId: string) => {
+        const found = mocks.presetModels.find((m) => m.id === modelId);
+        if (found?.rules) return found.rules;
+        return {
+          requiresVad: true,
+          requiresPunctuation: modelId === 'local-batch',
+        };
+      }),
     },
   };
 });
@@ -259,7 +283,137 @@ describe('asrConfigService', () => {
       batchSegmentationMode: 'whole',
     });
   });
+  it('resolves a local batch request without VAD when batch VAD is disabled for Confucius4-R2T2', () => {
+    const base = buildAsrConfig({ batchVadEnabled: false });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+              modelId: 'confucius4-r2t2-q8-gguf',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
 
+    expect(request).toMatchObject({
+      engine: 'local',
+      localEngine: 'llama-cpp',
+      mode: 'batch',
+      modelId: 'confucius4-r2t2-q8-gguf',
+      modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+      modelType: 'qwen3-asr',
+      vadModel: null,
+      punctuationModel: null,
+      vadBuffer: 8,
+      batchSegmentationMode: 'whole',
+    });
+  });
+
+  it('resolves a local batch request with VAD when batch VAD is enabled for Confucius4-R2T2', () => {
+    const base = buildAsrConfig({ batchVadEnabled: true });
+    const request = resolveAsrTranscriptionRequest(
+      {
+        ...base,
+        asr: {
+          ...base.asr!,
+          selections: {
+            ...base.asr!.selections,
+            batch: {
+              engine: 'local',
+              modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+              modelId: 'confucius4-r2t2-q8-gguf',
+              mode: 'batch',
+            },
+          },
+        },
+      },
+      'batch'
+    );
+
+    expect(request).toMatchObject({
+      engine: 'local',
+      localEngine: 'llama-cpp',
+      mode: 'batch',
+      modelId: 'confucius4-r2t2-q8-gguf',
+      modelPath: 'C:/models/confucius4-r2t2-q8-gguf',
+      modelType: 'qwen3-asr',
+      vadModel: 'C:/models/silero_vad.onnx',
+      punctuationModel: null,
+      vadBuffer: 8,
+      batchSegmentationMode: 'vad',
+    });
+  });
+  it('evaluates isBatchVadExemptModel cleanly for exempt and non-exempt models', () => {
+    expect(isBatchVadExemptModel({ type: 'qwen3-asr' })).toBe(true);
+    expect(isBatchVadExemptModel({ type: 'parakeet-tdt' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'confucius4-r2t2-q8-gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/Confucius4-R2T2-Q8_0.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'qwen3-asr-0.6b-q8-gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/qwen3_asr.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ id: 'sherpa-onnx-sense-voice-zh-en' })).toBe(false);
+    expect(isBatchVadExemptModel({ id: 'confucius4-t3po' })).toBe(false);
+    expect(isBatchVadExemptModel({ path: 'C:/models/Confucius4_R2T2_Q8_0.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: 'C:/models/confucius4_r2t2.gguf' })).toBe(true);
+    expect(isBatchVadExemptModel({ path: '/models/confucius4_r2t2/model.gguf' })).toBe(true);
+  });
+  it('evaluates isBatchVadForced correctly on AsrModelSelection', () => {
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'qwen3-asr-0.6b-q8-gguf',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'confucius4-r2t2-q8-gguf',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: 'local-batch',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(true);
+    expect(
+      isBatchVadForced({
+        engine: 'online',
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(isBatchVadForced(null)).toBe(false);
+    expect(isBatchVadForced(undefined)).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelId: null,
+        modelPath: '',
+        mode: 'batch',
+      })
+    ).toBe(false);
+    expect(
+      isBatchVadForced({
+        engine: 'local',
+        modelPath: 'C:/models/Confucius4_R2T2_Q8_0.gguf',
+      } as unknown as Parameters<typeof isBatchVadForced>[0])
+    ).toBe(false);
+  });
   it('forces batch VAD segmentation for non-exempt models even when batch VAD is disabled in config', () => {
     const request = resolveAsrTranscriptionRequest(
       buildAsrConfig({
@@ -626,5 +780,112 @@ projects:
     if (voiceTypingReq.engine === 'local') {
       expect(voiceTypingReq.enablePartialDecoding).toBe(false);
     }
+  });
+
+  describe('buildModelSelectionPatch', () => {
+    const dummyCatalog = {
+      modelPathById: {
+        'local-live': '/path/to/local-live',
+        'local-batch': '/path/to/local-batch',
+      },
+      models: [
+        { id: 'local-live', installPath: '/path/to/local-live' } as any,
+        { id: 'local-batch', installPath: '/path/to/local-batch' } as any,
+      ],
+      dependencyRequestsByModelId: {
+        'local-live': [
+          {
+            modelId: 'vad-model',
+            configKey: 'vadModelPath' as const,
+            installPath: '/path/to/vad',
+            isInstalled: true,
+          },
+          {
+            modelId: 'punct-model',
+            configKey: 'punctuationModelPath' as const,
+            installPath: '/path/to/punct',
+            isInstalled: false,
+          },
+        ],
+      },
+    };
+
+    it('clears selection when modelId is empty', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(config, 'live', '', dummyCatalog);
+      expect(livePatch.streamingModelPath).toBe('');
+      expect(livePatch.asr?.selections.live.modelPath).toBe('');
+      expect(livePatch.asr?.selections.live.modelId).toBeNull();
+
+      const batchPatch = buildModelSelectionPatch(config, 'batch', '', dummyCatalog);
+      expect(batchPatch.batchModelPath).toBe('');
+      expect(batchPatch.asr?.selections.batch.modelPath).toBe('');
+      expect(batchPatch.asr?.selections.batch.modelId).toBeNull();
+    });
+
+    it('handles online provider with submodel', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(
+        config,
+        'live',
+        'volcengine-doubao::doubao-pro',
+        dummyCatalog
+      );
+      expect(livePatch.asr?.selections.live.engine).toBe('online');
+      expect(livePatch.asr?.selections.live.providerId).toBe('volcengine-doubao');
+      expect(livePatch.asr?.selections.live.modelId).toBe('doubao-pro');
+
+      const batchPatch = buildModelSelectionPatch(
+        config,
+        'batch',
+        'volcengine-doubao::doubao-pro',
+        dummyCatalog
+      );
+      expect(batchPatch.asr?.selections.batch.engine).toBe('online');
+      expect(batchPatch.asr?.selections.batch.providerId).toBe('volcengine-doubao');
+      expect(batchPatch.asr?.selections.batch.modelId).toBe('doubao-pro');
+    });
+
+    it('handles online provider without submodel', () => {
+      const config = buildAsrConfig();
+      const livePatch = buildModelSelectionPatch(config, 'live', 'groq-whisper', dummyCatalog);
+      expect(livePatch.asr?.selections.live.engine).toBe('online');
+      expect(livePatch.asr?.selections.live.providerId).toBe('groq-whisper');
+
+      const batchPatch = buildModelSelectionPatch(config, 'batch', 'groq-whisper', dummyCatalog);
+      expect(batchPatch.asr?.selections.batch.engine).toBe('online');
+      expect(batchPatch.asr?.selections.batch.providerId).toBe('groq-whisper');
+    });
+
+    it('returns empty patch if local model path cannot be resolved', () => {
+      const config = buildAsrConfig();
+      const patch = buildModelSelectionPatch(config, 'live', 'unknown-model', dummyCatalog);
+      expect(patch).toEqual({});
+    });
+
+    it('sets local model and applies installed/uninstalled dependencies', () => {
+      const dispatchSpy = vi.spyOn(document, 'dispatchEvent');
+      const config = buildAsrConfig({
+        liveVadModelPath: '',
+        batchVadModelPath: '',
+        livePunctuationModelPath: '',
+        batchPunctuationModelPath: '',
+      });
+
+      const patch = buildModelSelectionPatch(config, 'live', 'local-live', dummyCatalog);
+      expect(patch.streamingModelPath).toBe('/path/to/local-live');
+      expect(patch.asr?.selections.live.modelId).toBe('local-live');
+      // Installed VAD model should be applied to both live and batch
+      expect(patch.liveVadModelPath).toBe('/path/to/vad');
+      expect(patch.batchVadModelPath).toBe('/path/to/vad');
+      // Uninstalled punctuation model should trigger download-background-model event
+      expect(dispatchSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'download-background-model',
+          detail: { modelId: 'punct-model' },
+        })
+      );
+      dispatchSpy.mockRestore();
+    });
   });
 });

@@ -227,9 +227,40 @@ fn offline_decode_result_reports_empty_text() {
         text: "   ".to_string(),
         tokens: Vec::new(),
         timestamps: None,
+        durations: None,
     };
 
     assert!(result.is_empty_text());
+}
+
+#[test]
+fn offline_recognizer_creation_with_corrupt_files_fails_cleanly_without_abort() {
+    let temp_dir = std::env::temp_dir().join(format!("sona-corrupt-test-{}", uuid::Uuid::new_v4()));
+    let _ = std::fs::create_dir_all(&temp_dir);
+
+    let encoder = temp_dir.join("encoder.onnx");
+    let decoder = temp_dir.join("decoder.onnx");
+    let tokens = temp_dir.join("tokens.txt");
+
+    std::fs::write(&encoder, b"corrupted onnx encoder data").unwrap();
+    std::fs::write(&decoder, b"corrupted onnx decoder data").unwrap();
+    std::fs::write(&tokens, b"<unk> 0\n<s> 1\n</s> 2\n").unwrap();
+
+    let model_type = ModelType::OfflineWhisper {
+        encoder,
+        decoder,
+        tokens,
+        language: "en".to_string(),
+    };
+
+    let result = create_offline_recognizer(model_type, 1, Some("cpu"));
+    let error = match result {
+        Err(e) => e,
+        Ok(_) => panic!("Corrupted model files should fail to create offline recognizer"),
+    };
+
+    assert_eq!(error.kind, AsrPortErrorKind::Model);
+    let _ = std::fs::remove_dir_all(temp_dir);
 }
 #[test]
 fn build_model_config_constructs_offline_omnilingual_when_files_present() {
@@ -283,6 +314,36 @@ fn build_model_config_normalizes_language_for_funasr_nano() {
     match model {
         ModelType::OfflineFunASRNano { language, .. } => {
             assert_eq!(language, "zh");
+        }
+        other => panic!("expected OfflineFunASRNano, got {other:?}"),
+    }
+}
+
+#[test]
+fn funasr_nano_build_model_config_propagates_hotwords_and_itn() {
+    let model_path = Path::new("C:/models/funasr-nano");
+    let file_config = Some(ModelFileConfig {
+        encoder_adaptor: Some("encoder_adaptor.onnx".to_string()),
+        llm: Some("llm.onnx".to_string()),
+        embedding: Some("embedding.onnx".to_string()),
+        tokenizer: Some("tokenizer".to_string()),
+        ..Default::default()
+    });
+
+    let model = build_model_config(
+        model_path,
+        "funasr-nano",
+        &file_config,
+        true,
+        "zh",
+        Some("hotwords.txt".to_string()),
+    )
+    .expect("funasr-nano model should build");
+
+    match model {
+        ModelType::OfflineFunASRNano { hotwords, itn, .. } => {
+            assert_eq!(hotwords, Some("hotwords.txt".to_string()));
+            assert!(itn);
         }
         other => panic!("expected OfflineFunASRNano, got {other:?}"),
     }
@@ -732,4 +793,75 @@ async fn test_x_asr_streaming_segment_isolation_no_duplication() {
             segments[i - 1]
         );
     }
+}
+
+#[test]
+fn build_model_config_constructs_offline_canary_when_files_present() {
+    let model_path = Path::new("C:/models/canary-180m");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        decoder: Some("decoder.int8.onnx".to_string()),
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    // Auto language
+    let model_type =
+        build_offline_model_config(model_path, "canary", &file_config, false, "auto", None)
+            .expect("canary config should succeed with valid files");
+
+    assert_eq!(model_type.model_type_name(), "canary");
+    assert!(model_type.is_offline());
+
+    match model_type {
+        ModelType::OfflineCanary {
+            encoder,
+            decoder,
+            tokens,
+            src_lang,
+            tgt_lang,
+            use_pnc,
+        } => {
+            assert_eq!(encoder, model_path.join("encoder.int8.onnx"));
+            assert_eq!(decoder, model_path.join("decoder.int8.onnx"));
+            assert_eq!(tokens, model_path.join("tokens.txt"));
+            assert_eq!(src_lang, "");
+            assert_eq!(tgt_lang, "");
+            assert!(use_pnc);
+        }
+        other => panic!("expected OfflineCanary, got {other:?}"),
+    }
+
+    // Specific language
+    let model_type =
+        build_offline_model_config(model_path, "canary", &file_config, false, "de", None)
+            .expect("canary config should succeed with valid files");
+    match model_type {
+        ModelType::OfflineCanary {
+            src_lang, tgt_lang, ..
+        } => {
+            assert_eq!(src_lang, "de");
+            assert_eq!(tgt_lang, "de");
+        }
+        other => panic!("expected OfflineCanary, got {other:?}"),
+    }
+}
+
+#[test]
+fn build_model_config_rejects_canary_when_files_missing() {
+    let model_path = Path::new("C:/models/canary-180m");
+    let file_config = Some(ModelFileConfig {
+        encoder: Some("encoder.int8.onnx".to_string()),
+        // missing decoder
+        tokens: Some("tokens.txt".to_string()),
+        ..Default::default()
+    });
+
+    let err = build_offline_model_config(model_path, "canary", &file_config, false, "auto", None)
+        .unwrap_err();
+    assert_eq!(err.kind, AsrPortErrorKind::Model);
+    assert!(
+        err.message
+            .contains("Required file name not specified in config")
+    );
 }

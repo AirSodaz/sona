@@ -37,8 +37,14 @@ pub fn get_foreground_window_info()
     crate::platform::system::get_foreground_window_info()
 }
 
-#[tauri::command]
-pub fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
+#[tauri::command(async)]
+pub async fn focus_window(app: AppHandle, label: String) -> Result<(), String> {
+    for _ in 0..20 {
+        if app.get_webview_window(&label).is_some() {
+            return crate::platform::system::focus_window(&app, &label);
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(25)).await;
+    }
     crate::platform::system::focus_window(&app, &label)
 }
 #[tauri::command]
@@ -239,6 +245,10 @@ pub fn detect_app_channel_from_config(
         }
     }
 
+    if env!("SONA_BUILD_CHANNEL").eq_ignore_ascii_case("nightly") {
+        return sona_shim::registry::Channel::Nightly;
+    }
+
     sona_shim::registry::Channel::Stable
 }
 
@@ -350,4 +360,36 @@ pub async fn set_default_channel(channel: String) -> Result<(), String> {
     })
     .await
     .map_err(|e| format!("Set default channel error: {}", e))?
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AppBuildInfo {
+    pub semver: String,
+    pub channel: String,
+    pub commit_sha: String,
+    pub is_dirty: bool,
+    pub build_number: Option<String>,
+    pub build_timestamp: String,
+    pub display_version: String,
+    pub is_update_supported: bool,
+}
+
+#[tauri::command]
+pub fn get_app_build_info() -> AppBuildInfo {
+    let build_number = env!("SONA_BUILD_NUMBER");
+    AppBuildInfo {
+        semver: env!("SONA_BUILD_SEMVER").to_string(),
+        channel: env!("SONA_BUILD_CHANNEL").to_string(),
+        commit_sha: env!("SONA_COMMIT_SHA").to_string(),
+        is_dirty: env!("SONA_IS_DIRTY") == "true",
+        build_number: if build_number.is_empty() {
+            None
+        } else {
+            Some(build_number.to_string())
+        },
+        build_timestamp: env!("SONA_BUILD_TIMESTAMP").to_string(),
+        display_version: env!("SONA_DISPLAY_VERSION").to_string(),
+        is_update_supported: env!("SONA_IS_UPDATE_SUPPORTED") == "true",
+    }
 }

@@ -652,6 +652,7 @@ pub fn segments_from_volcengine_response(
         timestamps: None,
         durations: None,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     }])
@@ -735,6 +736,7 @@ fn volcengine_segment_from_utterance(
         timestamps: (!timestamps.is_empty()).then_some(timestamps),
         durations: (!durations.is_empty()).then_some(durations),
         translation: None,
+        draft_translation: None,
         speaker,
         speaker_attribution,
     })

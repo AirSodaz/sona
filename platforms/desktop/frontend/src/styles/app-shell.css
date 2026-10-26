@@ -526,6 +526,7 @@
 .tab-button {
   position: relative;
   z-index: 1;
+  flex: 1 1 0;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -588,19 +589,24 @@
 
 .panel-left {
   flex: 0 0 350px;
+  width: 350px;
+  min-width: 350px;
+  max-width: 350px;
+  box-sizing: border-box;
   background: var(--color-bg-secondary);
 }
 
 .panel-footer {
   display: flex;
   align-items: center;
-  padding: 8px 16px 16px;
+  padding: 16px 20px 20px;
   background: transparent;
   flex-shrink: 0;
   box-sizing: border-box;
 }
 
 .panel-footer .options-container {
+  position: relative;
   width: 100%;
   display: flex;
   justify-content: center;
@@ -618,6 +624,11 @@
   overflow: hidden;
 }
 
+.tools-detail-pane.panel-right {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 .projects-mode-shell {
   flex: 1;
   min-height: 0;
@@ -625,6 +636,14 @@
   background: var(--color-bg-secondary);
 }
 
+.tools-mode-shell {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg-secondary);
+}
 .workspace-mode-shell {
   display: flex;
   flex: 1;

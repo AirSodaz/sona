@@ -163,4 +163,36 @@ mod tests {
 
         assert_eq!(error.kind, AsrPortErrorKind::Model);
     }
+
+    #[test]
+    fn silero_vad_handles_long_audio_without_overflow() {
+        let model_path = std::env::var_os("SONA_TEST_SILERO_VAD_MODEL")
+            .map(std::path::PathBuf::from)
+            .or_else(|| {
+                std::env::var_os("SONA_TEST_MODELS_DIR").map(|dir| {
+                    let base = std::path::PathBuf::from(dir);
+                    let v5 = base.join("silero_vad_v5.onnx");
+                    if v5.exists() {
+                        v5
+                    } else {
+                        base.join("silero_vad.onnx")
+                    }
+                })
+            });
+
+        let Some(model_path) = model_path.filter(|p| p.exists()) else {
+            return;
+        };
+
+        let options = VadDetectionOptions::batch_defaults(&model_path);
+        let mut detector = SileroOnnxEngine
+            .create_stream_detector(&options)
+            .expect("failed to create VAD stream detector with existing model");
+
+        let chunk = vec![0.0f32; 1600];
+        for _ in 0..1200 {
+            detector.accept_samples(&chunk);
+            assert!(!detector.is_speech_detected());
+        }
+    }
 }

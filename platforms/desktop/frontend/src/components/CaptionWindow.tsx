@@ -7,9 +7,9 @@ import {
 } from '../services/captionWindowService';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
+import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
-
 /**
  * Root component for the always-on-top caption window.
  * Manages its own state by listening to Tauri events from the main window.
@@ -115,6 +115,12 @@ export function CaptionWindow() {
   const startDragging = () => {
     getCurrentWindow().startDragging();
   };
+  const displayMode = captionState.style.displayMode ?? 'bilingual';
+  const bilingualOrder = captionState.style.bilingualOrder ?? 'original_first';
+  const translationColor = captionState.style.translationColor ?? '#6ee7b7';
+  const translationFontSize =
+    captionState.style.translationFontSize ??
+    Math.max(14, Math.round(captionState.style.fontSize * 0.85));
 
   return (
     <div
@@ -149,18 +155,96 @@ export function CaptionWindow() {
       >
         {displaySegments.length === 0
           ? null
-          : displaySegments.map((segment) => (
-              <p
-                key={segment.id}
-                className={`live-caption-line ${segment.isFinal ? '' : 'partial'}`}
-                style={{ color: captionState.style.color }}
-              >
-                {segment.speaker && (
-                  <span className="live-caption-speaker">[{segment.speaker.label}]</span>
-                )}
-                {typeof segment.text === 'string' ? segment.text : ''}
-              </p>
-            ))}
+          : displaySegments.map((segment) => {
+              const hasTranslation = Boolean(segment.translation || segment.draftTranslation);
+              const originalLine = (
+                <div
+                  className="caption-original-line"
+                  style={{
+                    color: captionState.style.color,
+                    marginTop:
+                      bilingualOrder === 'translation_first' &&
+                      displayMode === 'bilingual' &&
+                      hasTranslation
+                        ? '2px'
+                        : 0,
+                  }}
+                >
+                  {segment.speaker && (
+                    <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                  )}
+                  <span>{typeof segment.text === 'string' ? segment.text : ''}</span>
+                </div>
+              );
+
+              const translationLine = hasTranslation ? (
+                <div
+                  className="caption-translation-line"
+                  style={{
+                    fontSize: `${translationFontSize}px`,
+                    color: translationColor,
+                    marginTop:
+                      displayMode === 'bilingual' && bilingualOrder !== 'translation_first'
+                        ? '2px'
+                        : 0,
+                  }}
+                >
+                  {displayMode === 'translation' && segment.speaker && (
+                    <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                  )}
+                  <span>{segment.translation ?? ''}</span>
+                  {segment.draftTranslation && (
+                    <>
+                      {needsWordBoundarySpace(segment.translation, segment.draftTranslation)
+                        ? ' '
+                        : null}
+                      <span className="caption-draft-tail" style={{ opacity: 0.6 }}>
+                        {segment.draftTranslation}
+                      </span>
+                    </>
+                  )}
+                </div>
+              ) : null;
+
+              return (
+                <div
+                  key={segment.id}
+                  className={`live-caption-line ${segment.isFinal ? '' : 'partial'}`}
+                  style={{ marginBottom: displayMode === 'bilingual' ? '8px' : '4px' }}
+                >
+                  {displayMode === 'original' && originalLine}
+                  {displayMode === 'translation' &&
+                    (translationLine || (
+                      <div
+                        className="caption-translation-line caption-translation-pending"
+                        style={{
+                          fontSize: `${translationFontSize}px`,
+                          color: translationColor,
+                          opacity: 0.6,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        {segment.speaker && (
+                          <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                        )}
+                        <span>{segment.text}</span>
+                      </div>
+                    ))}
+                  {displayMode === 'bilingual' &&
+                    (bilingualOrder === 'translation_first' ? (
+                      <>
+                        {translationLine}
+                        {originalLine}
+                      </>
+                    ) : (
+                      <>
+                        {originalLine}
+                        {translationLine}
+                      </>
+                    ))}
+                </div>
+              );
+            })}
       </div>
     </div>
   );

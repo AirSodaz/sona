@@ -1,14 +1,10 @@
 import { useConfigStore } from '../stores/configStore';
 import type { AppConfig } from '../types/config';
-import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
-import { historyService } from './historyService';
 import { getPathStatusMap } from './pathStatusService';
 import { projectService } from './projectService';
 import { STORE_KEY_CONFIG, settingsStore } from './storageService';
-import { BaseDirectory, exists } from './tauri/platform/fs';
 
-const HISTORY_DIR = 'history';
 type ModelConfigKey =
   | 'batchModelPath'
   | 'streamingModelPath'
@@ -25,12 +21,10 @@ type ModelConfigKey =
 type ConfiguredModelField = { key: ModelConfigKey; path: string };
 
 export interface HealthCheckServicePorts {
-  historyService: typeof historyService;
   useConfigStore: typeof useConfigStore;
   settingsStore: typeof settingsStore;
   projectService: typeof projectService;
   getPathStatusMap: typeof getPathStatusMap;
-  exists: typeof exists;
 }
 
 /**
@@ -46,66 +40,12 @@ export class HealthCheckService {
   runHealthCheck = async (): Promise<void> => {
     logger.info('[HealthCheck] Starting data consistency check...');
     try {
-      // We run these sequentially or in parallel depending on their impact
-      // History check can be slow if there are many items, so we check existence.
-      await this.checkHistory();
       await this.checkModels();
       await this.checkProjects();
 
       logger.info('[HealthCheck] Health check completed.');
     } catch (error) {
       logger.error('[HealthCheck] Error during health check:', error);
-    }
-  };
-
-  /**
-   * Verifies that history items have at least one valid file (audio or transcript).
-   * If both are missing, the record is considered "dead" and removed.
-   */
-  checkHistory = async (): Promise<void> => {
-    const items = await this.ports.historyService.getAll();
-    if (items.length === 0) return;
-
-    const invalidIds: string[] = [];
-
-    for (const item of items) {
-      const audioPath = `${HISTORY_DIR}/${item.audioPath}`;
-      const transcriptPath = `${HISTORY_DIR}/${item.transcriptPath}`;
-
-      try {
-        const transcriptExists = await this.ports.exists(transcriptPath, {
-          baseDir: BaseDirectory.AppLocalData,
-        });
-        if (isHistoryItemDraft(item)) {
-          if (!transcriptExists) {
-            invalidIds.push(item.id);
-          }
-          continue;
-        }
-
-        const audioExists = await this.ports.exists(audioPath, {
-          baseDir: BaseDirectory.AppLocalData,
-        });
-
-        if (!audioExists && !transcriptExists) {
-          invalidIds.push(item.id);
-        }
-      } catch (e) {
-        // If checking fails (e.g. permission), we don't assume it's invalid
-        logger.warn(`[HealthCheck] Failed to verify files for history item ${item.id}:`, e);
-      }
-    }
-
-    if (invalidIds.length > 0) {
-      logger.info(
-        `[HealthCheck] Found ${invalidIds.length} invalid history records. Removing silently...`
-      );
-      try {
-        // historyService.deleteRecordings handles index update and any remaining file cleanup
-        await this.ports.historyService.deleteRecordings(invalidIds);
-      } catch (e) {
-        logger.error('[HealthCheck] Failed to remove invalid history records:', e);
-      }
     }
   };
 
@@ -179,10 +119,8 @@ export function createHealthCheckService(ports: HealthCheckServicePorts): Health
 }
 
 export const healthCheckService = createHealthCheckService({
-  historyService,
   useConfigStore,
   settingsStore,
   projectService,
   getPathStatusMap,
-  exists,
 });

@@ -1,4 +1,5 @@
 import presetModelsData from '../../../../../core/src/models/preset-models.json';
+import type { InterruptedDownloadInfo } from '../bindings';
 import type { ModelFileConfig } from './model';
 
 export type TimestampSupportHint = 'token' | 'segment' | 'unknown';
@@ -37,28 +38,32 @@ export interface ModelRatings {
  */
 export type ModelLabel = 'accurate' | 'lite';
 
+export type ModelCatalogModelType =
+  | 'zipformer'
+  | 'sensevoice'
+  | 'paraformer'
+  | 'punctuation'
+  | 'vad'
+  | 'itn'
+  | 'whisper'
+  | 'funasr-nano'
+  | 'fire-red-asr'
+  | 'dolphin'
+  | 'qwen3-asr'
+  | 'parakeet-tdt'
+  | 'moonshine'
+  | 'speaker-segmentation'
+  | 'speaker-embedding'
+  | 'omnilingual'
+  | 'alignment'
+  | 'canary'
+  | 'onnx-nmt';
+
 export interface ModelInfo {
   id: string;
   name: string;
   description: string;
-  type:
-    | 'zipformer'
-    | 'sensevoice'
-    | 'paraformer'
-    | 'punctuation'
-    | 'vad'
-    | 'itn'
-    | 'whisper'
-    | 'funasr-nano'
-    | 'fire-red-asr'
-    | 'dolphin'
-    | 'qwen3-asr'
-    | 'parakeet-tdt'
-    | 'moonshine'
-    | 'speaker-segmentation'
-    | 'speaker-embedding'
-    | 'omnilingual'
-    | 'alignment';
+  type: ModelCatalogModelType;
   modes?: ModelMode[];
   /** All recognizable languages, sorted ascending ISO 639 codes (`yue` = Cantonese). */
   languages: string[];
@@ -68,13 +73,14 @@ export interface ModelInfo {
   isRecommended?: boolean;
   isArchive?: boolean;
   filename?: string;
-  engine: 'sherpa-onnx' | 'llama-cpp';
+  engine: 'sherpa-onnx' | 'llama-cpp' | 'onnx-nmt';
   ratings?: ModelRatings;
   labels?: ModelLabel[];
   rules?: ModelRules;
   fileConfig?: ModelFileConfig;
   groupId?: string;
   versionLabel?: string;
+  interruptedDownload?: InterruptedDownloadInfo | null;
 }
 
 export type ModelCatalogSectionType =

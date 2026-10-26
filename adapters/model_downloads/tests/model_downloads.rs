@@ -247,3 +247,260 @@ async fn multi_file_hash_failure_preserves_previous_install() {
     );
     assert!(!install_path.join("model.gguf").exists());
 }
+
+#[test]
+fn inspect_and_clean_interrupted_download_single_file() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "silero-vad";
+    // Initially, no interrupted download
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create a partial .download file
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"partial-data").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"partial-data".len() as u64);
+    assert!(info.total_bytes.is_some());
+
+    // Clean interrupted download
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!temp_file.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_multi_file() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3-asr-0.6b-q8-gguf";
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create staging directory with partial download
+    let staging_dir = models_dir.join(format!("{}.installing", model_id));
+    std::fs::create_dir_all(&staging_dir).unwrap();
+    let staged_temp = staging_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf.download");
+    std::fs::write(&staged_temp, b"multi-partial-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"multi-partial-bytes".len() as u64);
+
+    // Clean interrupted download
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!staging_dir.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_local_llm() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3.5-4b";
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Create partial .download file for the local LLM model
+    let temp_file = models_dir.join("Qwen3.5-4B-Q4_K_M.gguf.download");
+    std::fs::write(&temp_file, b"llm-partial-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id)
+        .expect("should find interrupted LLM download");
+    assert_eq!(info.model_id, model_id);
+    assert_eq!(info.downloaded_bytes, b"llm-partial-bytes".len() as u64);
+    assert!(info.total_bytes.is_some());
+
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!temp_file.exists());
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_handles_locked_files() {
+    use fs3::FileExt;
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "silero-vad";
+    let temp_file = models_dir.join("silero_vad.onnx.download");
+    std::fs::write(&temp_file, b"actively-downloading-data").unwrap();
+
+    // Lock the file exclusively as an active download would
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&temp_file)
+        .unwrap();
+    file.try_lock_exclusive().unwrap();
+
+    // While locked, inspection must return None (not interrupted)
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    // Cleaning while locked must return Err(ResourceBusy)
+    let clean_res = clean_interrupted_download(&models_dir, model_id);
+    assert!(clean_res.is_err());
+    assert_eq!(
+        clean_res.unwrap_err().kind(),
+        std::io::ErrorKind::ResourceBusy
+    );
+    assert!(temp_file.exists());
+
+    // Unlock file
+    drop(file);
+
+    // Now inspection finds it
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_some());
+    // And cleaning succeeds
+    assert!(clean_interrupted_download(&models_dir, model_id).unwrap());
+    assert!(!temp_file.exists());
+}
+
+#[test]
+fn clean_interrupted_download_handles_installing_file_and_archive_staging() {
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    // sensevoice is an archive model (artifacts.len() == 1, is_archive = true)
+    let model_id = "sensevoice";
+    let resolved =
+        sona_core::models::downloads::resolve_model_download(model_id, &models_dir).unwrap();
+    let staging_dir = sona_core::models::downloads::staging_install_path(&resolved.install_path);
+    std::fs::create_dir_all(&staging_dir).unwrap();
+    std::fs::write(staging_dir.join("extracted_part.bin"), b"staged-bytes").unwrap();
+
+    let info = inspect_interrupted_download(&models_dir, model_id);
+    assert!(info.is_some());
+
+    let cleaned = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned);
+    assert!(!staging_dir.exists());
+
+    // Also test when .installing is a regular file (e.g. symlink or touched file)
+    let staging_file = staging_dir;
+    std::fs::write(&staging_file, b"stray-file").unwrap();
+    assert!(staging_file.exists());
+
+    let cleaned2 = clean_interrupted_download(&models_dir, model_id).unwrap();
+    assert!(cleaned2);
+    assert!(!staging_file.exists());
+}
+
+#[test]
+fn inspect_and_clean_interrupted_download_handles_nested_locked_files() {
+    use fs3::FileExt;
+    use sona_model_downloads::{clean_interrupted_download, inspect_interrupted_download};
+
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    std::fs::create_dir_all(&models_dir).unwrap();
+
+    let model_id = "qwen3-asr-0.6b-q8-gguf";
+    let resolved =
+        sona_core::models::downloads::resolve_model_download(model_id, &models_dir).unwrap();
+    let staging_dir = sona_core::models::downloads::staging_install_path(&resolved.install_path);
+    let nested_dir = staging_dir.join("tokenizer");
+    std::fs::create_dir_all(&nested_dir).unwrap();
+    let nested_file = nested_dir.join("vocab.json.download");
+    std::fs::write(&nested_file, b"actively-downloading-nested-data").unwrap();
+
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .open(&nested_file)
+        .unwrap();
+    file.try_lock_exclusive().unwrap();
+
+    assert!(inspect_interrupted_download(&models_dir, model_id).is_none());
+
+    let clean_res = clean_interrupted_download(&models_dir, model_id);
+    assert!(clean_res.is_err());
+    assert_eq!(
+        clean_res.unwrap_err().kind(),
+        std::io::ErrorKind::ResourceBusy
+    );
+    assert!(nested_file.exists());
+
+    drop(file);
+
+    assert!(clean_interrupted_download(&models_dir, model_id).unwrap());
+    assert!(!staging_dir.exists());
+}
+
+#[tokio::test]
+async fn cancel_during_connection_handshake_aborts_immediately() {
+    let dir = tempfile::tempdir().unwrap();
+    let models_dir = dir.path().join("models");
+    let model = find_preset_model("silero-vad").unwrap().clone();
+    let install_path = models_dir.join(&model.id);
+
+    // Set up a listener that accepts connections but never sends an HTTP response (simulating hanging connection)
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+    tokio::spawn(async move {
+        while let Ok((socket, _)) = listener.accept().await {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            drop(socket);
+        }
+    });
+
+    let resolved = ResolvedModelDownload {
+        model,
+        models_dir: models_dir.clone(),
+        download_path: install_path.clone(),
+        install_path: install_path.clone(),
+        artifacts: vec![ResolvedModelArtifact {
+            url: format!("http://{addr}/silero_vad.onnx"),
+            filename: "silero_vad.onnx".to_string(),
+            sha256: None,
+            size_bytes: Some(1000),
+            install_path: install_path.clone(),
+        }],
+    };
+
+    let cancel = Arc::new(tokio::sync::Notify::new());
+    let cancel_for_task = cancel.clone();
+
+    let download_task = tokio::spawn(async move {
+        download_model_with_cancel(&resolved, cancel_for_task, |_| {}).await
+    });
+
+    // Allow time for request.send() to begin connecting
+    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+
+    let start = std::time::Instant::now();
+    cancel.notify_one();
+
+    let result = download_task.await.unwrap();
+    let elapsed = start.elapsed();
+
+    assert!(matches!(result, Err(DownloadError::Cancelled)));
+    assert!(
+        elapsed.as_millis() < 1000,
+        "Cancellation took too long during connect phase: {:?}",
+        elapsed
+    );
+}

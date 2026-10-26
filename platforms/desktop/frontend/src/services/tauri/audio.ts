@@ -49,3 +49,7 @@ export async function stopMicrophoneCapture(instanceId: string): Promise<string>
 export async function setMicrophoneCapturePaused(request: SetCapturePausedRequest): Promise<void> {
   await invokeTauri(TauriCommand.audio.setMicrophoneCapturePaused, request);
 }
+
+export async function audioDeleteRecordingFile(filePath: string): Promise<void> {
+  await invokeTauri(TauriCommand.audio.deleteRecordingFile, { filePath });
+}

@@ -315,6 +315,26 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     {
         return true;
     }
+    if existing.get("captionDisplayMode") != normalized.get("captionDisplayMode")
+        || existing.get("captionBilingualOrder") != normalized.get("captionBilingualOrder")
+        || existing.get("captionTranslationFontSize")
+            != normalized.get("captionTranslationFontSize")
+        || existing.get("captionTranslationFontColor")
+            != normalized.get("captionTranslationFontColor")
+        || existing.get("realtimeTranslationEnabled")
+            != normalized.get("realtimeTranslationEnabled")
+        || existing.get("realtimeTranslationSourceLanguage")
+            != normalized.get("realtimeTranslationSourceLanguage")
+        || existing.get("realtimeTranslationTargetLanguage")
+            != normalized.get("realtimeTranslationTargetLanguage")
+        || existing.get("realtimeTranslationEngine") != normalized.get("realtimeTranslationEngine")
+        || existing.get("realtimeTranslationModelId")
+            != normalized.get("realtimeTranslationModelId")
+        || existing.get("voiceTypingRealtimePreview")
+            != normalized.get("voiceTypingRealtimePreview")
+    {
+        return true;
+    }
     existing.get("logLevel") != normalized.get("logLevel")
 }
 
@@ -524,6 +544,18 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(&parsed, "captionFontColor", "#ffffff")),
         ),
         (
+            "captionTranslationFontSize",
+            json!(number_or_default(&parsed, "captionTranslationFontSize", 18)),
+        ),
+        (
+            "captionTranslationFontColor",
+            json!(string_or_default(
+                &parsed,
+                "captionTranslationFontColor",
+                "#6ee7b7"
+            )),
+        ),
+        (
             "captionBackgroundColor",
             json!(string_or_default(
                 &parsed,
@@ -538,6 +570,58 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
                 "captionBackgroundOpacity",
                 0.6
             )),
+        ),
+        (
+            "captionDisplayMode",
+            json!(string_or_default(
+                &parsed,
+                "captionDisplayMode",
+                "bilingual"
+            )),
+        ),
+        (
+            "captionBilingualOrder",
+            json!(string_or_default(
+                &parsed,
+                "captionBilingualOrder",
+                "original_first"
+            )),
+        ),
+        (
+            "realtimeTranslationEnabled",
+            json!(bool_at(&parsed, "realtimeTranslationEnabled").unwrap_or(false)),
+        ),
+        (
+            "realtimeTranslationSourceLanguage",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationSourceLanguage",
+                "en"
+            )),
+        ),
+        (
+            "realtimeTranslationTargetLanguage",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationTargetLanguage",
+                "zh"
+            )),
+        ),
+        (
+            "realtimeTranslationEngine",
+            json!(string_or_default(
+                &parsed,
+                "realtimeTranslationEngine",
+                "onnx"
+            )),
+        ),
+        (
+            "realtimeTranslationModelId",
+            parsed
+                .get("realtimeTranslationModelId")
+                .and_then(Value::as_str)
+                .filter(|s| !s.trim().is_empty())
+                .map_or(Value::Null, |v| json!(v)),
         ),
         ("llmSettings", ensure_llm_state(&parsed)),
         (
@@ -635,6 +719,10 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "voiceTypingMode",
             json!(string_or_default(&parsed, "voiceTypingMode", "hold")),
+        ),
+        (
+            "voiceTypingRealtimePreview",
+            json!(bool_at(&parsed, "voiceTypingRealtimePreview").unwrap_or(true)),
         ),
         (
             "httpServerEnabled",
@@ -824,6 +912,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "batchAlignmentModelPath",
         "modelDownloadMirror",
         "captionFontColor",
+        "captionTranslationFontColor",
         "captionBackgroundColor",
         "language",
         "summaryTemplateId",
@@ -864,6 +953,8 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "mcpAllowModelManagement",
         "mcpNotifyOnMutation",
         "mcpAuditLogEnabled",
+        "realtimeTranslationEnabled",
+        "voiceTypingRealtimePreview",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }
@@ -886,6 +977,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "microphoneBoost",
         "captionWindowWidth",
         "captionFontSize",
+        "captionTranslationFontSize",
         "captionBackgroundOpacity",
         "liveVadBufferSize",
         "batchVadBufferSize",
@@ -914,6 +1006,36 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         value
             .as_str()
             .is_some_and(|mode| matches!(mode, "full" | "read_only" | "granular"))
+    });
+    repair_field_type(config, &defaults, "captionDisplayMode", |value| {
+        value
+            .as_str()
+            .is_some_and(|m| matches!(m, "bilingual" | "translation" | "original"))
+    });
+    repair_field_type(config, &defaults, "captionBilingualOrder", |value| {
+        value
+            .as_str()
+            .is_some_and(|o| matches!(o, "original_first" | "translation_first"))
+    });
+    repair_field_type(
+        config,
+        &defaults,
+        "realtimeTranslationSourceLanguage",
+        |value| value.as_str().is_some_and(|s| !s.trim().is_empty()),
+    );
+    repair_field_type(
+        config,
+        &defaults,
+        "realtimeTranslationTargetLanguage",
+        |value| value.as_str().is_some_and(|s| !s.trim().is_empty()),
+    );
+    repair_field_type(config, &defaults, "realtimeTranslationEngine", |value| {
+        value
+            .as_str()
+            .is_some_and(|engine| matches!(engine, "onnx" | "llama-cpp"))
+    });
+    repair_field_type(config, &defaults, "realtimeTranslationModelId", |value| {
+        value.is_null() || value.as_str().is_some_and(|s| !s.trim().is_empty())
     });
 }
 

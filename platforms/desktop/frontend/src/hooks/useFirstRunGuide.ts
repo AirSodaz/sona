@@ -189,7 +189,7 @@ export function useFirstRunGuide() {
 
   function handleFinish(): void {
     setConfig({ microphoneId: selectedMicrophoneId });
-    setMode('live');
+    setMode('create', 'live');
     complete();
   }
 

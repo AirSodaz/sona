@@ -5,6 +5,8 @@ import { useTranslation } from 'react-i18next';
 import './SettingsShared.css';
 
 export interface SettingsLocationCardProps {
+  /** Optional element ID for search scrolling/highlighting */
+  id?: string;
   /** Test ID attribute for the card container */
   testId?: string;
   /** Title of the location setting */
@@ -50,6 +52,7 @@ export interface SettingsLocationCardProps {
 }
 
 export function SettingsLocationCard({
+  id,
   testId,
   title,
   hint,
@@ -87,7 +90,7 @@ export function SettingsLocationCard({
     restoreDefaultLabel ?? t('common.restore_default', { defaultValue: 'Restore Default' });
 
   return (
-    <div className="settings-storage-location-card" data-testid={testId}>
+    <div id={id} className="settings-storage-location-card" data-testid={testId}>
       <div className="settings-storage-location-header">
         <div className="settings-storage-location-title-row">
           <span className="settings-storage-location-title">{title}</span>

@@ -1,4 +1,15 @@
-import { Activity, Clock, Copy, HardDrive, List, RefreshCw, Server, Zap } from 'lucide-react';
+import {
+  Activity,
+  Check,
+  Clock,
+  Copy,
+  Globe,
+  HardDrive,
+  List,
+  RefreshCw,
+  Server,
+  Zap,
+} from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,27 +24,74 @@ import type {
 } from '../../types/apiServer';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import { logger } from '../../utils/logger';
-import { Switch } from '../Switch';
-import {
-  SettingsItem,
-  SettingsPageHeader,
-  SettingsSection,
-  SettingsTabContainer,
-} from './SettingsLayout';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
+import { SettingsItem, SettingsSection, SettingsTabContainer } from './SettingsLayout';
 
 export function SettingsApiServerTab(): React.JSX.Element {
   const { t } = useTranslation();
   const config = useApiServerConfig();
   const setConfig = useSetConfig();
   const transport = useTransport();
-
+  const transportRef = useRef(transport);
+  useEffect(() => {
+    transportRef.current = transport;
+  }, [transport]);
   const [copied, setCopied] = useState(false);
+  const [copiedEndpoint, setCopiedEndpoint] = useState(false);
   const [health, setHealth] = useState<ApiServerHealth | null>(null);
   const [info, setInfo] = useState<ApiServerInfo | null>(null);
   const [jobs, setJobs] = useState<Record<string, ApiServerJobStatus>>({});
   const [lastError, setLastError] = useState<string | null>(null);
-
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const healthRef = useRef<ApiServerHealth | null>(null);
+  const isMountedRef = useRef(true);
+  const inFlightSnapshotRef = useRef<Promise<ApiServerDashboardSnapshot> | null>(null);
+  const prevConfigRef = useRef<{
+    host: string;
+    port: number;
+    apiKey: string;
+    maxConcurrent: number;
+    maxQueueSize: number;
+    maxUploadSizeMb: number;
+    jobTtlMinutes: number;
+    ipWhitelist: string;
+    gpuAcceleration: string;
+    enabled: boolean;
+  } | null>(null);
+  const mountConfigRef = useRef<{
+    host: string;
+    port: number;
+    apiKey: string;
+    maxConcurrent: number;
+    maxQueueSize: number;
+    maxUploadSizeMb: number;
+    jobTtlMinutes: number;
+    ipWhitelist: string;
+    gpuAcceleration: string;
+    enabled: boolean;
+  }>({
+    host: config.httpServerHost ?? '127.0.0.1',
+    port: config.httpServerPort ?? 14200,
+    apiKey: config.httpServerApiKey ?? '',
+    maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+    maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+    maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
+    jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+    ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+    gpuAcceleration: config.gpuAcceleration ?? 'auto',
+    enabled: Boolean(config.httpServerEnabled),
+  });
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    healthRef.current = health;
+  }, [health]);
 
   useEffect(() => {
     if (copied) {
@@ -42,24 +100,52 @@ export function SettingsApiServerTab(): React.JSX.Element {
     }
   }, [copied]);
 
+  useEffect(() => {
+    if (copiedEndpoint) {
+      const timer = setTimeout(() => setCopiedEndpoint(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [copiedEndpoint]);
+
+  const handleCopyEndpoint = async () => {
+    const host = config.httpServerHost || '127.0.0.1';
+    const port = config.httpServerPort ?? 14200;
+    const formattedHost = host.includes(':') && !host.startsWith('[') ? `[${host}]` : host;
+    const url = `http://${formattedHost}:${port}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedEndpoint(true);
+    } catch (e) {
+      logger.error('[ApiServer] Failed to copy endpoint URL:', e);
+    }
+  };
   const fetchData = useCallback(async () => {
     if (!config.httpServerEnabled) return;
 
     try {
-      const snapshot = await transport.invoke<ApiServerDashboardSnapshot>(
+      const promise = transportRef.current.invoke<ApiServerDashboardSnapshot>(
         TauriCommand.apiServer.dashboardSnapshot
       );
-      setHealth(snapshot.health);
-      setInfo(snapshot.info);
-      setJobs(snapshot.jobs);
+      inFlightSnapshotRef.current = promise;
+      const snapshot = await promise;
+      if (!isMountedRef.current || !config.httpServerEnabled) return;
+      setHealth(snapshot?.health ?? null);
+      setInfo(snapshot?.info ?? null);
+      setJobs(snapshot?.jobs ?? {});
       setLastError(null);
     } catch (err) {
+      if (!isMountedRef.current || !config.httpServerEnabled) return;
       setHealth(null);
       setInfo(null);
       setJobs({});
-      setLastError(extractErrorMessage(err));
+      const errMsg = extractErrorMessage(err);
+      if (!(healthRef.current === null && errMsg.toLowerCase().includes('not running'))) {
+        setLastError(errMsg);
+      }
+    } finally {
+      inFlightSnapshotRef.current = null;
     }
-  }, [config.httpServerEnabled, transport.invoke]);
+  }, [config.httpServerEnabled]);
 
   useEffect(() => {
     if (config.httpServerEnabled) {
@@ -70,6 +156,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
       setHealth(null);
       setInfo(null);
       setJobs({});
+      setLastError(null);
       if (pollIntervalRef.current) {
         clearInterval(pollIntervalRef.current);
       }
@@ -126,10 +213,28 @@ export function SettingsApiServerTab(): React.JSX.Element {
     setConfig({ httpServerApiKey: e.target.value });
   };
 
-  const handleGenerateKey = useCallback(() => {
+  const handleGenerateKey = useCallback(async () => {
+    if (config.httpServerApiKey) {
+      const confirmed = await useDialogStore.getState().confirm(
+        t('settings.api_server.regenerate_key_confirm_message', {
+          defaultValue:
+            'Regenerating the API key will invalidate the current key and require updating all external clients. Do you want to continue?',
+        }),
+        {
+          title: t('settings.api_server.regenerate_key_title', {
+            defaultValue: 'Regenerate API Key',
+          }),
+          variant: 'warning',
+          confirmLabel: t('settings.api_server.btn_generate_key', {
+            defaultValue: 'Generate New Key',
+          }),
+        }
+      );
+      if (!confirmed) return;
+    }
     const newKey = crypto.randomUUID();
     setConfig({ httpServerApiKey: newKey });
-  }, [setConfig]);
+  }, [config.httpServerApiKey, setConfig, t]);
 
   const handleCopyKey = useCallback(() => {
     const key = config.httpServerApiKey || '';
@@ -144,30 +249,97 @@ export function SettingsApiServerTab(): React.JSX.Element {
   }, [config.httpServerApiKey]);
 
   useEffect(() => {
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
+      if (!isMountedRef.current) return;
+
+      const currentSnapshot = {
+        host: config.httpServerHost ?? '127.0.0.1',
+        port: config.httpServerPort ?? 14200,
+        apiKey: config.httpServerApiKey ?? '',
+        maxConcurrent: config.httpServerMaxConcurrent ?? 2,
+        maxQueueSize: config.httpServerMaxQueueSize ?? 100,
+        maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
+        jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+        ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
+        gpuAcceleration: config.gpuAcceleration ?? 'auto',
+        enabled: Boolean(config.httpServerEnabled),
+      };
+      const isFirstRun = prevConfigRef.current === null;
+      const prev = prevConfigRef.current;
+      prevConfigRef.current = currentSnapshot;
+
       if (config.httpServerEnabled) {
-        transport
+        if (isFirstRun) {
+          const configChanged =
+            mountConfigRef.current.host !== currentSnapshot.host ||
+            mountConfigRef.current.port !== currentSnapshot.port ||
+            mountConfigRef.current.apiKey !== currentSnapshot.apiKey ||
+            mountConfigRef.current.maxConcurrent !== currentSnapshot.maxConcurrent ||
+            mountConfigRef.current.maxQueueSize !== currentSnapshot.maxQueueSize ||
+            mountConfigRef.current.maxUploadSizeMb !== currentSnapshot.maxUploadSizeMb ||
+            mountConfigRef.current.jobTtlMinutes !== currentSnapshot.jobTtlMinutes ||
+            mountConfigRef.current.ipWhitelist !== currentSnapshot.ipWhitelist ||
+            mountConfigRef.current.gpuAcceleration !== currentSnapshot.gpuAcceleration;
+
+          let isRunning = healthRef.current?.status === 'ok';
+          if (!isRunning && inFlightSnapshotRef.current) {
+            try {
+              const snapshot = await inFlightSnapshotRef.current;
+              if (snapshot?.health?.status === 'ok') {
+                isRunning = true;
+              }
+            } catch {
+              isRunning = false;
+            }
+          }
+          if (isRunning && !configChanged) {
+            return;
+          }
+        } else if (
+          prev &&
+          prev.enabled === currentSnapshot.enabled &&
+          prev.host === currentSnapshot.host &&
+          prev.port === currentSnapshot.port &&
+          prev.apiKey === currentSnapshot.apiKey &&
+          prev.maxConcurrent === currentSnapshot.maxConcurrent &&
+          prev.maxQueueSize === currentSnapshot.maxQueueSize &&
+          prev.maxUploadSizeMb === currentSnapshot.maxUploadSizeMb &&
+          prev.jobTtlMinutes === currentSnapshot.jobTtlMinutes &&
+          prev.ipWhitelist === currentSnapshot.ipWhitelist &&
+          prev.gpuAcceleration === currentSnapshot.gpuAcceleration
+        ) {
+          return;
+        }
+
+        transportRef.current
           .invoke<string>(TauriCommand.apiServer.start, {
-            host: config.httpServerHost ?? '127.0.0.1',
-            port: config.httpServerPort ?? 14200,
-            apiKey: config.httpServerApiKey ?? '',
-            maxConcurrent: config.httpServerMaxConcurrent ?? 2,
-            maxQueueSize: config.httpServerMaxQueueSize ?? 100,
-            maxUploadSizeMb: config.httpServerMaxUploadSizeMB ?? 50,
-            jobTtlMinutes: config.httpServerJobTtlMinutes ?? 60,
+            host: currentSnapshot.host,
+            port: currentSnapshot.port,
+            apiKey: currentSnapshot.apiKey,
+            maxConcurrent: currentSnapshot.maxConcurrent,
+            maxQueueSize: currentSnapshot.maxQueueSize,
+            maxUploadSizeMb: currentSnapshot.maxUploadSizeMb,
+            jobTtlMinutes: currentSnapshot.jobTtlMinutes,
             maxStreaming: 2,
-            ipWhitelist: config.httpServerIpWhitelist ?? 'localhost',
-            gpuAcceleration: config.gpuAcceleration ?? 'auto',
+            ipWhitelist: currentSnapshot.ipWhitelist,
+            gpuAcceleration: currentSnapshot.gpuAcceleration,
           })
           .then((normalizedWhitelist) => {
+            if (!isMountedRef.current) return;
+            setLastError(null);
+            void fetchData();
             if (
               typeof normalizedWhitelist === 'string' &&
               normalizedWhitelist !== config.httpServerIpWhitelist
             ) {
+              if (prevConfigRef.current) {
+                prevConfigRef.current.ipWhitelist = normalizedWhitelist;
+              }
               setConfig({ httpServerIpWhitelist: normalizedWhitelist });
             }
           })
           .catch((e) => {
+            if (!isMountedRef.current) return;
             logger.error('[ApiServer] Failed to start server:', e);
             const errMsg = extractErrorMessage(e);
             setLastError(errMsg);
@@ -182,7 +354,16 @@ export function SettingsApiServerTab(): React.JSX.Element {
             });
           });
       } else {
-        transport.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
+        if (isFirstRun) {
+          const isRunning = healthRef.current?.status === 'ok';
+          if (!isRunning) {
+            return;
+          }
+        } else if (prev && !prev.enabled) {
+          return;
+        }
+        setLastError(null);
+        transportRef.current.invoke(TauriCommand.apiServer.stop, { force: true }).catch((e) => {
           logger.error('[ApiServer] Failed to stop server:', e);
         });
       }
@@ -199,9 +380,9 @@ export function SettingsApiServerTab(): React.JSX.Element {
     config.httpServerJobTtlMinutes,
     config.httpServerIpWhitelist,
     config.gpuAcceleration,
+    fetchData,
     setConfig,
     t,
-    transport.invoke,
   ]);
   const handleToggleEnabled = async (checked: boolean) => {
     if (!checked) {
@@ -236,38 +417,183 @@ export function SettingsApiServerTab(): React.JSX.Element {
       } catch (e) {
         logger.error('[ApiServer] Failed to check active jobs:', e);
       }
+      setLastError(null);
+      setHealth(null);
+      setInfo(null);
+      setJobs({});
+      try {
+        await transport.invoke(TauriCommand.apiServer.stop, { force: true });
+      } catch (e) {
+        logger.error('[ApiServer] Failed to stop server:', e);
+      }
     }
     setConfig({ httpServerEnabled: checked });
   };
 
+  const isEnabled = Boolean(config.httpServerEnabled);
+  const isRunning = Boolean(health);
+  const isError = isEnabled && Boolean(lastError && !health);
+  const statusTone: ToolHeroStatusTone = !isEnabled
+    ? 'inactive'
+    : isError
+      ? 'error'
+      : isRunning
+        ? 'active'
+        : 'warning';
+  const statusText = !isEnabled
+    ? t('tools.status_disabled', { defaultValue: 'Disabled' })
+    : isError
+      ? t('common.error', { defaultValue: 'Error' })
+      : isRunning
+        ? `${t('settings.api_server.state_running', { defaultValue: 'Running' })} :${config.httpServerPort ?? 14200}`
+        : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' });
   return (
-    <SettingsTabContainer id="settings-panel-api-server" ariaLabelledby="settings-tab-api_server">
-      <SettingsPageHeader
-        icon={<Server width={28} height={28} />}
+    <SettingsTabContainer id="tools-panel-api_server" ariaLabelledby="tools-tab-api_server">
+      <ToolHeroHeader
+        id="settings-api-server-switch"
+        icon={<Server size={24} />}
         title={t('settings.api_server.title', { defaultValue: 'API Server' })}
         description={t('settings.api_server.description', {
           defaultValue:
             'Expose an HTTP API for external headless integration with Sona. Features like live recording and batch transcription can be invoked via HTTP.',
         })}
+        statusText={statusText}
+        statusTone={statusTone}
+        enabled={isEnabled}
+        onToggle={handleToggleEnabled}
+        switchAriaLabel={t('settings.api_server.enable_label', {
+          defaultValue: 'Enable API Server',
+        })}
+        actions={
+          isEnabled ? (
+            <button
+              type="button"
+              className="btn btn-secondary btn-sm"
+              onClick={handleCopyEndpoint}
+              title={t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+            >
+              {copiedEndpoint ? <Check size={13} /> : <Copy size={13} />}
+              <span>
+                {copiedEndpoint
+                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
+                  : t('tools.copy_api_url', { defaultValue: 'Copy Endpoint' })}
+              </span>
+            </button>
+          ) : undefined
+        }
       />
 
-      <SettingsSection>
-        {/* Enable Toggle */}
-        <SettingsItem
-          title={t('settings.api_server.enable_label', { defaultValue: 'Enable API Server' })}
-          hint={t('settings.api_server.enable_hint', {
-            defaultValue: 'Start an HTTP server to control Sona via external applications.',
-          })}
+      {isEnabled && (
+        <SettingsSection
+          title={t('settings.api_server.status_title', { defaultValue: 'Server Status' })}
+          icon={<Activity size={20} />}
         >
-          <Switch
-            checked={config.httpServerEnabled ?? false}
-            onChange={handleToggleEnabled}
-            aria-label={t('settings.api_server.enable_label', {
-              defaultValue: 'Enable API Server',
-            })}
-          />
-        </SettingsItem>
+          <div className="settings-api-server-panel">
+            <div className="api-server-status-grid">
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Activity size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_state', { defaultValue: 'State' })}
+                  </div>
+                  <div className={`status-card-value ${health ? 'text-success' : 'text-error'}`}>
+                    {health
+                      ? t('settings.api_server.state_running', { defaultValue: 'Running' })
+                      : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Clock size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_uptime', { defaultValue: 'Uptime' })}
+                  </div>
+                  <div className="status-card-value">
+                    {health ? formatUptime(health.uptime) : '-'}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Zap size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_gpu', {
+                      defaultValue: 'GPU Acceleration',
+                    })}
+                  </div>
+                  <div className="status-card-value">
+                    {info?.gpuAvailable
+                      ? t('common.enabled', { defaultValue: 'Enabled' })
+                      : t('common.disabled', { defaultValue: 'Disabled' })}
+                  </div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <Activity size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_active_jobs', {
+                      defaultValue: 'Active Tasks',
+                    })}
+                  </div>
+                  <div className="status-card-value">{health ? health.activeJobs : '-'}</div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <List size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_pending_jobs', {
+                      defaultValue: 'Pending Tasks',
+                    })}
+                  </div>
+                  <div className="status-card-value">{health ? health.pendingJobs : '-'}</div>
+                </div>
+              </div>
+              <div className="status-card">
+                <div className="status-card-icon">
+                  <HardDrive size={20} />
+                </div>
+                <div className="status-card-content">
+                  <div className="status-card-label">
+                    {t('settings.api_server.status_label_cache_space', {
+                      defaultValue: 'Cache Usage',
+                    })}
+                  </div>
+                  <div className="status-card-value">
+                    {health ? formatBytes(health.cacheSpaceBytes) : '-'}
+                  </div>
+                </div>
+              </div>
+            </div>
+            {lastError && !health && (
+              <div className="settings-error-notice" style={{ marginTop: '12px' }}>
+                {t('settings.api_server.connection_error', { defaultValue: 'Connection Error' })}:{' '}
+                {lastError}
+              </div>
+            )}
+          </div>
+        </SettingsSection>
+      )}
 
+      <SettingsSection
+        title={t('settings.api_server.network_security_title', {
+          defaultValue: 'Network & Security',
+        })}
+        icon={<Globe size={20} />}
+      >
         {/* Host */}
         <SettingsItem
           title={t('settings.api_server.host_label', { defaultValue: 'Host' })}
@@ -323,6 +649,7 @@ export function SettingsApiServerTab(): React.JSX.Element {
 
         {/* API Key */}
         <SettingsItem
+          id="settings-api-server-auth"
           title={t('settings.api_server.api_key_label', { defaultValue: 'API Key' })}
           hint={t('settings.api_server.api_key_hint', {
             defaultValue: 'Optional Bearer token for authenticating HTTP requests.',
@@ -357,9 +684,13 @@ export function SettingsApiServerTab(): React.JSX.Element {
                   : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
               }
               data-tooltip-pos="top"
-              aria-label={t('settings.api_server.copy_key', { defaultValue: 'Copy' })}
+              aria-label={
+                copied
+                  ? t('settings.api_server.copied', { defaultValue: 'Copied!' })
+                  : t('settings.api_server.copy_key', { defaultValue: 'Copy' })
+              }
             >
-              <Copy size={16} />
+              {copied ? <Check size={16} /> : <Copy size={16} />}
             </button>
           </div>
         </SettingsItem>
@@ -452,146 +783,41 @@ export function SettingsApiServerTab(): React.JSX.Element {
         </SettingsItem>
       </SettingsSection>
 
-      {config.httpServerEnabled && (
-        <>
-          <SettingsSection
-            title={t('settings.api_server.status_title', { defaultValue: 'Server Status' })}
-          >
-            <div className="settings-api-server-panel">
-              <div className="api-server-status-grid">
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Activity size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_state', { defaultValue: 'State' })}
-                    </div>
-                    <div className={`status-card-value ${health ? 'text-success' : 'text-error'}`}>
-                      {health
-                        ? t('settings.api_server.state_running', { defaultValue: 'Running' })
-                        : t('settings.api_server.state_stopped', { defaultValue: 'Stopped' })}
-                    </div>
-                  </div>
+      {isEnabled && (
+        <SettingsSection title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}>
+          <div className="settings-api-server-panel">
+            <div className="api-server-jobs-container">
+              {Object.keys(jobs || {}).length === 0 ? (
+                <div className="empty-state-mini">
+                  <p>
+                    {t('settings.api_server.no_jobs', {
+                      defaultValue: 'No active or recent jobs.',
+                    })}
+                  </p>
                 </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Clock size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_uptime', { defaultValue: 'Uptime' })}
-                    </div>
-                    <div className="status-card-value">
-                      {health ? formatUptime(health.uptime) : '-'}
-                    </div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Zap size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_gpu', {
-                        defaultValue: 'GPU Acceleration',
-                      })}
-                    </div>
-                    <div className="status-card-value">
-                      {info?.gpuAvailable
-                        ? t('common.enabled', { defaultValue: 'Enabled' })
-                        : t('common.disabled', { defaultValue: 'Disabled' })}
-                    </div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <Activity size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_active_jobs', {
-                        defaultValue: 'Active Tasks',
-                      })}
-                    </div>
-                    <div className="status-card-value">{health ? health.activeJobs : '-'}</div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <List size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_pending_jobs', {
-                        defaultValue: 'Pending Tasks',
-                      })}
-                    </div>
-                    <div className="status-card-value">{health ? health.pendingJobs : '-'}</div>
-                  </div>
-                </div>
-                <div className="status-card">
-                  <div className="status-card-icon">
-                    <HardDrive size={20} />
-                  </div>
-                  <div className="status-card-content">
-                    <div className="status-card-label">
-                      {t('settings.api_server.status_label_cache_space', {
-                        defaultValue: 'Cache Usage',
-                      })}
-                    </div>
-                    <div className="status-card-value">
-                      {health ? formatBytes(health.cacheSpaceBytes) : '-'}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              {lastError && !health && (
-                <div className="settings-error-notice" style={{ marginTop: '12px' }}>
-                  {t('settings.api_server.connection_error', { defaultValue: 'Connection Error' })}:{' '}
-                  {lastError}
-                </div>
+              ) : (
+                <table className="jobs-table">
+                  <thead>
+                    <tr>
+                      <th>{t('settings.api_server.job_id', { defaultValue: 'Job ID' })}</th>
+                      <th>{t('settings.api_server.job_status', { defaultValue: 'Status' })}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {Object.entries(jobs || {}).map(([id, status]) => (
+                      <tr key={id}>
+                        <td className="job-id-cell" title={id}>
+                          {id.slice(0, 8)}...
+                        </td>
+                        <td>{getStatusLabel(status)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
             </div>
-          </SettingsSection>
-
-          <SettingsSection
-            title={t('settings.api_server.jobs_title', { defaultValue: 'Job Queue' })}
-          >
-            <div className="settings-api-server-panel">
-              <div className="api-server-jobs-container">
-                {Object.keys(jobs).length === 0 ? (
-                  <div className="empty-state-mini">
-                    <p>
-                      {t('settings.api_server.no_jobs', {
-                        defaultValue: 'No active or recent jobs.',
-                      })}
-                    </p>
-                  </div>
-                ) : (
-                  <table className="jobs-table">
-                    <thead>
-                      <tr>
-                        <th>{t('settings.api_server.job_id', { defaultValue: 'Job ID' })}</th>
-                        <th>{t('settings.api_server.job_status', { defaultValue: 'Status' })}</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(jobs).map(([id, status]) => (
-                        <tr key={id}>
-                          <td className="job-id-cell" title={id}>
-                            {id.slice(0, 8)}...
-                          </td>
-                          <td>{getStatusLabel(status)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                )}
-              </div>
-            </div>
-          </SettingsSection>
-        </>
+          </div>
+        </SettingsSection>
       )}
     </SettingsTabContainer>
   );

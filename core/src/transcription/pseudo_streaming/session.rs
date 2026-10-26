@@ -200,9 +200,24 @@ fn execute_inference_pass(
         .timestamps
         .as_ref()
         .map(|ts| ts.iter().map(|t| *t + global_start as f32).collect());
-    let durations = timestamps_abs
-        .as_ref()
-        .and_then(|ts| synthesize_durations(ts, global_end as f32));
+    let durations = result
+        .durations
+        .filter(|d| {
+            !d.is_empty()
+                && result
+                    .timestamps
+                    .as_ref()
+                    .is_none_or(|ts| d.len() == ts.len())
+                && result
+                    .tokens
+                    .as_ref()
+                    .is_none_or(|toks| d.len() == toks.len())
+        })
+        .or_else(|| {
+            timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, global_end as f32))
+        });
 
     let segment = TranscriptSegment {
         id: segment_id.to_string(),
@@ -215,6 +230,7 @@ fn execute_inference_pass(
         timestamps: timestamps_abs,
         durations,
         translation: None,
+        draft_translation: None,
         speaker: None,
         speaker_attribution: None,
     };

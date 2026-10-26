@@ -38,6 +38,16 @@ pub struct DoctorReport {
     pub models: DoctorModelsStatus,
     pub hardware_acceleration: DoctorHardwareStatus,
     pub config: DoctorConfigStatus,
+    pub build_info: DoctorBuildInfo,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DoctorBuildInfo {
+    pub version: String,
+    pub channel: String,
+    pub commit: String,
+    pub dirty: bool,
+    pub build_timestamp: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -92,6 +102,17 @@ pub async fn run_doctor(
     } else {
         let mut lines = Vec::new();
         lines.push("Sona CLI System Health Check:".to_string());
+        lines.push(format!(
+            "  Version: {} | Channel: {} | Commit: {}{}",
+            report.build_info.version,
+            report.build_info.channel,
+            report.build_info.commit,
+            if report.build_info.dirty {
+                " [dirty]"
+            } else {
+                ""
+            }
+        ));
         lines.push("--------------------------------------------------".to_string());
 
         // 1. Built-in decoder and FFmpeg
@@ -218,6 +239,13 @@ async fn inspect_system(args: &DoctorArgs) -> DoctorReport {
         models: models_status,
         hardware_acceleration: hw_status,
         config: config_status,
+        build_info: DoctorBuildInfo {
+            version: env!("SONA_DISPLAY_VERSION").to_string(),
+            channel: env!("SONA_BUILD_CHANNEL").to_string(),
+            commit: env!("SONA_COMMIT_SHA").to_string(),
+            dirty: env!("SONA_IS_DIRTY") == "true",
+            build_timestamp: env!("SONA_BUILD_TIMESTAMP").to_string(),
+        },
     }
 }
 async fn inspect_hardware() -> DoctorHardwareStatus {

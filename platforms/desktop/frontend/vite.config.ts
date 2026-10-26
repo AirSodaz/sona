@@ -1,8 +1,14 @@
 /// <reference types="vitest" />
 
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
 import { defineConfig, type Plugin, type ViteDevServer } from 'vite';
+import { getBuildInfo } from '../../../scripts/get-build-info.mjs';
 import { buildTokens } from './scripts/build-tokens.mjs';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '../../..');
 
 function tokensPlugin(): Plugin {
   return {
@@ -35,6 +41,17 @@ export default defineConfig(async () => ({
       },
     }),
   ],
+  define: {
+    __APP_BUILD_INFO__: JSON.stringify(
+      getBuildInfo({
+        cwd: repoRoot,
+        env:
+          process.env.NODE_ENV === 'test' || process.env.VITEST
+            ? { ...process.env, SONA_CHANNEL: process.env.SONA_CHANNEL || 'stable' }
+            : process.env,
+      })
+    ),
+  },
   test: {
     globals: true,
     exclude: ['**/node_modules/**', 'tests/e2e/**', 'playwright-report/**'],

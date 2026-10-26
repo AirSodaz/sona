@@ -521,3 +521,21 @@ async fn update_check_explicit_channel_overrides_hyphenated_version() {
     assert_eq!(val["channel"], "stable");
     assert_eq!(val["current_version"], "0.9.6-45");
 }
+
+#[tokio::test]
+async fn update_fails_closed_on_dev_or_ci_builds() {
+    // When invoked without --current-version-override in dev or CI builds,
+    // update must immediately return an error without touching endpoints.
+    let mut io = sona_cli::MemoryCliIo::default();
+    let res = sona_cli::run_cli_with_io_async(["sona-cli", "update", "--check"], &mut io).await;
+
+    assert!(
+        res.is_err(),
+        "update without override on dev/ci build must fail"
+    );
+    let err_msg = res.unwrap_err().to_string();
+    assert!(
+        err_msg.contains("Auto-update is disabled for"),
+        "unexpected error: {err_msg}"
+    );
+}

@@ -1,4 +1,6 @@
-use sona_core::llm::provider_protocol::{LlmModelSummary, strategy_supports_model_listing};
+use sona_core::llm::provider_protocol::{
+    LlmModelMetadataSource, LlmModelSummary, strategy_supports_model_listing,
+};
 use sona_core::llm::requests::LlmModelsRequest;
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::LlmPortError;
@@ -7,8 +9,8 @@ use crate::aimux_adapter::{create_aimux_provider, map_aimux_error};
 use crate::models_dev::{
     default_models_dev_catalog, models_dev_provider_id, should_enrich_model_metadata,
 };
+use crate::provider_discovery::discover_native_provider_models;
 use crate::transport::validate_llm_api_host;
-
 pub async fn list_models_with_provider(
     request: LlmModelsRequest,
 ) -> Result<Vec<LlmModelSummary>, LlmPortError> {
@@ -20,17 +22,32 @@ pub async fn list_models_with_provider(
     }
     validate_llm_api_host(&request.base_url)?;
 
-    let provider = create_aimux_provider(strategy, &request.api_key, &request.base_url, None)?;
-
-    let runtime_models = provider.list_models().await.map_err(map_aimux_error)?;
-
-    let discovered = runtime_models
-        .into_iter()
-        .map(|m| LlmModelSummary {
-            model: m.id,
-            ..LlmModelSummary::default()
-        })
-        .collect::<Vec<_>>();
+    // 1. Attempt native proprietary provider discovery
+    let discovered = match discover_native_provider_models(
+        strategy,
+        &request.api_key,
+        &request.base_url,
+    )
+    .await
+    {
+        Some(Ok(models)) => models,
+        Some(Err(err)) => return Err(err),
+        None => {
+            // 2. Fall back to standard aimux model listing
+            let provider =
+                create_aimux_provider(strategy, &request.api_key, &request.base_url, None)?;
+            let runtime_models = provider.list_models().await.map_err(map_aimux_error)?;
+            runtime_models
+                .into_iter()
+                .map(|m| LlmModelSummary {
+                    model: m.id,
+                    metadata_sources: vec![LlmModelMetadataSource::Provider],
+                    ..LlmModelSummary::default()
+                })
+                .collect::<Vec<_>>()
+        }
+    };
+    // 3. Complete metadata via models.dev catalog
     let enriched = if !should_enrich_model_metadata(&request.provider, &request.base_url) {
         discovered
     } else {
@@ -40,6 +57,7 @@ pub async fn list_models_with_provider(
             .await
     };
 
+    // 4. Resolve capabilities via built-in rules
     let results = enriched
         .into_iter()
         .map(|mut summary| {

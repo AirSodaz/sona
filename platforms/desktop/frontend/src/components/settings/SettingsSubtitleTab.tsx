@@ -1,9 +1,11 @@
 import {
   Activity,
+  ArrowLeftRight,
   Check,
   Copy,
   History,
   Keyboard,
+  Languages,
   Layers,
   Plus,
   Search,
@@ -17,6 +19,7 @@ import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
+import { useRealtimeTranslationConfig } from '../../hooks/useRealtimeTranslationConfig';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import { DEFAULT_VOICE_TYPING_CONTEXT_RULES } from '../../services/voiceTyping/voiceTypingContext';
 import {
@@ -96,7 +99,13 @@ function getFailureSourceLabel(
   }
 }
 
-function VoiceTypingSettingsSection(): React.JSX.Element {
+export interface VoiceTypingSettingsSectionProps {
+  hideEnableSwitch?: boolean;
+}
+
+export function VoiceTypingSettingsSection({
+  hideEnableSwitch = false,
+}: VoiceTypingSettingsSectionProps = {}): React.JSX.Element {
   const { t, i18n } = useTranslation();
   const vtConfig = useVoiceTypingConfig();
   const updateConfig = useSetConfig();
@@ -111,11 +120,15 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     [i18n?.language]
   );
   const isAvailable = readiness.state === 'ready';
+  const isMissingDependency =
+    readiness.state === 'needs_shortcut' ||
+    readiness.state === 'needs_live_model' ||
+    readiness.state === 'needs_vad';
   const hasFailureReason = readiness.state === 'failed' && Boolean(readiness.lastErrorMessage);
   const failureSourceLabel = getFailureSourceLabel(t, readiness.lastErrorSource);
   const availabilityTone: AvailabilityTone = isAvailable
     ? 'ready'
-    : hasFailureReason
+    : hasFailureReason || isMissingDependency
       ? 'missing'
       : 'off';
 
@@ -132,21 +145,25 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             'Configure global shortcut triggers, activation mode, and floating capsule placement',
         })}
       >
-        <SettingsItem
-          title={t('settings.enable_voice_typing', {
-            defaultValue: 'Enable Voice Typing',
-          })}
-          hint={t('settings.enable_voice_typing_hint', {
-            defaultValue: 'Type text directly into any application using your voice',
-          })}
-        >
-          <Switch
-            checked={vtConfig.voiceTypingEnabled ?? false}
-            onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
-          />
-        </SettingsItem>
+        {!hideEnableSwitch && (
+          <SettingsItem
+            id="settings-voice-typing-enable"
+            title={t('settings.enable_voice_typing', {
+              defaultValue: 'Enable Voice Typing',
+            })}
+            hint={t('settings.enable_voice_typing_hint', {
+              defaultValue: 'Type text directly into any application using your voice',
+            })}
+          >
+            <Switch
+              checked={vtConfig.voiceTypingEnabled ?? false}
+              onChange={(val) => updateConfig({ voiceTypingEnabled: val })}
+            />
+          </SettingsItem>
+        )}
 
         <SettingsItem
+          id="settings-voice-typing-shortcut"
           title={t('settings.voice_typing_shortcut', { defaultValue: 'Shortcut' })}
           hint={t('settings.voice_typing_shortcut_hint', {
             defaultValue: 'Global shortcut to activate voice typing',
@@ -188,6 +205,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
+          id="settings-voice-typing-mode"
           title={t('settings.voice_typing_mode', { defaultValue: 'Mode' })}
           hint={t('settings.voice_typing_mode_hint', {
             defaultValue: 'How the shortcut triggers listening',
@@ -257,6 +275,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         })}
       >
         <SettingsItem
+          id="settings-voice-typing-processing"
           title={t('settings.voice_typing_processing_mode', { defaultValue: 'Processing Mode' })}
           hint={t('settings.voice_typing_processing_mode_hint', {
             defaultValue: 'Choose between fast raw output or AI-powered smart polishing',
@@ -364,6 +383,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         </SettingsItem>
 
         <SettingsItem
+          id="settings-voice-typing-cjk"
           title={t('settings.voice_typing_cjk_spacing_enabled', {
             defaultValue: 'CJK-Latin Typography Spacing',
           })}
@@ -391,6 +411,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
         })}
       >
         <SettingsItem
+          id="settings-voice-typing-context"
           title={t('settings.voice_typing_context_awareness_enabled', {
             defaultValue: 'Application Context Awareness',
           })}
@@ -465,6 +486,16 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
             defaultValue: 'Availability',
           })}
           hint={(() => {
+            if (isMissingDependency) {
+              const key =
+                readiness.state === 'needs_shortcut'
+                  ? 'settings.voice_typing_status_summary_missing_shortcut'
+                  : readiness.state === 'needs_vad'
+                    ? 'settings.voice_typing_status_summary_missing_vad'
+                    : 'settings.voice_typing_status_summary_missing_model';
+              return t(key, { defaultValue: 'Voice Typing still needs setup before it can run.' });
+            }
+
             if (!hasFailureReason) {
               return undefined;
             }
@@ -496,7 +527,7 @@ function VoiceTypingSettingsSection(): React.JSX.Element {
     </>
   );
 }
-function VoiceTypingHistorySection(): React.JSX.Element {
+export function VoiceTypingHistorySection(): React.JSX.Element {
   const { t } = useTranslation();
   const historyItems = useVoiceTypingHistoryStore((state) => state.items);
   const removeItem = useVoiceTypingHistoryStore((state) => state.removeItem);
@@ -586,6 +617,7 @@ function VoiceTypingHistorySection(): React.JSX.Element {
 
   return (
     <SettingsSection
+      id="settings-voice-typing-history"
       title={t('settings.voice_typing_history', { defaultValue: 'Dictation History' })}
       icon={<History size={20} />}
     >
@@ -874,32 +906,85 @@ function VoiceTypingHistorySection(): React.JSX.Element {
 export type SubtitleSubTab = 'voice_typing' | 'subtitles';
 
 export interface SettingsSubtitleTabProps {
+  /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialSubTab?: SubtitleSubTab;
+  subTabRequestId?: number;
 }
 
 export function SettingsSubtitleTab({
-  initialSubTab = 'voice_typing',
+  initialSubTab,
+  subTabRequestId,
 }: SettingsSubtitleTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const config = useCaptionConfig();
   const updateConfig = useSetConfig();
 
-  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<SubtitleSubTab>(initialSubTab || 'voice_typing');
 
   useEffect(() => {
-    if (initialSubTab) {
+    if (initialSubTab && subTabRequestId !== undefined) {
       setActiveSubTab(initialSubTab);
     }
-  }, [initialSubTab]);
+  }, [initialSubTab, subTabRequestId]);
   const lockWindow = config.lockWindow ?? false;
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;
   const captionWindowWidth = config.captionWindowWidth ?? 800;
   const captionFontSize = config.captionFontSize ?? 24;
   const captionFontColor = config.captionFontColor || '#ffffff';
+  const captionTranslationFontSize = config.captionTranslationFontSize ?? 18;
+  const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
   const captionBackgroundColor = config.captionBackgroundColor || '#000000';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
+  const {
+    realtimeTranslationEnabled,
+    realtimeTranslationSourceLanguage,
+    captionDisplayMode,
+    sourceLanguages,
+    targetLanguages,
+    targetLanguageValue,
+    handleSourceLanguageChange,
+    handleTargetLanguageChange,
+    handleSwapLanguages,
+    handleToggleRealtimeTranslation,
+  } = useRealtimeTranslationConfig();
+  const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
+  const displayModeOptions = useMemo(
+    () => [
+      {
+        value: 'bilingual',
+        label: t('settings.caption_mode_bilingual', {
+          defaultValue: 'Bilingual (Original & Translation)',
+        }),
+      },
+      {
+        value: 'translation',
+        label: t('settings.caption_mode_translation', { defaultValue: 'Translation Only' }),
+      },
+      {
+        value: 'original',
+        label: t('settings.caption_mode_original', { defaultValue: 'Original Only' }),
+      },
+    ],
+    [t]
+  );
+
+  const bilingualOrderOptions = useMemo(
+    () => [
+      {
+        value: 'original_first',
+        label: t('settings.caption_order_original_first', { defaultValue: 'Original on Top' }),
+      },
+      {
+        value: 'translation_first',
+        label: t('settings.caption_order_translation_first', {
+          defaultValue: 'Translation on Top',
+        }),
+      },
+    ],
+    [t]
+  );
   return (
     <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
       <SettingsPageHeader
@@ -972,6 +1057,7 @@ export function SettingsSubtitleTab({
           }}
         >
           <SettingsSection
+            id="settings-subtitle-window"
             title={t('settings.subtitle_behavior_title')}
             icon={<SlidersHorizontal size={20} />}
           >
@@ -998,6 +1084,126 @@ export function SettingsSubtitleTab({
           </SettingsSection>
 
           <SettingsSection
+            id="settings-subtitle-translation"
+            title={t('settings.subtitle_realtime_translation_title', {
+              defaultValue: 'Real-time Bilingual Translation',
+            })}
+            icon={<Languages size={20} />}
+            description={t('settings.subtitle_realtime_translation_desc', {
+              defaultValue:
+                'On-device neural translation for live captions with local agreement stabilization.',
+            })}
+          >
+            <SettingsItem
+              title={t('settings.enable_realtime_translation', {
+                defaultValue: 'Enable Real-time Translation',
+              })}
+              hint={t('settings.enable_realtime_translation_hint', {
+                defaultValue: 'Translate spoken subtitles in real time as speech is recognized.',
+              })}
+            >
+              <Switch
+                checked={realtimeTranslationEnabled}
+                onChange={handleToggleRealtimeTranslation}
+              />
+            </SettingsItem>
+
+            {realtimeTranslationEnabled && (
+              <>
+                <SettingsItem
+                  title={t('settings.translation_language_pair', {
+                    defaultValue: 'Language Pair',
+                  })}
+                  hint={t('settings.translation_language_pair_hint', {
+                    defaultValue:
+                      'Translate from source language to target language (supports Chinese, English, Japanese).',
+                  })}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Dropdown
+                      id="translation-source-language"
+                      aria-label={t('settings.translation_source_language', {
+                        defaultValue: 'Translation Source Language',
+                      })}
+                      options={sourceLanguages}
+                      value={realtimeTranslationSourceLanguage}
+                      onChange={handleSourceLanguageChange}
+                      style={{ width: '150px' }}
+                    />
+                    <button
+                      type="button"
+                      id="swap-translation-languages"
+                      aria-label={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
+                      className="btn btn-secondary"
+                      onClick={handleSwapLanguages}
+                      title={t('settings.swap_translation_languages', {
+                        defaultValue: 'Swap languages',
+                      })}
+                      style={{
+                        padding: '6px 10px',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                      }}
+                    >
+                      <ArrowLeftRight size={14} />
+                    </button>
+                    <Dropdown
+                      id="translation-target-language"
+                      aria-label={t('settings.translation_target_language', {
+                        defaultValue: 'Translation Target Language',
+                      })}
+                      options={targetLanguages}
+                      value={targetLanguageValue}
+                      onChange={handleTargetLanguageChange}
+                      style={{ width: '150px' }}
+                    />
+                  </div>
+                </SettingsItem>
+
+                <SettingsItem
+                  title={t('settings.caption_display_mode', {
+                    defaultValue: 'Display Mode',
+                  })}
+                >
+                  <Dropdown
+                    options={displayModeOptions}
+                    value={captionDisplayMode}
+                    onChange={(val) =>
+                      updateConfig({
+                        captionDisplayMode: val as 'bilingual' | 'translation' | 'original',
+                      })
+                    }
+                    style={{ width: '260px' }}
+                  />
+                </SettingsItem>
+
+                {captionDisplayMode === 'bilingual' && (
+                  <SettingsItem
+                    title={t('settings.caption_bilingual_order', {
+                      defaultValue: 'Bilingual Order',
+                    })}
+                  >
+                    <Dropdown
+                      options={bilingualOrderOptions}
+                      value={captionBilingualOrder}
+                      onChange={(val) =>
+                        updateConfig({
+                          captionBilingualOrder: val as 'original_first' | 'translation_first',
+                        })
+                      }
+                      style={{ width: '200px' }}
+                    />
+                  </SettingsItem>
+                )}
+              </>
+            )}
+          </SettingsSection>
+
+          <SettingsSection
+            id="settings-subtitle-appearance"
             title={t('settings.subtitle_appearance_title')}
             icon={<Subtitles size={20} />}
             description={t('settings.subtitle_appearance_desc')}
@@ -1037,6 +1243,52 @@ export function SettingsSubtitleTab({
                 value={captionFontColor}
                 onChange={(color) => updateConfig({ captionFontColor: color })}
                 aria-label={t('live.font_color')}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_size', {
+                defaultValue: 'Translation Font Size',
+              })}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <input
+                  type="number"
+                  min="12"
+                  max="72"
+                  step="1"
+                  value={captionTranslationFontSize}
+                  onChange={(e) => {
+                    const parsed = Number(e.target.value);
+                    if (!Number.isNaN(parsed)) {
+                      updateConfig({ captionTranslationFontSize: parsed });
+                    }
+                  }}
+                  onBlur={(e) => {
+                    const parsed = Number(e.target.value);
+                    const clamped = Number.isNaN(parsed) ? 18 : Math.max(12, Math.min(72, parsed));
+                    updateConfig({ captionTranslationFontSize: clamped });
+                  }}
+                  className="settings-input"
+                  style={{ width: '100px', textAlign: 'center' }}
+                  aria-label={t('live.translation_font_size', {
+                    defaultValue: 'Translation Font Size',
+                  })}
+                />
+              </div>
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('live.translation_font_color', {
+                defaultValue: 'Translation Font Color',
+              })}
+            >
+              <ColorSwatchPicker
+                value={captionTranslationFontColor}
+                onChange={(color) => updateConfig({ captionTranslationFontColor: color })}
+                aria-label={t('live.translation_font_color', {
+                  defaultValue: 'Translation Font Color',
+                })}
               />
             </SettingsItem>
 

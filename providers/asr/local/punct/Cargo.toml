@@ -10,6 +10,5 @@ license.workspace = true
 role = "provider"
 
 [dependencies]
-log = { workspace = true }
 sherpa-onnx = { workspace = true }
 sona-core = { workspace = true }

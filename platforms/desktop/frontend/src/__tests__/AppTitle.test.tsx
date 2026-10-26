@@ -14,6 +14,7 @@ vi.mock('../components/transcript/TranscriptWorkbench', () => ({
 vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
 vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
 vi.mock('../components/ProjectsView', () => ({ ProjectsView: () => <div>ProjectsView</div> }));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/Settings', () => ({ Settings: () => <div>Settings</div> }));
 vi.mock('../components/DiagnosticsModal', () => ({
   DiagnosticsModal: () => <div>DiagnosticsModal</div>,
@@ -63,7 +64,8 @@ vi.mock('../stores/onboardingStore', () => ({
 
 describe('App Title Logic', () => {
   const defaultTranscriptState = {
-    mode: 'live',
+    mode: 'create',
+    ingestionFocus: 'live',
     setMode: vi.fn(),
   };
 
@@ -101,20 +103,40 @@ describe('App Title Logic', () => {
     setupStore();
   });
 
-  it('displays "Live Record" title in live mode', () => {
+  it('renders segmented control without redundant heading in create mode', () => {
     render(<App />);
-    expect(screen.getByText('panel.live_record')).not.toBeNull();
+    expect(screen.queryByRole('heading', { level: 2, name: 'panel.create' })).toBeNull();
+    expect(screen.getByRole('tablist')).not.toBeNull();
   });
 
-  it('displays "Batch Import" title in batch mode', () => {
-    setupStore({ mode: 'batch' });
-    render(<App />);
-    expect(screen.getByText('panel.batch_import')).not.toBeNull();
+  it('renders the tools workbench and shows tools shell in tools mode', () => {
+    setupStore({ mode: 'tools' });
+    const { container } = render(<App />);
+
+    expect(screen.getByText('ToolsView')).not.toBeNull();
+    const toolsShell = container.querySelector('.tools-mode-shell') as HTMLElement;
+    expect(toolsShell).not.toBeNull();
+    expect(toolsShell.style.display).not.toBe('none');
+
+    const workspaceShell = container.querySelector('.workspace-mode-shell') as HTMLElement;
+    expect(workspaceShell.style.display).toBe('none');
   });
 
+  it('renders the projects workbench and shows projects shell in projects mode', () => {
+    setupStore({ mode: 'projects' });
+    const { container } = render(<App />);
+
+    expect(screen.getByText('ProjectsView')).not.toBeNull();
+    const projectsShell = container.querySelector('.projects-mode-shell') as HTMLElement;
+    expect(projectsShell).not.toBeNull();
+    expect(projectsShell.style.display).not.toBe('none');
+
+    const workspaceShell = container.querySelector('.workspace-mode-shell') as HTMLElement;
+    expect(workspaceShell.style.display).toBe('none');
+  });
   it('displays active project name as a tag in header when active', () => {
     setupStore(
-      { mode: 'live' },
+      { mode: 'create' },
       {
         activeProjectId: 'p1',
         projects: [{ id: 'p1', name: 'My Project' }],

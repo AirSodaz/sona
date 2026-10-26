@@ -28,11 +28,11 @@ import { useMcpStore } from '../../stores/mcpStore';
 import type { AppConfig, McpPermissionMode } from '../../types/config';
 import { ClientLogo } from '../icons/ClientLogos';
 import { Switch } from '../Switch';
+import { ToolHeroHeader, type ToolHeroStatusTone } from '../tools/ToolHeroHeader';
 import {
   SegmentedSubTabs,
   SettingsAccordion,
   SettingsItem,
-  SettingsPageHeader,
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
@@ -82,6 +82,12 @@ export function SettingsMcpTab(): React.JSX.Element {
     void fetchClientConfigs();
   }, [fetchStatus, fetchLogs, fetchTools, fetchClientConfigs]);
 
+  useEffect(() => {
+    if (!status?.running) {
+      setPingLatency((prev) => (prev !== null && prev >= 0 ? null : prev));
+    }
+  }, [status?.running]);
+
   const handleCopy = useCallback((text: string, key: string) => {
     void navigator.clipboard.writeText(text);
     setCopiedKey(key);
@@ -92,6 +98,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
   const handleToggleEnabled = useCallback(
     async (nextEnabled: boolean) => {
+      setPingLatency(null);
       setConfig({ mcpEnabled: nextEnabled });
       await toggleEnabled(nextEnabled);
     },
@@ -99,6 +106,7 @@ export function SettingsMcpTab(): React.JSX.Element {
   );
 
   const handleRestart = useCallback(async () => {
+    setPingLatency(null);
     await toggleEnabled(false);
     await toggleEnabled(true);
   }, [toggleEnabled]);
@@ -125,8 +133,13 @@ export function SettingsMcpTab(): React.JSX.Element {
     const start = performance.now();
     try {
       await fetchStatus();
-      const elapsed = Math.round((performance.now() - start) * 10) / 10;
-      setPingLatency(elapsed);
+      const mcpState = useMcpStore.getState();
+      if (mcpState.error || !mcpState.status?.running) {
+        setPingLatency(-1);
+      } else {
+        const elapsed = Math.round((performance.now() - start) * 10) / 10;
+        setPingLatency(elapsed);
+      }
     } catch {
       setPingLatency(-1);
     } finally {
@@ -187,39 +200,72 @@ export function SettingsMcpTab(): React.JSX.Element {
   );
 
   const currentMode = config.mcpPermissionMode ?? status?.permissionMode ?? 'full';
+  const isEnabled = Boolean(config.mcpEnabled ?? status?.enabled ?? true);
+  const isRunning = Boolean(status?.running);
+  const activeConnections = status?.activeConnections ?? 0;
+
+  const statusTone: ToolHeroStatusTone = !isEnabled
+    ? 'inactive'
+    : !isRunning
+      ? 'warning'
+      : 'active';
+  const statusText = !isEnabled
+    ? t('tools.status_disabled', { defaultValue: 'Disabled' })
+    : !isRunning
+      ? t('settings.mcp.status_stopped', { defaultValue: 'Stopped' })
+      : activeConnections > 0
+        ? t('settings.mcp.active_clients_count_short', {
+            count: activeConnections,
+            defaultValue: `${activeConnections} Connected`,
+          })
+        : t('settings.mcp.status_listening', { defaultValue: 'Listening' });
 
   return (
-    <SettingsTabContainer id="settings-panel-mcp" ariaLabelledby="settings-tab-mcp">
-      <SettingsPageHeader
-        icon={<Bot width={28} height={28} />}
+    <SettingsTabContainer id="tools-panel-mcp" ariaLabelledby="tools-tab-mcp">
+      <ToolHeroHeader
+        id="settings-mcp-hero"
+        icon={<Bot size={24} />}
         title={t('settings.mcp.title', { defaultValue: 'MCP Agents' })}
         description={t('settings.mcp.description', {
           defaultValue:
             'Securely expose transcription, recording control, and historical data to external AI Agents (Claude Desktop, Cursor, Windsurf, Zed) via Model Context Protocol.',
         })}
+        statusText={statusText}
+        statusTone={statusTone}
+        enabled={isEnabled}
+        onToggle={handleToggleEnabled}
+        switchAriaLabel={t('settings.mcp.enable_label', {
+          defaultValue: 'Enable MCP Agent Service',
+        })}
+        actions={
+          <button
+            type="button"
+            className="btn btn-secondary btn-sm"
+            disabled={!isEnabled || !status?.running || isPinging}
+            onClick={() => void handlePing()}
+            title={t('settings.mcp.btn_ping', { defaultValue: 'Ping MCP Service' })}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Zap size={13} />
+            <span>
+              {isPinging
+                ? t('settings.mcp.pinging', { defaultValue: 'Pinging...' })
+                : pingLatency !== null
+                  ? pingLatency >= 0
+                    ? `${pingLatency}ms`
+                    : t('settings.mcp.ping_failed', { defaultValue: 'Ping failed' })
+                  : t('settings.mcp.btn_ping', { defaultValue: 'Ping' })}
+            </span>
+          </button>
+        }
       />
 
       {/* 1. Service Lifecycle & Status */}
       <SettingsSection
+        id="settings-mcp-servers"
         title={t('settings.mcp.status_title', { defaultValue: 'Service Lifecycle & Status' })}
         icon={<Activity size={18} />}
       >
-        <SettingsItem
-          title={t('settings.mcp.enable_label', { defaultValue: 'Enable MCP Agent Service' })}
-          hint={t('settings.mcp.enable_hint', {
-            defaultValue:
-              'Start the local IPC listener (Named Pipe / Unix Domain Socket) allowing external AI Agents to control Sona.',
-          })}
-        >
-          <Switch
-            checked={config.mcpEnabled ?? status?.enabled ?? true}
-            onChange={handleToggleEnabled}
-            aria-label={t('settings.mcp.enable_label', {
-              defaultValue: 'Enable MCP Agent Service',
-            })}
-          />
-        </SettingsItem>
-
         <SettingsItem
           title={t('settings.mcp.service_status', { defaultValue: 'Service Status & Clients' })}
           hint={
@@ -259,7 +305,7 @@ export function SettingsMcpTab(): React.JSX.Element {
             <button
               type="button"
               className="btn btn-secondary btn-sm"
-              disabled={!config.mcpEnabled}
+              disabled={!isEnabled}
               onClick={() => void handleRestart()}
               title={t('settings.mcp.btn_restart_service', { defaultValue: 'Restart Service' })}
             >
@@ -325,6 +371,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
       {/* 2. Security & Permissions Policy */}
       <SettingsSection
+        id="settings-mcp-permission"
         title={t('settings.mcp.security_title', { defaultValue: 'Security & Permissions' })}
         icon={<Shield size={18} />}
       >
@@ -683,6 +730,7 @@ export function SettingsMcpTab(): React.JSX.Element {
 
       {/* 4. Live Activity & Audit Stream */}
       <SettingsSection
+        id="settings-mcp-logs"
         title={t('settings.mcp.audit_log_title', {
           defaultValue: 'Live Activity & Audit Stream',
         })}
@@ -818,7 +866,7 @@ export function SettingsMcpTab(): React.JSX.Element {
             <button
               type="button"
               className="btn btn-secondary btn-xs"
-              disabled={isPinging || !status?.running}
+              disabled={!isEnabled || isPinging || !status?.running}
               onClick={(e) => {
                 e.stopPropagation();
                 void handlePing();

@@ -14,8 +14,10 @@ import {
   buildRestoreDefaultModelConfigPatch,
 } from '../services/modelConfigPatches';
 import { modelService } from '../services/modelService';
+import { cleanInterruptedDownload } from '../services/tauri/app';
 import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
+import { useModelDownloadStore } from '../stores/modelDownloadStore';
 import type {
   ModelCatalogModel,
   ModelCatalogSnapshot,
@@ -28,11 +30,12 @@ import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
+import { formatBytes } from './notifications/modelDownloadAdapter';
 
 type DownloadState = {
   progress: number;
   status: string;
-  controller: AbortController;
+  controller?: AbortController;
 };
 
 type ModelCatalogLoadState = 'idle' | 'loading' | 'ready' | 'error';
@@ -107,7 +110,50 @@ export function useModelManager(isOpen: boolean) {
   const alert = useDialogStore((state) => state.alert);
   const { t } = useTranslation();
 
-  const [downloads, setDownloads] = useState<Record<string, DownloadState>>({});
+  const inFlightModelsRef = useRef<Set<string>>(new Set());
+  const activeDownloadsRef = useRef<
+    Map<string, { downloadId: string; controller: AbortController }>
+  >(new Map());
+  const storeDownloads = useModelDownloadStore((state) => state.downloads);
+
+  const downloads = useMemo(() => {
+    const projection: Record<string, DownloadState> = {};
+    for (const [modelId, item] of Object.entries(storeDownloads)) {
+      if (item.status === 'downloading') {
+        const active = activeDownloadsRef.current.get(modelId);
+        let status = item.statusText || '';
+        if (
+          !status &&
+          item.downloadedBytes != null &&
+          item.totalBytes != null &&
+          item.totalBytes > 0
+        ) {
+          const downloadedMB = Math.round(item.downloadedBytes / 1024 / 1024);
+          const totalMB = Math.round(item.totalBytes / 1024 / 1024);
+          const label = t('settings.model_download_status.download_label', {
+            defaultValue: 'Downloading',
+          });
+          status = item.speed
+            ? t('settings.model_download_status.downloading', {
+                label,
+                downloadedMB,
+                totalMB,
+                speed: item.speed,
+              })
+            : `${label}... ${downloadedMB}MB / ${totalMB}MB`;
+        } else if (!status && item.speed) {
+          status = item.speed;
+        }
+
+        projection[modelId] = {
+          progress: item.progress ?? 0,
+          status,
+          controller: active?.controller,
+        };
+      }
+    }
+    return projection;
+  }, [storeDownloads, t]);
   const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(
     EMPTY_MODEL_CATALOG_SNAPSHOT
@@ -137,7 +183,7 @@ export function useModelManager(isOpen: boolean) {
     async (loadGeneration?: number) => {
       const isCurrentLoad = () =>
         loadGeneration === undefined || loadGeneration === catalogLoadGenerationRef.current;
-      setCatalogLoadState('loading');
+      setCatalogLoadState((prev) => (prev === 'ready' ? 'ready' : 'loading'));
       setCatalogLoadError(null);
       markSettingsPerf('settings.models.catalog.load.start');
       try {
@@ -163,7 +209,7 @@ export function useModelManager(isOpen: boolean) {
           });
           throw error;
         }
-        setCatalogLoadState('error');
+        setCatalogLoadState((prev) => (prev === 'ready' ? 'ready' : 'error'));
         setCatalogLoadError(extractErrorMessage(error));
         markSettingsPerf('settings.models.catalog.load.fail', getSettingsPerfErrorDetail(error));
         throw error;
@@ -270,115 +316,178 @@ export function useModelManager(isOpen: boolean) {
 
   async function executeDownload(
     modelId: string,
-    downloadFn: (id: string, callback: ProgressCallback, signal: AbortSignal) => Promise<string>,
+    downloadFn: (
+      id: string,
+      callback: ProgressCallback,
+      signal: AbortSignal,
+      downloadId: string
+    ) => Promise<string>,
     onSuccess: (path: string) => void | Promise<void>
   ) {
-    if (downloads[modelId]) return;
+    if (activeDownloadsRef.current.has(modelId)) return;
 
     const controller = new AbortController();
-    setDownloads((prev) => ({
-      ...prev,
-      [modelId]: { progress: 0, status: '', controller },
-    }));
+    const downloadId = `${modelId}-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    activeDownloadsRef.current.set(modelId, { downloadId, controller });
 
+    const catalogModel = getCatalogModel(modelId);
+    const modelName = catalogModel?.name ?? modelId;
+
+    useModelDownloadStore.getState().startDownload({
+      modelId,
+      modelName,
+      modelType: 'asr',
+      downloadId,
+      onCancel: () => {
+        controller.abort();
+      },
+      onRetry: () => {
+        const targetModel = getCatalogModel(modelId);
+        if (targetModel && !activeDownloadsRef.current.has(modelId)) {
+          void handleDownload(targetModel);
+        }
+      },
+    });
+
+    let downloadedPath: string;
     try {
-      const downloadedPath = await downloadFn(
-        modelId,
-        (pct, status) => {
-          setDownloads((prev) => {
-            if (!prev[modelId]) return prev;
-            return {
-              ...prev,
-              [modelId]: { ...prev[modelId], progress: pct, status: status },
-            };
-          });
-        },
-        controller.signal
-      );
+      try {
+        downloadedPath = await downloadFn(
+          modelId,
+          (pct, statusText) => {
+            useModelDownloadStore
+              .getState()
+              .updateProgress(downloadId, { progress: pct, statusText });
+          },
+          controller.signal,
+          downloadId
+        );
+      } catch (error) {
+        const errorMsg = extractErrorMessage(error);
+        if (errorMsg === 'Download cancelled' || controller.signal.aborted) {
+          logger.info('Download cancelled by user');
+          void useModelDownloadStore.getState().cancelDownload(modelId, downloadId);
+        } else {
+          useModelDownloadStore.getState().failDownload(modelId, errorMsg, downloadId);
+          if (errorMsg.includes('Download already in progress')) {
+            await alert(t('errors.model.already_in_progress'));
+          } else {
+            await showError({
+              code: 'model.download_failed',
+              messageKey: 'errors.model.download_failed',
+              cause: error,
+            });
+          }
+        }
+        try {
+          await refreshModelCatalogSnapshot();
+        } catch (snapError) {
+          logger.warn('Failed to refresh catalog snapshot after download error/cancel:', snapError);
+        }
+        return;
+      }
 
-      await refreshModelCatalogSnapshot();
-      await onSuccess(downloadedPath);
-    } catch (error) {
-      const errorMsg = extractErrorMessage(error);
-      if (errorMsg === 'Download cancelled') {
-        logger.info('Download cancelled by user');
-      } else if (errorMsg.includes('Download already in progress')) {
-        await alert(t('errors.model.already_in_progress'));
-      } else {
-        await showError({
-          code: 'model.download_failed',
-          messageKey: 'errors.model.download_failed',
-          cause: error,
-        });
+      useModelDownloadStore.getState().completeDownload(modelId, downloadId);
+      try {
+        await refreshModelCatalogSnapshot();
+        await onSuccess(downloadedPath);
+      } catch (postError) {
+        logger.error(
+          'Failed to refresh catalog snapshot or complete download callback:',
+          postError
+        );
       }
     } finally {
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[modelId];
-        return next;
-      });
+      if (activeDownloadsRef.current.get(modelId)?.downloadId === downloadId) {
+        activeDownloadsRef.current.delete(modelId);
+        inFlightModelsRef.current.delete(modelId);
+      }
     }
   }
 
   function handleCancelDownload(modelId: string) {
-    const download = downloads[modelId];
-    if (download) {
-      download.controller.abort();
-      setDownloads((prev) => {
-        const next = { ...prev };
-        delete next[modelId];
-        return next;
+    const active = activeDownloadsRef.current.get(modelId);
+    if (active) {
+      active.controller.abort();
+      void useModelDownloadStore.getState().cancelDownload(modelId, active.downloadId);
+    } else {
+      const download = downloads[modelId];
+      if (download?.controller) {
+        download.controller.abort();
+      }
+      inFlightModelsRef.current.delete(modelId);
+      void useModelDownloadStore.getState().cancelDownload(modelId);
+      void refreshModelCatalogSnapshot().catch((err) => {
+        logger.warn('Failed to refresh catalog snapshot after cancel:', err);
       });
     }
   }
 
   async function handleDownload(model: ModelInfo) {
-    const { compatible, reason } = await modelService.checkHardware(model.id);
-    if (!compatible) {
-      const confirmed = await confirm(t('settings.hardware_warning_confirm', { reason }), {
-        title: t('settings.hardware_warning_title'),
-        variant: 'warning',
-      });
-      if (!confirmed) return;
+    const isDownloadingInStore =
+      useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading';
+    if (
+      inFlightModelsRef.current.has(model.id) ||
+      activeDownloadsRef.current.has(model.id) ||
+      isDownloadingInStore
+    ) {
+      return;
     }
+    inFlightModelsRef.current.add(model.id);
 
-    if (model.modes && model.modes.length > 0) {
-      const dependencyUpdates: Partial<typeof config> = {};
-      const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
-      for (const dependency of dependencies) {
-        const fieldKeys = [
-          scenarioModelFieldKey(dependency.configKey, 'live'),
-          scenarioModelFieldKey(dependency.configKey, 'batch'),
-        ];
-        if (fieldKeys.every((key) => config[key])) {
-          continue;
+    try {
+      const { compatible, reason } = await modelService.checkHardware(model.id);
+      if (!compatible) {
+        const confirmed = await confirm(t('settings.hardware_warning_confirm', { reason }), {
+          title: t('settings.hardware_warning_title'),
+          variant: 'warning',
+        });
+        if (!confirmed) {
+          return;
         }
-        if (dependency.isInstalled) {
-          for (const key of fieldKeys) {
-            if (!config[key]) {
-              dependencyUpdates[key] = dependency.installPath;
-            }
+      }
+
+      if (model.modes && model.modes.length > 0) {
+        const dependencyUpdates: Partial<typeof config> = {};
+        const dependencies = modelCatalog.dependencyRequestsByModelId[model.id] ?? [];
+        for (const dependency of dependencies) {
+          const fieldKeys = [
+            scenarioModelFieldKey(dependency.configKey, 'live'),
+            scenarioModelFieldKey(dependency.configKey, 'batch'),
+          ];
+          if (fieldKeys.every((key) => config[key])) {
+            continue;
           }
-        } else {
-          document.dispatchEvent(
-            new CustomEvent('download-background-model', {
-              detail: { modelId: dependency.modelId },
-            })
-          );
+          if (dependency.isInstalled) {
+            for (const key of fieldKeys) {
+              if (!config[key]) {
+                dependencyUpdates[key] = dependency.installPath;
+              }
+            }
+          } else {
+            document.dispatchEvent(
+              new CustomEvent('download-background-model', {
+                detail: { modelId: dependency.modelId },
+              })
+            );
+          }
+        }
+        if (Object.keys(dependencyUpdates).length > 0) {
+          updateConfig(dependencyUpdates);
         }
       }
-      if (Object.keys(dependencyUpdates).length > 0) {
-        updateConfig(dependencyUpdates);
-      }
-    }
 
-    await executeDownload(
-      model.id,
-      (id, cb, sig) => modelService.downloadModel(id, cb, sig, config.modelDownloadMirror),
-      (path) => {
-        setModelPath(model, path);
-      }
-    );
+      await executeDownload(
+        model.id,
+        (id, cb, sig, dlId) =>
+          modelService.downloadModel(id, cb, sig, config.modelDownloadMirror, dlId),
+        (path) => {
+          setModelPath(model, path);
+        }
+      );
+    } finally {
+      inFlightModelsRef.current.delete(model.id);
+    }
   }
 
   async function handleLoad(model: ModelInfo) {
@@ -423,6 +532,84 @@ export function useModelManager(isOpen: boolean) {
     }
   }
 
+  async function handleDiscardDownload(model: ModelInfo) {
+    if (
+      inFlightModelsRef.current.has(model.id) ||
+      activeDownloadsRef.current.has(model.id) ||
+      useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading'
+    ) {
+      return;
+    }
+
+    const catalogModel = getCatalogModel(model.id);
+    const interruptedDownload = catalogModel
+      ? catalogModel.interruptedDownload
+      : (model as ModelCatalogModel).interruptedDownload;
+    if (!interruptedDownload) return;
+
+    inFlightModelsRef.current.add(model.id);
+    try {
+      const downloadedFormatted = formatBytes(interruptedDownload.downloadedBytes) || '0 MB';
+      const totalFormatted = formatBytes(interruptedDownload.totalBytes ?? undefined);
+      const sizeText = totalFormatted
+        ? `${downloadedFormatted} / ${totalFormatted}`
+        : downloadedFormatted;
+      const pctText =
+        interruptedDownload.percentage != null
+          ? `${Math.round(interruptedDownload.percentage)}%`
+          : '';
+      const progressDetail = pctText ? `${sizeText} (${pctText})` : sizeText;
+
+      const confirmed = await confirm(
+        t('settings.discard_download_confirm_message', {
+          name: model.name,
+          progress: progressDetail,
+          defaultValue: `Are you sure you want to discard the incomplete download for ${model.name} (${progressDetail})? This will delete partial files and free up disk space.`,
+        }),
+        {
+          title: t('settings.discard_download_confirm_title', {
+            defaultValue: 'Discard Incomplete Download',
+          }),
+          confirmLabel: t('settings.discard_download_confirm_button', {
+            defaultValue: 'Discard Files',
+          }),
+          cancelLabel: t('common.cancel', { defaultValue: 'Cancel' }),
+          variant: 'warning',
+        }
+      );
+
+      if (!confirmed) return;
+
+      if (
+        activeDownloadsRef.current.has(model.id) ||
+        useModelDownloadStore.getState().downloads[model.id]?.status === 'downloading'
+      ) {
+        return;
+      }
+
+      try {
+        await cleanInterruptedDownload(model.id);
+        useModelDownloadStore.getState().dismissDownload(model.id);
+      } catch (cleanErr) {
+        logger.warn('Failed to clean interrupted download:', cleanErr);
+        await showError({
+          code: 'model.clean_failed',
+          messageKey: 'errors.model.clean_failed',
+          cause: cleanErr,
+        });
+        return;
+      }
+
+      try {
+        await refreshModelCatalogSnapshot();
+      } catch (snapErr) {
+        logger.warn('Failed to refresh catalog snapshot after discard cleanup:', snapErr);
+      }
+    } finally {
+      inFlightModelsRef.current.delete(model.id);
+    }
+  }
+
   async function restoreDefaultModelSettings() {
     const confirmed = await confirm(t('settings.restore_defaults_confirm'), {
       title: t('settings.restore_defaults'),
@@ -450,6 +637,7 @@ export function useModelManager(isOpen: boolean) {
 
     handleDownload,
     handleCancelDownload,
+    handleDiscardDownload,
     handleLoad,
     handleDelete,
     restoreDefaultModelSettings,

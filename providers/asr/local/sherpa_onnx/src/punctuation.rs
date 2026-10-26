@@ -1,16 +1,33 @@
 use crate::audio::resolve_model_onnx_path;
-use sherpa_onnx::{OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig};
+use sherpa_onnx::{
+    OfflinePunctuation, OfflinePunctuationConfig, OfflinePunctuationModelConfig, OnlinePunctuation,
+    OnlinePunctuationConfig, OnlinePunctuationModelConfig,
+};
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 enum PunctuationInner {
-    Real(OfflinePunctuation),
+    Offline(OfflinePunctuation),
+    Online(OnlinePunctuation),
     #[cfg(test)]
     TestDummy,
 }
 
 pub struct Punctuation {
     inner: PunctuationInner,
+}
+
+fn resolve_vocab_path(model_path: &Path) -> Option<PathBuf> {
+    let dir = if model_path.is_dir() {
+        model_path
+    } else {
+        model_path.parent()?
+    };
+    let candidate = dir.join("bpe.vocab");
+    if candidate.is_file() {
+        return Some(candidate);
+    }
+    None
 }
 
 impl Punctuation {
@@ -39,13 +56,43 @@ impl Punctuation {
         })?;
 
         Ok(Self {
-            inner: PunctuationInner::Real(inner),
+            inner: PunctuationInner::Offline(inner),
+        })
+    }
+
+    pub fn new_online(
+        model_path: &str,
+        vocab_path: &str,
+        num_threads: i32,
+    ) -> Result<Self, AsrPortError> {
+        let config = OnlinePunctuationConfig {
+            model: OnlinePunctuationModelConfig {
+                cnn_bilstm: Some(model_path.to_string()),
+                bpe_vocab: Some(vocab_path.to_string()),
+                num_threads,
+                debug: false,
+                provider: Some("cpu".to_string()),
+            },
+        };
+
+        let inner = OnlinePunctuation::create(&config).ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Failed to create OnlinePunctuation",
+            )
+        })?;
+
+        Ok(Self {
+            inner: PunctuationInner::Online(inner),
         })
     }
 
     pub fn add_punct(&self, text: &str) -> String {
         match &self.inner {
-            PunctuationInner::Real(punct) => punct
+            PunctuationInner::Offline(punct) => punct
+                .add_punctuation(text)
+                .unwrap_or_else(|| text.to_string()),
+            PunctuationInner::Online(punct) => punct
                 .add_punctuation(text)
                 .unwrap_or_else(|| text.to_string()),
             #[cfg(test)]
@@ -80,5 +127,14 @@ pub fn load_punctuation_from_path(
     }
 
     let model_path = resolve_model_onnx_path(path)?;
-    Punctuation::new(&model_path.to_string_lossy(), 1).map(Some)
+    if let Some(vocab_path) = resolve_vocab_path(path) {
+        Punctuation::new_online(
+            &model_path.to_string_lossy(),
+            &vocab_path.to_string_lossy(),
+            1,
+        )
+        .map(Some)
+    } else {
+        Punctuation::new(&model_path.to_string_lossy(), 1).map(Some)
+    }
 }

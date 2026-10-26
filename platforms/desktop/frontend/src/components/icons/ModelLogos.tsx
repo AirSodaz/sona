@@ -12,6 +12,7 @@ import moonshineImg from '../../assets/models/moonshine.png';
 import nvidiaImg from '../../assets/models/nvidia.png';
 import openaiImg from '../../assets/models/openai.png';
 import paraformerImg from '../../assets/models/paraformer.png';
+import r2t2Img from '../../assets/models/r2t2.png';
 import sensevoiceImg from '../../assets/models/sensevoice.png';
 import volcengineImg from '../../assets/models/volcengine.png';
 import whisperImg from '../../assets/models/whisper.png';
@@ -19,6 +20,7 @@ import zipformerImg from '../../assets/models/zipformer.png';
 
 export type AsrBrand =
   | 'qwen'
+  | 'r2t2'
   | 'sensevoice'
   | 'firered'
   | 'whisper'
@@ -224,6 +226,26 @@ export function NvidiaLogo({
   return (
     <img
       src={nvidiaImg}
+      alt={alt}
+      width={size}
+      height={size}
+      className={`model-brand-logo ${className}`.trim()}
+      loading="lazy"
+      decoding="async"
+      {...props}
+    />
+  );
+}
+/** R2T2 (Confucius4-R2T2) Logo: Official NetEase Youdao project emblem */
+export function R2t2Logo({
+  size = 32,
+  className = '',
+  alt = 'Confucius4-R2T2',
+  ...props
+}: ModelLogoProps): React.JSX.Element {
+  return (
+    <img
+      src={r2t2Img}
       alt={alt}
       width={size}
       height={size}
@@ -464,6 +486,7 @@ export const ASR_MODEL_TYPES = new Set([
   'fire-red-asr',
   'dolphin',
   'qwen3-asr',
+  'confucius4-r2t2',
   'parakeet-tdt',
   'moonshine',
   'omnilingual',
@@ -476,6 +499,7 @@ export const ASR_MODEL_TYPES = new Set([
   'deepgram',
   'assemblyai',
   'elevenlabs',
+  'canary',
 ]);
 
 const NON_ASR_MODEL_TYPES = new Set([
@@ -543,7 +567,9 @@ export function isAsrModel(model: {
     token.includes('deepgram') ||
     token.includes('assemblyai') ||
     token.includes('assembly') ||
-    token.includes('elevenlabs')
+    token.includes('elevenlabs') ||
+    token.includes('r2t2') ||
+    token.includes('canary')
   ) {
     return true;
   }
@@ -588,6 +614,9 @@ export function resolveModelBrand(model: {
   if (token.includes('elevenlabs')) {
     return 'elevenlabs';
   }
+  if (token.includes('r2t2')) {
+    return 'r2t2';
+  }
   if (token.includes('qwen')) {
     return 'qwen';
   }
@@ -617,7 +646,7 @@ export function resolveModelBrand(model: {
   ) {
     return 'zipformer';
   }
-  if (token.includes('parakeet') || token.includes('nemo')) {
+  if (token.includes('parakeet') || token.includes('nemo') || token.includes('canary')) {
     return 'nvidia';
   }
   if (token.includes('dolphin')) {
@@ -678,6 +707,8 @@ export function ModelBrandLogo({
       return <DolphinLogo size={size} className={className} {...props} />;
     case 'moonshine':
       return <MoonshineLogo size={size} className={className} {...props} />;
+    case 'r2t2':
+      return <R2t2Logo size={size} className={className} {...props} />;
     case 'volcengine':
       return <VolcengineLogo size={size} className={className} {...props} />;
     case 'groq':

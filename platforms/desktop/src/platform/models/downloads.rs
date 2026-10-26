@@ -81,9 +81,12 @@ impl DownloadState {
         self.downloads.lock().ok()?.remove(id)
     }
 
-    pub(crate) async fn notify_download(&self, id: &str) {
+    pub(crate) async fn notify_download(&self, id: &str) -> bool {
         if let Some(notify) = self.notify_for_download(id).await {
             notify.notify_one();
+            true
+        } else {
+            false
         }
     }
 
@@ -97,18 +100,6 @@ impl DownloadState {
     async fn notify_for_download(&self, id: &str) -> Option<Arc<Notify>> {
         self.downloads.lock().ok()?.get(id).cloned()
     }
-}
-
-pub async fn cancel_download(
-    state: tauri::State<'_, DownloadState>,
-    id: String,
-) -> Result<(), String> {
-    state.notify_download(&id).await;
-    Ok(())
-}
-
-pub async fn has_active_downloads(state: tauri::State<'_, DownloadState>) -> Result<bool, String> {
-    Ok(state.has_active_downloads().await)
 }
 
 pub async fn download_file(
@@ -167,6 +158,12 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     };
     use tauri::Emitter;
 
+    let notify = state
+        .notify_for_download(&download_id)
+        .await
+        .unwrap_or_else(|| Arc::new(Notify::new()));
+    let _download_guard = state.register_download(download_id.clone(), notify.clone());
+
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
     let resolved =
         resolve_model_download(&model_id, &models_dir).map_err(|error| error.to_string())?;
@@ -176,9 +173,6 @@ pub async fn download_preset_model<R: tauri::Runtime>(
     {
         return Ok(resolved.install_path.to_string_lossy().into_owned());
     }
-
-    let notify = Arc::new(Notify::new());
-    let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();
     let result = download_model_with_cancel_and_mirror(
@@ -294,7 +288,10 @@ pub async fn download_and_install_cuda_addon<R: tauri::Runtime>(
             })?,
     };
 
-    let notify = Arc::new(Notify::new());
+    let notify = state
+        .notify_for_download(&download_id)
+        .await
+        .unwrap_or_else(|| Arc::new(Notify::new()));
     let _download_guard = state.register_download(download_id.clone(), notify.clone());
     let app_clone = app.clone();
     let event_download_id = download_id.clone();

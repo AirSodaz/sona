@@ -16,13 +16,20 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
   const [isInitializing, setIsInitializing] = useState(false);
   const activeRef = useRef(isCaptionMode);
 
+  const previousConfigRef = useRef<string | null>(null);
   useEffect(() => {
     activeRef.current = isCaptionMode;
   }, [isCaptionMode]);
 
   const stopCaptionSession = useCallback(async function stopCaptionSession(): Promise<void> {
-    await captionSessionRuntime.stop();
-    setIsInitializing(false);
+    try {
+      await captionSessionRuntime.stop();
+    } catch (error) {
+      logger.warn('[CaptionSession] Error stopping session:', error);
+    } finally {
+      setIsInitializing(false);
+      previousConfigRef.current = null;
+    }
   }, []);
 
   const startCaptionSession = useCallback(
@@ -38,6 +45,20 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
 
       try {
         setIsInitializing(true);
+        previousConfigRef.current = JSON.stringify([
+          config.streamingModelPath,
+          config.asr,
+          config.language,
+          config.enableITN,
+          config.livePunctuationModelPath,
+          config.liveVadModelPath,
+          config.liveVadBufferSize,
+          config.realtimeTranslationEnabled,
+          config.realtimeTranslationSourceLanguage,
+          config.realtimeTranslationTargetLanguage,
+          config.realtimeTranslationEngine,
+          config.realtimeTranslationModelId,
+        ]);
         await captionSessionRuntime.start(
           config,
           () => activeRef.current,
@@ -68,7 +89,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
   }, [isCaptionMode, startCaptionSession, stopCaptionSession]);
 
   useEffect(() => {
-    const _recognizerConfig = [
+    const currentConfigKey = JSON.stringify([
       config.streamingModelPath,
       config.asr,
       config.language,
@@ -76,15 +97,34 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
       config.livePunctuationModelPath,
       config.liveVadModelPath,
       config.liveVadBufferSize,
-    ];
-    void _recognizerConfig;
+      config.realtimeTranslationEnabled,
+      config.realtimeTranslationSourceLanguage,
+      config.realtimeTranslationTargetLanguage,
+      config.realtimeTranslationEngine,
+      config.realtimeTranslationModelId,
+    ]);
+
+    if (!isCaptionMode || isInitializing || !captionSessionRuntime.isRunning()) {
+      return;
+    }
+
+    if (previousConfigRef.current === null) {
+      previousConfigRef.current = currentConfigKey;
+      return;
+    }
+
+    if (previousConfigRef.current === currentConfigKey) {
+      return;
+    }
+
+    previousConfigRef.current = currentConfigKey;
 
     async function restartCaptionRecognizer(): Promise<void> {
-      if (!isCaptionMode || isInitializing) {
-        return;
+      try {
+        await captionSessionRuntime.restartRecognizer();
+      } catch (error) {
+        logger.warn('[CaptionSession] Failed to restart recognizer on config change:', error);
       }
-
-      await captionSessionRuntime.restartRecognizer();
     }
 
     void restartCaptionRecognizer();
@@ -96,10 +136,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.livePunctuationModelPath,
     config.liveVadModelPath,
     config.liveVadBufferSize,
+    config.realtimeTranslationEnabled,
+    config.realtimeTranslationSourceLanguage,
+    config.realtimeTranslationTargetLanguage,
+    config.realtimeTranslationEngine,
+    config.realtimeTranslationModelId,
     isCaptionMode,
     isInitializing,
   ]);
-
   useEffect(() => {
     if (!isCaptionMode || isInitializing) {
       return;
@@ -113,6 +157,10 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.captionFontColor,
     config.captionBackgroundColor,
     config.captionBackgroundOpacity,
+    config.captionTranslationFontSize,
+    config.captionTranslationFontColor,
+    config.captionDisplayMode,
+    config.captionBilingualOrder,
     isCaptionMode,
     isInitializing,
   ]);

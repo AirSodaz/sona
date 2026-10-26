@@ -1,0 +1,208 @@
+/* Segmented Mode Selector & Full-Height Panes for Create Workspace Panel */
+
+.create-workspace-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
+
+.create-workspace-header {
+  height: 54px;
+  min-height: 54px;
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-bottom: none;
+  background: var(--color-bg-secondary);
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.create-tab-navigation {
+  position: relative;
+  display: flex;
+  width: 100%;
+  background: var(--color-bg-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  gap: 4px;
+  box-sizing: border-box;
+}
+
+/* Sliding pill indicator */
+.create-tab-slider {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: calc((100% - 12px) / 2);
+  height: calc(100% - 8px);
+  background: var(--color-bg-elevated);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-sm);
+  transition: transform 220ms cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  pointer-events: none;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.create-tab-button {
+  position: relative;
+  z-index: 1;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-sm);
+  white-space: nowrap;
+  padding: 4px 12px;
+  height: 32px;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition:
+    color var(--transition-fast),
+    font-weight var(--transition-fast);
+  user-select: none;
+}
+
+.create-tab-button span {
+  white-space: nowrap;
+}
+
+.create-tab-button:hover {
+  color: var(--color-text-secondary);
+}
+
+.create-tab-button:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.create-tab-button.active {
+  color: var(--color-text-primary);
+  font-weight: 600;
+}
+
+.create-tab-button.active:focus-visible {
+  box-shadow: var(--apple-control-focus-ring), var(--shadow-sm);
+}
+
+.create-tab-button svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2px;
+}
+
+.create-tab-badge.live-recording {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-danger, #ef4444);
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  animation: deck-pulse 1.8s infinite;
+  flex-shrink: 0;
+}
+
+.create-tab-badge.batch-processing {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-info, #0b6e99);
+  box-shadow: 0 0 0 0 rgba(11, 110, 153, 0.7);
+  animation: deck-pulse-info 1.8s infinite;
+  flex-shrink: 0;
+}
+
+.create-tab-badge.batch-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3.5px;
+  border-radius: var(--radius-full, 9999px);
+  background: var(--color-info, #0b6e99);
+  color: #ffffff;
+  font-size: 0.6rem;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+  white-space: nowrap;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12);
+}
+
+.create-workspace-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  overflow: hidden;
+}
+
+.create-pane {
+  height: 100%;
+  width: 100%;
+  overflow-y: auto;
+}
+
+@keyframes deck-pulse {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(239, 68, 68, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+  }
+}
+
+@keyframes deck-pulse-info {
+  0% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(11, 110, 153, 0.7);
+  }
+  70% {
+    transform: scale(1);
+    box-shadow: 0 0 0 6px rgba(11, 110, 153, 0);
+  }
+  100% {
+    transform: scale(0.95);
+    box-shadow: 0 0 0 0 rgba(11, 110, 153, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .create-tab-slider {
+    transition: none;
+  }
+
+  .create-tab-badge.live-recording,
+  .create-tab-badge.batch-processing {
+    animation: none;
+  }
+}

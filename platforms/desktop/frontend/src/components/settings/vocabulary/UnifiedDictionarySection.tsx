@@ -567,6 +567,7 @@ export function UnifiedDictionarySection({
 
   return (
     <SettingsSection
+      id="settings-vocabulary-dict"
       title={t('settings.unified_dictionary_title', { defaultValue: 'Unified Dictionary' })}
       icon={<Book size={20} />}
       description={t('settings.unified_dictionary_desc', {
@@ -845,7 +846,7 @@ export function UnifiedDictionarySection({
           </div>
 
           {/* Replacements Card */}
-          <div className="dict-card">
+          <div id="settings-vocabulary-replacements" className="dict-card">
             <div className="dict-card-header">
               <span className="dict-card-title-icon">
                 <ArrowRight size={16} />

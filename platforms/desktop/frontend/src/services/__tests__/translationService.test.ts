@@ -282,4 +282,33 @@ describe('TranslationService', () => {
     });
     expect(historyService.updateTranscript).not.toHaveBeenCalled();
   });
+
+  it('translates current transcript with explicit targetLanguage override', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+      segments: [{ id: '1', start: 0, end: 1, text: 'hello', isFinal: true }],
+      sourceHistoryId: null,
+    });
+    vi.mocked(invoke).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'hello', isFinal: true, translation: '안녕하세요' },
+      ],
+    });
+
+    await translationService.translateCurrentTranscript('ko');
+
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        targetLanguage: 'ko',
+        targetLanguageName: 'Korean',
+      }),
+    });
+  });
 });

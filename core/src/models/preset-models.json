@@ -370,6 +370,166 @@
     ]
   },
   {
+    "id": "confucius4-r2t2-q8-gguf",
+    "name": "Confucius4-R2T2",
+    "description": "settings.descriptions.confucius4_r2t2",
+    "type": "qwen3-asr",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fil",
+      "fr",
+      "hi",
+      "hu",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "mk",
+      "ms",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sv",
+      "th",
+      "tr",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~2.18 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "isRecommended": false,
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-Q8_0.gguf?download=true",
+        "filename": "Confucius4-R2T2-Q8_0.gguf",
+        "sha256": "151097e43957a19984ea7de66e8144ce69b95039eb31c93da4f58db367e455c3",
+        "sizeBytes": 1834422208
+      },
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-Q8_0.gguf?download=true",
+        "filename": "mmproj-Confucius4-R2T2-Q8_0.gguf",
+        "sha256": "8dc2c67e6a0484114928142d098db7ad94ae9f34c78948ef9d37a9678418cb65",
+        "sizeBytes": 348336544
+      }
+    ],
+    "fileConfig": {
+      "model": "Confucius4-R2T2-Q8_0.gguf",
+      "mmproj": "mmproj-Confucius4-R2T2-Q8_0.gguf"
+    },
+    "groupId": "confucius4-r2t2",
+    "versionLabel": "Q8_0",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
+    "id": "confucius4-r2t2-f16-gguf",
+    "name": "Confucius4-R2T2",
+    "description": "settings.descriptions.confucius4_r2t2",
+    "type": "qwen3-asr",
+    "modes": [
+      "streaming",
+      "batch"
+    ],
+    "languages": [
+      "ar",
+      "cs",
+      "da",
+      "de",
+      "el",
+      "en",
+      "es",
+      "fa",
+      "fi",
+      "fil",
+      "fr",
+      "hi",
+      "hu",
+      "id",
+      "it",
+      "ja",
+      "ko",
+      "mk",
+      "ms",
+      "nl",
+      "pl",
+      "pt",
+      "ro",
+      "ru",
+      "sv",
+      "th",
+      "tr",
+      "vi",
+      "yue",
+      "zh"
+    ],
+    "languageMode": "auto",
+    "size": "~4.09 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 3
+    },
+    "isRecommended": false,
+    "isArchive": false,
+    "engine": "llama-cpp",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false,
+      "timestampSupportHint": "segment",
+      "initialRefreshRateMs": 400
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/Confucius4-R2T2-f16.gguf?download=true",
+        "filename": "Confucius4-R2T2-f16.gguf",
+        "sha256": "4fa26b8f2d6db9122752d3e28694c26083bad95f6263d2f7619c7f98f2480b97",
+        "sizeBytes": 3447345088
+      },
+      {
+        "url": "https://huggingface.co/netease-youdao/Confucius4-R2T2-GGUF/resolve/86ff0251cb9f456b63aeef5f80137f104e22869a/mmproj-Confucius4-R2T2-f16.gguf?download=true",
+        "filename": "mmproj-Confucius4-R2T2-f16.gguf",
+        "sha256": "0057b28b8814e431a28e3d1002343eef2d1676bbf8b0625351ae4550ac4e595d",
+        "sizeBytes": 641773984
+      }
+    ],
+    "fileConfig": {
+      "model": "Confucius4-R2T2-f16.gguf",
+      "mmproj": "mmproj-Confucius4-R2T2-f16.gguf"
+    },
+    "groupId": "confucius4-r2t2",
+    "versionLabel": "F16",
+    "labels": [
+      "accurate"
+    ]
+  },
+  {
     "id": "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26",
     "name": "FireRedASR2-AED",
     "description": "settings.descriptions.firered_asr",
@@ -2391,6 +2551,218 @@
     ]
   },
   {
+    "id": "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    "name": "Canary 180M Flash",
+    "description": "settings.descriptions.canary_180m",
+    "type": "canary",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "de",
+      "en",
+      "es",
+      "fr"
+    ],
+    "languageMode": "selectable",
+    "size": "~207 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "7a75b4e2a5857a6dcc0819503bbe3fad66943db4a3ccf21d3f27c633667d303f",
+        "sizeBytes": 132678643
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "e41a2ab9c0c2fe81a1e8ade5a45fb02a74bc4db7d1f91b89a54a25e2cf79cba2",
+        "sizeBytes": 74437848
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2dae6fc7815f9640645e0c765522b278ee0cef49b482d91f6913e334628d3e77",
+        "sizeBytes": 53555
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "canary-180m-flash",
+    "versionLabel": "180M Flash Int8"
+  },
+  {
+    "id": "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+    "name": "Canary 180M Flash",
+    "description": "settings.descriptions.canary_180m",
+    "type": "canary",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "de",
+      "en",
+      "es",
+      "fr"
+    ],
+    "languageMode": "selectable",
+    "size": "~756 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr/resolve/main/encoder.onnx",
+        "filename": "encoder.onnx",
+        "sha256": "7b43326c56fe621e6fa9c1e876bd8bc912aa5e1d934b6695a329466ebbf9ca3f",
+        "sizeBytes": 461454900
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr/resolve/main/decoder.onnx",
+        "filename": "decoder.onnx",
+        "sha256": "95224f6f181dba1ba502ac3507a1d66e6dc4150418e977e87f0049cb9047ca5d",
+        "sizeBytes": 295099727
+      },
+      {
+        "url": "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "2dae6fc7815f9640645e0c765522b278ee0cef49b482d91f6913e334628d3e77",
+        "sizeBytes": 53555
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.onnx",
+      "decoder": "decoder.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "canary-180m-flash",
+    "versionLabel": "180M Flash Fp32"
+  },
+  {
+    "id": "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+    "name": "Canary 1B",
+    "description": "settings.descriptions.canary_1b",
+    "type": "canary",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "de",
+      "en",
+      "es",
+      "fr"
+    ],
+    "languageMode": "selectable",
+    "size": "~1.41 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/encoder.int8.onnx",
+        "filename": "encoder.int8.onnx",
+        "sha256": "0d8f349aaa015d47c81d88c4ba3a5461c19bc09ebb72bf4c61698eec9f09e968",
+        "sizeBytes": 857602351
+      },
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/decoder.int8.onnx",
+        "filename": "decoder.int8.onnx",
+        "sha256": "e68d839a8939a0c1d55d03fd5c6e6d3f113cfc97038027ffe566b8e3a4be2cd8",
+        "sizeBytes": 558682707
+      },
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "399db68418b655f50275779cfe425c55a5ef6dda12cf38375d709566927ef513",
+        "sizeBytes": 224406
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.int8.onnx",
+      "decoder": "decoder.int8.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "canary-1b",
+    "versionLabel": "1B Int8"
+  },
+  {
+    "id": "sherpa-onnx-nemo-canary-1b-en-es-de-fr",
+    "name": "Canary 1B",
+    "description": "settings.descriptions.canary_1b",
+    "type": "canary",
+    "modes": [
+      "batch"
+    ],
+    "languages": [
+      "de",
+      "en",
+      "es",
+      "fr"
+    ],
+    "languageMode": "selectable",
+    "size": "~1.98 GB",
+    "ratings": {
+      "accuracy": 5,
+      "speed": 4
+    },
+    "engine": "sherpa-onnx",
+    "rules": {
+      "requiresVad": true,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/encoder.fp16.onnx",
+        "filename": "encoder.fp16.onnx",
+        "sha256": "8505ac066a56480a63cad2ef9fc2f67022e43f202998bbb5819c956bdec0db72",
+        "sizeBytes": 1644472275
+      },
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/decoder.fp16.onnx",
+        "filename": "decoder.fp16.onnx",
+        "sha256": "4edc4237dee4822e7f42b4ea81f5e46b706ca9869d16c37f1581d6c4e5d2ead9",
+        "sizeBytes": 338252012
+      },
+      {
+        "url": "https://huggingface.co/Sarphix/canary-1b-v2-sherpa-onnx-int8/resolve/main/tokens.txt",
+        "filename": "tokens.txt",
+        "sha256": "399db68418b655f50275779cfe425c55a5ef6dda12cf38375d709566927ef513",
+        "sizeBytes": 224406
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder.fp16.onnx",
+      "decoder": "decoder.fp16.onnx",
+      "tokens": "tokens.txt"
+    },
+    "groupId": "canary-1b",
+    "versionLabel": "1B Fp16"
+  },
+  {
     "id": "sherpa-onnx-punct-ct-transformer-zh-en-vocab272727-2024-04-12",
     "name": "Punctuation - CT Transformer",
     "description": "settings.descriptions.ct_punctuation",
@@ -2415,6 +2787,36 @@
         "filename": "tokens.json",
         "sha256": "c960ab87bccea4aa15cf49a59f71973c2c330b46668048cd8da253749ec71ee3",
         "sizeBytes": 4207480
+      }
+    ]
+  },
+  {
+    "id": "sherpa-onnx-online-punct-en-2024-08-06",
+    "name": "Punctuation - CNN-BiLSTM (Online)",
+    "description": "settings.descriptions.online_punctuation",
+    "type": "punctuation",
+    "languages": [
+      "en"
+    ],
+    "languageMode": "fixed",
+    "size": "~7.6 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "sherpa-onnx",
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/brady-pplx/sherpa-onnx-online-punct-en-2024-08-06/resolve/main/model.int8.onnx",
+        "filename": "model.int8.onnx",
+        "sha256": "9d611f445fe4a46186080fe161be6059d87d72eb88d3a8cb00c1a06e83a6067e",
+        "sizeBytes": 7490500
+      },
+      {
+        "url": "https://huggingface.co/brady-pplx/sherpa-onnx-online-punct-en-2024-08-06/resolve/main/bpe.vocab",
+        "filename": "bpe.vocab",
+        "sha256": "e118b7ad88c54db562517df49e1cffd4836d166c34fb190fd311d7f34eb238f5",
+        "sizeBytes": 149430
       }
     ]
   },
@@ -2679,5 +3081,249 @@
         "sizeBytes": 2313101
       }
     ]
+  },
+  {
+    "id": "opus-mt-en-zh",
+    "name": "Opus-MT (EN -> ZH)",
+    "description": "settings.descriptions.opus_mt_en_zh",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~447 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "57b664dad9511c1ad0c51164eab0144f289d7dd75c0327615ded328c04b57525",
+        "sizeBytes": 209942461
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/onnx/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "aecdf193206d433ef3725ac4ce2104058f0a3550066a8747da14e7fc69d48cc2",
+        "sizeBytes": 235591974
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "5775ddc9e3ff2fae91554da56468ad35ff56edaba870fea74447bc7234bfdaa8",
+        "sizeBytes": 806435
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "81dc94efa84e4025ef38d25d5d07429fe41e3eb29d44003f1db6fe98487b0052",
+        "sizeBytes": 804600
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-en-zh/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "22c957348eed495ee925afc40a36da3e387c8a34a734c8486967c2dca271613e",
+        "sizeBytes": 1747795
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-zh-en",
+    "name": "Opus-MT (ZH -> EN)",
+    "description": "settings.descriptions.opus_mt_zh_en",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "en",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~447 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "92257f4246886bae8cc9c98dddb41224058a6bba11794d12c6c85dbdb7389d52",
+        "sizeBytes": 209942461
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/onnx/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "56c5a3663baa93e5351d47e1bcd1614c8ba565f5d96024f3c07d653fc58174ff",
+        "sizeBytes": 235591974
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "e27a3a1b539f4959ec72ea60e453f49156289f95d4e6000b29332efc45616203",
+        "sizeBytes": 804677
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "6a881f4717cd7265f53fea54fd3dc689c767c05338fac7a4590f3088cb2d7855",
+        "sizeBytes": 806530
+      },
+      {
+        "url": "https://huggingface.co/onnx-community/opus-mt-zh-en/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "08a119a1defd522fa047cb5e3bfe3e89633e96caa38ced0dc9cee7ef1021a011",
+        "sizeBytes": 1747906
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-ja-zh",
+    "name": "Opus-MT (JA -> ZH)",
+    "description": "settings.descriptions.opus_mt_ja_zh",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "ja",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~225 MB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "b98e850b37d960295a23158e47db13633286d2e11c575d69475bf3bf6689f993",
+        "sizeBytes": 105020768
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "9380a66e508b9b1a6630b3b47c06a8a183c669b3674cb24446e3f84c4408b2aa",
+        "sizeBytes": 117946490
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "25103859c8bbbe317e69b07551c55c53dc7943eebf078c56fbf5bc7f96d63289",
+        "sizeBytes": 1312134
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "fe81460cde65383464718c26789ff8c5d818719c3f2c2c3cd36f42532579c56e",
+        "sizeBytes": 1312134
+      },
+      {
+        "url": "https://huggingface.co/ruozhi521/shiyin-mt-ja-zh-onnx/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "475501ee1f35876ec50894ef34ef88e949cc92c688da24ccb26abcc3281c0256",
+        "sizeBytes": 1871214
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
+  },
+  {
+    "id": "opus-mt-zh-ja",
+    "name": "Opus-MT (ZH -> JA)",
+    "description": "settings.descriptions.opus_mt_zh_ja",
+    "type": "onnx-nmt",
+    "modes": [],
+    "languages": [
+      "ja",
+      "zh"
+    ],
+    "languageMode": "selectable",
+    "size": "~1.1 GB",
+    "ratings": {
+      "accuracy": 4,
+      "speed": 5
+    },
+    "engine": "onnx-nmt",
+    "rules": {
+      "requiresVad": false,
+      "requiresPunctuation": false
+    },
+    "artifacts": [
+      {
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/encoder_model.onnx",
+        "filename": "encoder_model.onnx",
+        "sha256": "5c7cff61be56dcb3cb7456d3725ffcf3606cbc49b3f0f9ececb8d0288ca58116",
+        "sizeBytes": 437653279
+      },
+      {
+        "url": "https://huggingface.co/iHad169/opus-mt-zh-jap/resolve/main/decoder_model.onnx",
+        "filename": "decoder_model.onnx",
+        "sha256": "22b23ef8b08de264e56303f1ab7783c0715c3d1b16451bd418e1ade840599d3c",
+        "sizeBytes": 669794801
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/source.spm",
+        "filename": "source.spm",
+        "sha256": "ccc8f70bef6e04fc6a57119b2a4a59556d5c5b9f9f04b88be2f0656c6d7d192d",
+        "sizeBytes": 719585
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/target.spm",
+        "filename": "target.spm",
+        "sha256": "04bcec8d949fc7b2aacc38e428f297160457b373f3f85ad7c8faf391138d937b",
+        "sizeBytes": 802604
+      },
+      {
+        "url": "https://huggingface.co/Helsinki-NLP/opus-mt-tc-big-zh-ja/resolve/main/vocab.json",
+        "filename": "vocab.json",
+        "sha256": "113d3e0e68fab82b3061b2cd2fef598dbcfe2c3e5de71cd43d7b5b985243ddb8",
+        "sizeBytes": 938547
+      }
+    ],
+    "fileConfig": {
+      "encoder": "encoder_model.onnx",
+      "decoder": "decoder_model.onnx",
+      "sourceSpm": "source.spm",
+      "targetSpm": "target.spm",
+      "vocab": "vocab.json"
+    }
   }
 ]

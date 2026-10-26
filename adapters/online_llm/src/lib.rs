@@ -4,6 +4,7 @@ pub mod demuxer;
 mod model_discovery;
 mod models_dev;
 pub mod native_completion;
+pub mod provider_discovery;
 mod providers;
 mod transport;
 
@@ -12,8 +13,10 @@ pub use completion::{build_standard_user_input, complete_with_provider};
 
 pub use model_discovery::list_models_with_provider;
 pub use models_dev::{
-    ModelsDevCatalog, models_dev_provider_id, parse_models_dev_models, should_enrich_model_metadata,
+    ModelsDevCatalog, init_models_dev_cache_dir, models_dev_provider_id, parse_models_dev_models,
+    should_enrich_model_metadata,
 };
+pub use provider_discovery::discover_native_provider_models;
 pub use providers::{
     GOOGLE_TRANSLATE_USER_AGENT, GoogleTranslateAdapter, GoogleTranslateData,
     GoogleTranslateFreeAttemptError, GoogleTranslateRequest, GoogleTranslateResponse,

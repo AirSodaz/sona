@@ -5,7 +5,7 @@ use crate::integrations::llm::{
     TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::services::DesktopServices;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn generate_llm_text(
@@ -63,7 +63,8 @@ pub async fn list_llm_models(
 ) -> Result<Vec<LlmModelSummary>, String> {
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    crate::integrations::llm::list_llm_models_with_models_dir(request, models_dir).await
+    let cache_dir = app.path().app_cache_dir().ok();
+    crate::integrations::llm::list_llm_models_with_dirs(request, models_dir, cache_dir).await
 }
 
 #[tauri::command]
@@ -73,7 +74,8 @@ pub async fn describe_llm_model(
 ) -> Result<Option<LlmModelSummary>, String> {
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    crate::integrations::llm::describe_llm_model_with_models_dir(config, models_dir).await
+    let cache_dir = app.path().app_cache_dir().ok();
+    crate::integrations::llm::describe_llm_model_with_dirs(config, models_dir, cache_dir).await
 }
 
 #[tauri::command]
@@ -113,4 +115,46 @@ pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Resul
     })
     .await
     .map_err(|e| format!("Model import task failed: {e}"))?
+}
+
+#[tauri::command(async)]
+pub async fn list_local_nmt_cards(
+    app: AppHandle,
+) -> Result<sona_core::llm::local_models::LocalLlmCardsResponse, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    crate::platform::blocking::spawn_blocking_map(move || {
+        Ok::<_, String>(sona_core::llm::local_models::discover_local_nmt_cards(
+            &models_dir,
+        ))
+    })
+    .await
+}
+
+#[tauri::command(async)]
+pub async fn test_local_nmt_model(
+    app: AppHandle,
+    services: State<'_, DesktopServices>,
+    model_id: String,
+    text: String,
+) -> Result<String, String> {
+    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
+    let lower_id = model_id.trim().to_lowercase();
+    let stripped = lower_id.strip_prefix("opus-mt-").unwrap_or(&lower_id);
+    let parts: Vec<&str> = stripped.split('-').collect();
+    if parts.len() < 2 {
+        return Err(format!(
+            "Cannot determine language pair from model ID: {model_id}"
+        ));
+    }
+    let src = parts[0];
+    let tgt = parts[1];
+    let adapter = services
+        .translation_pool
+        .get_or_load(src, tgt, &models_dir)
+        .map_err(|e| e.to_string())?;
+    use sona_core::ports::translation::TranslationEnginePort;
+    adapter
+        .translate(&text, src, tgt)
+        .await
+        .map_err(|e| e.to_string())
 }

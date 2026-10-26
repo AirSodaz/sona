@@ -1,14 +1,23 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLlmSettings } from '../../../services/llm/state';
-import { completeLlm, importLocalLlmFile, listLocalLlmCards } from '../../../services/tauri/llm';
+import {
+  completeLlm,
+  importLocalLlmFile,
+  listLocalLlmCards,
+  listLocalNmtCards,
+  testLocalNmtModel,
+} from '../../../services/tauri/llm';
 import { openDialog } from '../../../services/tauri/platform/dialog';
+import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmCompletionResponse } from '../../../types/llm';
 import { LocalProviderAccordionItem } from '../llm/LocalProviderAccordionItem';
 
 vi.mock('../../../services/tauri/llm', () => ({
   listLocalLlmCards: vi.fn().mockResolvedValue({ modelsDir: '/test/models', cards: [] }),
+  listLocalNmtCards: vi.fn().mockResolvedValue({ modelsDir: '/test/models', cards: [] }),
+  testLocalNmtModel: vi.fn().mockResolvedValue('test translation'),
   completeLlm: vi.fn().mockImplementation(async () => ({
     text: 'test response',
     usage: {
@@ -33,6 +42,7 @@ vi.mock('../../../services/tauri/app', () => ({
   downloadPresetModel: vi.fn(),
   cancelDownload: vi.fn(),
   deletePresetModel: vi.fn(),
+  cleanInterruptedDownload: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../../../services/tauri/platform/dialog', () => ({
@@ -44,10 +54,25 @@ vi.mock('../../../stores/configStore', () => ({
     selector({ config: { modelDownloadMirror: 'direct' } }),
 }));
 
+const mockConfirm = vi.fn().mockResolvedValue(true);
+const mockCheckboxConfirm = vi.fn().mockResolvedValue({ confirmed: true, checked: false });
+const mockShowError = vi.fn().mockResolvedValue(undefined);
+
 vi.mock('../../../stores/dialogStore', () => ({
   useDialogStore: (
-    selector: (state: { confirm: (opts: unknown) => Promise<boolean> }) => unknown
-  ) => selector({ confirm: vi.fn().mockResolvedValue(true) }),
+    selector: (state: {
+      confirm: typeof mockConfirm;
+      checkboxConfirm: typeof mockCheckboxConfirm;
+      alert: (opts: unknown) => Promise<void>;
+      showError: typeof mockShowError;
+    }) => unknown
+  ) =>
+    selector({
+      confirm: mockConfirm,
+      checkboxConfirm: mockCheckboxConfirm,
+      alert: vi.fn().mockResolvedValue(undefined),
+      showError: mockShowError,
+    }),
 }));
 
 const mockConfig: LlmAssistantConfig = {
@@ -101,8 +126,8 @@ describe('LocalProviderAccordionItem', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    useModelDownloadStore.setState({ downloads: {} });
   });
-
   it('renders import GGUF and refresh buttons with project unified data-tooltip instead of title', () => {
     render(
       <LocalProviderAccordionItem
@@ -114,15 +139,17 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    const importBtn = screen.getByRole('button', { name: /Import Local GGUF|导入本地 GGUF/i });
     expect(importBtn).toBeTruthy();
-    expect(importBtn.getAttribute('data-tooltip')).toBe('导入本地已有的 GGUF 格式模型文件');
+    expect(importBtn.getAttribute('data-tooltip')).toMatch(
+      /Import existing local GGUF model files|导入本地已有的 GGUF 格式模型文件/
+    );
     expect(importBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(importBtn.getAttribute('title')).toBeNull();
 
-    const refreshBtn = screen.getByRole('button', { name: /刷新/i });
+    const refreshBtn = screen.getByRole('button', { name: /Refresh|刷新/i });
     expect(refreshBtn).toBeTruthy();
-    expect(refreshBtn.getAttribute('data-tooltip')).toBe('刷新');
+    expect(refreshBtn.getAttribute('data-tooltip')).toMatch(/Refresh|刷新/);
     expect(refreshBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(refreshBtn.getAttribute('title')).toBeNull();
   });
@@ -140,13 +167,107 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    const importBtn = screen.getByRole('button', { name: /Import Local GGUF|导入本地 GGUF/i });
     fireEvent.click(importBtn);
 
     await vi.waitFor(() => {
       expect(openDialog).toHaveBeenCalled();
       expect(importLocalLlmFile).toHaveBeenCalledWith('/downloads/custom-model.gguf');
       expect(listLocalLlmCards).toHaveBeenCalled();
+    });
+  });
+
+  it('triggers NMT connection test with testLocalNmtModel and displays speed badge', async () => {
+    const mockNmtCard = {
+      ...mockInstalledCard,
+      id: 'opus-mt-en-zh',
+      name: 'Opus-MT (EN -> ZH)',
+      backend: 'onnx-nmt',
+      capabilities: ['translate'],
+    };
+
+    vi.mocked(listLocalNmtCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockNmtCard],
+    });
+    let currentTime = 1000;
+    const perfNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => currentTime);
+
+    vi.mocked(testLocalNmtModel).mockImplementationOnce(async () => {
+      currentTime = 2000; // 1 second elapsed
+      return '你好，世界！';
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
+    fireEvent.click(nmtTab);
+
+    await vi.waitFor(() => {
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Opus-MT \(EN -> ZH\)/i,
+      }) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+    });
+
+    const testBtn = screen.getByRole('button', {
+      name: /(Test Connection|测试连接) Opus-MT \(EN -> ZH\)/i,
+    });
+    await act(async () => {
+      fireEvent.click(testBtn);
+    });
+
+    await vi.waitFor(() => {
+      expect(testLocalNmtModel).toHaveBeenCalledWith('opus-mt-en-zh', 'Hello, world!');
+      const speedBadge = screen.getByTestId('local-model-speed-opus-mt-en-zh');
+      expect(speedBadge.textContent).toBe('6 t/s');
+    });
+
+    perfNowSpy.mockRestore();
+  });
+
+  it('renders LLM and NMT subtabs and toggles between them', async () => {
+    const mockNmtCard = {
+      ...mockInstalledCard,
+      id: 'opus-mt-en-zh',
+      name: 'Opus-MT (EN -> ZH)',
+      backend: 'onnx-nmt',
+      capabilities: ['translate'],
+    };
+
+    vi.mocked(listLocalNmtCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockNmtCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const llmTab = screen.getByRole('tab', {
+      name: /Large Language Model \(LLM\)|大语言模型 \(LLM\)/i,
+    });
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
+    expect(llmTab).toBeTruthy();
+    expect(nmtTab).toBeTruthy();
+
+    fireEvent.click(nmtTab);
+    await vi.waitFor(() => {
+      expect(screen.getByText('Opus-MT (EN -> ZH)')).toBeTruthy();
     });
   });
 
@@ -199,11 +320,13 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
@@ -228,8 +351,12 @@ describe('LocalProviderAccordionItem', () => {
     // Verify model response text is NOT rendered in the UI
     expect(screen.queryByText('你好！我是 Qwen 模型。')).toBeNull();
 
-    const updatedBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
-    expect(updatedBtn.getAttribute('data-tooltip')).toBe('✓ 推理成功 (25 t/s)');
+    const updatedBtn = screen.getByRole('button', {
+      name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+    });
+    expect(updatedBtn.getAttribute('data-tooltip')).toMatch(
+      /✓ (Inference successful|推理成功) \(25 t\/s\)/
+    );
 
     perfNowSpy.mockRestore();
   });
@@ -253,17 +380,21 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
 
     await vi.waitFor(() => {
-      const updatedBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const updatedBtn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      });
       expect(updatedBtn.classList.contains('error')).toBe(true);
       expect(updatedBtn.getAttribute('data-tooltip')).toBe('✕ GPU out of memory');
     });
@@ -292,17 +423,19 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
       expect(btn.classList.contains('success')).toBe(true);
     });
 
@@ -312,7 +445,7 @@ describe('LocalProviderAccordionItem', () => {
     });
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
       expect(btn.classList.contains('success')).toBe(false);
       expect(screen.getByTestId('local-model-speed-qwen3.5-4b')).toBeTruthy();
     });
@@ -344,11 +477,13 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
@@ -358,7 +493,7 @@ describe('LocalProviderAccordionItem', () => {
     });
 
     // Delete the model
-    const deleteBtn = screen.getByRole('button', { name: /删除 Qwen3.5 4B/i });
+    const deleteBtn = screen.getByRole('button', { name: /(Delete|删除) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(deleteBtn);
     });
@@ -366,5 +501,154 @@ describe('LocalProviderAccordionItem', () => {
     await vi.waitFor(() => {
       expect(screen.queryByTestId('local-model-speed-qwen3.5-4b')).toBeNull();
     });
+  });
+
+  it('resumes download directly without prompt when downloading an interrupted model', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const downloadBtn = screen.getByRole('button', { name: /Resume download Qwen3.5 4B/i });
+    await act(async () => {
+      fireEvent.click(downloadBtn);
+    });
+
+    expect(mockCheckboxConfirm).not.toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).toHaveBeenCalledWith(
+      expect.objectContaining({ modelId: 'qwen3.5-4b' })
+    );
+  });
+
+  it('cleans interrupted download when discard button is clicked and confirmed', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockConfirm.mockResolvedValueOnce(true);
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).toHaveBeenCalledWith('qwen3.5-4b');
+    expect(downloadPresetModel).not.toHaveBeenCalled();
+  });
+
+  it('does not clean interrupted download when discard button is clicked and cancelled', async () => {
+    const { cleanInterruptedDownload, downloadPresetModel } = await import(
+      '../../../services/tauri/app'
+    );
+    mockConfirm.mockResolvedValueOnce(false);
+
+    const interruptedCard = {
+      ...mockInstalledCard,
+      isInstalled: false,
+      installedPath: null,
+      installedSizeBytes: null,
+      interruptedDownload: {
+        modelId: 'qwen3.5-4b',
+        downloadedBytes: 1370468944,
+        totalBytes: 2740937888,
+        percentage: 50,
+      },
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValueOnce({
+      modelsDir: '/test/models',
+      cards: [interruptedCard],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(screen.getByText(/Paused \(50%\)/)).toBeTruthy();
+    });
+
+    const discardBtn = screen.getByRole('button', {
+      name: /Discard incomplete download Qwen3.5 4B/i,
+    });
+    await act(async () => {
+      fireEvent.click(discardBtn);
+    });
+
+    expect(mockConfirm).toHaveBeenCalled();
+    expect(cleanInterruptedDownload).not.toHaveBeenCalled();
+    expect(downloadPresetModel).not.toHaveBeenCalled();
   });
 });

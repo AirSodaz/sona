@@ -6,6 +6,14 @@
     },
     "silero-vad": {
       "silero_vad.onnx": "https://www.modelscope.cn/models/liaowenbin/silero_vad/resolve/master/silero_vad.onnx"
+    },
+    "confucius4-r2t2-q8-gguf": {
+      "Confucius4-R2T2-Q8_0.gguf": "https://www.modelscope.cn/models/netease-youdao/Confucius4-R2T2-GGUF/resolve/master/Confucius4-R2T2-Q8_0.gguf",
+      "mmproj-Confucius4-R2T2-Q8_0.gguf": "https://www.modelscope.cn/models/netease-youdao/Confucius4-R2T2-GGUF/resolve/master/mmproj-Confucius4-R2T2-Q8_0.gguf"
+    },
+    "confucius4-r2t2-f16-gguf": {
+      "Confucius4-R2T2-f16.gguf": "https://www.modelscope.cn/models/netease-youdao/Confucius4-R2T2-GGUF/resolve/master/Confucius4-R2T2-f16.gguf",
+      "mmproj-Confucius4-R2T2-f16.gguf": "https://www.modelscope.cn/models/netease-youdao/Confucius4-R2T2-GGUF/resolve/master/mmproj-Confucius4-R2T2-f16.gguf"
     }
   }
 }

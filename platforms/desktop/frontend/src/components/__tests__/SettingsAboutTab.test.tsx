@@ -5,10 +5,34 @@ import {
   UPTODATE_RESET_DELAY_MS,
   useAppUpdaterStore,
 } from '../../stores/appUpdaterStore';
+import type * as ChannelModule from '../../utils/channel';
+import * as channelUtils from '../../utils/channel';
 import { SettingsAboutTab } from '../settings/SettingsAboutTab';
 
 const checkMock = vi.fn();
 const runGuardedQuitMock = vi.fn();
+
+const { mockBuildInfo } = vi.hoisted(() => ({
+  mockBuildInfo: {
+    semver: '0.9.8',
+    channel: 'stable' as const,
+    commitSha: 'mocksha',
+    isDirty: false,
+    buildNumber: null,
+    buildTimestamp: '2026-10-26T00:00:00Z',
+    displayVersion: '0.9.8',
+    isUpdateSupported: true,
+  },
+}));
+
+vi.mock('../../utils/channel', async (importOriginal) => {
+  const original = await importOriginal<typeof ChannelModule>();
+  return {
+    ...original,
+    getAppBuildInfo: vi.fn(() => ({ ...mockBuildInfo })),
+    getAppReleaseChannel: vi.fn(() => mockBuildInfo.channel),
+  };
+});
 
 vi.mock('@tauri-apps/plugin-updater', () => ({
   check: (...args: unknown[]) => checkMock(...args),
@@ -158,5 +182,27 @@ describe('SettingsAboutTab', () => {
 
     expect(useAppUpdaterStore.getState().notificationVisible).toBe(false);
     expect(useAppUpdaterStore.getState().status).toBe('available');
+  });
+
+  it('displays disabled update message and no check button when on dev channel', () => {
+    vi.mocked(channelUtils.getAppBuildInfo).mockReturnValueOnce({
+      semver: '0.9.8',
+      channel: 'dev',
+      commitSha: '3f2a1b0',
+      isDirty: true,
+      buildNumber: null,
+      buildTimestamp: '2026-10-26T00:00:00Z',
+      displayVersion: '0.9.8+dev.3f2a1b0.dirty',
+      isUpdateSupported: false,
+    });
+    vi.mocked(channelUtils.getAppReleaseChannel).mockReturnValueOnce('dev');
+
+    const { container } = render(<SettingsAboutTab />);
+    expect(screen.queryByRole('button', { name: 'settings.about_check_updates' })).toBeNull();
+    expect(screen.getByText('settings.update_disabled_for_channel')).toBeDefined();
+    expect(container.querySelector('.about-version-badge.channel-dev')).not.toBeNull();
+    expect(container.querySelector('.about-version-text')?.textContent).toBe(
+      'v0.9.8+dev.3f2a1b0.dirty'
+    );
   });
 });

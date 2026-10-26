@@ -257,10 +257,161 @@ describe('SyncConnectedPanel', () => {
         onDeleteRecoveryKey={onDeleteRecoveryKey}
       />
     );
-
     const titleEl = container.querySelector('.settings-accordion-copy-title.sync-security-title');
     expect(titleEl).not.toBeNull();
     expect(titleEl?.querySelector('svg')).not.toBeNull();
     expect(titleEl?.querySelector('span')?.textContent).toBe('Vault Security & Recovery');
+
+    // Collapsed by default when no recovery key is available
+    expect(container.querySelector('#settings-sync-recovery-key')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Vault Security & Recovery/ }));
+    expect(container.querySelector('#settings-sync-recovery-key')).not.toBeNull();
+  });
+
+  it('opens the security accordion for a recovery-key deep link', () => {
+    const { container, rerender } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    expect(container.querySelector('#settings-sync-recovery-key')).toBeNull();
+
+    rerender(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        navRequest={{ requestId: 1, targetId: 'settings-sync-recovery-key' }}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    expect(container.querySelector('#settings-sync-recovery-key')).not.toBeNull();
+  });
+
+  it('deep-linking with targetId: "settings-sync-encryption" expands the security accordion and mounts the change password form', () => {
+    const { container, rerender } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    expect(container.querySelector('.sync-change-password-form')).toBeNull();
+
+    rerender(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        navRequest={{ requestId: 2, targetId: 'settings-sync-encryption' }}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    expect(container.querySelector('.sync-change-password-form')).not.toBeNull();
+    expect(screen.getByText('Change master password')).toBeDefined();
+  });
+
+  it('initial mount with recoveryKey renders the security accordion open by default', () => {
+    const { container } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey="sona-vault-test-key-123"
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    expect(container.querySelector('#settings-sync-recovery-key')).not.toBeNull();
+    expect(container.querySelector('.sync-change-password-form')).not.toBeNull();
+  });
+
+  it('status hero card contains id="settings-sync-webdav"', () => {
+    const { container } = render(
+      <SyncConnectedPanel
+        busyAction={null}
+        recoveryKey={null}
+        status={mockStatus}
+        onChangeMasterPassword={onChangeMasterPassword}
+        onChangePreset={onChangePreset}
+        onCopyRecoveryKey={onCopyRecoveryKey}
+        onDisconnect={onDisconnect}
+        onExportRecoveryKey={onExportRecoveryKey}
+        onGenerateRecoveryKey={onGenerateRecoveryKey}
+        onLock={onLock}
+        onRunNow={onRunNow}
+        onSetPaused={onSetPaused}
+        onUnlock={onUnlock}
+        onUnlockWithRecovery={onUnlockWithRecovery}
+        onDeleteRecoveryKey={onDeleteRecoveryKey}
+      />
+    );
+
+    const heroCard = container.querySelector('#settings-sync-webdav');
+    expect(heroCard).not.toBeNull();
+    expect(heroCard?.classList.contains('sync-status-hero-card')).toBe(true);
   });
 });

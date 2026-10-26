@@ -38,7 +38,11 @@ import { useProjectStore } from './projectStore';
 import { useTaskLedgerStore } from './taskLedgerStore';
 import { clearActiveTranscriptSession, setTranscriptSegments } from './transcriptCoordinator';
 import { useTranscriptSessionStore } from './transcriptSessionStore';
-import { DEFAULT_SESSION_DATA, useTranscriptStore } from './transcriptStore';
+import {
+  DEFAULT_SESSION_DATA,
+  registerBatchActiveItemIdResolver,
+  useTranscriptStore,
+} from './transcriptStore';
 
 interface AddFilesOptions {
   origin?: BatchQueueItemOrigin;
@@ -402,8 +406,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           transcriptStore.setAudioUrl(savedMeta.audioUrl ?? null);
           // Only update the active project when still in batch mode,
           // to avoid overriding the browse scope in the projects view.
-          const currentMode = useTranscriptStore.getState().mode;
-          if (currentMode === 'batch') {
+          const { mode: currentMode, ingestionFocus } = useTranscriptStore.getState();
+          if (currentMode === 'create' && ingestionFocus === 'batch') {
             void useProjectStore.getState().setActiveProjectId(savedMeta.projectId ?? null);
           }
         }
@@ -722,3 +726,5 @@ export const useIsQueueProcessing = () => useBatchQueueStore((state) => state.is
 
 /** Selector for paused state. */
 export const useIsQueuePaused = () => useBatchQueueStore((state) => state.isQueuePaused);
+
+registerBatchActiveItemIdResolver(() => useBatchQueueStore.getState().activeItemId);

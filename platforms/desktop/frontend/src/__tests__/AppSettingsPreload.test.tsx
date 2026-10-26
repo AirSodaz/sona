@@ -44,8 +44,10 @@ vi.mock('../components/transcript/TranscriptWorkbench', async () => {
     },
   };
 });
-vi.mock('../components/BatchImport', () => ({ BatchImport: () => <div>BatchImport</div> }));
-vi.mock('../components/LiveRecord', () => ({ LiveRecord: () => <div>LiveRecord</div> }));
+vi.mock('../components/CreateWorkspacePanel', () => ({
+  CreateWorkspacePanel: () => <div>CreateWorkspacePanel</div>,
+}));
+vi.mock('../components/tools/ToolsView', () => ({ ToolsView: () => <div>ToolsView</div> }));
 vi.mock('../components/ProjectsView', () => ({
   ProjectsView: (props: any) => {
     projectsViewRenderMock(props);
@@ -68,6 +70,8 @@ vi.mock('../components/OnboardingReminderBanner', () => ({ OnboardingReminderBan
 vi.mock('../components/Icons', () => ({
   AutomationIcon: () => <span>AutomationIcon</span>,
   SettingsIcon: () => <span>SettingsIcon</span>,
+  SlidersIcon: () => <span>SlidersIcon</span>,
+  ChevronUpIcon: () => <span>ChevronUpIcon</span>,
 }));
 
 vi.mock('../components/settings/settingsLoaders', () => ({

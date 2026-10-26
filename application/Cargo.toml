@@ -14,13 +14,15 @@ sona-core = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true, features = ["std"] }
 futures-util = { workspace = true }
+log = { workspace = true }
+parking_lot = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["rt", "sync"] }
+tokio = { workspace = true, features = ["rt", "sync", "time"] }
 
 [dev-dependencies]
 sona-sqlite = { workspace = true }
 sona-runtime-fs = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }

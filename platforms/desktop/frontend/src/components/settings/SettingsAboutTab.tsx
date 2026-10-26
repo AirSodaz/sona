@@ -1,10 +1,9 @@
 import { type JSX, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import packageJson from '../../../package.json';
 import { useAppUpdater } from '../../hooks/useAppUpdater';
 import { openLogFolder } from '../../services/tauri/app';
 import { openUrl } from '../../services/tauri/platform/opener';
-import { formatChannelBadgeLabel, getAppReleaseChannel } from '../../utils/channel';
+import { formatChannelBadgeLabel, getAppBuildInfo } from '../../utils/channel';
 import { logger } from '../../utils/logger';
 import {
   BookIcon,
@@ -37,8 +36,10 @@ export function SettingsAboutTab(): JSX.Element {
       resetStatus();
     };
   }, [resetStatus]);
-  const channel = getAppReleaseChannel();
+  const buildInfo = getAppBuildInfo();
+  const channel = buildInfo.channel;
   const channelLabel = formatChannelBadgeLabel(channel);
+  const displayVersion = `v${buildInfo.displayVersion}`;
   const handleOpenHomepage = async () => {
     try {
       await openUrl('https://github.com/AirSodaz/sona');
@@ -56,6 +57,18 @@ export function SettingsAboutTab(): JSX.Element {
   };
 
   const renderUpdateContent = () => {
+    if (!buildInfo.isUpdateSupported) {
+      return (
+        <div className="update-status update-disabled">
+          <span>
+            {t('settings.update_disabled_for_channel', {
+              channel: channelLabel,
+              defaultValue: `Auto-update is disabled for ${channelLabel} builds.`,
+            })}
+          </span>
+        </div>
+      );
+    }
     switch (status) {
       case 'idle':
         return (
@@ -148,10 +161,10 @@ export function SettingsAboutTab(): JSX.Element {
             style={{ width: '100%', height: '100%', borderRadius: 'inherit' }}
           />
         </div>
-        <div className="about-title">
+        <div id="settings-about-version" className="about-title">
           <h2>Sona</h2>
           <span className={`about-version-badge channel-${channel}`}>
-            <span className="about-version-text">v{packageJson.version}</span>
+            <span className="about-version-text">{displayVersion}</span>
             <span className="about-version-divider">/</span>
             <span className="about-channel-text">{channelLabel}</span>
           </span>
@@ -162,6 +175,7 @@ export function SettingsAboutTab(): JSX.Element {
       {/* Info Cards */}
       <div className="about-cards">
         <button
+          id="settings-about-homepage"
           className="about-card about-card-clickable"
           onClick={handleOpenHomepage}
           aria-label={t('settings.about_source_code')}
@@ -179,6 +193,7 @@ export function SettingsAboutTab(): JSX.Element {
         </button>
 
         <button
+          id="settings-about-logs"
           className="about-card about-card-clickable"
           onClick={handleOpenLogFolder}
           aria-label={t('settings.about_open_logs')}
@@ -207,7 +222,9 @@ export function SettingsAboutTab(): JSX.Element {
       </div>
 
       {/* Actions */}
-      <div className="about-actions">{renderUpdateContent()}</div>
+      <div id="settings-about-check-updates" className="about-actions">
+        {renderUpdateContent()}
+      </div>
 
       {/* Footer */}
       <div className="about-footer">

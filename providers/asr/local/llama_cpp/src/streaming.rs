@@ -23,10 +23,10 @@ use sona_core::transcription::pseudo_streaming::{
 };
 
 use crate::batch::{
-    GpuOffload, MAX_GENERATED_TOKENS, MODEL_TYPE_QWEN3_ASR, N_BATCH, QWEN3_ASR_HOTWORDS_MAX_CHARS,
-    backend, gpu_backend_available, init_inference, normalize_hotwords, parse_qwen3_asr_output,
-    parse_qwen3_asr_partial_output, qwen3_asr_language, qwen3_asr_prompt, resolve_auto_gpu_offload,
-    resolve_gpu_offload, resolve_required_model_file,
+    GpuOffload, MAX_GENERATED_TOKENS, MODEL_TYPE_CONFUCIUS4_R2T2, MODEL_TYPE_QWEN3_ASR, N_BATCH,
+    QWEN3_ASR_HOTWORDS_MAX_CHARS, backend, gpu_backend_available, init_inference,
+    normalize_hotwords, parse_qwen3_asr_output, parse_qwen3_asr_partial_output, qwen3_asr_language,
+    qwen3_asr_prompt, resolve_auto_gpu_offload, resolve_gpu_offload, resolve_required_model_file,
 };
 
 const MAX_PARTIAL_GENERATED_TOKENS: usize = 256;
@@ -110,10 +110,12 @@ pub(crate) fn validate_streaming_request(
         ));
     }
 
-    if model_type != MODEL_TYPE_QWEN3_ASR {
+    if model_type != MODEL_TYPE_QWEN3_ASR && model_type != MODEL_TYPE_CONFUCIUS4_R2T2 {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
-            format!("Unknown llama.cpp streaming ASR model type '{model_type}'."),
+            format!(
+                "llama.cpp streaming ASR supports model types '{MODEL_TYPE_QWEN3_ASR}' and '{MODEL_TYPE_CONFUCIUS4_R2T2}', got '{model_type}'."
+            ),
         ));
     }
 
@@ -332,6 +334,7 @@ impl PseudoStreamDecoder for Qwen3PseudoStreamDecoder {
                 text,
                 tokens: None,
                 timestamps: None,
+                durations: None,
             }))
         }
     }
@@ -583,6 +586,25 @@ mod tests {
         let error =
             validate_streaming_request(&request).expect_err("should reject wrong model type");
         assert_eq!(error.kind, AsrPortErrorKind::Unsupported);
+        assert!(error.message.contains(MODEL_TYPE_QWEN3_ASR));
+        assert!(error.message.contains(MODEL_TYPE_CONFUCIUS4_R2T2));
+        let _ = std::fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn validate_streaming_request_accepts_confucius4_r2t2() {
+        let dir = create_test_model_dir();
+        let mut request = sample_streaming_request(&dir);
+        if let AsrEngineConfig::Local {
+            ref mut model_type, ..
+        } = request.engine_config
+        {
+            *model_type = MODEL_TYPE_CONFUCIUS4_R2T2.to_string();
+        }
+
+        let validated =
+            validate_streaming_request(&request).expect("confucius4-r2t2 should succeed");
+        assert_eq!(validated.model_file, dir.join("model.gguf"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

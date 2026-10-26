@@ -1023,11 +1023,44 @@ fn setting_json_round_trips_malformed_storage_and_preserves_empty_keys() {
         store.calls(),
         vec![
             StoreCall::LoadSetting("".into()),
+            StoreCall::LoadBaseConfigJson,
             StoreCall::SetSetting("".into(), "{\"status\":\"completed\",\"version\":1}".into()),
             StoreCall::LoadSetting("".into()),
             StoreCall::LoadSetting("bad".into()),
         ]
     );
+}
+
+#[test]
+fn get_setting_falls_back_to_app_config_payload() {
+    let store = MemoryAppConfigStore::default();
+    let service = service(&store);
+
+    service
+        .save_config(&json!({
+            "realtimeTranslationEnabled": true,
+            "realtimeTranslationSourceLanguage": "en",
+            "realtimeTranslationTargetLanguage": "zh"
+        }))
+        .unwrap();
+
+    assert_eq!(
+        service.get_setting("realtimeTranslationEnabled").unwrap(),
+        Some(json!(true))
+    );
+    assert_eq!(
+        service
+            .get_setting("realtimeTranslationSourceLanguage")
+            .unwrap(),
+        Some(json!("en"))
+    );
+    assert_eq!(
+        service
+            .get_setting("realtimeTranslationTargetLanguage")
+            .unwrap(),
+        Some(json!("zh"))
+    );
+    assert_eq!(service.get_setting("nonExistentSetting").unwrap(), None);
 }
 
 #[test]

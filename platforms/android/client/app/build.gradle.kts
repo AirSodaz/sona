@@ -10,9 +10,10 @@ val maximumAndroidVersionCode = 2_100_000_000L
 fun environmentValue(name: String): String =
     providers.environmentVariable(name).orNull?.trim().orEmpty()
 
+val validAndroidChannels = setOf("stable", "nightly", "ci", "dev")
 val sonaAndroidChannel = environmentValue("SONA_ANDROID_CHANNEL").ifEmpty { "stable" }
-require(sonaAndroidChannel == "stable" || sonaAndroidChannel == "nightly") {
-    "SONA_ANDROID_CHANNEL must be stable or nightly"
+require(sonaAndroidChannel in validAndroidChannels) {
+    "SONA_ANDROID_CHANNEL must be one of: ${validAndroidChannels.joinToString(", ")}"
 }
 
 val suppliedAndroidVersionName = environmentValue("SONA_ANDROID_VERSION_NAME")
@@ -26,7 +27,7 @@ if (sonaAndroidChannel == "nightly") {
     }
 }
 
-val sonaAndroidVersionName = suppliedAndroidVersionName.ifEmpty { "0.9.7" }
+val sonaAndroidVersionName = suppliedAndroidVersionName.ifEmpty { "0.9.8" }
 val sonaAndroidVersionCodeValue = suppliedAndroidVersionCode.ifEmpty { "1" }
 val parsedAndroidVersionCode = sonaAndroidVersionCodeValue.toLongOrNull()
 require(
@@ -129,7 +130,7 @@ dependencies {
     implementation("androidx.navigation:navigation-compose:2.9.8")
     implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("com.google.android.material:material:1.14.0")
-    implementation("rustls:rustls-platform-verifier:0.1.1")
+    implementation("org.rustls:rustls-platform-verifier:0.2.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 

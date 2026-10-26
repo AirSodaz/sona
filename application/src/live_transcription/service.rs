@@ -10,6 +10,7 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use tokio::sync::{Mutex as AsyncMutex, Notify};
 
+use super::translation::StreamingTranslationCoordinator;
 #[derive(Clone, Debug, Default, PartialEq, Eq, Hash)]
 pub struct LiveSourceEpoch {
     pub source_id: String,
@@ -117,6 +118,8 @@ pub struct LiveTranscriptionCoordinator {
 struct CoordinatorInner {
     factory: Arc<dyn StreamingAsrFactoryPort>,
     telemetry: Arc<dyn AsrRuntimeObserver>,
+    translation: parking_lot::RwLock<Option<Arc<StreamingTranslationCoordinator>>>,
+    partial_versions: parking_lot::Mutex<HashMap<String, u64>>,
     state: AsyncMutex<CoordinatorState>,
     lifecycle_guard: AsyncMutex<()>,
     feed_guard: AsyncMutex<()>,
@@ -368,10 +371,20 @@ impl LiveTranscriptionCoordinator {
         factory: Arc<dyn StreamingAsrFactoryPort>,
         telemetry: Arc<dyn AsrRuntimeObserver>,
     ) -> Self {
+        Self::with_optional_translation(factory, telemetry, None)
+    }
+
+    pub fn with_optional_translation(
+        factory: Arc<dyn StreamingAsrFactoryPort>,
+        telemetry: Arc<dyn AsrRuntimeObserver>,
+        translation: Option<Arc<StreamingTranslationCoordinator>>,
+    ) -> Self {
         Self {
             inner: Arc::new(CoordinatorInner {
                 factory,
                 telemetry,
+                translation: parking_lot::RwLock::new(translation),
+                partial_versions: parking_lot::Mutex::new(HashMap::new()),
                 state: AsyncMutex::new(CoordinatorState::default()),
                 lifecycle_guard: AsyncMutex::new(()),
                 feed_guard: AsyncMutex::new(()),
@@ -655,7 +668,11 @@ impl LiveTranscriptionCoordinator {
                 observer.drain().await;
                 let mut state = self.inner.state.lock().await;
                 state.pipelines.remove(&pipeline_id);
+                let has_no_pipelines = state.pipelines.is_empty();
                 drop(state);
+                if has_no_pipelines {
+                    self.clear_translation();
+                }
                 mailbox.close_and_drain().await;
                 flush_result.and(stop_result)
             }
@@ -738,12 +755,28 @@ impl LiveTranscriptionCoordinator {
             }
         }
 
+        let state = self.inner.state.lock().await;
+        if state.pipelines.is_empty() {
+            self.clear_translation();
+        }
+
         match first_error {
             Some(error) => Err(error),
             None => Ok(()),
         }
     }
 
+    pub fn set_translation(&self, translation: Option<Arc<StreamingTranslationCoordinator>>) {
+        self.inner.partial_versions.lock().clear();
+        *self.inner.translation.write() = translation;
+    }
+
+    pub fn clear_translation(&self) {
+        self.inner.partial_versions.lock().clear();
+        if let Some(translator) = self.inner.translation.read().as_ref() {
+            translator.clear();
+        }
+    }
     pub async fn metrics(&self) -> LiveTranscriptionMetrics {
         let state = self.inner.state.lock().await;
         let active_consumers = state.consumer_to_pipeline.len();
@@ -918,7 +951,7 @@ impl CoordinatorInner {
         }
     }
 
-    async fn dispatch_transcript(&self, event: AsrTranscriptUpdateEvent) {
+    async fn broadcast_transcript(&self, event: AsrTranscriptUpdateEvent) {
         let mut state = self.state.lock().await;
         let Some(pipeline) = state.pipelines.get_mut(&event.instance_id) else {
             return;
@@ -940,6 +973,84 @@ impl CoordinatorInner {
                     stage: event.stage.clone(),
                     update,
                 });
+        }
+    }
+
+    async fn dispatch_transcript(self: &Arc<Self>, mut event: AsrTranscriptUpdateEvent) {
+        let translator = self.translation.read().clone();
+        let Some(translator) = translator else {
+            self.broadcast_transcript(event).await;
+            return;
+        };
+
+        let has_final = event.update.upsert_segments.iter().any(|s| s.is_final)
+            || !event.update.remove_ids.is_empty();
+
+        if has_final {
+            {
+                let mut versions = self.partial_versions.lock();
+                for s in &event.update.upsert_segments {
+                    if s.is_final {
+                        versions.remove(&s.id);
+                    } else {
+                        let v = versions.entry(s.id.clone()).or_insert(0);
+                        *v += 1;
+                    }
+                }
+                for id in &event.update.remove_ids {
+                    versions.remove(id);
+                }
+            }
+            translator.enrich_update(&mut event.update).await;
+            self.broadcast_transcript(event).await;
+        } else {
+            // 1. Fill cached translation immediately so partials display existing translations
+            translator.fill_cached(&mut event.update);
+
+            // 2. Broadcast partial transcript update immediately without waiting for translation
+            self.broadcast_transcript(event.clone()).await;
+
+            // 3. Track version and spawn background translation to refine translation
+            let segment_versions: Vec<(String, u64)> = {
+                let mut versions = self.partial_versions.lock();
+                event
+                    .update
+                    .upsert_segments
+                    .iter()
+                    .map(|s| {
+                        let v = versions.entry(s.id.clone()).or_insert(0);
+                        *v += 1;
+                        (s.id.clone(), *v)
+                    })
+                    .collect()
+            };
+
+            let delay = translator.debounce_delay(&event.update);
+            let this = Arc::clone(self);
+            tokio::spawn(async move {
+                if !delay.is_zero() {
+                    tokio::time::sleep(delay).await;
+                    let is_stale = {
+                        let versions = this.partial_versions.lock();
+                        segment_versions
+                            .iter()
+                            .any(|(id, v)| versions.get(id) != Some(v))
+                    };
+                    if is_stale {
+                        return;
+                    }
+                }
+                translator.enrich_update(&mut event.update).await;
+                let is_stale = {
+                    let versions = this.partial_versions.lock();
+                    segment_versions
+                        .iter()
+                        .any(|(id, v)| versions.get(id) != Some(v))
+                };
+                if !is_stale {
+                    this.broadcast_transcript(event).await;
+                }
+            });
         }
     }
 

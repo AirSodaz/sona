@@ -5,8 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { v4 as uuidv4 } from 'uuid';
 import { type RecordSegmentDeliveryMeta, useAudioRecorder } from '../hooks/useAudioRecorder';
 import { useAudioVisualizer } from '../hooks/useAudioVisualizer';
-import { useCaptionSession } from '../hooks/useCaptionSession';
-import { captionWindowService } from '../services/captionWindowService';
 import { polishService } from '../services/polishService';
 import { useConfigStore } from '../stores/configStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
@@ -23,7 +21,6 @@ import type { TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
 import { Dropdown } from './Dropdown';
 import { RecordingTimer } from './RecordingTimer';
-import { Switch } from './Switch';
 
 /** Props for the LiveRecord component. */
 interface LiveRecordProps {
@@ -77,21 +74,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
     }
   }, [focusStartRecordingToken, isRecording]);
 
-  // Caption Mode
-  const isCaptionMode = useTranscriptRuntimeStore((state) => state.isCaptionMode);
-  const setIsCaptionMode = useTranscriptRuntimeStore((state) => state.setIsCaptionMode);
   const config = useConfigStore((state) => state.config);
-
-  // Initialize dedicated caption session hook
-  useCaptionSession(config, isCaptionMode);
-
-  // Config Helpers
-  const lockWindow = config.lockWindow ?? false;
-  const alwaysOnTop = config.alwaysOnTop ?? true;
-  useEffect(() => {
-    captionWindowService.setClickThrough(lockWindow).catch(logger.error);
-    captionWindowService.setAlwaysOnTop(alwaysOnTop).catch(logger.error);
-  }, [lockWindow, alwaysOnTop]);
 
   // Segment Handler
   const onSegment = useCallback((update: TranscriptUpdate, meta: RecordSegmentDeliveryMeta) => {
@@ -187,6 +170,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       if (isAgentRecording) {
         return;
       }
+      useTranscriptStore.getState().setIngestionFocus('live');
       const historyId = uuidv4();
       openTranscriptSession({
         segments: [],
@@ -219,13 +203,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
       await pauseRecording();
     }
   }, [isPaused, pauseRecording, resumeRecording]);
-
-  const handleCaptionToggle = useCallback(
-    (checked: boolean) => {
-      setIsCaptionMode(checked);
-    },
-    [setIsCaptionMode]
-  );
 
   function getRecordingStatusText(): string {
     if (isAgentRecording) {
@@ -392,16 +369,6 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
         <p className="recording-status-text" aria-live="polite">
           {getRecordingStatusText()}
         </p>
-      </div>
-
-      <div className="live-caption-toggle">
-        <Switch
-          checked={isCaptionMode}
-          onChange={handleCaptionToggle}
-          label={t('live.caption_mode')}
-          disabled={false}
-        />
-        <span className="live-caption-hint">{t('live.caption_mode_hint')}</span>
       </div>
     </div>
   );

@@ -157,6 +157,10 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
     ),
     ("qwen3-asr-0.6b", "qwen3-asr-0.6b-q8-gguf"),
     ("qwen3-asr-1.7b", "qwen3-asr-1.7b-q8-gguf"),
+    ("confucius4-r2t2", "confucius4-r2t2-q8-gguf"),
+    ("confucius4-r2t2-q8", "confucius4-r2t2-q8-gguf"),
+    ("confucius4-r2t2-f16", "confucius4-r2t2-f16-gguf"),
+    ("r2t2", "confucius4-r2t2-q8-gguf"),
     ("firered", "sherpa-onnx-fire-red-asr2-zh_en-int8-2026-02-26"),
     (
         "firered-int8",
@@ -188,6 +192,34 @@ pub const PRESET_MODEL_ALIASES: &[(&str, &str)] = &[
     (
         "moonshine-base-zh",
         "sherpa-onnx-moonshine-base-zh-quantized-2026-02-27",
+    ),
+    (
+        "canary",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m-int8",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr-int8",
+    ),
+    (
+        "canary-180m-fp32",
+        "sherpa-onnx-nemo-canary-180m-flash-en-es-de-fr",
+    ),
+    ("canary-1b", "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8"),
+    (
+        "canary-1b-int8",
+        "sherpa-onnx-nemo-canary-1b-en-es-de-fr-int8",
+    ),
+    ("canary-1b-fp16", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
+    ("canary-1b-fp32", "sherpa-onnx-nemo-canary-1b-en-es-de-fr"),
+    ("online-punct", "sherpa-onnx-online-punct-en-2024-08-06"),
+    (
+        "online-punctuation",
+        "sherpa-onnx-online-punct-en-2024-08-06",
     ),
     ("punctuation", DEFAULT_PUNCTUATION_MODEL_ID),
     ("punct", DEFAULT_PUNCTUATION_MODEL_ID),
@@ -371,6 +403,8 @@ pub enum ModelCatalogModelType {
     SpeakerEmbedding,
     Omnilingual,
     Alignment,
+    Canary,
+    OnnxNmt,
 }
 
 impl ModelCatalogModelType {
@@ -393,6 +427,8 @@ impl ModelCatalogModelType {
             Self::SpeakerEmbedding => "speaker-embedding",
             Self::Omnilingual => "omnilingual",
             Self::Alignment => "alignment",
+            Self::Canary => "canary",
+            Self::OnnxNmt => "onnx-nmt",
         }
     }
 }
@@ -425,6 +461,8 @@ impl std::str::FromStr for ModelCatalogModelType {
             "speaker-embedding" => Ok(Self::SpeakerEmbedding),
             "omnilingual" => Ok(Self::Omnilingual),
             "alignment" => Ok(Self::Alignment),
+            "canary" => Ok(Self::Canary),
+            "onnx-nmt" => Ok(Self::OnnxNmt),
             _ => Err(format!("Unknown ModelCatalogModelType: {s}")),
         }
     }
@@ -492,6 +530,8 @@ pub enum ModelEngine {
     SherpaOnnx,
     #[serde(rename = "llama-cpp")]
     LlamaCpp,
+    #[serde(rename = "onnx-nmt")]
+    OnnxNmt,
 }
 
 impl ModelEngine {
@@ -499,6 +539,7 @@ impl ModelEngine {
         match self {
             Self::SherpaOnnx => "sherpa-onnx",
             Self::LlamaCpp => "llama-cpp",
+            Self::OnnxNmt => "onnx-nmt",
         }
     }
 }
@@ -516,6 +557,7 @@ impl std::str::FromStr for ModelEngine {
         match s {
             "sherpa-onnx" => Ok(Self::SherpaOnnx),
             "llama-cpp" => Ok(Self::LlamaCpp),
+            "onnx-nmt" => Ok(Self::OnnxNmt),
             _ => Err(format!("Unknown ModelEngine: {s}")),
         }
     }
@@ -561,6 +603,8 @@ pub struct ModelCatalogModel {
     pub install_path: String,
     pub download_path: String,
     pub is_installed: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub interrupted_download: Option<crate::models::downloads::InterruptedDownloadInfo>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -858,6 +902,7 @@ impl PresetModel {
             && self.model_type != "speaker-segmentation"
             && self.model_type != "speaker-embedding"
             && self.model_type != "alignment"
+            && self.model_type != "onnx-nmt"
     }
 
     /// Returns the human-readable selection label for this preset model.
@@ -924,6 +969,7 @@ fn model_matches_section(model: &ModelCatalogModel, section_type: ModelCatalogSe
                 | ModelCatalogModelType::SpeakerSegmentation
                 | ModelCatalogModelType::SpeakerEmbedding
                 | ModelCatalogModelType::Alignment
+                | ModelCatalogModelType::OnnxNmt
         ),
     }
 }
@@ -1149,6 +1195,12 @@ impl ModelCatalogModel {
             .parse::<ModelEngine>()
             .unwrap_or_else(|_| panic!("Unknown model engine in preset model '{}'", model.id));
 
+        let interrupted_download = if !is_installed {
+            crate::models::downloads::inspect_interrupted_download(models_dir, &model.id)
+        } else {
+            None
+        };
+
         Self {
             id: model.id.clone(),
             name: model.name.clone(),
@@ -1169,6 +1221,7 @@ impl ModelCatalogModel {
             install_path: path_to_catalog_string(&install_path),
             download_path: path_to_catalog_string(&download_path),
             is_installed,
+            interrupted_download,
         }
     }
 
@@ -1202,6 +1255,7 @@ impl ModelCatalogModel {
                     | ModelCatalogModelType::SpeakerSegmentation
                     | ModelCatalogModelType::SpeakerEmbedding
                     | ModelCatalogModelType::Alignment
+                    | ModelCatalogModelType::OnnxNmt
             )
     }
 

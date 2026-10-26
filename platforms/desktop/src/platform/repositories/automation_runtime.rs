@@ -195,7 +195,10 @@ fn schedule_candidate(
     let handle = tauri::async_runtime::spawn(async move {
         tokio::time::sleep(Duration::from_millis(rule_for_task.debounce_ms)).await;
 
-        let first_snapshot = match candidate_payload_for_rule(&rule_for_task, &file_path_for_task) {
+        let mut previous_snapshot = match candidate_payload_for_rule(
+            &rule_for_task,
+            &file_path_for_task,
+        ) {
             Ok(Some(snapshot)) => snapshot,
             Ok(None) => {
                 state_for_task
@@ -217,43 +220,60 @@ fn schedule_candidate(
             }
         };
 
-        tokio::time::sleep(Duration::from_millis(rule_for_task.stable_window_ms)).await;
+        const MAX_STABILITY_CHECKS: usize = 20;
+        let mut stabilized_snapshot = None;
 
-        let second_snapshot = match candidate_payload_for_rule(&rule_for_task, &file_path_for_task)
-        {
-            Ok(Some(snapshot)) => snapshot,
-            Ok(None) => {
-                state_for_task
-                    .inner
-                    .lock_pending_candidates()
-                    .remove(&pending_key_for_task);
-                return;
-            }
-            Err(error) => {
-                warn!(
-                    "[AutomationRuntime] Failed to stat candidate after stability wait: rule={} path={} error={}",
-                    rule_for_task.rule_id, file_path_for_task, error
-                );
-                state_for_task
-                    .inner
-                    .lock_pending_candidates()
-                    .remove(&pending_key_for_task);
-                return;
-            }
-        };
+        for attempt in 1..=MAX_STABILITY_CHECKS {
+            tokio::time::sleep(Duration::from_millis(rule_for_task.stable_window_ms)).await;
 
-        if first_snapshot != second_snapshot {
-            state_for_task
-                .inner
-                .lock_pending_candidates()
-                .remove(&pending_key_for_task);
-            return;
+            let current_snapshot = match candidate_payload_for_rule(
+                &rule_for_task,
+                &file_path_for_task,
+            ) {
+                Ok(Some(snapshot)) => snapshot,
+                Ok(None) => {
+                    state_for_task
+                        .inner
+                        .lock_pending_candidates()
+                        .remove(&pending_key_for_task);
+                    return;
+                }
+                Err(error) => {
+                    warn!(
+                        "[AutomationRuntime] Failed to stat candidate during stability check (attempt {}/{}): rule={} path={} error={}",
+                        attempt,
+                        MAX_STABILITY_CHECKS,
+                        rule_for_task.rule_id,
+                        file_path_for_task,
+                        error
+                    );
+                    state_for_task
+                        .inner
+                        .lock_pending_candidates()
+                        .remove(&pending_key_for_task);
+                    return;
+                }
+            };
+
+            if previous_snapshot == current_snapshot {
+                stabilized_snapshot = Some(current_snapshot);
+                break;
+            }
+
+            previous_snapshot = current_snapshot;
         }
 
-        if let Err(error) = event_sink_for_task.emit_candidate(second_snapshot) {
+        if let Some(snapshot) = stabilized_snapshot {
+            if let Err(error) = event_sink_for_task.emit_candidate(snapshot) {
+                warn!(
+                    "[AutomationRuntime] Failed to emit candidate: rule={} path={} error={}",
+                    rule_for_task.rule_id, file_path_for_task, error
+                );
+            }
+        } else {
             warn!(
-                "[AutomationRuntime] Failed to emit candidate: rule={} path={} error={}",
-                rule_for_task.rule_id, file_path_for_task, error
+                "[AutomationRuntime] Candidate failed to stabilize after {} checks: rule={} path={}",
+                MAX_STABILITY_CHECKS, rule_for_task.rule_id, file_path_for_task
             );
         }
 
@@ -656,5 +676,40 @@ mod tests {
 
         let guard = inner.lock_pending_candidates();
         assert!(guard.is_empty());
+    }
+
+    #[tokio::test]
+    async fn schedule_candidate_waits_for_file_to_stabilize_before_emitting() {
+        let dir = tempdir().unwrap();
+        let file_path = dir.path().join("growing.wav");
+        fs::write(&file_path, b"initial chunk").unwrap();
+        let sink = Arc::new(RecordingSink::default());
+        let state = AutomationRuntimeState::default();
+        let rule = sample_rule(|rule| {
+            rule.watch_directory = dir.path().to_string_lossy().into_owned();
+            rule.exclude_directory = dir.path().join("exports").to_string_lossy().into_owned();
+            rule.debounce_ms = 5;
+            rule.stable_window_ms = 25;
+        });
+
+        schedule_candidate(state.clone(), sink.clone(), rule.clone(), file_path.clone());
+
+        // Append after debounce during stability window
+        tokio::time::sleep(Duration::from_millis(15)).await;
+        let mut f = fs::OpenOptions::new()
+            .append(true)
+            .open(&file_path)
+            .unwrap();
+        std::io::Write::write_all(&mut f, b" additional chunk").unwrap();
+        drop(f);
+
+        wait_for_payload_count(&state, &sink, 1).await;
+
+        let payloads = sink.payloads.lock().unwrap().clone();
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(
+            payloads[0].size,
+            b"initial chunk additional chunk".len() as u64
+        );
     }
 }

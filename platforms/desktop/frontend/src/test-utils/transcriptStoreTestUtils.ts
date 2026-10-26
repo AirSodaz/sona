@@ -1,6 +1,7 @@
 import { useConfigStore } from '../stores/configStore';
 import { useEffectiveConfigStore } from '../stores/effectiveConfigStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useToolsStore } from '../stores/toolsStore';
 import {
   applyTranscriptUpdate,
   clearActiveTranscriptSession,
@@ -37,6 +38,7 @@ import type { AppConfig } from '../types/config';
 import type {
   AppMode,
   HistorySummaryPayload,
+  IngestionFocus,
   ProcessingStatus,
   SummaryTemplateId,
   TranscriptSegment,
@@ -82,6 +84,7 @@ interface PlaybackPatch {
 
 interface RuntimePatch {
   mode?: AppMode;
+  ingestionFocus?: IngestionFocus;
   processingStatus?: ProcessingStatus;
   processingProgress?: number;
   isRecording?: boolean;
@@ -117,6 +120,7 @@ const PLAYBACK_KEYS = new Set<keyof PlaybackPatch>([
 
 const RUNTIME_KEYS = new Set<keyof RuntimePatch>([
   'mode',
+  'ingestionFocus',
   'processingStatus',
   'processingProgress',
   'isRecording',
@@ -232,6 +236,7 @@ export function resetTranscriptStores(): void {
     isLoading: false,
     error: null,
   }));
+  useToolsStore.setState({ activeTool: 'subtitles' });
 
   const store = useRealTranscriptStore;
 
@@ -245,7 +250,9 @@ export function resetTranscriptStores(): void {
         aligningSegmentIds: new Set<string>(),
       },
     },
-    mode: 'live',
+    mode: 'create',
+    ingestionFocus: 'live',
+    recordingSessionId: null,
     processingStatus: 'idle',
     processingProgress: 0,
     isRecording: false,

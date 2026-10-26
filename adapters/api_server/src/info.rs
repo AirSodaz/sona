@@ -92,6 +92,8 @@ fn resolve_model_brand(id: &str, name: &str) -> String {
         "moonshine".to_string()
     } else if token.contains("dolphin") {
         "dolphin".to_string()
+    } else if token.contains("r2t2") {
+        "r2t2".to_string()
     } else {
         "generic".to_string()
     }

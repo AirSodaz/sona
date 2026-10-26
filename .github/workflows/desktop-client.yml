@@ -20,9 +20,9 @@ on:
         default: ""
     secrets:
       TAURI_SIGNING_PRIVATE_KEY:
-        required: true
+        required: false
       TAURI_SIGNING_PRIVATE_KEY_PASSWORD:
-        required: true
+        required: false
 
 permissions:
   contents: read
@@ -48,8 +48,8 @@ jobs:
             args: "--target aarch64-pc-windows-msvc"
     env:
       LLAMA_CPP_REF: b10405
-      SHERPA_ONNX_VERSION: 1.13.8
-      SHERPA_ONNX_TAG: v1.13.8
+      SHERPA_ONNX_VERSION: 2.0.0
+      SHERPA_ONNX_TAG: v2.0.0
       LLAMA_BUILD_SHARED_LIBS: 1
       LLAMA_ENABLE_VULKAN: ${{ contains(matrix.args, 'llama-vulkan') && '1' || '0' }}
       LLAMA_ENABLE_METAL: ${{ contains(matrix.args, 'llama-metal') && '1' || '0' }}
@@ -85,7 +85,7 @@ jobs:
         uses: ./.github/actions/setup-node-pnpm
 
       - name: Patch channel version & identifiers
-        if: inputs.channel != ''
+        if: inputs.channel == 'nightly'
         run: node platforms/desktop/scripts/patch-channel.js --channel "${{ inputs.channel }}" --version "${{ inputs.version_name }}"
 
       - name: Setup sherpa-onnx libraries

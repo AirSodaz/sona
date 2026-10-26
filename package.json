@@ -1,10 +1,10 @@
 {
   "name": "sona",
   "private": true,
-  "version": "0.9.7",
+  "version": "0.9.8",
   "license": "MIT",
   "type": "module",
-  "packageManager": "pnpm@12.11.2",
+  "packageManager": "pnpm@12.15.0",
   "scripts": {
     "dev": "pnpm --filter sona-desktop-frontend run dev",
     "prepare": "husky",
@@ -38,8 +38,8 @@
     "version:bump": "node scripts/bump-version.js"
   },
   "devDependencies": {
-    "@commitlint/cli": "^21.2.3",
-    "@commitlint/config-conventional": "^21.2.3",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0"
   },

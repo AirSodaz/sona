@@ -198,7 +198,7 @@ export function SettingsGeneralTab({
           </div>
         </SettingsItem>
 
-        <SettingsItem title={t('settings.theme')} layout="vertical">
+        <SettingsItem id="settings-theme" title={t('settings.theme')} layout="vertical">
           <div className="theme-selector-container">
             <button
               className={`theme-card ${theme === 'light' ? 'active' : ''}`}
@@ -308,7 +308,11 @@ export function SettingsGeneralTab({
           </div>
         </SettingsItem>
 
-        <SettingsItem title={t('settings.auto_start')} hint={t('settings.auto_start_hint')}>
+        <SettingsItem
+          id="settings-auto-start"
+          title={t('settings.auto_start')}
+          hint={t('settings.auto_start_hint')}
+        >
           <Switch
             checked={autoStart}
             onChange={(enabled) =>
@@ -321,6 +325,7 @@ export function SettingsGeneralTab({
         </SettingsItem>
 
         <SettingsItem
+          id="settings-tray-exit"
           title={t('settings.minimize_to_tray')}
           hint={t('settings.minimize_to_tray_hint')}
         >
@@ -335,16 +340,26 @@ export function SettingsGeneralTab({
           />
         </SettingsItem>
 
-        {autoStart && minimizeToTrayOnExit && (
-          <SettingsItem title={t('settings.silent_start')} hint={t('settings.silent_start_hint')}>
-            <Switch
-              checked={silentStart}
-              onChange={(enabled) => updateConfig({ silentStart: enabled })}
-            />
-          </SettingsItem>
-        )}
+        <SettingsItem
+          id="settings-silent-start"
+          title={t('settings.silent_start')}
+          hint={
+            !autoStart || !minimizeToTrayOnExit
+              ? t('settings.silent_start_disabled_hint', {
+                  defaultValue:
+                    'Requires "Launch on startup" and "Minimize to tray on exit" to be enabled.',
+                })
+              : t('settings.silent_start_hint')
+          }
+        >
+          <Switch
+            checked={autoStart && minimizeToTrayOnExit && silentStart}
+            disabled={!autoStart || !minimizeToTrayOnExit}
+            onChange={(enabled) => updateConfig({ silentStart: enabled })}
+          />
+        </SettingsItem>
 
-        <SettingsItem title={t('settings.auto_check_updates')}>
+        <SettingsItem id="settings-auto-check-updates" title={t('settings.auto_check_updates')}>
           <Switch
             checked={autoCheckUpdates}
             onChange={(enabled) => updateConfig({ autoCheckUpdates: enabled })}
@@ -543,6 +558,7 @@ export function SettingsGeneralTab({
         icon={<Stethoscope size={20} />}
       >
         <SettingsItem
+          id="settings-diagnostics"
           title={t('settings.diagnostics.entry_title', { defaultValue: 'Diagnostics' })}
           hint={t('settings.diagnostics.entry_hint', {
             defaultValue:
