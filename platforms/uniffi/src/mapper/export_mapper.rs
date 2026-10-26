@@ -96,5 +96,6 @@ pub(crate) fn export_request_from_ffi(
         format: value.format.into(),
         mode: value.mode.into(),
         output_path: value.output_path,
+        bilingual_order: None,
     })
 }

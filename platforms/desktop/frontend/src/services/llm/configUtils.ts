@@ -150,6 +150,10 @@ export function isLlmConfigComplete(llmConfig: LlmConfig | null): llmConfig is L
     return false;
   }
 
+  if (llmConfig.strategy === 'local_nmt') {
+    return true;
+  }
+
   const definition = getProviderDefinition(llmConfig.provider, customProviderFromConfig(llmConfig));
   const hasApiHost =
     definition.id === 'local' || Boolean(llmConfig.baseUrl?.trim() || definition.defaultApiHost);

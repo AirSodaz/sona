@@ -6,7 +6,8 @@ import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
-import { getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
+import { applyTextReplacements, extractReplacementsFromTerms } from '../utils/textProcessing';
+import { getActiveLlmConfig, getFeatureLlmConfig, isLlmConfigComplete } from './llm/configUtils';
 import { runConfiguredSegmentTask, runTranscriptSegmentTaskJob } from './llm/segmentTask';
 import { runTranscriptLlmJob } from './llmOperations';
 import { listenToTranscriptLlmJobUpdates } from './llmTaskEvents';
@@ -17,6 +18,7 @@ import type {
 } from './llmTaskTypes';
 import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
+import { translateTranscriptSegments } from './tauri/llm';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryTranslateTranscriptJobOptions {
@@ -52,6 +54,7 @@ export interface TranslationServicePorts {
   runConfiguredSegmentTask: typeof runConfiguredSegmentTask;
   runTranscriptSegmentTaskJob: typeof runTranscriptSegmentTaskJob;
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
+  translateTranscriptSegments: typeof translateTranscriptSegments;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
   rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
@@ -75,6 +78,33 @@ export class TranslationService {
       buildRequest: ({ taskId, llmConfig, segments: inputSegments }) =>
         this.buildRequest(taskId, llmConfig, config, inputSegments),
     });
+  }
+
+  async translateText(
+    text: string,
+    targetLanguage: string,
+    options?: { sourceLanguage?: string; signal?: AbortSignal }
+  ): Promise<string> {
+    const trimmed = text.trim();
+    if (!trimmed) {
+      return '';
+    }
+    const config = this.ports.getEffectiveConfigSnapshot();
+    const llm = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
+    if (!isLlmConfigComplete(llm)) {
+      throw new Error('LLM Service not fully configured.');
+    }
+    const langOpt = LANGUAGE_OPTIONS.find((l) => l.code === targetLanguage);
+    const taskId = `translate-text-${Date.now()}`;
+    const results = await this.ports.translateTranscriptSegments({
+      taskId,
+      config: llm,
+      segments: [{ id: '1', text: trimmed }],
+      targetLanguage,
+      targetLanguageName: langOpt ? langOpt.englishName : undefined,
+      sourceLanguage: options?.sourceLanguage,
+    });
+    return results[0]?.translation ?? trimmed;
   }
 
   async translateCurrentTranscript(targetLanguageOverride?: string) {
@@ -108,6 +138,10 @@ export class TranslationService {
     const pipeline = resolveItemPipeline(projectId, useProjectStore.getState().projects, config);
     const resolvedTargetLanguage =
       targetLanguage || pipeline.targetLanguage || config.translationLanguage || 'zh';
+    const keywords =
+      pipeline.customTerms && pipeline.customTerms.length > 0
+        ? pipeline.customTerms.join('\n')
+        : undefined;
     await this.ports.runTranscriptSegmentTaskJob({
       taskType: 'translate',
       segments,
@@ -144,9 +178,36 @@ export class TranslationService {
             segments,
             targetLanguage: resolvedTargetLanguage,
             targetLanguageName: langOpt ? langOpt.englishName : undefined,
+            keywords,
           });
           if (isTaskLedgerCancelRequested(createLlmTaskLedgerId(taskId))) {
             return;
+          }
+          if (
+            llm.strategy === 'local_nmt' &&
+            pipeline.customTerms &&
+            pipeline.customTerms.length > 0 &&
+            result.segments
+          ) {
+            const replacements = extractReplacementsFromTerms(pipeline.customTerms);
+            if (replacements.length > 0) {
+              const ruleSets = [
+                {
+                  id: 'pipeline-custom-terms',
+                  name: 'Pipeline Custom Terms',
+                  enabled: true,
+                  ignoreCase: false,
+                  rules: replacements,
+                },
+              ];
+              result.segments = result.segments.map((seg) => {
+                if (!seg.translation) return seg;
+                return {
+                  ...seg,
+                  translation: applyTextReplacements(seg.translation, ruleSets),
+                };
+              });
+            }
           }
           this.applyTranscriptJobUpdate(result);
           if (result.segments && jobHistoryId && jobHistoryId !== 'current') {
@@ -227,6 +288,7 @@ export const translationService = createTranslationService({
   runConfiguredSegmentTask,
   runTranscriptSegmentTaskJob,
   runTranscriptLlmJob,
+  translateTranscriptSegments,
   listenToTranscriptLlmJobUpdates,
   rebaselineTranscriptAutoSave: (historyId, segments) =>
     transcriptAutoSaveRuntime.rebaseline(historyId, segments),

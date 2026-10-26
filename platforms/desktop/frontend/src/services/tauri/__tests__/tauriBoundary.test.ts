@@ -1393,6 +1393,7 @@ describe('tauri boundary wrappers', () => {
       format: 'srt',
       mode: 'bilingual',
       outputPath: 'C:/exports/transcript.srt',
+      bilingualOrder: null,
     });
 
     expect(invoke).toHaveBeenCalledWith(TauriCommand.export.transcriptFile, {
@@ -1400,6 +1401,7 @@ describe('tauri boundary wrappers', () => {
       format: 'srt',
       mode: 'bilingual',
       outputPath: 'C:/exports/transcript.srt',
+      bilingualOrder: null,
     });
   });
 

@@ -45,6 +45,36 @@ describe('exportService', () => {
       format: 'srt',
       mode: 'bilingual',
       outputPath: 'C:/exports/bad_name.srt',
+      bilingualOrder: null,
+    });
+  });
+
+  it('forwards custom bilingualOrder option', async () => {
+    const segments: TranscriptSegment[] = [
+      {
+        id: 'seg-1',
+        start: 0,
+        end: 1,
+        text: 'Hello',
+        isFinal: true,
+      },
+    ];
+
+    await exportTranscriptToDirectory({
+      segments,
+      directory: 'C:/exports',
+      baseFileName: 'custom_order',
+      format: 'vtt',
+      mode: 'bilingual',
+      bilingualOrder: 'translation_first',
+    });
+
+    expect(exportTranscriptFile).toHaveBeenCalledWith({
+      segments,
+      format: 'vtt',
+      mode: 'bilingual',
+      outputPath: 'C:/exports/custom_order.vtt',
+      bilingualOrder: 'translation_first',
     });
   });
 });

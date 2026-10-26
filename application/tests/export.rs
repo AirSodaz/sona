@@ -168,6 +168,7 @@ fn export_service_renders_through_core_and_persists_through_the_port() {
             format: ExportFormat::Vtt,
             mode: ExportMode::Original,
             output_path: "exports/sample.vtt".to_string(),
+            bilingual_order: None,
         })
         .unwrap();
 
@@ -197,6 +198,7 @@ fn export_service_preserves_repository_failures() {
             format: ExportFormat::Txt,
             mode: ExportMode::Original,
             output_path: "exports/sample.txt".to_string(),
+            bilingual_order: None,
         })
         .unwrap_err();
 
@@ -215,12 +217,13 @@ fn export_file_contracts_round_trip_camel_case_json() {
         format: ExportFormat::Vtt,
         mode: ExportMode::Bilingual,
         output_path: "C:/exports/transcript.vtt".to_string(),
+        bilingual_order: Some("translation_first".to_string()),
     };
-
     let request_json = serde_json::to_value(&request).unwrap();
     assert_eq!(request_json["format"], "vtt");
     assert_eq!(request_json["mode"], "bilingual");
     assert_eq!(request_json["outputPath"], "C:/exports/transcript.vtt");
+    assert_eq!(request_json["bilingualOrder"], "translation_first");
 
     let decoded_request: ExportTranscriptFileRequest =
         serde_json::from_value(request_json).unwrap();
@@ -228,7 +231,7 @@ fn export_file_contracts_round_trip_camel_case_json() {
     assert_eq!(decoded_request.format, request.format);
     assert_eq!(decoded_request.mode, request.mode);
     assert_eq!(decoded_request.output_path, request.output_path);
-
+    assert_eq!(decoded_request.bilingual_order, request.bilingual_order);
     let result: ExportTranscriptFileResult = serde_json::from_value(serde_json::json!({
         "outputPath": "C:/exports/transcript.vtt",
         "bytesWritten": 42
@@ -236,4 +239,41 @@ fn export_file_contracts_round_trip_camel_case_json() {
     .unwrap();
     assert_eq!(result.output_path, "C:/exports/transcript.vtt");
     assert_eq!(result.bytes_written, 42);
+}
+
+#[test]
+fn export_segments_with_bilingual_order() {
+    use sona_core::export::export_segments_with_order;
+    let mut segments = sample_segments();
+    segments[0].translation = Some("Bonjour".to_string());
+    segments[1].translation = Some("Monde".to_string());
+    // Subtitle format (SRT) with translation_first:
+    let srt_trans_first = export_segments_with_order(
+        &segments,
+        ExportFormat::Srt,
+        ExportMode::Bilingual,
+        Some("translation_first"),
+    )
+    .unwrap();
+    assert!(srt_trans_first.contains("Alice: Bonjour\nHello"));
+
+    // Subtitle format (SRT) with original_first:
+    let srt_orig_first = export_segments_with_order(
+        &segments,
+        ExportFormat::Srt,
+        ExportMode::Bilingual,
+        Some("original_first"),
+    )
+    .unwrap();
+    assert!(srt_orig_first.contains("Alice: Hello\nBonjour"));
+
+    // Document format (TXT) with translation_first:
+    let txt_trans_first = export_segments_with_order(
+        &segments,
+        ExportFormat::Txt,
+        ExportMode::Bilingual,
+        Some("translation_first"),
+    )
+    .unwrap();
+    assert!(txt_trans_first.contains("Alice: Bonjour\nHello"));
 }

@@ -77,6 +77,7 @@ export interface TranslateTranscriptLlmJobRequest extends TranscriptLlmJobReques
   targetLanguage: string;
   targetLanguageName?: string;
   sourceLanguage?: string;
+  keywords?: string;
 }
 
 export interface PolishTranscriptLlmJobRequest extends TranscriptLlmJobRequestBase {

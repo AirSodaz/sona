@@ -10,6 +10,7 @@ export interface ExportTranscriptToDirectoryOptions {
   baseFileName: string;
   format: ExportFormat;
   mode: ExportMode;
+  bilingualOrder?: 'original_first' | 'translation_first';
 }
 
 export interface ExportServicePorts {
@@ -37,6 +38,7 @@ export class ExportService {
       format: options.format,
       mode: options.mode,
       outputPath: fullPath,
+      bilingualOrder: options.bilingualOrder ?? null,
     });
     return result.outputPath;
   };

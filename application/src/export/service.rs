@@ -1,6 +1,6 @@
 use sona_core::export::{
     ExportError, ExportTranscriptFileRequest, ExportTranscriptFileResult,
-    TranscriptExportRepository, export_segments_with_mode,
+    TranscriptExportRepository, export_segments_with_order,
 };
 
 pub struct ExportService<R> {
@@ -19,7 +19,12 @@ where
         &self,
         request: ExportTranscriptFileRequest,
     ) -> Result<ExportTranscriptFileResult, ExportError> {
-        let content = export_segments_with_mode(&request.segments, request.format, request.mode)?;
+        let content = export_segments_with_order(
+            &request.segments,
+            request.format,
+            request.mode,
+            request.bilingual_order.as_deref(),
+        )?;
         self.repository
             .write_export(&request.output_path, &content)?;
 

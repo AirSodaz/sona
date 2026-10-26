@@ -2,6 +2,7 @@ import { useConfigStore } from '../../stores/configStore';
 import { logger } from '../../utils/logger';
 import { getActiveLlmConfig, getFeatureLlmConfig } from '../llm/configUtils';
 import { completeLlm } from '../tauri/llm';
+import { translationService } from '../translationService';
 import { getContextDirective, type VoiceTypingContextState } from './voiceTypingContext';
 
 export const DEFAULT_VOICE_TYPING_POLISH_PROMPT = `你是一个智能语音输入润色助手。你的任务是将用户的语音识别草稿整理为通顺、专业、自然的最终书面文本。
@@ -213,53 +214,25 @@ export async function translateVoiceTypingText(
     return '';
   }
 
-  const config = useConfigStore.getState().config;
-  const llmConfig = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
-
-  if (!llmConfig?.provider) {
-    logger.warn('[VoiceTypingTranslate] No active LLM provider configured, using raw text');
-    options?.onError?.(new Error('No active LLM provider configured'));
-    return trimmed;
-  }
-
-  const systemPrompt = `You are a professional translator. Translate the user input into ${targetLanguage}.
-Rules:
-1. Output the translated text only.
-2. Do not include any explanations, prefixes, markdown code blocks, or notes.
-3. Preserve the original meaning and tone accurately.`;
-
   const timeoutMs = options?.timeoutMs ?? POLISH_TIMEOUT_MS;
+  const { promise: timeoutPromise, reject } = Promise.withResolvers<never>();
+  const timer = setTimeout(
+    () => reject(new Error(`Translate timed out after ${timeoutMs}ms`)),
+    timeoutMs
+  );
 
   try {
-    const timeoutPromise = new Promise<never>((_, reject) => {
-      setTimeout(
-        () => reject(new Error(`LLM translate timed out after ${timeoutMs}ms`)),
-        timeoutMs
-      );
-    });
-
-    const completionPromise = completeLlm({
-      config: {
-        ...llmConfig,
-        temperature: 0.2,
-      },
-      systemPrompt,
-      input: trimmed,
-      options: {
-        maxOutputTokens: 2048,
-      },
-    });
-
-    const response = await Promise.race([completionPromise, timeoutPromise]);
-    const translated = cleanPolishedOutput(response.text);
+    const translationPromise = translationService.translateText(trimmed, targetLanguage);
+    const translated = cleanPolishedOutput(
+      await Promise.race([translationPromise, timeoutPromise])
+    );
 
     if (!translated) {
-      logger.warn(
-        '[VoiceTypingTranslate] Empty output from LLM translate, falling back to input text'
-      );
-      options?.onError?.(new Error('Empty output from LLM translate'));
+      logger.warn('[VoiceTypingTranslate] Empty output from translate, falling back to input text');
+      options?.onError?.(new Error('Empty output from translate'));
       return trimmed;
     }
+
     logger.info('[VoiceTypingTranslate] Text successfully translated', {
       originalLength: trimmed.length,
       translatedLength: translated.length,
@@ -268,10 +241,12 @@ Rules:
     return translated;
   } catch (error) {
     logger.warn(
-      '[VoiceTypingTranslate] LLM translate failed or timed out, falling back to input text:',
+      '[VoiceTypingTranslate] Translation failed or timed out, falling back to input text:',
       error
     );
     options?.onError?.(error);
     return trimmed;
+  } finally {
+    clearTimeout(timer);
   }
 }

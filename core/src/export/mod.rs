@@ -98,14 +98,23 @@ pub fn export_segments_with_mode(
     format: ExportFormat,
     mode: ExportMode,
 ) -> Result<String, ExportError> {
+    export_segments_with_order(segments, format, mode, None)
+}
+
+pub fn export_segments_with_order(
+    segments: &[TranscriptSegment],
+    format: ExportFormat,
+    mode: ExportMode,
+    bilingual_order: Option<&str>,
+) -> Result<String, ExportError> {
     match format {
         ExportFormat::Json => export_json(segments, mode).map_err(|error| ExportError::Render {
             reason: error.to_string(),
         }),
-        ExportFormat::Txt => Ok(export_txt(segments, mode)),
-        ExportFormat::Srt => Ok(export_srt(segments, mode)),
-        ExportFormat::Vtt => Ok(export_vtt(segments, mode)),
-        ExportFormat::Md => Ok(export_md(segments, mode)),
+        ExportFormat::Txt => Ok(export_txt(segments, mode, bilingual_order)),
+        ExportFormat::Srt => Ok(export_srt(segments, mode, bilingual_order)),
+        ExportFormat::Vtt => Ok(export_vtt(segments, mode, bilingual_order)),
+        ExportFormat::Md => Ok(export_md(segments, mode, bilingual_order)),
     }
 }
 
@@ -128,22 +137,32 @@ fn export_json(
     serde_json::to_string_pretty(&payload)
 }
 
-fn export_txt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
+fn export_txt(
+    segments: &[TranscriptSegment],
+    mode: ExportMode,
+    bilingual_order: Option<&str>,
+) -> String {
     segments
         .iter()
         .filter(|segment| segment.is_final)
-        .map(|segment| segment_export_text_with_speaker(segment, mode, false, false))
+        .map(|segment| {
+            segment_export_text_with_speaker(segment, mode, false, false, bilingual_order)
+        })
         .filter(|text| !text.is_empty())
         .collect::<Vec<_>>()
         .join("\n\n")
 }
 
-fn export_md(segments: &[TranscriptSegment], mode: ExportMode) -> String {
+fn export_md(
+    segments: &[TranscriptSegment],
+    mode: ExportMode,
+    bilingual_order: Option<&str>,
+) -> String {
     segments
         .iter()
         .filter(|segment| segment.is_final)
         .map(|segment| {
-            let text = segment_export_text(segment, mode, false, false);
+            let text = segment_export_text(segment, mode, false, false, bilingual_order);
             prefix_md_speaker_label(segment, &text)
         })
         .filter(|text| !text.is_empty())
@@ -151,12 +170,16 @@ fn export_md(segments: &[TranscriptSegment], mode: ExportMode) -> String {
         .join("\n\n")
 }
 
-fn export_srt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
+fn export_srt(
+    segments: &[TranscriptSegment],
+    mode: ExportMode,
+    bilingual_order: Option<&str>,
+) -> String {
     segments
         .iter()
         .filter(|segment| segment.is_final)
         .filter_map(|segment| {
-            let text = segment_export_text_with_speaker(segment, mode, true, true);
+            let text = segment_export_text_with_speaker(segment, mode, true, true, bilingual_order);
             if text.is_empty() {
                 return None;
             }
@@ -176,12 +199,16 @@ fn export_srt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
         .join("\n")
 }
 
-fn export_vtt(segments: &[TranscriptSegment], mode: ExportMode) -> String {
+fn export_vtt(
+    segments: &[TranscriptSegment],
+    mode: ExportMode,
+    bilingual_order: Option<&str>,
+) -> String {
     let body = segments
         .iter()
         .filter(|segment| segment.is_final)
         .filter_map(|segment| {
-            let text = segment_export_text_with_speaker(segment, mode, true, true);
+            let text = segment_export_text_with_speaker(segment, mode, true, true, bilingual_order);
             if text.is_empty() {
                 return None;
             }
@@ -228,6 +255,7 @@ fn segment_export_text(
     mode: ExportMode,
     is_html_formatted: bool,
     is_subtitle: bool,
+    bilingual_order: Option<&str>,
 ) -> String {
     let original = if is_html_formatted {
         html_to_formatted_text(segment.text.trim())
@@ -242,8 +270,18 @@ fn segment_export_text(
 
     match mode {
         ExportMode::Translation => translation,
-        ExportMode::Bilingual if is_subtitle => format!("{translation}\n{original}"),
-        ExportMode::Bilingual => format!("{original}\n{translation}"),
+        ExportMode::Bilingual => {
+            let is_translation_first = match bilingual_order {
+                Some("translation_first") => true,
+                Some("original_first") => false,
+                _ => is_subtitle,
+            };
+            if is_translation_first {
+                format!("{translation}\n{original}")
+            } else {
+                format!("{original}\n{translation}")
+            }
+        }
         ExportMode::Original => original,
     }
 }
@@ -253,8 +291,15 @@ fn segment_export_text_with_speaker(
     mode: ExportMode,
     is_html_formatted: bool,
     is_subtitle: bool,
+    bilingual_order: Option<&str>,
 ) -> String {
-    let text = segment_export_text(segment, mode, is_html_formatted, is_subtitle);
+    let text = segment_export_text(
+        segment,
+        mode,
+        is_html_formatted,
+        is_subtitle,
+        bilingual_order,
+    );
     prefix_speaker_label(segment, &text)
 }
 

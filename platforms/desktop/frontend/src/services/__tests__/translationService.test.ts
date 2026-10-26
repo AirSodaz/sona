@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useProjectStore } from '../../stores/projectStore';
 import {
   buildTestConfig as buildBaseTestConfig,
   type DeepPartial,
@@ -308,6 +309,102 @@ describe('TranslationService', () => {
         taskType: 'translate',
         targetLanguage: 'ko',
         targetLanguageName: 'Korean',
+      }),
+    });
+  });
+
+  it('passes customTerms as keywords to run_transcript_llm_job and applies them for local-nmt', async () => {
+    useProjectStore.setState({
+      activeProjectId: 'proj-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'Project 1',
+          description: '',
+          createdAt: Date.now(),
+          updatedAt: Date.now(),
+          pipeline: {
+            enabled: true,
+            customTerms: ['AI => 人工智能', 'LLM => 大语言模型'],
+            targetLanguage: 'zh',
+            autoExport: false,
+            autoPolish: false,
+            autoTranslate: false,
+            autoSummary: false,
+          },
+        },
+      ],
+    });
+
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+        llmSettings: {
+          providers: {
+            local: {
+              apiHost: '',
+              apiKey: '',
+            },
+          },
+          models: {
+            'opus-mt': {
+              id: 'opus-mt',
+              provider: 'local',
+              model: 'opus-mt-en-zh',
+            },
+          },
+          modelOrder: ['opus-mt'],
+          selections: {
+            translationModelId: 'opus-mt',
+          },
+        },
+      }),
+      segments: [{ id: '1', start: 0, end: 1, text: 'AI and LLM', isFinal: true }],
+      sourceHistoryId: null,
+    });
+
+    vi.mocked(invoke).mockResolvedValue({
+      taskId: 'translate-task-id',
+      taskType: 'translate',
+      jobHistoryId: null,
+      segments: [
+        { id: '1', start: 0, end: 1, text: 'AI and LLM', isFinal: true, translation: 'AI 和 LLM' },
+      ],
+    });
+
+    await translationService.translateCurrentTranscript();
+    expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', {
+      request: expect.objectContaining({
+        taskId: 'translate-task-id',
+        taskType: 'translate',
+        keywords: 'AI => 人工智能\nLLM => 大语言模型',
+      }),
+    });
+
+    const storeSegments = useTranscriptStore.getState().segments;
+    expect(storeSegments[0].translation).toBe('人工智能 和 大语言模型');
+  });
+
+  it('translates single text via translateText helper', async () => {
+    useTranscriptStore.setState({
+      config: buildTranslationTestConfig({
+        translationLanguage: 'zh',
+      }),
+    });
+
+    vi.mocked(invoke).mockImplementation(async (command) => {
+      if (command === 'translate_transcript_segments') {
+        return [{ id: '1', translation: '你好，世界！' }];
+      }
+      return null;
+    });
+
+    const result = await translationService.translateText('Hello, world!', 'zh');
+    expect(result).toBe('你好，世界！');
+    expect(invoke).toHaveBeenCalledWith('translate_transcript_segments', {
+      request: expect.objectContaining({
+        targetLanguage: 'zh',
+        segments: [{ id: '1', text: 'Hello, world!' }],
       }),
     });
   });

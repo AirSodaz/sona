@@ -472,7 +472,7 @@ fn transcript_job_request_sanitize_for_task() {
     );
     assert_eq!(translate_req.source_language.as_deref(), Some("en"));
     assert!(translate_req.context.is_none());
-    assert!(translate_req.keywords.is_none());
+    assert_eq!(translate_req.keywords.as_deref(), Some("AI, Rust"));
     assert!(translate_req.mode.is_none());
     assert!(translate_req.template.is_none());
     assert!(translate_req.chunk_size.is_none());

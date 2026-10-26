@@ -9,12 +9,14 @@ pub async fn export_transcript_file(
     format: ExportFormat,
     mode: ExportMode,
     output_path: String,
+    bilingual_order: Option<String>,
 ) -> Result<ExportTranscriptFileResult, String> {
     let request = ExportTranscriptFileRequest {
         segments,
         format,
         mode,
         output_path,
+        bilingual_order,
     };
     sona_ts_bind::validate_export_transcript_request_for_typescript(&request)
         .map_err(|error| error.to_string())?;

@@ -30,6 +30,7 @@ fn export_transcript_file_writes_core_content_and_reports_bytes() {
         format: ExportFormat::Vtt,
         mode: ExportMode::Bilingual,
         output_path: output_path.to_string_lossy().into_owned(),
+        bilingual_order: None,
     })
     .unwrap();
 
@@ -50,6 +51,7 @@ fn export_adapter_entrypoint_preserves_typed_repository_errors() {
         format: ExportFormat::Vtt,
         mode: ExportMode::Original,
         output_path: output_path.to_string_lossy().into_owned(),
+        bilingual_order: None,
     })
     .unwrap_err();
 

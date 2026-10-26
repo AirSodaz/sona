@@ -12,6 +12,8 @@ pub struct ExportTranscriptFileRequest {
     pub format: ExportFormat,
     pub mode: ExportMode,
     pub output_path: String,
+    #[serde(default)]
+    pub bilingual_order: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq, Eq, Serialize)]

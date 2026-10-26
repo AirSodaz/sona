@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { exportTranscriptToDirectory } from '../services/exportService';
 import { openDialog } from '../services/tauri/platform/dialog';
+import { useConfigStore } from '../stores/configStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
@@ -17,7 +18,7 @@ export function useExportActions({ isOpen, onSuccess }: UseExportActionsProps) {
   const { t } = useTranslation();
   const alert = useDialogStore((state) => state.alert);
   const showError = useDialogStore((state) => state.showError);
-
+  const captionBilingualOrder = useConfigStore((state) => state.config.captionBilingualOrder);
   const segments = useTranscriptSessionStore((state) => state.segments);
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
   const historyItems = useHistoryStore((state) => state.items);
@@ -97,6 +98,7 @@ export function useExportActions({ isOpen, onSuccess }: UseExportActionsProps) {
         baseFileName: fileName,
         format: exportFormat,
         mode: exportMode,
+        bilingualOrder: captionBilingualOrder || 'original_first',
       });
 
       await alert(t('export.success'), { variant: 'success' });

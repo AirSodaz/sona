@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use tauri::State;
+use tauri::{Emitter, State};
 
 use crate::integrations::asr::{
     AsrPortError, AsrRuntimeMetricsSnapshot, AsrTranscriptionRequest, TauriAsrRuntimeObserver,
@@ -559,33 +559,87 @@ pub(crate) fn configure_realtime_translation(services: &DesktopServices, app: &t
             .flatten()
             .and_then(|v| v.as_str().map(String::from))
             .unwrap_or_else(|| "zh".to_string());
+        let engine_str = services
+            .config
+            .get_setting("realtimeTranslationEngine")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(String::from))
+            .unwrap_or_else(|| "onnx".to_string());
+
+        let engine_kind = match engine_str.to_ascii_lowercase().as_str() {
+            "llama-cpp" | "llama_cpp" | "llamacpp" => {
+                sona_core::ports::translation::TranslationEngineKind::LlamaCpp
+            }
+            _ => sona_core::ports::translation::TranslationEngineKind::OnnxNmt,
+        };
+
+        let model_id = services
+            .config
+            .get_setting("realtimeTranslationModelId")
+            .ok()
+            .flatten()
+            .and_then(|v| v.as_str().map(String::from));
 
         if let Ok(models_dir) =
             crate::platform::storage_location::resolve_active_models_dir_for_app(app)
         {
-            match services
-                .translation_pool
-                .get_or_load(&src, &tgt, &models_dir)
-            {
-                Ok(adapter) => {
-                    let coordinator = Arc::new(
-                        sona_application::live_transcription::StreamingTranslationCoordinator::new(
-                            adapter, src, tgt,
-                        ),
-                    );
+            match crate::integrations::translation::TranslationEngineFactory::create_engine(
+                services,
+                engine_kind,
+                model_id.as_deref(),
+                &src,
+                &tgt,
+                &models_dir,
+            ) {
+                Ok(engine) => {
+                    let coordinator = match engine_kind {
+                        sona_core::ports::translation::TranslationEngineKind::LlamaCpp => {
+                            Arc::new(
+                                sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                                    engine, src, tgt,
+                                )
+                                .with_debounce(1000, 3),
+                            )
+                        }
+                        sona_core::ports::translation::TranslationEngineKind::OnnxNmt => {
+                            Arc::new(
+                                sona_application::live_transcription::StreamingTranslationCoordinator::new(
+                                    engine, src, tgt,
+                                )
+                                .with_debounce(300, 3),
+                            )
+                        }
+                    };
                     services
                         .asr
                         .live_coordinator()
                         .set_translation(Some(coordinator));
                 }
                 Err(e) => {
-                    log::warn!("[ASR] Realtime translation model could not be loaded: {e}");
+                    log::warn!(
+                        "[ASR] Realtime translation model could not be loaded ({engine_str}): {e}"
+                    );
                     services.asr.live_coordinator().set_translation(None);
+                    let _ = app.emit(
+                        "realtime-translation-error",
+                        serde_json::json!({
+                            "error": e.to_string(),
+                            "engine": engine_str,
+                        }),
+                    );
                 }
             }
         } else {
             log::warn!("[ASR] Failed to resolve active models directory for realtime translation");
             services.asr.live_coordinator().set_translation(None);
+            let _ = app.emit(
+                "realtime-translation-error",
+                serde_json::json!({
+                    "error": "Failed to resolve active models directory".to_string(),
+                    "engine": engine_str,
+                }),
+            );
         }
     } else {
         services.asr.live_coordinator().set_translation(None);

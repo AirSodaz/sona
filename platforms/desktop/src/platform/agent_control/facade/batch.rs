@@ -246,6 +246,7 @@ pub async fn export_transcript(
         format,
         mode,
         output_path: req.output_path.clone(),
+        bilingual_order: None,
     };
 
     tokio::task::spawn_blocking(move || {

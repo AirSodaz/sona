@@ -1,8 +1,8 @@
-import type { AppConfig, TextReplacementRule, TextReplacementRuleSet } from '../../types/config';
+import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
 import type { TranscriptSegment } from '../../types/transcript';
 import type { ExportFormat, ExportMode } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
-import { applyTextReplacements } from '../../utils/textProcessing';
+import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
@@ -41,28 +41,6 @@ export interface PipelineExecutionEnginePorts {
   isFeatureLlmConfigComplete: typeof isFeatureLlmConfigComplete;
 }
 
-function extractReplacementsFromTerms(terms: string[] = []): TextReplacementRule[] {
-  const rules: TextReplacementRule[] = [];
-  for (const term of terms) {
-    const trimmed = term.trim();
-    if (!trimmed) continue;
-    let from = '';
-    let to = '';
-    if (trimmed.includes('=>')) {
-      const parts = trimmed.split('=>');
-      from = parts[0]?.trim() || '';
-      to = parts[1]?.trim() || '';
-    } else if (trimmed.includes('->')) {
-      const parts = trimmed.split('->');
-      from = parts[0]?.trim() || '';
-      to = parts[1]?.trim() || '';
-    }
-    if (from && to) {
-      rules.push({ id: `term_${from}_${to}`, from, to });
-    }
-  }
-  return rules;
-}
 export class PipelineExecutionEngine {
   constructor(private readonly ports: PipelineExecutionEnginePorts) {}
 

@@ -460,4 +460,21 @@ describe('CaptionWindow', () => {
     expect(pendingEl?.textContent).toContain('Pending translation text');
     expect((pendingEl as HTMLElement).style.opacity).toBe('0.6');
   });
+
+  it('displays error banner when realtime-translation-error event is received', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['realtime-translation-error']?.({
+        payload: {
+          error: 'Model opus-mt-en-zh not installed',
+          engine: 'onnx',
+        },
+      });
+    });
+
+    const errorBanner = container.querySelector('.caption-error-banner');
+    expect(errorBanner).not.toBeNull();
+    expect(errorBanner?.textContent).toContain('Model opus-mt-en-zh not installed');
+  });
 });

@@ -478,11 +478,14 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const t2 = second.translation?.trim();
       const mergedTranslation =
         t1 && t2 ? `${t1}${needsWordBoundarySpace(t1, t2) ? ' ' : ''}${t2}` : t1 || t2 || undefined;
+      const text1 = stripParagraph(first.text);
+      const text2 = stripParagraph(second.text);
+      const textSpace = needsWordBoundarySpace(text1, text2) ? ' ' : '';
       const merged: TranscriptSegment = {
         id: first.id,
         start: first.start,
         end: second.end,
-        text: `<p>${stripParagraph(first.text)} ${stripParagraph(second.text)}</p>`,
+        text: `<p>${text1}${textSpace}${text2}</p>`,
         isFinal: first.isFinal && second.isFinal,
         speaker: first.speaker,
         speakerAttribution: first.speakerAttribution,

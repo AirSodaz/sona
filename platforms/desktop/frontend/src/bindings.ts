@@ -1053,6 +1053,7 @@ export type ExportTranscriptFileRequest_Deserialize = {
 	format: ExportFormat,
 	mode: ExportMode,
 	outputPath: string,
+	bilingualOrder?: string | null,
 };
 
 export type ExportTranscriptFileRequest_Serialize = {
@@ -1060,6 +1061,7 @@ export type ExportTranscriptFileRequest_Serialize = {
 	format: ExportFormat,
 	mode: ExportMode,
 	outputPath: string,
+	bilingualOrder: string | null,
 };
 
 export type ExportTranscriptFileResult = {

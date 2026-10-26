@@ -5,6 +5,7 @@ import {
   CAPTION_WINDOW_LABEL,
   DEFAULT_CAPTION_WINDOW_STATE,
 } from '../services/captionWindowService';
+import { listen } from '../services/tauri/platform/events';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
@@ -31,7 +32,7 @@ export function CaptionWindow() {
   });
 
   const [clearedRevision, setClearedRevision] = useState<number | null>(null);
-
+  const [translationError, setTranslationError] = useState<string | null>(null);
   // Track target width to enforce it during height resizing
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -62,6 +63,27 @@ export function CaptionWindow() {
       return () => clearTimeout(timer);
     }
   }, [captionState.revision, displaySegments.length]);
+
+  // Listen for realtime translation model loading errors from backend
+  useEffect(() => {
+    let disposed = false;
+    let unlisten: (() => void) | undefined;
+    listen<{ error: string; engine: string }>('realtime-translation-error', (event) => {
+      void logger.warn('[CaptionWindow] Realtime translation error received:', event.payload);
+      setTranslationError(event.payload.error || 'Translation model failed to load');
+    }).then((fn) => {
+      if (disposed) {
+        fn();
+      } else {
+        unlisten = fn;
+      }
+    });
+
+    return () => {
+      disposed = true;
+      unlisten?.();
+    };
+  }, []);
 
   // Dynamic height: Use ResizeObserver to ensure window always matches content height accurately
   useEffect(() => {
@@ -141,6 +163,23 @@ export function CaptionWindow() {
       <div className="caption-drag-handle" data-tauri-drag-region onMouseDown={startDragging}>
         <div className="drag-indicator" />
       </div>
+      {translationError && (
+        <div
+          className="caption-error-banner"
+          style={{
+            padding: '4px 8px',
+            marginBottom: '4px',
+            backgroundColor: 'rgba(239, 68, 68, 0.85)',
+            color: '#ffffff',
+            borderRadius: '4px',
+            fontSize: '12px',
+            textAlign: 'center',
+            backdropFilter: 'blur(4px)',
+          }}
+        >
+          {translationError}
+        </div>
+      )}
 
       <div
         className="live-caption-content"

@@ -1,4 +1,4 @@
-import type { TextReplacementRuleSet } from '../types/config';
+import type { TextReplacementRule, TextReplacementRuleSet } from '../types/config';
 
 /**
  * Applies enabled text replacement rules from multiple rule sets to a given text string.
@@ -76,4 +76,30 @@ export function expandTextMacros(text: string, now: Date = new Date()): string {
     .replace(/\{year\}/gi, year)
     .replace(/\{month\}/gi, month)
     .replace(/\{day\}/gi, day);
+}
+
+/**
+ * Extracts replacement rules from custom terms formatted as "from => to" or "from -> to".
+ */
+export function extractReplacementsFromTerms(terms: string[] = []): TextReplacementRule[] {
+  const rules: TextReplacementRule[] = [];
+  for (const term of terms) {
+    const trimmed = term.trim();
+    if (!trimmed) continue;
+    let from = '';
+    let to = '';
+    if (trimmed.includes('=>')) {
+      const parts = trimmed.split('=>');
+      from = parts[0]?.trim() || '';
+      to = parts[1]?.trim() || '';
+    } else if (trimmed.includes('->')) {
+      const parts = trimmed.split('->');
+      from = parts[0]?.trim() || '';
+      to = parts[1]?.trim() || '';
+    }
+    if (from && to) {
+      rules.push({ id: `term_${from}_${to}`, from, to });
+    }
+  }
+  return rules;
 }

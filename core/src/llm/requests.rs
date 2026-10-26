@@ -319,7 +319,6 @@ impl TranscriptLlmJobRequest {
         match self.task_type {
             LlmTaskType::Translate => {
                 self.context = None;
-                self.keywords = None;
                 self.mode = None;
                 self.template = None;
                 self.chunk_size = None;

@@ -1,6 +1,7 @@
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useExportActions } from '../hooks/useExportActions';
+import { useConfigStore } from '../stores/configStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import type { TranscriptSegment } from '../types/transcript';
 import type { ExportFormat } from '../utils/exportFormats';
@@ -29,7 +30,8 @@ function htmlToPlainText(html: string): string {
 
 function formatSegmentsToPlainText(
   segments: TranscriptSegment[],
-  mode: 'original' | 'translation' | 'bilingual'
+  mode: 'original' | 'translation' | 'bilingual',
+  bilingualOrder: 'original_first' | 'translation_first' = 'original_first'
 ): string {
   return segments
     .filter((seg) => seg.isFinal)
@@ -43,7 +45,10 @@ function formatSegmentsToPlainText(
         text = translationText;
       } else if (mode === 'bilingual') {
         if (originalText && translationText) {
-          text = `${originalText}\n${translationText}`;
+          text =
+            bilingualOrder === 'translation_first'
+              ? `${translationText}\n${originalText}`
+              : `${originalText}\n${translationText}`;
         } else {
           text = originalText || translationText;
         }
@@ -87,8 +92,9 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
     handleExport,
   } = useExportActions({ isOpen, onSuccess: onClose });
 
+  const captionBilingualOrder =
+    useConfigStore((state) => state.config.captionBilingualOrder) || 'original_first';
   const segments = useTranscriptSessionStore((state) => state.segments);
-
   const [copied, setCopied] = React.useState(false);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -102,7 +108,7 @@ export function ExportModal({ isOpen, onClose }: ExportModalProps): React.JSX.El
 
   const handleCopy = async () => {
     try {
-      const plainText = formatSegmentsToPlainText(segments, exportMode);
+      const plainText = formatSegmentsToPlainText(segments, exportMode, captionBilingualOrder);
       await navigator.clipboard.writeText(plainText);
 
       if (timeoutRef.current) {

@@ -164,6 +164,7 @@ pub fn run_export(args: ExportArgs, io: &mut (dyn crate::CliIo + Send)) -> CliRe
         format,
         mode,
         output_path: args.output.to_string_lossy().into_owned(),
+        bilingual_order: None,
     };
     let result = export_transcript_file(request).map_err(map_export_error)?;
     let output = if args.json {
