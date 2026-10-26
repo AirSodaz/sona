@@ -511,4 +511,100 @@ describe('Transcript Stores', () => {
     expect(bgSession.segments).toHaveLength(1);
     expect(bgSession.segments[0].text).toBe('Recorded segment');
   });
+  describe('mergeSegments translation preservation', () => {
+    it('merges two segments with English translations with a space separator', () => {
+      const sessionStore = useTranscriptSessionStore.getState();
+      const seg1Id = sessionStore.addSegment({
+        text: '<p>Hello</p>',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        translation: 'Hello',
+        draftTranslation: 'draft1',
+      });
+      const seg2Id = sessionStore.addSegment({
+        text: '<p>world</p>',
+        start: 1,
+        end: 2,
+        isFinal: true,
+        translation: 'world',
+        draftTranslation: 'draft2',
+      });
+
+      sessionStore.mergeSegments(seg1Id, seg2Id);
+
+      const segments = useTranscriptSessionStore.getState().segments;
+      expect(segments).toHaveLength(1);
+      expect(segments[0].translation).toBe('Hello world');
+      expect(segments[0].draftTranslation).toBeUndefined();
+    });
+
+    it('merges two segments with CJK translations without space', () => {
+      const sessionStore = useTranscriptSessionStore.getState();
+      const seg1Id = sessionStore.addSegment({
+        text: '<p>你好</p>',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        translation: '你好',
+      });
+      const seg2Id = sessionStore.addSegment({
+        text: '<p>世界</p>',
+        start: 1,
+        end: 2,
+        isFinal: true,
+        translation: '世界',
+      });
+
+      sessionStore.mergeSegments(seg1Id, seg2Id);
+
+      const segments = useTranscriptSessionStore.getState().segments;
+      expect(segments).toHaveLength(1);
+      expect(segments[0].translation).toBe('你好世界');
+    });
+
+    it('preserves single translation when one segment has no translation', () => {
+      const sessionStore = useTranscriptSessionStore.getState();
+      const seg1Id = sessionStore.addSegment({
+        text: '<p>First</p>',
+        start: 0,
+        end: 1,
+        isFinal: true,
+        translation: 'Translated part',
+      });
+      const seg2Id = sessionStore.addSegment({
+        text: '<p>Second</p>',
+        start: 1,
+        end: 2,
+        isFinal: true,
+      });
+
+      sessionStore.mergeSegments(seg1Id, seg2Id);
+
+      const segments = useTranscriptSessionStore.getState().segments;
+      expect(segments).toHaveLength(1);
+      expect(segments[0].translation).toBe('Translated part');
+    });
+
+    it('clears undivided translation on split segments in sessionStore', () => {
+      const sessionStore = useTranscriptSessionStore.getState();
+      const segId = sessionStore.addSegment({
+        text: '<p>First half Second half</p>',
+        start: 0,
+        end: 10,
+        isFinal: true,
+        translation: '前半段 后半段',
+        draftTranslation: 'draft',
+      });
+
+      sessionStore.splitTranscriptSegment(segId, '<p>First half</p>', '<p>Second half</p>');
+
+      const segments = useTranscriptSessionStore.getState().segments;
+      expect(segments).toHaveLength(2);
+      expect(segments[0].translation).toBeUndefined();
+      expect(segments[0].draftTranslation).toBeUndefined();
+      expect(segments[1].translation).toBeUndefined();
+      expect(segments[1].draftTranslation).toBeUndefined();
+    });
+  });
 });

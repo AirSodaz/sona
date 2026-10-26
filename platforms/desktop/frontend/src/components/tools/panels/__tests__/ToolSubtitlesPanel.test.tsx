@@ -1,10 +1,24 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as ModelServiceModule from '../../../../services/modelService';
+import { modelService } from '../../../../services/modelService';
 import { useConfigStore } from '../../../../stores/configStore';
+import { useDialogStore } from '../../../../stores/dialogStore';
 import { useTranscriptRuntimeStore } from '../../../../stores/transcriptRuntimeStore';
 import { buildTestConfig } from '../../../../test-utils/configTestUtils';
 import { ToolSubtitlesPanel } from '../ToolSubtitlesPanel';
+
+vi.mock('../../../../services/modelService', async (importOriginal) => {
+  const actual = await importOriginal<typeof ModelServiceModule>();
+  return {
+    ...actual,
+    modelService: {
+      ...actual.modelService,
+      isModelInstalled: vi.fn(),
+    },
+  };
+});
 
 vi.mock('react-i18next', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactI18Next>();
@@ -20,6 +34,7 @@ vi.mock('react-i18next', async (importOriginal) => {
 describe('ToolSubtitlesPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(true);
     useTranscriptRuntimeStore.setState({ isCaptionMode: false });
     useConfigStore.setState({
       config: buildTestConfig({
@@ -52,7 +67,7 @@ describe('ToolSubtitlesPanel', () => {
     expect(container.querySelector('#tools-subtitle-preview-section')).not.toBeNull();
   });
 
-  it('toggles real-time translation switch and updates config', () => {
+  it('toggles real-time translation switch and updates config when model is installed', async () => {
     render(<ToolSubtitlesPanel />);
 
     const switchBtn = screen.getByRole('switch', {
@@ -62,7 +77,32 @@ describe('ToolSubtitlesPanel', () => {
 
     fireEvent.click(switchBtn);
 
-    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(true);
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(true);
+    });
+  });
+
+  it('blocks enabling realtime translation and displays error when model is not installed', async () => {
+    vi.mocked(modelService.isModelInstalled).mockResolvedValue(false);
+    const showErrorSpy = vi.fn().mockResolvedValue(undefined);
+    useDialogStore.setState({ showError: showErrorSpy });
+
+    render(<ToolSubtitlesPanel />);
+
+    const switchBtn = screen.getByRole('switch', {
+      name: 'settings.enable_realtime_translation',
+    });
+    fireEvent.click(switchBtn);
+
+    await waitFor(() => {
+      expect(showErrorSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          code: 'model.not_installed',
+        })
+      );
+    });
+
+    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
   });
   it('falls back to bilingual mode when realtime translation is disabled while in translation mode', () => {
     useConfigStore.setState((state) => ({

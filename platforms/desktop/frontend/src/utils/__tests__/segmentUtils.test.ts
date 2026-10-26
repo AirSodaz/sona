@@ -224,4 +224,56 @@ describe('performSegmentSplit', () => {
     expect(segmentLeft.end).toBe(13.0); // 10.0 + 0.3 * 10
     expect(segmentRight.start).toBe(13.0);
   });
+  it('clears translation and draftTranslation on split halves by default', () => {
+    const segment: TranscriptSegment = {
+      id: 'seg-4',
+      start: 0,
+      end: 10.0,
+      text: 'Full sentence text',
+      translation: 'Complete sentence translation',
+      draftTranslation: 'Draft tail',
+      isFinal: true,
+    };
+
+    const { segmentLeft, segmentRight } = performSegmentSplit(
+      segment,
+      4,
+      'Full sentence text',
+      'Full',
+      'sentence text',
+      'new-id-split'
+    );
+
+    expect(segmentLeft.translation).toBeUndefined();
+    expect(segmentLeft.draftTranslation).toBeUndefined();
+    expect(segmentRight.translation).toBeUndefined();
+    expect(segmentRight.draftTranslation).toBeUndefined();
+  });
+
+  it('assigns explicit translations when provided to performSegmentSplit', () => {
+    const segment: TranscriptSegment = {
+      id: 'seg-5',
+      start: 0,
+      end: 10.0,
+      text: 'Hello World',
+      translation: '你好世界',
+      isFinal: true,
+    };
+
+    const { segmentLeft, segmentRight } = performSegmentSplit(
+      segment,
+      5,
+      'Hello World',
+      'Hello',
+      ' World',
+      'new-id-explicit',
+      '你好',
+      '世界'
+    );
+
+    expect(segmentLeft.translation).toBe('你好');
+    expect(segmentLeft.draftTranslation).toBeUndefined();
+    expect(segmentRight.translation).toBe('世界');
+    expect(segmentRight.draftTranslation).toBeUndefined();
+  });
 });

@@ -428,4 +428,36 @@ describe('CaptionWindow', () => {
     expect(screen.getByText('Good morning')).toBeDefined();
     expect(screen.queryByText('早上好')).toBeNull();
   });
+
+  it('renders pending fallback placeholder with original text when translation is missing in translation mode', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-pending',
+              text: 'Pending translation text',
+              translation: null,
+              draftTranslation: null,
+              start: 0,
+              end: 1,
+              isFinal: false,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayMode: 'translation',
+          },
+        },
+      });
+    });
+
+    const pendingEl = container.querySelector('.caption-translation-pending');
+    expect(pendingEl).not.toBeNull();
+    expect(pendingEl?.textContent).toContain('Pending translation text');
+    expect((pendingEl as HTMLElement).style.opacity).toBe('0.6');
+  });
 });

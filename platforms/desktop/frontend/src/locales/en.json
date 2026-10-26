@@ -2055,6 +2055,7 @@
     "subtitle_realtime_translation_desc": "Configure machine translation, display modes, and bilingual ordering for live subtitles.",
     "enable_realtime_translation": "Enable Real-time Translation",
     "enable_realtime_translation_hint": "Synchronously translate and display subtitles in real time",
+    "translation_model_not_installed": "The offline translation model is not downloaded. Please download it in Settings > Models before enabling realtime translation.",
     "translation_language_pair": "Translation Language Pair",
     "translation_language_pair_hint": "Select source and target translation languages",
     "translation_source_language": "Source Language",

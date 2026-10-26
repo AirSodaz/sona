@@ -77,11 +77,12 @@ export class TranslationService {
     });
   }
 
-  async translateCurrentTranscript() {
+  async translateCurrentTranscript(targetLanguageOverride?: string) {
     const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retryTranslateTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
+      targetLanguage: targetLanguageOverride,
     });
   }
 

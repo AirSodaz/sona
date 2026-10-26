@@ -2055,6 +2055,7 @@
     "subtitle_realtime_translation_desc": "配置实时字幕的机器翻译、显示模式与双语排列。",
     "enable_realtime_translation": "启用实时翻译",
     "enable_realtime_translation_hint": "在实时字幕中同步生成并显示译文",
+    "translation_model_not_installed": "离线翻译模型尚未下载。请在“设置 > 模型管理”中下载对应模型后再启用实时翻译。",
     "translation_language_pair": "翻译语种对",
     "translation_language_pair_hint": "选择源语言与目标翻译语言",
     "translation_source_language": "源语言",

@@ -1,4 +1,5 @@
 import { render, screen } from '@testing-library/react';
+import type * as ReactI18Next from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useVoiceTypingRuntimeStore } from '../../../stores/voiceTypingRuntimeStore';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
@@ -8,17 +9,20 @@ function interpolate(template: string, options?: Record<string, unknown>) {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(options?.[key] ?? ''));
 }
 
-vi.mock('react-i18next', () => ({
-  useTranslation: () => ({
-    t: (key: string, options?: Record<string, unknown>) => {
-      if (typeof options?.defaultValue === 'string') {
-        return interpolate(options.defaultValue, options);
-      }
-
-      return key;
-    },
-  }),
-}));
+vi.mock('react-i18next', async (importOriginal) => {
+  const actual = await importOriginal<typeof ReactI18Next>();
+  return {
+    ...actual,
+    useTranslation: () => ({
+      t: (key: string, options?: Record<string, unknown>) => {
+        if (typeof options?.defaultValue === 'string') {
+          return interpolate(options.defaultValue, options);
+        }
+        return key;
+      },
+    }),
+  };
+});
 
 vi.mock('../../../services/modelService', () => ({
   PRESET_MODELS: [

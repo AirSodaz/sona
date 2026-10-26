@@ -2055,6 +2055,7 @@
     "subtitle_realtime_translation_desc": "リアルタイム字幕の機械翻訳、表示モード、二言語の順序を設定します。",
     "enable_realtime_translation": "リアルタイム翻訳を有効化",
     "enable_realtime_translation_hint": "リアルタイム字幕で翻訳を同期生成して表示します",
+    "translation_model_not_installed": "オフライン翻訳モデルがダウンロードされていません。リアルタイム翻訳を有効にする前に、設定 > モデル管理でダウンロードしてください。",
     "translation_language_pair": "翻訳言語ペア",
     "translation_language_pair_hint": "翻訳元の言語と翻訳先の言語を選択します",
     "translation_source_language": "翻訳元言語",

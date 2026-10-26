@@ -19,6 +19,7 @@ import type {
   TranscriptSummaryState,
   TranscriptUpdate,
 } from '../types/transcript';
+import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import {
   findSegmentAndIndexForTime,
   performSegmentSplit,
@@ -473,6 +474,10 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       const [first, second] = seg1.start <= seg2.start ? [seg1, seg2] : [seg2, seg1];
       if (!areSpeakerTagsEqual(first.speaker, second.speaker)) return {};
       const stripParagraph = (t: string) => t.replace(/<\/?p[^>]*>/gi, '');
+      const t1 = first.translation?.trim();
+      const t2 = second.translation?.trim();
+      const mergedTranslation =
+        t1 && t2 ? `${t1}${needsWordBoundarySpace(t1, t2) ? ' ' : ''}${t2}` : t1 || t2 || undefined;
       const merged: TranscriptSegment = {
         id: first.id,
         start: first.start,
@@ -481,6 +486,8 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         isFinal: first.isFinal && second.isFinal,
         speaker: first.speaker,
         speakerAttribution: first.speakerAttribution,
+        translation: mergedTranslation,
+        draftTranslation: undefined,
       };
       return {
         segments: session.segments

@@ -2055,6 +2055,7 @@
     "subtitle_realtime_translation_desc": "실시간 자막의 기계 번역, 표시 모드 및 이중 언어 순서를 설정합니다.",
     "enable_realtime_translation": "실시간 번역 활성화",
     "enable_realtime_translation_hint": "실시간 자막에서 번역을 동시에 생성하고 표시합니다",
+    "translation_model_not_installed": "오프라인 번역 모델이 다운로드되지 않았습니다. 실시간 번역을 활성화하기 전에 설정 > 모델에서 다운로드하세요.",
     "translation_language_pair": "번역 언어 쌍",
     "translation_language_pair_hint": "원본 언어와 대상 번역 언어를 선택합니다",
     "translation_source_language": "원본 언어",

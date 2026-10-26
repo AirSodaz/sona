@@ -213,7 +213,23 @@ export function CaptionWindow() {
                   style={{ marginBottom: displayMode === 'bilingual' ? '8px' : '4px' }}
                 >
                   {displayMode === 'original' && originalLine}
-                  {displayMode === 'translation' && translationLine}
+                  {displayMode === 'translation' &&
+                    (translationLine || (
+                      <div
+                        className="caption-translation-line caption-translation-pending"
+                        style={{
+                          fontSize: `${translationFontSize}px`,
+                          color: translationColor,
+                          opacity: 0.6,
+                          fontStyle: 'italic',
+                        }}
+                      >
+                        {segment.speaker && (
+                          <span className="live-caption-speaker">[{segment.speaker.label}]</span>
+                        )}
+                        <span>{segment.text}</span>
+                      </div>
+                    ))}
                   {displayMode === 'bilingual' &&
                     (bilingualOrder === 'translation_first' ? (
                       <>

@@ -1,12 +1,16 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type * as ReactI18Next from 'react-i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { translationService } from '../../services/translationService';
 import { useConfigStore } from '../../stores/configStore';
+import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
+import { DEFAULT_PROJECT_PIPELINE } from '../../types/project';
 import { TranslateButton } from '../TranslateButton';
 
 // Mock dependencies
 vi.mock('react-i18next', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('react-i18next')>();
+  const actual = await importOriginal<typeof ReactI18Next>();
   return {
     ...actual,
     useTranslation: () => ({
@@ -22,6 +26,11 @@ vi.mock('../../stores/dialogStore', () => ({
     selector({
       showError: vi.fn(),
     }),
+}));
+vi.mock('../../services/translationService', () => ({
+  translationService: {
+    translateCurrentTranscript: vi.fn(),
+  },
 }));
 
 describe('TranslateButton', () => {
@@ -148,5 +157,73 @@ describe('TranslateButton', () => {
 
     const storedRecents = localStorage.getItem('sona_recent_translation_languages');
     expect(storedRecents).toContain('af');
+  });
+
+  it('updates project pipeline target language when in project with pipeline enabled', async () => {
+    const mockUpdateProjectPipeline = vi.fn().mockResolvedValue(undefined);
+    useProjectStore.setState({
+      activeProjectId: 'proj-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'Project 1',
+          createdAt: 1000,
+          updatedAt: 1000,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoPolish: false,
+            autoTranslate: true,
+            targetLanguage: 'zh',
+          },
+        },
+      ],
+      updateProjectPipeline: mockUpdateProjectPipeline,
+    });
+
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const afrikaansBtn = screen.getByText('Afrikaans');
+    fireEvent.click(afrikaansBtn);
+
+    await waitFor(() => {
+      expect(mockUpdateProjectPipeline).toHaveBeenCalledWith(
+        'proj-1',
+        expect.objectContaining({
+          targetLanguage: 'af',
+        })
+      );
+      expect(useConfigStore.getState().config.translationLanguage).toBe('af');
+    });
+  });
+
+  it('passes effectiveTargetLang to translateCurrentTranscript when translation starts', async () => {
+    useProjectStore.setState({
+      activeProjectId: 'proj-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'Project 1',
+          createdAt: 1000,
+          updatedAt: 1000,
+          pipeline: {
+            ...DEFAULT_PROJECT_PIPELINE,
+            enabled: true,
+            autoPolish: false,
+            autoTranslate: true,
+            targetLanguage: 'es',
+          },
+        },
+      ],
+    });
+
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const startBtn = screen.getByText('translation.start');
+    fireEvent.click(startBtn);
+
+    expect(translationService.translateCurrentTranscript).toHaveBeenCalledWith('es');
   });
 });
