@@ -705,6 +705,26 @@ pub async fn toggle_live_translation(
         .flatten()
         .and_then(|v| v.as_str().map(String::from));
 
+    let norm_src = sona_application::live_transcription::normalize_language_code(&src);
+    let norm_tgt = sona_application::live_transcription::normalize_language_code(&tgt);
+    if !src.eq_ignore_ascii_case("auto") && norm_src.eq_ignore_ascii_case(norm_tgt) {
+        services.asr.live_coordinator().set_translation(None);
+        return Ok(());
+    }
+
+    let resolved_engine_src = if engine_kind
+        == sona_core::ports::translation::TranslationEngineKind::OnnxNmt
+        && (src.trim().is_empty() || src.eq_ignore_ascii_case("auto"))
+    {
+        if norm_tgt.eq_ignore_ascii_case("zh") {
+            "en".to_string()
+        } else {
+            "zh".to_string()
+        }
+    } else {
+        src.clone()
+    };
+
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)
         .map_err(|e| format!("Failed to resolve models directory: {e}"))?;
 
@@ -712,7 +732,7 @@ pub async fn toggle_live_translation(
         &services,
         engine_kind,
         model_id.as_deref(),
-        &src,
+        &resolved_engine_src,
         &tgt,
         &models_dir,
     )
@@ -739,13 +759,23 @@ pub async fn toggle_live_translation(
 
     if let Some(segments) = catchup_segments.filter(|s| !s.is_empty()) {
         let live_coord = services.asr.live_coordinator().clone();
-        let app_handle = app.clone();
+        let recording_session = services.recording_session.clone();
         let active_consumer = {
             let guard = services.recording_session.lock().await;
             guard.as_ref().map(|s| s.consumer_id.clone())
         };
         tokio::spawn(async move {
             for mut seg in segments {
+                let still_active = {
+                    let guard = recording_session.lock().await;
+                    guard
+                        .as_ref()
+                        .is_some_and(|s| active_consumer.as_deref() == Some(&s.consumer_id))
+                };
+                if !still_active || !live_coord.is_translation_enabled() {
+                    break;
+                }
+
                 let text = seg.text.trim();
                 if text.is_empty() {
                     continue;
@@ -768,12 +798,7 @@ pub async fn toggle_live_translation(
                             remove_ids: Vec::new(),
                             upsert_segments: vec![seg],
                         };
-                        live_coord.broadcast_transcript_update(update.clone()).await;
-                        if let Some(consumer_id) = &active_consumer {
-                            let event_name =
-                                crate::integrations::asr::recognizer_output_event(consumer_id);
-                            let _ = app_handle.emit(&event_name, &update);
-                        }
+                        live_coord.broadcast_transcript_update(update).await;
                     }
                     Err(e) => {
                         log::warn!(

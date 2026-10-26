@@ -773,6 +773,10 @@ impl LiveTranscriptionCoordinator {
         *self.inner.translation.write() = translation;
     }
 
+    pub fn is_translation_enabled(&self) -> bool {
+        self.inner.translation.read().is_some()
+    }
+
     pub fn clear_translation(&self) {
         self.inner.partial_versions.lock().clear();
         if let Some(translator) = self.inner.translation.read().as_ref() {
@@ -1035,14 +1039,15 @@ impl CoordinatorInner {
                 .cloned()
                 .collect();
 
-            if !final_segments.is_empty() {
+            let remove_ids = event.update.remove_ids.clone();
+            if !final_segments.is_empty() || !remove_ids.is_empty() {
                 let this = Arc::clone(self);
                 let translator_clone = Arc::clone(&translator);
                 let instance_id = event.instance_id.clone();
                 let stage = event.stage.clone();
                 tokio::spawn(async move {
                     let mut update = TranscriptUpdate {
-                        remove_ids: Vec::new(),
+                        remove_ids,
                         upsert_segments: final_segments,
                     };
                     translator_clone.enrich_update(&mut update).await;

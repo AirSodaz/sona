@@ -452,7 +452,9 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
   },
   patchSegmentTranslation: (id, translation) => {
     updateActiveSession(set, (session) => ({
-      segments: session.segments.map((s) => (s.id === id ? { ...s, translation } : s)),
+      segments: session.segments.map((s) =>
+        s.id === id ? { ...s, translation, draftTranslation: undefined } : s
+      ),
     }));
   },
   updateSegmentForSession: (sessionId, id, updates) => {

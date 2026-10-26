@@ -446,7 +446,16 @@ describe('TranslationService', () => {
   it('patches translations incrementally without overwriting newly added segments', async () => {
     useTranscriptStore.setState({
       config: buildTranslationTestConfig({ translationLanguage: 'zh' }),
-      segments: [{ id: '1', start: 0, end: 1, text: 'Segment 1', isFinal: true }],
+      segments: [
+        {
+          id: '1',
+          start: 0,
+          end: 1,
+          text: 'Segment 1',
+          isFinal: true,
+          draftTranslation: 'draft...',
+        },
+      ],
       sourceHistoryId: 'history-123',
     });
 
@@ -494,6 +503,7 @@ describe('TranslationService', () => {
     expect(segments.length).toBe(2);
     expect(segments[0].id).toBe('1');
     expect(segments[0].translation).toBe('分段 1');
+    expect(segments[0].draftTranslation).toBeUndefined();
     expect(segments[1].text).toBe('Segment 2 (newly arrived)');
   });
 });

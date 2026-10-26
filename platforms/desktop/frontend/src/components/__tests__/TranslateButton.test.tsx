@@ -251,6 +251,7 @@ describe('TranslateButton', () => {
     fireEvent.click(swapBtn);
     const config = useConfigStore.getState().config;
     expect(config.realtimeTranslationSourceLanguage).toBe('zh');
+    expect(config.realtimeTranslationTargetLanguage).toBe('en');
   });
 
   it('renders realtime translation toggle card during active recording and calls toggleLiveTranslation', async () => {
@@ -309,7 +310,18 @@ describe('TranslateButton', () => {
     fireEvent.click(screen.getByRole('button', { expanded: false }));
 
     await waitFor(() => {
-      screen.getByText('models.not_downloaded');
+      screen.getByText('translation.not_downloaded');
     });
+  });
+
+  it('focuses first language candidate when pressing ArrowDown in search input', () => {
+    render(<TranslateButton />);
+    fireEvent.click(screen.getByRole('button', { expanded: false }));
+
+    const searchInput = screen.getByPlaceholderText('translation.search_placeholder');
+    fireEvent.keyDown(searchInput, { key: 'ArrowDown' });
+
+    const firstCandidate = document.querySelector('[data-candidate-lang="true"]');
+    expect(document.activeElement).toBe(firstCandidate);
   });
 });

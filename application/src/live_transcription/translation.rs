@@ -80,9 +80,12 @@ impl StreamingTranslationCoordinator {
     pub fn fill_cached(&self, update: &mut TranscriptUpdate) {
         let states = self.states.lock();
         for segment in &mut update.upsert_segments {
+            if segment.is_final {
+                continue;
+            }
             let text = segment.text.trim();
             let effective_source = if self.source_lang.trim().is_empty()
-                || self.source_lang.eq_ignore_ascii_case("auto")
+                || self.source_lang.trim().eq_ignore_ascii_case("auto")
             {
                 detect_script_language(text)
             } else {
@@ -126,7 +129,7 @@ impl StreamingTranslationCoordinator {
             }
 
             let effective_source = if self.source_lang.trim().is_empty()
-                || self.source_lang.eq_ignore_ascii_case("auto")
+                || self.source_lang.trim().eq_ignore_ascii_case("auto")
             {
                 detect_script_language(text)
             } else {

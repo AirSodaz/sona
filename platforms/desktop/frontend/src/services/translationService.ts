@@ -307,7 +307,10 @@ export class TranslationService {
     const sessionStore = this.ports.getTranscriptSessionStore();
     for (const seg of payload.segments) {
       if (seg.translation) {
-        sessionStore.updateSegment(seg.id, { translation: seg.translation });
+        sessionStore.updateSegment(seg.id, {
+          translation: seg.translation,
+          draftTranslation: undefined,
+        });
       }
     }
     const sidecarStore = this.ports.getTranscriptSidecarStore();

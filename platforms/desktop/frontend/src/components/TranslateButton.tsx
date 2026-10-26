@@ -129,10 +129,10 @@ export function TranslateButton({
   const [selectingMode, setSelectingMode] = useState<'source' | 'target'>('target');
   const [installedModels, setInstalledModels] = useState<Record<string, boolean>>({});
 
-  const llm = getFeatureLlmConfig(config, 'translation') ?? getActiveLlmConfig(config);
+  const translationLlm = getFeatureLlmConfig(config, 'translation');
   const isLocalOnnx =
-    llm?.strategy === 'local_nmt' || (!llm && config.realtimeTranslationEngine === 'onnx');
-
+    translationLlm?.strategy === 'local_nmt' ||
+    (!translationLlm && config.realtimeTranslationEngine === 'onnx');
   useEffect(() => {
     let active = true;
     if (isOpen && isLocalOnnx && typeof modelService?.isModelInstalled === 'function') {
@@ -275,11 +275,11 @@ export function TranslateButton({
   };
 
   const handleSwapLanguages = () => {
-    const oldSrc = effectiveSourceLang === 'auto' ? 'zh' : effectiveSourceLang;
+    const defaultFallback = effectiveTargetLang === 'zh' ? 'en' : 'zh';
+    const oldSrc = effectiveSourceLang === 'auto' ? defaultFallback : effectiveSourceLang;
     const oldTgt = effectiveTargetLang;
     const newSrc = oldTgt;
-    const newTgt = oldSrc;
-
+    const newTgt = oldSrc === newSrc ? defaultFallback : oldSrc;
     setConfig({
       realtimeTranslationSourceLanguage: newSrc,
       realtimeTranslationTargetLanguage: newTgt,
@@ -699,7 +699,7 @@ export function TranslateButton({
                                 border: '1px solid var(--color-border)',
                               }}
                             >
-                              {t('models.not_downloaded', { defaultValue: '未下载' })}
+                              {t('translation.not_downloaded', { defaultValue: 'Not Downloaded' })}
                             </span>
                           )}
                         </button>
@@ -772,14 +772,12 @@ export function TranslateButton({
                   onKeyDown={(e) => {
                     if (e.key === 'ArrowDown') {
                       e.preventDefault();
-                      if (menuRef.current) {
-                        const buttons = Array.from(menuRef.current.querySelectorAll('button'));
-                        if (buttons.length > 2) {
-                          buttons[2].focus();
-                        }
-                      }
+                      e.stopPropagation();
+                      const firstCandidate = menuRef.current?.querySelector<HTMLButtonElement>(
+                        '[data-candidate-lang="true"]'
+                      );
+                      firstCandidate?.focus();
                     } else if (e.key === 'Escape') {
-                      e.preventDefault();
                       closeMenu();
                       triggerRef.current?.focus();
                     } else {
@@ -823,6 +821,7 @@ export function TranslateButton({
                         <button
                           key={`common-${lang}`}
                           type="button"
+                          data-candidate-lang="true"
                           onClick={() => void handleLanguageSelect(lang)}
                           style={{
                             padding: '4px 6px',
@@ -891,6 +890,7 @@ export function TranslateButton({
                           type="button"
                           className="export-dropdown-item"
                           onClick={() => void handleLanguageSelect(lang.code)}
+                          data-candidate-lang="true"
                           role="menuitem"
                           tabIndex={-1}
                           style={{
