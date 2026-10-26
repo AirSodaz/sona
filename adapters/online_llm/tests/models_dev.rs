@@ -106,3 +106,115 @@ fn models_dev_allows_online_gateways_and_skips_loopback_endpoints() {
         "https://api.openai.com"
     ));
 }
+
+#[tokio::test]
+async fn test_models_dev_disk_cache_persistence() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("sona_models_dev_test_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).unwrap();
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let addr = listener.local_addr().unwrap();
+
+    tokio::spawn(async move {
+        if let Ok((mut stream, _)) = listener.accept().await {
+            use tokio::io::AsyncWriteExt;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}",
+                CATALOG.len(),
+                CATALOG
+            );
+            let _ = stream.write_all(response.as_bytes()).await;
+        }
+    });
+
+    let catalog = ModelsDevCatalog::with_endpoint_and_cache_dir(
+        format!("http://{addr}/api.json"),
+        Duration::from_secs(2),
+        Some(temp_dir.clone()),
+    );
+
+    let discovered = vec![LlmModelSummary {
+        model: "gpt-test".into(),
+        ..LlmModelSummary::default()
+    }];
+
+    let enriched = catalog.enrich("openai", discovered).await;
+    assert_eq!(enriched.len(), 1);
+    assert_eq!(enriched[0].display_name.as_deref(), Some("GPT Test"));
+
+    let cache_file = temp_dir.join("models_dev_cache.json");
+    assert!(
+        cache_file.is_file(),
+        "models_dev_cache.json should be created on disk"
+    );
+    let content = std::fs::read_to_string(&cache_file).unwrap();
+    assert!(content.contains("gpt-test"));
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[tokio::test]
+async fn test_models_dev_stale_on_error_recovery() {
+    let temp_dir =
+        std::env::temp_dir().join(format!("sona_models_dev_stale_{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&temp_dir);
+    std::fs::create_dir_all(&temp_dir).unwrap();
+
+    let cache_file = temp_dir.join("models_dev_cache.json");
+    std::fs::write(&cache_file, CATALOG).unwrap();
+
+    let catalog = ModelsDevCatalog::with_endpoint_and_cache_dir(
+        "http://127.0.0.1:1/nonexistent.json",
+        Duration::from_millis(50),
+        Some(temp_dir.clone()),
+    );
+
+    let discovered = vec![LlmModelSummary {
+        model: "gpt-test".into(),
+        ..LlmModelSummary::default()
+    }];
+
+    let enriched = catalog.enrich("openai", discovered).await;
+    assert_eq!(enriched.len(), 1);
+    assert_eq!(enriched[0].display_name.as_deref(), Some("GPT Test"));
+    assert_eq!(enriched[0].context_window, Some(128000));
+
+    let _ = std::fs::remove_dir_all(temp_dir);
+}
+
+#[test]
+fn test_metadata_merge_priority_native_over_models_dev() {
+    use sona_core::llm::model_catalog::merge_model_metadata;
+
+    let catalog_models = parse_models_dev_models(CATALOG, "openai", &["gpt-test"]).unwrap();
+
+    let discovered = vec![LlmModelSummary {
+        model: "gpt-test".into(),
+        display_name: Some("Native Discovered Name".into()),
+        context_window: Some(256_000),
+        max_output_tokens: None,
+        metadata_sources: vec![LlmModelMetadataSource::Provider],
+        ..LlmModelSummary::default()
+    }];
+
+    let merged = merge_model_metadata(discovered, catalog_models);
+    assert_eq!(merged.len(), 1);
+    let item = &merged[0];
+
+    assert_eq!(item.display_name.as_deref(), Some("Native Discovered Name"));
+    assert_eq!(item.context_window, Some(256_000));
+    assert_eq!(item.max_output_tokens, Some(16384));
+    assert_eq!(item.input_price, Some(2.0));
+    assert_eq!(item.output_price, Some(8.0));
+
+    assert!(
+        item.metadata_sources
+            .contains(&LlmModelMetadataSource::Provider)
+    );
+    assert!(
+        item.metadata_sources
+            .contains(&LlmModelMetadataSource::ModelsDev)
+    );
+}

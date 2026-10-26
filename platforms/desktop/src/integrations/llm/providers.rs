@@ -23,6 +23,8 @@ pub(crate) struct DesktopLlmAdapter {
     online: OnlineLlmAdapter,
     local: LlamaCppLlmEngine,
     models_dir: Option<PathBuf>,
+    #[allow(dead_code)]
+    cache_dir: Option<PathBuf>,
     translation_pool:
         Option<std::sync::Arc<crate::integrations::translation::TranslationModelPool>>,
 }
@@ -48,20 +50,25 @@ fn detect_source_language(texts: &[String]) -> &'static str {
 }
 
 impl DesktopLlmAdapter {
-    pub(crate) fn new(models_dir: Option<PathBuf>) -> Self {
-        Self::with_pool(models_dir, None)
+    pub(crate) fn new(models_dir: Option<PathBuf>, cache_dir: Option<PathBuf>) -> Self {
+        Self::with_pool(models_dir, cache_dir, None)
     }
 
     pub(crate) fn with_pool(
         models_dir: Option<PathBuf>,
+        cache_dir: Option<PathBuf>,
         translation_pool: Option<
             std::sync::Arc<crate::integrations::translation::TranslationModelPool>,
         >,
     ) -> Self {
+        if let Some(dir) = &cache_dir {
+            sona_online_llm::init_models_dev_cache_dir(dir.clone());
+        }
         Self {
             online: OnlineLlmAdapter,
             local: LlamaCppLlmEngine::with_models_dir(models_dir.clone()),
             models_dir,
+            cache_dir,
             translation_pool,
         }
     }

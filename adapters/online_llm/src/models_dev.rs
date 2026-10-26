@@ -1,26 +1,28 @@
-use std::collections::HashMap;
-use std::sync::OnceLock;
-use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
-
 use serde::Deserialize;
 use sona_core::domain::LlmProvider;
 use sona_core::llm::model_catalog::merge_model_metadata;
 use sona_core::llm::provider_protocol::{LlmModality, LlmModelMetadataSource, LlmModelSummary};
 use sona_core::llm::tasks::LlmProviderStrategy;
 use sona_core::ports::llm::{LlmPortError, LlmPortErrorKind};
+use std::collections::HashMap;
+use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant, SystemTime};
 
 use crate::transport::{http_status_port_error, is_local_or_lan_host, reqwest_port_error};
 
 const MODELS_DEV_ENDPOINT: &str = "https://models.dev/api.json";
-const MODELS_DEV_CACHE_TTL: Duration = Duration::from_secs(24 * 60 * 60);
-const MODELS_DEV_TIMEOUT: Duration = Duration::from_secs(3);
+const MODELS_DEV_CACHE_TTL: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+const MODELS_DEV_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Clone)]
 pub struct ModelsDevCatalog {
     endpoint: String,
     client: reqwest::Client,
     cache: Arc<RwLock<Option<CachedCatalog>>>,
+    cache_dir: Arc<RwLock<Option<PathBuf>>>,
+    download_lock: Arc<tokio::sync::Mutex<()>>,
 }
 
 #[derive(Clone)]
@@ -35,8 +37,20 @@ impl Default for ModelsDevCatalog {
     }
 }
 
+fn default_fallback_cache_dir() -> PathBuf {
+    std::env::temp_dir().join("sona_cache")
+}
+
 impl ModelsDevCatalog {
     pub fn with_endpoint(endpoint: impl Into<String>, timeout: Duration) -> Self {
+        Self::with_endpoint_and_cache_dir(endpoint, timeout, None)
+    }
+
+    pub fn with_endpoint_and_cache_dir(
+        endpoint: impl Into<String>,
+        timeout: Duration,
+        cache_dir: Option<PathBuf>,
+    ) -> Self {
         Self {
             endpoint: endpoint.into(),
             client: reqwest::Client::builder()
@@ -44,7 +58,25 @@ impl ModelsDevCatalog {
                 .build()
                 .expect("models.dev HTTP client should build"),
             cache: Arc::new(RwLock::new(None)),
+            cache_dir: Arc::new(RwLock::new(cache_dir)),
+            download_lock: Arc::new(tokio::sync::Mutex::new(())),
         }
+    }
+
+    pub fn set_cache_dir(&self, dir: PathBuf) {
+        if let Ok(mut lock) = self.cache_dir.write() {
+            *lock = Some(dir);
+        }
+    }
+
+    pub fn cache_file_path(&self) -> PathBuf {
+        let dir = self
+            .cache_dir
+            .read()
+            .ok()
+            .and_then(|lock| lock.clone())
+            .unwrap_or_else(default_fallback_cache_dir);
+        dir.join("models_dev_cache.json")
     }
 
     pub async fn enrich(
@@ -88,6 +120,7 @@ impl ModelsDevCatalog {
     }
 
     async fn fetch(&self) -> Result<String, LlmPortError> {
+        // 1. In-memory fast path
         if let Some(cached) = self
             .cache
             .read()
@@ -103,34 +136,123 @@ impl ModelsDevCatalog {
             return Ok(cached.body.clone());
         }
 
-        let response = self
-            .client
-            .get(&self.endpoint)
-            .send()
-            .await
-            .map_err(reqwest_port_error)?;
-        let status = response.status();
-        let headers = response.headers().clone();
-        let body = response.text().await.map_err(reqwest_port_error)?;
-        if !status.is_success() {
-            return Err(http_status_port_error(status, &headers, body));
+        // 2. Single-flight lock against cache thundering herd
+        let _guard = self.download_lock.lock().await;
+
+        // Double check in-memory cache after acquiring lock
+        if let Some(cached) = self
+            .cache
+            .read()
+            .ok()
+            .and_then(|lock| lock.as_ref().cloned())
+            .filter(|cached| cached.fetched_at.elapsed() < MODELS_DEV_CACHE_TTL)
+        {
+            return Ok(cached.body);
         }
-        *self.cache.write().map_err(|_| {
-            LlmPortError::new(
-                LlmPortErrorKind::Unavailable,
-                "models.dev cache lock is poisoned",
-            )
-        })? = Some(CachedCatalog {
-            fetched_at: Instant::now(),
-            body: body.clone(),
-        });
-        Ok(body)
+
+        let cache_path = self.cache_file_path();
+
+        // 3. Disk cache check (< 7 days TTL)
+        if let Ok(metadata) = std::fs::metadata(&cache_path) {
+            let is_fresh = metadata
+                .modified()
+                .ok()
+                .and_then(|m| SystemTime::now().duration_since(m).ok())
+                .is_some_and(|age| age < MODELS_DEV_CACHE_TTL);
+
+            let fresh_content = is_fresh
+                .then(|| std::fs::read_to_string(&cache_path).ok())
+                .flatten()
+                .filter(|c| !c.trim().is_empty());
+
+            if let Some(content) = fresh_content {
+                let age = metadata
+                    .modified()
+                    .ok()
+                    .and_then(|m| m.elapsed().ok())
+                    .unwrap_or_default();
+                let fetched_at = Instant::now().checked_sub(age).unwrap_or_else(Instant::now);
+                if let Ok(mut cache_lock) = self.cache.write() {
+                    *cache_lock = Some(CachedCatalog {
+                        fetched_at,
+                        body: content.clone(),
+                    });
+                }
+                return Ok(content);
+            }
+        }
+
+        // 4. Network fetch with atomic disk persistence and Stale-on-Error recovery
+        let fetch_result = async {
+            let response = self
+                .client
+                .get(&self.endpoint)
+                .send()
+                .await
+                .map_err(reqwest_port_error)?;
+            let status = response.status();
+            let headers = response.headers().clone();
+            let body = response.text().await.map_err(reqwest_port_error)?;
+            if !status.is_success() {
+                return Err(http_status_port_error(status, &headers, body));
+            }
+            Ok(body)
+        }
+        .await;
+
+        match fetch_result {
+            Ok(body) => {
+                if let Some(parent) = cache_path.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                let tmp_path = cache_path.with_extension(format!("tmp.{}", std::process::id()));
+                if std::fs::write(&tmp_path, &body).is_ok()
+                    && std::fs::rename(&tmp_path, &cache_path).is_err()
+                {
+                    let _ = std::fs::remove_file(&cache_path);
+                    if std::fs::rename(&tmp_path, &cache_path).is_err() {
+                        let _ = std::fs::remove_file(&tmp_path);
+                    }
+                }
+                if let Ok(mut lock) = self.cache.write() {
+                    *lock = Some(CachedCatalog {
+                        fetched_at: Instant::now(),
+                        body: body.clone(),
+                    });
+                }
+                Ok(body)
+            }
+            Err(error) => {
+                log::warn!("models.dev fetch failed: {error}; checking for stale disk cache");
+                if let Some(content) = std::fs::read_to_string(&cache_path)
+                    .ok()
+                    .filter(|c| !c.trim().is_empty())
+                {
+                    log::info!(
+                        "recovered models.dev catalog from stale disk cache ({})",
+                        cache_path.display()
+                    );
+                    if let Ok(mut lock) = self.cache.write() {
+                        *lock = Some(CachedCatalog {
+                            fetched_at: Instant::now(),
+                            body: content.clone(),
+                        });
+                    }
+                    return Ok(content);
+                }
+                Err(error)
+            }
+        }
     }
 }
 
 pub(crate) fn default_models_dev_catalog() -> &'static ModelsDevCatalog {
     static CATALOG: OnceLock<ModelsDevCatalog> = OnceLock::new();
     CATALOG.get_or_init(ModelsDevCatalog::default)
+}
+
+pub fn init_models_dev_cache_dir(dir: PathBuf) {
+    default_models_dev_catalog().set_cache_dir(dir);
 }
 
 #[derive(Deserialize)]

@@ -5,7 +5,7 @@ use crate::integrations::llm::{
     TranslateSegmentsRequest, TranslatedSegment,
 };
 use crate::services::DesktopServices;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 #[tauri::command]
 pub async fn generate_llm_text(
@@ -63,7 +63,8 @@ pub async fn list_llm_models(
 ) -> Result<Vec<LlmModelSummary>, String> {
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    crate::integrations::llm::list_llm_models_with_models_dir(request, models_dir).await
+    let cache_dir = app.path().app_cache_dir().ok();
+    crate::integrations::llm::list_llm_models_with_dirs(request, models_dir, cache_dir).await
 }
 
 #[tauri::command]
@@ -73,7 +74,8 @@ pub async fn describe_llm_model(
 ) -> Result<Option<LlmModelSummary>, String> {
     let models_dir =
         crate::platform::storage_location::resolve_active_models_dir_for_app(&app).ok();
-    crate::integrations::llm::describe_llm_model_with_models_dir(config, models_dir).await
+    let cache_dir = app.path().app_cache_dir().ok();
+    crate::integrations::llm::describe_llm_model_with_dirs(config, models_dir, cache_dir).await
 }
 
 #[tauri::command]

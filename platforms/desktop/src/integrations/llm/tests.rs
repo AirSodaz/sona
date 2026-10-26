@@ -825,7 +825,7 @@ fn llm_api_url_client_builds_for_https_and_local_or_lan_with_various_timeouts() 
 
 #[tokio::test]
 async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
-    let empty_adapter = DesktopLlmAdapter::new(None);
+    let empty_adapter = DesktopLlmAdapter::new(None, None);
 
     let local_config = LlmConfig {
         provider: sona_core::domain::LlmProvider::Builtin(
@@ -870,7 +870,7 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
     std::fs::write(temp_dir.join("Qwen3.5-4B-Q4_K_M.gguf"), b"dummy-llm").unwrap();
     std::fs::write(temp_dir.join("Qwen3-ASR-0.6B-Q8_0.gguf"), b"dummy-asr").unwrap();
 
-    let installed_adapter = DesktopLlmAdapter::new(Some(temp_dir.clone()));
+    let installed_adapter = DesktopLlmAdapter::new(Some(temp_dir.clone()), None);
     let models = installed_adapter
         .list_models(LlmModelsRequest {
             provider: sona_core::domain::LlmProvider::Builtin(
@@ -899,7 +899,7 @@ async fn desktop_llm_adapter_recognizes_local_config_and_lists_models() {
 
 #[tokio::test]
 async fn desktop_llm_adapter_fails_informative_error_when_model_missing() {
-    let adapter = DesktopLlmAdapter::new(None);
+    let adapter = DesktopLlmAdapter::new(None, None);
 
     let err = adapter
         .complete(LlmCompletionRequest {
@@ -934,7 +934,7 @@ async fn desktop_llm_adapter_fails_informative_error_when_model_missing() {
 async fn test_desktop_llm_adapter_translate_batch_empty_texts() {
     use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
 
-    let adapter = DesktopLlmAdapter::new(None);
+    let adapter = DesktopLlmAdapter::new(None, None);
     let result = adapter
         .translate_batch(LlmTranslationRequest {
             config: LlmConfig {
@@ -966,7 +966,7 @@ async fn test_desktop_llm_adapter_translate_batch_empty_texts() {
 async fn test_desktop_llm_adapter_translate_batch_same_language_identity() {
     use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
 
-    let adapter = DesktopLlmAdapter::new(None);
+    let adapter = DesktopLlmAdapter::new(None, None);
     let texts = vec!["Hello world".to_string(), "Testing".to_string()];
     let result = adapter
         .translate_batch(LlmTranslationRequest {
@@ -999,7 +999,7 @@ async fn test_desktop_llm_adapter_translate_batch_same_language_identity() {
 async fn test_desktop_llm_adapter_translate_batch_extracts_model_languages() {
     use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
 
-    let adapter = DesktopLlmAdapter::new(None);
+    let adapter = DesktopLlmAdapter::new(None, None);
     let texts = vec!["Hello world".to_string()];
     let result = adapter
         .translate_batch(LlmTranslationRequest {
