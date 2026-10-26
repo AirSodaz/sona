@@ -481,7 +481,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                   const parsed = Number(e.target.value);
                   if (!Number.isNaN(parsed)) {
                     updateConfig({
-                      captionTranslationFontSize: Math.max(12, Math.min(72, parsed)),
+                      captionTranslationFontSize: Math.max(12, Math.min(48, parsed)),
                     });
                   }
                 }}

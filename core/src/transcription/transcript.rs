@@ -483,7 +483,7 @@ where
                 timestamps: current_timestamps,
                 durations: current_durations,
                 translation: segment.translation.clone(),
-                draft_translation: segment.draft_translation.clone(),
+                draft_translation: None,
                 speaker: segment.speaker.clone(),
                 speaker_attribution: segment.speaker_attribution.clone(),
             };
@@ -555,7 +555,7 @@ where
             timestamps: current_timestamps,
             durations: current_durations,
             translation: segment.translation.clone(),
-            draft_translation: segment.draft_translation.clone(),
+            draft_translation: None,
             speaker: segment.speaker.clone(),
             speaker_attribution: segment.speaker_attribution.clone(),
         };

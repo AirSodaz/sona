@@ -560,3 +560,64 @@ async fn test_mixed_update_invalidates_stale_partial() {
         "seg-2 must not be reverted to stale partial 'Hello'"
     );
 }
+#[tokio::test]
+async fn test_cjk_char_delta_one_allows_translation_after_debounce() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "zh",
+        "en",
+    )
+    .with_debounce(50, 3);
+
+    // Initial partial: "我"
+    let mut update1 = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-cjk", "我", false)],
+    };
+    coordinator.enrich_update(&mut update1).await;
+    assert_eq!(engine.call_count(), 1);
+
+    // Wait for debounce interval to pass
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    // Emit second partial with 1 CJK char added: "我看" (char_delta = 1 < min_char_delta 3)
+    let mut update2 = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-cjk", "我看", false)],
+    };
+    coordinator.enrich_update(&mut update2).await;
+    // Because CJK threshold is 1, it should translate!
+    assert_eq!(engine.call_count(), 2);
+}
+
+#[tokio::test]
+async fn test_word_correction_zero_char_delta_translates_after_debounce() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "en",
+        "zh",
+    )
+    .with_debounce(50, 3);
+
+    // Initial partial: "cat"
+    let mut update1 = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-correction", "cat", false)],
+    };
+    coordinator.enrich_update(&mut update1).await;
+    assert_eq!(engine.call_count(), 1);
+
+    // Wait for debounce interval to pass
+    tokio::time::sleep(Duration::from_millis(60)).await;
+
+    // Emit word correction: "dog" (same length 3, char_delta = 0)
+    let mut update2 = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-correction", "dog", false)],
+    };
+    coordinator.enrich_update(&mut update2).await;
+    // Word correction with char_delta == 0 should translate after debounce!
+    assert_eq!(engine.call_count(), 2);
+}

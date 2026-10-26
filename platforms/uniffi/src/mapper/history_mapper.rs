@@ -859,7 +859,7 @@ fn history_transcript_segment_from_ffi(
         timestamps: value.timestamps,
         durations: value.durations,
         translation: value.translation,
-        draft_translation: None,
+        draft_translation: value.draft_translation,
         speaker: value.speaker.map(history_speaker_from_ffi),
         speaker_attribution: value
             .speaker_attribution

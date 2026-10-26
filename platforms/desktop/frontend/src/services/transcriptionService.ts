@@ -323,13 +323,24 @@ export class TranscriptionService {
       return;
     }
     if (this.transport === 'external') {
-      await this.lifecycle.stopExternal();
-      await this.lifecycle.startExternal(
-        config,
-        (error) => this.onError?.(error),
-        this.externalGain
-      );
-      this.runningConfig = config;
+      try {
+        await this.lifecycle.stopExternal();
+        await this.lifecycle.startExternal(
+          config,
+          (error) => this.onError?.(error),
+          this.externalGain
+        );
+        this.runningConfig = config;
+      } catch (error) {
+        this.lifecycle.markStopped();
+        this.runningConfig = null;
+        this.transport = 'idle';
+        logger.warn(
+          `[TranscriptionService] Failed to restart external stream for ${this.instanceId}:`,
+          error
+        );
+        throw error;
+      }
     }
   }
 

@@ -1025,8 +1025,21 @@ impl CoordinatorInner {
                     .collect()
             };
 
+            let delay = translator.debounce_delay(&event.update);
             let this = Arc::clone(self);
             tokio::spawn(async move {
+                if !delay.is_zero() {
+                    tokio::time::sleep(delay).await;
+                    let is_stale = {
+                        let versions = this.partial_versions.lock();
+                        segment_versions
+                            .iter()
+                            .any(|(id, v)| versions.get(id) != Some(v))
+                    };
+                    if is_stale {
+                        return;
+                    }
+                }
                 translator.enrich_update(&mut event.update).await;
                 let is_stale = {
                     let versions = this.partial_versions.lock();

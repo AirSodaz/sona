@@ -85,6 +85,12 @@ impl SentencePieceTokenizer {
         let vocab: HashMap<String, u32> = serde_json::from_str(&content)
             .map_err(|e| format!("Failed to parse vocab JSON {}: {e}", path.display()))?;
         self.set_vocab(vocab);
+        if self.vocab_to_id.is_none() {
+            return Err(format!(
+                "Vocabulary in {} exceeds MAX_SUPPORTED_VOCAB_ID",
+                path.display()
+            ));
+        }
         Ok(())
     }
 
@@ -155,21 +161,21 @@ impl SentencePieceTokenizer {
         let mut best_score = vec![f32::NEG_INFINITY; n + 1];
         let mut best_prev = vec![(0usize, spm_unk_id); n + 1];
         best_score[0] = 0.0;
+        let effective_max_l = if self.max_piece_len > 0 {
+            self.max_piece_len
+        } else {
+            self.piece_to_id
+                .keys()
+                .map(|k| k.chars().count())
+                .max()
+                .unwrap_or(1)
+        };
 
         for i in 0..n {
             if best_score[i] == f32::NEG_INFINITY {
                 continue;
             }
 
-            let effective_max_l = if self.max_piece_len > 0 {
-                self.max_piece_len
-            } else {
-                self.piece_to_id
-                    .keys()
-                    .map(|k| k.chars().count())
-                    .max()
-                    .unwrap_or(1)
-            };
             let max_l = effective_max_l.min(n - i);
             for len in 1..=max_l {
                 let sub: String = chars[i..i + len].iter().collect();

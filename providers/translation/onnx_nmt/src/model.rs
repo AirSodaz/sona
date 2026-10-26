@@ -345,7 +345,7 @@ impl OnnxNmtModel {
             all_candidates.truncate(beam_size);
             active_beams = all_candidates;
 
-            if !completed_hypotheses.is_empty() {
+            if completed_hypotheses.len() >= beam_size {
                 let best_completed_score = completed_hypotheses
                     .iter()
                     .map(|c| c.1)
@@ -353,9 +353,7 @@ impl OnnxNmtModel {
                 let active_len = active_beams[0].tokens.len().saturating_sub(1).max(1);
                 let active_penalty = ((5.0 + active_len as f32) / 6.0).powf(1.0);
                 let best_active_potential = active_beams[0].score / active_penalty;
-                if completed_hypotheses.len() >= beam_size
-                    || best_completed_score >= best_active_potential
-                {
+                if best_completed_score >= best_active_potential {
                     break;
                 }
             }

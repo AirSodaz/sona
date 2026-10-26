@@ -85,6 +85,51 @@ describe('VoiceTypingSessionMachine', () => {
     );
   });
 
+  it('does not reuse stream translation if stream target language does not match target language', async () => {
+    const mismatchMachine = new VoiceTypingSessionMachine({
+      transcriptionService: mockTranscriptionService,
+      overlayPresenter: mockOverlayPresenter,
+      resolveOverlayPosition: vi.fn().mockResolvedValue([100, 100]),
+      resolveOverlayPositionAfterCommit: vi.fn().mockResolvedValue([100, 100]),
+      ensureMicrophoneStarted: vi.fn().mockResolvedValue(undefined),
+      resolveMicrophoneGain: () => 1.0,
+      injectText: mockInjectText,
+      translateText: mockTranslateText,
+      getTargetLanguage: () => 'zh',
+      getStreamTargetLanguage: () => 'ja',
+      onTextCommitted: mockOnTextCommitted,
+      getProcessingMode: () => 'raw',
+      isSoundEnabled: () => false,
+      isCjkSpacingEnabled: () => false,
+    });
+
+    await mismatchMachine.start({ isTranslate: true });
+
+    const segment: TranscriptSegment = {
+      id: 'seg-mismatch',
+      text: 'Hello world',
+      start: 0,
+      end: 1,
+      isFinal: true,
+      translation: 'こんにちは世界',
+      draftTranslation: undefined,
+    };
+
+    (mismatchMachine as any).enqueueSegmentUpdate('voice-typing-1', 1, {
+      removeIds: [],
+      upsertSegments: [segment],
+    });
+
+    await (mismatchMachine as any).segmentProcessingChain;
+
+    await mismatchMachine.stop();
+
+    // Must NOT inject the Japanese stream translation ('こんにちは世界')
+    expect(mockInjectText).not.toHaveBeenCalledWith('こんにちは世界');
+    // Must call translateText for targetLanguage 'zh'
+    expect(mockTranslateText).toHaveBeenCalledWith('Hello world', 'zh', expect.any(Function));
+  });
+
   it('falls back to translateText if stream translation was missing', async () => {
     await machine.start({ isTranslate: true });
 

@@ -67,7 +67,7 @@ pub async fn start_external_live_transcription(
         let _ = services.asr.live_coordinator().release(&consumer_id).await;
     }
     configure_realtime_translation(&services, &app);
-    services
+    let acquire_res = services
         .asr
         .live_coordinator()
         .acquire(
@@ -78,7 +78,12 @@ pub async fn start_external_live_transcription(
             asr_request,
             observer,
         )
-        .await
+        .await;
+    if acquire_res.is_err() && !services.asr.live_coordinator().is_active().await {
+        services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
+    }
+    acquire_res
 }
 
 #[tauri::command(async)]
@@ -343,15 +348,13 @@ pub async fn pause_native_live_transcription(
             session.coordinator_released = true;
         }
     }
-    if !services.asr.live_coordinator().is_active().await {
-        services.asr.live_coordinator().set_translation(None);
-        services.translation_pool.unload_all();
-    }
+
     res
 }
 #[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn resume_native_live_transcription(
+    app: tauri::AppHandle,
     services: State<'_, DesktopServices>,
     consumer_id: String,
     source_kind: String,
@@ -369,6 +372,7 @@ pub async fn resume_native_live_transcription(
         services.emitter.clone(),
         services.asr.metrics_store(),
     )) as Arc<dyn AsrRuntimeObserver>;
+    configure_realtime_translation(&services, &app);
     match services
         .asr
         .live_coordinator()
@@ -468,6 +472,7 @@ pub async fn stop_native_live_transcription(
     };
     if !services.asr.live_coordinator().is_active().await {
         services.asr.live_coordinator().set_translation(None);
+        services.translation_pool.unload_all();
     }
     {
         let mut guard = services.recording_session.lock().await;

@@ -39,6 +39,7 @@ fn segment() -> FfiTranscriptSegment {
         timestamps: Some(vec![0.0, 0.5]),
         durations: Some(vec![0.5, 0.5]),
         translation: Some("Hola".to_string()),
+        draft_translation: None,
         speaker: Some(FfiSpeakerTag {
             id: "speaker-1".to_string(),
             label: "Speaker 1".to_string(),

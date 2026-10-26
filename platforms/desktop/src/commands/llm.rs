@@ -115,14 +115,17 @@ pub async fn import_local_llm_file(app: AppHandle, source_path: String) -> Resul
     .map_err(|e| format!("Model import task failed: {e}"))?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub async fn list_local_nmt_cards(
     app: AppHandle,
 ) -> Result<sona_core::llm::local_models::LocalLlmCardsResponse, String> {
     let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)?;
-    Ok(sona_core::llm::local_models::discover_local_nmt_cards(
-        &models_dir,
-    ))
+    crate::platform::blocking::spawn_blocking_map(move || {
+        Ok::<_, String>(sona_core::llm::local_models::discover_local_nmt_cards(
+            &models_dir,
+        ))
+    })
+    .await
 }
 
 #[tauri::command(async)]

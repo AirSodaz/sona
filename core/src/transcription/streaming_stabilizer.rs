@@ -5,6 +5,8 @@ pub fn is_cjk_char(c: char) -> bool {
         '\u{4E00}'..='\u{9FFF}' | // CJK Unified Ideographs
         '\u{3400}'..='\u{4DBF}' | // CJK Extension A
         '\u{F900}'..='\u{FAFF}' | // CJK Compatibility Ideographs
+        '\u{20000}'..='\u{2FA1F}' | // CJK Extension B/C/D/E/F & Compatibility Supplement
+        '\u{30000}'..='\u{323AF}' | // CJK Extension G/H/I
         '\u{3040}'..='\u{309F}' | // Hiragana
         '\u{30A0}'..='\u{30FF}'   // Katakana
     )
@@ -25,7 +27,8 @@ pub fn is_boundary_char(c: char) -> bool {
         || c.is_ascii_punctuation()
         || matches!(
             c,
-            '\u{2000}'..='\u{206F}' | '\u{00AB}' | '\u{00BB}' | '\u{00BF}' | '\u{00A1}'
+            '\u{2000}'
+                ..='\u{206F}' | '\u{00AB}' | '\u{00BB}' | '\u{00BF}' | '\u{00A1}' | '\u{00B7}'
         )
         || is_cjk_char(c)
         || is_cjk_punctuation(c)

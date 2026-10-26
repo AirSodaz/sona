@@ -1,7 +1,14 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLlmSettings } from '../../../services/llm/state';
-import { completeLlm, listLocalLlmCards, listLocalNmtCards } from '../../../services/tauri/llm';
+import {
+  completeLlm,
+  importLocalLlmFile,
+  listLocalLlmCards,
+  listLocalNmtCards,
+  testLocalNmtModel,
+} from '../../../services/tauri/llm';
+import { openDialog } from '../../../services/tauri/platform/dialog';
 import { useModelDownloadStore } from '../../../stores/modelDownloadStore';
 import type { LlmAssistantConfig } from '../../../types/config';
 import type { LlmCompletionResponse } from '../../../types/llm';
@@ -120,6 +127,109 @@ describe('LocalProviderAccordionItem', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useModelDownloadStore.setState({ downloads: {} });
+  });
+  it('renders import GGUF and refresh buttons with project unified data-tooltip instead of title', () => {
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    expect(importBtn).toBeTruthy();
+    expect(importBtn.getAttribute('data-tooltip')).toBe('导入本地已有的 GGUF 格式模型文件');
+    expect(importBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(importBtn.getAttribute('title')).toBeNull();
+
+    const refreshBtn = screen.getByRole('button', { name: /刷新/i });
+    expect(refreshBtn).toBeTruthy();
+    expect(refreshBtn.getAttribute('data-tooltip')).toBe('刷新');
+    expect(refreshBtn.getAttribute('data-tooltip-pos')).toBe('top');
+    expect(refreshBtn.getAttribute('title')).toBeNull();
+  });
+
+  it('calls openDialog and importLocalLlmFile when importing custom GGUF', async () => {
+    vi.mocked(openDialog).mockResolvedValue('/downloads/custom-model.gguf');
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    fireEvent.click(importBtn);
+
+    await vi.waitFor(() => {
+      expect(openDialog).toHaveBeenCalled();
+      expect(importLocalLlmFile).toHaveBeenCalledWith('/downloads/custom-model.gguf');
+      expect(listLocalLlmCards).toHaveBeenCalled();
+    });
+  });
+
+  it('triggers NMT connection test with testLocalNmtModel and displays speed badge', async () => {
+    const mockNmtCard = {
+      ...mockInstalledCard,
+      id: 'opus-mt-en-zh',
+      name: 'Opus-MT (EN -> ZH)',
+      backend: 'onnx-nmt',
+      capabilities: ['translate'],
+    };
+
+    vi.mocked(listLocalNmtCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockNmtCard],
+    });
+    let currentTime = 1000;
+    const perfNowSpy = vi.spyOn(performance, 'now').mockImplementation(() => currentTime);
+
+    vi.mocked(testLocalNmtModel).mockImplementationOnce(async () => {
+      currentTime = 2000; // 1 second elapsed
+      return '你好，世界！';
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    const nmtTab = screen.getByRole('tab', { name: /翻译模型 \(NMT\)/i });
+    fireEvent.click(nmtTab);
+
+    await vi.waitFor(() => {
+      const btn = screen.getByRole('button', {
+        name: /测试连接 Opus-MT \(EN -> ZH\)/i,
+      }) as HTMLButtonElement;
+      expect(btn.disabled).toBe(false);
+    });
+
+    const testBtn = screen.getByRole('button', {
+      name: /测试连接 Opus-MT \(EN -> ZH\)/i,
+    });
+    await act(async () => {
+      fireEvent.click(testBtn);
+    });
+
+    await vi.waitFor(() => {
+      expect(testLocalNmtModel).toHaveBeenCalledWith('opus-mt-en-zh', 'Hello, world!');
+      const speedBadge = screen.getByTestId('local-model-speed-opus-mt-en-zh');
+      expect(speedBadge.textContent).toBe('6 t/s');
+    });
+
+    perfNowSpy.mockRestore();
   });
 
   it('renders LLM and NMT subtabs and toggles between them', async () => {

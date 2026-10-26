@@ -69,6 +69,7 @@ pub struct FfiTranscriptSegment {
     pub timestamps: Option<Vec<f32>>,
     pub durations: Option<Vec<f32>>,
     pub translation: Option<String>,
+    pub draft_translation: Option<String>,
     pub speaker: Option<FfiSpeakerTag>,
     pub speaker_attribution: Option<FfiSpeakerAttribution>,
 }
@@ -206,6 +207,7 @@ pub(crate) fn transcript_segment_to_ffi(segment: &TranscriptSegment) -> FfiTrans
         timestamps: segment.timestamps.clone(),
         durations: segment.durations.clone(),
         translation: segment.translation.clone(),
+        draft_translation: segment.draft_translation.clone(),
         speaker: segment.speaker.as_ref().map(speaker_tag_to_ffi),
         speaker_attribution: segment
             .speaker_attribution

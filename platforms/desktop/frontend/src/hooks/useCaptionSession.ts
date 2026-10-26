@@ -28,6 +28,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
       logger.warn('[CaptionSession] Error stopping session:', error);
     } finally {
       setIsInitializing(false);
+      previousConfigRef.current = null;
     }
   }, []);
 
@@ -44,6 +45,20 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
 
       try {
         setIsInitializing(true);
+        previousConfigRef.current = JSON.stringify([
+          config.streamingModelPath,
+          config.asr,
+          config.language,
+          config.enableITN,
+          config.livePunctuationModelPath,
+          config.liveVadModelPath,
+          config.liveVadBufferSize,
+          config.realtimeTranslationEnabled,
+          config.realtimeTranslationSourceLanguage,
+          config.realtimeTranslationTargetLanguage,
+          config.realtimeTranslationEngine,
+          config.realtimeTranslationModelId,
+        ]);
         await captionSessionRuntime.start(
           config,
           () => activeRef.current,
@@ -85,10 +100,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
       config.realtimeTranslationEnabled,
       config.realtimeTranslationSourceLanguage,
       config.realtimeTranslationTargetLanguage,
+      config.realtimeTranslationEngine,
+      config.realtimeTranslationModelId,
     ]);
 
     if (!isCaptionMode || isInitializing || !captionSessionRuntime.isRunning()) {
-      previousConfigRef.current = currentConfigKey;
       return;
     }
 
@@ -123,10 +139,11 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.realtimeTranslationEnabled,
     config.realtimeTranslationSourceLanguage,
     config.realtimeTranslationTargetLanguage,
+    config.realtimeTranslationEngine,
+    config.realtimeTranslationModelId,
     isCaptionMode,
     isInitializing,
   ]);
-
   useEffect(() => {
     if (!isCaptionMode || isInitializing) {
       return;

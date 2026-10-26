@@ -1310,10 +1310,13 @@ export function SettingsSubtitleTab({
                   onChange={(e) => {
                     const parsed = Number(e.target.value);
                     if (!Number.isNaN(parsed)) {
-                      updateConfig({
-                        captionTranslationFontSize: Math.max(12, Math.min(72, parsed)),
-                      });
+                      updateConfig({ captionTranslationFontSize: parsed });
                     }
+                  }}
+                  onBlur={(e) => {
+                    const parsed = Number(e.target.value);
+                    const clamped = Number.isNaN(parsed) ? 18 : Math.max(12, Math.min(72, parsed));
+                    updateConfig({ captionTranslationFontSize: clamped });
                   }}
                   className="settings-input"
                   style={{ width: '100px', textAlign: 'center' }}

@@ -183,29 +183,6 @@ impl LlmTranslationPort for DesktopLlmAdapter {
                 (None, None)
             };
 
-            let src_lang = request
-                .source_language
-                .as_deref()
-                .filter(|s| {
-                    let trimmed = s.trim();
-                    !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("auto")
-                })
-                .map(|s| s.to_string())
-                .or_else(|| {
-                    let detected = detect_source_language(&request.texts).to_string();
-                    let norm_detected =
-                        crate::integrations::translation::normalize_language_code(&detected);
-                    let norm_target = crate::integrations::translation::normalize_language_code(
-                        &request.target_language,
-                    );
-                    if norm_detected.eq_ignore_ascii_case(norm_target) && model_src.is_some() {
-                        model_src.clone()
-                    } else {
-                        Some(detected)
-                    }
-                })
-                .or(model_src)
-                .unwrap_or_else(|| "en".to_string());
             let tgt_lang = if !request.target_language.trim().is_empty() {
                 request.target_language.clone()
             } else if let Some(mt) = model_tgt {
@@ -213,10 +190,25 @@ impl LlmTranslationPort for DesktopLlmAdapter {
             } else {
                 request.target_language.clone()
             };
-
-            let norm_src = crate::integrations::translation::normalize_language_code(&src_lang);
             let norm_tgt = crate::integrations::translation::normalize_language_code(&tgt_lang);
 
+            let src_lang = if let Some(source_language) =
+                request.source_language.as_deref().filter(|s| {
+                    let trimmed = s.trim();
+                    !trimmed.is_empty() && !trimmed.eq_ignore_ascii_case("auto")
+                }) {
+                source_language.to_string()
+            } else {
+                let detected = detect_source_language(&request.texts);
+                let norm_detected =
+                    crate::integrations::translation::normalize_language_code(detected);
+                if norm_detected.eq_ignore_ascii_case(norm_tgt) {
+                    return Ok(request.texts);
+                }
+                detected.to_string()
+            };
+
+            let norm_src = crate::integrations::translation::normalize_language_code(&src_lang);
             if norm_src.eq_ignore_ascii_case(norm_tgt) {
                 return Ok(request.texts);
             }

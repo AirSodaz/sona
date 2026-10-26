@@ -1,7 +1,7 @@
-use parking_lot::RwLock;
+use parking_lot::{Condvar, Mutex, RwLock, RwLockUpgradableReadGuard};
 use sona_core::ports::translation::TranslationPortError;
 use sona_translation_onnx::OnnxNmtAdapter;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::Path;
 use std::sync::Arc;
 
@@ -39,8 +39,23 @@ struct TranslationModelCacheInner {
 
 type TranslationModelCache = Arc<RwLock<TranslationModelCacheInner>>;
 
+struct InFlightGuard<'a> {
+    loading: &'a (Mutex<HashSet<(String, String)>>, Condvar),
+    key: (String, String),
+}
+
+impl<'a> Drop for InFlightGuard<'a> {
+    fn drop(&mut self) {
+        let (lock, cvar) = self.loading;
+        let mut in_flight = lock.lock();
+        in_flight.remove(&self.key);
+        cvar.notify_all();
+    }
+}
+
 pub struct TranslationModelPool {
     cache: TranslationModelCache,
+    loading: Arc<(Mutex<HashSet<(String, String)>>, Condvar)>,
 }
 
 impl Default for TranslationModelPool {
@@ -56,6 +71,7 @@ impl TranslationModelPool {
                 models: HashMap::new(),
                 order: Vec::new(),
             })),
+            loading: Arc::new((Mutex::new(HashSet::new()), Condvar::new())),
         }
     }
 
@@ -70,13 +86,52 @@ impl TranslationModelPool {
 
         let key = (src.to_string(), tgt.to_string());
 
-        // Fast path: read lock
+        // Fast path: upgradable read lock
         {
-            let cache = self.cache.read();
+            let cache = self.cache.upgradable_read();
             if let Some(adapter) = cache.models.get(&key) {
-                return Ok(Arc::clone(adapter));
+                let adapter = Arc::clone(adapter);
+                if cache.order.first() != Some(&key) {
+                    let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+                    if let Some(pos) = cache.order.iter().position(|k| k == &key) {
+                        let k = cache.order.remove(pos);
+                        cache.order.insert(0, k);
+                    }
+                }
+                return Ok(adapter);
             }
         }
+
+        // Single-flight synchronization for model loading
+        let (lock, cvar) = &*self.loading;
+        let mut in_flight = lock.lock();
+        loop {
+            {
+                let cache = self.cache.upgradable_read();
+                if let Some(adapter) = cache.models.get(&key) {
+                    let adapter = Arc::clone(adapter);
+                    if cache.order.first() != Some(&key) {
+                        let mut cache = RwLockUpgradableReadGuard::upgrade(cache);
+                        if let Some(pos) = cache.order.iter().position(|k| k == &key) {
+                            let k = cache.order.remove(pos);
+                            cache.order.insert(0, k);
+                        }
+                    }
+                    return Ok(adapter);
+                }
+            }
+
+            if in_flight.insert(key.clone()) {
+                break;
+            }
+            cvar.wait(&mut in_flight);
+        }
+        drop(in_flight);
+
+        let _guard = InFlightGuard {
+            loading: &self.loading,
+            key: key.clone(),
+        };
 
         let model_id = format!("opus-mt-{src}-{tgt}");
         let Some(preset) = sona_core::models::preset_models::find_preset_model(&model_id) else {
@@ -199,6 +254,7 @@ fn try_download_vocab(url: &str, target_path: &Path, expected_sha256: &str) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sona_core::ports::translation::TranslationEnginePort;
 
     #[test]
     fn test_normalize_language_code() {
@@ -261,5 +317,34 @@ mod tests {
         let cache = pool.cache.read();
         assert!(cache.models.is_empty());
         assert!(cache.order.is_empty());
+    }
+
+    #[test]
+    fn test_pool_lru_promotion_on_read_hit() {
+        let pool = TranslationModelPool::new();
+        let key1 = ("en".to_string(), "zh".to_string());
+        let key2 = ("zh".to_string(), "en".to_string());
+        {
+            let mut cache = pool.cache.write();
+            cache
+                .models
+                .insert(key1.clone(), Arc::new(OnnxNmtAdapter::new(None, 1)));
+            cache
+                .models
+                .insert(key2.clone(), Arc::new(OnnxNmtAdapter::new(None, 1)));
+            cache.order.push(key1.clone());
+            cache.order.push(key2.clone());
+        }
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let adapter = pool.get_or_load("zh", "en", temp_dir.path()).unwrap();
+        assert_eq!(
+            adapter.engine_kind(),
+            sona_core::ports::translation::TranslationEngineKind::OnnxNmt
+        );
+
+        let cache = pool.cache.read();
+        assert_eq!(cache.order.first(), Some(&key2));
+        assert_eq!(cache.order.get(1), Some(&key1));
     }
 }

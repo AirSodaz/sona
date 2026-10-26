@@ -2,7 +2,7 @@
 
 use parking_lot::Mutex;
 use sona_core::ports::translation::TranslationEnginePort;
-use sona_core::transcription::streaming_stabilizer::StreamingStabilizer;
+use sona_core::transcription::streaming_stabilizer::{StreamingStabilizer, is_cjk_char};
 use sona_core::transcription::transcript::TranscriptUpdate;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -53,6 +53,25 @@ impl StreamingTranslationCoordinator {
 
     pub fn target_lang(&self) -> &str {
         &self.target_lang
+    }
+    pub fn debounce_ms(&self) -> u64 {
+        self.debounce_ms
+    }
+
+    pub fn debounce_delay(&self, update: &TranscriptUpdate) -> Duration {
+        let states = self.states.lock();
+        let debounce = Duration::from_millis(self.debounce_ms);
+        let mut max_remaining = Duration::ZERO;
+        for segment in &update.upsert_segments {
+            if let Some(state) = states.get(&segment.id) {
+                let elapsed = state.last_translate_time.elapsed();
+                let remaining = debounce.saturating_sub(elapsed);
+                if remaining > max_remaining {
+                    max_remaining = remaining;
+                }
+            }
+        }
+        max_remaining
     }
 
     pub fn clear(&self) {
@@ -131,13 +150,15 @@ impl StreamingTranslationCoordinator {
                         if text == state.last_text {
                             false
                         } else {
+                            let is_cjk = text.chars().any(is_cjk_char);
+                            let min_delta = if is_cjk { 1 } else { self.min_char_delta };
                             let char_delta = text
                                 .chars()
                                 .count()
                                 .abs_diff(state.last_text.chars().count());
                             let elapsed = state.last_translate_time.elapsed();
-                            let eligible = char_delta >= self.min_char_delta
-                                && elapsed >= Duration::from_millis(self.debounce_ms);
+                            let eligible = elapsed >= Duration::from_millis(self.debounce_ms)
+                                && (char_delta >= min_delta || char_delta == 0);
                             if eligible {
                                 state.last_text = text.to_string();
                                 state.last_translate_time = Instant::now();
@@ -170,11 +191,19 @@ impl StreamingTranslationCoordinator {
                         Ok(translated_text) => {
                             let mut states = self.states.lock();
                             if let Some(entry) = states.get_mut(&segment.id) {
-                                let out = entry.stabilizer.update(&translated_text, false);
-                                entry.last_draft_translation = out.draft_tail.clone();
-                                entry.last_translate_time = Instant::now();
-                                segment.translation = out.frozen_prefix;
-                                segment.draft_translation = out.draft_tail;
+                                if entry.last_text == text {
+                                    let out = entry.stabilizer.update(&translated_text, false);
+                                    entry.last_draft_translation = out.draft_tail.clone();
+                                    entry.last_translate_time = Instant::now();
+                                    segment.translation = out.frozen_prefix;
+                                    segment.draft_translation = out.draft_tail;
+                                } else {
+                                    segment.translation =
+                                        Some(entry.stabilizer.frozen_prefix().to_string())
+                                            .filter(|s| !s.is_empty());
+                                    segment.draft_translation =
+                                        entry.last_draft_translation.clone();
+                                }
                             }
                         }
                         Err(err) => {

@@ -63,6 +63,7 @@ interface VoiceTypingSessionMachineOptions {
     onError?: (error: unknown) => void
   ) => Promise<string>;
   getTargetLanguage?: () => string;
+  getStreamTargetLanguage?: () => string | undefined;
   onTransformFailed?: (entry: { originalText: string; instruction: string }) => void;
   onPolishFailed?: (entry: { originalText: string }) => void;
   getFocusedSelectionText?: () => Promise<string | null>;
@@ -436,10 +437,14 @@ export class VoiceTypingSessionMachine {
         }
 
         // 2. Translate step: reuse stream translation only when non-polish and single segment
+        const targetLanguage = this.options.getTargetLanguage?.() || 'en';
+        const streamTargetLanguage = this.options.getStreamTargetLanguage?.() ?? targetLanguage;
+        // 2. Translate step: reuse stream translation only when non-polish, single segment, and matching target language
         const canReuseStreamTranslation =
           mode !== 'polish' &&
           this.accumulatedPolishText.length === 1 &&
-          this.currentSegmentId === null;
+          this.currentSegmentId === null &&
+          streamTargetLanguage.toLowerCase() === targetLanguage.toLowerCase();
         let translatedText = canReuseStreamTranslation
           ? this.latestStreamTranslation?.trim()
           : undefined;
@@ -718,6 +723,9 @@ export class VoiceTypingSessionMachine {
 
     const mode = this.options.getProcessingMode?.() || 'raw';
     if (this.isTranslateSession) {
+      if (this.currentSegmentId !== segment.id && !segment.isFinal) {
+        this.latestStreamTranslation = null;
+      }
       if (segment.isFinal) {
         this.latestStreamTranslation = segment.translation ?? null;
         this.latestStreamDraftTranslation = null;

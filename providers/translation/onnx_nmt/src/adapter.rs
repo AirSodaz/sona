@@ -62,9 +62,22 @@ impl TranslationEnginePort for OnnxNmtAdapter {
     async fn translate(
         &self,
         text: &str,
-        _source_lang: &str,
-        _target_lang: &str,
+        source_lang: &str,
+        target_lang: &str,
     ) -> Result<String, TranslationPortError> {
+        let src = source_lang.trim();
+        let tgt = target_lang.trim();
+        if src.is_empty() || tgt.is_empty() {
+            return Err(TranslationPortError::invalid_language(
+                "Source and target languages cannot be empty",
+            ));
+        }
+
+        let trimmed = text.trim();
+        if trimmed.is_empty() || src.eq_ignore_ascii_case(tgt) {
+            return Ok(trimmed.to_string());
+        }
+
         let text = text.to_string();
         let model_arc = Arc::clone(&self.model);
         let model_dir = self.model_dir.clone();

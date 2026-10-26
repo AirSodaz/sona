@@ -338,6 +338,16 @@ export function FeatureCard({
     if (provider === 'google_translate' || provider === 'google_translate_free') {
       return false;
     }
+    if (provider === 'local' && featureId === 'translation') {
+      const trimmed = model.trim();
+      if (
+        trimmed === 'auto' ||
+        trimmed === AUTO_NMT_LABEL ||
+        trimmed.toLowerCase().startsWith('opus-mt-')
+      ) {
+        return false;
+      }
+    }
     const normalizedModel = model.toLowerCase();
     const core = (normalizedModel.split('/').pop() || normalizedModel).replace(/\./g, '-');
     return !(

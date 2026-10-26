@@ -110,3 +110,19 @@ fn test_korean_word_boundary_and_unicode_punctuation() {
     let lcp_guillemet = calculate_longest_common_prefix("«bonjour", "«bonjour tout le monde");
     assert_eq!(lcp_guillemet, "«bonjour");
 }
+
+#[test]
+fn test_plane_2_cjk_and_middle_dot_boundary() {
+    use sona_core::transcription::streaming_stabilizer::{is_boundary_char, is_cjk_char};
+
+    assert!(is_cjk_char('\u{20000}'));
+    assert!(is_cjk_char('\u{2A6DF}'));
+    assert!(is_cjk_char('\u{30000}'));
+    assert!(is_cjk_char('\u{323AF}'));
+
+    assert!(is_boundary_char('·'));
+    assert!(is_boundary_char('\u{00B7}'));
+
+    let lcp = calculate_longest_common_prefix("迈克尔·杰克", "迈克尔·杰克逊");
+    assert_eq!(lcp, "迈克尔·杰克");
+}

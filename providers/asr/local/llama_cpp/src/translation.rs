@@ -73,9 +73,10 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
             source: None,
         };
 
+        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
         let response = match tokio::time::timeout(
             std::time::Duration::from_secs(30),
-            self.engine.complete(request),
+            self.engine.execute_completion_internal(request, Some(tx)),
         )
         .await
         {
@@ -94,12 +95,23 @@ impl TranslationEnginePort for LlamaCppTranslationAdapter {
                 ));
             }
         };
-        Ok(response.text.trim().to_string())
+        Ok(strip_translation_tags(&response.text))
     }
 
     fn engine_kind(&self) -> TranslationEngineKind {
         TranslationEngineKind::LlamaCpp
     }
+}
+
+fn strip_translation_tags(text: &str) -> String {
+    let mut result = text.trim().to_string();
+    if let Some(idx) = result.find("<translation>") {
+        result = result[idx + "<translation>".len()..].to_string();
+    }
+    if let Some(idx) = result.rfind("</translation>") {
+        result = result[..idx].to_string();
+    }
+    result.trim().to_string()
 }
 #[cfg(test)]
 mod tests {
@@ -135,5 +147,21 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(res3, "Hello world");
+    }
+
+    #[test]
+    fn test_strip_translation_tags() {
+        assert_eq!(
+            strip_translation_tags("<translation>Hello world</translation>"),
+            "Hello world"
+        );
+        assert_eq!(
+            strip_translation_tags("  <translation>\n你好世界\n</translation>  "),
+            "你好世界"
+        );
+        assert_eq!(
+            strip_translation_tags("Plain text without tags"),
+            "Plain text without tags"
+        );
     }
 }
