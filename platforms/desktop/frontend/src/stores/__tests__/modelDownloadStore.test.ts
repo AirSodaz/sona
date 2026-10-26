@@ -351,4 +351,35 @@ describe('modelDownloadStore', () => {
     cleanupModelDownloadListener();
     expect(unlisten2).toHaveBeenCalled();
   });
+
+  it('accepts statusText in updateProgress and resets it on terminal states', () => {
+    useModelDownloadStore.getState().startDownload({
+      modelId: 'model-status-test',
+      modelName: 'Status Test Model',
+      downloadId: 'dl-status-1',
+    });
+
+    useModelDownloadStore.getState().updateProgress('dl-status-1', {
+      progress: 45,
+      statusText: 'Extracting model files...',
+    });
+
+    let item = useModelDownloadStore.getState().downloads['model-status-test'];
+    expect(item.progress).toBe(45);
+    expect(item.statusText).toBe('Extracting model files...');
+
+    // Progress update without statusText retains prior statusText
+    useModelDownloadStore.getState().updateProgress('dl-status-1', {
+      progress: 50,
+    });
+    item = useModelDownloadStore.getState().downloads['model-status-test'];
+    expect(item.progress).toBe(50);
+    expect(item.statusText).toBe('Extracting model files...');
+
+    // Completing download clears statusText
+    useModelDownloadStore.getState().completeDownload('model-status-test', 'dl-status-1');
+    item = useModelDownloadStore.getState().downloads['model-status-test'];
+    expect(item.status).toBe('completed');
+    expect(item.statusText).toBeUndefined();
+  });
 });

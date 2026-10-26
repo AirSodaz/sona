@@ -17,6 +17,7 @@ export interface ModelDownloadItem {
   downloadedBytes?: number;
   totalBytes?: number;
   speed?: string;
+  statusText?: string;
   error?: string;
   timestamp: number;
   downloadId: string;
@@ -43,6 +44,7 @@ interface ModelDownloadState {
       downloadedBytes?: number;
       totalBytes?: number;
       speed?: string;
+      statusText?: string;
     }
   ) => void;
   completeDownload: (modelId: string, downloadId?: string) => void;
@@ -172,7 +174,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
     }));
   },
 
-  updateProgress: (identifier, { progress, downloadedBytes, totalBytes, speed }) => {
+  updateProgress: (identifier, { progress, downloadedBytes, totalBytes, speed, statusText }) => {
     set((state) => {
       let targetModelId: string | null = null;
       for (const [mid, item] of Object.entries(state.downloads)) {
@@ -199,6 +201,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             downloadedBytes: downloadedBytes ?? current.downloadedBytes,
             totalBytes: totalBytes ?? current.totalBytes,
             speed: speed ?? current.speed,
+            statusText: statusText ?? current.statusText,
           },
         },
       };
@@ -225,6 +228,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             status: 'completed',
             progress: 100,
             speed: undefined,
+            statusText: undefined,
             onCancel: undefined,
             onRetry: undefined,
             timestamp: Date.now(),
@@ -254,6 +258,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
             status: 'failed',
             error: error ?? current.error,
             speed: undefined,
+            statusText: undefined,
             onCancel: undefined,
             timestamp: Date.now(),
           },
@@ -288,6 +293,7 @@ export const useModelDownloadStore = create<ModelDownloadState>((set, get) => ({
               ...current,
               status: 'cancelled',
               speed: undefined,
+              statusText: undefined,
               onCancel: undefined,
               timestamp: Date.now(),
             },

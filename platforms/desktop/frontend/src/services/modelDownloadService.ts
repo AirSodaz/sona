@@ -150,7 +150,7 @@ export class ModelDownloadService {
           tempFilePath,
           onProgress,
           signal,
-          'Downloading',
+          i18n.t('settings.model_download_status.download_label'),
           expectedSha256,
           candidateIndex > 0,
           resolvedDownloadId
@@ -278,7 +278,7 @@ export class ModelDownloadService {
         onProgress(
           Math.round((downloaded / total) * 100),
           i18n.t('settings.model_download_status.downloading', {
-            label: 'Downloading',
+            label: i18n.t('settings.model_download_status.download_label'),
             downloadedMB: Math.round(downloaded / 1024 / 1024),
             totalMB: Math.round(total / 1024 / 1024),
             speed: speedStr,
@@ -291,7 +291,7 @@ export class ModelDownloadService {
       onProgress?.(
         0,
         i18n.t('settings.model_download_status.downloading_only', {
-          label: 'Downloading',
+          label: i18n.t('settings.model_download_status.download_label'),
         })
       );
       const path = await this.ports.downloadPresetModel({

@@ -139,15 +139,17 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    const importBtn = screen.getByRole('button', { name: /Import Local GGUF|导入本地 GGUF/i });
     expect(importBtn).toBeTruthy();
-    expect(importBtn.getAttribute('data-tooltip')).toBe('导入本地已有的 GGUF 格式模型文件');
+    expect(importBtn.getAttribute('data-tooltip')).toMatch(
+      /Import existing local GGUF model files|导入本地已有的 GGUF 格式模型文件/
+    );
     expect(importBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(importBtn.getAttribute('title')).toBeNull();
 
-    const refreshBtn = screen.getByRole('button', { name: /刷新/i });
+    const refreshBtn = screen.getByRole('button', { name: /Refresh|刷新/i });
     expect(refreshBtn).toBeTruthy();
-    expect(refreshBtn.getAttribute('data-tooltip')).toBe('刷新');
+    expect(refreshBtn.getAttribute('data-tooltip')).toMatch(/Refresh|刷新/);
     expect(refreshBtn.getAttribute('data-tooltip-pos')).toBe('top');
     expect(refreshBtn.getAttribute('title')).toBeNull();
   });
@@ -165,7 +167,7 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const importBtn = screen.getByRole('button', { name: /导入本地 GGUF/i });
+    const importBtn = screen.getByRole('button', { name: /Import Local GGUF|导入本地 GGUF/i });
     fireEvent.click(importBtn);
 
     await vi.waitFor(() => {
@@ -206,18 +208,18 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const nmtTab = screen.getByRole('tab', { name: /翻译模型 \(NMT\)/i });
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
     fireEvent.click(nmtTab);
 
     await vi.waitFor(() => {
       const btn = screen.getByRole('button', {
-        name: /测试连接 Opus-MT \(EN -> ZH\)/i,
+        name: /(Test Connection|测试连接) Opus-MT \(EN -> ZH\)/i,
       }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
     const testBtn = screen.getByRole('button', {
-      name: /测试连接 Opus-MT \(EN -> ZH\)/i,
+      name: /(Test Connection|测试连接) Opus-MT \(EN -> ZH\)/i,
     });
     await act(async () => {
       fireEvent.click(testBtn);
@@ -256,8 +258,10 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const llmTab = screen.getByRole('tab', { name: /大语言模型 \(LLM\)/i });
-    const nmtTab = screen.getByRole('tab', { name: /翻译模型 \(NMT\)/i });
+    const llmTab = screen.getByRole('tab', {
+      name: /Large Language Model \(LLM\)|大语言模型 \(LLM\)/i,
+    });
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
     expect(llmTab).toBeTruthy();
     expect(nmtTab).toBeTruthy();
 
@@ -316,11 +320,13 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
@@ -345,8 +351,12 @@ describe('LocalProviderAccordionItem', () => {
     // Verify model response text is NOT rendered in the UI
     expect(screen.queryByText('你好！我是 Qwen 模型。')).toBeNull();
 
-    const updatedBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
-    expect(updatedBtn.getAttribute('data-tooltip')).toBe('✓ 推理成功 (25 t/s)');
+    const updatedBtn = screen.getByRole('button', {
+      name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+    });
+    expect(updatedBtn.getAttribute('data-tooltip')).toMatch(
+      /✓ (Inference successful|推理成功) \(25 t\/s\)/
+    );
 
     perfNowSpy.mockRestore();
   });
@@ -370,17 +380,21 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
 
     await vi.waitFor(() => {
-      const updatedBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const updatedBtn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      });
       expect(updatedBtn.classList.contains('error')).toBe(true);
       expect(updatedBtn.getAttribute('data-tooltip')).toBe('✕ GPU out of memory');
     });
@@ -409,17 +423,19 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
       expect(btn.classList.contains('success')).toBe(true);
     });
 
@@ -429,7 +445,7 @@ describe('LocalProviderAccordionItem', () => {
     });
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+      const btn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
       expect(btn.classList.contains('success')).toBe(false);
       expect(screen.getByTestId('local-model-speed-qwen3.5-4b')).toBeTruthy();
     });
@@ -461,11 +477,13 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     await vi.waitFor(() => {
-      const btn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i }) as HTMLButtonElement;
+      const btn = screen.getByRole('button', {
+        name: /(Test Connection|测试连接) Qwen3\.5 4B/i,
+      }) as HTMLButtonElement;
       expect(btn.disabled).toBe(false);
     });
 
-    const testBtn = screen.getByRole('button', { name: /测试连接 Qwen3.5 4B/i });
+    const testBtn = screen.getByRole('button', { name: /(Test Connection|测试连接) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(testBtn);
     });
@@ -475,7 +493,7 @@ describe('LocalProviderAccordionItem', () => {
     });
 
     // Delete the model
-    const deleteBtn = screen.getByRole('button', { name: /删除 Qwen3.5 4B/i });
+    const deleteBtn = screen.getByRole('button', { name: /(Delete|删除) Qwen3\.5 4B/i });
     await act(async () => {
       fireEvent.click(deleteBtn);
     });

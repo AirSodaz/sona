@@ -71,11 +71,11 @@ function RatingMeters({ model }: { model: ModelInfo }) {
   return (
     <span className="model-ratings">
       <RatingMeter
-        label={t('settings.model_rating_accuracy', { defaultValue: '准确度' })}
+        label={t('settings.model_rating_accuracy', { defaultValue: 'Accuracy' })}
         value={ratings.accuracy}
       />
       <RatingMeter
-        label={t('settings.model_rating_speed', { defaultValue: '速度' })}
+        label={t('settings.model_rating_speed', { defaultValue: 'Speed' })}
         value={ratings.speed}
       />
     </span>
@@ -90,7 +90,7 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
         <span className="model-status-chip model-status-downloading">
           {t('settings.downloading_progress', {
             progress: Math.round(status.progress),
-            defaultValue: `正在下载 (${Math.round(status.progress)}%)`,
+            defaultValue: `Downloading (${Math.round(status.progress)}%)`,
           })}
         </span>
       );
@@ -98,7 +98,7 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
       return (
         <span className="model-status-chip model-status-installed">
           <CheckIcon />
-          {t('settings.model_status_installed', { defaultValue: '已安装' })}
+          {t('settings.model_status_installed', { defaultValue: 'Installed' })}
         </span>
       );
     case 'partial':
@@ -108,7 +108,7 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
           {t('settings.model_status_partial_installed', {
             installed: status.installed,
             total: status.total,
-            defaultValue: '{{installed}}/{{total}} 已安装',
+            defaultValue: '{{installed}}/{{total}} Installed',
           })}
         </span>
       );
@@ -126,7 +126,7 @@ function ModelStatusChip({ status }: { status: ModelStatus }) {
     default:
       return (
         <span className="model-status-chip model-status-not-installed">
-          {t('settings.not_installed', { defaultValue: '未安装' })}
+          {t('settings.not_installed', { defaultValue: 'Not installed' })}
         </span>
       );
   }

@@ -2078,8 +2078,8 @@
     "model_download_status": {
       "download_label": "正在下载",
       "downloading": "{{label}}... {{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",
-      "downloading_from_mirror": "正在从镜像站下载 {{label}}...",
-      "downloading_only": "正在下载 {{label}}...",
+      "downloading_from_mirror": "从镜像站{{label}}...",
+      "downloading_only": "{{label}}...",
       "done": "完成",
       "extracting": "正在解压（可能需要一些时间）...",
       "extracting_file": "正在解压：{{filename}}"

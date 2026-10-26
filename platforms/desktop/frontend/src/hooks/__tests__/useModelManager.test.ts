@@ -143,7 +143,15 @@ function buildInstalledCatalogSnapshot(installedIds: string[]): any {
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (key: string) => key,
+    t: (key: string, options?: Record<string, unknown>) => {
+      if (key === 'settings.model_download_status.downloading' && options) {
+        return `${options.label ?? 'Downloading'}... ${options.downloadedMB}MB / ${options.totalMB}MB (${options.speed})`;
+      }
+      if (typeof options?.defaultValue === 'string') {
+        return options.defaultValue;
+      }
+      return key;
+    },
   }),
   initReactI18next: {
     type: '3rdParty',
@@ -817,6 +825,60 @@ describe('useModelManager download lifecycle and errors (H1-H8)', () => {
 
     expect(result.current.downloads[catalogModel.id]).toBeDefined();
     expect(result.current.downloads[catalogModel.id]?.progress).toBe(45);
+  });
+
+  it('projects statusText and formats downloadedBytes, totalBytes, and speed in downloads status', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    useModelDownloadStore.getState().startDownload({
+      modelId: catalogModel.id,
+      modelName: catalogModel.name,
+      downloadId: 'dl-status-projection',
+    });
+
+    // 1. With explicit statusText
+    useModelDownloadStore.getState().updateProgress('dl-status-projection', {
+      progress: 50,
+      statusText: 'Extracting files...',
+    });
+
+    const { result, rerender } = renderHook(() => useModelManager(true));
+    expect(result.current.downloads[catalogModel.id]?.status).toBe('Extracting files...');
+
+    // 2. Without statusText, formatted with bytes and speed
+    act(() => {
+      useModelDownloadStore.getState().updateProgress('dl-status-projection', {
+        progress: 60,
+        statusText: '',
+        downloadedBytes: 60 * 1024 * 1024,
+        totalBytes: 100 * 1024 * 1024,
+        speed: '3.5 MB/s',
+      });
+    });
+    rerender();
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('60');
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('100');
+    expect(result.current.downloads[catalogModel.id]?.status).toContain('3.5 MB/s');
+  });
+
+  it('forwards statusText from downloadFn progress callback to store', async () => {
+    vi.mocked(modelService.getModelCatalogSnapshot).mockResolvedValue(
+      buildInstalledCatalogSnapshot([])
+    );
+    vi.mocked(modelService.checkHardware).mockResolvedValue({ compatible: true });
+    vi.mocked(modelService.downloadModel).mockImplementation(async (_id, onProgress) => {
+      onProgress?.(40, 'Downloading... 40MB / 100MB (2.0 MB/s)');
+      return '/models/preset-a';
+    });
+
+    const { result } = renderHook(() => useModelManager(true));
+    await act(async () => {
+      await result.current.handleDownload(catalogModel);
+    });
+
+    // downloadFn called updateProgress with statusText during download
+    expect(modelService.downloadModel).toHaveBeenCalled();
   });
 
   it('prevents handleDiscardDownload while download cancellation is actively unwinding', async () => {

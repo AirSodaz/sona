@@ -112,6 +112,12 @@ export function LocalProviderAccordionItem({
       const { downloaded, total, id } = parseDownloadProgressPayload(event.payload);
       if (!id || total <= 0) return;
 
+      const storeItem =
+        useModelDownloadStore.getState().downloads[id] ??
+        Object.values(useModelDownloadStore.getState().downloads).find(
+          (item) => item.downloadId === id || item.modelId === id
+        );
+      const storeSpeed = storeItem?.speed;
       setDownloads((prev) => {
         if (!prev[id]) return prev;
         const progress = Math.min(100, Math.round((downloaded / total) * 100));
@@ -122,6 +128,8 @@ export function LocalProviderAccordionItem({
             progress,
             downloadedBytes: downloaded,
             totalBytes: total,
+            speed: storeSpeed ?? prev[id].speed,
+            statusText: undefined,
           },
         };
       });
@@ -192,7 +200,7 @@ export function LocalProviderAccordionItem({
 
       setDownloads((prev) => ({
         ...prev,
-        [downloadId]: { progress: 0, statusText: t('settings.llm.status_downloading') },
+        [downloadId]: { progress: 0 },
       }));
 
       try {
@@ -226,7 +234,7 @@ export function LocalProviderAccordionItem({
         });
       }
     },
-    [fetchCards, modelDownloadMirror, t]
+    [fetchCards, modelDownloadMirror]
   );
 
   const handleDelete = useCallback(
@@ -401,7 +409,7 @@ export function LocalProviderAccordionItem({
             size={12}
             style={{ display: 'inline', marginRight: 4 }}
           />
-          {t('settings.llm.status_downloading', { defaultValue: '正在下载' })}
+          {t('settings.llm.status_downloading', { defaultValue: 'Downloading' })}
         </span>
       );
     }
@@ -409,13 +417,13 @@ export function LocalProviderAccordionItem({
       return (
         <span className="status-badge ready">
           <Check size={12} style={{ display: 'inline', marginRight: 4 }} />
-          {t('settings.llm.installed_ready', { defaultValue: '已就绪' })} ({installedCards.length})
+          {t('settings.llm.installed_ready', { defaultValue: 'Ready' })} ({installedCards.length})
         </span>
       );
     }
     return (
       <span className="status-badge off">
-        {t('settings.llm.status_off', { defaultValue: '待下载模型' })}
+        {t('settings.llm.status_off', { defaultValue: 'No models downloaded' })}
       </span>
     );
   }, [hasInstalled, installedCards.length, isAnyDownloading, t]);
@@ -502,9 +510,9 @@ export function LocalProviderAccordionItem({
     <SettingsAccordion
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>{t('settings.llm_providers.local', { defaultValue: '本地模型' })}</span>
+          <span>{t('settings.llm_providers.local', { defaultValue: 'Local Models' })}</span>
           <span className="local-model-badge local-model-badge-rec" style={{ fontSize: '0.7rem' }}>
-            {t('settings.llm.local_engine_badge', { defaultValue: '离线端侧' })}
+            {t('settings.llm.local_engine_badge', { defaultValue: 'On-Device' })}
           </span>
         </div>
       }
@@ -527,11 +535,11 @@ export function LocalProviderAccordionItem({
             items={[
               {
                 value: 'llm',
-                label: t('settings.llm.subtab_llm', { defaultValue: '大语言模型 (LLM)' }),
+                label: t('settings.llm.subtab_llm', { defaultValue: 'Large Language Model (LLM)' }),
               },
               {
                 value: 'nmt',
-                label: t('settings.llm.subtab_nmt', { defaultValue: '翻译模型 (NMT)' }),
+                label: t('settings.llm.subtab_nmt', { defaultValue: 'Translation Model (NMT)' }),
               },
             ]}
             activeTab={activeSubTab}
@@ -545,13 +553,13 @@ export function LocalProviderAccordionItem({
                 className="btn btn-secondary btn-sm"
                 onClick={handleImportCustomFile}
                 data-tooltip={t('settings.llm.import_custom_model_hint', {
-                  defaultValue: '导入本地已有的 GGUF 格式模型文件',
+                  defaultValue: 'Import existing local GGUF model files',
                 })}
                 data-tooltip-pos="top"
               >
                 <Plus size={14} />
                 <span>
-                  {t('settings.llm.import_custom_model', { defaultValue: '导入本地 GGUF' })}
+                  {t('settings.llm.import_custom_model', { defaultValue: 'Import Local GGUF' })}
                 </span>
               </button>
             )}
@@ -560,9 +568,9 @@ export function LocalProviderAccordionItem({
               className="btn btn-icon btn-secondary-soft btn-sm"
               onClick={fetchCards}
               disabled={isLoading}
-              data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+              data-tooltip={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
               data-tooltip-pos="top"
-              aria-label={t('settings.llm.refresh_local_models', { defaultValue: '刷新' })}
+              aria-label={t('settings.llm.refresh_local_models', { defaultValue: 'Refresh' })}
             >
               <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
             </button>

@@ -121,15 +121,39 @@ export function useModelManager(isOpen: boolean) {
     for (const [modelId, item] of Object.entries(storeDownloads)) {
       if (item.status === 'downloading') {
         const active = activeDownloadsRef.current.get(modelId);
+        let status = item.statusText || '';
+        if (
+          !status &&
+          item.downloadedBytes != null &&
+          item.totalBytes != null &&
+          item.totalBytes > 0
+        ) {
+          const downloadedMB = Math.round(item.downloadedBytes / 1024 / 1024);
+          const totalMB = Math.round(item.totalBytes / 1024 / 1024);
+          const label = t('settings.model_download_status.download_label', {
+            defaultValue: 'Downloading',
+          });
+          status = item.speed
+            ? t('settings.model_download_status.downloading', {
+                label,
+                downloadedMB,
+                totalMB,
+                speed: item.speed,
+              })
+            : `${label}... ${downloadedMB}MB / ${totalMB}MB`;
+        } else if (!status && item.speed) {
+          status = item.speed;
+        }
+
         projection[modelId] = {
           progress: item.progress ?? 0,
-          status: '',
+          status,
           controller: active?.controller,
         };
       }
     }
     return projection;
-  }, [storeDownloads]);
+  }, [storeDownloads, t]);
   const [installedModels, setInstalledModels] = useState<Set<string>>(new Set());
   const [modelCatalog, setModelCatalog] = useState<ModelCatalogSnapshot>(
     EMPTY_MODEL_CATALOG_SNAPSHOT
@@ -330,8 +354,10 @@ export function useModelManager(isOpen: boolean) {
       try {
         downloadedPath = await downloadFn(
           modelId,
-          (pct) => {
-            useModelDownloadStore.getState().updateProgress(downloadId, { progress: pct });
+          (pct, statusText) => {
+            useModelDownloadStore
+              .getState()
+              .updateProgress(downloadId, { progress: pct, statusText });
           },
           controller.signal,
           downloadId

@@ -2116,8 +2116,8 @@
     "model_download_status": {
       "download_label": "正在下載",
       "downloading": "{{label}}... {{downloadedMB}}MB / {{totalMB}}MB ({{speed}})",
-      "downloading_from_mirror": "正在從鏡像站下載 {{label}}...",
-      "downloading_only": "正在下載 {{label}}...",
+      "downloading_from_mirror": "從鏡像站{{label}}...",
+      "downloading_only": "{{label}}...",
       "done": "完成",
       "extracting": "正在解壓縮（可能需要一些時間）...",
       "extracting_file": "正在解壓縮：{{filename}}"
