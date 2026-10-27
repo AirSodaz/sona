@@ -382,13 +382,25 @@ class CaptionSessionRuntime {
       logger.warn('[CaptionSession] Failed to listen to caption:lock-toggle:', error);
     }
 
-    const shortcut = config.captionLockShortcut || 'Alt+C';
-    const normalizedShortcut = shortcut.replace(/\s+/g, '');
+    await this.updateShortcut(config.captionLockShortcut);
+
+    if (!isActive()) {
+      await this.stop();
+      return;
+    }
+  }
+
+  async updateShortcut(shortcut?: string): Promise<void> {
+    const rawShortcut = shortcut || 'Alt+C';
+    const normalizedShortcut = rawShortcut.replace(/\s+/g, '');
+    if (normalizedShortcut === this.registeredShortcut) {
+      return;
+    }
+    if (this.registeredShortcut) {
+      await unregister(this.registeredShortcut).catch(() => {});
+      this.registeredShortcut = null;
+    }
     if (normalizedShortcut) {
-      if (this.registeredShortcut) {
-        await unregister(this.registeredShortcut).catch(() => {});
-        this.registeredShortcut = null;
-      }
       try {
         await register(normalizedShortcut, async (event) => {
           if (event?.state && event.state !== 'Pressed') {

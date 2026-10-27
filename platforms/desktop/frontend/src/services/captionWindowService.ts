@@ -226,6 +226,8 @@ export class CaptionWindowService {
   private moveTimer: number | null = null;
   private isResettingPosition = false;
   private isBindingMoveListener = false;
+  private programmaticTargetPosition: { x: number; y: number } | null = null;
+  private resetTimer: number | null = null;
 
   constructor(private readonly ports: CaptionWindowServicePorts) {
     this.controller = this.ports.createAuxWindowController({
@@ -343,6 +345,7 @@ export class CaptionWindowService {
     }
 
     if (!hadExistingWindow) {
+      this.programmaticTargetPosition = { x: targetX, y: targetY };
       await windowInstance.setPosition(new PhysicalPosition(targetX, targetY)).catch(() => {});
     }
 
@@ -356,13 +359,14 @@ export class CaptionWindowService {
         this.moveUnlisten = await windowInstance.onMoved(({ payload: position }) => {
           if (this.isResettingPosition) return;
           if (
-            options?.x == null &&
-            options?.y == null &&
-            Math.abs(position.x - targetX) < 2 &&
-            Math.abs(position.y - targetY) < 2
+            this.programmaticTargetPosition &&
+            Math.abs(position.x - this.programmaticTargetPosition.x) < 2 &&
+            Math.abs(position.y - this.programmaticTargetPosition.y) < 2
           ) {
+            this.programmaticTargetPosition = null;
             return;
           }
+          this.programmaticTargetPosition = null;
           clearTimeout(this.moveTimer ?? undefined);
           this.moveTimer = window.setTimeout(() => {
             useConfigStore.getState().setConfig({
@@ -372,16 +376,19 @@ export class CaptionWindowService {
           }, 300);
         });
 
-        windowInstance
-          .once('tauri://destroyed', () => {
-            clearTimeout(this.moveTimer ?? undefined);
-            this.moveTimer = null;
-            if (this.moveUnlisten) {
+        const destroyPromise = windowInstance.once?.('tauri://destroyed', () => {
+          clearTimeout(this.moveTimer ?? undefined);
+          this.moveTimer = null;
+          if (this.moveUnlisten) {
+            try {
               this.moveUnlisten();
-              this.moveUnlisten = null;
-            }
-          })
-          .catch(() => {});
+            } catch {}
+            this.moveUnlisten = null;
+          }
+        });
+        if (destroyPromise && typeof destroyPromise.catch === 'function') {
+          destroyPromise.catch(() => {});
+        }
       } catch (err) {
         logger.warn('[CaptionWindowService] Failed to bind window move listener', { err });
       } finally {
@@ -408,9 +415,17 @@ export class CaptionWindowService {
     logger.info('[CaptionWindowService] Requested to close caption window');
     clearTimeout(this.moveTimer ?? undefined);
     this.moveTimer = null;
+    if (this.resetTimer !== null) {
+      clearTimeout(this.resetTimer);
+      this.resetTimer = null;
+    }
+    this.isResettingPosition = false;
+    this.programmaticTargetPosition = null;
     this.isBindingMoveListener = false;
     if (this.moveUnlisten) {
-      this.moveUnlisten();
+      try {
+        this.moveUnlisten();
+      } catch {}
       this.moveUnlisten = null;
     }
     this.state = {
@@ -438,16 +453,23 @@ export class CaptionWindowService {
       captionWindowX: null,
       captionWindowY: null,
     });
+    this.programmaticTargetPosition = { x: defaultX, y: defaultY };
 
     const windowInstance = await this.controller.getWindow();
     if (windowInstance) {
       await windowInstance.setPosition(new PhysicalPosition(defaultX, defaultY)).catch(() => {});
     }
 
-    window.setTimeout(() => {
+    if (this.resetTimer !== null) {
+      clearTimeout(this.resetTimer);
+      this.resetTimer = null;
+    }
+    this.resetTimer = window.setTimeout(() => {
       this.isResettingPosition = false;
+      this.resetTimer = null;
     }, 500);
   }
+
   async isOpen(): Promise<boolean> {
     const windowInstance = await this.controller.getWindow();
     return !!windowInstance;

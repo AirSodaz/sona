@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => {
         if (event === 'tauri://created') {
           callback();
         }
+        return Promise.resolve(undefined);
       }),
       close: vi.fn().mockResolvedValue(undefined),
       hide: vi.fn().mockResolvedValue(undefined),
@@ -481,6 +482,41 @@ describe('CaptionWindowService', () => {
     // Dragged position was persisted
     expect(useConfigStore.getState().config.captionWindowX).toBe(400);
     expect(useConfigStore.getState().config.captionWindowY).toBe(500);
+
+    vi.useRealTimers();
+  });
+  it('persists moving the window back to default coordinates', async () => {
+    vi.useFakeTimers();
+    mocks.getByLabel.mockResolvedValue(null);
+
+    const { captionWindowService } = await import('../captionWindowService');
+    const { useConfigStore } = await import('../../stores/configStore');
+
+    useConfigStore.getState().setConfig({
+      captionWindowX: null,
+      captionWindowY: null,
+    });
+
+    await captionWindowService.open();
+    expect(mocks.moveListeners).toHaveLength(1);
+
+    // Initial position event matches programmatic target, suppressed
+    mocks.moveListeners[0]({ payload: { x: 560, y: 932 } });
+    vi.advanceTimersByTime(350);
+    expect(useConfigStore.getState().config.captionWindowX).toBeNull();
+    expect(useConfigStore.getState().config.captionWindowY).toBeNull();
+
+    // Trigger onMoved with user drag coordinates
+    mocks.moveListeners[0]({ payload: { x: 400, y: 500 } });
+    vi.advanceTimersByTime(350);
+    expect(useConfigStore.getState().config.captionWindowX).toBe(400);
+    expect(useConfigStore.getState().config.captionWindowY).toBe(500);
+
+    // User moves back to default coordinates [560, 932]
+    mocks.moveListeners[0]({ payload: { x: 560, y: 932 } });
+    vi.advanceTimersByTime(350);
+    expect(useConfigStore.getState().config.captionWindowX).toBe(560);
+    expect(useConfigStore.getState().config.captionWindowY).toBe(932);
 
     vi.useRealTimers();
   });

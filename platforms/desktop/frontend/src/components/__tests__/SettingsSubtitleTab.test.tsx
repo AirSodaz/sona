@@ -268,7 +268,7 @@ describe('SettingsSubtitleTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#1A1A1A' });
   });
 
-  it('updates stroke width, stroke color, alignment, disappear delay, and priority in subtitle settings', () => {
+  it('updates stroke width, stroke color, alignment, and disappear delay in subtitle settings', () => {
     render(<SettingsSubtitleTab initialSubTab="subtitles" />);
 
     // Text alignment: click left tab

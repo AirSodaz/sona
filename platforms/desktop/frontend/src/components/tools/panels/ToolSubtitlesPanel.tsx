@@ -79,7 +79,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
   const captionTextStroke = config.captionTextStroke ?? false;
-  const captionStrokeWidth = config.captionStrokeWidth ?? 0;
+  const captionStrokeWidth = config.captionStrokeWidth ?? 2;
   const captionStrokeColor = config.captionStrokeColor || '#000000';
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
@@ -101,6 +101,12 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
         : captionBilingualOrder === 'translation_first'
           ? 'translation_main'
           : 'original_main');
+  const effectiveBilingualOrder: 'original_first' | 'translation_first' =
+    captionDisplayPriority === 'translation_main'
+      ? 'translation_first'
+      : captionDisplayPriority === 'original_main'
+        ? 'original_first'
+        : config.captionBilingualOrder || 'original_first';
 
   const isTranslationMain = captionDisplayPriority === 'translation_main';
   const isOriginalMain = captionDisplayPriority === 'original_main';
@@ -463,7 +469,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                       defaultValue: 'Bilingual Order',
                     })}
                     options={bilingualOrderOptions}
-                    value={captionBilingualOrder}
+                    value={effectiveBilingualOrder}
                     onChange={(val) => {
                       const order = val as 'original_first' | 'translation_first';
                       updateConfig({
@@ -714,6 +720,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 <ColorSwatchPicker
                   value={captionStrokeColor}
                   onChange={(color) => updateConfig({ captionStrokeColor: color })}
+                  presets={SUBTITLE_COLOR_PRESETS}
                   aria-label={t('settings.caption_stroke_color', { defaultValue: 'Stroke Color' })}
                 />
               </SettingsItem>

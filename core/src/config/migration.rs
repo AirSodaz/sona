@@ -620,11 +620,27 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         (
             "captionDisplayPriority",
-            json!(string_or_default(
-                &parsed,
-                "captionDisplayPriority",
-                "translation_main"
-            )),
+            json!(
+                parsed
+                    .get("captionDisplayPriority")
+                    .and_then(non_empty_str)
+                    .map(ToString::to_string)
+                    .unwrap_or_else(|| {
+                        match parsed.get("captionDisplayMode").and_then(non_empty_str) {
+                            Some("translation") => "translation_only".to_string(),
+                            Some("original") => "original_only".to_string(),
+                            _ => {
+                                if parsed.get("captionBilingualOrder").and_then(non_empty_str)
+                                    == Some("translation_first")
+                                {
+                                    "translation_main".to_string()
+                                } else {
+                                    "original_main".to_string()
+                                }
+                            }
+                        }
+                    })
+            ),
         ),
         (
             "captionTextStroke",
@@ -995,6 +1011,7 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "captionBackgroundColor",
         "captionStrokeColor",
         "captionLockShortcut",
+        "language",
         "summaryTemplateId",
         "translationLanguage",
         "polishKeywords",

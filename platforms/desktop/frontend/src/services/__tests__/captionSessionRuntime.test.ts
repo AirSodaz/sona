@@ -51,6 +51,7 @@ vi.mock('../captionWindowService', () => ({
     close: vi.fn().mockResolvedValue(undefined),
     sendSegments: vi.fn().mockResolvedValue(undefined),
     updateStyle: vi.fn().mockResolvedValue(undefined),
+    setClickThrough: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -220,15 +221,12 @@ describe('captionSessionRuntime', () => {
     );
     expect(globalShortcutMocks.register).toHaveBeenCalledWith('Alt+C', expect.any(Function));
 
-    // Simulate another start with a different shortcut
+    // Dynamically update to a different shortcut
     const customConfig = buildTestConfig({
       ...config,
       captionLockShortcut: 'Ctrl+Shift+L',
     });
-    (captionSessionRuntime as any).usingNativeCapture = false;
-
-    await captionSessionRuntime.start(customConfig, () => true, vi.fn());
-
+    await captionSessionRuntime.updateShortcut(customConfig.captionLockShortcut);
     expect(globalShortcutMocks.unregister).toHaveBeenCalledWith('Alt+C');
     expect(globalShortcutMocks.register).toHaveBeenCalledWith('Ctrl+Shift+L', expect.any(Function));
 

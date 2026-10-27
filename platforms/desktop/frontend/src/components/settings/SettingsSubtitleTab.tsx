@@ -938,7 +938,7 @@ export function SettingsSubtitleTab({
   const captionBackgroundColor = config.captionBackgroundColor || '#17171a';
   const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.72;
   const captionTextStroke = config.captionTextStroke ?? false;
-  const captionStrokeWidth = config.captionStrokeWidth ?? 0;
+  const captionStrokeWidth = config.captionStrokeWidth ?? 2;
   const captionStrokeColor = config.captionStrokeColor || '#000000';
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
@@ -1004,7 +1004,7 @@ export function SettingsSubtitleTab({
       | 'translation_only'
       | 'original_only';
     let mode: 'bilingual' | 'translation' | 'original' = 'bilingual';
-    let order: 'original_first' | 'translation_first' = 'original_first';
+    let order = captionBilingualOrder;
 
     if (priority === 'translation_main') {
       mode = 'bilingual';

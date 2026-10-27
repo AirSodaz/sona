@@ -17,8 +17,8 @@ import { logger } from '../utils/logger';
 
 export function computeCaptionTextStyle(
   style: CaptionWindowStyle,
-  _isPrimary: boolean,
-  isTranslation: boolean
+  isPrimary: boolean,
+  _isTranslation?: boolean
 ): React.CSSProperties {
   const strokeEnabled = Boolean(style.textStroke) && (style.strokeWidth ?? 0) > 0;
   const strokeWidth = style.strokeWidth ?? 0;
@@ -35,9 +35,9 @@ export function computeCaptionTextStyle(
     );
   }
   if (shadowEnabled) {
-    const diffuseShadow = isTranslation
-      ? '0 1px 2px rgba(0, 0, 0, 0.4)'
-      : '0 1px 3px rgba(0, 0, 0, 0.55)';
+    const diffuseShadow = isPrimary
+      ? '0 1px 3px rgba(0, 0, 0, 0.55)'
+      : '0 1px 2px rgba(0, 0, 0, 0.4)';
     shadows.push(diffuseShadow);
   }
 
@@ -270,13 +270,18 @@ export function CaptionWindow() {
     e.stopPropagation();
     if (displaySegments.length === 0) return;
     const latest = displaySegments[displaySegments.length - 1];
+    const translationText = latest.draftTranslation
+      ? latest.translation
+        ? `${latest.translation}${needsWordBoundarySpace(latest.translation, latest.draftTranslation) ? ' ' : ''}${latest.draftTranslation}`
+        : latest.draftTranslation
+      : latest.translation || '';
     let textToCopy = '';
     if (isOriginalOnly) {
       textToCopy = latest.text || '';
     } else if (isOriginalMain) {
-      textToCopy = latest.text || latest.translation || latest.draftTranslation || '';
+      textToCopy = latest.text || translationText || '';
     } else {
-      textToCopy = latest.translation || latest.draftTranslation || latest.text || '';
+      textToCopy = translationText || latest.text || '';
     }
     if (!textToCopy) return;
     try {
@@ -321,7 +326,10 @@ export function CaptionWindow() {
               backdropFilter: `blur(${captionState.style.backgroundBlurRadius ?? 12}px)`,
               WebkitBackdropFilter: `blur(${captionState.style.backgroundBlurRadius ?? 12}px)`,
             }
-          : {}),
+          : {
+              backdropFilter: 'none',
+              WebkitBackdropFilter: 'none',
+            }),
       }}
     >
       {/* Drag region for moving the window & hover mini toolbar */}

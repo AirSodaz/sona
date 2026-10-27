@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { captionWindowService } from '../../../../services/captionWindowService';
 import type * as ModelServiceModule from '../../../../services/modelService';
 import { modelService } from '../../../../services/modelService';
 import { useConfigStore } from '../../../../stores/configStore';
@@ -9,6 +10,11 @@ import { useTranscriptRuntimeStore } from '../../../../stores/transcriptRuntimeS
 import { buildTestConfig } from '../../../../test-utils/configTestUtils';
 import { ToolSubtitlesPanel } from '../ToolSubtitlesPanel';
 
+vi.mock('../../../../services/captionWindowService', () => ({
+  captionWindowService: {
+    resetPosition: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 vi.mock('../../../../services/modelService', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelServiceModule>();
   return {
@@ -338,5 +344,74 @@ describe('ToolSubtitlesPanel', () => {
       expect(children[0].style.fontSize).toBe('24px');
       expect(children[1].style.fontSize).toBe('18px');
     });
+  });
+
+  it('toggles text stroke and updates stroke width and stroke color', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const strokeSwitch = screen.getByRole('switch', {
+      name: 'settings.caption_text_stroke',
+    });
+    expect(strokeSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // Toggle on
+    fireEvent.click(strokeSwitch);
+    expect(useConfigStore.getState().config.captionTextStroke).toBe(true);
+    expect(useConfigStore.getState().config.captionStrokeWidth).toBe(2);
+
+    // Stroke width slider
+    const strokeWidthSlider = screen.getByRole('slider', {
+      name: 'settings.caption_stroke_width',
+    });
+    fireEvent.change(strokeWidthSlider, { target: { value: '3.5' } });
+    expect(useConfigStore.getState().config.captionStrokeWidth).toBe(3.5);
+
+    // Stroke color swatch
+    const strokeColorPicker = screen.getByLabelText('settings.caption_stroke_color');
+    const colorBtn = within(strokeColorPicker).getByRole('button', { name: '#facc15' });
+    fireEvent.click(colorBtn);
+    expect(useConfigStore.getState().config.captionStrokeColor).toBe('#facc15');
+  });
+
+  it('toggles text shadow and background blur switches', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const shadowSwitch = screen.getByRole('switch', {
+      name: 'settings.caption_text_shadow',
+    });
+    expect(shadowSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(shadowSwitch);
+    expect(useConfigStore.getState().config.captionTextShadow).toBe(false);
+
+    const blurSwitch = screen.getByRole('switch', {
+      name: 'settings.caption_background_blur',
+    });
+    expect(blurSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(blurSwitch);
+    expect(useConfigStore.getState().config.captionBackgroundBlur).toBe(false);
+  });
+
+  it('updates text alignment and disappear delay', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const leftTab = screen.getByRole('radio', { name: 'settings.caption_align_left' });
+    fireEvent.click(leftTab);
+    expect(useConfigStore.getState().config.captionTextAlign).toBe('left');
+
+    const delaySlider = screen.getByRole('slider', {
+      name: 'settings.caption_disappear_delay',
+    });
+    fireEvent.change(delaySlider, { target: { value: '6' } });
+    expect(useConfigStore.getState().config.captionDisappearDelay).toBe(6);
+  });
+
+  it('calls captionWindowService.resetPosition when clicking reset position button', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const resetBtn = screen.getByRole('button', {
+      name: 'settings.caption_reset_position',
+    });
+    fireEvent.click(resetBtn);
+    expect(captionWindowService.resetPosition).toHaveBeenCalledTimes(1);
   });
 });

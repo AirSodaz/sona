@@ -744,6 +744,61 @@ describe('CaptionWindow', () => {
       vi.advanceTimersByTime(2500);
     });
   });
+
+  it('applies backdropFilter none when backgroundBlur is false', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [],
+          style: {
+            ...defaultStyle,
+            backgroundBlur: false,
+          },
+        },
+      });
+    });
+
+    const body = container.querySelector('.caption-window-body') as HTMLElement;
+    expect(body.style.backdropFilter).toBe('none');
+  });
+
+  it('copies joined translation and draftTranslation to clipboard', async () => {
+    render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-draft',
+              text: 'Hello world',
+              translation: 'Hello',
+              draftTranslation: 'world',
+              start: 0,
+              end: 1,
+              isFinal: false,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayPriority: 'translation_main',
+          },
+        },
+      });
+    });
+
+    const copyBtn = screen.getByTitle('复制字幕');
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello world');
+    expect(screen.getByText('已复制')).toBeDefined();
+  });
 });
 describe('computeCaptionTextStyle', () => {
   it('omits stroke and hard shadow when stroke is disabled or width <= 0', () => {
