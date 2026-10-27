@@ -1,13 +1,13 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CaptionWindow, computeCaptionTextStyle } from '../CaptionWindow';
 
 const defaultStyle = {
   width: 800,
-  fontSize: 24,
+  fontSize: 22,
   color: '#ffffff',
-  backgroundColor: '#000000',
-  backgroundOpacity: 0.6,
+  backgroundColor: '#17171a',
+  backgroundOpacity: 0.72,
 };
 
 // Hoist mocks
@@ -28,6 +28,8 @@ const mocks = vi.hoisted(() => {
     mockStartDragging: vi.fn(),
     mockSetMinSize: vi.fn(),
     mockSetMaxSize: vi.fn(),
+    mockSetIgnoreCursorEvents: vi.fn().mockResolvedValue(undefined),
+    mockEmit: vi.fn().mockResolvedValue(undefined),
     mockInvoke: vi.fn(async (command: string): Promise<any> => {
       if (command === 'get_aux_window_state') {
         return null;
@@ -47,6 +49,7 @@ vi.mock('@tauri-apps/api/window', () => ({
     startDragging: mocks.mockStartDragging,
     setMinSize: mocks.mockSetMinSize,
     setMaxSize: mocks.mockSetMaxSize,
+    setIgnoreCursorEvents: mocks.mockSetIgnoreCursorEvents,
   }),
 }));
 
@@ -76,6 +79,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 
 vi.mock('@tauri-apps/api/event', () => ({
   listen: mocks.mockListen,
+  emit: mocks.mockEmit,
 }));
 
 describe('CaptionWindow', () => {
@@ -117,6 +121,13 @@ describe('CaptionWindow', () => {
         return null;
       }
       return undefined;
+    });
+    mocks.mockEmit.mockClear();
+    mocks.mockSetIgnoreCursorEvents.mockClear();
+    Object.assign(navigator, {
+      clipboard: {
+        writeText: vi.fn().mockResolvedValue(undefined),
+      },
     });
 
     // Mock offsetHeight and getBoundingClientRect
@@ -656,6 +667,82 @@ describe('CaptionWindow', () => {
     // fading-out is immediately cleared, sentence two is visible
     expect(body.classList.contains('fading-out')).toBe(false);
     expect(screen.getByText('Sentence two')).toBeDefined();
+  });
+
+  it('copies context-aware text to clipboard and displays toast', async () => {
+    render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-1',
+              text: 'Hello world',
+              translation: '你好世界',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayPriority: 'translation_main',
+          },
+        },
+      });
+    });
+
+    const copyBtn = screen.getByTitle('复制字幕');
+    await act(async () => {
+      fireEvent.click(copyBtn);
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('你好世界');
+    expect(screen.getByText('已复制')).toBeDefined();
+
+    // Advance timer to verify toast disappears
+    act(() => {
+      vi.advanceTimersByTime(2100);
+    });
+    expect(screen.queryByText('已复制')).toBeNull();
+  });
+
+  it('locks window, emits caption:lock-toggle, and shows toast banner', async () => {
+    render(<CaptionWindow />);
+
+    const lockBtn = screen.getByTitle('锁定穿透 (Alt+C)');
+    await act(async () => {
+      fireEvent.click(lockBtn);
+    });
+
+    expect(screen.getByText('已开启穿透 (Alt+C 解锁)')).toBeDefined();
+    expect(mocks.mockEmit).not.toHaveBeenCalled();
+
+    // Advance timers past 1500ms lock delay
+    await act(async () => {
+      vi.advanceTimersByTime(1600);
+    });
+
+    expect(mocks.mockEmit).toHaveBeenCalledWith('caption:lock-toggle', true);
+    expect(mocks.mockSetIgnoreCursorEvents).toHaveBeenCalledWith(true);
+  });
+
+  it('cleans up active toast and lock timers on unmount', async () => {
+    const { unmount } = render(<CaptionWindow />);
+
+    const lockBtn = screen.getByTitle('锁定穿透 (Alt+C)');
+    await act(async () => {
+      fireEvent.click(lockBtn);
+    });
+
+    unmount();
+
+    // Advancing timers after unmount does not trigger further effects or throw
+    await act(async () => {
+      vi.advanceTimersByTime(2500);
+    });
   });
 });
 describe('computeCaptionTextStyle', () => {

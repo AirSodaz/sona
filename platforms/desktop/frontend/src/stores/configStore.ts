@@ -119,7 +119,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionBilingualOrder: 'original_first',
   captionDisplayPriority: 'translation_main',
   captionTextStroke: false,
-  captionStrokeWidth: 0,
+  captionStrokeWidth: 2,
   captionStrokeColor: '#000000',
   captionTextShadow: true,
   captionTextAlign: 'center',

@@ -173,8 +173,8 @@ describe('CaptionWindowService', () => {
     expect(mocks.createdWindows[0].options).toEqual(
       expect.objectContaining({
         url: '/index.html?window=caption',
-        x: 560,
-        y: 932,
+        x: undefined,
+        y: undefined,
         width: 800,
         height: 120,
         resizable: true,
@@ -185,6 +185,9 @@ describe('CaptionWindowService', () => {
         alwaysOnTop: true,
         visible: true,
       })
+    );
+    expect(mocks.createdWindows[0].windowInstance.setPosition).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 560, y: 932 })
     );
     expect(mocks.invoke).toHaveBeenCalledWith('set_aux_window_state', {
       label: 'caption',
@@ -435,5 +438,80 @@ describe('CaptionWindowService', () => {
     expect(existingWindow.setPosition).toHaveBeenCalledWith(
       expect.objectContaining({ x: 560, y: 932 })
     );
+  });
+
+  it('does not overwrite position when opening an existing caption window without coordinates', async () => {
+    const existingWindow = mocks.buildWindow();
+    mocks.getByLabel.mockResolvedValue(existingWindow);
+
+    const { captionWindowService } = await import('../captionWindowService');
+
+    await captionWindowService.open({ width: 900 });
+
+    expect(existingWindow.setPosition).not.toHaveBeenCalled();
+  });
+
+  it('ignores initial default coordinates in onMoved and persists user dragging', async () => {
+    vi.useFakeTimers();
+    mocks.getByLabel.mockResolvedValue(null);
+
+    const { captionWindowService } = await import('../captionWindowService');
+    const { useConfigStore } = await import('../../stores/configStore');
+
+    useConfigStore.getState().setConfig({
+      captionWindowX: null,
+      captionWindowY: null,
+    });
+
+    await captionWindowService.open();
+    expect(mocks.moveListeners).toHaveLength(1);
+
+    // Trigger onMoved with initial default coordinates [560, 932]
+    mocks.moveListeners[0]({ payload: { x: 560, y: 932 } });
+    vi.advanceTimersByTime(350);
+
+    // Initial position was ignored, not persisted
+    expect(useConfigStore.getState().config.captionWindowX).toBeNull();
+    expect(useConfigStore.getState().config.captionWindowY).toBeNull();
+
+    // Trigger onMoved with user drag coordinates
+    mocks.moveListeners[0]({ payload: { x: 400, y: 500 } });
+    vi.advanceTimersByTime(350);
+
+    // Dragged position was persisted
+    expect(useConfigStore.getState().config.captionWindowX).toBe(400);
+    expect(useConfigStore.getState().config.captionWindowY).toBe(500);
+
+    vi.useRealTimers();
+  });
+
+  it('resolves negative multi-monitor coordinates when inside secondary monitor bounds', async () => {
+    const primaryMonitor = {
+      scaleFactor: 1.0,
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1040 },
+      },
+    };
+    const leftMonitor = {
+      scaleFactor: 1.0,
+      position: { x: -1920, y: 0 },
+      size: { width: 1920, height: 1080 },
+      workArea: {
+        position: { x: -1920, y: 0 },
+        size: { width: 1920, height: 1040 },
+      },
+    };
+    mocks.availableMonitors.mockResolvedValue([leftMonitor, primaryMonitor]);
+    mocks.primaryMonitor.mockResolvedValue(primaryMonitor);
+
+    const { resolveCaptionWindowInitialPosition } = await import('../captionWindowService');
+
+    // Valid negative coordinates on the left monitor
+    const [x, y] = await resolveCaptionWindowInitialPosition(800, 120, -1000, 500);
+    expect(x).toBe(-1000);
+    expect(y).toBe(500);
   });
 });

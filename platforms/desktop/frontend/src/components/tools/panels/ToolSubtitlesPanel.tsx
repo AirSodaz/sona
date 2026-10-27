@@ -93,13 +93,14 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
     | 'original_main'
     | 'translation_only'
     | 'original_only' =
-    captionDisplayMode === 'translation'
+    config.captionDisplayPriority ??
+    (captionDisplayMode === 'translation'
       ? 'translation_only'
       : captionDisplayMode === 'original'
         ? 'original_only'
         : captionBilingualOrder === 'translation_first'
           ? 'translation_main'
-          : 'original_main';
+          : 'original_main');
 
   const isTranslationMain = captionDisplayPriority === 'translation_main';
   const isOriginalMain = captionDisplayPriority === 'original_main';
@@ -176,18 +177,24 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
     [t]
   );
 
+  const hasTranslation = realtimeTranslationEnabled && !isOriginalOnly;
+
   const originalLine = (
     <p
       key="original"
       className="subtitle-live-preview-line-primary"
       data-testid="subtitle-preview-original"
       style={{
-        fontSize: `${captionFontSize}px`,
+        fontSize:
+          isTranslationMain && hasTranslation
+            ? `${captionTranslationFontSize}px`
+            : `${captionFontSize}px`,
         color: captionFontColor,
         margin: 0,
-        fontWeight: 500,
+        opacity: isTranslationMain && hasTranslation ? 0.8 : 1,
+        fontWeight: isTranslationMain && hasTranslation ? 400 : 500,
         textAlign: captionTextAlign,
-        ...computeCaptionTextStyle(captionStyle, true, false),
+        ...computeCaptionTextStyle(captionStyle, !(isTranslationMain && hasTranslation), false),
       }}
     >
       {t('tools.subtitles_preview_text_primary', {
@@ -202,12 +209,13 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
       className="subtitle-live-preview-line-secondary"
       data-testid="subtitle-preview-translation"
       style={{
-        fontSize: `${captionTranslationFontSize}px`,
+        fontSize: isOriginalMain ? `${captionTranslationFontSize}px` : `${captionFontSize}px`,
         color: captionTranslationFontColor,
         margin: 0,
-        opacity: 0.9,
+        opacity: 1,
+        fontWeight: isOriginalMain ? 400 : 500,
         textAlign: captionTextAlign,
-        ...computeCaptionTextStyle(captionStyle, false, true),
+        ...computeCaptionTextStyle(captionStyle, !isOriginalMain, true),
       }}
     >
       {t('tools.subtitles_preview_text_secondary', {
@@ -658,7 +666,13 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
           >
             <Switch
               checked={captionTextStroke}
-              onChange={(enabled) => updateConfig({ captionTextStroke: enabled })}
+              onChange={(enabled) =>
+                updateConfig({
+                  captionTextStroke: enabled,
+                  ...(enabled && captionStrokeWidth <= 0 ? { captionStrokeWidth: 2 } : {}),
+                })
+              }
+              aria-label={t('settings.caption_text_stroke', { defaultValue: 'Text Stroke' })}
             />
           </SettingsItem>
 
@@ -677,6 +691,9 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                     onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
                     className="settings-slider"
                     style={{ flex: 1 }}
+                    aria-label={t('settings.caption_stroke_width', {
+                      defaultValue: 'Stroke Width',
+                    })}
                   />
                   <span
                     style={{
@@ -712,6 +729,7 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <Switch
               checked={captionTextShadow}
               onChange={(enabled) => updateConfig({ captionTextShadow: enabled })}
+              aria-label={t('settings.caption_text_shadow', { defaultValue: 'Text Shadow' })}
             />
           </SettingsItem>
 
@@ -724,6 +742,9 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
             <Switch
               checked={captionBackgroundBlur}
               onChange={(enabled) => updateConfig({ captionBackgroundBlur: enabled })}
+              aria-label={t('settings.caption_background_blur', {
+                defaultValue: 'Background Blur',
+              })}
             />
           </SettingsItem>
 
@@ -743,6 +764,9 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
                 className="settings-slider"
                 style={{ flex: 1 }}
+                aria-label={t('settings.caption_disappear_delay', {
+                  defaultValue: 'Disappear Delay',
+                })}
               />
               <span
                 style={{

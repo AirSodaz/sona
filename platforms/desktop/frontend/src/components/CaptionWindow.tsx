@@ -8,7 +8,7 @@ import {
   type CaptionWindowStyle,
   DEFAULT_CAPTION_WINDOW_STATE,
 } from '../services/captionWindowService';
-import { listen } from '../services/tauri/platform/events';
+import { emit, listen } from '../services/tauri/platform/events';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
@@ -75,6 +75,18 @@ export function CaptionWindow() {
   const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+      }
+    };
+  }, []);
 
   // Track target width to enforce it during height resizing
   const containerRef = useRef<HTMLDivElement>(null);
@@ -232,33 +244,6 @@ export function CaptionWindow() {
     }, 2000);
   };
 
-  const handleCopy = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (displaySegments.length === 0) return;
-    const latest = displaySegments[displaySegments.length - 1];
-    const textToCopy = latest.translation || latest.text || '';
-    if (!textToCopy) return;
-    try {
-      await navigator.clipboard.writeText(textToCopy);
-      showToast(t('caption.copied', { defaultValue: '已复制' }));
-    } catch (err) {
-      logger.warn('[CaptionWindow] Failed to copy to clipboard', err);
-    }
-  };
-
-  const handleLock = async (e: React.MouseEvent) => {
-    e.stopPropagation();
-    showToast(t('caption.locked_click_through', { defaultValue: '已开启穿透 (Alt+C 解锁)' }));
-    setTimeout(async () => {
-      try {
-        const currentWindow = getCurrentWindow();
-        await currentWindow.setIgnoreCursorEvents(true);
-      } catch (err) {
-        logger.warn('[CaptionWindow] Failed to set ignore cursor events', err);
-      }
-    }, 1500);
-  };
-
   const effectivePriority =
     captionState.style.displayPriority ??
     (captionState.style.displayMode === 'translation'
@@ -281,6 +266,43 @@ export function CaptionWindow() {
   const isTranslationOnly = effectivePriority === 'translation_only';
   const isOriginalOnly = effectivePriority === 'original_only';
 
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (displaySegments.length === 0) return;
+    const latest = displaySegments[displaySegments.length - 1];
+    let textToCopy = '';
+    if (isOriginalOnly) {
+      textToCopy = latest.text || '';
+    } else if (isOriginalMain) {
+      textToCopy = latest.text || latest.translation || latest.draftTranslation || '';
+    } else {
+      textToCopy = latest.translation || latest.draftTranslation || latest.text || '';
+    }
+    if (!textToCopy) return;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      showToast(t('caption.copied', { defaultValue: '已复制' }));
+    } catch (err) {
+      logger.warn('[CaptionWindow] Failed to copy to clipboard', err);
+    }
+  };
+
+  const handleLock = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    showToast(t('caption.locked_click_through', { defaultValue: '已开启穿透 (Alt+C 解锁)' }));
+    if (lockTimerRef.current) {
+      clearTimeout(lockTimerRef.current);
+    }
+    lockTimerRef.current = setTimeout(async () => {
+      try {
+        await emit('caption:lock-toggle', true);
+        const currentWindow = getCurrentWindow();
+        await currentWindow.setIgnoreCursorEvents(true).catch(() => {});
+      } catch (err) {
+        logger.warn('[CaptionWindow] Failed to set ignore cursor events', err);
+      }
+    }, 1500);
+  };
   return (
     <div
       className={`caption-window-body ${isFadingOut ? 'fading-out' : ''}`}
@@ -305,10 +327,11 @@ export function CaptionWindow() {
       {/* Drag region for moving the window & hover mini toolbar */}
       <div className="caption-drag-handle" data-tauri-drag-region onMouseDown={startDragging}>
         <div className="drag-indicator" />
-        <div className="caption-handle-actions">
+        <div className="caption-handle-actions" data-tauri-drag-region="false">
           <button
             type="button"
             className="caption-action-btn"
+            data-tauri-drag-region="false"
             title={t('caption.copy', { defaultValue: '复制字幕' })}
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
@@ -318,6 +341,7 @@ export function CaptionWindow() {
           <button
             type="button"
             className="caption-action-btn"
+            data-tauri-drag-region="false"
             title={t('caption.lock', { defaultValue: '锁定穿透 (Alt+C)' })}
             onClick={handleLock}
             onMouseDown={(e) => e.stopPropagation()}
@@ -386,7 +410,11 @@ export function CaptionWindow() {
 
               const originalLine = (
                 <div
-                  className="caption-original-line"
+                  className={
+                    isTranslationMain && hasTranslation
+                      ? 'caption-original-line caption-secondary-line'
+                      : 'caption-original-line caption-primary-line'
+                  }
                   style={{
                     ...originalStyle,
                     marginTop: isTranslationMain && hasTranslation ? '2px' : 0,
@@ -401,7 +429,11 @@ export function CaptionWindow() {
 
               const translationLine = hasTranslation ? (
                 <div
-                  className="caption-translation-line"
+                  className={
+                    isOriginalMain
+                      ? 'caption-translation-line caption-secondary-line'
+                      : 'caption-translation-line caption-primary-line'
+                  }
                   style={{
                     ...translationStyle,
                     marginTop: isOriginalMain ? '2px' : 0,

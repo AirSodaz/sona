@@ -317,7 +317,8 @@
     background 0.2s ease;
 }
 
-.caption-window-body:hover .caption-drag-handle {
+.caption-window-body:hover .caption-drag-handle,
+.caption-window-body:focus-within .caption-drag-handle {
   opacity: 1;
   pointer-events: auto;
 }
@@ -370,7 +371,7 @@
   position: absolute;
   top: 8px;
   left: 50%;
-  transform: translateX(-50%);
+  translate: -50% 0;
   background: rgba(0, 0, 0, 0.85);
   color: #ffffff;
   padding: 4px 12px;
@@ -393,6 +394,8 @@
   justify-content: flex-end;
   max-height: calc(3.2rem + var(--spacing-md));
   text-align: center;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .caption-primary-line {

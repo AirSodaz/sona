@@ -30,7 +30,7 @@ fn default_config_conforms_to_the_typed_app_config_contract() {
     assert_eq!(typed.streaming_model_path.as_deref(), Some(""));
     assert_eq!(typed.batch_model_path.as_deref(), Some(""));
     assert_eq!(typed.language.as_deref(), Some("auto"));
-    assert_eq!(typed.caption_translation_font_size, Some(18.0));
+    assert_eq!(typed.caption_translation_font_size, Some(16.0));
     assert_eq!(
         typed.caption_translation_font_color.as_deref(),
         Some("#6ee7b7")
@@ -83,7 +83,7 @@ fn current_config_migration_repairs_invalid_typed_scalar_fields() {
     assert_eq!(result.config["theme"], "auto");
     assert_eq!(result.config["captionWindowWidth"], 800);
     assert_eq!(result.config["voiceTypingMode"], "hold");
-    assert_eq!(result.config["captionTranslationFontSize"], 18);
+    assert_eq!(result.config["captionTranslationFontSize"], 16);
     assert_eq!(result.config["captionTranslationFontColor"], "#6ee7b7");
 }
 

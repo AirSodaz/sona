@@ -36,6 +36,7 @@
     "core:window:allow-set-focus",
     "core:window:allow-primary-monitor",
     "core:window:allow-available-monitors",
+    "core:window:allow-current-monitor",
     "core:event:default",
     "dialog:allow-save",
     "dialog:allow-open",

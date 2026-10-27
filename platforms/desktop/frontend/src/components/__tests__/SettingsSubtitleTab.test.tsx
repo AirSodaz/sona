@@ -20,6 +20,9 @@ const mockReadiness = vi.hoisted(() => ({
   lastErrorSource: null as null | 'shortcut_registration' | 'warmup' | 'microphone' | 'session',
   lastErrorMessage: null as string | null,
 }));
+const mockStoreState = vi.hoisted(() => ({
+  realtimeTranslationEnabled: false,
+}));
 
 vi.mock('../../hooks/useVoiceTypingReadiness', () => ({
   useVoiceTypingReadiness: () => mockReadiness,
@@ -88,7 +91,7 @@ vi.mock('../../stores/configStore', () => ({
       const state = {
         config: {
           hotwordSets: [],
-          realtimeTranslationEnabled: false,
+          realtimeTranslationEnabled: mockStoreState.realtimeTranslationEnabled,
         },
       };
       return typeof selector === 'function' ? selector(state) : state;
@@ -97,7 +100,7 @@ vi.mock('../../stores/configStore', () => ({
       getState: () => ({
         config: {
           hotwordSets: [],
-          realtimeTranslationEnabled: false,
+          realtimeTranslationEnabled: mockStoreState.realtimeTranslationEnabled,
         },
       }),
     }
@@ -110,6 +113,7 @@ describe('SettingsSubtitleTab', () => {
     mockReadiness.state = 'ready';
     mockReadiness.lastErrorSource = null;
     mockReadiness.lastErrorMessage = null;
+    mockStoreState.realtimeTranslationEnabled = false;
   });
 
   it('renders secondary tabs and defaults to voice typing', () => {
@@ -402,5 +406,23 @@ describe('SettingsSubtitleTab', () => {
     fireEvent.click(resetBtn);
 
     expect(mockResetPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates captionDisplayPriority, captionDisplayMode, and captionBilingualOrder when priority is changed', () => {
+    mockStoreState.realtimeTranslationEnabled = true;
+
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    const select = document.getElementById('caption-display-priority-select') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+
+    // Select 'original_main'
+    fireEvent.change(select, { target: { value: 'original_main' } });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      captionDisplayPriority: 'original_main',
+      captionDisplayMode: 'bilingual',
+      captionBilingualOrder: 'original_first',
+    });
   });
 });

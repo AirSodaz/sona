@@ -296,6 +296,7 @@ class CaptionSessionRuntime {
 
   private registeredShortcut: string | null = null;
   private lastLockToggleTime = 0;
+  private lockToggleUnlisten: UnlistenFn | null = null;
   isRunning(): boolean {
     return Boolean(
       (this.stream && this.audioContext?.state === 'running') || this.usingNativeCapture
@@ -368,9 +369,26 @@ class CaptionSessionRuntime {
       this.processor = pipeline.processor;
     }
 
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
+    try {
+      this.lockToggleUnlisten = await listen<boolean>('caption:lock-toggle', async (event) => {
+        useConfigStore.getState().setConfig({ lockWindow: event.payload });
+        await captionWindowService.setClickThrough(event.payload);
+      });
+    } catch (error) {
+      logger.warn('[CaptionSession] Failed to listen to caption:lock-toggle:', error);
+    }
+
     const shortcut = config.captionLockShortcut || 'Alt+C';
     const normalizedShortcut = shortcut.replace(/\s+/g, '');
     if (normalizedShortcut) {
+      if (this.registeredShortcut) {
+        await unregister(this.registeredShortcut).catch(() => {});
+        this.registeredShortcut = null;
+      }
       try {
         await register(normalizedShortcut, async (event) => {
           if (event?.state && event.state !== 'Pressed') {
@@ -432,6 +450,10 @@ class CaptionSessionRuntime {
       }
       this.registeredShortcut = null;
     }
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
   }
 
   async restartRecognizer(): Promise<void> {
@@ -479,6 +501,10 @@ class CaptionSessionRuntime {
     this.systemAudioUnlisten = null;
     this.registeredShortcut = null;
     this.lastLockToggleTime = 0;
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
   }
 }
 

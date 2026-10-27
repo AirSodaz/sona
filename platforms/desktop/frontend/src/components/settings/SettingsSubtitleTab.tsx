@@ -1245,9 +1245,13 @@ export function SettingsSubtitleTab({
                   })}
                 >
                   <Dropdown
+                    id="caption-display-priority-select"
                     options={displayPriorityOptions}
                     value={captionDisplayPriority}
                     onChange={handleDisplayPriorityChange}
+                    aria-label={t('settings.caption_display_priority', {
+                      defaultValue: 'Display Priority',
+                    })}
                     style={{ width: '260px' }}
                   />
                 </SettingsItem>
@@ -1319,7 +1323,7 @@ export function SettingsSubtitleTab({
                   }}
                   onBlur={(e) => {
                     const parsed = Number(e.target.value);
-                    const clamped = Number.isNaN(parsed) ? 18 : Math.max(12, Math.min(72, parsed));
+                    const clamped = Number.isNaN(parsed) ? 16 : Math.max(12, Math.min(72, parsed));
                     updateConfig({ captionTranslationFontSize: clamped });
                   }}
                   className="settings-input"
@@ -1411,7 +1415,12 @@ export function SettingsSubtitleTab({
             >
               <Switch
                 checked={captionTextStroke}
-                onChange={(enabled) => updateConfig({ captionTextStroke: enabled })}
+                onChange={(enabled) =>
+                  updateConfig({
+                    captionTextStroke: enabled,
+                    ...(enabled && captionStrokeWidth <= 0 ? { captionStrokeWidth: 2 } : {}),
+                  })
+                }
               />
             </SettingsItem>
 

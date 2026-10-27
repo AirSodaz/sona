@@ -317,10 +317,27 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     }
     if existing.get("captionDisplayMode") != normalized.get("captionDisplayMode")
         || existing.get("captionBilingualOrder") != normalized.get("captionBilingualOrder")
+        || existing.get("captionDisplayPriority") != normalized.get("captionDisplayPriority")
+        || existing.get("captionWindowX") != normalized.get("captionWindowX")
+        || existing.get("captionWindowY") != normalized.get("captionWindowY")
+        || existing.get("captionFontSize") != normalized.get("captionFontSize")
+        || existing.get("captionFontColor") != normalized.get("captionFontColor")
         || existing.get("captionTranslationFontSize")
             != normalized.get("captionTranslationFontSize")
         || existing.get("captionTranslationFontColor")
             != normalized.get("captionTranslationFontColor")
+        || existing.get("captionBackgroundColor") != normalized.get("captionBackgroundColor")
+        || existing.get("captionBackgroundOpacity") != normalized.get("captionBackgroundOpacity")
+        || existing.get("captionTextStroke") != normalized.get("captionTextStroke")
+        || existing.get("captionStrokeWidth") != normalized.get("captionStrokeWidth")
+        || existing.get("captionStrokeColor") != normalized.get("captionStrokeColor")
+        || existing.get("captionTextShadow") != normalized.get("captionTextShadow")
+        || existing.get("captionTextAlign") != normalized.get("captionTextAlign")
+        || existing.get("captionBackgroundBlur") != normalized.get("captionBackgroundBlur")
+        || existing.get("captionBackgroundBlurRadius")
+            != normalized.get("captionBackgroundBlurRadius")
+        || existing.get("captionDisappearDelay") != normalized.get("captionDisappearDelay")
+        || existing.get("captionLockShortcut") != normalized.get("captionLockShortcut")
         || existing.get("realtimeTranslationEnabled")
             != normalized.get("realtimeTranslationEnabled")
         || existing.get("realtimeTranslationSourceLanguage")
@@ -536,8 +553,22 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(number_or_default(&parsed, "captionWindowWidth", 800)),
         ),
         (
+            "captionWindowX",
+            match parsed.get("captionWindowX").and_then(Value::as_f64) {
+                Some(v) => json!(v),
+                None => Value::Null,
+            },
+        ),
+        (
+            "captionWindowY",
+            match parsed.get("captionWindowY").and_then(Value::as_f64) {
+                Some(v) => json!(v),
+                None => Value::Null,
+            },
+        ),
+        (
             "captionFontSize",
-            json!(number_or_default(&parsed, "captionFontSize", 24)),
+            json!(number_or_default(&parsed, "captionFontSize", 22)),
         ),
         (
             "captionFontColor",
@@ -545,7 +576,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         (
             "captionTranslationFontSize",
-            json!(number_or_default(&parsed, "captionTranslationFontSize", 18)),
+            json!(number_or_default(&parsed, "captionTranslationFontSize", 16)),
         ),
         (
             "captionTranslationFontColor",
@@ -560,7 +591,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(string_or_default(
                 &parsed,
                 "captionBackgroundColor",
-                "#000000"
+                "#17171a"
             )),
         ),
         (
@@ -568,7 +599,7 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
             json!(number_f64_or_default(
                 &parsed,
                 "captionBackgroundOpacity",
-                0.6
+                0.72
             )),
         ),
         (
@@ -586,6 +617,54 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
                 "captionBilingualOrder",
                 "original_first"
             )),
+        ),
+        (
+            "captionDisplayPriority",
+            json!(string_or_default(
+                &parsed,
+                "captionDisplayPriority",
+                "translation_main"
+            )),
+        ),
+        (
+            "captionTextStroke",
+            json!(bool_at(&parsed, "captionTextStroke").unwrap_or(false)),
+        ),
+        (
+            "captionStrokeWidth",
+            json!(number_f64_or_default(&parsed, "captionStrokeWidth", 2.0)),
+        ),
+        (
+            "captionStrokeColor",
+            json!(string_or_default(&parsed, "captionStrokeColor", "#000000")),
+        ),
+        (
+            "captionTextShadow",
+            json!(bool_at(&parsed, "captionTextShadow").unwrap_or(true)),
+        ),
+        (
+            "captionTextAlign",
+            json!(string_or_default(&parsed, "captionTextAlign", "center")),
+        ),
+        (
+            "captionBackgroundBlur",
+            json!(bool_at(&parsed, "captionBackgroundBlur").unwrap_or(true)),
+        ),
+        (
+            "captionBackgroundBlurRadius",
+            json!(number_f64_or_default(
+                &parsed,
+                "captionBackgroundBlurRadius",
+                20.0
+            )),
+        ),
+        (
+            "captionDisappearDelay",
+            json!(number_f64_or_default(&parsed, "captionDisappearDelay", 4.0)),
+        ),
+        (
+            "captionLockShortcut",
+            json!(string_or_default(&parsed, "captionLockShortcut", "Alt+C")),
         ),
         (
             "realtimeTranslationEnabled",
@@ -914,7 +993,8 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "captionFontColor",
         "captionTranslationFontColor",
         "captionBackgroundColor",
-        "language",
+        "captionStrokeColor",
+        "captionLockShortcut",
         "summaryTemplateId",
         "translationLanguage",
         "polishKeywords",
@@ -955,6 +1035,9 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "mcpAuditLogEnabled",
         "realtimeTranslationEnabled",
         "voiceTypingRealtimePreview",
+        "captionTextStroke",
+        "captionTextShadow",
+        "captionBackgroundBlur",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }
@@ -979,6 +1062,9 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "captionFontSize",
         "captionTranslationFontSize",
         "captionBackgroundOpacity",
+        "captionStrokeWidth",
+        "captionBackgroundBlurRadius",
+        "captionDisappearDelay",
         "liveVadBufferSize",
         "batchVadBufferSize",
         "llmRequestTimeoutSeconds",
@@ -1016,6 +1102,25 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         value
             .as_str()
             .is_some_and(|o| matches!(o, "original_first" | "translation_first"))
+    });
+    repair_field_type(config, &defaults, "captionWindowX", |value| {
+        value.is_null() || value.as_f64().is_some()
+    });
+    repair_field_type(config, &defaults, "captionWindowY", |value| {
+        value.is_null() || value.as_f64().is_some()
+    });
+    repair_field_type(config, &defaults, "captionDisplayPriority", |value| {
+        value.as_str().is_some_and(|p| {
+            matches!(
+                p,
+                "original_main" | "translation_main" | "original_only" | "translation_only"
+            )
+        })
+    });
+    repair_field_type(config, &defaults, "captionTextAlign", |value| {
+        value
+            .as_str()
+            .is_some_and(|a| matches!(a, "left" | "center" | "right"))
     });
     repair_field_type(
         config,

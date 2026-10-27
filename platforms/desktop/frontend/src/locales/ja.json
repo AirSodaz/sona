@@ -2096,6 +2096,8 @@
     "caption_disappear_delay_hint": "発話停止後に字幕が消えるまでの待機時間（その後フェードアウト）",
     "caption_lock_shortcut": "クリック透過ショートカット",
     "caption_lock_shortcut_hint": "字幕ウィンドウのマウスクリック透過を切り替えるグローバルショートカット",
+    "caption_reset_position": "ウィンドウ位置をリセット",
+    "caption_reset_position_hint": "字幕フローティングウィンドウを画面下部中央のデフォルト位置にリセットします",
     "subtitle_voice_typing_title": "字幕と Voice Typing",
     "subtitle_voice_typing_desc": "ライブ字幕ウィンドウと、他のアプリへの音声入力を設定します。",
     "subtitle_tab_description": "デスクトップライブ字幕のウィンドウ動作と外観表示を設定します。",

@@ -180,8 +180,17 @@ export async function resolveCaptionWindowInitialPosition(
   const defaultY = Math.round(workArea.y + workArea.height - physHeight - Math.round(28 * scale));
 
   if (savedX != null && savedY != null) {
-    if (monitors.length > 0) {
-      const isInsideAnyMonitor = monitors.some((m) => {
+    const candidates = monitors.length > 0 ? monitors : monitor ? [monitor] : [];
+    if (candidates.length > 0) {
+      const isInsideAnyMonitor = candidates.some((m) => {
+        if (
+          m?.position?.x == null ||
+          m?.position?.y == null ||
+          m?.size?.width == null ||
+          m?.size?.height == null
+        ) {
+          return false;
+        }
         const minX = m.position.x;
         const maxX = m.position.x + m.size.width;
         const minY = m.position.y;
@@ -216,6 +225,7 @@ export class CaptionWindowService {
   private moveUnlisten: (() => void) | null = null;
   private moveTimer: number | null = null;
   private isResettingPosition = false;
+  private isBindingMoveListener = false;
 
   constructor(private readonly ports: CaptionWindowServicePorts) {
     this.controller = this.ports.createAuxWindowController({
@@ -229,8 +239,8 @@ export class CaptionWindowService {
           decorations: false,
           transparent: true,
           skipTaskbar: true,
-          x: displayState.position?.[0],
-          y: displayState.position?.[1],
+          x: undefined,
+          y: undefined,
           width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
           height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
           minWidth: 200,
@@ -319,9 +329,10 @@ export class CaptionWindowService {
     );
 
     const hadExistingWindow = Boolean(await this.controller.getWindow());
+    const shouldSetPosition = !hadExistingWindow || options?.x != null || options?.y != null;
     const windowInstance = await this.controller.open({
       size: { width: nextStyle.width, height: CAPTION_INITIAL_HEIGHT },
-      position: [targetX, targetY],
+      ...(shouldSetPosition ? { position: [targetX, targetY] } : {}),
       focus: true,
       alwaysOnTop: requestedAlwaysOnTop ?? true,
     });
@@ -335,10 +346,23 @@ export class CaptionWindowService {
       await windowInstance.setPosition(new PhysicalPosition(targetX, targetY)).catch(() => {});
     }
 
-    if (!this.moveUnlisten && typeof windowInstance.onMoved === 'function') {
+    if (
+      !this.moveUnlisten &&
+      !this.isBindingMoveListener &&
+      typeof windowInstance.onMoved === 'function'
+    ) {
+      this.isBindingMoveListener = true;
       try {
         this.moveUnlisten = await windowInstance.onMoved(({ payload: position }) => {
           if (this.isResettingPosition) return;
+          if (
+            options?.x == null &&
+            options?.y == null &&
+            Math.abs(position.x - targetX) < 2 &&
+            Math.abs(position.y - targetY) < 2
+          ) {
+            return;
+          }
           clearTimeout(this.moveTimer ?? undefined);
           this.moveTimer = window.setTimeout(() => {
             useConfigStore.getState().setConfig({
@@ -348,16 +372,20 @@ export class CaptionWindowService {
           }, 300);
         });
 
-        windowInstance.once('tauri://destroyed', () => {
-          clearTimeout(this.moveTimer ?? undefined);
-          this.moveTimer = null;
-          if (this.moveUnlisten) {
-            this.moveUnlisten();
-            this.moveUnlisten = null;
-          }
-        });
+        windowInstance
+          .once('tauri://destroyed', () => {
+            clearTimeout(this.moveTimer ?? undefined);
+            this.moveTimer = null;
+            if (this.moveUnlisten) {
+              this.moveUnlisten();
+              this.moveUnlisten = null;
+            }
+          })
+          .catch(() => {});
       } catch (err) {
         logger.warn('[CaptionWindowService] Failed to bind window move listener', { err });
+      } finally {
+        this.isBindingMoveListener = false;
       }
     }
 
@@ -380,6 +408,7 @@ export class CaptionWindowService {
     logger.info('[CaptionWindowService] Requested to close caption window');
     clearTimeout(this.moveTimer ?? undefined);
     this.moveTimer = null;
+    this.isBindingMoveListener = false;
     if (this.moveUnlisten) {
       this.moveUnlisten();
       this.moveUnlisten = null;

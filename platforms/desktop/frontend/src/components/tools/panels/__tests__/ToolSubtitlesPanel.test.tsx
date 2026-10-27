@@ -50,6 +50,7 @@ describe('ToolSubtitlesPanel', () => {
         realtimeTranslationTargetLanguage: 'zh',
         captionDisplayMode: 'bilingual',
         captionBilingualOrder: 'original_first',
+        captionDisplayPriority: 'original_main',
       }),
     });
   });
@@ -258,6 +259,7 @@ describe('ToolSubtitlesPanel', () => {
           ...state.config,
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'original',
+          captionDisplayPriority: 'original_only',
         },
       }));
 
@@ -273,7 +275,7 @@ describe('ToolSubtitlesPanel', () => {
           ...state.config,
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'translation',
-          captionTranslationFontSize: 20,
+          captionDisplayPriority: 'translation_only',
           captionTranslationFontColor: '#6ee7b7',
         },
       }));
@@ -283,7 +285,7 @@ describe('ToolSubtitlesPanel', () => {
       expect(screen.queryByTestId('subtitle-preview-original')).toBeNull();
       const translation = screen.getByTestId('subtitle-preview-translation');
       expect(translation).toBeDefined();
-      expect(translation.style.fontSize).toBe('20px');
+      expect(translation.style.fontSize).toBe('24px');
       expect(translation.style.color).toBe('rgb(110, 231, 183)');
     });
 
@@ -294,7 +296,7 @@ describe('ToolSubtitlesPanel', () => {
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'bilingual',
           captionBilingualOrder: 'original_first',
-          captionFontSize: 24,
+          captionDisplayPriority: 'original_main',
           captionFontColor: '#ffffff',
           captionTranslationFontSize: 18,
           captionTranslationFontColor: '#6ee7b7',
@@ -319,7 +321,7 @@ describe('ToolSubtitlesPanel', () => {
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'bilingual',
           captionBilingualOrder: 'translation_first',
-          captionFontSize: 24,
+          captionDisplayPriority: 'translation_main',
           captionFontColor: '#ffffff',
           captionTranslationFontSize: 18,
           captionTranslationFontColor: '#6ee7b7',
@@ -333,8 +335,8 @@ describe('ToolSubtitlesPanel', () => {
       expect(children).toHaveLength(2);
       expect(children[0].getAttribute('data-testid')).toBe('subtitle-preview-translation');
       expect(children[1].getAttribute('data-testid')).toBe('subtitle-preview-original');
-      expect(children[0].style.fontSize).toBe('18px');
-      expect(children[1].style.fontSize).toBe('24px');
+      expect(children[0].style.fontSize).toBe('24px');
+      expect(children[1].style.fontSize).toBe('18px');
     });
   });
 });
