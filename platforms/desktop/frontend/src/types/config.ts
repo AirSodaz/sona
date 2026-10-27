@@ -199,6 +199,30 @@ export interface CaptionConfig {
   captionDisplayMode?: 'bilingual' | 'translation' | 'original';
   /** Bilingual order: original first or translation first. */
   captionBilingualOrder?: 'original_first' | 'translation_first';
+  /** Caption display priority: translation main, original main, translation only, or original only. Default: 'translation_main'. */
+  captionDisplayPriority?:
+    | 'translation_main'
+    | 'original_main'
+    | 'translation_only'
+    | 'original_only';
+  /** Whether to enable text stroke (outline). Default: true. */
+  captionTextStroke?: boolean;
+  /** Stroke width in pixels (1 to 5). Default: 2. */
+  captionStrokeWidth?: number;
+  /** Stroke color (HEX). Default: '#000000'. */
+  captionStrokeColor?: string;
+  /** Whether to enable text drop shadow. Default: true. */
+  captionTextShadow?: boolean;
+  /** Text alignment: center or left. Default: 'center'. */
+  captionTextAlign?: 'center' | 'left';
+  /** Whether to enable background acrylic/gaussian blur. Default: false. */
+  captionBackgroundBlur?: boolean;
+  /** Background blur radius in pixels. Default: 12. */
+  captionBackgroundBlurRadius?: number;
+  /** Disappear delay in seconds before fade-out (1.0 to 10.0). Default: 4.0. */
+  captionDisappearDelay?: number;
+  /** Global shortcut to toggle caption window click-through lock. Default: 'Alt+C'. */
+  captionLockShortcut?: string;
   /** Whether real-time translation is enabled. */
   realtimeTranslationEnabled?: boolean;
   /** Source language for real-time translation. */

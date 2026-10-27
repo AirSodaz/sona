@@ -102,6 +102,23 @@ vi.mock('../../utils/logger', () => ({
   },
 }));
 
+const defaultStyle = {
+  width: 800,
+  fontSize: 24,
+  color: '#ffffff',
+  backgroundColor: '#000000',
+  backgroundOpacity: 0.6,
+  textStroke: true,
+  strokeWidth: 2,
+  strokeColor: '#000000',
+  textShadow: true,
+  textAlign: 'center' as const,
+  backgroundBlur: false,
+  backgroundBlurRadius: 12,
+  disappearDelay: 4.0,
+  displayPriority: 'translation_main' as const,
+};
+
 describe('CaptionWindowService', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -139,13 +156,7 @@ describe('CaptionWindowService', () => {
       payload: {
         revision: 1,
         segments: [],
-        style: {
-          width: 800,
-          fontSize: 24,
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          backgroundOpacity: 0.6,
-        },
+        style: defaultStyle,
       },
     });
     expect(mocks.emitTo).toHaveBeenCalledWith(
@@ -157,13 +168,7 @@ describe('CaptionWindowService', () => {
       {
         revision: 1,
         segments: [],
-        style: {
-          width: 800,
-          fontSize: 24,
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          backgroundOpacity: 0.6,
-        },
+        style: defaultStyle,
       }
     );
   });
@@ -198,6 +203,7 @@ describe('CaptionWindowService', () => {
         revision: 1,
         segments: [],
         style: {
+          ...defaultStyle,
           width: 1000,
           fontSize: 32,
           color: '#ff0000',
@@ -225,13 +231,7 @@ describe('CaptionWindowService', () => {
       payload: {
         revision: 1,
         segments: [],
-        style: {
-          width: 800,
-          fontSize: 24,
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          backgroundOpacity: 0.6,
-        },
+        style: defaultStyle,
       },
     });
     expect(mocks.createdWindows[0].windowInstance.setIgnoreCursorEvents).toHaveBeenCalledWith(true);
@@ -269,11 +269,9 @@ describe('CaptionWindowService', () => {
         revision: 1,
         segments: [],
         style: {
+          ...defaultStyle,
           width: 1200,
           fontSize: 40,
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          backgroundOpacity: 0.6,
         },
       },
     });
@@ -289,11 +287,9 @@ describe('CaptionWindowService', () => {
         revision: 2,
         segments: [],
         style: {
+          ...defaultStyle,
           width: 1400,
           fontSize: 42,
-          color: '#ffffff',
-          backgroundColor: '#000000',
-          backgroundOpacity: 0.6,
         },
       },
     });
@@ -304,11 +300,7 @@ describe('CaptionWindowService', () => {
     const { captionWindowService } = await import('../captionWindowService');
 
     await captionWindowService.updateStyle({
-      width: 800,
-      fontSize: 24,
-      color: '#ffffff',
-      backgroundColor: '#000000',
-      backgroundOpacity: 0.6,
+      ...defaultStyle,
     });
 
     expect(mocks.invoke).not.toHaveBeenCalled();

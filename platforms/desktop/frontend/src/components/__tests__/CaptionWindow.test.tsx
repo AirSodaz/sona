@@ -176,10 +176,10 @@ describe('CaptionWindow', () => {
     expect(screen.getByText('New')).toBeTruthy();
   });
 
-  it('clears text after 3 seconds of inactivity', async () => {
-    render(<CaptionWindow />);
+  it('clears text after disappearDelay and fade transition', async () => {
+    const { container } = render(<CaptionWindow />);
 
-    // Add text
+    // Add text with disappearDelay: 3.0
     await act(async () => {
       if (mocks.listenCallbacks['caption:state']) {
         mocks.listenCallbacks['caption:state']({
@@ -197,21 +197,30 @@ describe('CaptionWindow', () => {
                 durations: [],
               },
             ],
-            style: defaultStyle,
+            style: { ...defaultStyle, disappearDelay: 3.0 },
           },
         });
       }
     });
     expect(screen.getByText('Hello')).toBeTruthy();
 
-    // Wait 3 seconds
+    const body = container.querySelector('.caption-window-body');
+    expect(body?.classList.contains('fading-out')).toBe(false);
+
+    // Wait 3 seconds -> starts fading out
     await act(async () => {
       vi.advanceTimersByTime(3000);
     });
+    expect(body?.classList.contains('fading-out')).toBe(true);
 
-    // Should be cleared
+    // Wait 300ms fade transition -> cleared
+    await act(async () => {
+      vi.advanceTimersByTime(300);
+    });
+
     expect(screen.queryByText('Waiting for speech...')).toBeNull();
     expect(screen.queryByText('Hello')).toBeNull();
+    expect(body?.classList.contains('fading-out')).toBe(false);
   });
 
   it('resizes window when content changes', async () => {
@@ -476,5 +485,176 @@ describe('CaptionWindow', () => {
     const errorBanner = container.querySelector('.caption-error-banner');
     expect(errorBanner).not.toBeNull();
     expect(errorBanner?.textContent).toContain('Model opus-mt-en-zh not installed');
+  });
+
+  it('applies text stroke and 8-axis shadow when textStroke is true', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-stroke',
+              text: 'Stroke test',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            textStroke: true,
+            strokeWidth: 3,
+            strokeColor: '#000000',
+            textShadow: true,
+          },
+        },
+      });
+    });
+
+    const originalLine = container.querySelector('.caption-original-line') as HTMLElement;
+    expect(originalLine).not.toBeNull();
+    expect(originalLine.style.webkitTextStroke).toBe('3px #000000');
+    expect(originalLine.style.textShadow).toContain('-1px -1px 0 #000000');
+    expect(originalLine.style.textShadow).toContain('0 3px 8px rgba(0, 0, 0, 0.85)');
+  });
+
+  it('renders translation_main with translation first, larger font, and original below', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-prio',
+              text: 'Original English',
+              translation: '中文译文',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayPriority: 'translation_main',
+            fontSize: 28,
+            translationFontSize: 18,
+            translationColor: '#10b981',
+          },
+        },
+      });
+    });
+
+    const translationLine = container.querySelector('.caption-translation-line') as HTMLElement;
+    const originalLine = container.querySelector('.caption-original-line') as HTMLElement;
+    expect(translationLine).not.toBeNull();
+    expect(originalLine).not.toBeNull();
+
+    // Translation is primary: 28px and translationColor
+    expect(translationLine.style.fontSize).toBe('28px');
+    expect(translationLine.style.color).toBe('rgb(16, 185, 129)');
+
+    // Original is secondary: 18px and 0.8 opacity
+    expect(originalLine.style.fontSize).toBe('18px');
+    expect(originalLine.style.opacity).toBe('0.8');
+
+    // DOM order: translation line appears before original line
+    expect(
+      translationLine.compareDocumentPosition(originalLine) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+  });
+
+  it('does not render original line in translation_only display priority', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-trans-only',
+              text: 'Original hidden text',
+              translation: 'Visible translation text',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            displayPriority: 'translation_only',
+          },
+        },
+      });
+    });
+
+    expect(screen.getByText('Visible translation text')).toBeDefined();
+    expect(screen.queryByText('Original hidden text')).toBeNull();
+    expect(container.querySelector('.caption-original-line')).toBeNull();
+  });
+
+  it('immediately interrupts fading-out state when new segment arrives', async () => {
+    const { container } = render(<CaptionWindow />);
+
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 1,
+          segments: [
+            {
+              id: 'seg-1',
+              text: 'Sentence one',
+              start: 0,
+              end: 1,
+              isFinal: true,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            disappearDelay: 4.0,
+          },
+        },
+      });
+    });
+
+    const body = container.querySelector('.caption-window-body') as HTMLElement;
+    expect(body.classList.contains('fading-out')).toBe(false);
+
+    // Advance 4s to trigger fade-out
+    await act(async () => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(body.classList.contains('fading-out')).toBe(true);
+
+    // New segment arrives mid-fade!
+    await act(async () => {
+      mocks.listenCallbacks['caption:state']?.({
+        payload: {
+          revision: 2,
+          segments: [
+            {
+              id: 'seg-2',
+              text: 'Sentence two',
+              start: 1,
+              end: 2,
+              isFinal: false,
+            },
+          ],
+          style: {
+            ...defaultStyle,
+            disappearDelay: 4.0,
+          },
+        },
+      });
+    });
+
+    // fading-out is immediately cleared, sentence two is visible
+    expect(body.classList.contains('fading-out')).toBe(false);
+    expect(screen.getByText('Sentence two')).toBeDefined();
   });
 });

@@ -270,6 +270,26 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_bilingual_order: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_display_priority: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_stroke: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_stroke_width: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_stroke_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_shadow: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_align: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_background_blur: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_background_blur_radius: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_disappear_delay: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_lock_shortcut: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realtime_translation_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realtime_translation_source_language: Option<String>,

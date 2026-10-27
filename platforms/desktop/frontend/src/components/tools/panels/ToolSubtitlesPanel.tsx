@@ -17,10 +17,17 @@ import {
 import { useCaptionConfig, useConfigStore, useSetConfig } from '../../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { hexToRgba } from '../../../utils/colorUtils';
+import { computeCaptionTextStyle } from '../../CaptionWindow';
 import { ColorSwatchPicker } from '../../ColorSwatchPicker';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
-import { SettingsItem, SettingsSection, SettingsTabContainer } from '../../settings/SettingsLayout';
+import {
+  SegmentedSubTabs,
+  SettingsItem,
+  SettingsSection,
+  SettingsTabContainer,
+} from '../../settings/SettingsLayout';
+import { SettingsShortcutInput } from '../../settings/SettingsShortcutInput';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 
 const SUBTITLE_COLOR_PRESETS = ['#ffffff', '#000000', '#facc15', '#60a5fa', '#4ade80', '#f87171'];
@@ -70,6 +77,68 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   } = useRealtimeTranslationConfig();
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
+  const captionTextStroke = config.captionTextStroke ?? true;
+  const captionStrokeWidth = config.captionStrokeWidth ?? 2;
+  const captionStrokeColor = config.captionStrokeColor || '#000000';
+  const captionTextShadow = config.captionTextShadow ?? true;
+  const captionTextAlign = config.captionTextAlign ?? 'center';
+  const captionBackgroundBlur = config.captionBackgroundBlur ?? false;
+  const captionBackgroundBlurRadius = config.captionBackgroundBlurRadius ?? 12;
+  const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
+  const captionLockShortcut = config.captionLockShortcut || 'Alt+C';
+
+  const captionDisplayPriority:
+    | 'translation_main'
+    | 'original_main'
+    | 'translation_only'
+    | 'original_only' =
+    captionDisplayMode === 'translation'
+      ? 'translation_only'
+      : captionDisplayMode === 'original'
+        ? 'original_only'
+        : captionBilingualOrder === 'translation_first'
+          ? 'translation_main'
+          : 'original_main';
+
+  const isTranslationMain = captionDisplayPriority === 'translation_main';
+  const isOriginalMain = captionDisplayPriority === 'original_main';
+  const isTranslationOnly = captionDisplayPriority === 'translation_only';
+  const isOriginalOnly = captionDisplayPriority === 'original_only';
+  const captionStyle = useMemo(
+    () => ({
+      width: captionWindowWidth,
+      fontSize: captionFontSize,
+      color: captionFontColor,
+      backgroundColor: captionBackgroundColor,
+      backgroundOpacity: captionBackgroundOpacity,
+      textStroke: captionTextStroke,
+      strokeWidth: captionStrokeWidth,
+      strokeColor: captionStrokeColor,
+      textShadow: captionTextShadow,
+      textAlign: captionTextAlign,
+      backgroundBlur: captionBackgroundBlur,
+      backgroundBlurRadius: captionBackgroundBlurRadius,
+      disappearDelay: captionDisappearDelay,
+      displayPriority: captionDisplayPriority,
+    }),
+    [
+      captionWindowWidth,
+      captionFontSize,
+      captionFontColor,
+      captionBackgroundColor,
+      captionBackgroundOpacity,
+      captionTextStroke,
+      captionStrokeWidth,
+      captionStrokeColor,
+      captionTextShadow,
+      captionTextAlign,
+      captionBackgroundBlur,
+      captionBackgroundBlurRadius,
+      captionDisappearDelay,
+      captionDisplayPriority,
+    ]
+  );
+
   const displayModeOptions = useMemo(
     () => [
       {
@@ -116,6 +185,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
         color: captionFontColor,
         margin: 0,
         fontWeight: 500,
+        textAlign: captionTextAlign,
+        ...computeCaptionTextStyle(captionStyle, true, false),
       }}
     >
       {t('tools.subtitles_preview_text_primary', {
@@ -134,6 +205,8 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
         color: captionTranslationFontColor,
         margin: 0,
         opacity: 0.9,
+        textAlign: captionTextAlign,
+        ...computeCaptionTextStyle(captionStyle, false, true),
       }}
     >
       {t('tools.subtitles_preview_text_secondary', {
@@ -220,6 +293,21 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
               checked={lockWindow}
               onChange={(enabled) => updateConfig({ lockWindow: enabled })}
               aria-label={t('live.lock_window', { defaultValue: 'Lock Window' })}
+            />
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.caption_lock_shortcut', {
+              defaultValue: 'Lock Click-Through Shortcut',
+            })}
+            hint={t('settings.caption_lock_shortcut_hint', {
+              defaultValue:
+                'Global hotkey to toggle mouse click-through for the live caption window.',
+            })}
+          >
+            <SettingsShortcutInput
+              value={captionLockShortcut}
+              onChange={(val) => updateConfig({ captionLockShortcut: val })}
             />
           </SettingsItem>
         </SettingsSection>
@@ -316,11 +404,21 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                   })}
                   options={displayModeOptions}
                   value={captionDisplayMode}
-                  onChange={(val) =>
+                  onChange={(val) => {
+                    const mode = val as 'bilingual' | 'translation' | 'original';
+                    const priority =
+                      mode === 'translation'
+                        ? 'translation_only'
+                        : mode === 'original'
+                          ? 'original_only'
+                          : captionBilingualOrder === 'translation_first'
+                            ? 'translation_main'
+                            : 'original_main';
                     updateConfig({
-                      captionDisplayMode: val as 'bilingual' | 'translation' | 'original',
-                    })
-                  }
+                      captionDisplayMode: mode,
+                      captionDisplayPriority: priority,
+                    });
+                  }}
                   style={{ width: '260px' }}
                 />
               </SettingsItem>
@@ -338,11 +436,14 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                     })}
                     options={bilingualOrderOptions}
                     value={captionBilingualOrder}
-                    onChange={(val) =>
+                    onChange={(val) => {
+                      const order = val as 'original_first' | 'translation_first';
                       updateConfig({
-                        captionBilingualOrder: val as 'original_first' | 'translation_first',
-                      })
-                    }
+                        captionBilingualOrder: order,
+                        captionDisplayPriority:
+                          order === 'translation_first' ? 'translation_main' : 'original_main',
+                      });
+                    }}
                     style={{ width: '200px' }}
                   />
                 </SettingsItem>
@@ -505,6 +606,136 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
               </span>
             </div>
           </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.caption_text_align', { defaultValue: 'Text Alignment' })}
+          >
+            <SegmentedSubTabs<'center' | 'left'>
+              id="tools-caption-text-align-select"
+              role="radiogroup"
+              size="sm"
+              ariaLabel={t('settings.caption_text_align', { defaultValue: 'Text Alignment' })}
+              items={[
+                {
+                  value: 'center',
+                  label: t('settings.caption_align_center', { defaultValue: 'Center' }),
+                },
+                {
+                  value: 'left',
+                  label: t('settings.caption_align_left', { defaultValue: 'Left' }),
+                },
+              ]}
+              activeTab={captionTextAlign}
+              onChange={(val) => updateConfig({ captionTextAlign: val })}
+            />
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.caption_text_stroke', { defaultValue: 'Text Stroke' })}
+            hint={t('settings.caption_text_stroke_hint', {
+              defaultValue: 'Adds a high-contrast outline for readability on bright backgrounds.',
+            })}
+          >
+            <Switch
+              checked={captionTextStroke}
+              onChange={(enabled) => updateConfig({ captionTextStroke: enabled })}
+            />
+          </SettingsItem>
+
+          {captionTextStroke && (
+            <>
+              <SettingsItem
+                title={t('settings.caption_stroke_width', { defaultValue: 'Stroke Width' })}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
+                  <input
+                    type="range"
+                    min="1"
+                    max="5"
+                    step="0.5"
+                    value={captionStrokeWidth}
+                    onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
+                    className="settings-slider"
+                    style={{ flex: 1 }}
+                  />
+                  <span
+                    style={{
+                      width: '40px',
+                      textAlign: 'right',
+                      fontSize: '13px',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {captionStrokeWidth}px
+                  </span>
+                </div>
+              </SettingsItem>
+
+              <SettingsItem
+                title={t('settings.caption_stroke_color', { defaultValue: 'Stroke Color' })}
+              >
+                <ColorSwatchPicker
+                  value={captionStrokeColor}
+                  onChange={(color) => updateConfig({ captionStrokeColor: color })}
+                  aria-label={t('settings.caption_stroke_color', { defaultValue: 'Stroke Color' })}
+                />
+              </SettingsItem>
+            </>
+          )}
+
+          <SettingsItem
+            title={t('settings.caption_text_shadow', { defaultValue: 'Text Shadow' })}
+            hint={t('settings.caption_text_shadow_hint', {
+              defaultValue: 'Soft drop shadow behind caption text.',
+            })}
+          >
+            <Switch
+              checked={captionTextShadow}
+              onChange={(enabled) => updateConfig({ captionTextShadow: enabled })}
+            />
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.caption_background_blur', { defaultValue: 'Background Blur' })}
+            hint={t('settings.caption_background_blur_hint', {
+              defaultValue: 'Frosted glass effect behind subtitles.',
+            })}
+          >
+            <Switch
+              checked={captionBackgroundBlur}
+              onChange={(enabled) => updateConfig({ captionBackgroundBlur: enabled })}
+            />
+          </SettingsItem>
+
+          <SettingsItem
+            title={t('settings.caption_disappear_delay', { defaultValue: 'Disappear Delay' })}
+            hint={t('settings.caption_disappear_delay_hint', {
+              defaultValue: 'Time in seconds before subtitles fade out after speech stops.',
+            })}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
+              <input
+                type="range"
+                min="1"
+                max="10"
+                step="0.5"
+                value={captionDisappearDelay}
+                onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
+                className="settings-slider"
+                style={{ flex: 1 }}
+              />
+              <span
+                style={{
+                  width: '40px',
+                  textAlign: 'right',
+                  fontSize: '13px',
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {captionDisappearDelay.toFixed(1)}s
+              </span>
+            </div>
+          </SettingsItem>
         </SettingsSection>
 
         {/* Real-time WYSIWYG Subtitle Preview */}
@@ -527,25 +758,29 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '6px',
+                textAlign: captionTextAlign,
+                ...(captionBackgroundBlur
+                  ? {
+                      backdropFilter: `blur(${captionBackgroundBlurRadius}px)`,
+                      WebkitBackdropFilter: `blur(${captionBackgroundBlurRadius}px)`,
+                    }
+                  : {}),
               }}
             >
-              {(!realtimeTranslationEnabled || captionDisplayMode === 'original') && originalLine}
-              {realtimeTranslationEnabled &&
-                captionDisplayMode === 'translation' &&
-                translationLine}
-              {realtimeTranslationEnabled &&
-                captionDisplayMode === 'bilingual' &&
-                (captionBilingualOrder === 'translation_first' ? (
-                  <>
-                    {translationLine}
-                    {originalLine}
-                  </>
-                ) : (
-                  <>
-                    {originalLine}
-                    {translationLine}
-                  </>
-                ))}
+              {(!realtimeTranslationEnabled || isOriginalOnly) && originalLine}
+              {realtimeTranslationEnabled && isTranslationOnly && translationLine}
+              {realtimeTranslationEnabled && isTranslationMain && (
+                <>
+                  {translationLine}
+                  {originalLine}
+                </>
+              )}
+              {realtimeTranslationEnabled && isOriginalMain && (
+                <>
+                  {originalLine}
+                  {translationLine}
+                </>
+              )}
             </div>
           </div>
         </SettingsSection>

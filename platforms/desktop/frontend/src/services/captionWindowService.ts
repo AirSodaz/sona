@@ -22,6 +22,15 @@ export interface CaptionWindowStyle {
   bilingualOrder?: 'original_first' | 'translation_first';
   translationColor?: string;
   translationFontSize?: number;
+  displayPriority?: 'translation_main' | 'original_main' | 'translation_only' | 'original_only';
+  textStroke?: boolean;
+  strokeWidth?: number;
+  strokeColor?: string;
+  textShadow?: boolean;
+  textAlign?: 'center' | 'left';
+  backgroundBlur?: boolean;
+  backgroundBlurRadius?: number;
+  disappearDelay?: number;
 }
 
 export interface CaptionWindowOpenOptions {
@@ -36,6 +45,15 @@ export interface CaptionWindowOpenOptions {
   bilingualOrder?: 'original_first' | 'translation_first';
   translationColor?: string;
   translationFontSize?: number;
+  displayPriority?: 'translation_main' | 'original_main' | 'translation_only' | 'original_only';
+  textStroke?: boolean;
+  strokeWidth?: number;
+  strokeColor?: string;
+  textShadow?: boolean;
+  textAlign?: 'center' | 'left';
+  backgroundBlur?: boolean;
+  backgroundBlurRadius?: number;
+  disappearDelay?: number;
 }
 
 export interface CaptionWindowState {
@@ -50,6 +68,15 @@ const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
   color: '#ffffff',
   backgroundColor: '#000000',
   backgroundOpacity: 0.6,
+  textStroke: true,
+  strokeWidth: 2,
+  strokeColor: '#000000',
+  textShadow: true,
+  textAlign: 'center',
+  backgroundBlur: false,
+  backgroundBlurRadius: 12,
+  disappearDelay: 4.0,
+  displayPriority: 'translation_main',
 };
 
 export const DEFAULT_CAPTION_WINDOW_STATE: CaptionWindowState = {
@@ -68,7 +95,16 @@ function areCaptionStylesEqual(left: CaptionWindowStyle, right: CaptionWindowSty
     left.displayMode === right.displayMode &&
     left.bilingualOrder === right.bilingualOrder &&
     left.translationColor === right.translationColor &&
-    left.translationFontSize === right.translationFontSize
+    left.translationFontSize === right.translationFontSize &&
+    left.displayPriority === right.displayPriority &&
+    left.textStroke === right.textStroke &&
+    left.strokeWidth === right.strokeWidth &&
+    left.strokeColor === right.strokeColor &&
+    left.textShadow === right.textShadow &&
+    left.textAlign === right.textAlign &&
+    left.backgroundBlur === right.backgroundBlur &&
+    left.backgroundBlurRadius === right.backgroundBlurRadius &&
+    left.disappearDelay === right.disappearDelay
   );
 }
 
@@ -166,31 +202,37 @@ export class CaptionWindowService {
     });
 
     const nextStyle: CaptionWindowStyle = {
-      width: options?.width ?? this.state.style.width,
-      fontSize: options?.fontSize ?? this.state.style.fontSize,
-      color: options?.color ?? this.state.style.color,
-      backgroundColor: options?.backgroundColor ?? this.state.style.backgroundColor,
-      backgroundOpacity: options?.backgroundOpacity ?? this.state.style.backgroundOpacity,
-      ...(options?.displayMode !== undefined
-        ? { displayMode: options.displayMode }
-        : this.state.style.displayMode !== undefined
-          ? { displayMode: this.state.style.displayMode }
-          : {}),
-      ...(options?.bilingualOrder !== undefined
-        ? { bilingualOrder: options.bilingualOrder }
-        : this.state.style.bilingualOrder !== undefined
-          ? { bilingualOrder: this.state.style.bilingualOrder }
-          : {}),
+      ...this.state.style,
+      ...(options?.width !== undefined ? { width: options.width } : {}),
+      ...(options?.fontSize !== undefined ? { fontSize: options.fontSize } : {}),
+      ...(options?.color !== undefined ? { color: options.color } : {}),
+      ...(options?.backgroundColor !== undefined
+        ? { backgroundColor: options.backgroundColor }
+        : {}),
+      ...(options?.backgroundOpacity !== undefined
+        ? { backgroundOpacity: options.backgroundOpacity }
+        : {}),
+      ...(options?.displayMode !== undefined ? { displayMode: options.displayMode } : {}),
+      ...(options?.bilingualOrder !== undefined ? { bilingualOrder: options.bilingualOrder } : {}),
       ...(options?.translationColor !== undefined
         ? { translationColor: options.translationColor }
-        : this.state.style.translationColor !== undefined
-          ? { translationColor: this.state.style.translationColor }
-          : {}),
+        : {}),
       ...(options?.translationFontSize !== undefined
         ? { translationFontSize: options.translationFontSize }
-        : this.state.style.translationFontSize !== undefined
-          ? { translationFontSize: this.state.style.translationFontSize }
-          : {}),
+        : {}),
+      ...(options?.displayPriority !== undefined
+        ? { displayPriority: options.displayPriority }
+        : {}),
+      ...(options?.textStroke !== undefined ? { textStroke: options.textStroke } : {}),
+      ...(options?.strokeWidth !== undefined ? { strokeWidth: options.strokeWidth } : {}),
+      ...(options?.strokeColor !== undefined ? { strokeColor: options.strokeColor } : {}),
+      ...(options?.textShadow !== undefined ? { textShadow: options.textShadow } : {}),
+      ...(options?.textAlign !== undefined ? { textAlign: options.textAlign } : {}),
+      ...(options?.backgroundBlur !== undefined ? { backgroundBlur: options.backgroundBlur } : {}),
+      ...(options?.backgroundBlurRadius !== undefined
+        ? { backgroundBlurRadius: options.backgroundBlurRadius }
+        : {}),
+      ...(options?.disappearDelay !== undefined ? { disappearDelay: options.disappearDelay } : {}),
     };
 
     await this.commitState({ style: nextStyle });
@@ -267,43 +309,33 @@ export class CaptionWindowService {
     }
   }
 
-  async updateStyle(style: {
-    width?: number;
-    fontSize?: number;
-    color?: string;
-    backgroundColor?: string;
-    backgroundOpacity?: number;
-    displayMode?: 'bilingual' | 'translation' | 'original';
-    bilingualOrder?: 'original_first' | 'translation_first';
-    translationColor?: string;
-    translationFontSize?: number;
-  }) {
+  async updateStyle(style: Partial<CaptionWindowStyle>) {
     const nextStyle: CaptionWindowStyle = {
-      width: style.width ?? this.state.style.width,
-      fontSize: style.fontSize ?? this.state.style.fontSize,
-      color: style.color ?? this.state.style.color,
-      backgroundColor: style.backgroundColor ?? this.state.style.backgroundColor,
-      backgroundOpacity: style.backgroundOpacity ?? this.state.style.backgroundOpacity,
-      ...(style.displayMode !== undefined
-        ? { displayMode: style.displayMode }
-        : this.state.style.displayMode !== undefined
-          ? { displayMode: this.state.style.displayMode }
-          : {}),
-      ...(style.bilingualOrder !== undefined
-        ? { bilingualOrder: style.bilingualOrder }
-        : this.state.style.bilingualOrder !== undefined
-          ? { bilingualOrder: this.state.style.bilingualOrder }
-          : {}),
-      ...(style.translationColor !== undefined
-        ? { translationColor: style.translationColor }
-        : this.state.style.translationColor !== undefined
-          ? { translationColor: this.state.style.translationColor }
-          : {}),
+      ...this.state.style,
+      ...(style.width !== undefined ? { width: style.width } : {}),
+      ...(style.fontSize !== undefined ? { fontSize: style.fontSize } : {}),
+      ...(style.color !== undefined ? { color: style.color } : {}),
+      ...(style.backgroundColor !== undefined ? { backgroundColor: style.backgroundColor } : {}),
+      ...(style.backgroundOpacity !== undefined
+        ? { backgroundOpacity: style.backgroundOpacity }
+        : {}),
+      ...(style.displayMode !== undefined ? { displayMode: style.displayMode } : {}),
+      ...(style.bilingualOrder !== undefined ? { bilingualOrder: style.bilingualOrder } : {}),
+      ...(style.translationColor !== undefined ? { translationColor: style.translationColor } : {}),
       ...(style.translationFontSize !== undefined
         ? { translationFontSize: style.translationFontSize }
-        : this.state.style.translationFontSize !== undefined
-          ? { translationFontSize: this.state.style.translationFontSize }
-          : {}),
+        : {}),
+      ...(style.displayPriority !== undefined ? { displayPriority: style.displayPriority } : {}),
+      ...(style.textStroke !== undefined ? { textStroke: style.textStroke } : {}),
+      ...(style.strokeWidth !== undefined ? { strokeWidth: style.strokeWidth } : {}),
+      ...(style.strokeColor !== undefined ? { strokeColor: style.strokeColor } : {}),
+      ...(style.textShadow !== undefined ? { textShadow: style.textShadow } : {}),
+      ...(style.textAlign !== undefined ? { textAlign: style.textAlign } : {}),
+      ...(style.backgroundBlur !== undefined ? { backgroundBlur: style.backgroundBlur } : {}),
+      ...(style.backgroundBlurRadius !== undefined
+        ? { backgroundBlurRadius: style.backgroundBlurRadius }
+        : {}),
+      ...(style.disappearDelay !== undefined ? { disappearDelay: style.disappearDelay } : {}),
     };
 
     if (areCaptionStylesEqual(nextStyle, this.state.style)) {

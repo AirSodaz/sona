@@ -144,6 +144,15 @@ describe('captionSessionRuntime', () => {
       bilingualOrder: config.captionBilingualOrder,
       translationColor: config.captionTranslationFontColor,
       translationFontSize: config.captionTranslationFontSize,
+      displayPriority: config.captionDisplayPriority,
+      textStroke: config.captionTextStroke,
+      strokeWidth: config.captionStrokeWidth,
+      strokeColor: config.captionStrokeColor,
+      textShadow: config.captionTextShadow,
+      textAlign: config.captionTextAlign,
+      backgroundBlur: config.captionBackgroundBlur,
+      backgroundBlurRadius: config.captionBackgroundBlurRadius,
+      disappearDelay: config.captionDisappearDelay,
     });
   });
 

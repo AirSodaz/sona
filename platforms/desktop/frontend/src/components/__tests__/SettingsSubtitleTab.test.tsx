@@ -57,6 +57,15 @@ vi.mock('../../stores/configStore', () => ({
     captionFontColor: '#ffffff',
     captionBackgroundColor: '#000000',
     captionBackgroundOpacity: 0.6,
+    captionDisplayPriority: 'translation_main',
+    captionTextStroke: true,
+    captionStrokeWidth: 2,
+    captionStrokeColor: '#000000',
+    captionTextShadow: true,
+    captionTextAlign: 'center',
+    captionBackgroundBlur: false,
+    captionDisappearDelay: 4.0,
+    captionLockShortcut: 'Alt+C',
   }),
   useVoiceTypingConfig: () => ({
     voiceTypingEnabled: false,
@@ -247,6 +256,37 @@ describe('SettingsSubtitleTab', () => {
     ) as HTMLInputElement;
     fireEvent.change(hexInput, { target: { value: '#1A1A1A' } });
     expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#1A1A1A' });
+  });
+
+  it('updates stroke width, stroke color, alignment, disappear delay, and priority in subtitle settings', () => {
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    // Text alignment: click left tab
+    const leftAlignTab = screen.getByRole('radio', { name: 'settings.caption_align_left' });
+    fireEvent.click(leftAlignTab);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionTextAlign: 'left' });
+
+    // Text stroke width slider
+    const strokeWidthSlider = document.querySelector(
+      'input[type="range"][min="1"][max="5"]'
+    ) as HTMLInputElement;
+    expect(strokeWidthSlider).not.toBeNull();
+    fireEvent.change(strokeWidthSlider, { target: { value: '3.5' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeWidth: 3.5 });
+
+    // Disappear delay slider
+    const delaySlider = document.querySelector(
+      'input[type="range"][min="1"][max="10"]'
+    ) as HTMLInputElement;
+    expect(delaySlider).not.toBeNull();
+    fireEvent.change(delaySlider, { target: { value: '5.5' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionDisappearDelay: 5.5 });
+
+    // Stroke color swatch
+    const strokeColorContainer = screen.getByLabelText('settings.caption_stroke_color');
+    const swatch = within(strokeColorContainer).getByRole('button', { name: '#10B981' });
+    fireEvent.click(swatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeColor: '#10B981' });
   });
 
   it('updates voice typing settings from the combined page', () => {
