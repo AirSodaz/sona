@@ -20,6 +20,7 @@ import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { DEFAULT_LLM_STATE } from '../stores/transcriptSidecarState';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import { DEFAULT_PROJECT_PIPELINE } from '../types/project';
 import { getLocalizedLanguageName } from '../utils/languageUtils';
 import {
@@ -101,9 +102,15 @@ export function TranslateButton({
 
   const segmentsLength = useTranscriptSessionStore((state) => state.segments.length);
   const isRecording = useTranscriptRuntimeStore((state) => state.isRecording);
+  const recordingSessionId = useTranscriptStore((state) => state.recordingSessionId);
 
   // LLM state
   const sourceHistoryId = useTranscriptSessionStore((state) => state.sourceHistoryId);
+  const isLiveSession =
+    isRecording &&
+    (recordingSessionId
+      ? sourceHistoryId === recordingSessionId
+      : !sourceHistoryId || sourceHistoryId === 'current');
   const llmState =
     useTranscriptSidecarStore((state) => state.llmStates[sourceHistoryId || 'current']) ||
     DEFAULT_LLM_STATE;
@@ -134,9 +141,10 @@ export function TranslateButton({
   const [installedModels, setInstalledModels] = useState<Record<string, boolean>>({});
 
   const translationLlm = getFeatureLlmConfig(config, 'translation');
-  const isLocalOnnx =
-    translationLlm?.strategy === 'local_nmt' ||
-    (!translationLlm && config.realtimeTranslationEngine === 'onnx');
+  const isLocalOnnx = isLiveSession
+    ? (config.realtimeTranslationEngine ?? 'onnx') === 'onnx'
+    : translationLlm?.strategy === 'local_nmt' ||
+      (!translationLlm && config.realtimeTranslationEngine === 'onnx');
   useEffect(() => {
     let active = true;
     if (isOpen && isLocalOnnx && typeof modelService?.isModelInstalled === 'function') {
@@ -303,7 +311,7 @@ export function TranslateButton({
       }
     }
 
-    if (isRecording && realtimeTranslationEnabled) {
+    if (isLiveSession && realtimeTranslationEnabled) {
       void toggleLiveTranslation({
         enabled: true,
         sourceLang: newSrc,
@@ -322,6 +330,7 @@ export function TranslateButton({
   const handleToggleRealtime = async () => {
     const nextEnabled = !realtimeTranslationEnabled;
     setConfig({ realtimeTranslationEnabled: nextEnabled });
+    if (!isLiveSession) return;
     try {
       await toggleLiveTranslation({
         enabled: nextEnabled,
@@ -355,7 +364,16 @@ export function TranslateButton({
       realtimeTranslationTargetLanguage: nextTarget,
       translationLanguage: nextTarget,
     });
-    if (isRecording && realtimeTranslationEnabled) {
+    if (projectId && projectPipeline.isProjectPipeline) {
+      const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+      if (project) {
+        void useProjectStore.getState().updateProjectPipeline(projectId, {
+          ...(project.pipeline ?? DEFAULT_PROJECT_PIPELINE),
+          targetLanguage: nextTarget,
+        });
+      }
+    }
+    if (isLiveSession && realtimeTranslationEnabled) {
       void toggleLiveTranslation({
         enabled: true,
         sourceLang: langCode,
@@ -393,15 +411,23 @@ export function TranslateButton({
       }
     }
 
+    let nextSource = effectiveSourceLang;
+    if (langCode === effectiveSourceLang && effectiveSourceLang !== 'auto') {
+      nextSource = langCode === 'zh' ? 'en' : 'zh';
+      setConfig({
+        realtimeTranslationSourceLanguage: nextSource,
+      });
+    }
+
     setConfig({
       translationLanguage: langCode,
       realtimeTranslationTargetLanguage: langCode,
     });
 
-    if (isRecording && realtimeTranslationEnabled) {
+    if (isLiveSession && realtimeTranslationEnabled) {
       void toggleLiveTranslation({
         enabled: true,
-        sourceLang: effectiveSourceLang,
+        sourceLang: nextSource,
         targetLang: langCode,
         catchupSegments: segments.filter((s) => s.isFinal),
       }).catch(async (error) => {
@@ -489,7 +515,7 @@ export function TranslateButton({
           aria-labelledby="translate-menu-button"
           style={{ minWidth: '250px' }}
         >
-          {isRecording ? (
+          {isLiveSession ? (
             <div
               style={{
                 padding: '8px 12px',
@@ -521,8 +547,10 @@ export function TranslateButton({
                     onChange={handleToggleRealtime}
                     role="switch"
                     aria-checked={realtimeTranslationEnabled}
+                    aria-label={t('translation.realtime_toggle', {
+                      defaultValue: 'Real-time Bilingual Translation',
+                    })}
                   />
-                  <span className="toggle-slider round" />
                 </label>
               </div>
             </div>

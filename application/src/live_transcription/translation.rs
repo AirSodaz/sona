@@ -77,13 +77,23 @@ impl StreamingTranslationCoordinator {
     pub fn clear(&self) {
         self.states.lock().clear();
     }
+    pub fn remove_states(&self, ids: &[String]) {
+        if ids.is_empty() {
+            return;
+        }
+        let mut states = self.states.lock();
+        for id in ids {
+            states.remove(id);
+        }
+    }
+
     pub fn fill_cached(&self, update: &mut TranscriptUpdate) {
         let states = self.states.lock();
         for segment in &mut update.upsert_segments {
-            if segment.is_final {
+            let text = segment.text.trim();
+            if text.is_empty() {
                 continue;
             }
-            let text = segment.text.trim();
             let effective_source = if self.source_lang.trim().is_empty()
                 || self.source_lang.trim().eq_ignore_ascii_case("auto")
             {
@@ -97,14 +107,29 @@ impl StreamingTranslationCoordinator {
             }
 
             if let Some(state) = states.get(&segment.id) {
-                if segment.translation.is_none() {
+                if segment.is_final {
                     let frozen = state.stabilizer.frozen_prefix();
-                    if !frozen.is_empty() {
-                        segment.translation = Some(frozen.to_string());
+                    let draft = state.last_draft_translation.as_deref().unwrap_or("");
+                    let combined = match (!frozen.is_empty(), !draft.is_empty()) {
+                        (true, true) => format!("{frozen}{draft}"),
+                        (true, false) => frozen.to_string(),
+                        (false, true) => draft.to_string(),
+                        (false, false) => String::new(),
+                    };
+                    if !combined.is_empty() {
+                        segment.translation = Some(combined);
                     }
-                }
-                if segment.draft_translation.is_none() {
-                    segment.draft_translation = state.last_draft_translation.clone();
+                    segment.draft_translation = None;
+                } else {
+                    if segment.translation.is_none() {
+                        let frozen = state.stabilizer.frozen_prefix();
+                        if !frozen.is_empty() {
+                            segment.translation = Some(frozen.to_string());
+                        }
+                    }
+                    if segment.draft_translation.is_none() {
+                        segment.draft_translation = state.last_draft_translation.clone();
+                    }
                 }
             }
         }
@@ -166,11 +191,16 @@ impl StreamingTranslationCoordinator {
                         log::warn!("Final translation failed for segment {}: {err}", segment.id);
                         let mut states = self.states.lock();
                         if let Some(state) = states.remove(&segment.id) {
-                            let frozen = state.stabilizer.frozen_prefix().to_string();
-                            if !frozen.is_empty() {
-                                segment.translation = Some(frozen);
-                            } else {
-                                segment.translation = state.last_draft_translation;
+                            let frozen = state.stabilizer.frozen_prefix();
+                            let draft = state.last_draft_translation.as_deref().unwrap_or("");
+                            let combined = match (!frozen.is_empty(), !draft.is_empty()) {
+                                (true, true) => format!("{frozen}{draft}"),
+                                (true, false) => frozen.to_string(),
+                                (false, true) => draft.to_string(),
+                                (false, false) => String::new(),
+                            };
+                            if !combined.is_empty() {
+                                segment.translation = Some(combined);
                             }
                         }
                         segment.draft_translation = None;
@@ -182,11 +212,16 @@ impl StreamingTranslationCoordinator {
                         );
                         let mut states = self.states.lock();
                         if let Some(state) = states.remove(&segment.id) {
-                            let frozen = state.stabilizer.frozen_prefix().to_string();
-                            if !frozen.is_empty() {
-                                segment.translation = Some(frozen);
-                            } else {
-                                segment.translation = state.last_draft_translation;
+                            let frozen = state.stabilizer.frozen_prefix();
+                            let draft = state.last_draft_translation.as_deref().unwrap_or("");
+                            let combined = match (!frozen.is_empty(), !draft.is_empty()) {
+                                (true, true) => format!("{frozen}{draft}"),
+                                (true, false) => frozen.to_string(),
+                                (false, true) => draft.to_string(),
+                                (false, false) => String::new(),
+                            };
+                            if !combined.is_empty() {
+                                segment.translation = Some(combined);
                             }
                         }
                         segment.draft_translation = None;
@@ -260,8 +295,9 @@ impl StreamingTranslationCoordinator {
                                 "Streaming translation failed for segment {}: {err}",
                                 segment.id
                             );
-                            let states = self.states.lock();
-                            if let Some(state) = states.get(&segment.id) {
+                            let mut states = self.states.lock();
+                            if let Some(state) = states.get_mut(&segment.id) {
+                                state.last_text.clear();
                                 segment.translation =
                                     Some(state.stabilizer.frozen_prefix().to_string())
                                         .filter(|s| !s.is_empty());
@@ -273,8 +309,9 @@ impl StreamingTranslationCoordinator {
                                 "Streaming translation timed out (3000ms) for segment {}",
                                 segment.id
                             );
-                            let states = self.states.lock();
-                            if let Some(state) = states.get(&segment.id) {
+                            let mut states = self.states.lock();
+                            if let Some(state) = states.get_mut(&segment.id) {
+                                state.last_text.clear();
                                 segment.translation =
                                     Some(state.stabilizer.frozen_prefix().to_string())
                                         .filter(|s| !s.is_empty());
@@ -305,6 +342,19 @@ pub fn detect_script_language(text: &str) -> &'static str {
         .any(|c| matches!(c, '\u{3040}'..='\u{309F}' | '\u{30A0}'..='\u{30FF}'));
     if has_kana {
         return "ja";
+    }
+    let has_hangul = text.chars().any(|c| {
+        matches!(
+            c,
+            '\u{AC00}'..='\u{D7AF}' | '\u{1100}'..='\u{11FF}' | '\u{3130}'..='\u{318F}'
+        )
+    });
+    if has_hangul {
+        return "ko";
+    }
+    let has_cyrillic = text.chars().any(|c| matches!(c, '\u{0400}'..='\u{04FF}'));
+    if has_cyrillic {
+        return "ru";
     }
     let has_cjk_ideograph = text.chars().any(|c| {
         matches!(
@@ -345,6 +395,20 @@ pub fn normalize_language_code(code: &str) -> &str {
                 .is_some_and(|p| p.eq_ignore_ascii_case("jpn"))
         {
             return "ja";
+        }
+        if prefix.eq_ignore_ascii_case("ko")
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("kor"))
+        {
+            return "ko";
+        }
+        if prefix.eq_ignore_ascii_case("ru")
+            || trimmed
+                .get(..3)
+                .is_some_and(|p| p.eq_ignore_ascii_case("rus"))
+        {
+            return "ru";
         }
     }
     trimmed

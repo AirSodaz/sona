@@ -709,7 +709,7 @@ pub async fn toggle_live_translation(
     let norm_tgt = sona_application::live_transcription::normalize_language_code(&tgt);
     if !src.eq_ignore_ascii_case("auto") && norm_src.eq_ignore_ascii_case(norm_tgt) {
         services.asr.live_coordinator().set_translation(None);
-        return Ok(());
+        return Err("Source and target languages cannot be identical".to_string());
     }
 
     let resolved_engine_src = if engine_kind
@@ -725,19 +725,29 @@ pub async fn toggle_live_translation(
         src.clone()
     };
 
-    let models_dir = crate::platform::storage_location::resolve_active_models_dir_for_app(&app)
-        .map_err(|e| format!("Failed to resolve models directory: {e}"))?;
+    let models_dir =
+        match crate::platform::storage_location::resolve_active_models_dir_for_app(&app) {
+            Ok(dir) => dir,
+            Err(e) => {
+                services.asr.live_coordinator().set_translation(None);
+                return Err(format!("Failed to resolve models directory: {e}"));
+            }
+        };
 
-    let engine = crate::integrations::translation::TranslationEngineFactory::create_engine(
+    let engine = match crate::integrations::translation::TranslationEngineFactory::create_engine(
         &services,
         engine_kind,
         model_id.as_deref(),
         &resolved_engine_src,
         &tgt,
         &models_dir,
-    )
-    .map_err(|e| format!("Failed to create translation engine: {e}"))?;
-
+    ) {
+        Ok(engine) => engine,
+        Err(e) => {
+            services.asr.live_coordinator().set_translation(None);
+            return Err(format!("Failed to create translation engine: {e}"));
+        }
+    };
     let debounce_ms = match engine_kind {
         sona_core::ports::translation::TranslationEngineKind::LlamaCpp => 1000,
         _ => 300,
@@ -770,7 +780,7 @@ pub async fn toggle_live_translation(
                     let guard = recording_session.lock().await;
                     guard
                         .as_ref()
-                        .is_some_and(|s| s.consumer_id == *consumer_id)
+                        .is_some_and(|s| s.consumer_id == *consumer_id && !s.is_paused)
                 } else {
                     live_coord.is_active().await
                 };
@@ -798,8 +808,26 @@ pub async fn toggle_live_translation(
                     continue;
                 }
 
-                match engine.translate(text, eff_src, eff_tgt).await {
-                    Ok(translated) => {
+                let translate_fut = engine.translate(text, eff_src, eff_tgt);
+                match tokio::time::timeout(std::time::Duration::from_millis(5000), translate_fut)
+                    .await
+                {
+                    Ok(Ok(translated)) => {
+                        let is_current = live_coord
+                            .current_translation()
+                            .is_some_and(|c| Arc::ptr_eq(&c, &coordinator));
+                        let still_active = if let Some(consumer_id) = &active_consumer {
+                            let guard = recording_session.lock().await;
+                            guard
+                                .as_ref()
+                                .is_some_and(|s| s.consumer_id == *consumer_id && !s.is_paused)
+                        } else {
+                            live_coord.is_active().await
+                        };
+                        if !still_active || !is_current {
+                            break;
+                        }
+
                         seg.translation = Some(translated);
                         seg.draft_translation = None;
                         let update = sona_core::transcription::transcript::TranscriptUpdate {
@@ -813,9 +841,15 @@ pub async fn toggle_live_translation(
                             )
                             .await;
                     }
-                    Err(e) => {
+                    Ok(Err(e)) => {
                         log::warn!(
                             "[ASR] Catchup translation failed for segment {}: {e}",
+                            seg.id
+                        );
+                    }
+                    Err(_timeout) => {
+                        log::warn!(
+                            "[ASR] Catchup translation timed out (5000ms) for segment {}",
                             seg.id
                         );
                     }

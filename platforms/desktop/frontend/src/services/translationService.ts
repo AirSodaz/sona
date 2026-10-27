@@ -121,16 +121,26 @@ export class TranslationService {
     const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
     const isLiveSession =
       isRecording &&
-      (!sessionStore.sourceHistoryId || sessionStore.sourceHistoryId === recordingSessionId);
+      (recordingSessionId
+        ? sessionStore.sourceHistoryId === recordingSessionId
+        : !sessionStore.sourceHistoryId || sessionStore.sourceHistoryId === 'current');
 
     if (isLiveSession) {
       const currentHistoryId = sessionStore.sourceHistoryId || 'current';
       const sidecarStore = this.ports.getTranscriptSidecarStore();
       sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
+      const config = this.ports.getEffectiveConfigSnapshot();
+      const targetLang =
+        targetLanguageOverride ||
+        config.realtimeTranslationTargetLanguage ||
+        config.translationLanguage ||
+        'zh';
+      const sourceLang = config.realtimeTranslationSourceLanguage || 'auto';
       const toggleFn = this.ports.toggleLiveTranslation ?? toggleLiveTranslation;
       await toggleFn({
         enabled: true,
-        targetLang: targetLanguageOverride,
+        sourceLang,
+        targetLang,
         catchupSegments: sessionStore.segments.filter((s) => s.isFinal),
       });
       return;

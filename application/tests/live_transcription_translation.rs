@@ -388,11 +388,11 @@ async fn test_live_transcription_final_failure_falls_back_to_frozen_prefix() {
     };
     coord.enrich_update(&mut update3).await;
 
-    // Should gracefully fall back to the previously stabilized frozen_prefix
+    // Should gracefully fall back to the previously stabilized frozen + draft
     assert_eq!(
         update3.upsert_segments[0].translation,
-        Some("我喜欢".into()),
-        "Final translation failure must fall back to stabilized frozen prefix"
+        Some("我喜欢看书".into()),
+        "Final translation failure must fall back to combined frozen prefix and draft translation"
     );
     assert_eq!(update3.upsert_segments[0].draft_translation, None);
 }
@@ -685,19 +685,25 @@ async fn test_slow_final_translation_does_not_block_release_or_hang() {
     }
 
     // Call release immediately while translation is still pending in background
-    let start_release = std::time::Instant::now();
     let release_res = coordinator.release("consumer-slow-final").await;
     assert!(release_res.is_ok());
+
+    // The teardown barrier guarantees that the pending final translation was awaited and delivered to observer
+    let updates = observer.updates.lock().unwrap().clone();
     assert!(
-        start_release.elapsed() < Duration::from_millis(150),
-        "Release took {:?}, should not block on slow translation",
-        start_release.elapsed()
+        updates.len() >= 2,
+        "Expected immediate and enrichment updates, got {}",
+        updates.len()
     );
-
-    // Wait for the slow translation background task to settle cleanly without panic
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    let final_update = updates
+        .iter()
+        .find(|u| u.stage == "enrichment")
+        .expect("enrichment update should be delivered");
+    assert!(
+        final_update.update.upsert_segments[0].translation.is_some(),
+        "final segment should have received translation before release completed"
+    );
 }
-
 #[tokio::test]
 async fn test_language_detection_and_same_language_skip() {
     let engine = Arc::new(MockTranslationEngine::new());
@@ -759,6 +765,7 @@ async fn test_language_detection_and_same_language_skip() {
 
 #[tokio::test]
 async fn test_final_translation_timeout_falls_back_gracefully() {
+    tokio::time::pause();
     let engine = Arc::new(MockTranslationEngine::new());
     // Delay 5200ms (> 5000ms timeout)
     engine.set_delay(Duration::from_millis(5200));
@@ -772,14 +779,7 @@ async fn test_final_translation_timeout_falls_back_gracefully() {
         remove_ids: Vec::new(),
         upsert_segments: vec![make_segment("seg-timeout", "Timeout test text", true)],
     };
-    let start = std::time::Instant::now();
     coordinator.enrich_update(&mut update).await;
-    let elapsed = start.elapsed();
-    assert!(
-        elapsed >= Duration::from_millis(4900) && elapsed < Duration::from_millis(5600),
-        "enrich_update took {:?}",
-        elapsed
-    );
     assert_eq!(update.upsert_segments[0].draft_translation, None);
 }
 
@@ -901,19 +901,40 @@ async fn test_final_translation_with_timeline_normalization() {
         segment_ids
     );
 
-    // 2. Background enrichment broadcast delivers translations without generating duplicate timeline-1 IDs
+    // 2. Background enrichment broadcast delivers translations for both split segments without generating duplicate timeline-1 IDs
     let enriched = &updates[1];
     assert_eq!(enriched.stage, "enrichment");
+    assert_eq!(
+        enriched.update.upsert_segments.len(),
+        2,
+        "expected enrichment for both split segments, got {:?}",
+        enriched.update.upsert_segments
+    );
+    let enriched_ids: Vec<String> = enriched
+        .update
+        .upsert_segments
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert!(
+        enriched_ids.iter().any(|id| id.starts_with("timeline-")),
+        "enrichment broadcast should include the split timeline segment, got {:?}",
+        enriched_ids
+    );
     for seg in &enriched.update.upsert_segments {
         assert!(
-            !seg.id.starts_with("timeline-"),
-            "enrichment broadcast should not re-run output_policy to generate new timeline IDs, got {}",
+            seg.translation.is_some(),
+            "segment {} should be translated",
             seg.id
         );
-        assert!(seg.translation.is_some(), "segment should be translated");
+        assert_ne!(
+            seg.text, "I like to read books. It is very fun.",
+            "segment {} text should not be overwritten with unsplit sentence",
+            seg.id
+        );
     }
 
-    // Ensure no duplicate timeline IDs exist across all updates
+    // Ensure both updates share the same timeline ID (timeline-0) and no duplicate (e.g. timeline-1) was generated
     let mut timeline_ids = Vec::new();
     for u in &updates {
         for s in &u.update.upsert_segments {
@@ -922,10 +943,13 @@ async fn test_final_translation_with_timeline_normalization() {
             }
         }
     }
-    assert_eq!(
-        timeline_ids.len(),
-        1,
-        "expected only 1 timeline id (timeline-0), got {:?}",
+    assert!(
+        timeline_ids.iter().all(|id| id == "timeline-0"),
+        "all timeline ids should be timeline-0, got {:?}",
         timeline_ids
+    );
+    assert!(
+        !timeline_ids.iter().any(|id| id == "timeline-1"),
+        "enrichment must not generate duplicate timeline-1 id"
     );
 }

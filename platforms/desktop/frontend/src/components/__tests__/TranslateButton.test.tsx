@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { translationService } from '../../services/translationService';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -89,6 +89,10 @@ describe('TranslateButton', () => {
     useTranscriptStore.setState({
       config: useConfigStore.getState().config as any,
     });
+  });
+  afterEach(() => {
+    useTranscriptRuntimeStore.setState({ isRecording: false });
+    useTranscriptStore.setState({ recordingSessionId: null });
   });
 
   it('renders the translate button', () => {
@@ -426,7 +430,22 @@ describe('TranslateButton', () => {
     await waitFor(() => {
       expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
     });
+  });
 
-    useTranscriptRuntimeStore.setState({ isRecording: false });
+  it('renders batch Start Translation button when viewing historical transcript during active recording', () => {
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+    useTranscriptStore.setState({
+      recordingSessionId: 'live-session-123',
+      sourceHistoryId: 'historical-session-456',
+    });
+
+    render(<TranslateButton />);
+    const button = screen.getByRole('button', { expanded: false });
+    fireEvent.click(button);
+
+    // Should NOT render real-time toggle
+    expect(screen.queryByRole('switch')).toBeNull();
+    // Should render the batch translation button
+    expect(screen.getByText('translation.start')).toBeDefined();
   });
 });

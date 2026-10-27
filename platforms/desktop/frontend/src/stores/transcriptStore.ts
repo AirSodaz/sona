@@ -218,10 +218,14 @@ function updateActiveSession(
 ) {
   set((state: TranscriptStore) => {
     const session = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
+    const patch = updater(session);
+    if (!patch || Object.keys(patch).length === 0) {
+      return state;
+    }
     return {
       sessions: {
         ...state.sessions,
-        [state.activeSessionId]: { ...session, ...updater(session) },
+        [state.activeSessionId]: { ...session, ...patch },
       },
     };
   });
@@ -452,16 +456,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
     }));
   },
   patchSegmentTranslation: (id, translation) => {
-    updateActiveSession(set, (session) => {
-      if (!session.segments.some((s) => s.id === id)) {
-        return {};
-      }
-      return {
-        segments: session.segments.map((s) =>
-          s.id === id ? { ...s, translation, draftTranslation: undefined } : s
-        ),
-      };
-    });
+    get().patchSegmentTranslations([{ id, translation }]);
   },
   patchSegmentTranslations: (updates) => {
     if (updates.length === 0) return;
@@ -470,7 +465,7 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
       let changed = false;
       const nextSegments = session.segments.map((s) => {
         const tr = translationMap.get(s.id);
-        if (tr !== undefined && s.translation !== tr) {
+        if (tr !== undefined && (s.translation !== tr || s.draftTranslation !== undefined)) {
           changed = true;
           return { ...s, translation: tr, draftTranslation: undefined };
         }

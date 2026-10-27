@@ -433,7 +433,7 @@ describe('TranslationService', () => {
 
       expect(invoke).toHaveBeenCalledWith('toggle_live_translation', {
         enabled: true,
-        sourceLang: null,
+        sourceLang: 'en',
         targetLang: 'zh',
         catchupSegments: [expect.objectContaining({ id: '1', text: 'Hello', isFinal: true })],
       });
