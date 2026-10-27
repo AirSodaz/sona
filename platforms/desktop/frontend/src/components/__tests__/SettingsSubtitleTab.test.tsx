@@ -24,6 +24,12 @@ const mockReadiness = vi.hoisted(() => ({
 vi.mock('../../hooks/useVoiceTypingReadiness', () => ({
   useVoiceTypingReadiness: () => mockReadiness,
 }));
+const mockResetPosition = vi.fn();
+vi.mock('../../services/captionWindowService', () => ({
+  captionWindowService: {
+    resetPosition: () => mockResetPosition(),
+  },
+}));
 
 vi.mock('../Dropdown', () => ({
   Dropdown: ({ id, value, onChange, options }: any) => (
@@ -388,5 +394,13 @@ describe('SettingsSubtitleTab', () => {
     expect(updateCall).toBeDefined();
     expect(updateCall![0].dictionaryContent).toContain('(id:voice-typing):');
     expect(updateCall![0].dictionaryContent).toContain('- The weather is great today.');
+  });
+  it('triggers captionWindowService.resetPosition when Reset Window Position button is clicked', () => {
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    const resetBtn = screen.getByRole('button', { name: 'settings.caption_reset_position' });
+    fireEvent.click(resetBtn);
+
+    expect(mockResetPosition).toHaveBeenCalledTimes(1);
   });
 });

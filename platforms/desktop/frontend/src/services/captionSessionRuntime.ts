@@ -33,6 +33,8 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
   return {
     alwaysOnTop: config.alwaysOnTop ?? true,
     lockWindow: config.lockWindow ?? false,
+    x: config.captionWindowX,
+    y: config.captionWindowY,
     width: config.captionWindowWidth,
     fontSize: config.captionFontSize,
     color: config.captionFontColor,

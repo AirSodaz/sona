@@ -4,7 +4,11 @@ const mocks = vi.hoisted(() => {
   const emitTo = vi.fn().mockResolvedValue(undefined);
   const invoke = vi.fn().mockResolvedValue(undefined);
   const getByLabel = vi.fn().mockResolvedValue(null);
+  const availableMonitors = vi.fn().mockResolvedValue([]);
+  const primaryMonitor = vi.fn().mockResolvedValue(null);
+  const currentMonitor = vi.fn().mockResolvedValue(null);
   const createdWindows: any[] = [];
+  const moveListeners: Array<(event: { payload: { x: number; y: number } }) => void> = [];
   const nextWindowFailures = {
     setAlwaysOnTop: null as unknown,
     setIgnoreCursorEvents: null as unknown,
@@ -14,6 +18,13 @@ const mocks = vi.hoisted(() => {
     constructor(
       public width: number,
       public height: number
+    ) {}
+  }
+
+  class MockPhysicalPosition {
+    constructor(
+      public x: number,
+      public y: number
     ) {}
   }
 
@@ -33,8 +44,12 @@ const mocks = vi.hoisted(() => {
       scaleFactor: vi.fn().mockResolvedValue(1),
       innerSize: vi.fn().mockResolvedValue({ width: 800, height: 120 }),
       setSize: vi.fn().mockResolvedValue(undefined),
+      setPosition: vi.fn().mockResolvedValue(undefined),
+      onMoved: vi.fn((cb: (event: { payload: { x: number; y: number } }) => void) => {
+        moveListeners.push(cb);
+        return Promise.resolve(vi.fn());
+      }),
     };
-
     if (nextWindowFailures.setAlwaysOnTop) {
       windowInstance.setAlwaysOnTop.mockRejectedValueOnce(nextWindowFailures.setAlwaysOnTop);
     }
@@ -66,14 +81,19 @@ const mocks = vi.hoisted(() => {
   }
 
   return {
+    MockPhysicalPosition,
     MockPhysicalSize,
     MockWebviewWindow,
+    availableMonitors,
     buildWindow,
     createdWindows,
+    currentMonitor,
     emitTo,
     getByLabel,
     invoke,
+    moveListeners,
     nextWindowFailures,
+    primaryMonitor,
   };
 });
 
@@ -86,7 +106,14 @@ vi.mock('@tauri-apps/api/event', () => ({
 }));
 
 vi.mock('@tauri-apps/api/dpi', () => ({
+  PhysicalPosition: mocks.MockPhysicalPosition,
   PhysicalSize: mocks.MockPhysicalSize,
+}));
+
+vi.mock('@tauri-apps/api/window', () => ({
+  availableMonitors: mocks.availableMonitors,
+  primaryMonitor: mocks.primaryMonitor,
+  currentMonitor: mocks.currentMonitor,
 }));
 
 vi.mock('@tauri-apps/api/webviewWindow', () => ({
@@ -104,17 +131,19 @@ vi.mock('../../utils/logger', () => ({
 
 const defaultStyle = {
   width: 800,
-  fontSize: 24,
+  fontSize: 22,
   color: '#ffffff',
-  backgroundColor: '#000000',
-  backgroundOpacity: 0.6,
-  textStroke: true,
-  strokeWidth: 2,
+  backgroundColor: '#17171a',
+  backgroundOpacity: 0.72,
+  translationColor: '#6ee7b7',
+  translationFontSize: 16,
+  textStroke: false,
+  strokeWidth: 0,
   strokeColor: '#000000',
   textShadow: true,
   textAlign: 'center' as const,
-  backgroundBlur: false,
-  backgroundBlurRadius: 12,
+  backgroundBlur: true,
+  backgroundBlurRadius: 20,
   disappearDelay: 4.0,
   displayPriority: 'translation_main' as const,
 };
@@ -124,7 +153,11 @@ describe('CaptionWindowService', () => {
     vi.clearAllMocks();
     vi.resetModules();
     mocks.createdWindows.length = 0;
+    mocks.moveListeners.length = 0;
     mocks.getByLabel.mockResolvedValue(null);
+    mocks.availableMonitors.mockResolvedValue([]);
+    mocks.primaryMonitor.mockResolvedValue(null);
+    mocks.currentMonitor.mockResolvedValue(null);
     mocks.invoke.mockResolvedValue(undefined);
     mocks.emitTo.mockResolvedValue(undefined);
     mocks.nextWindowFailures.setAlwaysOnTop = null;
@@ -140,6 +173,8 @@ describe('CaptionWindowService', () => {
     expect(mocks.createdWindows[0].options).toEqual(
       expect.objectContaining({
         url: '/index.html?window=caption',
+        x: 560,
+        y: 932,
         width: 800,
         height: 120,
         resizable: true,
@@ -306,5 +341,99 @@ describe('CaptionWindowService', () => {
     expect(mocks.invoke).not.toHaveBeenCalled();
     expect(mocks.emitTo).not.toHaveBeenCalled();
     expect(mocks.getByLabel).not.toHaveBeenCalled();
+  });
+  it('resolves default bottom-center position using primary monitor workArea', async () => {
+    mocks.primaryMonitor.mockResolvedValue({
+      scaleFactor: 1.5,
+      position: { x: 0, y: 0 },
+      size: { width: 3840, height: 2160 },
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 3840, height: 2100 },
+      },
+    });
+
+    const { resolveCaptionWindowInitialPosition } = await import('../captionWindowService');
+    const [x, y] = await resolveCaptionWindowInitialPosition(800, 120);
+
+    // width 800 * 1.5 = 1200. x = (3840 - 1200) / 2 = 1320
+    // height 120 * 1.5 = 180. y = 2100 - 180 - round(28 * 1.5 = 42) = 1878
+    expect(x).toBe(1320);
+    expect(y).toBe(1878);
+  });
+
+  it('clamps out-of-bounds coordinates to default bottom-center and accepts in-bounds coordinates', async () => {
+    const mockMonitor = {
+      scaleFactor: 1.0,
+      position: { x: 0, y: 0 },
+      size: { width: 1920, height: 1080 },
+      workArea: {
+        position: { x: 0, y: 0 },
+        size: { width: 1920, height: 1040 },
+      },
+    };
+    mocks.availableMonitors.mockResolvedValue([mockMonitor]);
+    mocks.primaryMonitor.mockResolvedValue(mockMonitor);
+
+    const { resolveCaptionWindowInitialPosition } = await import('../captionWindowService');
+
+    // Valid in-bounds coordinates
+    const [inX, inY] = await resolveCaptionWindowInitialPosition(800, 120, 200, 300);
+    expect(inX).toBe(200);
+    expect(inY).toBe(300);
+
+    // Out of bounds coordinates (-500, 9999)
+    const [outX, outY] = await resolveCaptionWindowInitialPosition(800, 120, -500, 9999);
+    // Should fall back to default bottom-center: x = (1920 - 800)/2 = 560, y = 1040 - 120 - 28 = 892
+    expect(outX).toBe(560);
+    expect(outY).toBe(892);
+  });
+
+  it('tracks window drag and persists coordinates to configStore with debounce', async () => {
+    vi.useFakeTimers();
+    mocks.getByLabel.mockResolvedValue(null);
+
+    // Module reset in beforeEach requires dynamic import to bind freshly hoisted mocks
+    const { captionWindowService } = await import('../captionWindowService');
+    const { useConfigStore } = await import('../../stores/configStore');
+
+    // Open caption window
+    await captionWindowService.open();
+    expect(mocks.moveListeners).toHaveLength(1);
+
+    // Directly trigger moveListener simulating drag
+    mocks.moveListeners[0]({ payload: { x: 350, y: 450 } });
+
+    // Before debounce
+    expect(useConfigStore.getState().config.captionWindowX).toBeNull();
+
+    // Advance timers past 300ms debounce
+    vi.advanceTimersByTime(350);
+
+    expect(useConfigStore.getState().config.captionWindowX).toBe(350);
+    expect(useConfigStore.getState().config.captionWindowY).toBe(450);
+
+    vi.useRealTimers();
+  });
+
+  it('resetPosition clears saved config coordinates and repositions active window', async () => {
+    const existingWindow = mocks.buildWindow();
+    mocks.getByLabel.mockResolvedValue(existingWindow);
+
+    const { captionWindowService } = await import('../captionWindowService');
+    const { useConfigStore } = await import('../../stores/configStore');
+
+    useConfigStore.getState().setConfig({
+      captionWindowX: 700,
+      captionWindowY: 800,
+    });
+
+    await captionWindowService.resetPosition();
+
+    expect(useConfigStore.getState().config.captionWindowX).toBeNull();
+    expect(useConfigStore.getState().config.captionWindowY).toBeNull();
+    expect(existingWindow.setPosition).toHaveBeenCalledWith(
+      expect.objectContaining({ x: 560, y: 932 })
+    );
   });
 });

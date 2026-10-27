@@ -183,6 +183,10 @@ export interface CaptionConfig {
   startOnLaunch?: boolean;
   /** Width of the caption window in pixels. Default: 800. */
   captionWindowWidth?: number;
+  /** X coordinate of the caption window in physical/screen pixels. */
+  captionWindowX?: number | null;
+  /** Y coordinate of the caption window in physical/screen pixels. */
+  captionWindowY?: number | null;
   /** Font size of the caption text in pixels. Default: 24. */
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */

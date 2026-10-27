@@ -2096,6 +2096,8 @@
     "caption_disappear_delay_hint": "语音停止后字幕停留的时间，随后平滑淡出隐去",
     "caption_lock_shortcut": "穿透锁定快捷键",
     "caption_lock_shortcut_hint": "切换字幕窗口鼠标穿透锁定的全局快捷键",
+    "caption_reset_position": "重置窗口位置",
+    "caption_reset_position_hint": "将字幕悬浮窗口重置为屏幕底部居中的默认位置",
     "subtitle_voice_typing_title": "字幕与语音输入",
     "subtitle_voice_typing_desc": "配置实时字幕窗口，以及向其他应用输入文字的语音输入。",
     "subtitle_tab_description": "配置桌面实时字幕的窗口行为与外观显示效果。",

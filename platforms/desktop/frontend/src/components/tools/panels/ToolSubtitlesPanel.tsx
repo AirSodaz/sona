@@ -14,6 +14,7 @@ import {
   isAsrRequestConfigured,
   resolveAsrTranscriptionRequest,
 } from '../../../services/asrConfigService';
+import { captionWindowService } from '../../../services/captionWindowService';
 import { useCaptionConfig, useConfigStore, useSetConfig } from '../../../stores/configStore';
 import { useTranscriptRuntimeStore } from '../../../stores/transcriptRuntimeStore';
 import { hexToRgba } from '../../../utils/colorUtils';
@@ -57,12 +58,12 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;
   const captionWindowWidth = config.captionWindowWidth ?? 800;
-  const captionFontSize = config.captionFontSize ?? 24;
+  const captionFontSize = config.captionFontSize ?? 22;
   const captionFontColor = config.captionFontColor || '#ffffff';
-  const captionTranslationFontSize = config.captionTranslationFontSize ?? 18;
+  const captionTranslationFontSize = config.captionTranslationFontSize ?? 16;
   const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
-  const captionBackgroundColor = config.captionBackgroundColor || '#000000';
-  const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
+  const captionBackgroundColor = config.captionBackgroundColor || '#17171a';
+  const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.72;
   const {
     realtimeTranslationEnabled,
     realtimeTranslationSourceLanguage,
@@ -77,13 +78,13 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   } = useRealtimeTranslationConfig();
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
 
-  const captionTextStroke = config.captionTextStroke ?? true;
-  const captionStrokeWidth = config.captionStrokeWidth ?? 2;
+  const captionTextStroke = config.captionTextStroke ?? false;
+  const captionStrokeWidth = config.captionStrokeWidth ?? 0;
   const captionStrokeColor = config.captionStrokeColor || '#000000';
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
-  const captionBackgroundBlur = config.captionBackgroundBlur ?? false;
-  const captionBackgroundBlurRadius = config.captionBackgroundBlurRadius ?? 12;
+  const captionBackgroundBlur = config.captionBackgroundBlur ?? true;
+  const captionBackgroundBlurRadius = config.captionBackgroundBlurRadius ?? 20;
   const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
   const captionLockShortcut = config.captionLockShortcut || 'Alt+C';
 
@@ -309,6 +310,25 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
               value={captionLockShortcut}
               onChange={(val) => updateConfig({ captionLockShortcut: val })}
             />
+          </SettingsItem>
+          <SettingsItem
+            title={t('settings.caption_reset_position', {
+              defaultValue: 'Reset Window Position',
+            })}
+            hint={t('settings.caption_reset_position_hint', {
+              defaultValue:
+                'Reset the caption floating window to the default bottom-center position.',
+            })}
+          >
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => void captionWindowService.resetPosition()}
+            >
+              {t('settings.caption_reset_position', {
+                defaultValue: 'Reset Window Position',
+              })}
+            </button>
           </SettingsItem>
         </SettingsSection>
         <SettingsSection

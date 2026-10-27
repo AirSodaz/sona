@@ -286,8 +286,11 @@
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition: opacity 0.3s ease-out;
   position: relative;
 }
@@ -297,7 +300,7 @@
 }
 
 .caption-drag-handle {
-  height: 32px;
+  height: 28px;
   width: 100%;
   cursor: grab;
   display: flex;
@@ -324,7 +327,7 @@
 }
 
 .drag-indicator {
-  width: 40px;
+  width: 36px;
   height: 4px;
   background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
@@ -339,12 +342,12 @@
 }
 
 .caption-action-btn {
-  background: transparent;
+  background: rgba(255, 255, 255, 0.12);
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
-  padding: 4px;
-  border-radius: 4px;
+  padding: 3px 6px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;

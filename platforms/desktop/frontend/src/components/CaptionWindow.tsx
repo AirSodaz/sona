@@ -18,10 +18,10 @@ import { logger } from '../utils/logger';
 export function computeCaptionTextStyle(
   style: CaptionWindowStyle,
   _isPrimary: boolean,
-  _isTranslation: boolean
+  isTranslation: boolean
 ): React.CSSProperties {
-  const strokeEnabled = style.textStroke !== false;
-  const strokeWidth = style.strokeWidth ?? 2;
+  const strokeEnabled = Boolean(style.textStroke) && (style.strokeWidth ?? 0) > 0;
+  const strokeWidth = style.strokeWidth ?? 0;
   const strokeColor = style.strokeColor ?? '#000000';
   const shadowEnabled = style.textShadow !== false;
 
@@ -31,15 +31,14 @@ export function computeCaptionTextStyle(
       `-1px -1px 0 ${strokeColor}`,
       `1px -1px 0 ${strokeColor}`,
       `-1px 1px 0 ${strokeColor}`,
-      `1px 1px 0 ${strokeColor}`,
-      `-2px 0 0 ${strokeColor}`,
-      `2px 0 0 ${strokeColor}`,
-      `0 -2px 0 ${strokeColor}`,
-      `0 2px 0 ${strokeColor}`
+      `1px 1px 0 ${strokeColor}`
     );
   }
   if (shadowEnabled) {
-    shadows.push('0 3px 8px rgba(0, 0, 0, 0.85)');
+    const diffuseShadow = isTranslation
+      ? '0 1px 2px rgba(0, 0, 0, 0.4)'
+      : '0 1px 3px rgba(0, 0, 0, 0.55)';
+    shadows.push(diffuseShadow);
   }
 
   return {

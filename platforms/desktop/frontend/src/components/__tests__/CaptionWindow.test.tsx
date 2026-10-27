@@ -1,6 +1,6 @@
 import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { CaptionWindow } from '../CaptionWindow';
+import { CaptionWindow, computeCaptionTextStyle } from '../CaptionWindow';
 
 const defaultStyle = {
   width: 800,
@@ -487,7 +487,7 @@ describe('CaptionWindow', () => {
     expect(errorBanner?.textContent).toContain('Model opus-mt-en-zh not installed');
   });
 
-  it('applies text stroke and 8-axis shadow when textStroke is true', async () => {
+  it('applies text stroke and diffuse shadow when textStroke is true', async () => {
     const { container } = render(<CaptionWindow />);
 
     await act(async () => {
@@ -518,7 +518,7 @@ describe('CaptionWindow', () => {
     expect(originalLine).not.toBeNull();
     expect(originalLine.style.webkitTextStroke).toBe('3px #000000');
     expect(originalLine.style.textShadow).toContain('-1px -1px 0 #000000');
-    expect(originalLine.style.textShadow).toContain('0 3px 8px rgba(0, 0, 0, 0.85)');
+    expect(originalLine.style.textShadow).toContain('0 1px 3px rgba(0, 0, 0, 0.55)');
   });
 
   it('renders translation_main with translation first, larger font, and original below', async () => {
@@ -656,5 +656,50 @@ describe('CaptionWindow', () => {
     // fading-out is immediately cleared, sentence two is visible
     expect(body.classList.contains('fading-out')).toBe(false);
     expect(screen.getByText('Sentence two')).toBeDefined();
+  });
+});
+describe('computeCaptionTextStyle', () => {
+  it('omits stroke and hard shadow when stroke is disabled or width <= 0', () => {
+    const style = {
+      ...defaultStyle,
+      textStroke: false,
+      strokeWidth: 0,
+      textShadow: true,
+    };
+    const primary = computeCaptionTextStyle(style, true, false);
+    expect(primary.WebkitTextStroke).toBeUndefined();
+    expect(primary.textShadow).toBe('0 1px 3px rgba(0, 0, 0, 0.55)');
+    expect(primary.textShadow).not.toContain('-1px');
+
+    const translation = computeCaptionTextStyle(style, false, true);
+    expect(translation.WebkitTextStroke).toBeUndefined();
+    expect(translation.textShadow).toBe('0 1px 2px rgba(0, 0, 0, 0.4)');
+  });
+
+  it('applies 4-cardinal offsets and diffuse shadow when stroke is enabled with width > 0', () => {
+    const style = {
+      ...defaultStyle,
+      textStroke: true,
+      strokeWidth: 2,
+      strokeColor: '#ff0000',
+      textShadow: true,
+    };
+    const primary = computeCaptionTextStyle(style, true, false);
+    expect(primary.WebkitTextStroke).toBe('2px #ff0000');
+    expect(primary.textShadow).toContain('-1px -1px 0 #ff0000');
+    expect(primary.textShadow).toContain('1px 1px 0 #ff0000');
+    expect(primary.textShadow).toContain('0 1px 3px rgba(0, 0, 0, 0.55)');
+    expect(primary.textShadow).not.toContain('-2px 0 0');
+  });
+
+  it('omits text shadow completely when textShadow is false', () => {
+    const style = {
+      ...defaultStyle,
+      textStroke: false,
+      strokeWidth: 0,
+      textShadow: false,
+    };
+    const primary = computeCaptionTextStyle(style, true, false);
+    expect(primary.textShadow).toBeUndefined();
   });
 });

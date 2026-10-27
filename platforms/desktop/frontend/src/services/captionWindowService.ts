@@ -1,3 +1,4 @@
+import { useConfigStore } from '../stores/configStore';
 import type { TranscriptSegment } from '../types/transcript';
 import { logger } from '../utils/logger';
 import {
@@ -6,7 +7,13 @@ import {
   type AuxWindowDisplayState,
 } from './auxWindowController';
 import { TauriEvent } from './tauri/events';
-import { WebviewWindow } from './tauri/platform/windows';
+import {
+  availableMonitors,
+  currentMonitor,
+  PhysicalPosition,
+  primaryMonitor,
+  WebviewWindow,
+} from './tauri/platform/windows';
 
 export const CAPTION_WINDOW_LABEL = 'caption';
 export const CAPTION_EVENT_STATE = TauriEvent.auxWindow.captionState;
@@ -34,6 +41,8 @@ export interface CaptionWindowStyle {
 }
 
 export interface CaptionWindowOpenOptions {
+  x?: number | null;
+  y?: number | null;
   alwaysOnTop?: boolean;
   lockWindow?: boolean;
   width?: number;
@@ -64,17 +73,19 @@ export interface CaptionWindowState {
 
 const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
   width: 800,
-  fontSize: 24,
+  fontSize: 22,
   color: '#ffffff',
-  backgroundColor: '#000000',
-  backgroundOpacity: 0.6,
-  textStroke: true,
-  strokeWidth: 2,
+  backgroundColor: '#17171a',
+  backgroundOpacity: 0.72,
+  translationColor: '#6ee7b7',
+  translationFontSize: 16,
+  textStroke: false,
+  strokeWidth: 0,
   strokeColor: '#000000',
   textShadow: true,
   textAlign: 'center',
-  backgroundBlur: false,
-  backgroundBlurRadius: 12,
+  backgroundBlur: true,
+  backgroundBlurRadius: 20,
   disappearDelay: 4.0,
   displayPriority: 'translation_main',
 };
@@ -132,6 +143,62 @@ async function applyCaptionWindowFlag(
     await logger.warn('[CaptionWindowService] Failed to apply caption window flag', logPayload);
   }
 }
+export async function resolveCaptionWindowInitialPosition(
+  width: number,
+  height: number,
+  savedX?: number | null,
+  savedY?: number | null
+): Promise<[number, number]> {
+  const monitors = await availableMonitors().catch(() => []);
+  const monitor =
+    (await primaryMonitor().catch(() => null)) ??
+    (await currentMonitor().catch(() => null)) ??
+    monitors[0] ??
+    null;
+
+  const scale = monitor?.scaleFactor ?? 1;
+  const workArea =
+    monitor?.workArea?.position && monitor?.workArea?.size
+      ? {
+          x: monitor.workArea.position.x,
+          y: monitor.workArea.position.y,
+          width: monitor.workArea.size.width,
+          height: monitor.workArea.size.height,
+        }
+      : monitor?.position && monitor?.size
+        ? {
+            x: monitor.position.x,
+            y: monitor.position.y,
+            width: monitor.size.width,
+            height: monitor.size.height,
+          }
+        : { x: 0, y: 0, width: 1920, height: 1080 };
+
+  const physWidth = Math.ceil(width * scale);
+  const physHeight = Math.ceil(height * scale);
+  const defaultX = Math.round(workArea.x + (workArea.width - physWidth) / 2);
+  const defaultY = Math.round(workArea.y + workArea.height - physHeight - Math.round(28 * scale));
+
+  if (savedX != null && savedY != null) {
+    if (monitors.length > 0) {
+      const isInsideAnyMonitor = monitors.some((m) => {
+        const minX = m.position.x;
+        const maxX = m.position.x + m.size.width;
+        const minY = m.position.y;
+        const maxY = m.position.y + m.size.height;
+        return savedX >= minX && savedX < maxX && savedY >= minY && savedY < maxY;
+      });
+
+      if (isInsideAnyMonitor) {
+        return [savedX, savedY];
+      }
+    } else if (Number.isFinite(savedX) && Number.isFinite(savedY)) {
+      return [savedX, savedY];
+    }
+  }
+
+  return [defaultX, defaultY];
+}
 
 export interface CaptionWindowServicePorts {
   createAuxWindowController: (
@@ -146,6 +213,9 @@ export interface CaptionWindowServicePorts {
 export class CaptionWindowService {
   private controller: AuxWindowController<CaptionWindowState>;
   private state: CaptionWindowState = DEFAULT_CAPTION_WINDOW_STATE;
+  private moveUnlisten: (() => void) | null = null;
+  private moveTimer: number | null = null;
+  private isResettingPosition = false;
 
   constructor(private readonly ports: CaptionWindowServicePorts) {
     this.controller = this.ports.createAuxWindowController({
@@ -159,6 +229,8 @@ export class CaptionWindowService {
           decorations: false,
           transparent: true,
           skipTaskbar: true,
+          x: displayState.position?.[0],
+          y: displayState.position?.[1],
           width: displayState.size?.width ?? DEFAULT_CAPTION_STYLE.width,
           height: displayState.size?.height ?? CAPTION_INITIAL_HEIGHT,
           minWidth: 200,
@@ -239,9 +311,17 @@ export class CaptionWindowService {
 
     const requestedAlwaysOnTop = options?.alwaysOnTop;
     const requestedLockWindow = options?.lockWindow;
+    const [targetX, targetY] = await resolveCaptionWindowInitialPosition(
+      nextStyle.width,
+      CAPTION_INITIAL_HEIGHT,
+      options?.x,
+      options?.y
+    );
+
     const hadExistingWindow = Boolean(await this.controller.getWindow());
     const windowInstance = await this.controller.open({
       size: { width: nextStyle.width, height: CAPTION_INITIAL_HEIGHT },
+      position: [targetX, targetY],
       focus: true,
       alwaysOnTop: requestedAlwaysOnTop ?? true,
     });
@@ -249,6 +329,36 @@ export class CaptionWindowService {
     if (!windowInstance) {
       logger.error('[CaptionWindowService] Failed to obtain caption window handle');
       return;
+    }
+
+    if (!hadExistingWindow) {
+      await windowInstance.setPosition(new PhysicalPosition(targetX, targetY)).catch(() => {});
+    }
+
+    if (!this.moveUnlisten && typeof windowInstance.onMoved === 'function') {
+      try {
+        this.moveUnlisten = await windowInstance.onMoved(({ payload: position }) => {
+          if (this.isResettingPosition) return;
+          clearTimeout(this.moveTimer ?? undefined);
+          this.moveTimer = window.setTimeout(() => {
+            useConfigStore.getState().setConfig({
+              captionWindowX: position.x,
+              captionWindowY: position.y,
+            });
+          }, 300);
+        });
+
+        windowInstance.once('tauri://destroyed', () => {
+          clearTimeout(this.moveTimer ?? undefined);
+          this.moveTimer = null;
+          if (this.moveUnlisten) {
+            this.moveUnlisten();
+            this.moveUnlisten = null;
+          }
+        });
+      } catch (err) {
+        logger.warn('[CaptionWindowService] Failed to bind window move listener', { err });
+      }
     }
 
     if (requestedAlwaysOnTop !== undefined && hadExistingWindow) {
@@ -268,6 +378,12 @@ export class CaptionWindowService {
 
   async close() {
     logger.info('[CaptionWindowService] Requested to close caption window');
+    clearTimeout(this.moveTimer ?? undefined);
+    this.moveTimer = null;
+    if (this.moveUnlisten) {
+      this.moveUnlisten();
+      this.moveUnlisten = null;
+    }
     this.state = {
       ...this.state,
       revision: this.state.revision + 1,
@@ -277,6 +393,32 @@ export class CaptionWindowService {
     await this.controller.close();
   }
 
+  async resetPosition() {
+    this.isResettingPosition = true;
+    clearTimeout(this.moveTimer ?? undefined);
+    this.moveTimer = null;
+
+    const [defaultX, defaultY] = await resolveCaptionWindowInitialPosition(
+      this.state.style.width,
+      CAPTION_INITIAL_HEIGHT,
+      null,
+      null
+    );
+
+    useConfigStore.getState().setConfig({
+      captionWindowX: null,
+      captionWindowY: null,
+    });
+
+    const windowInstance = await this.controller.getWindow();
+    if (windowInstance) {
+      await windowInstance.setPosition(new PhysicalPosition(defaultX, defaultY)).catch(() => {});
+    }
+
+    window.setTimeout(() => {
+      this.isResettingPosition = false;
+    }, 500);
+  }
   async isOpen(): Promise<boolean> {
     const windowInstance = await this.controller.getWindow();
     return !!windowInstance;

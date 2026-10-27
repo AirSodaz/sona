@@ -2096,6 +2096,8 @@
     "caption_disappear_delay_hint": "How long subtitles stay visible after speech stops before fading out",
     "caption_lock_shortcut": "Lock Shortcut",
     "caption_lock_shortcut_hint": "Global hotkey to toggle mouse click-through for the caption window",
+    "caption_reset_position": "Reset Window Position",
+    "caption_reset_position_hint": "Reset the caption floating window to the default bottom-center position",
     "subtitle_voice_typing_title": "Subtitles & Voice Typing",
     "subtitle_voice_typing_desc": "Configure the live caption window and voice typing into other apps.",
     "subtitle_tab_description": "Configure live caption window behavior and visual appearance.",
