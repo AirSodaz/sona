@@ -117,13 +117,14 @@ pub fn detect_audio_mime_type(file_path: &Path) -> &'static str {
         "wav" => "audio/wav",
         "mp3" => "audio/mp3",
         "ogg" => "audio/ogg",
-        "m4a" => "audio/m4a",
+        "m4a" | "mp4" => "audio/m4a",
         "aac" => "audio/aac",
         "flac" => "audio/flac",
+        "webm" => "audio/webm",
+        "opus" => "audio/ogg",
         _ => "audio/wav",
     }
 }
-
 fn normalize_language_hint(language: &str) -> Option<String> {
     let lang = language.trim();
     if lang.is_empty() || lang.eq_ignore_ascii_case("auto") {
@@ -311,11 +312,30 @@ fn map_content_type_to_audio_mime(content_type: &str) -> Option<&'static str> {
     match raw.as_str() {
         "audio/mpeg" | "audio/mp3" => Some("audio/mp3"),
         "audio/wav" | "audio/x-wav" | "audio/wave" => Some("audio/wav"),
-        "audio/ogg" | "application/ogg" => Some("audio/ogg"),
+        "audio/ogg" | "application/ogg" | "audio/opus" => Some("audio/ogg"),
         "audio/m4a" | "audio/x-m4a" | "audio/mp4" => Some("audio/m4a"),
         "audio/aac" | "audio/x-aac" => Some("audio/aac"),
         "audio/flac" | "audio/x-flac" => Some("audio/flac"),
+        "audio/webm" => Some("audio/webm"),
         _ => None,
+    }
+}
+
+fn sniff_audio_mime_type(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
+        Some("audio/wav")
+    } else if (bytes.len() >= 3 && &bytes[0..3] == b"ID3")
+        || (bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0)
+    {
+        Some("audio/mp3")
+    } else if bytes.len() >= 4 && &bytes[0..4] == b"OggS" {
+        Some("audio/ogg")
+    } else if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
+        Some("audio/m4a")
+    } else if bytes.len() >= 4 && &bytes[0..4] == b"fLaC" {
+        Some("audio/flac")
+    } else {
+        None
     }
 }
 
@@ -326,6 +346,14 @@ pub async fn execute_aimux_batch(
 ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
     let path_str = input.file_path.to_string_lossy();
     let is_network_stream = sona_core::history::is_network_url(&path_str);
+    if is_network_stream && !path_str.starts_with("http://") && !path_str.starts_with("https://") {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!(
+                "Online batch ASR only supports HTTP/HTTPS audio streams; cannot fetch: {path_str}"
+            ),
+        ));
+    }
     let (bytes, media_type) = if is_network_stream {
         let client = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(15))
@@ -334,19 +362,26 @@ pub async fn execute_aimux_batch(
             .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
 
         let response = client.get(path_str.as_ref()).send().await.map_err(|e| {
-            AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!("Failed to fetch stream URL: {e}"),
-            )
+            let kind = if e.is_timeout() {
+                AsrPortErrorKind::Timeout
+            } else {
+                AsrPortErrorKind::Network
+            };
+            AsrPortError::new(kind, format!("Failed to fetch stream URL: {e}"))
         })?;
 
-        if !response.status().is_success() {
+        let status = response.status();
+        if !status.is_success() {
+            let kind = if status.is_server_error() {
+                AsrPortErrorKind::Unavailable
+            } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                AsrPortErrorKind::RateLimited
+            } else {
+                AsrPortErrorKind::InvalidRequest
+            };
             return Err(AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!(
-                    "Stream URL returned status {}: {path_str}",
-                    response.status()
-                ),
+                kind,
+                format!("Stream URL returned status {status}: {path_str}"),
             ));
         }
 
@@ -361,25 +396,43 @@ pub async fn execute_aimux_batch(
             ));
         }
 
+        if let Some(content_type) = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+        {
+            let ct_lower = content_type.to_ascii_lowercase();
+            if ct_lower.starts_with("text/html") || ct_lower.starts_with("application/json") {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!("Stream URL returned non-audio Content-Type: {content_type}"),
+                ));
+            }
+        }
+
         let header_mime = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
             .and_then(|v| v.to_str().ok())
             .and_then(map_content_type_to_audio_mime);
 
-        let bytes = response
-            .bytes()
-            .await
-            .map_err(|e| AsrPortError::runtime(format!("Failed to read stream bytes: {e}")))?;
-
-        if bytes.len() > MAX_ONLINE_STREAM_DOWNLOAD_BYTES {
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::InvalidRequest,
-                format!(
-                    "Stream downloaded size ({} bytes) exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)",
-                    bytes.len()
-                ),
-            ));
+        let mut stream_bytes = Vec::new();
+        let mut resp = response;
+        while let Some(chunk) = resp.chunk().await.map_err(|e| {
+            AsrPortError::new(
+                AsrPortErrorKind::Network,
+                format!("Failed reading stream chunk: {e}"),
+            )
+        })? {
+            if stream_bytes.len() + chunk.len() > MAX_ONLINE_STREAM_DOWNLOAD_BYTES {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Stream downloaded size exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)"
+                    ),
+                ));
+            }
+            stream_bytes.extend_from_slice(&chunk);
         }
 
         let media_type = if let Some(mime) = header_mime {
@@ -392,10 +445,15 @@ pub async fn execute_aimux_batch(
                 .split('#')
                 .next()
                 .unwrap_or(&path_str);
-            detect_audio_mime_type(Path::new(clean_url))
+            let ext_mime = detect_audio_mime_type(Path::new(clean_url));
+            if ext_mime == "audio/wav" && !clean_url.ends_with(".wav") {
+                sniff_audio_mime_type(&stream_bytes).unwrap_or("audio/mp3")
+            } else {
+                ext_mime
+            }
         };
 
-        (bytes.to_vec(), media_type)
+        (stream_bytes, media_type)
     } else {
         let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
             AsrPortError::new(

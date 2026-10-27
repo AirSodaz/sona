@@ -116,15 +116,18 @@ export class BatchItemProcessor {
       }
 
       const duration = this.calculateDuration(currentSegments);
-      const isStream = item.sourceType === 'url_stream';
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
           : undefined;
+      const inputSource = item.streamUrl || item.filePath;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
-              item.filePath,
+              inputSource,
               currentSegments,
               duration,
               convertedPath,
@@ -132,7 +135,7 @@ export class BatchItemProcessor {
               item.id
             )
           : await this.ports.historyService.saveImportedFile(
-              item.filePath,
+              inputSource,
               currentSegments,
               duration,
               convertedPath,
@@ -172,7 +175,9 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      const isStream = item.sourceType === 'url_stream';
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
       const tempDirectory = await tempDir();
       tempWavPath =
         isLlamaCpp || batchAsr.engine === 'online' || (isStream && !item.retainAudio)
@@ -256,10 +261,14 @@ export class BatchItemProcessor {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
     } catch (error) {
+      flushSegmentBuffer();
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
       const isCancelled =
         callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
       try {
-        if ((!isCancelled || item.sourceType === 'url_stream') && currentSegments.length > 0) {
+        if ((!isCancelled || isStream) && currentSegments.length > 0) {
           await ensureHistorySaved();
           await persistHistorySnapshot();
         }

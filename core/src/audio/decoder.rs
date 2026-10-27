@@ -69,7 +69,10 @@ impl BuiltinAudioDecoder {
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
         let mut hint = Hint::new();
         if let Some(ext) = hint_ext {
-            hint.with_extension(ext.trim().trim_start_matches('.'));
+            let clean_ext = ext.trim().trim_start_matches('.').to_ascii_lowercase();
+            if !clean_ext.is_empty() {
+                hint.with_extension(&clean_ext);
+            }
         }
         Self::decode_media_source_stream(mss, hint, target_sample_rate)
     }
@@ -275,6 +278,10 @@ impl BuiltinAudioDecoder {
         let input_rate = actual_sample_rate.ok_or_else(|| {
             AudioDecodeError::Decode("Decoded audio sample rate is unknown".into())
         })?;
+
+        drop(decoder);
+        drop(format);
+        drop(sample_buf);
 
         // Resample to target_sample_rate if needed
         if input_rate == target_sample_rate {

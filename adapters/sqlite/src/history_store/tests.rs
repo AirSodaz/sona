@@ -957,12 +957,11 @@ fn test_save_imported_stream_url_without_audio_file() {
             converted_source_path: None,
         })
         .unwrap();
-
     assert_eq!(item.id, "stream-1");
+    assert_eq!(item.title, "Batch podcast.mp3");
     assert_eq!(item.audio_path, "");
     assert_eq!(item.audio_status, HistoryAudioStatus::Removed);
     assert_eq!(item.preview_text, "Stream transcript text...");
-
     let history_dir = root.path().join("history");
     if history_dir.exists() {
         let entries = std::fs::read_dir(&history_dir).unwrap().collect::<Vec<_>>();
@@ -973,9 +972,9 @@ fn test_save_imported_stream_url_without_audio_file() {
     }
 
     let loaded = store.get_item("stream-1").unwrap().unwrap();
+    assert_eq!(loaded.title, "Batch podcast.mp3");
     assert_eq!(loaded.audio_path, "");
     assert_eq!(loaded.audio_status, HistoryAudioStatus::Removed);
-
     let segments = store
         .load_transcript("stream-1")
         .unwrap()

@@ -50,8 +50,8 @@ pub struct StreamTranscriptionJob {
 
 async fn process_speech_slice(
     samples: Vec<f32>,
-    start_time: f32,
-    duration: f32,
+    start_time: f64,
+    duration: f64,
     recognizer: Arc<SafeOfflineRecognizer>,
     punctuation: Option<Arc<dyn PunctuationModel>>,
     observer: Arc<dyn BatchTranscriptionObserver>,
@@ -72,24 +72,25 @@ async fn process_speech_slice(
     .ok()??;
 
     let (decoded, text) = decoded;
-    let timestamps_abs = decoded
-        .timestamps
-        .as_ref()
-        .map(|ts| ts.iter().map(|t| *t + start_time).collect::<Vec<_>>());
+    let timestamps_abs = decoded.timestamps.as_ref().map(|ts| {
+        ts.iter()
+            .map(|t| *t + start_time as f32)
+            .collect::<Vec<_>>()
+    });
     let durations = decoded
         .durations
         .filter(|d| !d.is_empty() && d.len() == decoded.tokens.len())
         .or_else(|| {
             timestamps_abs
                 .as_ref()
-                .and_then(|ts| synthesize_durations(ts, start_time + duration))
+                .and_then(|ts| synthesize_durations(ts, (start_time + duration) as f32))
         });
 
     let mut transcript_segment = TranscriptSegment {
         id: uuid::Uuid::new_v4().to_string(),
         text,
-        start: start_time as f64,
-        end: (start_time + duration) as f64,
+        start: start_time,
+        end: start_time + duration,
         is_final: true,
         timing: None,
         tokens: Some(decoded.tokens),
@@ -219,6 +220,17 @@ impl StreamTranscriptionJob {
         let mut reader = AudioStreamReader::open(stream_config).await?;
         observer.on_progress(5.0);
 
+        if self.alignment_model.is_some() {
+            log::warn!(
+                "Forced alignment is not supported for live audio stream transcription; skipping alignment."
+            );
+        }
+        if self.speaker_processing.is_some() {
+            log::warn!(
+                "Speaker diarization is not supported for live audio stream transcription; skipping speaker processing."
+            );
+        }
+
         let mut vad_detector = if let Some(vad_path) = self.vad_model.as_deref() {
             let options = VadDetectorOptions {
                 threshold: 0.5,
@@ -229,8 +241,13 @@ impl StreamTranscriptionJob {
                 sample_rate: 16000,
                 num_threads: 1,
             };
+            let buffer_size = if self.vad_buffer > 0.0 {
+                self.vad_buffer
+            } else {
+                60.0
+            };
             match create_vad_config(vad_path, options) {
-                Ok(config) => VoiceActivityDetector::create(&config, 60.0),
+                Ok(config) => VoiceActivityDetector::create(&config, buffer_size),
                 Err(err) => {
                     log::warn!(
                         "Failed to create stream VAD detector: {err}; falling back to fixed chunks"
@@ -246,8 +263,8 @@ impl StreamTranscriptionJob {
         let mut total_samples_streamed: usize = 0;
         let mut chunk_buffer = Vec::new();
         let fixed_chunk_size = 16000 * 15; // 15 seconds
+        let mut last_reported_progress: f32 = 5.0;
         let mut stream_error = None;
-
         loop {
             if observer.is_cancelled() {
                 break;
@@ -265,17 +282,20 @@ impl StreamTranscriptionJob {
 
             total_samples_streamed += frame.len();
             let elapsed_seconds = total_samples_streamed as f32 / 16000.0;
-            let progress = (1.0 - (-elapsed_seconds / 300.0).exp()) * 85.0 + 5.0;
-            observer.on_progress(progress.clamp(5.0, 95.0));
+            let progress = ((1.0 - (-elapsed_seconds / 300.0).exp()) * 85.0 + 5.0).clamp(5.0, 95.0);
+            if progress - last_reported_progress >= 1.0 {
+                observer.on_progress(progress);
+                last_reported_progress = progress;
+            }
 
             if let Some(detector) = vad_detector.as_mut() {
                 detector.accept_waveform(&frame);
                 while !detector.is_empty() {
                     if let Some(speech_segment) = detector.front() {
                         let seg_samples = speech_segment.samples().to_vec();
-                        let start_time = speech_segment.start() as f32 / 16000.0;
-                        let duration = seg_samples.len() as f32 / 16000.0;
-
+                        let start_sample = speech_segment.start().max(0);
+                        let start_time = start_sample as f64 / 16000.0;
+                        let duration = seg_samples.len() as f64 / 16000.0;
                         if let Some(segment) = process_speech_slice(
                             seg_samples,
                             start_time,
@@ -294,11 +314,11 @@ impl StreamTranscriptionJob {
             } else {
                 chunk_buffer.extend_from_slice(&frame);
                 if chunk_buffer.len() >= fixed_chunk_size {
-                    let chunk_duration = chunk_buffer.len() as f32 / 16000.0;
+                    let chunk_duration = chunk_buffer.len() as f64 / 16000.0;
                     let chunk_start =
-                        (total_samples_streamed - chunk_buffer.len()) as f32 / 16000.0;
+                        (total_samples_streamed - chunk_buffer.len()) as f64 / 16000.0;
                     if let Some(segment) = process_speech_slice(
-                        chunk_buffer.clone(),
+                        std::mem::take(&mut chunk_buffer),
                         chunk_start,
                         chunk_duration,
                         Arc::clone(&recognizer),
@@ -309,7 +329,6 @@ impl StreamTranscriptionJob {
                     {
                         results.push(segment);
                     }
-                    chunk_buffer.clear();
                 }
             }
         }
@@ -324,13 +343,13 @@ impl StreamTranscriptionJob {
             return Err(err);
         }
 
-        if total_samples_streamed == 0
-            && let Some(err_msg) = reader.take_stderr_output().await
-        {
+        if total_samples_streamed == 0 {
+            let err_msg = reader.take_stderr_output().await;
             reader.finish();
+            let msg = err_msg.unwrap_or_else(|| "No audio data received from stream".to_string());
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
-                format!("Stream failed: {err_msg}"),
+                format!("Stream failed: {msg}"),
             ));
         }
 
@@ -340,8 +359,9 @@ impl StreamTranscriptionJob {
             while !detector.is_empty() {
                 if let Some(speech_segment) = detector.front() {
                     let seg_samples = speech_segment.samples().to_vec();
-                    let start_time = speech_segment.start() as f32 / 16000.0;
-                    let duration = seg_samples.len() as f32 / 16000.0;
+                    let start_sample = speech_segment.start().max(0);
+                    let start_time = start_sample as f64 / 16000.0;
+                    let duration = seg_samples.len() as f64 / 16000.0;
 
                     if let Some(segment) = process_speech_slice(
                         seg_samples,
@@ -359,9 +379,9 @@ impl StreamTranscriptionJob {
                 detector.pop();
             }
         } else if !chunk_buffer.is_empty() {
-            let chunk_duration = chunk_buffer.len() as f32 / 16000.0;
+            let chunk_duration = chunk_buffer.len() as f64 / 16000.0;
             let chunk_start =
-                total_samples_streamed.saturating_sub(chunk_buffer.len()) as f32 / 16000.0;
+                total_samples_streamed.saturating_sub(chunk_buffer.len()) as f64 / 16000.0;
             if let Some(segment) = process_speech_slice(
                 std::mem::take(&mut chunk_buffer),
                 chunk_start,

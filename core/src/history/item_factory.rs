@@ -13,11 +13,15 @@ pub struct HistoryItemGeneratedValues {
 }
 
 pub fn is_network_url(path: &str) -> bool {
-    let trimmed = path.trim().to_ascii_lowercase();
-    trimmed.starts_with("http://")
-        || trimmed.starts_with("https://")
-        || trimmed.starts_with("rtmp://")
-        || trimmed.starts_with("rtsp://")
+    let trimmed = path.trim();
+    for scheme in &["http://", "https://", "rtmp://", "rtsp://"] {
+        if trimmed.len() > scheme.len() && trimmed[..scheme.len()].eq_ignore_ascii_case(scheme) {
+            let rest = trimmed[scheme.len()..].trim_start();
+            let host_part = rest.split(['/', '?', '#']).next().unwrap_or("");
+            return !host_part.trim().is_empty();
+        }
+    }
+    false
 }
 
 pub fn create_live_draft_item(
@@ -87,12 +91,23 @@ pub fn create_imported_file_item(
     generated: HistoryItemGeneratedValues,
     project_id: Option<String>,
 ) -> ImportedFileItem {
+    let is_url_stream = is_network_url(&source_path) && converted_source_path.is_none();
     let timestamp = generated.timestamp;
     let id = id.unwrap_or(generated.fallback_id);
     let title_file_name = file_name_from_path(&source_path, "Imported File");
-    let copy_source_path = converted_source_path.unwrap_or_else(|| source_path.clone());
-    let audio_extension = extension_from_path(&copy_source_path, "wav");
-    let item = build_history_item_record(
+    let copy_source_path = converted_source_path.unwrap_or_else(|| {
+        if is_url_stream {
+            String::new()
+        } else {
+            source_path.clone()
+        }
+    });
+    let audio_extension = if is_url_stream {
+        String::new()
+    } else {
+        extension_from_path(&copy_source_path, "wav")
+    };
+    let mut item = build_history_item_record(
         id,
         timestamp,
         duration,
@@ -103,6 +118,10 @@ pub fn create_imported_file_item(
         project_id,
         None,
     );
+    if is_url_stream {
+        item.audio_path = String::new();
+        item.audio_status = HistoryAudioStatus::Removed;
+    }
     ImportedFileItem {
         item,
         copy_source_path,
@@ -206,11 +225,13 @@ mod tests {
         assert!(is_network_url("https://example.com/audio.mp3?token=123"));
         assert!(is_network_url("RTMP://live.example.com/app/stream"));
         assert!(is_network_url("rtsp://192.168.1.1:554/live"));
+        assert!(!is_network_url("http://"));
+        assert!(!is_network_url("https://  "));
+        assert!(!is_network_url("rtmp:///live"));
         assert!(!is_network_url("C:\\path\\to\\audio.wav"));
         assert!(!is_network_url("/home/user/audio.mp3"));
         assert!(!is_network_url("relative/audio.flac"));
     }
-
     #[test]
     fn test_file_name_from_path_for_urls() {
         assert_eq!(
@@ -236,5 +257,28 @@ mod tests {
             file_name_from_path("https://example.com/audio/%20segment%20/ ", "Fallback"),
             "%20segment%20"
         );
+    }
+
+    #[test]
+    fn test_create_imported_file_item_stream_url() {
+        let generated = HistoryItemGeneratedValues {
+            fallback_id: "test-id-1".to_string(),
+            timestamp: 1234567890,
+            recording_title: "Default Title".to_string(),
+        };
+        let imported = create_imported_file_item(
+            None,
+            "https://example.com/audio/podcast.mp3?token=secret".to_string(),
+            None,
+            120.0,
+            vec![],
+            generated,
+            None,
+        );
+        assert_eq!(imported.item.id, "test-id-1");
+        assert_eq!(imported.item.audio_path, "");
+        assert_eq!(imported.item.audio_status, HistoryAudioStatus::Removed);
+        assert_eq!(imported.item.title, "Batch podcast.mp3");
+        assert_eq!(imported.copy_source_path, "");
     }
 }

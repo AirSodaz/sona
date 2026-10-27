@@ -134,15 +134,18 @@ impl AudioStreamReader {
                 command.creation_flags(0x0800_0000);
             }
 
+            command.arg("-loglevel").arg("error");
+            let is_http = config.url.starts_with("http://") || config.url.starts_with("https://");
+            if is_http {
+                command
+                    .arg("-reconnect")
+                    .arg("1")
+                    .arg("-reconnect_streamed")
+                    .arg("1")
+                    .arg("-reconnect_delay_max")
+                    .arg("5");
+            }
             command
-                .arg("-loglevel")
-                .arg("error")
-                .arg("-reconnect")
-                .arg("1")
-                .arg("-reconnect_streamed")
-                .arg("1")
-                .arg("-reconnect_delay_max")
-                .arg("5")
                 .arg("-i")
                 .arg(config.url)
                 .arg("-f")
@@ -197,7 +200,7 @@ impl AudioStreamReader {
                 .build()
                 .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
 
-            let response = client.get(config.url).send().await.map_err(|e| {
+            let mut response = client.get(config.url).send().await.map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!("Failed to fetch stream URL: {e}"),
@@ -225,29 +228,31 @@ impl AudioStreamReader {
                     ),
                 ));
             }
-
-            let bytes = response.bytes().await.map_err(|e| {
-                AsrPortError::runtime(format!("Failed to read stream response bytes: {e}"))
-            })?;
-
-            if bytes.len() > MAX_IN_MEMORY_STREAM_BYTES {
-                return Err(AsrPortError::new(
-                    AsrPortErrorKind::InvalidRequest,
-                    format!(
-                        "Stream size ({} bytes) exceeds maximum allowed in-memory limit ({MAX_IN_MEMORY_STREAM_BYTES} bytes)",
-                        bytes.len()
-                    ),
-                ));
+            let mut bytes = Vec::new();
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|e| AsrPortError::runtime(format!("Failed to read stream chunk: {e}")))?
+            {
+                if bytes.len() + chunk.len() > MAX_IN_MEMORY_STREAM_BYTES {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::InvalidRequest,
+                        format!(
+                            "Stream size exceeds maximum allowed in-memory limit ({MAX_IN_MEMORY_STREAM_BYTES} bytes)"
+                        ),
+                    ));
+                }
+                bytes.extend_from_slice(&chunk);
             }
-            let bytes = bytes.to_vec();
 
             let hint_ext = config
                 .url
                 .split('?')
                 .next()
-                .and_then(|p| p.rsplit('.').next())
-                .map(|ext| ext.trim_matches('/').to_string());
-
+                .and_then(|p| p.split('#').next())
+                .and_then(|p| p.rsplit('/').next())
+                .and_then(|filename| filename.rsplit_once('.'))
+                .map(|(_, ext)| ext.to_string());
             let decoded_samples = tokio::task::spawn_blocking(move || {
                 sona_core::audio::decode_audio_bytes(bytes, hint_ext.as_deref(), sample_rate)
             })
@@ -286,7 +291,7 @@ impl AudioStreamReader {
                     offset = 1;
                 }
 
-                while offset < 2 {
+                while offset < buf.len() {
                     let n = stdout.read(&mut buf[offset..]).await.map_err(|e| {
                         AsrPortError::runtime(format!("Error reading from ffmpeg stream: {e}"))
                     })?;
@@ -346,6 +351,7 @@ impl AudioStreamReader {
             AudioStreamReader::Ffmpeg {
                 stderr_task, child, ..
             } => {
+                let _ = child.start_kill();
                 if let Some(task) = stderr_task.take() {
                     let _ =
                         tokio::time::timeout(std::time::Duration::from_millis(500), child.wait())
@@ -367,10 +373,12 @@ impl AudioStreamReader {
     pub fn finish(&mut self) {
         match self {
             AudioStreamReader::Ffmpeg {
+                child,
                 wav_writer,
                 stderr_task,
                 ..
             } => {
+                let _ = child.start_kill();
                 if let Some(writer) = wav_writer.take() {
                     let _ = writer.finalize();
                 }

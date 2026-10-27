@@ -115,6 +115,11 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                         Some(sp_config),
                     )
                     .await?;
+            } else {
+                log::warn!(
+                    "Skipping local speaker profile matching: audio source is a network URL stream ({})",
+                    file_path.display()
+                );
             }
         }
 

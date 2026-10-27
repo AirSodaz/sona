@@ -1,3 +1,4 @@
+import { Globe } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
@@ -5,7 +6,6 @@ import { useDialogStore } from '../stores/dialogStore';
 import { CompleteIcon, ErrorIcon, PauseIcon, PlayIcon, ProcessingIcon, UploadIcon } from './Icons';
 import { QueueClearMenu } from './QueueClearMenu';
 import { SplitButton } from './ui/SplitButton';
-
 export interface QueueSummaryBarProps {
   onAddFiles: () => void;
   onAddStream?: () => void;
@@ -175,12 +175,16 @@ export function QueueSummaryBar({
                 icon: <UploadIcon width={13} height={13} />,
                 onClick: onAddFiles,
               },
-              {
-                key: 'stream',
-                label: t('batch.import_stream', { defaultValue: '网络音视频链接...' }),
-                icon: <span>🌐</span>,
-                onClick: () => onAddStream?.(),
-              },
+              ...(onAddStream
+                ? [
+                    {
+                      key: 'stream',
+                      label: t('batch.import_stream', { defaultValue: 'Import Network Stream...' }),
+                      icon: <Globe size={13} />,
+                      onClick: onAddStream,
+                    },
+                  ]
+                : []),
             ]}
           />
         </div>

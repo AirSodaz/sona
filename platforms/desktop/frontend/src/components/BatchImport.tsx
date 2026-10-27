@@ -1,3 +1,4 @@
+import { Globe } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -305,8 +306,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         onDragLeave={handleDragLeave}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
-        role="button"
-        tabIndex={0}
         aria-label={t('batch.drop_desc')}
       >
         <div className="drop-zone-icon">
@@ -336,8 +335,8 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
               },
               {
                 key: 'stream',
-                label: t('batch.import_stream', { defaultValue: '网络音视频链接...' }),
-                icon: <span>🌐</span>,
+                label: t('batch.import_stream', { defaultValue: 'Import Network Stream...' }),
+                icon: <Globe size={14} />,
                 onClick: () => setIsStreamModalOpen(true),
               },
             ]}

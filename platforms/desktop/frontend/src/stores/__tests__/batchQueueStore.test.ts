@@ -828,6 +828,10 @@ describe('batchQueueStore', () => {
       expect(deriveTitleFromUrl('https://live.example.com/stream-live')).toBe('stream-live');
       expect(deriveTitleFromUrl('https://example.com/')).toBe('example.com');
       expect(deriveTitleFromUrl('not-a-url')).toBe('not-a-url');
+      expect(deriveTitleFromUrl('https://example.com/%20/')).toBe('example.com');
+      expect(deriveTitleFromUrl('https://example.com/episode%2042.mp3')).toBe('episode 42.mp3');
+      expect(deriveTitleFromUrl('https://')).toBe('Network Stream');
+      expect(deriveTitleFromUrl('http://192.168.1.1:8000/live#stream')).toBe('live');
     });
 
     it('addStreamItems enqueues url_stream items with options', () => {
@@ -847,6 +851,26 @@ describe('batchQueueStore', () => {
       expect(items[0].filename).toBe('My Custom Podcast');
       expect(items[0].retainAudio).toBe(true);
       expect(items[0].status).toBe('pending');
+    });
+
+    it('addStreamItems enqueues multiple items and ignores alias for multi-item batches', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore
+        .getState()
+        .addStreamItems(
+          ['https://example.com/audio/podcast1.mp3', 'https://example.com/audio/podcast2.mp3'],
+          {
+            alias: 'Ignored Alias',
+            retainAudio: false,
+          }
+        );
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(2);
+      expect(items[0].filename).toBe('podcast1.mp3');
+      expect(items[1].filename).toBe('podcast2.mp3');
+      expect(items[0].retainAudio).toBe(false);
     });
   });
 });

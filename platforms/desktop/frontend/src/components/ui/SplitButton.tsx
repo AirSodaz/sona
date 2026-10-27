@@ -20,8 +20,8 @@ export interface SplitButtonProps {
   size?: 'sm' | 'md';
   variant?: 'primary' | 'secondary';
   ariaLabel?: string;
+  toggleAriaLabel?: string;
 }
-
 export function SplitButton({
   primaryLabel,
   primaryIcon,
@@ -32,15 +32,25 @@ export function SplitButton({
   size = 'sm',
   variant = 'primary',
   ariaLabel,
+  toggleAriaLabel,
 }: SplitButtonProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const menuId = useId();
 
   useEffect(() => {
-    if (!isOpen) return undefined;
+    if (isOpen) {
+      const firstEnabledIndex = menuItems.findIndex((item) => !item.disabled);
+      if (firstEnabledIndex !== -1) {
+        menuItemRefs.current[firstEnabledIndex]?.focus();
+      }
+    }
+  }, [isOpen, menuItems]);
 
+  useEffect(() => {
+    if (!isOpen) return undefined;
     const handleClickOutside = (event: MouseEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
@@ -52,6 +62,53 @@ export function SplitButton({
         event.stopPropagation();
         setIsOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        const enabledIndices = menuItems
+          .map((item, idx) => (!item.disabled ? idx : -1))
+          .filter((idx) => idx !== -1);
+        if (enabledIndices.length === 0) return;
+
+        const activeEl = document.activeElement;
+        const currentPos = enabledIndices.findIndex(
+          (idx) => menuItemRefs.current[idx] === activeEl
+        );
+
+        let nextIndex: number;
+        if (event.key === 'ArrowDown') {
+          nextIndex =
+            currentPos === -1 || currentPos === enabledIndices.length - 1
+              ? enabledIndices[0]
+              : enabledIndices[currentPos + 1];
+        } else {
+          nextIndex =
+            currentPos <= 0
+              ? enabledIndices[enabledIndices.length - 1]
+              : enabledIndices[currentPos - 1];
+        }
+        menuItemRefs.current[nextIndex]?.focus();
+        return;
+      }
+
+      if (event.key === 'Home') {
+        event.preventDefault();
+        const first = menuItems.findIndex((item) => !item.disabled);
+        if (first !== -1) menuItemRefs.current[first]?.focus();
+        return;
+      }
+
+      if (event.key === 'End') {
+        event.preventDefault();
+        for (let i = menuItems.length - 1; i >= 0; i--) {
+          if (!menuItems[i].disabled) {
+            menuItemRefs.current[i]?.focus();
+            break;
+          }
+        }
+        return;
       }
     };
 
@@ -61,7 +118,7 @@ export function SplitButton({
       document.removeEventListener('mousedown', handleClickOutside);
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen]);
+  }, [isOpen, menuItems]);
 
   const baseBtnClass = variant === 'primary' ? 'btn btn-primary' : 'btn btn-secondary-soft';
   const sizeClass = size === 'sm' ? 'btn-sm' : '';
@@ -70,6 +127,11 @@ export function SplitButton({
     <div
       ref={containerRef}
       className={`split-button-container ${className}`}
+      onBlur={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          setIsOpen(false);
+        }
+      }}
       style={{
         display: 'inline-flex',
         alignItems: 'stretch',
@@ -101,10 +163,16 @@ export function SplitButton({
         className={`${baseBtnClass} ${sizeClass}`}
         onClick={() => setIsOpen((prev) => !prev)}
         disabled={disabled || menuItems.length === 0}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setIsOpen(true);
+          }
+        }}
         aria-haspopup="menu"
         aria-expanded={isOpen}
-        aria-controls={menuId}
-        aria-label={ariaLabel ? `${ariaLabel} options` : 'More options'}
+        aria-controls={isOpen ? menuId : undefined}
+        aria-label={toggleAriaLabel ?? (ariaLabel ? `${ariaLabel} options` : 'More options')}
         style={{
           borderTopLeftRadius: 0,
           borderBottomLeftRadius: 0,
@@ -139,15 +207,27 @@ export function SplitButton({
             gap: '2px',
           }}
         >
-          {menuItems.map((item) => (
+          {menuItems.map((item, index) => (
             <button
               key={item.key}
+              ref={(el) => {
+                menuItemRefs.current[index] = el;
+              }}
               type="button"
               role="menuitem"
               disabled={item.disabled}
               onClick={() => {
                 setIsOpen(false);
                 item.onClick();
+              }}
+              onFocus={(e) => {
+                if (!item.disabled) {
+                  e.currentTarget.style.backgroundColor =
+                    'var(--color-bg-hover, rgba(255, 255, 255, 0.08))';
+                }
+              }}
+              onBlur={(e) => {
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
               style={{
                 display: 'flex',

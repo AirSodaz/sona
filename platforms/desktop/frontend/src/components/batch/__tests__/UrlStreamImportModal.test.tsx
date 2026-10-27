@@ -21,17 +21,37 @@ describe('UrlStreamImportModal', () => {
     const handleClose = vi.fn();
     render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
 
-    expect(screen.getByText('导入网络音视频链接')).toBeDefined();
+    expect(screen.getByText(/导入网络音视频链接|Import Network/i)).toBeDefined();
 
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'invalid-url' } });
 
-    const submitBtn = screen.getByText('加入队列');
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
     fireEvent.click(submitBtn);
 
-    expect(
-      screen.getByText('链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。')
-    ).toBeDefined();
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+  });
+
+  it('rejects URLs containing unencoded whitespace', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: { value: 'https://example.com/audio file with spaces.mp3' },
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+    expect(handleClose).not.toHaveBeenCalled();
+
+    // Typing valid text clears error
+    fireEvent.change(textarea, {
+      target: { value: 'https://example.com/audio.mp3' },
+    });
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
   });
 
   it('submits valid stream URLs and enqueues items', () => {
@@ -43,13 +63,13 @@ describe('UrlStreamImportModal', () => {
       target: { value: 'https://example.com/audio/podcast.mp3' },
     });
 
-    const aliasInput = screen.getByPlaceholderText(/例如：AI 播客第 42 期/);
+    const aliasInput = screen.getByPlaceholderText(/例如：AI 播客第 42 期|AI Podcast Episode 42/i);
     fireEvent.change(aliasInput, { target: { value: 'My Stream Episode' } });
 
     const retainCheckbox = screen.getByRole('checkbox');
     fireEvent.click(retainCheckbox);
 
-    const submitBtn = screen.getByText('加入队列');
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
     fireEvent.click(submitBtn);
 
     expect(handleClose).toHaveBeenCalled();
@@ -72,9 +92,11 @@ describe('UrlStreamImportModal', () => {
       },
     });
 
-    expect(screen.queryByPlaceholderText(/例如：AI 播客第 42 期/)).toBeNull();
+    expect(
+      screen.queryByPlaceholderText(/例如：AI 播客第 42 期|AI Podcast Episode 42/i)
+    ).toBeNull();
 
-    const submitBtn = screen.getByText('加入队列');
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
     fireEvent.click(submitBtn);
 
     expect(handleClose).toHaveBeenCalled();
@@ -96,12 +118,10 @@ describe('UrlStreamImportModal', () => {
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'ftp://invalid-scheme.com/audio.mp3' } });
 
-    const submitBtn = screen.getByText('加入队列');
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
     fireEvent.click(submitBtn);
 
-    expect(
-      screen.getByText('链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。')
-    ).toBeDefined();
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
 
     const cancelBtn = screen.getByRole('button', { name: /cancel|取消/i });
     fireEvent.click(cancelBtn);
@@ -110,9 +130,7 @@ describe('UrlStreamImportModal', () => {
     rerender(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
     const textareaReopened = screen.getByRole('textbox') as HTMLTextAreaElement;
     expect(textareaReopened.value).toBe('');
-    expect(
-      screen.queryByText('链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。')
-    ).toBeNull();
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
   });
 
   it('accepts case-insensitive schemes (HTTP://, RTSP://)', () => {
@@ -124,13 +142,11 @@ describe('UrlStreamImportModal', () => {
       target: { value: 'HTTP://example.com/stream.mp3\nRTSP://192.168.1.100:554/live' },
     });
 
-    const submitBtn = screen.getByText('加入队列');
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
     fireEvent.click(submitBtn);
 
     expect(handleClose).toHaveBeenCalled();
-    expect(
-      screen.queryByText('链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。')
-    ).toBeNull();
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
     const items = useBatchQueueStore.getState().queueItems;
     expect(items).toHaveLength(2);
     expect(items[0].streamUrl).toBe('HTTP://example.com/stream.mp3');

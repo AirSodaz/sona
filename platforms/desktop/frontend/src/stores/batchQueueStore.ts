@@ -50,7 +50,13 @@ export function deriveTitleFromUrl(url: string): string {
     const pathname = parsed.pathname.replace(/\/+$/, '');
     const segment = pathname.split('/').pop();
     if (segment?.trim()) {
-      return decodeURIComponent(segment.trim());
+      try {
+        const decoded = decodeURIComponent(segment.trim()).trim();
+        if (decoded) return decoded;
+      } catch {
+        const raw = segment.trim();
+        if (raw) return raw;
+      }
     }
     if (parsed.hostname?.trim()) {
       return parsed.hostname.trim();
@@ -59,7 +65,10 @@ export function deriveTitleFromUrl(url: string): string {
     const clean = url.split('?')[0].split('#')[0];
     const segment = clean.replace(/\/+$/, '').split('/').pop();
     if (segment?.trim()) {
-      return segment.trim();
+      const trimmed = segment.trim();
+      if (!/^(https?|rtmp|rtsp):?$/i.test(trimmed)) {
+        return trimmed;
+      }
     }
   }
   return 'Network Stream';

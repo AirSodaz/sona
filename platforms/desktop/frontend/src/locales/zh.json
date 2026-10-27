@@ -355,7 +355,20 @@
     "continue_transcribing": "继续转录",
     "clear_queue_confirm_title": "清空转录队列？",
     "clear_queue_confirm_message": "队列中有正在转录的文件。清空队列将终止转录并丢失当前进度，确定要清空全部吗？",
-    "clear_all_confirm_action": "终止并清空"
+    "clear_all_confirm_action": "终止并清空",
+    "import_stream": "网络音视频链接...",
+    "import_stream_title": "导入网络音视频链接",
+    "stream_badge": "网络流",
+    "finish_and_save": "完成并保存",
+    "stream_modal_empty_error": "请输入至少一个音视频网络流链接。",
+    "stream_modal_invalid_error": "链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。",
+    "stream_urls_label": "网络音视频链接 (支持多行批量输入)",
+    "stream_urls_hint": "直接通过网络流转录，完成转录的音频切片随用随弃，不占用长期磁盘空间。",
+    "stream_alias_label": "自定义名称 (可选)",
+    "stream_alias_placeholder": "例如：AI 播客第 42 期",
+    "stream_retain_audio": "保留转码音频副本 (保存后可在工作台回放)",
+    "stream_retain_audio_desc": "未勾选时，音频只在内存中滑动处理后即时销毁，零本地磁盘占用。",
+    "add_to_queue": "加入队列"
   },
   "player": {
     "play": "播放",

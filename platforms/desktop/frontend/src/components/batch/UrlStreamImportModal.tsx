@@ -1,5 +1,6 @@
+import { Globe } from 'lucide-react';
 import type React from 'react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../../stores/batchQueueStore';
 import { Checkbox } from '../Checkbox';
@@ -19,6 +20,8 @@ export function UrlStreamImportModal({
   const [alias, setAlias] = useState('');
   const [retainAudio, setRetainAudio] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const errorId = useId();
 
   const textareaId = useId();
   const aliasId = useId();
@@ -53,7 +56,7 @@ export function UrlStreamImportModal({
       return;
     }
 
-    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/.+/i.test(url));
+    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/\S+$/i.test(url));
 
     if (invalidUrls.length > 0) {
       setErrorMessage(
@@ -76,9 +79,10 @@ export function UrlStreamImportModal({
     <Modal
       isOpen={isOpen}
       onClose={handleModalClose}
+      initialFocusRef={textareaRef}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span>🌐</span>
+          <Globe size={18} />
           <span>
             {t('batch.import_stream_title', {
               defaultValue: '导入网络音视频链接',
@@ -130,6 +134,7 @@ export function UrlStreamImportModal({
             })}
           </label>
           <textarea
+            ref={textareaRef}
             id={textareaId}
             rows={4}
             value={urlInput}
@@ -137,6 +142,8 @@ export function UrlStreamImportModal({
               setUrlInput(e.target.value);
               if (errorMessage) setErrorMessage(null);
             }}
+            aria-invalid={Boolean(errorMessage)}
+            aria-describedby={errorMessage ? errorId : undefined}
             placeholder={`https://example.com/podcast.mp3\nhttps://live.example.com/audio-stream.m3u8\nrtsp://192.168.1.1:554/live`}
             style={{
               width: '100%',
@@ -234,6 +241,9 @@ export function UrlStreamImportModal({
 
         {errorMessage && (
           <div
+            id={errorId}
+            role="alert"
+            aria-live="polite"
             style={{
               color: 'var(--color-error, #ef4444)',
               fontSize: '13px',
@@ -242,7 +252,7 @@ export function UrlStreamImportModal({
               gap: '6px',
             }}
           >
-            <span>⚠️</span>
+            <span aria-hidden="true">⚠️</span>
             <span>{errorMessage}</span>
           </div>
         )}
