@@ -30,7 +30,7 @@ fn default_config_conforms_to_the_typed_app_config_contract() {
     assert_eq!(typed.streaming_model_path.as_deref(), Some(""));
     assert_eq!(typed.batch_model_path.as_deref(), Some(""));
     assert_eq!(typed.language.as_deref(), Some("auto"));
-    assert_eq!(typed.caption_translation_font_size, Some(18.0));
+    assert_eq!(typed.caption_translation_font_size, Some(16.0));
     assert_eq!(
         typed.caption_translation_font_color.as_deref(),
         Some("#6ee7b7")
@@ -83,7 +83,7 @@ fn current_config_migration_repairs_invalid_typed_scalar_fields() {
     assert_eq!(result.config["theme"], "auto");
     assert_eq!(result.config["captionWindowWidth"], 800);
     assert_eq!(result.config["voiceTypingMode"], "hold");
-    assert_eq!(result.config["captionTranslationFontSize"], 18);
+    assert_eq!(result.config["captionTranslationFontSize"], 16);
     assert_eq!(result.config["captionTranslationFontColor"], "#6ee7b7");
 }
 
@@ -257,4 +257,75 @@ fn migration_populates_live_and_batch_model_paths_and_buffer_sizes_from_legacy_c
         "local"
     );
     validate_app_config(&result.config).expect("migrated config should match AppConfig");
+}
+
+#[test]
+fn migration_preserves_legacy_caption_display_mode_and_bilingual_order() {
+    let mut config_translation = default_config();
+    config_translation["configVersion"] = json!(7);
+    let obj = config_translation.as_object_mut().unwrap();
+    obj.remove("captionDisplayPriority");
+    obj.insert("captionDisplayMode".to_string(), json!("translation"));
+    let result = migrate_app_config(Some(config_translation), "Default Rules".to_string());
+    assert_eq!(result.config["captionDisplayPriority"], "translation_only");
+    validate_app_config(&result.config).expect("valid config");
+
+    let mut config_original = default_config();
+    config_original["configVersion"] = json!(7);
+    let obj = config_original.as_object_mut().unwrap();
+    obj.remove("captionDisplayPriority");
+    obj.insert("captionDisplayMode".to_string(), json!("original"));
+    let result = migrate_app_config(Some(config_original), "Default Rules".to_string());
+    assert_eq!(result.config["captionDisplayPriority"], "original_only");
+    validate_app_config(&result.config).expect("valid config");
+
+    let mut config_bilingual_trans = default_config();
+    config_bilingual_trans["configVersion"] = json!(7);
+    let obj = config_bilingual_trans.as_object_mut().unwrap();
+    obj.remove("captionDisplayPriority");
+    obj.insert("captionDisplayMode".to_string(), json!("bilingual"));
+    obj.insert(
+        "captionBilingualOrder".to_string(),
+        json!("translation_first"),
+    );
+    let result = migrate_app_config(Some(config_bilingual_trans), "Default Rules".to_string());
+    assert_eq!(result.config["captionDisplayPriority"], "translation_main");
+    validate_app_config(&result.config).expect("valid config");
+
+    let mut config_bilingual_orig = default_config();
+    config_bilingual_orig["configVersion"] = json!(7);
+    let obj = config_bilingual_orig.as_object_mut().unwrap();
+    obj.remove("captionDisplayPriority");
+    obj.insert("captionDisplayMode".to_string(), json!("bilingual"));
+    obj.insert("captionBilingualOrder".to_string(), json!("original_first"));
+    let result = migrate_app_config(Some(config_bilingual_orig), "Default Rules".to_string());
+    assert_eq!(result.config["captionDisplayPriority"], "original_main");
+    validate_app_config(&result.config).expect("valid config");
+
+    let mut config_unset = default_config();
+    config_unset["configVersion"] = json!(7);
+    let obj = config_unset.as_object_mut().unwrap();
+    obj.remove("captionDisplayPriority");
+    obj.remove("captionDisplayMode");
+    obj.remove("captionBilingualOrder");
+    let result = migrate_app_config(Some(config_unset), "Default Rules".to_string());
+    assert_eq!(result.config["captionDisplayPriority"], "original_main");
+    validate_app_config(&result.config).expect("valid config");
+}
+
+#[test]
+fn current_config_migration_repairs_invalid_caption_and_language_scalars() {
+    let mut config = default_config();
+    config["language"] = json!(12345);
+    config["captionDisplayPriority"] = json!("invalid_priority");
+    config["captionStrokeWidth"] = json!("heavy");
+    config["captionTextAlign"] = json!("justified");
+
+    let result = migrate_app_config(Some(config), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("migration output should match AppConfig");
+
+    assert_eq!(result.config["language"], "auto");
+    assert_eq!(result.config["captionDisplayPriority"], "translation_main");
+    assert_eq!(result.config["captionStrokeWidth"], 2.0);
+    assert_eq!(result.config["captionTextAlign"], "center");
 }

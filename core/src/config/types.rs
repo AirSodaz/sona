@@ -254,6 +254,10 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_window_width: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_window_x: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_window_y: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_font_size: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_font_color: Option<String>,
@@ -269,6 +273,22 @@ pub struct AppConfig {
     pub caption_display_mode: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_bilingual_order: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_display_priority: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_stroke: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_stroke_width: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_stroke_color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_shadow: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_text_align: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_disappear_delay: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub caption_lock_shortcut: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub realtime_translation_enabled: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

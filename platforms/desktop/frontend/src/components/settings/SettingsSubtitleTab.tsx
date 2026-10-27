@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { LANGUAGE_OPTIONS } from '../../constants/languages';
 import { useRealtimeTranslationConfig } from '../../hooks/useRealtimeTranslationConfig';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
+import { captionWindowService } from '../../services/captionWindowService';
 import { DEFAULT_VOICE_TYPING_CONTEXT_RULES } from '../../services/voiceTyping/voiceTypingContext';
 import {
   useCaptionConfig,
@@ -930,12 +931,19 @@ export function SettingsSubtitleTab({
   const alwaysOnTop = config.alwaysOnTop ?? true;
   const startOnLaunch = config.startOnLaunch ?? false;
   const captionWindowWidth = config.captionWindowWidth ?? 800;
-  const captionFontSize = config.captionFontSize ?? 24;
+  const captionFontSize = config.captionFontSize ?? 22;
   const captionFontColor = config.captionFontColor || '#ffffff';
-  const captionTranslationFontSize = config.captionTranslationFontSize ?? 18;
+  const captionTranslationFontSize = config.captionTranslationFontSize ?? 16;
   const captionTranslationFontColor = config.captionTranslationFontColor || '#6ee7b7';
-  const captionBackgroundColor = config.captionBackgroundColor || '#000000';
-  const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.6;
+  const captionBackgroundColor = config.captionBackgroundColor || '#17171a';
+  const captionBackgroundOpacity = config.captionBackgroundOpacity ?? 0.72;
+  const captionTextStroke = config.captionTextStroke ?? false;
+  const captionStrokeWidth = config.captionStrokeWidth ?? 2;
+  const captionStrokeColor = config.captionStrokeColor || '#000000';
+  const captionTextShadow = config.captionTextShadow ?? true;
+  const captionTextAlign = config.captionTextAlign ?? 'center';
+  const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
+  const captionLockShortcut = config.captionLockShortcut || 'Alt+C';
   const {
     realtimeTranslationEnabled,
     realtimeTranslationSourceLanguage,
@@ -949,42 +957,72 @@ export function SettingsSubtitleTab({
     handleToggleRealtimeTranslation,
   } = useRealtimeTranslationConfig();
   const captionBilingualOrder = config.captionBilingualOrder || 'original_first';
-
-  const displayModeOptions = useMemo(
+  const captionDisplayPriority =
+    config.captionDisplayPriority ??
+    (captionDisplayMode === 'translation'
+      ? 'translation_only'
+      : captionDisplayMode === 'original'
+        ? 'original_only'
+        : captionBilingualOrder === 'translation_first'
+          ? 'translation_main'
+          : 'original_main');
+  const displayPriorityOptions = useMemo(
     () => [
       {
-        value: 'bilingual',
-        label: t('settings.caption_mode_bilingual', {
-          defaultValue: 'Bilingual (Original & Translation)',
+        value: 'translation_main',
+        label: t('settings.caption_priority_translation_main', {
+          defaultValue: 'Translation Main (Translation on Top)',
         }),
       },
       {
-        value: 'translation',
-        label: t('settings.caption_mode_translation', { defaultValue: 'Translation Only' }),
+        value: 'original_main',
+        label: t('settings.caption_priority_original_main', {
+          defaultValue: 'Original Main (Original on Top)',
+        }),
       },
       {
-        value: 'original',
-        label: t('settings.caption_mode_original', { defaultValue: 'Original Only' }),
+        value: 'translation_only',
+        label: t('settings.caption_priority_translation_only', {
+          defaultValue: 'Translation Only',
+        }),
+      },
+      {
+        value: 'original_only',
+        label: t('settings.caption_priority_original_only', {
+          defaultValue: 'Original Only',
+        }),
       },
     ],
     [t]
   );
 
-  const bilingualOrderOptions = useMemo(
-    () => [
-      {
-        value: 'original_first',
-        label: t('settings.caption_order_original_first', { defaultValue: 'Original on Top' }),
-      },
-      {
-        value: 'translation_first',
-        label: t('settings.caption_order_translation_first', {
-          defaultValue: 'Translation on Top',
-        }),
-      },
-    ],
-    [t]
-  );
+  const handleDisplayPriorityChange = (val: string) => {
+    const priority = val as
+      | 'translation_main'
+      | 'original_main'
+      | 'translation_only'
+      | 'original_only';
+    let mode: 'bilingual' | 'translation' | 'original' = 'bilingual';
+    let order = captionBilingualOrder;
+
+    if (priority === 'translation_main') {
+      mode = 'bilingual';
+      order = 'translation_first';
+    } else if (priority === 'original_main') {
+      mode = 'bilingual';
+      order = 'original_first';
+    } else if (priority === 'translation_only') {
+      mode = 'translation';
+    } else if (priority === 'original_only') {
+      mode = 'original';
+    }
+
+    updateConfig({
+      captionDisplayPriority: priority,
+      captionDisplayMode: mode,
+      captionBilingualOrder: order,
+    });
+  };
   return (
     <SettingsTabContainer id="settings-panel-subtitle" ariaLabelledby="settings-tab-subtitle">
       <SettingsPageHeader
@@ -1081,6 +1119,40 @@ export function SettingsSubtitleTab({
                 onChange={(enabled) => updateConfig({ lockWindow: enabled })}
               />
             </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.caption_lock_shortcut', {
+                defaultValue: 'Lock Click-Through Shortcut',
+              })}
+              hint={t('settings.caption_lock_shortcut_hint', {
+                defaultValue:
+                  'Global hotkey to toggle mouse click-through for the live caption window.',
+              })}
+            >
+              <SettingsShortcutInput
+                value={captionLockShortcut}
+                onChange={(val) => updateConfig({ captionLockShortcut: val })}
+              />
+            </SettingsItem>
+            <SettingsItem
+              title={t('settings.caption_reset_position', {
+                defaultValue: 'Reset Window Position',
+              })}
+              hint={t('settings.caption_reset_position_hint', {
+                defaultValue:
+                  'Reset the caption floating window to the default bottom-center position.',
+              })}
+            >
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => void captionWindowService.resetPosition()}
+              >
+                {t('settings.caption_reset_position', {
+                  defaultValue: 'Reset Window Position',
+                })}
+              </button>
+            </SettingsItem>
           </SettingsSection>
 
           <SettingsSection
@@ -1164,40 +1236,24 @@ export function SettingsSubtitleTab({
                 </SettingsItem>
 
                 <SettingsItem
-                  title={t('settings.caption_display_mode', {
-                    defaultValue: 'Display Mode',
+                  title={t('settings.caption_display_priority', {
+                    defaultValue: 'Display Priority',
+                  })}
+                  hint={t('settings.caption_display_priority_hint', {
+                    defaultValue: 'Choose which translation/original line takes primary emphasis.',
                   })}
                 >
                   <Dropdown
-                    options={displayModeOptions}
-                    value={captionDisplayMode}
-                    onChange={(val) =>
-                      updateConfig({
-                        captionDisplayMode: val as 'bilingual' | 'translation' | 'original',
-                      })
-                    }
+                    id="caption-display-priority-select"
+                    options={displayPriorityOptions}
+                    value={captionDisplayPriority}
+                    onChange={handleDisplayPriorityChange}
+                    aria-label={t('settings.caption_display_priority', {
+                      defaultValue: 'Display Priority',
+                    })}
                     style={{ width: '260px' }}
                   />
                 </SettingsItem>
-
-                {captionDisplayMode === 'bilingual' && (
-                  <SettingsItem
-                    title={t('settings.caption_bilingual_order', {
-                      defaultValue: 'Bilingual Order',
-                    })}
-                  >
-                    <Dropdown
-                      options={bilingualOrderOptions}
-                      value={captionBilingualOrder}
-                      onChange={(val) =>
-                        updateConfig({
-                          captionBilingualOrder: val as 'original_first' | 'translation_first',
-                        })
-                      }
-                      style={{ width: '200px' }}
-                    />
-                  </SettingsItem>
-                )}
               </>
             )}
           </SettingsSection>
@@ -1266,7 +1322,7 @@ export function SettingsSubtitleTab({
                   }}
                   onBlur={(e) => {
                     const parsed = Number(e.target.value);
-                    const clamped = Number.isNaN(parsed) ? 18 : Math.max(12, Math.min(72, parsed));
+                    const clamped = Number.isNaN(parsed) ? 16 : Math.max(12, Math.min(72, parsed));
                     updateConfig({ captionTranslationFontSize: clamped });
                   }}
                   className="settings-input"
@@ -1323,6 +1379,133 @@ export function SettingsSubtitleTab({
                   }}
                 >
                   {Math.round(captionBackgroundOpacity * 100)}%
+                </span>
+              </div>
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.caption_text_align', { defaultValue: 'Text Alignment' })}
+            >
+              <SegmentedSubTabs<'center' | 'left'>
+                id="caption-text-align-select"
+                role="radiogroup"
+                size="sm"
+                ariaLabel={t('settings.caption_text_align', { defaultValue: 'Text Alignment' })}
+                items={[
+                  {
+                    value: 'center',
+                    label: t('settings.caption_align_center', { defaultValue: 'Center' }),
+                  },
+                  {
+                    value: 'left',
+                    label: t('settings.caption_align_left', { defaultValue: 'Left' }),
+                  },
+                ]}
+                activeTab={captionTextAlign}
+                onChange={(val) => updateConfig({ captionTextAlign: val })}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.caption_text_stroke', { defaultValue: 'Text Stroke' })}
+              hint={t('settings.caption_text_stroke_hint', {
+                defaultValue: 'Adds a high-contrast outline for readability on bright backgrounds.',
+              })}
+            >
+              <Switch
+                checked={captionTextStroke}
+                onChange={(enabled) =>
+                  updateConfig({
+                    captionTextStroke: enabled,
+                    ...(enabled && captionStrokeWidth <= 0 ? { captionStrokeWidth: 2 } : {}),
+                  })
+                }
+              />
+            </SettingsItem>
+
+            {captionTextStroke && (
+              <>
+                <SettingsItem
+                  title={t('settings.caption_stroke_width', { defaultValue: 'Stroke Width' })}
+                >
+                  <div
+                    style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}
+                  >
+                    <input
+                      type="range"
+                      min="1"
+                      max="5"
+                      step="0.5"
+                      value={captionStrokeWidth}
+                      onChange={(e) => updateConfig({ captionStrokeWidth: Number(e.target.value) })}
+                      className="settings-slider"
+                      style={{ flex: 1 }}
+                    />
+                    <span
+                      style={{
+                        width: '40px',
+                        textAlign: 'right',
+                        fontSize: '13px',
+                        fontVariantNumeric: 'tabular-nums',
+                      }}
+                    >
+                      {captionStrokeWidth}px
+                    </span>
+                  </div>
+                </SettingsItem>
+
+                <SettingsItem
+                  title={t('settings.caption_stroke_color', { defaultValue: 'Stroke Color' })}
+                >
+                  <ColorSwatchPicker
+                    value={captionStrokeColor}
+                    onChange={(color) => updateConfig({ captionStrokeColor: color })}
+                    aria-label={t('settings.caption_stroke_color', {
+                      defaultValue: 'Stroke Color',
+                    })}
+                  />
+                </SettingsItem>
+              </>
+            )}
+
+            <SettingsItem
+              title={t('settings.caption_text_shadow', { defaultValue: 'Text Shadow' })}
+              hint={t('settings.caption_text_shadow_hint', {
+                defaultValue: 'Soft drop shadow behind caption text.',
+              })}
+            >
+              <Switch
+                checked={captionTextShadow}
+                onChange={(enabled) => updateConfig({ captionTextShadow: enabled })}
+              />
+            </SettingsItem>
+
+            <SettingsItem
+              title={t('settings.caption_disappear_delay', { defaultValue: 'Disappear Delay' })}
+              hint={t('settings.caption_disappear_delay_hint', {
+                defaultValue: 'Time in seconds before subtitles fade out after speech stops.',
+              })}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '12px', width: '212px' }}>
+                <input
+                  type="range"
+                  min="1"
+                  max="10"
+                  step="0.5"
+                  value={captionDisappearDelay}
+                  onChange={(e) => updateConfig({ captionDisappearDelay: Number(e.target.value) })}
+                  className="settings-slider"
+                  style={{ flex: 1 }}
+                />
+                <span
+                  style={{
+                    width: '40px',
+                    textAlign: 'right',
+                    fontSize: '13px',
+                    fontVariantNumeric: 'tabular-nums',
+                  }}
+                >
+                  {captionDisappearDelay.toFixed(1)}s
                 </span>
               </div>
             </SettingsItem>

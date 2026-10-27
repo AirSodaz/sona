@@ -1,6 +1,7 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { captionWindowService } from '../../../../services/captionWindowService';
 import type * as ModelServiceModule from '../../../../services/modelService';
 import { modelService } from '../../../../services/modelService';
 import { useConfigStore } from '../../../../stores/configStore';
@@ -9,6 +10,11 @@ import { useTranscriptRuntimeStore } from '../../../../stores/transcriptRuntimeS
 import { buildTestConfig } from '../../../../test-utils/configTestUtils';
 import { ToolSubtitlesPanel } from '../ToolSubtitlesPanel';
 
+vi.mock('../../../../services/captionWindowService', () => ({
+  captionWindowService: {
+    resetPosition: vi.fn().mockResolvedValue(undefined),
+  },
+}));
 vi.mock('../../../../services/modelService', async (importOriginal) => {
   const actual = await importOriginal<typeof ModelServiceModule>();
   return {
@@ -50,6 +56,7 @@ describe('ToolSubtitlesPanel', () => {
         realtimeTranslationTargetLanguage: 'zh',
         captionDisplayMode: 'bilingual',
         captionBilingualOrder: 'original_first',
+        captionDisplayPriority: 'original_main',
       }),
     });
   });
@@ -258,6 +265,7 @@ describe('ToolSubtitlesPanel', () => {
           ...state.config,
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'original',
+          captionDisplayPriority: 'original_only',
         },
       }));
 
@@ -273,7 +281,7 @@ describe('ToolSubtitlesPanel', () => {
           ...state.config,
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'translation',
-          captionTranslationFontSize: 20,
+          captionDisplayPriority: 'translation_only',
           captionTranslationFontColor: '#6ee7b7',
         },
       }));
@@ -283,7 +291,7 @@ describe('ToolSubtitlesPanel', () => {
       expect(screen.queryByTestId('subtitle-preview-original')).toBeNull();
       const translation = screen.getByTestId('subtitle-preview-translation');
       expect(translation).toBeDefined();
-      expect(translation.style.fontSize).toBe('20px');
+      expect(translation.style.fontSize).toBe('24px');
       expect(translation.style.color).toBe('rgb(110, 231, 183)');
     });
 
@@ -294,7 +302,7 @@ describe('ToolSubtitlesPanel', () => {
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'bilingual',
           captionBilingualOrder: 'original_first',
-          captionFontSize: 24,
+          captionDisplayPriority: 'original_main',
           captionFontColor: '#ffffff',
           captionTranslationFontSize: 18,
           captionTranslationFontColor: '#6ee7b7',
@@ -319,7 +327,7 @@ describe('ToolSubtitlesPanel', () => {
           realtimeTranslationEnabled: true,
           captionDisplayMode: 'bilingual',
           captionBilingualOrder: 'translation_first',
-          captionFontSize: 24,
+          captionDisplayPriority: 'translation_main',
           captionFontColor: '#ffffff',
           captionTranslationFontSize: 18,
           captionTranslationFontColor: '#6ee7b7',
@@ -333,8 +341,70 @@ describe('ToolSubtitlesPanel', () => {
       expect(children).toHaveLength(2);
       expect(children[0].getAttribute('data-testid')).toBe('subtitle-preview-translation');
       expect(children[1].getAttribute('data-testid')).toBe('subtitle-preview-original');
-      expect(children[0].style.fontSize).toBe('18px');
-      expect(children[1].style.fontSize).toBe('24px');
+      expect(children[0].style.fontSize).toBe('24px');
+      expect(children[1].style.fontSize).toBe('18px');
     });
+  });
+
+  it('toggles text stroke and updates stroke width and stroke color', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const strokeSwitch = screen.getByRole('switch', {
+      name: 'settings.caption_text_stroke',
+    });
+    expect(strokeSwitch.getAttribute('aria-checked')).toBe('false');
+
+    // Toggle on
+    fireEvent.click(strokeSwitch);
+    expect(useConfigStore.getState().config.captionTextStroke).toBe(true);
+    expect(useConfigStore.getState().config.captionStrokeWidth).toBe(2);
+
+    // Stroke width slider
+    const strokeWidthSlider = screen.getByRole('slider', {
+      name: 'settings.caption_stroke_width',
+    });
+    fireEvent.change(strokeWidthSlider, { target: { value: '3.5' } });
+    expect(useConfigStore.getState().config.captionStrokeWidth).toBe(3.5);
+
+    // Stroke color swatch
+    const strokeColorPicker = screen.getByLabelText('settings.caption_stroke_color');
+    const colorBtn = within(strokeColorPicker).getByRole('button', { name: '#facc15' });
+    fireEvent.click(colorBtn);
+    expect(useConfigStore.getState().config.captionStrokeColor).toBe('#facc15');
+  });
+
+  it('toggles text shadow switch', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const shadowSwitch = screen.getByRole('switch', {
+      name: 'settings.caption_text_shadow',
+    });
+    expect(shadowSwitch.getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(shadowSwitch);
+    expect(useConfigStore.getState().config.captionTextShadow).toBe(false);
+  });
+
+  it('updates text alignment and disappear delay', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const leftTab = screen.getByRole('radio', { name: 'settings.caption_align_left' });
+    fireEvent.click(leftTab);
+    expect(useConfigStore.getState().config.captionTextAlign).toBe('left');
+
+    const delaySlider = screen.getByRole('slider', {
+      name: 'settings.caption_disappear_delay',
+    });
+    fireEvent.change(delaySlider, { target: { value: '6' } });
+    expect(useConfigStore.getState().config.captionDisappearDelay).toBe(6);
+  });
+
+  it('calls captionWindowService.resetPosition when clicking reset position button', () => {
+    render(<ToolSubtitlesPanel />);
+
+    const resetBtn = screen.getByRole('button', {
+      name: 'settings.caption_reset_position',
+    });
+    fireEvent.click(resetBtn);
+    expect(captionWindowService.resetPosition).toHaveBeenCalledTimes(1);
   });
 });

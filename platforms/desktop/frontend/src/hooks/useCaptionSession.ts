@@ -150,6 +150,7 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     }
 
     void captionSessionRuntime.updateStyle(config).catch(logger.error);
+    void captionSessionRuntime.updateShortcut(config.captionLockShortcut).catch(logger.error);
   }, [
     config,
     config.captionWindowWidth,
@@ -161,6 +162,14 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.captionTranslationFontColor,
     config.captionDisplayMode,
     config.captionBilingualOrder,
+    config.captionDisplayPriority,
+    config.captionTextStroke,
+    config.captionStrokeWidth,
+    config.captionStrokeColor,
+    config.captionTextShadow,
+    config.captionTextAlign,
+    config.captionDisappearDelay,
+    config.captionLockShortcut,
     isCaptionMode,
     isInitializing,
   ]);

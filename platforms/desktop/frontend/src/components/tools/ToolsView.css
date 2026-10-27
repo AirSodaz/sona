@@ -354,11 +354,13 @@
 
 .subtitle-live-preview-stage {
   padding: 16px 24px;
-  border-radius: var(--radius-md);
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
   text-align: center;
-  box-shadow: var(--shadow-md);
+  box-shadow:
+    0 10px 30px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.15);
   transition: all var(--transition-normal);
-  backdrop-filter: blur(8px);
 }
 
 .subtitle-live-preview-line-primary {

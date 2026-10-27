@@ -1,16 +1,52 @@
+import { Copy, Lock } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import {
   CAPTION_EVENT_STATE,
   CAPTION_WINDOW_LABEL,
+  type CaptionWindowStyle,
   DEFAULT_CAPTION_WINDOW_STATE,
 } from '../services/captionWindowService';
-import { listen } from '../services/tauri/platform/events';
+import { emit, listen } from '../services/tauri/platform/events';
 import { getCurrentWindow, PhysicalSize } from '../services/tauri/platform/windows';
 import type { TranscriptSegment } from '../types/transcript';
 import { needsWordBoundarySpace } from '../utils/cjkTypography';
 import { hexToRgba } from '../utils/colorUtils';
 import { logger } from '../utils/logger';
+
+export function computeCaptionTextStyle(
+  style: CaptionWindowStyle,
+  isPrimary: boolean,
+  _isTranslation?: boolean
+): React.CSSProperties {
+  const strokeEnabled = Boolean(style.textStroke) && (style.strokeWidth ?? 0) > 0;
+  const strokeWidth = style.strokeWidth ?? 0;
+  const strokeColor = style.strokeColor ?? '#000000';
+  const shadowEnabled = style.textShadow !== false;
+
+  const shadows: string[] = [];
+  if (strokeEnabled) {
+    shadows.push(
+      `-1px -1px 0 ${strokeColor}`,
+      `1px -1px 0 ${strokeColor}`,
+      `-1px 1px 0 ${strokeColor}`,
+      `1px 1px 0 ${strokeColor}`
+    );
+  }
+  if (shadowEnabled) {
+    const diffuseShadow = isPrimary
+      ? '0 1px 3px rgba(0, 0, 0, 0.55)'
+      : '0 1px 2px rgba(0, 0, 0, 0.4)';
+    shadows.push(diffuseShadow);
+  }
+
+  return {
+    ...(strokeEnabled ? { WebkitTextStroke: `${strokeWidth}px ${strokeColor}` } : {}),
+    ...(shadows.length > 0 ? { textShadow: shadows.join(', ') } : {}),
+  };
+}
 /**
  * Root component for the always-on-top caption window.
  * Manages its own state by listening to Tauri events from the main window.
@@ -31,8 +67,29 @@ export function CaptionWindow() {
     },
   });
 
+  useAuxWindowLanguage();
+  const { t } = useTranslation();
   const [clearedRevision, setClearedRevision] = useState<number | null>(null);
+  const [isFadingOut, setIsFadingOut] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [translationError, setTranslationError] = useState<string | null>(null);
+
+  const fadeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lockTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+      }
+      if (lockTimerRef.current) {
+        clearTimeout(lockTimerRef.current);
+      }
+    };
+  }, []);
+
   // Track target width to enforce it during height resizing
   const containerRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -53,16 +110,42 @@ export function CaptionWindow() {
     };
   }, []);
 
-  // Clear text: Clear the window if no new text appears for 3 seconds.
+  // Clear text: Fade out smoothly after disappearDelay, then clear after 300ms transition.
   useEffect(() => {
+    if (fadeTimerRef.current) {
+      clearTimeout(fadeTimerRef.current);
+      fadeTimerRef.current = null;
+    }
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current);
+      clearTimerRef.current = null;
+    }
+    setIsFadingOut(false);
+
     if (displaySegments.length > 0) {
       const revision = captionState.revision;
-      const timer = setTimeout(() => {
-        setClearedRevision(revision);
-      }, 3000);
-      return () => clearTimeout(timer);
+      const delayMs = (captionState.style.disappearDelay ?? 4.0) * 1000;
+      fadeTimerRef.current = setTimeout(() => {
+        setIsFadingOut(true);
+        clearTimerRef.current = setTimeout(() => {
+          setClearedRevision(revision);
+          setIsFadingOut(false);
+        }, 300);
+      }, delayMs);
     }
-  }, [captionState.revision, displaySegments.length]);
+
+    return () => {
+      if (fadeTimerRef.current) {
+        clearTimeout(fadeTimerRef.current);
+        fadeTimerRef.current = null;
+      }
+      if (clearTimerRef.current) {
+        clearTimeout(clearTimerRef.current);
+        clearTimerRef.current = null;
+      }
+    };
+  }, [captionState.revision, captionState.style.disappearDelay, displaySegments.length]);
+
   // Reset error when revision increments after window was cleared or on session restart
   useEffect(() => {
     if (clearedRevision !== null && captionState.revision !== clearedRevision) {
@@ -154,16 +237,84 @@ export function CaptionWindow() {
   const startDragging = () => {
     getCurrentWindow().startDragging();
   };
-  const displayMode = captionState.style.displayMode ?? 'bilingual';
-  const bilingualOrder = captionState.style.bilingualOrder ?? 'original_first';
-  const translationColor = captionState.style.translationColor ?? '#6ee7b7';
-  const translationFontSize =
-    captionState.style.translationFontSize ??
-    Math.max(14, Math.round(captionState.style.fontSize * 0.85));
 
+  const showToast = (message: string) => {
+    clearTimeout(toastTimerRef.current ?? undefined);
+    setToastMessage(message);
+    toastTimerRef.current = setTimeout(() => {
+      setToastMessage(null);
+    }, 2000);
+  };
+
+  const effectivePriority =
+    captionState.style.displayPriority ??
+    (captionState.style.displayMode === 'translation'
+      ? 'translation_only'
+      : captionState.style.displayMode === 'original'
+        ? 'original_only'
+        : captionState.style.bilingualOrder === 'translation_first'
+          ? 'translation_main'
+          : 'original_main');
+
+  const textAlign = captionState.style.textAlign ?? 'center';
+  const translationColor = captionState.style.translationColor ?? '#6ee7b7';
+  const primaryFontSize = captionState.style.fontSize;
+  const secondaryFontSize =
+    captionState.style.translationFontSize ??
+    Math.max(14, Math.round(captionState.style.fontSize * 0.75));
+
+  const isTranslationMain = effectivePriority === 'translation_main';
+  const isOriginalMain = effectivePriority === 'original_main';
+  const isTranslationOnly = effectivePriority === 'translation_only';
+  const isOriginalOnly = effectivePriority === 'original_only';
+
+  const handleCopy = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (displaySegments.length === 0) return;
+    const latest = displaySegments[displaySegments.length - 1];
+    const translationText = latest.draftTranslation
+      ? latest.translation
+        ? `${latest.translation}${needsWordBoundarySpace(latest.translation, latest.draftTranslation) ? ' ' : ''}${latest.draftTranslation}`
+        : latest.draftTranslation
+      : latest.translation || '';
+    let textToCopy = '';
+    if (isOriginalOnly) {
+      textToCopy = latest.text || '';
+    } else if (isOriginalMain) {
+      textToCopy = latest.text || translationText || '';
+    } else {
+      textToCopy = translationText || latest.text || '';
+    }
+    if (!textToCopy) return;
+    try {
+      await navigator.clipboard.writeText(textToCopy);
+      showToast(t('caption.copied', { defaultValue: 'Copied' }));
+    } catch (err) {
+      logger.warn('[CaptionWindow] Failed to copy to clipboard', err);
+    }
+  };
+
+  const handleLock = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    showToast(
+      t('caption.locked_click_through', { defaultValue: 'Click-through enabled (Alt+C to unlock)' })
+    );
+    if (lockTimerRef.current) {
+      clearTimeout(lockTimerRef.current);
+    }
+    lockTimerRef.current = setTimeout(async () => {
+      try {
+        await emit('caption:lock-toggle', true);
+        const currentWindow = getCurrentWindow();
+        await currentWindow.setIgnoreCursorEvents(true).catch(() => {});
+      } catch (err) {
+        logger.warn('[CaptionWindow] Failed to set ignore cursor events', err);
+      }
+    }, 1500);
+  };
   return (
     <div
-      className="caption-window-body"
+      className={`caption-window-body ${isFadingOut ? 'fading-out' : ''}`}
       ref={rootRef}
       style={{
         height: 'auto',
@@ -176,10 +327,37 @@ export function CaptionWindow() {
         ),
       }}
     >
-      {/* Drag region for moving the window */}
+      {/* Drag region for moving the window & hover mini toolbar */}
       <div className="caption-drag-handle" data-tauri-drag-region onMouseDown={startDragging}>
         <div className="drag-indicator" />
+        <div className="caption-handle-actions" data-tauri-drag-region="false">
+          <button
+            type="button"
+            className="caption-action-btn"
+            data-tauri-drag-region="false"
+            title={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
+            aria-label={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
+            onClick={handleCopy}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <Copy size={14} />
+          </button>
+          <button
+            type="button"
+            className="caption-action-btn"
+            data-tauri-drag-region="false"
+            title={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
+            aria-label={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
+            onClick={handleLock}
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <Lock size={14} />
+          </button>
+        </div>
       </div>
+
+      {toastMessage && <div className="caption-toast-banner">{toastMessage}</div>}
+
       {translationError && (
         <div
           className="caption-error-banner"
@@ -204,26 +382,47 @@ export function CaptionWindow() {
         style={{
           maxHeight: 'none',
           height: 'auto',
-          fontSize: `${captionState.style.fontSize}px`,
+          fontSize: `${primaryFontSize}px`,
           lineHeight: 1.5,
           color: captionState.style.color,
+          textAlign,
         }}
       >
         {displaySegments.length === 0
           ? null
           : displaySegments.map((segment) => {
               const hasTranslation = Boolean(segment.translation || segment.draftTranslation);
+
+              const originalStyle: React.CSSProperties = {
+                color: captionState.style.color,
+                fontSize: `${isTranslationMain && hasTranslation ? secondaryFontSize : primaryFontSize}px`,
+                opacity: isTranslationMain && hasTranslation ? 0.8 : 1,
+                textAlign,
+                ...computeCaptionTextStyle(
+                  captionState.style,
+                  !(isTranslationMain && hasTranslation),
+                  false
+                ),
+              };
+
+              const translationStyle: React.CSSProperties = {
+                color: translationColor,
+                fontSize: `${isOriginalMain ? secondaryFontSize : primaryFontSize}px`,
+                opacity: 1,
+                textAlign,
+                ...computeCaptionTextStyle(captionState.style, !isOriginalMain, true),
+              };
+
               const originalLine = (
                 <div
-                  className="caption-original-line"
+                  className={
+                    isTranslationMain && hasTranslation
+                      ? 'caption-original-line caption-secondary-line'
+                      : 'caption-original-line caption-primary-line'
+                  }
                   style={{
-                    color: captionState.style.color,
-                    marginTop:
-                      bilingualOrder === 'translation_first' &&
-                      displayMode === 'bilingual' &&
-                      hasTranslation
-                        ? '2px'
-                        : 0,
+                    ...originalStyle,
+                    marginTop: isTranslationMain && hasTranslation ? '2px' : 0,
                   }}
                 >
                   {segment.speaker && (
@@ -235,17 +434,17 @@ export function CaptionWindow() {
 
               const translationLine = hasTranslation ? (
                 <div
-                  className="caption-translation-line"
+                  className={
+                    isOriginalMain
+                      ? 'caption-translation-line caption-secondary-line'
+                      : 'caption-translation-line caption-primary-line'
+                  }
                   style={{
-                    fontSize: `${translationFontSize}px`,
-                    color: translationColor,
-                    marginTop:
-                      displayMode === 'bilingual' && bilingualOrder !== 'translation_first'
-                        ? '2px'
-                        : 0,
+                    ...translationStyle,
+                    marginTop: isOriginalMain ? '2px' : 0,
                   }}
                 >
-                  {displayMode === 'translation' && segment.speaker && (
+                  {isTranslationOnly && segment.speaker && (
                     <span className="live-caption-speaker">[{segment.speaker.label}]</span>
                   )}
                   <span>{segment.translation ?? ''}</span>
@@ -266,16 +465,19 @@ export function CaptionWindow() {
                 <div
                   key={segment.id}
                   className={`live-caption-line ${segment.isFinal ? '' : 'partial'}`}
-                  style={{ marginBottom: displayMode === 'bilingual' ? '8px' : '4px' }}
+                  style={{
+                    marginBottom:
+                      isTranslationOnly || isOriginalOnly || !hasTranslation ? '4px' : '8px',
+                    textAlign,
+                  }}
                 >
-                  {displayMode === 'original' && originalLine}
-                  {displayMode === 'translation' &&
+                  {isOriginalOnly && originalLine}
+                  {isTranslationOnly &&
                     (translationLine || (
                       <div
                         className="caption-translation-line caption-translation-pending"
                         style={{
-                          fontSize: `${translationFontSize}px`,
-                          color: translationColor,
+                          ...translationStyle,
                           opacity: 0.6,
                           fontStyle: 'italic',
                         }}
@@ -286,18 +488,18 @@ export function CaptionWindow() {
                         <span>{segment.text}</span>
                       </div>
                     ))}
-                  {displayMode === 'bilingual' &&
-                    (bilingualOrder === 'translation_first' ? (
-                      <>
-                        {translationLine}
-                        {originalLine}
-                      </>
-                    ) : (
-                      <>
-                        {originalLine}
-                        {translationLine}
-                      </>
-                    ))}
+                  {isTranslationMain && (
+                    <>
+                      {translationLine || originalLine}
+                      {translationLine && originalLine}
+                    </>
+                  )}
+                  {isOriginalMain && (
+                    <>
+                      {originalLine}
+                      {translationLine}
+                    </>
+                  )}
                 </div>
               );
             })}

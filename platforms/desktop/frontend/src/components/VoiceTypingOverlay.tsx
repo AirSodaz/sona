@@ -1,6 +1,7 @@
 import { Copy, History, Sparkles, X } from 'lucide-react';
 import { type CSSProperties, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import { useAuxWindowTheme } from '../hooks/useAuxWindowTheme';
 import { TauriEvent } from '../services/tauri/events';
@@ -95,6 +96,7 @@ async function resizeVoiceTypingWindow(rootElement: HTMLDivElement | null) {
 }
 
 export function VoiceTypingOverlay() {
+  useAuxWindowLanguage();
   const { t } = useTranslation();
   const rootRef = useRef<HTMLDivElement>(null);
   const drawerRef = useRef<HTMLDivElement>(null);

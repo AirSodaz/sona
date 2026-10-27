@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { buildTestConfig } from '../../test-utils/configTestUtils';
 import { captionSessionRuntime } from '../captionSessionRuntime';
 import { captionWindowService } from '../captionWindowService';
+import { TauriEvent } from '../tauri/events';
 
 const tauriCoreMocks = vi.hoisted(() => ({
   invoke: vi.fn(),
@@ -9,6 +10,23 @@ const tauriCoreMocks = vi.hoisted(() => ({
 
 const tauriEventMocks = vi.hoisted(() => ({
   listen: vi.fn(),
+}));
+const globalShortcutMocks = vi.hoisted(() => ({
+  register: vi.fn().mockResolvedValue(undefined),
+  unregister: vi.fn().mockResolvedValue(undefined),
+  isRegistered: vi.fn().mockResolvedValue(false),
+}));
+
+vi.mock('../tauri/platform/globalShortcut', () => ({
+  register: globalShortcutMocks.register,
+  unregister: globalShortcutMocks.unregister,
+  isRegistered: globalShortcutMocks.isRegistered,
+}));
+
+vi.mock('@tauri-apps/plugin-global-shortcut', () => ({
+  register: globalShortcutMocks.register,
+  unregister: globalShortcutMocks.unregister,
+  isRegistered: globalShortcutMocks.isRegistered,
 }));
 
 const transcriptionServiceMocks = vi.hoisted(() => ({
@@ -33,6 +51,7 @@ vi.mock('../captionWindowService', () => ({
     close: vi.fn().mockResolvedValue(undefined),
     sendSegments: vi.fn().mockResolvedValue(undefined),
     updateStyle: vi.fn().mockResolvedValue(undefined),
+    setClickThrough: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -104,11 +123,18 @@ describe('captionSessionRuntime', () => {
     transcriptionServiceMocks.captionStop.mockResolvedValue(undefined);
     transcriptionServiceMocks.captionRestart.mockResolvedValue(undefined);
     tauriEventMocks.listen.mockResolvedValue(vi.fn());
+    globalShortcutMocks.register.mockClear();
+    globalShortcutMocks.unregister.mockClear();
   });
 
   it('starts and stops native caption capture through the caption service', async () => {
     const unlisten = vi.fn();
-    tauriEventMocks.listen.mockResolvedValue(unlisten);
+    tauriEventMocks.listen.mockImplementation((event: string) => {
+      if (event === TauriEvent.audio.systemPeak) {
+        return Promise.resolve(unlisten);
+      }
+      return Promise.resolve(vi.fn());
+    });
     await captionSessionRuntime.start(config, () => true, vi.fn());
     await captionSessionRuntime.stop();
 
@@ -144,6 +170,13 @@ describe('captionSessionRuntime', () => {
       bilingualOrder: config.captionBilingualOrder,
       translationColor: config.captionTranslationFontColor,
       translationFontSize: config.captionTranslationFontSize,
+      displayPriority: config.captionDisplayPriority,
+      textStroke: config.captionTextStroke,
+      strokeWidth: config.captionStrokeWidth,
+      strokeColor: config.captionStrokeColor,
+      textShadow: config.captionTextShadow,
+      textAlign: config.captionTextAlign,
+      disappearDelay: config.captionDisappearDelay,
     });
   });
 
@@ -167,5 +200,36 @@ describe('captionSessionRuntime', () => {
   it('skips restartRecognizer when the caption session is not running', async () => {
     await captionSessionRuntime.restartRecognizer();
     expect(transcriptionServiceMocks.captionRestart).not.toHaveBeenCalled();
+  });
+
+  it('unregisters existing shortcut before registering configured shortcut and cleans up on stop', async () => {
+    const lockToggleUnlisten = vi.fn();
+    tauriEventMocks.listen.mockImplementation((event: string) => {
+      if (event === 'caption:lock-toggle') {
+        return Promise.resolve(lockToggleUnlisten);
+      }
+      return Promise.resolve(vi.fn());
+    });
+
+    await captionSessionRuntime.start(config, () => true, vi.fn());
+
+    expect(tauriEventMocks.listen).toHaveBeenCalledWith(
+      'caption:lock-toggle',
+      expect.any(Function)
+    );
+    expect(globalShortcutMocks.register).toHaveBeenCalledWith('Alt+C', expect.any(Function));
+
+    // Dynamically update to a different shortcut
+    const customConfig = buildTestConfig({
+      ...config,
+      captionLockShortcut: 'Ctrl+Shift+L',
+    });
+    await captionSessionRuntime.updateShortcut(customConfig.captionLockShortcut);
+    expect(globalShortcutMocks.unregister).toHaveBeenCalledWith('Alt+C');
+    expect(globalShortcutMocks.register).toHaveBeenCalledWith('Ctrl+Shift+L', expect.any(Function));
+
+    await captionSessionRuntime.stop();
+    expect(globalShortcutMocks.unregister).toHaveBeenCalledWith('Ctrl+Shift+L');
+    expect(lockToggleUnlisten).toHaveBeenCalled();
   });
 });

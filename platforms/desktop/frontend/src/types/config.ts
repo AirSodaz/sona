@@ -183,22 +183,46 @@ export interface CaptionConfig {
   startOnLaunch?: boolean;
   /** Width of the caption window in pixels. Default: 800. */
   captionWindowWidth?: number;
-  /** Font size of the caption text in pixels. Default: 24. */
+  /** X coordinate of the caption window in physical/screen pixels. */
+  captionWindowX?: number | null;
+  /** Y coordinate of the caption window in physical/screen pixels. */
+  captionWindowY?: number | null;
+  /** Font size of the caption text in pixels. Default: 22. */
   captionFontSize?: number;
   /** Font color of the caption text (HEX). Default: '#ffffff'. */
   captionFontColor?: string;
-  /** Font size of the translation text in pixels. Default: 18. */
+  /** Font size of the translation text in pixels. Default: 16. */
   captionTranslationFontSize?: number;
   /** Font color of the translation text (HEX). Default: '#6ee7b7'. */
   captionTranslationFontColor?: string;
-  /** Background color of the caption window (HEX). Default: '#000000'. */
+  /** Background color of the caption window (HEX). Default: '#17171a'. */
   captionBackgroundColor?: string;
-  /** Background opacity of the caption window (0.0 to 1.0). Default: 0.6. */
+  /** Background opacity of the caption window (0.0 to 1.0). Default: 0.72. */
   captionBackgroundOpacity?: number;
   /** Caption display mode: bilingual, translation only, or original only. */
   captionDisplayMode?: 'bilingual' | 'translation' | 'original';
   /** Bilingual order: original first or translation first. */
   captionBilingualOrder?: 'original_first' | 'translation_first';
+  /** Caption display priority: translation main, original main, translation only, or original only. Default: 'translation_main'. */
+  captionDisplayPriority?:
+    | 'translation_main'
+    | 'original_main'
+    | 'translation_only'
+    | 'original_only';
+  /** Whether to enable text stroke (outline). Default: false. */
+  captionTextStroke?: boolean;
+  /** Stroke width in pixels (1 to 5). Default: 2. */
+  captionStrokeWidth?: number;
+  /** Stroke color (HEX). Default: '#000000'. */
+  captionStrokeColor?: string;
+  /** Whether to enable text drop shadow. Default: true. */
+  captionTextShadow?: boolean;
+  /** Text alignment: center or left. Default: 'center'. */
+  captionTextAlign?: 'center' | 'left';
+  /** Disappear delay in seconds before fade-out (1.0 to 10.0). Default: 4.0. */
+  captionDisappearDelay?: number;
+  /** Global shortcut to toggle caption window click-through lock. Default: 'Alt+C'. */
+  captionLockShortcut?: string;
   /** Whether real-time translation is enabled. */
   realtimeTranslationEnabled?: boolean;
   /** Source language for real-time translation. */

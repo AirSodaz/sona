@@ -20,9 +20,18 @@ const mockReadiness = vi.hoisted(() => ({
   lastErrorSource: null as null | 'shortcut_registration' | 'warmup' | 'microphone' | 'session',
   lastErrorMessage: null as string | null,
 }));
+const mockStoreState = vi.hoisted(() => ({
+  realtimeTranslationEnabled: false,
+}));
 
 vi.mock('../../hooks/useVoiceTypingReadiness', () => ({
   useVoiceTypingReadiness: () => mockReadiness,
+}));
+const mockResetPosition = vi.fn();
+vi.mock('../../services/captionWindowService', () => ({
+  captionWindowService: {
+    resetPosition: () => mockResetPosition(),
+  },
 }));
 
 vi.mock('../Dropdown', () => ({
@@ -57,6 +66,14 @@ vi.mock('../../stores/configStore', () => ({
     captionFontColor: '#ffffff',
     captionBackgroundColor: '#000000',
     captionBackgroundOpacity: 0.6,
+    captionDisplayPriority: 'translation_main',
+    captionTextStroke: true,
+    captionStrokeWidth: 2,
+    captionStrokeColor: '#000000',
+    captionTextShadow: true,
+    captionTextAlign: 'center',
+    captionDisappearDelay: 4.0,
+    captionLockShortcut: 'Alt+C',
   }),
   useVoiceTypingConfig: () => ({
     voiceTypingEnabled: false,
@@ -73,7 +90,7 @@ vi.mock('../../stores/configStore', () => ({
       const state = {
         config: {
           hotwordSets: [],
-          realtimeTranslationEnabled: false,
+          realtimeTranslationEnabled: mockStoreState.realtimeTranslationEnabled,
         },
       };
       return typeof selector === 'function' ? selector(state) : state;
@@ -82,7 +99,7 @@ vi.mock('../../stores/configStore', () => ({
       getState: () => ({
         config: {
           hotwordSets: [],
-          realtimeTranslationEnabled: false,
+          realtimeTranslationEnabled: mockStoreState.realtimeTranslationEnabled,
         },
       }),
     }
@@ -95,6 +112,7 @@ describe('SettingsSubtitleTab', () => {
     mockReadiness.state = 'ready';
     mockReadiness.lastErrorSource = null;
     mockReadiness.lastErrorMessage = null;
+    mockStoreState.realtimeTranslationEnabled = false;
   });
 
   it('renders secondary tabs and defaults to voice typing', () => {
@@ -249,6 +267,37 @@ describe('SettingsSubtitleTab', () => {
     expect(mockUpdateConfig).toHaveBeenCalledWith({ captionBackgroundColor: '#1A1A1A' });
   });
 
+  it('updates stroke width, stroke color, alignment, and disappear delay in subtitle settings', () => {
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    // Text alignment: click left tab
+    const leftAlignTab = screen.getByRole('radio', { name: 'settings.caption_align_left' });
+    fireEvent.click(leftAlignTab);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionTextAlign: 'left' });
+
+    // Text stroke width slider
+    const strokeWidthSlider = document.querySelector(
+      'input[type="range"][min="1"][max="5"]'
+    ) as HTMLInputElement;
+    expect(strokeWidthSlider).not.toBeNull();
+    fireEvent.change(strokeWidthSlider, { target: { value: '3.5' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeWidth: 3.5 });
+
+    // Disappear delay slider
+    const delaySlider = document.querySelector(
+      'input[type="range"][min="1"][max="10"]'
+    ) as HTMLInputElement;
+    expect(delaySlider).not.toBeNull();
+    fireEvent.change(delaySlider, { target: { value: '5.5' } });
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionDisappearDelay: 5.5 });
+
+    // Stroke color swatch
+    const strokeColorContainer = screen.getByLabelText('settings.caption_stroke_color');
+    const swatch = within(strokeColorContainer).getByRole('button', { name: '#10B981' });
+    fireEvent.click(swatch);
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ captionStrokeColor: '#10B981' });
+  });
+
   it('updates voice typing settings from the combined page', () => {
     render(<SettingsSubtitleTab />);
 
@@ -348,5 +397,31 @@ describe('SettingsSubtitleTab', () => {
     expect(updateCall).toBeDefined();
     expect(updateCall![0].dictionaryContent).toContain('(id:voice-typing):');
     expect(updateCall![0].dictionaryContent).toContain('- The weather is great today.');
+  });
+  it('triggers captionWindowService.resetPosition when Reset Window Position button is clicked', () => {
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    const resetBtn = screen.getByRole('button', { name: 'settings.caption_reset_position' });
+    fireEvent.click(resetBtn);
+
+    expect(mockResetPosition).toHaveBeenCalledTimes(1);
+  });
+
+  it('updates captionDisplayPriority, captionDisplayMode, and captionBilingualOrder when priority is changed', () => {
+    mockStoreState.realtimeTranslationEnabled = true;
+
+    render(<SettingsSubtitleTab initialSubTab="subtitles" />);
+
+    const select = document.getElementById('caption-display-priority-select') as HTMLSelectElement;
+    expect(select).not.toBeNull();
+
+    // Select 'original_main'
+    fireEvent.change(select, { target: { value: 'original_main' } });
+
+    expect(mockUpdateConfig).toHaveBeenCalledWith({
+      captionDisplayPriority: 'original_main',
+      captionDisplayMode: 'bilingual',
+      captionBilingualOrder: 'original_first',
+    });
   });
 });

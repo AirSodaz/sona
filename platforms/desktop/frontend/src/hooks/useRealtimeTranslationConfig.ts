@@ -34,6 +34,7 @@ export function useRealtimeTranslationConfig() {
   const captionDisplayMode = useConfigStore(
     (state) => state.config.captionDisplayMode || 'bilingual'
   );
+  const captionDisplayPriority = useConfigStore((state) => state.config.captionDisplayPriority);
 
   const sourceLanguages = SOURCE_LANGUAGES;
 
@@ -111,10 +112,11 @@ export function useRealtimeTranslationConfig() {
   const handleToggleRealtimeTranslation = useCallback(
     async (enabled: boolean) => {
       if (!enabled) {
-        if (captionDisplayMode === 'translation') {
+        if (captionDisplayMode === 'translation' || captionDisplayPriority === 'translation_only') {
           updateConfig({
             realtimeTranslationEnabled: false,
             captionDisplayMode: 'bilingual',
+            captionDisplayPriority: 'translation_main',
           });
         } else {
           updateConfig({ realtimeTranslationEnabled: false });
@@ -146,7 +148,7 @@ export function useRealtimeTranslationConfig() {
 
       updateConfig({ realtimeTranslationEnabled: true });
     },
-    [captionDisplayMode, modelId, updateConfig]
+    [captionDisplayMode, captionDisplayPriority, modelId, updateConfig]
   );
 
   return {

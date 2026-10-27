@@ -111,7 +111,7 @@ describe('useRealtimeTranslationConfig', () => {
     expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
   });
 
-  it('resets captionDisplayMode to bilingual when disabling translation in translation mode', async () => {
+  it('resets captionDisplayMode to bilingual and captionDisplayPriority to translation_main when disabling translation in translation mode', async () => {
     useConfigStore.setState((state) => ({
       config: {
         ...state.config,
@@ -128,5 +128,48 @@ describe('useRealtimeTranslationConfig', () => {
 
     expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
     expect(useConfigStore.getState().config.captionDisplayMode).toBe('bilingual');
+    expect(useConfigStore.getState().config.captionDisplayPriority).toBe('translation_main');
+  });
+
+  it('resets captionDisplayPriority to translation_main when disabling translation with translation_only priority', async () => {
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        realtimeTranslationEnabled: true,
+        captionDisplayMode: 'bilingual',
+        captionDisplayPriority: 'translation_only',
+      },
+    }));
+
+    const { result } = renderHook(() => useRealtimeTranslationConfig());
+
+    await act(async () => {
+      await result.current.handleToggleRealtimeTranslation(false);
+    });
+
+    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
+    expect(useConfigStore.getState().config.captionDisplayMode).toBe('bilingual');
+    expect(useConfigStore.getState().config.captionDisplayPriority).toBe('translation_main');
+  });
+
+  it('preserves existing captionDisplayPriority when disabling translation in translation_main or original_main mode', async () => {
+    useConfigStore.setState((state) => ({
+      config: {
+        ...state.config,
+        realtimeTranslationEnabled: true,
+        captionDisplayMode: 'bilingual',
+        captionDisplayPriority: 'original_main',
+      },
+    }));
+
+    const { result } = renderHook(() => useRealtimeTranslationConfig());
+
+    await act(async () => {
+      await result.current.handleToggleRealtimeTranslation(false);
+    });
+
+    expect(useConfigStore.getState().config.realtimeTranslationEnabled).toBe(false);
+    expect(useConfigStore.getState().config.captionDisplayMode).toBe('bilingual');
+    expect(useConfigStore.getState().config.captionDisplayPriority).toBe('original_main');
   });
 });

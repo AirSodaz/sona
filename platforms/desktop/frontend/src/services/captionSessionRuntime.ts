@@ -1,3 +1,4 @@
+import { useConfigStore } from '../stores/configStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { logger } from '../utils/logger';
@@ -5,6 +6,7 @@ import { normalizeTranscriptUpdate } from '../utils/transcriptTiming';
 import { captionWindowService } from './captionWindowService';
 import { TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
+import { register, unregister } from './tauri/platform/globalShortcut';
 import { captionTranscriptionService, type TranscriptionService } from './transcriptionService';
 
 type CaptionWindowOpenOptions = Parameters<typeof captionWindowService.open>[0];
@@ -31,6 +33,8 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
   return {
     alwaysOnTop: config.alwaysOnTop ?? true,
     lockWindow: config.lockWindow ?? false,
+    x: config.captionWindowX,
+    y: config.captionWindowY,
     width: config.captionWindowWidth,
     fontSize: config.captionFontSize,
     color: config.captionFontColor,
@@ -40,6 +44,13 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
     bilingualOrder: config.captionBilingualOrder,
     translationColor: config.captionTranslationFontColor,
     translationFontSize: config.captionTranslationFontSize,
+    displayPriority: config.captionDisplayPriority,
+    textStroke: config.captionTextStroke,
+    strokeWidth: config.captionStrokeWidth,
+    strokeColor: config.captionStrokeColor,
+    textShadow: config.captionTextShadow,
+    textAlign: config.captionTextAlign,
+    disappearDelay: config.captionDisappearDelay,
   };
 }
 
@@ -53,6 +64,13 @@ function buildCaptionWindowStyle({
   bilingualOrder,
   translationColor,
   translationFontSize,
+  displayPriority,
+  textStroke,
+  strokeWidth,
+  strokeColor,
+  textShadow,
+  textAlign,
+  disappearDelay,
 }: {
   width?: number;
   fontSize?: number;
@@ -63,6 +81,13 @@ function buildCaptionWindowStyle({
   bilingualOrder?: 'original_first' | 'translation_first';
   translationColor?: string;
   translationFontSize?: number;
+  displayPriority?: 'translation_main' | 'original_main' | 'translation_only' | 'original_only';
+  textStroke?: boolean;
+  strokeWidth?: number;
+  strokeColor?: string;
+  textShadow?: boolean;
+  textAlign?: 'center' | 'left';
+  disappearDelay?: number;
 }): CaptionWindowStyleOptions {
   return {
     width,
@@ -74,6 +99,13 @@ function buildCaptionWindowStyle({
     ...(bilingualOrder !== undefined ? { bilingualOrder } : {}),
     ...(translationColor !== undefined ? { translationColor } : {}),
     ...(translationFontSize !== undefined ? { translationFontSize } : {}),
+    ...(displayPriority !== undefined ? { displayPriority } : {}),
+    ...(textStroke !== undefined ? { textStroke } : {}),
+    ...(strokeWidth !== undefined ? { strokeWidth } : {}),
+    ...(strokeColor !== undefined ? { strokeColor } : {}),
+    ...(textShadow !== undefined ? { textShadow } : {}),
+    ...(textAlign !== undefined ? { textAlign } : {}),
+    ...(disappearDelay !== undefined ? { disappearDelay } : {}),
   };
 }
 
@@ -254,6 +286,9 @@ class CaptionSessionRuntime {
   private usingNativeCapture = false;
   private systemAudioUnlisten: UnlistenFn | null = null;
 
+  private registeredShortcut: string | null = null;
+  private lastLockToggleTime = 0;
+  private lockToggleUnlisten: UnlistenFn | null = null;
   isRunning(): boolean {
     return Boolean(
       (this.stream && this.audioContext?.state === 'running') || this.usingNativeCapture
@@ -325,8 +360,65 @@ class CaptionSessionRuntime {
       const pipeline = connectWebAudioPipeline(this.audioContext, this.stream, captionService);
       this.processor = pipeline.processor;
     }
+
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
+    try {
+      this.lockToggleUnlisten = await listen<boolean>('caption:lock-toggle', async (event) => {
+        useConfigStore.getState().setConfig({ lockWindow: event.payload });
+        await captionWindowService.setClickThrough(event.payload);
+      });
+    } catch (error) {
+      logger.warn('[CaptionSession] Failed to listen to caption:lock-toggle:', error);
+    }
+
+    await this.updateShortcut(config.captionLockShortcut);
+
+    if (!isActive()) {
+      await this.stop();
+      return;
+    }
   }
 
+  async updateShortcut(shortcut?: string): Promise<void> {
+    const rawShortcut = shortcut || 'Alt+C';
+    const normalizedShortcut = rawShortcut.replace(/\s+/g, '');
+    if (normalizedShortcut === this.registeredShortcut) {
+      return;
+    }
+    if (this.registeredShortcut) {
+      await unregister(this.registeredShortcut).catch(() => {});
+      this.registeredShortcut = null;
+    }
+    if (normalizedShortcut) {
+      try {
+        await register(normalizedShortcut, async (event) => {
+          if (event?.state && event.state !== 'Pressed') {
+            return;
+          }
+          const now = Date.now();
+          if (now - this.lastLockToggleTime < 300) {
+            return;
+          }
+          this.lastLockToggleTime = now;
+
+          const currentLock = useConfigStore.getState().config.lockWindow ?? false;
+          const nextLock = !currentLock;
+          useConfigStore.getState().setConfig({ lockWindow: nextLock });
+          await captionWindowService.setClickThrough(nextLock);
+        });
+        this.registeredShortcut = normalizedShortcut;
+      } catch (error) {
+        logger.warn(
+          '[CaptionSession] Failed to register global lock shortcut:',
+          normalizedShortcut,
+          error
+        );
+      }
+    }
+  }
   async stop(): Promise<void> {
     logger.info('[CaptionSession] Stopping session...');
 
@@ -353,6 +445,19 @@ class CaptionSessionRuntime {
     this.activeService = captionTranscriptionService;
 
     this.processor = null;
+
+    if (this.registeredShortcut) {
+      try {
+        await unregister(this.registeredShortcut);
+      } catch (error) {
+        logger.debug('[CaptionSession] Failed to unregister global lock shortcut:', error);
+      }
+      this.registeredShortcut = null;
+    }
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
   }
 
   async restartRecognizer(): Promise<void> {
@@ -378,6 +483,13 @@ class CaptionSessionRuntime {
         bilingualOrder: config.captionBilingualOrder,
         translationColor: config.captionTranslationFontColor,
         translationFontSize: config.captionTranslationFontSize,
+        displayPriority: config.captionDisplayPriority,
+        textStroke: config.captionTextStroke,
+        strokeWidth: config.captionStrokeWidth,
+        strokeColor: config.captionStrokeColor,
+        textShadow: config.captionTextShadow,
+        textAlign: config.captionTextAlign,
+        disappearDelay: config.captionDisappearDelay,
       })
     );
   }
@@ -389,6 +501,12 @@ class CaptionSessionRuntime {
     this.activeService = captionTranscriptionService;
     this.usingNativeCapture = false;
     this.systemAudioUnlisten = null;
+    this.registeredShortcut = null;
+    this.lastLockToggleTime = 0;
+    if (this.lockToggleUnlisten) {
+      this.lockToggleUnlisten();
+      this.lockToggleUnlisten = null;
+    }
   }
 }
 
