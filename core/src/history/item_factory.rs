@@ -132,6 +132,7 @@ fn extension_from_path(path: &str, fallback: &str) -> String {
 }
 
 fn file_name_from_path(path: &str, fallback: &str) -> String {
+    let path = path.trim();
     if is_network_url(path) {
         let clean = path
             .split('?')
@@ -147,7 +148,8 @@ fn file_name_from_path(path: &str, fallback: &str) -> String {
             .trim_end_matches('/');
         if without_scheme.contains('/') {
             let segment = without_scheme.rsplit('/').next().unwrap_or("");
-            if !segment.trim().is_empty() {
+            let segment = segment.trim();
+            if !segment.is_empty() {
                 return segment.to_string();
             }
         }
@@ -156,7 +158,8 @@ fn file_name_from_path(path: &str, fallback: &str) -> String {
     PathBuf::from(path)
         .file_name()
         .and_then(|file_name| file_name.to_str())
-        .filter(|file_name| !file_name.trim().is_empty())
+        .map(|file_name| file_name.trim())
+        .filter(|file_name| !file_name.is_empty())
         .unwrap_or(fallback)
         .to_string()
 }
@@ -224,6 +227,14 @@ mod tests {
         assert_eq!(
             file_name_from_path("https://example.com/", "Fallback"),
             "Fallback"
+        );
+        assert_eq!(
+            file_name_from_path("  https://example.com/audio/live.mp3  ", "Fallback"),
+            "live.mp3"
+        );
+        assert_eq!(
+            file_name_from_path("https://example.com/audio/%20segment%20/ ", "Fallback"),
+            "%20segment%20"
         );
     }
 }

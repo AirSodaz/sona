@@ -35,6 +35,7 @@ export function SplitButton({
 }: SplitButtonProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const menuId = useId();
 
   useEffect(() => {
@@ -48,7 +49,9 @@ export function SplitButton({
 
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        event.stopPropagation();
         setIsOpen(false);
+        triggerRef.current?.focus();
       }
     };
 
@@ -93,6 +96,7 @@ export function SplitButton({
       </button>
 
       <button
+        ref={triggerRef}
         type="button"
         className={`${baseBtnClass} ${sizeClass}`}
         onClick={() => setIsOpen((prev) => !prev)}
@@ -100,7 +104,7 @@ export function SplitButton({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label="More import options"
+        aria-label={ariaLabel ? `${ariaLabel} options` : 'More options'}
         style={{
           borderTopLeftRadius: 0,
           borderBottomLeftRadius: 0,

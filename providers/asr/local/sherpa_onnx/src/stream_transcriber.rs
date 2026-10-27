@@ -1,7 +1,9 @@
 use sherpa_onnx::VoiceActivityDetector;
 use sona_core::models::config::ModelFileConfig;
 use sona_core::ports::aligner::AlignerEngineSet;
-use sona_core::ports::asr::{AsrPortError, BatchSegmentationMode, BatchTranscriptionObserver};
+use sona_core::ports::asr::{
+    AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriptionObserver,
+};
 use sona_core::ports::punctuation::{PunctuationEngineSet, PunctuationModel};
 use sona_core::ports::vad::VadEngineSet;
 use sona_core::transcription::runtime::BatchTranscribePlan;
@@ -46,23 +48,30 @@ pub struct StreamTranscriptionJob {
     pub ffmpeg_path: Option<PathBuf>,
 }
 
-fn process_speech_slice(
-    samples: &[f32],
+async fn process_speech_slice(
+    samples: Vec<f32>,
     start_time: f32,
     duration: f32,
-    recognizer: &SafeOfflineRecognizer,
-    punctuation: Option<&dyn PunctuationModel>,
-    observer: &dyn BatchTranscriptionObserver,
+    recognizer: Arc<SafeOfflineRecognizer>,
+    punctuation: Option<Arc<dyn PunctuationModel>>,
+    observer: Arc<dyn BatchTranscriptionObserver>,
 ) -> Option<TranscriptSegment> {
-    let decoded = decode_offline_samples(recognizer, samples)?;
-    let cleaned = normalize_recognizer_text(&decoded.text);
-    if cleaned.is_empty() {
-        return None;
-    }
-    let text = finalize_transcript_text(&cleaned, punctuation);
-    if text.is_empty() {
-        return None;
-    }
+    let decoded = tokio::task::spawn_blocking(move || {
+        let dec = decode_offline_samples(&recognizer, &samples)?;
+        let cleaned = normalize_recognizer_text(&dec.text);
+        if cleaned.is_empty() {
+            return None;
+        }
+        let text = finalize_transcript_text(&cleaned, punctuation.as_deref());
+        if text.is_empty() {
+            return None;
+        }
+        Some((dec, text))
+    })
+    .await
+    .ok()??;
+
+    let (decoded, text) = decoded;
     let timestamps_abs = decoded
         .timestamps
         .as_ref()
@@ -198,11 +207,7 @@ impl StreamTranscriptionJob {
         };
         let recognizer = get_or_create_offline_recognizer(cache_key)?;
         let is_funasr_nano = recognizer.model_type() == "funasr-nano";
-        let effective_punctuation = if is_funasr_nano {
-            None
-        } else {
-            punctuation.as_deref()
-        };
+        let effective_punctuation = if is_funasr_nano { None } else { punctuation };
 
         let stream_config = AudioStreamSourceConfig {
             url: &self.url,
@@ -241,6 +246,7 @@ impl StreamTranscriptionJob {
         let mut total_samples_streamed: usize = 0;
         let mut chunk_buffer = Vec::new();
         let fixed_chunk_size = 16000 * 15; // 15 seconds
+        let mut stream_error = None;
 
         loop {
             if observer.is_cancelled() {
@@ -252,6 +258,7 @@ impl StreamTranscriptionJob {
                 Ok(None) => break, // EOF reached
                 Err(err) => {
                     log::warn!("Stream read interrupted: {err}");
+                    stream_error = Some(err);
                     break;
                 }
             };
@@ -265,7 +272,7 @@ impl StreamTranscriptionJob {
                 detector.accept_waveform(&frame);
                 while !detector.is_empty() {
                     if let Some(speech_segment) = detector.front() {
-                        let seg_samples = speech_segment.samples();
+                        let seg_samples = speech_segment.samples().to_vec();
                         let start_time = speech_segment.start() as f32 / 16000.0;
                         let duration = seg_samples.len() as f32 / 16000.0;
 
@@ -273,10 +280,12 @@ impl StreamTranscriptionJob {
                             seg_samples,
                             start_time,
                             duration,
-                            &recognizer,
-                            effective_punctuation,
-                            observer.as_ref(),
-                        ) {
+                            Arc::clone(&recognizer),
+                            effective_punctuation.clone(),
+                            Arc::clone(&observer),
+                        )
+                        .await
+                        {
                             results.push(segment);
                         }
                     }
@@ -289,13 +298,15 @@ impl StreamTranscriptionJob {
                     let chunk_start =
                         (total_samples_streamed - chunk_buffer.len()) as f32 / 16000.0;
                     if let Some(segment) = process_speech_slice(
-                        &chunk_buffer,
+                        chunk_buffer.clone(),
                         chunk_start,
                         chunk_duration,
-                        &recognizer,
-                        effective_punctuation,
-                        observer.as_ref(),
-                    ) {
+                        Arc::clone(&recognizer),
+                        effective_punctuation.clone(),
+                        Arc::clone(&observer),
+                    )
+                    .await
+                    {
                         results.push(segment);
                     }
                     chunk_buffer.clear();
@@ -303,12 +314,32 @@ impl StreamTranscriptionJob {
             }
         }
 
+        if observer.is_cancelled() {
+            reader.finish();
+            return Err(AsrPortError::runtime("Task cancelled."));
+        }
+
+        if let Some(err) = stream_error {
+            reader.finish();
+            return Err(err);
+        }
+
+        if total_samples_streamed == 0
+            && let Some(err_msg) = reader.take_stderr_output().await
+        {
+            reader.finish();
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!("Stream failed: {err_msg}"),
+            ));
+        }
+
         // Flush remaining audio in detector or chunk buffer
         if let Some(detector) = vad_detector.as_mut() {
             detector.flush();
             while !detector.is_empty() {
                 if let Some(speech_segment) = detector.front() {
-                    let seg_samples = speech_segment.samples();
+                    let seg_samples = speech_segment.samples().to_vec();
                     let start_time = speech_segment.start() as f32 / 16000.0;
                     let duration = seg_samples.len() as f32 / 16000.0;
 
@@ -316,10 +347,12 @@ impl StreamTranscriptionJob {
                         seg_samples,
                         start_time,
                         duration,
-                        &recognizer,
-                        effective_punctuation,
-                        observer.as_ref(),
-                    ) {
+                        Arc::clone(&recognizer),
+                        effective_punctuation.clone(),
+                        Arc::clone(&observer),
+                    )
+                    .await
+                    {
                         results.push(segment);
                     }
                 }
@@ -330,16 +363,17 @@ impl StreamTranscriptionJob {
             let chunk_start =
                 total_samples_streamed.saturating_sub(chunk_buffer.len()) as f32 / 16000.0;
             if let Some(segment) = process_speech_slice(
-                &chunk_buffer,
+                std::mem::take(&mut chunk_buffer),
                 chunk_start,
                 chunk_duration,
-                &recognizer,
-                effective_punctuation,
-                observer.as_ref(),
-            ) {
+                Arc::clone(&recognizer),
+                effective_punctuation.clone(),
+                Arc::clone(&observer),
+            )
+            .await
+            {
                 results.push(segment);
             }
-            chunk_buffer.clear();
         }
 
         reader.finish();

@@ -982,6 +982,40 @@ fn test_save_imported_stream_url_without_audio_file() {
         .expect("transcript segments");
     assert_eq!(segments.len(), 1);
     assert_eq!(segments[0].text, "Stream transcript text");
+    assert_eq!(store.resolve_audio_path("stream-1").unwrap(), None);
+}
+
+#[test]
+fn test_save_imported_stream_url_with_retained_audio_file() {
+    let root = tempdir().unwrap();
+    let db = Database::open_in_memory().unwrap();
+    let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+    store.ensure_ready().unwrap();
+
+    let temp_audio_dir = tempdir().unwrap();
+    let temp_wav_path = temp_audio_dir.path().join("recorded_stream.wav");
+    std::fs::write(&temp_wav_path, b"RIFF....WAVEfmt ....data....").unwrap();
+
+    let item = store
+        .save_imported_file(HistorySaveImportedFileRequest {
+            id: Some("stream-retained".to_string()),
+            source_path: "https://example.com/audio/podcast.mp3?token=secret".to_string(),
+            segments: vec![segment_value("seg-1", "Retained stream text", 0.0, 5.0)],
+            duration: 5.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            converted_source_path: Some(temp_wav_path.to_string_lossy().to_string()),
+        })
+        .unwrap();
+
+    assert_eq!(item.id, "stream-retained");
+    assert_ne!(item.audio_path, "");
+    assert_eq!(item.audio_status, HistoryAudioStatus::Available);
+
+    let resolved = store.resolve_audio_path("stream-retained").unwrap();
+    assert!(resolved.is_some());
+    let resolved_path = resolved.unwrap();
+    assert!(std::path::Path::new(&resolved_path).exists());
 }
 
 #[test]

@@ -13,10 +13,13 @@ pub struct AudioStreamSourceConfig<'a> {
     pub save_to_path: Option<PathBuf>,
 }
 
+const MAX_IN_MEMORY_STREAM_BYTES: usize = 100 * 1024 * 1024;
+
 pub enum AudioStreamReader {
     Ffmpeg {
-        child: tokio::process::Child,
+        child: Box<tokio::process::Child>,
         stdout: tokio::io::BufReader<tokio::process::ChildStdout>,
+        stderr_task: Option<tokio::task::JoinHandle<String>>,
         wav_writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
         carryover_byte: Option<u8>,
     },
@@ -31,10 +34,16 @@ impl Drop for AudioStreamReader {
     fn drop(&mut self) {
         match self {
             AudioStreamReader::Ffmpeg {
-                child, wav_writer, ..
+                child,
+                wav_writer,
+                stderr_task,
+                ..
             } => {
                 if let Some(writer) = wav_writer.take() {
                     let _ = writer.finalize();
+                }
+                if let Some(task) = stderr_task.take() {
+                    task.abort();
                 }
                 let _ = child.start_kill();
             }
@@ -117,6 +126,7 @@ impl AudioStreamReader {
             })?;
 
             let mut command = tokio::process::Command::new(&ffmpeg_path);
+            command.kill_on_drop(true);
             #[cfg(target_os = "windows")]
             {
                 #[allow(unused_imports)]
@@ -158,9 +168,18 @@ impl AudioStreamReader {
                 AsrPortError::runtime("Failed to open child process stdout for ffmpeg stream")
             })?;
 
+            let stderr_task = child.stderr.take().map(|mut stderr| {
+                tokio::spawn(async move {
+                    let mut msg = String::new();
+                    let _ = tokio::io::AsyncReadExt::read_to_string(&mut stderr, &mut msg).await;
+                    msg
+                })
+            });
+
             Ok(AudioStreamReader::Ffmpeg {
-                child,
+                child: Box::new(child),
                 stdout: tokio::io::BufReader::new(stdout),
+                stderr_task,
                 wav_writer,
                 carryover_byte: None,
             })
@@ -172,18 +191,18 @@ impl AudioStreamReader {
                 ));
             }
 
-            let response = reqwest::Client::builder()
+            let client = reqwest::Client::builder()
+                .connect_timeout(std::time::Duration::from_secs(15))
+                .timeout(std::time::Duration::from_secs(300))
                 .build()
-                .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?
-                .get(config.url)
-                .send()
-                .await
-                .map_err(|e| {
-                    AsrPortError::new(
-                        AsrPortErrorKind::InvalidRequest,
-                        format!("Failed to fetch stream URL: {e}"),
-                    )
-                })?;
+                .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
+
+            let response = client.get(config.url).send().await.map_err(|e| {
+                AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!("Failed to fetch stream URL: {e}"),
+                )
+            })?;
 
             if !response.status().is_success() {
                 return Err(AsrPortError::new(
@@ -196,13 +215,31 @@ impl AudioStreamReader {
                 ));
             }
 
-            let bytes = response
-                .bytes()
-                .await
-                .map_err(|e| {
-                    AsrPortError::runtime(format!("Failed to read stream response bytes: {e}"))
-                })?
-                .to_vec();
+            if let Some(content_length) = response.content_length()
+                && content_length > MAX_IN_MEMORY_STREAM_BYTES as u64
+            {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Stream content length ({content_length} bytes) exceeds maximum allowed in-memory limit ({MAX_IN_MEMORY_STREAM_BYTES} bytes)"
+                    ),
+                ));
+            }
+
+            let bytes = response.bytes().await.map_err(|e| {
+                AsrPortError::runtime(format!("Failed to read stream response bytes: {e}"))
+            })?;
+
+            if bytes.len() > MAX_IN_MEMORY_STREAM_BYTES {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Stream size ({} bytes) exceeds maximum allowed in-memory limit ({MAX_IN_MEMORY_STREAM_BYTES} bytes)",
+                        bytes.len()
+                    ),
+                ));
+            }
+            let bytes = bytes.to_vec();
 
             let hint_ext = config
                 .url
@@ -249,29 +286,31 @@ impl AudioStreamReader {
                     offset = 1;
                 }
 
-                let n = stdout.read(&mut buf[offset..]).await.map_err(|e| {
-                    AsrPortError::runtime(format!("Error reading from ffmpeg stream: {e}"))
-                })?;
+                while offset < 2 {
+                    let n = stdout.read(&mut buf[offset..]).await.map_err(|e| {
+                        AsrPortError::runtime(format!("Error reading from ffmpeg stream: {e}"))
+                    })?;
+                    if n == 0 {
+                        break;
+                    }
+                    offset += n;
+                }
 
-                if n == 0 && offset == 0 {
+                if offset < 2 {
                     return Ok(None);
                 }
 
-                let total_bytes = offset + n;
+                let total_bytes = offset;
                 let usable_bytes = total_bytes - (total_bytes % 2);
                 if total_bytes % 2 != 0 {
                     *carryover_byte = Some(buf[total_bytes - 1]);
                 }
 
-                if usable_bytes == 0 {
-                    return Ok(None);
-                }
-
                 let samples = pcm_s16le_bytes_to_f32(&buf[..usable_bytes]);
                 if let Some(writer) = wav_writer.as_mut() {
-                    for &sample in &samples {
-                        let i16_sample = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                        let _ = writer.write_sample(i16_sample);
+                    for chunk in buf[..usable_bytes].as_chunks::<2>().0 {
+                        let sample = i16::from_le_bytes(*chunk);
+                        let _ = writer.write_sample(sample);
                     }
                 }
 
@@ -302,10 +341,44 @@ impl AudioStreamReader {
         }
     }
 
+    pub async fn take_stderr_output(&mut self) -> Option<String> {
+        match self {
+            AudioStreamReader::Ffmpeg {
+                stderr_task, child, ..
+            } => {
+                if let Some(task) = stderr_task.take() {
+                    let _ =
+                        tokio::time::timeout(std::time::Duration::from_millis(500), child.wait())
+                            .await;
+                    tokio::time::timeout(std::time::Duration::from_millis(500), task)
+                        .await
+                        .ok()
+                        .and_then(|res| res.ok())
+                        .map(|s| s.trim().to_string())
+                        .filter(|s| !s.is_empty())
+                } else {
+                    None
+                }
+            }
+            AudioStreamReader::InMemory { .. } => None,
+        }
+    }
+
     pub fn finish(&mut self) {
         match self {
-            AudioStreamReader::Ffmpeg { wav_writer, .. }
-            | AudioStreamReader::InMemory { wav_writer, .. } => {
+            AudioStreamReader::Ffmpeg {
+                wav_writer,
+                stderr_task,
+                ..
+            } => {
+                if let Some(writer) = wav_writer.take() {
+                    let _ = writer.finalize();
+                }
+                if let Some(task) = stderr_task.take() {
+                    task.abort();
+                }
+            }
+            AudioStreamReader::InMemory { wav_writer, .. } => {
                 if let Some(writer) = wav_writer.take() {
                     let _ = writer.finalize();
                 }

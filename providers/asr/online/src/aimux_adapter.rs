@@ -304,6 +304,21 @@ pub fn is_cloud_speaker_diarization_enabled(request: &AsrTranscriptionRequest) -
     true
 }
 
+const MAX_ONLINE_STREAM_DOWNLOAD_BYTES: usize = 100 * 1024 * 1024;
+
+fn map_content_type_to_audio_mime(content_type: &str) -> Option<&'static str> {
+    let raw = content_type.split(';').next()?.trim().to_ascii_lowercase();
+    match raw.as_str() {
+        "audio/mpeg" | "audio/mp3" => Some("audio/mp3"),
+        "audio/wav" | "audio/x-wav" | "audio/wave" => Some("audio/wav"),
+        "audio/ogg" | "application/ogg" => Some("audio/ogg"),
+        "audio/m4a" | "audio/x-m4a" | "audio/mp4" => Some("audio/m4a"),
+        "audio/aac" | "audio/x-aac" => Some("audio/aac"),
+        "audio/flac" | "audio/x-flac" => Some("audio/flac"),
+        _ => None,
+    }
+}
+
 /// Execute batch transcription through an aimux [`TranscriptionModel`].
 pub async fn execute_aimux_batch(
     model: &dyn TranscriptionModel,
@@ -311,14 +326,20 @@ pub async fn execute_aimux_batch(
 ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
     let path_str = input.file_path.to_string_lossy();
     let is_network_stream = sona_core::history::is_network_url(&path_str);
-    let bytes = if is_network_stream {
-        let client = reqwest::Client::new();
+    let (bytes, media_type) = if is_network_stream {
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
+
         let response = client.get(path_str.as_ref()).send().await.map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!("Failed to fetch stream URL: {e}"),
             )
         })?;
+
         if !response.status().is_success() {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
@@ -328,24 +349,66 @@ pub async fn execute_aimux_batch(
                 ),
             ));
         }
-        response
+
+        if let Some(content_length) = response.content_length()
+            && content_length > MAX_ONLINE_STREAM_DOWNLOAD_BYTES as u64
+        {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Stream content length ({content_length} bytes) exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)"
+                ),
+            ));
+        }
+
+        let header_mime = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(map_content_type_to_audio_mime);
+
+        let bytes = response
             .bytes()
             .await
-            .map_err(|e| AsrPortError::runtime(format!("Failed to read stream bytes: {e}")))?
-            .to_vec()
+            .map_err(|e| AsrPortError::runtime(format!("Failed to read stream bytes: {e}")))?;
+
+        if bytes.len() > MAX_ONLINE_STREAM_DOWNLOAD_BYTES {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Stream downloaded size ({} bytes) exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)",
+                    bytes.len()
+                ),
+            ));
+        }
+
+        let media_type = if let Some(mime) = header_mime {
+            mime
+        } else {
+            let clean_url = path_str
+                .split('?')
+                .next()
+                .unwrap_or(&path_str)
+                .split('#')
+                .next()
+                .unwrap_or(&path_str);
+            detect_audio_mime_type(Path::new(clean_url))
+        };
+
+        (bytes.to_vec(), media_type)
     } else {
-        tokio::fs::read(&input.file_path).await.map_err(|error| {
+        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
             AsrPortError::new(
                 AsrPortErrorKind::FileSystem,
                 format!("Failed to read audio file: {error}"),
             )
-        })?
+        })?;
+        let media_type = detect_audio_mime_type(&input.file_path);
+        (bytes, media_type)
     };
 
-    let media_type = detect_audio_mime_type(&input.file_path);
     let mut call_options =
         TranscriptionCallOptions::new(AudioInput::Binary(bytes.clone()), media_type);
-
     // Build provider options
     let mut po = std::collections::HashMap::new();
 
@@ -1194,6 +1257,55 @@ mod tests {
         assert_eq!(
             detect_audio_mime_type(Path::new("test.unknown")),
             "audio/wav"
+        );
+    }
+
+    #[test]
+    fn test_map_content_type_to_audio_mime() {
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mpeg"),
+            Some("audio/mp3")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mp3; charset=utf-8"),
+            Some("audio/mp3")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/wav"),
+            Some("audio/wav")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/x-wav"),
+            Some("audio/wav")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/ogg"),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("application/ogg"),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/m4a"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mp4"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/aac"),
+            Some("audio/aac")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/flac"),
+            Some("audio/flac")
+        );
+        assert_eq!(map_content_type_to_audio_mime("text/html"), None);
+        assert_eq!(
+            map_content_type_to_audio_mime("application/octet-stream"),
+            None
         );
     }
 

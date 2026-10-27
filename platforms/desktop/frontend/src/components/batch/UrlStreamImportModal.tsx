@@ -30,6 +30,14 @@ export function UrlStreamImportModal({
 
   const isSingleUrl = urls.length === 1;
 
+  const handleModalClose = () => {
+    setUrlInput('');
+    setAlias('');
+    setRetainAudio(false);
+    setErrorMessage(null);
+    onClose();
+  };
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) {
       e.preventDefault();
@@ -45,13 +53,7 @@ export function UrlStreamImportModal({
       return;
     }
 
-    const invalidUrls = urls.filter(
-      (url) =>
-        !url.startsWith('http://') &&
-        !url.startsWith('https://') &&
-        !url.startsWith('rtmp://') &&
-        !url.startsWith('rtsp://')
-    );
+    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/.+/i.test(url));
 
     if (invalidUrls.length > 0) {
       setErrorMessage(
@@ -67,16 +69,13 @@ export function UrlStreamImportModal({
       retainAudio,
     });
 
-    setUrlInput('');
-    setAlias('');
-    setRetainAudio(false);
-    onClose();
+    handleModalClose();
   };
 
   return (
     <Modal
       isOpen={isOpen}
-      onClose={onClose}
+      onClose={handleModalClose}
       title={
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span>🌐</span>
@@ -97,7 +96,7 @@ export function UrlStreamImportModal({
             width: '100%',
           }}
         >
-          <button type="button" className="btn btn-secondary-soft" onClick={onClose}>
+          <button type="button" className="btn btn-secondary-soft" onClick={handleModalClose}>
             {t('common.cancel', { defaultValue: '取消' })}
           </button>
           <button

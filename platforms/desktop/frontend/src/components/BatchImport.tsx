@@ -318,7 +318,11 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
           <p>{t('batch.drop_desc')}</p>
         </div>
 
-        <div style={{ marginTop: '8px' }} onClick={(e) => e.stopPropagation()}>
+        <div
+          style={{ marginTop: '8px' }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+        >
           <SplitButton
             primaryLabel={t('batch.select_file')}
             primaryIcon={<UploadIcon width={14} height={14} />}

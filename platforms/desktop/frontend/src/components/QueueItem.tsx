@@ -249,10 +249,11 @@ export const QueueItem = memo(function QueueItem({
           <button
             type="button"
             className="btn btn-icon queue-item-finish-save"
+            disabled={!item.activeInstanceId}
             onClick={async (e) => {
               e.stopPropagation();
-              const instanceId = item.activeInstanceId || item.id;
-              await cancelBatchTask(instanceId);
+              if (!item.activeInstanceId) return;
+              await cancelBatchTask(item.activeInstanceId);
             }}
             aria-label={t('batch.finish_and_save', { defaultValue: '完成并保存' })}
             data-tooltip={t('batch.finish_and_save', { defaultValue: '完成并保存' })}

@@ -69,7 +69,7 @@ impl BuiltinAudioDecoder {
         let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
         let mut hint = Hint::new();
         if let Some(ext) = hint_ext {
-            hint.with_extension(ext);
+            hint.with_extension(ext.trim().trim_start_matches('.'));
         }
         Self::decode_media_source_stream(mss, hint, target_sample_rate)
     }
