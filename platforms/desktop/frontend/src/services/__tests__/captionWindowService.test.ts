@@ -143,8 +143,6 @@ const defaultStyle = {
   strokeColor: '#000000',
   textShadow: true,
   textAlign: 'center' as const,
-  backgroundBlur: true,
-  backgroundBlurRadius: 20,
   disappearDelay: 4.0,
   displayPriority: 'translation_main' as const,
 };

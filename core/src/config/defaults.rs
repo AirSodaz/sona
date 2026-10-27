@@ -62,8 +62,6 @@ pub fn default_config() -> Value {
         ("captionStrokeColor", json!("#000000")),
         ("captionTextShadow", json!(true)),
         ("captionTextAlign", json!("center")),
-        ("captionBackgroundBlur", json!(true)),
-        ("captionBackgroundBlurRadius", json!(20.0)),
         ("captionDisappearDelay", json!(4.0)),
         ("captionLockShortcut", json!("Alt+C")),
         ("realtimeTranslationEnabled", json!(false)),

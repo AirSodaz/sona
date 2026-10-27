@@ -168,8 +168,6 @@ export function useCaptionSession(config: AppConfig, isCaptionMode: boolean): Ca
     config.captionStrokeColor,
     config.captionTextShadow,
     config.captionTextAlign,
-    config.captionBackgroundBlur,
-    config.captionBackgroundBlurRadius,
     config.captionDisappearDelay,
     config.captionLockShortcut,
     isCaptionMode,

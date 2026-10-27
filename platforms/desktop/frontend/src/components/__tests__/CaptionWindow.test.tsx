@@ -694,30 +694,30 @@ describe('CaptionWindow', () => {
       });
     });
 
-    const copyBtn = screen.getByTitle('复制字幕');
+    const copyBtn = screen.getByTitle('Copy Subtitle');
     await act(async () => {
       fireEvent.click(copyBtn);
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('你好世界');
-    expect(screen.getByText('已复制')).toBeDefined();
+    expect(screen.getByText('Copied')).toBeDefined();
 
     // Advance timer to verify toast disappears
     act(() => {
       vi.advanceTimersByTime(2100);
     });
-    expect(screen.queryByText('已复制')).toBeNull();
+    expect(screen.queryByText('Copied')).toBeNull();
   });
 
   it('locks window, emits caption:lock-toggle, and shows toast banner', async () => {
     render(<CaptionWindow />);
 
-    const lockBtn = screen.getByTitle('锁定穿透 (Alt+C)');
+    const lockBtn = screen.getByTitle('Lock click-through (Alt+C)');
     await act(async () => {
       fireEvent.click(lockBtn);
     });
 
-    expect(screen.getByText('已开启穿透 (Alt+C 解锁)')).toBeDefined();
+    expect(screen.getByText('Click-through enabled (Alt+C to unlock)')).toBeDefined();
     expect(mocks.mockEmit).not.toHaveBeenCalled();
 
     // Advance timers past 1500ms lock delay
@@ -732,7 +732,7 @@ describe('CaptionWindow', () => {
   it('cleans up active toast and lock timers on unmount', async () => {
     const { unmount } = render(<CaptionWindow />);
 
-    const lockBtn = screen.getByTitle('锁定穿透 (Alt+C)');
+    const lockBtn = screen.getByTitle('Lock click-through (Alt+C)');
     await act(async () => {
       fireEvent.click(lockBtn);
     });
@@ -745,7 +745,7 @@ describe('CaptionWindow', () => {
     });
   });
 
-  it('applies backdropFilter none when backgroundBlur is false', async () => {
+  it('does not apply inline backdropFilter to caption-window-body to prevent corner artifacts', async () => {
     const { container } = render(<CaptionWindow />);
 
     await act(async () => {
@@ -753,16 +753,13 @@ describe('CaptionWindow', () => {
         payload: {
           revision: 1,
           segments: [],
-          style: {
-            ...defaultStyle,
-            backgroundBlur: false,
-          },
+          style: defaultStyle,
         },
       });
     });
 
     const body = container.querySelector('.caption-window-body') as HTMLElement;
-    expect(body.style.backdropFilter).toBe('none');
+    expect(body.style.backdropFilter).toBeFalsy();
   });
 
   it('copies joined translation and draftTranslation to clipboard', async () => {
@@ -791,13 +788,13 @@ describe('CaptionWindow', () => {
       });
     });
 
-    const copyBtn = screen.getByTitle('复制字幕');
+    const copyBtn = screen.getByTitle('Copy Subtitle');
     await act(async () => {
       fireEvent.click(copyBtn);
     });
 
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Hello world');
-    expect(screen.getByText('已复制')).toBeDefined();
+    expect(screen.getByText('Copied')).toBeDefined();
   });
 });
 describe('computeCaptionTextStyle', () => {

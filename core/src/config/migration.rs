@@ -333,9 +333,6 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         || existing.get("captionStrokeColor") != normalized.get("captionStrokeColor")
         || existing.get("captionTextShadow") != normalized.get("captionTextShadow")
         || existing.get("captionTextAlign") != normalized.get("captionTextAlign")
-        || existing.get("captionBackgroundBlur") != normalized.get("captionBackgroundBlur")
-        || existing.get("captionBackgroundBlurRadius")
-            != normalized.get("captionBackgroundBlurRadius")
         || existing.get("captionDisappearDelay") != normalized.get("captionDisappearDelay")
         || existing.get("captionLockShortcut") != normalized.get("captionLockShortcut")
         || existing.get("realtimeTranslationEnabled")
@@ -661,18 +658,6 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "captionTextAlign",
             json!(string_or_default(&parsed, "captionTextAlign", "center")),
-        ),
-        (
-            "captionBackgroundBlur",
-            json!(bool_at(&parsed, "captionBackgroundBlur").unwrap_or(true)),
-        ),
-        (
-            "captionBackgroundBlurRadius",
-            json!(number_f64_or_default(
-                &parsed,
-                "captionBackgroundBlurRadius",
-                20.0
-            )),
         ),
         (
             "captionDisappearDelay",
@@ -1054,7 +1039,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "voiceTypingRealtimePreview",
         "captionTextStroke",
         "captionTextShadow",
-        "captionBackgroundBlur",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }
@@ -1080,7 +1064,6 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "captionTranslationFontSize",
         "captionBackgroundOpacity",
         "captionStrokeWidth",
-        "captionBackgroundBlurRadius",
         "captionDisappearDelay",
         "liveVadBufferSize",
         "batchVadBufferSize",

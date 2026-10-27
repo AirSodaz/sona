@@ -176,8 +176,6 @@ describe('captionSessionRuntime', () => {
       strokeColor: config.captionStrokeColor,
       textShadow: config.captionTextShadow,
       textAlign: config.captionTextAlign,
-      backgroundBlur: config.captionBackgroundBlur,
-      backgroundBlurRadius: config.captionBackgroundBlurRadius,
       disappearDelay: config.captionDisappearDelay,
     });
   });

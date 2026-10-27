@@ -123,8 +123,6 @@ export const DEFAULT_CONFIG: AppConfig = {
   captionStrokeColor: '#000000',
   captionTextShadow: true,
   captionTextAlign: 'center',
-  captionBackgroundBlur: true,
-  captionBackgroundBlurRadius: 20,
   captionDisappearDelay: 4.0,
   captionLockShortcut: 'Alt+C',
   realtimeTranslationEnabled: false,
@@ -302,8 +300,6 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
   'captionStrokeColor',
   'captionTextShadow',
   'captionTextAlign',
-  'captionBackgroundBlur',
-  'captionBackgroundBlurRadius',
   'captionDisappearDelay',
   'captionLockShortcut',
 ];

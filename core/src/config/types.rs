@@ -286,10 +286,6 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_text_align: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub caption_background_blur: Option<bool>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub caption_background_blur_radius: Option<f64>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_disappear_delay: Option<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub caption_lock_shortcut: Option<String>,

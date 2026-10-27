@@ -72,7 +72,6 @@ vi.mock('../../stores/configStore', () => ({
     captionStrokeColor: '#000000',
     captionTextShadow: true,
     captionTextAlign: 'center',
-    captionBackgroundBlur: false,
     captionDisappearDelay: 4.0,
     captionLockShortcut: 'Alt+C',
   }),

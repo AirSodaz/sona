@@ -1,6 +1,7 @@
 import { Copy, Lock } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useAuxWindowLanguage } from '../hooks/useAuxWindowLanguage';
 import { useAuxWindowState } from '../hooks/useAuxWindowState';
 import {
   CAPTION_EVENT_STATE,
@@ -66,6 +67,7 @@ export function CaptionWindow() {
     },
   });
 
+  useAuxWindowLanguage();
   const { t } = useTranslation();
   const [clearedRevision, setClearedRevision] = useState<number | null>(null);
   const [isFadingOut, setIsFadingOut] = useState(false);
@@ -286,7 +288,7 @@ export function CaptionWindow() {
     if (!textToCopy) return;
     try {
       await navigator.clipboard.writeText(textToCopy);
-      showToast(t('caption.copied', { defaultValue: '已复制' }));
+      showToast(t('caption.copied', { defaultValue: 'Copied' }));
     } catch (err) {
       logger.warn('[CaptionWindow] Failed to copy to clipboard', err);
     }
@@ -294,7 +296,9 @@ export function CaptionWindow() {
 
   const handleLock = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    showToast(t('caption.locked_click_through', { defaultValue: '已开启穿透 (Alt+C 解锁)' }));
+    showToast(
+      t('caption.locked_click_through', { defaultValue: 'Click-through enabled (Alt+C to unlock)' })
+    );
     if (lockTimerRef.current) {
       clearTimeout(lockTimerRef.current);
     }
@@ -321,15 +325,6 @@ export function CaptionWindow() {
           captionState.style.backgroundColor,
           captionState.style.backgroundOpacity
         ),
-        ...(captionState.style.backgroundBlur && captionState.style.backgroundOpacity > 0
-          ? {
-              backdropFilter: `blur(${captionState.style.backgroundBlurRadius ?? 12}px)`,
-              WebkitBackdropFilter: `blur(${captionState.style.backgroundBlurRadius ?? 12}px)`,
-            }
-          : {
-              backdropFilter: 'none',
-              WebkitBackdropFilter: 'none',
-            }),
       }}
     >
       {/* Drag region for moving the window & hover mini toolbar */}
@@ -340,7 +335,8 @@ export function CaptionWindow() {
             type="button"
             className="caption-action-btn"
             data-tauri-drag-region="false"
-            title={t('caption.copy', { defaultValue: '复制字幕' })}
+            title={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
+            aria-label={t('caption.copy', { defaultValue: 'Copy Subtitle' })}
             onClick={handleCopy}
             onMouseDown={(e) => e.stopPropagation()}
           >
@@ -350,7 +346,8 @@ export function CaptionWindow() {
             type="button"
             className="caption-action-btn"
             data-tauri-drag-region="false"
-            title={t('caption.lock', { defaultValue: '锁定穿透 (Alt+C)' })}
+            title={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
+            aria-label={t('caption.lock', { defaultValue: 'Lock click-through (Alt+C)' })}
             onClick={handleLock}
             onMouseDown={(e) => e.stopPropagation()}
           >

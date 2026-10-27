@@ -2090,8 +2090,6 @@
     "caption_text_align": "Text Alignment",
     "caption_align_center": "Center",
     "caption_align_left": "Left",
-    "caption_background_blur": "Background Acrylic Blur",
-    "caption_background_blur_hint": "Enables frosted glass blur behind the subtitle overlay",
     "caption_disappear_delay": "Disappear Delay",
     "caption_disappear_delay_hint": "How long subtitles stay visible after speech stops before fading out",
     "caption_lock_shortcut": "Lock Shortcut",

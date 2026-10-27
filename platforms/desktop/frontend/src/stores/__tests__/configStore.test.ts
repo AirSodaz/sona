@@ -60,8 +60,6 @@ describe('configStore - useApiServerConfig', () => {
     expect(result.current.captionStrokeColor).toBe('#000000');
     expect(result.current.captionTextShadow).toBe(true);
     expect(result.current.captionTextAlign).toBe('center');
-    expect(result.current.captionBackgroundBlur).toBe(true);
-    expect(result.current.captionBackgroundBlurRadius).toBe(20);
     expect(result.current.captionDisappearDelay).toBe(4.0);
     expect(result.current.captionLockShortcut).toBe('Alt+C');
   });

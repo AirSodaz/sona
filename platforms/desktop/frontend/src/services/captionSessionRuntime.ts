@@ -50,8 +50,6 @@ function buildCaptionWindowOptions(config: AppConfig): CaptionWindowOpenOptions 
     strokeColor: config.captionStrokeColor,
     textShadow: config.captionTextShadow,
     textAlign: config.captionTextAlign,
-    backgroundBlur: config.captionBackgroundBlur,
-    backgroundBlurRadius: config.captionBackgroundBlurRadius,
     disappearDelay: config.captionDisappearDelay,
   };
 }
@@ -72,8 +70,6 @@ function buildCaptionWindowStyle({
   strokeColor,
   textShadow,
   textAlign,
-  backgroundBlur,
-  backgroundBlurRadius,
   disappearDelay,
 }: {
   width?: number;
@@ -91,8 +87,6 @@ function buildCaptionWindowStyle({
   strokeColor?: string;
   textShadow?: boolean;
   textAlign?: 'center' | 'left';
-  backgroundBlur?: boolean;
-  backgroundBlurRadius?: number;
   disappearDelay?: number;
 }): CaptionWindowStyleOptions {
   return {
@@ -111,8 +105,6 @@ function buildCaptionWindowStyle({
     ...(strokeColor !== undefined ? { strokeColor } : {}),
     ...(textShadow !== undefined ? { textShadow } : {}),
     ...(textAlign !== undefined ? { textAlign } : {}),
-    ...(backgroundBlur !== undefined ? { backgroundBlur } : {}),
-    ...(backgroundBlurRadius !== undefined ? { backgroundBlurRadius } : {}),
     ...(disappearDelay !== undefined ? { disappearDelay } : {}),
   };
 }
@@ -497,8 +489,6 @@ class CaptionSessionRuntime {
         strokeColor: config.captionStrokeColor,
         textShadow: config.captionTextShadow,
         textAlign: config.captionTextAlign,
-        backgroundBlur: config.captionBackgroundBlur,
-        backgroundBlurRadius: config.captionBackgroundBlurRadius,
         disappearDelay: config.captionDisappearDelay,
       })
     );

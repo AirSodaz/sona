@@ -35,8 +35,6 @@ export interface CaptionWindowStyle {
   strokeColor?: string;
   textShadow?: boolean;
   textAlign?: 'center' | 'left';
-  backgroundBlur?: boolean;
-  backgroundBlurRadius?: number;
   disappearDelay?: number;
 }
 
@@ -60,8 +58,6 @@ export interface CaptionWindowOpenOptions {
   strokeColor?: string;
   textShadow?: boolean;
   textAlign?: 'center' | 'left';
-  backgroundBlur?: boolean;
-  backgroundBlurRadius?: number;
   disappearDelay?: number;
 }
 
@@ -84,8 +80,6 @@ const DEFAULT_CAPTION_STYLE: CaptionWindowStyle = {
   strokeColor: '#000000',
   textShadow: true,
   textAlign: 'center',
-  backgroundBlur: true,
-  backgroundBlurRadius: 20,
   disappearDelay: 4.0,
   displayPriority: 'translation_main',
 };
@@ -113,8 +107,6 @@ function areCaptionStylesEqual(left: CaptionWindowStyle, right: CaptionWindowSty
     left.strokeColor === right.strokeColor &&
     left.textShadow === right.textShadow &&
     left.textAlign === right.textAlign &&
-    left.backgroundBlur === right.backgroundBlur &&
-    left.backgroundBlurRadius === right.backgroundBlurRadius &&
     left.disappearDelay === right.disappearDelay
   );
 }
@@ -312,10 +304,6 @@ export class CaptionWindowService {
       ...(options?.strokeColor !== undefined ? { strokeColor: options.strokeColor } : {}),
       ...(options?.textShadow !== undefined ? { textShadow: options.textShadow } : {}),
       ...(options?.textAlign !== undefined ? { textAlign: options.textAlign } : {}),
-      ...(options?.backgroundBlur !== undefined ? { backgroundBlur: options.backgroundBlur } : {}),
-      ...(options?.backgroundBlurRadius !== undefined
-        ? { backgroundBlurRadius: options.backgroundBlurRadius }
-        : {}),
       ...(options?.disappearDelay !== undefined ? { disappearDelay: options.disappearDelay } : {}),
     };
 
@@ -524,10 +512,6 @@ export class CaptionWindowService {
       ...(style.strokeColor !== undefined ? { strokeColor: style.strokeColor } : {}),
       ...(style.textShadow !== undefined ? { textShadow: style.textShadow } : {}),
       ...(style.textAlign !== undefined ? { textAlign: style.textAlign } : {}),
-      ...(style.backgroundBlur !== undefined ? { backgroundBlur: style.backgroundBlur } : {}),
-      ...(style.backgroundBlurRadius !== undefined
-        ? { backgroundBlurRadius: style.backgroundBlurRadius }
-        : {}),
       ...(style.disappearDelay !== undefined ? { disappearDelay: style.disappearDelay } : {}),
     };
 

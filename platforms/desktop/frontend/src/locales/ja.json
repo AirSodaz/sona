@@ -2090,8 +2090,6 @@
     "caption_text_align": "文字の配置",
     "caption_align_center": "中央揃え",
     "caption_align_left": "左揃え",
-    "caption_background_blur": "背景ぼかし",
-    "caption_background_blur_hint": "半透明の背景にアクリル磨りガラス効果を適用します",
     "caption_disappear_delay": "消去ディレイ",
     "caption_disappear_delay_hint": "発話停止後に字幕が消えるまでの待機時間（その後フェードアウト）",
     "caption_lock_shortcut": "クリック透過ショートカット",

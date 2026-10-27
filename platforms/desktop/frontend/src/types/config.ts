@@ -219,10 +219,6 @@ export interface CaptionConfig {
   captionTextShadow?: boolean;
   /** Text alignment: center or left. Default: 'center'. */
   captionTextAlign?: 'center' | 'left';
-  /** Whether to enable background acrylic/gaussian blur. Default: true. */
-  captionBackgroundBlur?: boolean;
-  /** Background blur radius in pixels. Default: 20. */
-  captionBackgroundBlurRadius?: number;
   /** Disappear delay in seconds before fade-out (1.0 to 10.0). Default: 4.0. */
   captionDisappearDelay?: number;
   /** Global shortcut to toggle caption window click-through lock. Default: 'Alt+C'. */

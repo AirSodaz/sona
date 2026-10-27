@@ -83,8 +83,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
   const captionStrokeColor = config.captionStrokeColor || '#000000';
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
-  const captionBackgroundBlur = config.captionBackgroundBlur ?? true;
-  const captionBackgroundBlurRadius = config.captionBackgroundBlurRadius ?? 20;
   const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
   const captionLockShortcut = config.captionLockShortcut || 'Alt+C';
 
@@ -124,8 +122,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
       strokeColor: captionStrokeColor,
       textShadow: captionTextShadow,
       textAlign: captionTextAlign,
-      backgroundBlur: captionBackgroundBlur,
-      backgroundBlurRadius: captionBackgroundBlurRadius,
       disappearDelay: captionDisappearDelay,
       displayPriority: captionDisplayPriority,
     }),
@@ -140,8 +136,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
       captionStrokeColor,
       captionTextShadow,
       captionTextAlign,
-      captionBackgroundBlur,
-      captionBackgroundBlurRadius,
       captionDisappearDelay,
       captionDisplayPriority,
     ]
@@ -741,21 +735,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
           </SettingsItem>
 
           <SettingsItem
-            title={t('settings.caption_background_blur', { defaultValue: 'Background Blur' })}
-            hint={t('settings.caption_background_blur_hint', {
-              defaultValue: 'Frosted glass effect behind subtitles.',
-            })}
-          >
-            <Switch
-              checked={captionBackgroundBlur}
-              onChange={(enabled) => updateConfig({ captionBackgroundBlur: enabled })}
-              aria-label={t('settings.caption_background_blur', {
-                defaultValue: 'Background Blur',
-              })}
-            />
-          </SettingsItem>
-
-          <SettingsItem
             title={t('settings.caption_disappear_delay', { defaultValue: 'Disappear Delay' })}
             hint={t('settings.caption_disappear_delay_hint', {
               defaultValue: 'Time in seconds before subtitles fade out after speech stops.',
@@ -810,12 +789,6 @@ export function ToolSubtitlesPanel(): React.JSX.Element {
                 flexDirection: 'column',
                 gap: '6px',
                 textAlign: captionTextAlign,
-                ...(captionBackgroundBlur
-                  ? {
-                      backdropFilter: `blur(${captionBackgroundBlurRadius}px)`,
-                      WebkitBackdropFilter: `blur(${captionBackgroundBlurRadius}px)`,
-                    }
-                  : {}),
               }}
             >
               {(!realtimeTranslationEnabled || isOriginalOnly) && originalLine}

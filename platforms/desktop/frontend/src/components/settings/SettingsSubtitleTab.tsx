@@ -942,7 +942,6 @@ export function SettingsSubtitleTab({
   const captionStrokeColor = config.captionStrokeColor || '#000000';
   const captionTextShadow = config.captionTextShadow ?? true;
   const captionTextAlign = config.captionTextAlign ?? 'center';
-  const captionBackgroundBlur = config.captionBackgroundBlur ?? true;
   const captionDisappearDelay = config.captionDisappearDelay ?? 4.0;
   const captionLockShortcut = config.captionLockShortcut || 'Alt+C';
   const {
@@ -1478,18 +1477,6 @@ export function SettingsSubtitleTab({
               <Switch
                 checked={captionTextShadow}
                 onChange={(enabled) => updateConfig({ captionTextShadow: enabled })}
-              />
-            </SettingsItem>
-
-            <SettingsItem
-              title={t('settings.caption_background_blur', { defaultValue: 'Background Blur' })}
-              hint={t('settings.caption_background_blur_hint', {
-                defaultValue: 'Frosted glass effect behind subtitles.',
-              })}
-            >
-              <Switch
-                checked={captionBackgroundBlur}
-                onChange={(enabled) => updateConfig({ captionBackgroundBlur: enabled })}
               />
             </SettingsItem>
 

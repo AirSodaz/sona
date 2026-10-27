@@ -2090,8 +2090,6 @@
     "caption_text_align": "텍스트 정렬",
     "caption_align_center": "가운데 맞춤",
     "caption_align_left": "왼쪽 맞춤",
-    "caption_background_blur": "배경 흐림 효과",
-    "caption_background_blur_hint": "반투명 배경에 아크릴 반투명 유리 효과를 적용합니다",
     "caption_disappear_delay": "사라짐 지연 시간",
     "caption_disappear_delay_hint": "말이 끝난 후 자막이 유지되는 시간(이후 부드럽게 페이드아웃)",
     "caption_lock_shortcut": "클릭 관통 단축키",

@@ -2090,8 +2090,6 @@
     "caption_text_align": "文字对齐",
     "caption_align_center": "居中",
     "caption_align_left": "居左",
-    "caption_background_blur": "背景高斯模糊",
-    "caption_background_blur_hint": "在半透明背景后启用亚克力毛玻璃磨砂效果",
     "caption_disappear_delay": "消失延迟",
     "caption_disappear_delay_hint": "语音停止后字幕停留的时间，随后平滑淡出隐去",
     "caption_lock_shortcut": "穿透锁定快捷键",

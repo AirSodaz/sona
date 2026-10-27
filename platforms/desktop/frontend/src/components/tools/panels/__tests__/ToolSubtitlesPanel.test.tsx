@@ -373,7 +373,7 @@ describe('ToolSubtitlesPanel', () => {
     expect(useConfigStore.getState().config.captionStrokeColor).toBe('#facc15');
   });
 
-  it('toggles text shadow and background blur switches', () => {
+  it('toggles text shadow switch', () => {
     render(<ToolSubtitlesPanel />);
 
     const shadowSwitch = screen.getByRole('switch', {
@@ -382,13 +382,6 @@ describe('ToolSubtitlesPanel', () => {
     expect(shadowSwitch.getAttribute('aria-checked')).toBe('true');
     fireEvent.click(shadowSwitch);
     expect(useConfigStore.getState().config.captionTextShadow).toBe(false);
-
-    const blurSwitch = screen.getByRole('switch', {
-      name: 'settings.caption_background_blur',
-    });
-    expect(blurSwitch.getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(blurSwitch);
-    expect(useConfigStore.getState().config.captionBackgroundBlur).toBe(false);
   });
 
   it('updates text alignment and disappear delay', () => {
