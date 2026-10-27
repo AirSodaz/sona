@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next';
+import { Globe } from 'lucide-react';
 import { memo } from 'react';
+import { cancelBatchTask } from '../services/tauri/recognizer';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -181,6 +183,25 @@ export const QueueItem = memo(function QueueItem({
         )}
 
         <div className="queue-item-meta">
+          {item.sourceType === 'url_stream' && (
+            <span
+              className="queue-item-stream-badge"
+              title={item.streamUrl || item.filePath}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                color: 'var(--color-primary, #3b82f6)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                padding: '1px 6px',
+                borderRadius: '4px',
+              }}
+            >
+              <Globe size={11} strokeWidth={2} />
+              <span>{t('batch.stream_badge', { defaultValue: '网络流' })}</span>
+            </span>
+          )}
           {project && (
             <span className="queue-item-project-badge">
               <span
@@ -224,6 +245,23 @@ export const QueueItem = memo(function QueueItem({
       </div>
 
       <div className="queue-item-actions">
+        {item.sourceType === 'url_stream' && item.status === 'processing' && (
+          <button
+            type="button"
+            className="btn btn-icon queue-item-finish-save"
+            onClick={async (e) => {
+              e.stopPropagation();
+              const instanceId = item.activeInstanceId || item.id;
+              await cancelBatchTask(instanceId);
+            }}
+            aria-label={t('batch.finish_and_save', { defaultValue: '完成并保存' })}
+            data-tooltip={t('batch.finish_and_save', { defaultValue: '完成并保存' })}
+            data-tooltip-pos="left"
+            style={{ color: 'var(--color-success, #22c55e)' }}
+          >
+            <CompleteIcon width={13} height={13} />
+          </button>
+        )}
         {(item.status === 'error' || item.status === 'cancelled') && (
           <button
             className="btn btn-icon queue-item-retry"

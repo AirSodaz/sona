@@ -940,6 +940,51 @@ fn save_imported_file_duplicate_id_does_not_overwrite_existing_audio() {
 }
 
 #[test]
+fn test_save_imported_stream_url_without_audio_file() {
+    let root = tempdir().unwrap();
+    let db = Database::open_in_memory().unwrap();
+    let store = SqliteHistoryStore::with_db(root.path().to_path_buf(), db);
+    store.ensure_ready().unwrap();
+
+    let item = store
+        .save_imported_file(HistorySaveImportedFileRequest {
+            id: Some("stream-1".to_string()),
+            source_path: "https://example.com/audio/podcast.mp3?token=secret".to_string(),
+            segments: vec![segment_value("seg-1", "Stream transcript text", 0.0, 5.0)],
+            duration: 5.0,
+            tag_ids: Vec::new(),
+            project_id: None,
+            converted_source_path: None,
+        })
+        .unwrap();
+
+    assert_eq!(item.id, "stream-1");
+    assert_eq!(item.audio_path, "");
+    assert_eq!(item.audio_status, HistoryAudioStatus::Removed);
+    assert_eq!(item.preview_text, "Stream transcript text...");
+
+    let history_dir = root.path().join("history");
+    if history_dir.exists() {
+        let entries = std::fs::read_dir(&history_dir).unwrap().collect::<Vec<_>>();
+        assert!(
+            entries.is_empty(),
+            "History audio dir should not contain files for audio-less stream"
+        );
+    }
+
+    let loaded = store.get_item("stream-1").unwrap().unwrap();
+    assert_eq!(loaded.audio_path, "");
+    assert_eq!(loaded.audio_status, HistoryAudioStatus::Removed);
+
+    let segments = store
+        .load_transcript("stream-1")
+        .unwrap()
+        .expect("transcript segments");
+    assert_eq!(segments.len(), 1);
+    assert_eq!(segments[0].text, "Stream transcript text");
+}
+
+#[test]
 fn resolve_audio_path_marks_available_item_missing_without_deleting_text() {
     let root = tempdir().unwrap();
     let db = Database::open_in_memory().unwrap();

@@ -1,0 +1,365 @@
+use hound::{WavSpec, WavWriter};
+use sona_core::ports::asr::{
+    AsrPortError, AsrPortErrorKind, pcm_s16le_bytes_to_f32, resolve_ffmpeg_path,
+};
+use std::path::{Path, PathBuf};
+use tokio::io::AsyncReadExt;
+
+pub struct AudioStreamSourceConfig<'a> {
+    pub url: &'a str,
+    pub target_sample_rate: u32,
+    pub ffmpeg_enabled: bool,
+    pub custom_ffmpeg_path: Option<&'a Path>,
+    pub save_to_path: Option<PathBuf>,
+}
+
+pub enum AudioStreamReader {
+    Ffmpeg {
+        child: tokio::process::Child,
+        stdout: tokio::io::BufReader<tokio::process::ChildStdout>,
+        wav_writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
+        carryover_byte: Option<u8>,
+    },
+    InMemory {
+        samples: Vec<f32>,
+        position: usize,
+        wav_writer: Option<WavWriter<std::io::BufWriter<std::fs::File>>>,
+    },
+}
+
+impl Drop for AudioStreamReader {
+    fn drop(&mut self) {
+        match self {
+            AudioStreamReader::Ffmpeg {
+                child, wav_writer, ..
+            } => {
+                if let Some(writer) = wav_writer.take() {
+                    let _ = writer.finalize();
+                }
+                let _ = child.start_kill();
+            }
+            AudioStreamReader::InMemory { wav_writer, .. } => {
+                if let Some(writer) = wav_writer.take() {
+                    let _ = writer.finalize();
+                }
+            }
+        }
+    }
+}
+
+pub fn is_video_or_playlist_url(url: &str) -> bool {
+    let lower = url.to_ascii_lowercase();
+    let path = lower
+        .split('?')
+        .next()
+        .unwrap_or(&lower)
+        .split('#')
+        .next()
+        .unwrap_or(&lower);
+    path.ends_with(".m3u8")
+        || path.ends_with(".mp4")
+        || path.ends_with(".mkv")
+        || path.ends_with(".avi")
+        || path.ends_with(".mov")
+        || path.ends_with(".flv")
+        || path.ends_with(".webm")
+        || path.ends_with(".ts")
+}
+
+fn create_wav_writer(
+    path: &Path,
+    sample_rate: u32,
+) -> Result<WavWriter<std::io::BufWriter<std::fs::File>>, AsrPortError> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent).map_err(|e| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to create audio directory {}: {e}", parent.display()),
+            )
+        })?;
+    }
+    let file = std::fs::File::create(path).map_err(|e| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Failed to create audio file {}: {e}", path.display()),
+        )
+    })?;
+    let buf_writer = std::io::BufWriter::new(file);
+    let spec = WavSpec {
+        channels: 1,
+        sample_rate,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    WavWriter::new(buf_writer, spec).map_err(|e| {
+        AsrPortError::new(
+            AsrPortErrorKind::FileSystem,
+            format!("Failed to initialize wav writer: {e}"),
+        )
+    })
+}
+
+impl AudioStreamReader {
+    pub async fn open(config: AudioStreamSourceConfig<'_>) -> Result<Self, AsrPortError> {
+        let sample_rate = config.target_sample_rate;
+        let wav_writer = if let Some(save_path) = &config.save_to_path {
+            Some(create_wav_writer(save_path, sample_rate)?)
+        } else {
+            None
+        };
+
+        if config.ffmpeg_enabled {
+            let ffmpeg_path = resolve_ffmpeg_path(config.custom_ffmpeg_path).map_err(|e| {
+                AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!("FFmpeg is required for streaming but could not be resolved: {e}"),
+                )
+            })?;
+
+            let mut command = tokio::process::Command::new(&ffmpeg_path);
+            #[cfg(target_os = "windows")]
+            {
+                #[allow(unused_imports)]
+                use std::os::windows::process::CommandExt;
+                command.creation_flags(0x0800_0000);
+            }
+
+            command
+                .arg("-loglevel")
+                .arg("error")
+                .arg("-reconnect")
+                .arg("1")
+                .arg("-reconnect_streamed")
+                .arg("1")
+                .arg("-reconnect_delay_max")
+                .arg("5")
+                .arg("-i")
+                .arg(config.url)
+                .arg("-f")
+                .arg("s16le")
+                .arg("-acodec")
+                .arg("pcm_s16le")
+                .arg("-ar")
+                .arg(sample_rate.to_string())
+                .arg("-ac")
+                .arg("1")
+                .arg("-")
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped());
+
+            let mut child = command.spawn().map_err(|e| {
+                AsrPortError::new(
+                    AsrPortErrorKind::FileSystem,
+                    format!("Failed to spawn ffmpeg stream process: {e}"),
+                )
+            })?;
+
+            let stdout = child.stdout.take().ok_or_else(|| {
+                AsrPortError::runtime("Failed to open child process stdout for ffmpeg stream")
+            })?;
+
+            Ok(AudioStreamReader::Ffmpeg {
+                child,
+                stdout: tokio::io::BufReader::new(stdout),
+                wav_writer,
+                carryover_byte: None,
+            })
+        } else {
+            if is_video_or_playlist_url(config.url) {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    "Video stream or HLS playlist requires FFmpeg. Please enable FFmpeg in settings.",
+                ));
+            }
+
+            let response = reqwest::Client::builder()
+                .build()
+                .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?
+                .get(config.url)
+                .send()
+                .await
+                .map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::InvalidRequest,
+                        format!("Failed to fetch stream URL: {e}"),
+                    )
+                })?;
+
+            if !response.status().is_success() {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Stream URL returned non-success status {}: {}",
+                        response.status(),
+                        config.url
+                    ),
+                ));
+            }
+
+            let bytes = response
+                .bytes()
+                .await
+                .map_err(|e| {
+                    AsrPortError::runtime(format!("Failed to read stream response bytes: {e}"))
+                })?
+                .to_vec();
+
+            let hint_ext = config
+                .url
+                .split('?')
+                .next()
+                .and_then(|p| p.rsplit('.').next())
+                .map(|ext| ext.trim_matches('/').to_string());
+
+            let decoded_samples = tokio::task::spawn_blocking(move || {
+                sona_core::audio::decode_audio_bytes(bytes, hint_ext.as_deref(), sample_rate)
+            })
+            .await
+            .map_err(|e| AsrPortError::runtime(format!("Audio decode task join error: {e}")))?
+            .map_err(|e| {
+                AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!("Failed to decode audio stream: {e}"),
+                )
+            })?;
+
+            Ok(AudioStreamReader::InMemory {
+                samples: decoded_samples,
+                position: 0,
+                wav_writer,
+            })
+        }
+    }
+
+    pub async fn next_samples(
+        &mut self,
+        chunk_size: usize,
+    ) -> Result<Option<Vec<f32>>, AsrPortError> {
+        match self {
+            AudioStreamReader::Ffmpeg {
+                stdout,
+                wav_writer,
+                carryover_byte,
+                ..
+            } => {
+                let mut buf = vec![0u8; chunk_size * 2];
+                let mut offset = 0;
+                if let Some(byte) = carryover_byte.take() {
+                    buf[0] = byte;
+                    offset = 1;
+                }
+
+                let n = stdout.read(&mut buf[offset..]).await.map_err(|e| {
+                    AsrPortError::runtime(format!("Error reading from ffmpeg stream: {e}"))
+                })?;
+
+                if n == 0 && offset == 0 {
+                    return Ok(None);
+                }
+
+                let total_bytes = offset + n;
+                let usable_bytes = total_bytes - (total_bytes % 2);
+                if total_bytes % 2 != 0 {
+                    *carryover_byte = Some(buf[total_bytes - 1]);
+                }
+
+                if usable_bytes == 0 {
+                    return Ok(None);
+                }
+
+                let samples = pcm_s16le_bytes_to_f32(&buf[..usable_bytes]);
+                if let Some(writer) = wav_writer.as_mut() {
+                    for &sample in &samples {
+                        let i16_sample = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        let _ = writer.write_sample(i16_sample);
+                    }
+                }
+
+                Ok(Some(samples))
+            }
+            AudioStreamReader::InMemory {
+                samples,
+                position,
+                wav_writer,
+            } => {
+                if *position >= samples.len() {
+                    return Ok(None);
+                }
+
+                let end = (*position + chunk_size).min(samples.len());
+                let slice = samples[*position..end].to_vec();
+                *position = end;
+
+                if let Some(writer) = wav_writer.as_mut() {
+                    for &sample in &slice {
+                        let i16_sample = (sample.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                        let _ = writer.write_sample(i16_sample);
+                    }
+                }
+
+                Ok(Some(slice))
+            }
+        }
+    }
+
+    pub fn finish(&mut self) {
+        match self {
+            AudioStreamReader::Ffmpeg { wav_writer, .. }
+            | AudioStreamReader::InMemory { wav_writer, .. } => {
+                if let Some(writer) = wav_writer.take() {
+                    let _ = writer.finalize();
+                }
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_video_or_playlist_url() {
+        assert!(is_video_or_playlist_url(
+            "https://example.com/live/playlist.m3u8?token=xyz"
+        ));
+        assert!(is_video_or_playlist_url("http://example.com/video.mp4"));
+        assert!(is_video_or_playlist_url(
+            "http://example.com/video.mkv#t=10"
+        ));
+        assert!(!is_video_or_playlist_url("https://example.com/audio.mp3"));
+        assert!(!is_video_or_playlist_url("https://example.com/stream.wav"));
+        assert!(!is_video_or_playlist_url(
+            "https://example.com/podcast.flac?auth=1"
+        ));
+    }
+
+    #[tokio::test]
+    async fn test_in_memory_stream_chunking_and_tee() {
+        let sample_rate = 16000;
+        let samples = vec![0.1f32, 0.2, -0.3, 0.4, 0.5, -0.6, 0.7];
+        let temp_dir = tempfile::tempdir().unwrap();
+        let save_path = temp_dir.path().join("tee.wav");
+
+        let mut reader = AudioStreamReader::InMemory {
+            samples: samples.clone(),
+            position: 0,
+            wav_writer: Some(create_wav_writer(&save_path, sample_rate).unwrap()),
+        };
+
+        let chunk1 = reader.next_samples(4).await.unwrap().unwrap();
+        assert_eq!(chunk1, vec![0.1f32, 0.2, -0.3, 0.4]);
+
+        let chunk2 = reader.next_samples(4).await.unwrap().unwrap();
+        assert_eq!(chunk2, vec![0.5f32, -0.6, 0.7]);
+
+        let chunk3 = reader.next_samples(4).await.unwrap();
+        assert!(chunk3.is_none());
+
+        reader.finish();
+        assert!(save_path.exists());
+        let mut wav_reader = hound::WavReader::open(&save_path).unwrap();
+        let read_samples: Vec<i16> = wav_reader.samples::<i16>().map(|s| s.unwrap()).collect();
+        assert_eq!(read_samples.len(), samples.len());
+    }
+}

@@ -27,6 +27,12 @@ export interface BatchQueueItem {
   historyTitle?: string;
   /** Full file path for processing. */
   filePath: string;
+  /** Source type: local disk file or online network stream. */
+  sourceType?: 'file' | 'url_stream';
+  /** Original network stream URL when sourceType is 'url_stream'. */
+  streamUrl?: string;
+  /** Whether to retain a local audio copy for history playback. */
+  retainAudio?: boolean;
   /** Current processing status. */
   status: BatchQueueItemStatus;
   /** Processing progress (0-100). */

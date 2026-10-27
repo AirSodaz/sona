@@ -20,5 +20,8 @@ sherpa-onnx-sys = { workspace = true }
 sysinfo = { workspace = true }
 tokio = { workspace = true, features = ["process", "rt", "macros", "fs", "io-util", "sync"] }
 uuid = { workspace = true }
+futures-util = { workspace = true }
+reqwest = { workspace = true, features = ["stream", "rustls"] }
 
 [dev-dependencies]
+tempfile = { workspace = true }

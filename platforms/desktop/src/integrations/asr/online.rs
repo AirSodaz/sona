@@ -107,13 +107,15 @@ impl AsrBatchProcessor for OnlineBatchProcessor {
                 .is_some_and(|p| !p.trim().is_empty())
             && sona_online_asr::is_cloud_speaker_diarization_enabled(&request)
         {
-            segments =
-                sona_sherpa_onnx::speaker_processing::match_cloud_speaker_segments_from_file(
-                    &file_path,
-                    segments,
-                    Some(sp_config),
-                )
-                .await?;
+            if !sona_core::history::is_network_url(&file_path.to_string_lossy()) {
+                segments =
+                    sona_sherpa_onnx::speaker_processing::match_cloud_speaker_segments_from_file(
+                        &file_path,
+                        segments,
+                        Some(sp_config),
+                    )
+                    .await?;
+            }
         }
 
         let elapsed_ms = duration_to_ms(started.elapsed());

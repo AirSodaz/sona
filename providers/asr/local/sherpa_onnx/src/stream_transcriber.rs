@@ -1,0 +1,349 @@
+use sherpa_onnx::VoiceActivityDetector;
+use sona_core::models::config::ModelFileConfig;
+use sona_core::ports::aligner::AlignerEngineSet;
+use sona_core::ports::asr::{AsrPortError, BatchSegmentationMode, BatchTranscriptionObserver};
+use sona_core::ports::punctuation::{PunctuationEngineSet, PunctuationModel};
+use sona_core::ports::vad::VadEngineSet;
+use sona_core::transcription::runtime::BatchTranscribePlan;
+use sona_core::transcription::transcript::{
+    TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
+    normalize_recognizer_text, synthesize_durations,
+};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use crate::audio::{VadDetectorOptions, create_vad_config};
+use crate::audio_stream::{AudioStreamReader, AudioStreamSourceConfig};
+use crate::batch::{
+    OfflineRecognizerCacheKey, finalize_transcript_text, get_or_create_offline_recognizer,
+    get_or_create_punctuation,
+};
+use crate::gpu::{GpuFallbackNotice, is_int8_model, resolve_gpu_acceleration_plan};
+use crate::recognizer::{SafeOfflineRecognizer, decode_offline_samples};
+
+pub struct StreamTranscriptionJob {
+    pub url: String,
+    pub save_to_path: Option<PathBuf>,
+    pub model_path: PathBuf,
+    pub num_threads: i32,
+    pub enable_itn: bool,
+    pub language: String,
+    pub punctuation_model: Option<PathBuf>,
+    pub alignment_model: Option<PathBuf>,
+    pub vad_model: Option<PathBuf>,
+    pub vad_buffer: f32,
+    pub batch_segmentation_mode: BatchSegmentationMode,
+    pub model_type: String,
+    pub file_config: Option<ModelFileConfig>,
+    pub hotwords: Option<String>,
+    pub speaker_processing: Option<sona_core::transcription::speaker::SpeakerProcessingConfig>,
+    pub gpu_acceleration: Option<String>,
+    pub quiet: bool,
+    pub vad_engines: VadEngineSet,
+    pub punct_engines: PunctuationEngineSet,
+    pub aligner_engines: AlignerEngineSet,
+    pub ffmpeg_enabled: bool,
+    pub ffmpeg_path: Option<PathBuf>,
+}
+
+fn process_speech_slice(
+    samples: &[f32],
+    start_time: f32,
+    duration: f32,
+    recognizer: &SafeOfflineRecognizer,
+    punctuation: Option<&dyn PunctuationModel>,
+    observer: &dyn BatchTranscriptionObserver,
+) -> Option<TranscriptSegment> {
+    let decoded = decode_offline_samples(recognizer, samples)?;
+    let cleaned = normalize_recognizer_text(&decoded.text);
+    if cleaned.is_empty() {
+        return None;
+    }
+    let text = finalize_transcript_text(&cleaned, punctuation);
+    if text.is_empty() {
+        return None;
+    }
+    let timestamps_abs = decoded
+        .timestamps
+        .as_ref()
+        .map(|ts| ts.iter().map(|t| *t + start_time).collect::<Vec<_>>());
+    let durations = decoded
+        .durations
+        .filter(|d| !d.is_empty() && d.len() == decoded.tokens.len())
+        .or_else(|| {
+            timestamps_abs
+                .as_ref()
+                .and_then(|ts| synthesize_durations(ts, start_time + duration))
+        });
+
+    let mut transcript_segment = TranscriptSegment {
+        id: uuid::Uuid::new_v4().to_string(),
+        text,
+        start: start_time as f64,
+        end: (start_time + duration) as f64,
+        is_final: true,
+        timing: None,
+        tokens: Some(decoded.tokens),
+        timestamps: timestamps_abs,
+        durations,
+        translation: None,
+        draft_translation: None,
+        speaker: None,
+        speaker_attribution: None,
+    };
+    ensure_transcript_segment_timing(&mut transcript_segment);
+    observer.on_transcript_update(&TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![transcript_segment.clone()],
+    });
+    Some(transcript_segment)
+}
+
+impl StreamTranscriptionJob {
+    pub fn from_plan(
+        plan: BatchTranscribePlan,
+        vad_engines: &VadEngineSet,
+        punct_engines: &PunctuationEngineSet,
+        aligner_engines: &AlignerEngineSet,
+    ) -> Result<Self, AsrPortError> {
+        let url = plan.input_path.to_string_lossy().to_string();
+        Ok(Self {
+            url,
+            save_to_path: plan.save_to_path,
+            model_path: PathBuf::from(plan.model_path),
+            num_threads: plan.num_threads,
+            enable_itn: plan.enable_itn,
+            language: plan.language,
+            punctuation_model: plan.punctuation_model.map(PathBuf::from),
+            alignment_model: plan.alignment_model.map(PathBuf::from),
+            vad_model: plan.vad_model.map(PathBuf::from),
+            vad_buffer: plan.vad_buffer,
+            batch_segmentation_mode: plan.batch_segmentation_mode,
+            model_type: plan.model_type,
+            file_config: plan.file_config,
+            hotwords: plan.hotwords,
+            speaker_processing: plan.speaker_processing,
+            gpu_acceleration: plan.gpu_acceleration,
+            quiet: plan.quiet,
+            vad_engines: vad_engines.clone(),
+            punct_engines: punct_engines.clone(),
+            aligner_engines: aligner_engines.clone(),
+            ffmpeg_enabled: plan.ffmpeg_enabled,
+            ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
+        })
+    }
+
+    pub async fn transcribe(
+        self,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let is_int8 = is_int8_model(&self.model_path, self.file_config.as_ref());
+        let gpu_plan =
+            resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref(), is_int8).await;
+        let mut last_error = None;
+        let mut fallback_notice: Option<GpuFallbackNotice> = None;
+
+        for provider in gpu_plan.provider_options() {
+            if observer.is_cancelled() {
+                return Err(AsrPortError::runtime("Task cancelled."));
+            }
+            match self
+                .transcribe_with_provider(provider.as_deref(), Arc::clone(&observer))
+                .await
+            {
+                Ok(segments) => {
+                    if let Some(notice) = fallback_notice.take()
+                        && !self.quiet
+                    {
+                        log::warn!(
+                            "DirectML stream transcription failed, retrying with CPU: {}",
+                            notice.error
+                        );
+                    }
+                    return Ok(segments);
+                }
+                Err(error)
+                    if provider
+                        .as_deref()
+                        .map(|provider| gpu_plan.should_retry_after_failure(provider))
+                        .unwrap_or(false) =>
+                {
+                    fallback_notice = Some(GpuFallbackNotice::directml_retry(error.to_string()));
+                    last_error = Some(error);
+                }
+                Err(error) => return Err(error),
+            }
+        }
+
+        Err(last_error.unwrap_or_else(|| AsrPortError::runtime("Recognizer creation failed.")))
+    }
+
+    async fn transcribe_with_provider(
+        &self,
+        provider: Option<&str>,
+        observer: Arc<dyn BatchTranscriptionObserver>,
+    ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        let punctuation =
+            get_or_create_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
+
+        let cache_key = OfflineRecognizerCacheKey {
+            model_path: self.model_path.clone(),
+            model_type: self.model_type.clone(),
+            file_config: self.file_config.clone(),
+            enable_itn: self.enable_itn,
+            language: self.language.clone(),
+            hotwords: self.hotwords.clone(),
+            num_threads: self.num_threads,
+            provider: provider.map(str::to_string),
+        };
+        let recognizer = get_or_create_offline_recognizer(cache_key)?;
+        let is_funasr_nano = recognizer.model_type() == "funasr-nano";
+        let effective_punctuation = if is_funasr_nano {
+            None
+        } else {
+            punctuation.as_deref()
+        };
+
+        let stream_config = AudioStreamSourceConfig {
+            url: &self.url,
+            target_sample_rate: 16000,
+            ffmpeg_enabled: self.ffmpeg_enabled,
+            custom_ffmpeg_path: self.ffmpeg_path.as_deref(),
+            save_to_path: self.save_to_path.clone(),
+        };
+        let mut reader = AudioStreamReader::open(stream_config).await?;
+        observer.on_progress(5.0);
+
+        let mut vad_detector = if let Some(vad_path) = self.vad_model.as_deref() {
+            let options = VadDetectorOptions {
+                threshold: 0.5,
+                min_silence_duration: 0.6,
+                min_speech_duration: 0.25,
+                max_speech_duration: 15.0,
+                window_size: 512,
+                sample_rate: 16000,
+                num_threads: 1,
+            };
+            match create_vad_config(vad_path, options) {
+                Ok(config) => VoiceActivityDetector::create(&config, 60.0),
+                Err(err) => {
+                    log::warn!(
+                        "Failed to create stream VAD detector: {err}; falling back to fixed chunks"
+                    );
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
+        let mut results = Vec::new();
+        let mut total_samples_streamed: usize = 0;
+        let mut chunk_buffer = Vec::new();
+        let fixed_chunk_size = 16000 * 15; // 15 seconds
+
+        loop {
+            if observer.is_cancelled() {
+                break;
+            }
+
+            let frame = match reader.next_samples(512).await {
+                Ok(Some(samples)) => samples,
+                Ok(None) => break, // EOF reached
+                Err(err) => {
+                    log::warn!("Stream read interrupted: {err}");
+                    break;
+                }
+            };
+
+            total_samples_streamed += frame.len();
+            let elapsed_seconds = total_samples_streamed as f32 / 16000.0;
+            let progress = (1.0 - (-elapsed_seconds / 300.0).exp()) * 85.0 + 5.0;
+            observer.on_progress(progress.clamp(5.0, 95.0));
+
+            if let Some(detector) = vad_detector.as_mut() {
+                detector.accept_waveform(&frame);
+                while !detector.is_empty() {
+                    if let Some(speech_segment) = detector.front() {
+                        let seg_samples = speech_segment.samples();
+                        let start_time = speech_segment.start() as f32 / 16000.0;
+                        let duration = seg_samples.len() as f32 / 16000.0;
+
+                        if let Some(segment) = process_speech_slice(
+                            seg_samples,
+                            start_time,
+                            duration,
+                            &recognizer,
+                            effective_punctuation,
+                            observer.as_ref(),
+                        ) {
+                            results.push(segment);
+                        }
+                    }
+                    detector.pop();
+                }
+            } else {
+                chunk_buffer.extend_from_slice(&frame);
+                if chunk_buffer.len() >= fixed_chunk_size {
+                    let chunk_duration = chunk_buffer.len() as f32 / 16000.0;
+                    let chunk_start =
+                        (total_samples_streamed - chunk_buffer.len()) as f32 / 16000.0;
+                    if let Some(segment) = process_speech_slice(
+                        &chunk_buffer,
+                        chunk_start,
+                        chunk_duration,
+                        &recognizer,
+                        effective_punctuation,
+                        observer.as_ref(),
+                    ) {
+                        results.push(segment);
+                    }
+                    chunk_buffer.clear();
+                }
+            }
+        }
+
+        // Flush remaining audio in detector or chunk buffer
+        if let Some(detector) = vad_detector.as_mut() {
+            detector.flush();
+            while !detector.is_empty() {
+                if let Some(speech_segment) = detector.front() {
+                    let seg_samples = speech_segment.samples();
+                    let start_time = speech_segment.start() as f32 / 16000.0;
+                    let duration = seg_samples.len() as f32 / 16000.0;
+
+                    if let Some(segment) = process_speech_slice(
+                        seg_samples,
+                        start_time,
+                        duration,
+                        &recognizer,
+                        effective_punctuation,
+                        observer.as_ref(),
+                    ) {
+                        results.push(segment);
+                    }
+                }
+                detector.pop();
+            }
+        } else if !chunk_buffer.is_empty() {
+            let chunk_duration = chunk_buffer.len() as f32 / 16000.0;
+            let chunk_start =
+                total_samples_streamed.saturating_sub(chunk_buffer.len()) as f32 / 16000.0;
+            if let Some(segment) = process_speech_slice(
+                &chunk_buffer,
+                chunk_start,
+                chunk_duration,
+                &recognizer,
+                effective_punctuation,
+                observer.as_ref(),
+            ) {
+                results.push(segment);
+            }
+            chunk_buffer.clear();
+        }
+
+        reader.finish();
+        observer.on_progress(100.0);
+        Ok(results)
+    }
+}

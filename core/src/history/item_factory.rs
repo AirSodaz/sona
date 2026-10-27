@@ -12,6 +12,14 @@ pub struct HistoryItemGeneratedValues {
     pub recording_title: String,
 }
 
+pub fn is_network_url(path: &str) -> bool {
+    let trimmed = path.trim().to_ascii_lowercase();
+    trimmed.starts_with("http://")
+        || trimmed.starts_with("https://")
+        || trimmed.starts_with("rtmp://")
+        || trimmed.starts_with("rtsp://")
+}
+
 pub fn create_live_draft_item(
     request: HistoryCreateLiveDraftRequest,
     generated: HistoryItemGeneratedValues,
@@ -124,6 +132,27 @@ fn extension_from_path(path: &str, fallback: &str) -> String {
 }
 
 fn file_name_from_path(path: &str, fallback: &str) -> String {
+    if is_network_url(path) {
+        let clean = path
+            .split('?')
+            .next()
+            .unwrap_or(path)
+            .split('#')
+            .next()
+            .unwrap_or(path);
+        let without_scheme = clean
+            .split("://")
+            .nth(1)
+            .unwrap_or(clean)
+            .trim_end_matches('/');
+        if without_scheme.contains('/') {
+            let segment = without_scheme.rsplit('/').next().unwrap_or("");
+            if !segment.trim().is_empty() {
+                return segment.to_string();
+            }
+        }
+        return fallback.to_string();
+    }
     PathBuf::from(path)
         .file_name()
         .and_then(|file_name| file_name.to_str())
@@ -161,5 +190,40 @@ fn build_history_item_record(
         deleted_at: None,
         status: HistoryItemStatus::Complete,
         draft_source: None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_network_url() {
+        assert!(is_network_url("http://example.com/stream"));
+        assert!(is_network_url("https://example.com/audio.mp3?token=123"));
+        assert!(is_network_url("RTMP://live.example.com/app/stream"));
+        assert!(is_network_url("rtsp://192.168.1.1:554/live"));
+        assert!(!is_network_url("C:\\path\\to\\audio.wav"));
+        assert!(!is_network_url("/home/user/audio.mp3"));
+        assert!(!is_network_url("relative/audio.flac"));
+    }
+
+    #[test]
+    fn test_file_name_from_path_for_urls() {
+        assert_eq!(
+            file_name_from_path(
+                "https://example.com/audio/podcast.mp3?token=123",
+                "Fallback"
+            ),
+            "podcast.mp3"
+        );
+        assert_eq!(
+            file_name_from_path("https://live.example.com/live-stream", "Fallback"),
+            "live-stream"
+        );
+        assert_eq!(
+            file_name_from_path("https://example.com/", "Fallback"),
+            "Fallback"
+        );
     }
 }

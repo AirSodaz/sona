@@ -116,7 +116,11 @@ export class BatchItemProcessor {
       }
 
       const duration = this.calculateDuration(currentSegments);
-      const convertedPath = batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined;
+      const isStream = item.sourceType === 'url_stream';
+      const convertedPath =
+        batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
+          ? tempWavPath
+          : undefined;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
@@ -168,16 +172,17 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
+      const isStream = item.sourceType === 'url_stream';
       const tempDirectory = await tempDir();
       tempWavPath =
-        isLlamaCpp || batchAsr.engine === 'online'
+        isLlamaCpp || batchAsr.engine === 'online' || (isStream && !item.retainAudio)
           ? undefined
           : await join(tempDirectory, `${uuidv4()}.wav`);
-
       this.throwIfCancelRequested(callbacks);
 
+      const inputSource = item.streamUrl || item.filePath;
       const segments = await this.ports.transcriptionService.transcribeFile(
-        item.filePath,
+        inputSource,
         (progress) => {
           callbacks.updateStatus('processing', progress);
         },
@@ -254,7 +259,7 @@ export class BatchItemProcessor {
       const isCancelled =
         callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
       try {
-        if (!isCancelled && currentSegments.length > 0) {
+        if ((!isCancelled || item.sourceType === 'url_stream') && currentSegments.length > 0) {
           await ensureHistorySaved();
           await persistHistorySnapshot();
         }

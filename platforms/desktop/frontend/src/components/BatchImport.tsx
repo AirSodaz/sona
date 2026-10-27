@@ -18,9 +18,11 @@ import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
+import { UrlStreamImportModal } from './batch/UrlStreamImportModal';
 import { UploadIcon } from './Icons';
 import { QueueGroupedList } from './QueueGroupedList';
 import { QueueSummaryBar } from './QueueSummaryBar';
+import { SplitButton } from './ui/SplitButton';
 
 /** Props for BatchImport. */
 interface BatchImportProps {
@@ -38,6 +40,7 @@ interface BatchImportProps {
  */
 export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
   const showError = useDialogStore((state) => state.showError);
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const { t } = useTranslation();
   const platform = usePlatform();
@@ -281,8 +284,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
       >
-        <QueueSummaryBar onAddFiles={handleClick} />
+        <QueueSummaryBar onAddFiles={handleClick} onAddStream={() => setIsStreamModalOpen(true)} />
         <QueueGroupedList />
+        <UrlStreamImportModal
+          isOpen={isStreamModalOpen}
+          onClose={() => setIsStreamModalOpen(false)}
+        />
       </div>
     );
   }
@@ -311,18 +318,36 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
           <p>{t('batch.drop_desc')}</p>
         </div>
 
-        <div
-          className="btn btn-primary"
-          style={{ marginTop: '8px', pointerEvents: 'none' }}
-          aria-hidden="true"
-        >
-          {t('batch.select_file')}
+        <div style={{ marginTop: '8px' }} onClick={(e) => e.stopPropagation()}>
+          <SplitButton
+            primaryLabel={t('batch.select_file')}
+            primaryIcon={<UploadIcon width={14} height={14} />}
+            onPrimaryClick={handleClick}
+            menuItems={[
+              {
+                key: 'files',
+                label: t('batch.select_file'),
+                icon: <UploadIcon width={14} height={14} />,
+                onClick: handleClick,
+              },
+              {
+                key: 'stream',
+                label: t('batch.import_stream', { defaultValue: '网络音视频链接...' }),
+                icon: <span>🌐</span>,
+                onClick: () => setIsStreamModalOpen(true),
+              },
+            ]}
+          />
         </div>
 
         <p className="supported-formats" style={{ marginTop: '8px' }}>
           {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
         </p>
       </div>
+      <UrlStreamImportModal
+        isOpen={isStreamModalOpen}
+        onClose={() => setIsStreamModalOpen(false)}
+      />
     </div>
   );
 }

@@ -309,12 +309,38 @@ pub async fn execute_aimux_batch(
     model: &dyn TranscriptionModel,
     input: OnlineBatchTranscriptionRequest,
 ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-    let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            format!("Failed to read audio file: {error}"),
-        )
-    })?;
+    let path_str = input.file_path.to_string_lossy();
+    let is_network_stream = sona_core::history::is_network_url(&path_str);
+    let bytes = if is_network_stream {
+        let client = reqwest::Client::new();
+        let response = client.get(path_str.as_ref()).send().await.map_err(|e| {
+            AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!("Failed to fetch stream URL: {e}"),
+            )
+        })?;
+        if !response.status().is_success() {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Stream URL returned status {}: {path_str}",
+                    response.status()
+                ),
+            ));
+        }
+        response
+            .bytes()
+            .await
+            .map_err(|e| AsrPortError::runtime(format!("Failed to read stream bytes: {e}")))?
+            .to_vec()
+    } else {
+        tokio::fs::read(&input.file_path).await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file: {error}"),
+            )
+        })?
+    };
 
     let media_type = detect_audio_mime_type(&input.file_path);
     let mut call_options =
