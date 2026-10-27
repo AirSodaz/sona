@@ -127,6 +127,10 @@ export function TranslateButton({
   const realtimeTranslationEnabled = config.realtimeTranslationEnabled ?? false;
 
   const [selectingMode, setSelectingMode] = useState<'source' | 'target'>('target');
+  const switchSelectingMode = (mode: 'source' | 'target') => {
+    setSelectingMode(mode);
+    setSearchQuery('');
+  };
   const [installedModels, setInstalledModels] = useState<Record<string, boolean>>({});
 
   const translationLlm = getFeatureLlmConfig(config, 'translation');
@@ -279,7 +283,10 @@ export function TranslateButton({
     const oldSrc = effectiveSourceLang === 'auto' ? defaultFallback : effectiveSourceLang;
     const oldTgt = effectiveTargetLang;
     const newSrc = oldTgt;
-    const newTgt = oldSrc === newSrc ? defaultFallback : oldSrc;
+    let newTgt = oldSrc === newSrc ? defaultFallback : oldSrc;
+    if (isLocalOnnx && (newSrc === 'en' || newSrc === 'ja')) {
+      newTgt = 'zh';
+    }
     setConfig({
       realtimeTranslationSourceLanguage: newSrc,
       realtimeTranslationTargetLanguage: newTgt,
@@ -301,7 +308,13 @@ export function TranslateButton({
         enabled: true,
         sourceLang: newSrc,
         targetLang: newTgt,
-        catchupSegments: segments,
+        catchupSegments: segments.filter((s) => s.isFinal),
+      }).catch(async (error) => {
+        await showError({
+          code: 'translation.failed',
+          messageKey: 'errors.translation.failed',
+          cause: error,
+        });
       });
     }
   };
@@ -314,9 +327,10 @@ export function TranslateButton({
         enabled: nextEnabled,
         sourceLang: effectiveSourceLang,
         targetLang: effectiveTargetLang,
-        catchupSegments: nextEnabled ? segments : null,
+        catchupSegments: nextEnabled ? segments.filter((s) => s.isFinal) : null,
       });
     } catch (error) {
+      setConfig({ realtimeTranslationEnabled: !nextEnabled });
       await showError({
         code: 'translation.failed',
         messageKey: 'errors.translation.failed',
@@ -326,16 +340,36 @@ export function TranslateButton({
   };
 
   const handleSourceSelect = (langCode: string) => {
-    setConfig({ realtimeTranslationSourceLanguage: langCode });
+    let nextTarget = effectiveTargetLang;
+    if (langCode === nextTarget) {
+      nextTarget = langCode === 'zh' ? 'en' : 'zh';
+    } else if (isLocalOnnx) {
+      if (langCode === 'en' || langCode === 'ja') {
+        nextTarget = 'zh';
+      } else if (langCode === 'zh' && nextTarget === 'zh') {
+        nextTarget = 'en';
+      }
+    }
+    setConfig({
+      realtimeTranslationSourceLanguage: langCode,
+      realtimeTranslationTargetLanguage: nextTarget,
+      translationLanguage: nextTarget,
+    });
     if (isRecording && realtimeTranslationEnabled) {
       void toggleLiveTranslation({
         enabled: true,
         sourceLang: langCode,
-        targetLang: effectiveTargetLang,
-        catchupSegments: segments,
+        targetLang: nextTarget,
+        catchupSegments: segments.filter((s) => s.isFinal),
+      }).catch(async (error) => {
+        await showError({
+          code: 'translation.failed',
+          messageKey: 'errors.translation.failed',
+          cause: error,
+        });
       });
     }
-    setSelectingMode('target');
+    switchSelectingMode('target');
   };
 
   const handleLanguageSelect = async (langCode: string) => {
@@ -369,7 +403,13 @@ export function TranslateButton({
         enabled: true,
         sourceLang: effectiveSourceLang,
         targetLang: langCode,
-        catchupSegments: segments,
+        catchupSegments: segments.filter((s) => s.isFinal),
+      }).catch(async (error) => {
+        await showError({
+          code: 'translation.failed',
+          messageKey: 'errors.translation.failed',
+          cause: error,
+        });
       });
     }
 
@@ -464,11 +504,13 @@ export function TranslateButton({
               >
                 <div style={{ display: 'flex', flexDirection: 'column' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 600 }}>
-                    {t('translation.realtime_toggle', { defaultValue: '实时双语翻译' })}
+                    {t('translation.realtime_toggle', {
+                      defaultValue: 'Real-time Bilingual Translation',
+                    })}
                   </span>
                   <span style={{ fontSize: '0.7rem', color: 'var(--color-text-secondary)' }}>
                     {t('translation.realtime_toggle_desc', {
-                      defaultValue: '实时跟随语音 · 自动补齐已录分段',
+                      defaultValue: 'Follow speech in real-time · Auto catch-up recorded segments',
                     })}
                   </span>
                 </div>
@@ -539,7 +581,7 @@ export function TranslateButton({
           >
             <button
               type="button"
-              onClick={() => setSelectingMode('source')}
+              onClick={() => switchSelectingMode('source')}
               style={{
                 flex: 1,
                 padding: '6px 8px',
@@ -589,7 +631,7 @@ export function TranslateButton({
             </button>
             <button
               type="button"
-              onClick={() => setSelectingMode('target')}
+              onClick={() => switchSelectingMode('target')}
               style={{
                 flex: 1,
                 padding: '6px 8px',
@@ -658,7 +700,13 @@ export function TranslateButton({
                           : ['zh', 'en', 'ja'];
                     return candidates.map((code) => {
                       const isSelected = effectiveTargetLang === code;
-                      const pairModelId = `opus-mt-${effectiveSourceLang === 'auto' ? 'en' : effectiveSourceLang}-${code}`;
+                      const resolvedSrc =
+                        effectiveSourceLang === 'auto'
+                          ? code === 'zh'
+                            ? 'en'
+                            : 'zh'
+                          : effectiveSourceLang;
+                      const pairModelId = `opus-mt-${resolvedSrc}-${code}`;
                       const isInstalled = installedModels[pairModelId] ?? true;
                       return (
                         <button

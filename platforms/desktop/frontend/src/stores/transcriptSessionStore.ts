@@ -24,6 +24,7 @@ export type SessionStoreActions = Pick<
   | 'upsertSegment'
   | 'updateSegment'
   | 'patchSegmentTranslation'
+  | 'patchSegmentTranslations'
   | 'deleteSegment'
   | 'mergeSegments'
   | 'splitTranscriptSegment'
@@ -53,6 +54,8 @@ export const sessionActions: SessionStoreActions = {
   updateSegment: (id, updates) => useTranscriptStore.getState().updateSegment(id, updates),
   patchSegmentTranslation: (id, translation) =>
     useTranscriptStore.getState().patchSegmentTranslation(id, translation),
+  patchSegmentTranslations: (updates) =>
+    useTranscriptStore.getState().patchSegmentTranslations(updates),
   deleteSegment: (id) => useTranscriptStore.getState().deleteSegment(id),
   mergeSegments: (id1, id2) => useTranscriptStore.getState().mergeSegments(id1, id2),
   splitTranscriptSegment: (id, leftText, rightText, leftTranslation, rightTranslation) =>
@@ -87,6 +90,7 @@ export const {
   upsertSegment,
   updateSegment,
   patchSegmentTranslation,
+  patchSegmentTranslations,
   deleteSegment,
   mergeSegments,
   splitTranscriptSegment,

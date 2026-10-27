@@ -782,3 +782,150 @@ async fn test_final_translation_timeout_falls_back_gracefully() {
     );
     assert_eq!(update.upsert_segments[0].draft_translation, None);
 }
+
+#[tokio::test]
+async fn test_final_translation_enrichment_broadcast_to_active_consumer() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(translation_engine, "en", "zh").with_debounce(50, 2),
+    );
+
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-1",
+            LiveSourceEpoch::new("src-1", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit a final segment
+    session.emit("I like to read books every day.", 3.0, true);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    assert!(
+        updates.len() >= 2,
+        "expected at least 2 updates (immediate + enrichment), got {}",
+        updates.len()
+    );
+
+    // First update is immediate ASR (no translation yet)
+    let first = &updates[0];
+    assert_eq!(first.stage, "final");
+    assert_eq!(first.update.upsert_segments[0].translation, None);
+
+    // Second update is enrichment broadcast
+    let enriched = &updates[1];
+    assert_eq!(enriched.stage, "enrichment");
+    assert_eq!(
+        enriched.update.upsert_segments[0].translation,
+        Some("我喜欢每天看书。".into())
+    );
+}
+
+#[tokio::test]
+async fn test_final_translation_with_timeline_normalization() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(translation_engine, "en", "zh").with_debounce(50, 2),
+    );
+
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let mut request = sample_request();
+    request.normalization_options.enable_timeline = true;
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-1",
+            LiveSourceEpoch::new("src-1", 1),
+            0,
+            LiveInputTransform::default(),
+            request,
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit a multi-sentence final segment
+    session.emit("I like to read books. It is very fun.", 3.0, true);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    assert!(
+        updates.len() >= 2,
+        "expected at least 2 updates (immediate + enrichment), got {}",
+        updates.len()
+    );
+
+    // 1. Immediate broadcast splits the segment into timeline-0 for subsequent sentences
+    let imm = &updates[0];
+    assert_eq!(imm.stage, "final");
+    let segment_ids: Vec<String> = imm
+        .update
+        .upsert_segments
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert!(
+        segment_ids.iter().any(|id| id.starts_with("timeline-")),
+        "immediate broadcast should have generated a timeline id, got {:?}",
+        segment_ids
+    );
+
+    // 2. Background enrichment broadcast delivers translations without generating duplicate timeline-1 IDs
+    let enriched = &updates[1];
+    assert_eq!(enriched.stage, "enrichment");
+    for seg in &enriched.update.upsert_segments {
+        assert!(
+            !seg.id.starts_with("timeline-"),
+            "enrichment broadcast should not re-run output_policy to generate new timeline IDs, got {}",
+            seg.id
+        );
+        assert!(seg.translation.is_some(), "segment should be translated");
+    }
+
+    // Ensure no duplicate timeline IDs exist across all updates
+    let mut timeline_ids = Vec::new();
+    for u in &updates {
+        for s in &u.update.upsert_segments {
+            if s.id.starts_with("timeline-") {
+                timeline_ids.push(s.id.clone());
+            }
+        }
+    }
+    assert_eq!(
+        timeline_ids.len(),
+        1,
+        "expected only 1 timeline id (timeline-0), got {:?}",
+        timeline_ids
+    );
+}

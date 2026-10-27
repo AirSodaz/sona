@@ -205,8 +205,10 @@ impl StreamingTranslationCoordinator {
                                 .chars()
                                 .count()
                                 .abs_diff(state.last_text.chars().count());
-                            let elapsed = state.last_translate_time.elapsed();
-                            let eligible = elapsed >= Duration::from_millis(self.debounce_ms)
+                            let debounce_threshold =
+                                Duration::from_millis(self.debounce_ms.saturating_sub(25));
+                            let eligible = state.last_translate_time.elapsed()
+                                >= debounce_threshold
                                 && (char_delta >= min_delta || char_delta == 0);
                             if eligible {
                                 state.last_text = text.to_string();
@@ -242,7 +244,6 @@ impl StreamingTranslationCoordinator {
                                 if entry.last_text == text {
                                     let out = entry.stabilizer.update(&translated_text, false);
                                     entry.last_draft_translation = out.draft_tail.clone();
-                                    entry.last_translate_time = Instant::now();
                                     segment.translation = out.frozen_prefix;
                                     segment.draft_translation = out.draft_tail;
                                 } else {

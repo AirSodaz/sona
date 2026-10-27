@@ -1,5 +1,5 @@
 import { invoke } from '@tauri-apps/api/core';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useProjectStore } from '../../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
 import {
@@ -110,6 +110,9 @@ describe('TranslationService', () => {
     mockListenToLlmTaskProgress.mockResolvedValue(vi.fn());
     mockListenToTranscriptLlmJobUpdates.mockResolvedValue(vi.fn());
     mockCreateSnapshot.mockResolvedValue(null);
+  });
+  afterEach(() => {
+    useTranscriptRuntimeStore.setState({ isRecording: false });
   });
 
   it('translates the active transcript incrementally and toggles visibility when finished', async () => {
@@ -414,33 +417,57 @@ describe('TranslationService', () => {
   it('toggles live translation and catches up existing segments when recording is active', async () => {
     useTranscriptRuntimeStore.setState({ isRecording: true });
 
-    useTranscriptStore.setState({
-      segments: [
-        { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
-        { id: '2', start: 1, end: 2, text: 'World', isFinal: false },
-      ],
-      sourceHistoryId: 'rec-session-1',
-    });
+    try {
+      useTranscriptStore.setState({
+        recordingSessionId: 'rec-session-1',
+        sourceHistoryId: 'rec-session-1',
+        segments: [
+          { id: '1', start: 0, end: 1, text: 'Hello', isFinal: true },
+          { id: '2', start: 1, end: 2, text: 'World', isFinal: false },
+        ],
+      });
 
-    vi.mocked(invoke).mockResolvedValue(undefined);
+      vi.mocked(invoke).mockResolvedValue(undefined);
 
-    await translationService.translateCurrentTranscript('zh');
+      await translationService.translateCurrentTranscript('zh');
 
-    expect(invoke).toHaveBeenCalledWith('toggle_live_translation', {
-      enabled: true,
-      sourceLang: null,
-      targetLang: 'zh',
-      catchupSegments: expect.arrayContaining([
-        expect.objectContaining({ id: '1', text: 'Hello' }),
-        expect.objectContaining({ id: '2', text: 'World' }),
-      ]),
-    });
+      expect(invoke).toHaveBeenCalledWith('toggle_live_translation', {
+        enabled: true,
+        sourceLang: null,
+        targetLang: 'zh',
+        catchupSegments: [expect.objectContaining({ id: '1', text: 'Hello', isFinal: true })],
+      });
 
-    expect(useTranscriptStore.getState().getLlmState('rec-session-1').isTranslationVisible).toBe(
-      true
-    );
+      expect(useTranscriptStore.getState().getLlmState('rec-session-1').isTranslationVisible).toBe(
+        true
+      );
+    } finally {
+      useTranscriptRuntimeStore.setState({ isRecording: false });
+    }
+  });
 
-    useTranscriptRuntimeStore.setState({ isRecording: false });
+  it('does not toggle live translation when viewing a historical session while recording in background', async () => {
+    useTranscriptRuntimeStore.setState({ isRecording: true });
+
+    try {
+      useTranscriptStore.setState({
+        config: buildTranslationTestConfig({ translationLanguage: 'zh' }),
+        recordingSessionId: 'live-recording-session',
+        sourceHistoryId: 'historical-session-id',
+        segments: [{ id: 'h1', start: 0, end: 1, text: 'Past speech', isFinal: true }],
+      });
+
+      vi.mocked(invoke).mockResolvedValue({
+        taskId: 'translate-task-id',
+      });
+
+      await translationService.translateCurrentTranscript('zh');
+
+      expect(invoke).not.toHaveBeenCalledWith('toggle_live_translation', expect.anything());
+      expect(invoke).toHaveBeenCalledWith('run_transcript_llm_job', expect.anything());
+    } finally {
+      useTranscriptRuntimeStore.setState({ isRecording: false });
+    }
   });
 
   it('patches translations incrementally without overwriting newly added segments', async () => {

@@ -187,14 +187,18 @@ impl SubscriberMailbox {
         if self.closed.load(Ordering::Acquire) {
             return;
         }
-        let is_guaranteed = event
-            .update
-            .upsert_segments
-            .iter()
-            .any(|segment| segment.is_final)
-            || !event.update.remove_ids.is_empty();
+        let is_enrichment = event.stage == "enrichment" || event.stage == "catchup_translation";
+        let is_guaranteed = !is_enrichment
+            && (event
+                .update
+                .upsert_segments
+                .iter()
+                .any(|segment| segment.is_final)
+                || !event.update.remove_ids.is_empty());
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        if is_guaranteed {
+        if is_enrichment {
+            state.guaranteed.push_back(Delivery::Transcript(event));
+        } else if is_guaranteed {
             if let Some(partial) = state.latest_partial.take() {
                 state.guaranteed.push_back(partial);
             }
@@ -784,20 +788,50 @@ impl LiveTranscriptionCoordinator {
         }
     }
 
-    pub async fn broadcast_transcript_update(&self, update: TranscriptUpdate) {
-        let state = self.inner.state.lock().await;
-        for pipeline in state.pipelines.values() {
-            for (consumer_id, subscriber) in &pipeline.subscribers {
-                let processed_update = subscriber.output_policy.process_update(update.clone());
+    pub async fn broadcast_transcript_update_for_consumer(
+        &self,
+        target_consumer_id: Option<&str>,
+        update: TranscriptUpdate,
+    ) {
+        let mut state = self.inner.state.lock().await;
+        if let Some(consumer_id) = target_consumer_id {
+            let pipeline_id = state.consumer_to_pipeline.get(consumer_id).cloned();
+            if let Some(pipeline_id) = &pipeline_id
+                && let Some(pipeline) = state.pipelines.get_mut(pipeline_id)
+                && let Some(subscriber) = pipeline.subscribers.get_mut(consumer_id)
+            {
+                let processed_update = subscriber.output_policy.process_update(update);
                 subscriber
                     .mailbox
                     .push_transcript(AsrTranscriptUpdateEvent {
-                        instance_id: consumer_id.clone(),
+                        instance_id: consumer_id.to_string(),
                         stage: "catchup_translation".to_string(),
                         update: processed_update,
                     });
             }
+        } else {
+            for pipeline in state.pipelines.values_mut() {
+                for (consumer_id, subscriber) in &mut pipeline.subscribers {
+                    let processed_update = subscriber.output_policy.process_update(update.clone());
+                    subscriber
+                        .mailbox
+                        .push_transcript(AsrTranscriptUpdateEvent {
+                            instance_id: consumer_id.clone(),
+                            stage: "catchup_translation".to_string(),
+                            update: processed_update,
+                        });
+                }
+            }
         }
+    }
+
+    pub async fn broadcast_transcript_update(&self, update: TranscriptUpdate) {
+        self.broadcast_transcript_update_for_consumer(None, update)
+            .await;
+    }
+
+    pub fn current_translation(&self) -> Option<Arc<StreamingTranslationCoordinator>> {
+        self.inner.translation.read().clone()
     }
     pub async fn metrics(&self) -> LiveTranscriptionMetrics {
         let state = self.inner.state.lock().await;
@@ -973,6 +1007,22 @@ impl CoordinatorInner {
         }
     }
 
+    async fn broadcast_enrichment_transcript(&self, event: AsrTranscriptUpdateEvent) {
+        let state = self.state.lock().await;
+        let Some(pipeline) = state.pipelines.get(&event.instance_id) else {
+            return;
+        };
+        for (consumer_id, subscriber) in &pipeline.subscribers {
+            subscriber
+                .mailbox
+                .push_transcript(AsrTranscriptUpdateEvent {
+                    instance_id: consumer_id.clone(),
+                    stage: event.stage.clone(),
+                    update: event.update.clone(),
+                });
+        }
+    }
+
     async fn broadcast_transcript(&self, event: AsrTranscriptUpdateEvent) {
         let mut state = self.state.lock().await;
         let Some(pipeline) = state.pipelines.get_mut(&event.instance_id) else {
@@ -1044,13 +1094,22 @@ impl CoordinatorInner {
                 let this = Arc::clone(self);
                 let translator_clone = Arc::clone(&translator);
                 let instance_id = event.instance_id.clone();
-                let stage = event.stage.clone();
                 tokio::spawn(async move {
                     let mut update = TranscriptUpdate {
                         remove_ids,
                         upsert_segments: final_segments,
                     };
                     translator_clone.enrich_update(&mut update).await;
+
+                    let is_still_active = {
+                        let current = this.translation.read();
+                        current
+                            .as_ref()
+                            .is_some_and(|t| Arc::ptr_eq(t, &translator_clone))
+                    };
+                    if !is_still_active {
+                        return;
+                    }
 
                     let enrichment_segments: Vec<TranscriptSegment> = update
                         .upsert_segments
@@ -1061,13 +1120,13 @@ impl CoordinatorInner {
                     if !enrichment_segments.is_empty() {
                         let enrichment_event = AsrTranscriptUpdateEvent {
                             instance_id,
-                            stage,
+                            stage: "enrichment".to_string(),
                             update: TranscriptUpdate {
                                 remove_ids: Vec::new(),
                                 upsert_segments: enrichment_segments,
                             },
                         };
-                        this.broadcast_transcript(enrichment_event).await;
+                        this.broadcast_enrichment_transcript(enrichment_event).await;
                     }
                 });
             }

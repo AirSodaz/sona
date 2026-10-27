@@ -85,6 +85,7 @@ interface PlaybackPatch {
 interface RuntimePatch {
   mode?: AppMode;
   ingestionFocus?: IngestionFocus;
+  recordingSessionId?: string | null;
   processingStatus?: ProcessingStatus;
   processingProgress?: number;
   isRecording?: boolean;
@@ -121,6 +122,7 @@ const PLAYBACK_KEYS = new Set<keyof PlaybackPatch>([
 const RUNTIME_KEYS = new Set<keyof RuntimePatch>([
   'mode',
   'ingestionFocus',
+  'recordingSessionId',
   'processingStatus',
   'processingProgress',
   'isRecording',

@@ -755,7 +755,7 @@ pub async fn toggle_live_translation(
     services
         .asr
         .live_coordinator()
-        .set_translation(Some(coordinator));
+        .set_translation(Some(Arc::clone(&coordinator)));
 
     if let Some(segments) = catchup_segments.filter(|s| !s.is_empty()) {
         let live_coord = services.asr.live_coordinator().clone();
@@ -766,16 +766,24 @@ pub async fn toggle_live_translation(
         };
         tokio::spawn(async move {
             for mut seg in segments {
-                let still_active = {
+                let still_active = if let Some(consumer_id) = &active_consumer {
                     let guard = recording_session.lock().await;
                     guard
                         .as_ref()
-                        .is_some_and(|s| active_consumer.as_deref() == Some(&s.consumer_id))
+                        .is_some_and(|s| s.consumer_id == *consumer_id)
+                } else {
+                    live_coord.is_active().await
                 };
-                if !still_active || !live_coord.is_translation_enabled() {
+                let is_current = live_coord
+                    .current_translation()
+                    .is_some_and(|c| Arc::ptr_eq(&c, &coordinator));
+                if !still_active || !is_current {
                     break;
                 }
 
+                if !seg.is_final {
+                    continue;
+                }
                 let text = seg.text.trim();
                 if text.is_empty() {
                     continue;
@@ -798,7 +806,12 @@ pub async fn toggle_live_translation(
                             remove_ids: Vec::new(),
                             upsert_segments: vec![seg],
                         };
-                        live_coord.broadcast_transcript_update(update).await;
+                        live_coord
+                            .broadcast_transcript_update_for_consumer(
+                                active_consumer.as_deref(),
+                                update,
+                            )
+                            .await;
                     }
                     Err(e) => {
                         log::warn!(

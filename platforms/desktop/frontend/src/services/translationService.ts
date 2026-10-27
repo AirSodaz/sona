@@ -5,6 +5,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import { formatCjkTypography } from '../utils/cjkTypography';
@@ -116,8 +117,13 @@ export class TranslationService {
 
   async translateCurrentTranscript(targetLanguageOverride?: string) {
     const isRecording = useTranscriptRuntimeStore.getState().isRecording;
-    if (isRecording) {
-      const sessionStore = this.ports.getTranscriptSessionStore();
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+    const isLiveSession =
+      isRecording &&
+      (!sessionStore.sourceHistoryId || sessionStore.sourceHistoryId === recordingSessionId);
+
+    if (isLiveSession) {
       const currentHistoryId = sessionStore.sourceHistoryId || 'current';
       const sidecarStore = this.ports.getTranscriptSidecarStore();
       sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
@@ -125,12 +131,11 @@ export class TranslationService {
       await toggleFn({
         enabled: true,
         targetLang: targetLanguageOverride,
-        catchupSegments: sessionStore.segments,
+        catchupSegments: sessionStore.segments.filter((s) => s.isFinal),
       });
       return;
     }
 
-    const sessionStore = this.ports.getTranscriptSessionStore();
     await this.retryTranslateTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
@@ -305,13 +310,11 @@ export class TranslationService {
     }
 
     const sessionStore = this.ports.getTranscriptSessionStore();
-    for (const seg of payload.segments) {
-      if (seg.translation) {
-        sessionStore.updateSegment(seg.id, {
-          translation: seg.translation,
-          draftTranslation: undefined,
-        });
-      }
+    const updates = payload.segments
+      .filter((seg): seg is typeof seg & { translation: string } => Boolean(seg.translation))
+      .map((seg) => ({ id: seg.id, translation: seg.translation }));
+    if (updates.length > 0) {
+      sessionStore.patchSegmentTranslations(updates);
     }
     const sidecarStore = this.ports.getTranscriptSidecarStore();
     sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
