@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { translationService } from '../../services/translationService';
 import { useConfigStore } from '../../stores/configStore';
 import { useProjectStore } from '../../stores/projectStore';
@@ -35,9 +36,13 @@ vi.mock('../../services/translationService', () => ({
 }));
 
 const mockToggleLiveTranslation = vi.fn().mockResolvedValue(undefined);
-vi.mock('../../services/tauri/recognizer', () => ({
-  toggleLiveTranslation: (...args: unknown[]) => mockToggleLiveTranslation(...args),
-}));
+vi.mock('../../services/tauri/recognizer', async (importOriginal) => {
+  const actual = await importOriginal<typeof RecognizerModule>();
+  return {
+    ...actual,
+    toggleLiveTranslation: (...args: unknown[]) => mockToggleLiveTranslation(...args),
+  };
+});
 
 const mockIsModelInstalled = vi.fn().mockResolvedValue(true);
 vi.mock('../../services/modelService', () => ({

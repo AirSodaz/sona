@@ -1,14 +1,19 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as RecognizerModule from '../../../services/tauri/recognizer';
 import { setTestConfig } from '../../../test-utils/configTestUtils';
 import { CloudAsrProviderGrid } from '../CloudAsrProviderGrid';
 
 const mockTestOnlineAsrProvider = vi.fn();
 const mockOpenUrl = vi.fn();
 
-vi.mock('../../../services/tauri/recognizer', () => ({
-  testOnlineAsrProvider: (...args: unknown[]) => mockTestOnlineAsrProvider(...args),
-}));
+vi.mock('../../../services/tauri/recognizer', async (importOriginal) => {
+  const actual = await importOriginal<typeof RecognizerModule>();
+  return {
+    ...actual,
+    testOnlineAsrProvider: (...args: unknown[]) => mockTestOnlineAsrProvider(...args),
+  };
+});
 
 vi.mock('../../../services/tauri/platform/opener', () => ({
   openUrl: (...args: unknown[]) => mockOpenUrl(...args),

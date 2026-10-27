@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
 import { useNotificationPanelStore } from '../../stores/notificationPanelStore';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
@@ -75,9 +76,13 @@ vi.mock('../../services/automationTaskRetryService', () => ({
   retryAutomationTaskFromLedger: (...args: unknown[]) => retryAutomationTaskFromLedgerMock(...args),
 }));
 
-vi.mock('../../services/tauri/recognizer', () => ({
-  cancelBatchTask: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../../services/tauri/recognizer', async (importOriginal) => {
+  const actual = await importOriginal<typeof RecognizerModule>();
+  return {
+    ...actual,
+    cancelBatchTask: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 vi.mock('../../stores/errorDialogStore', () => ({
   useErrorDialogStore: {
