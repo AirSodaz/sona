@@ -4,6 +4,7 @@ use sona_core::ports::asr::{
     StreamingAsrFactoryPort, StreamingInferenceSpec, StreamingOutputPolicy,
 };
 use sona_core::transcription::asr_metrics::{AsrInferenceMetric, AsrModelLoadMetric};
+use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -111,6 +112,7 @@ struct CoordinatorState {
     avoided_feed_count: u64,
 }
 
+#[derive(Clone)]
 pub struct LiveTranscriptionCoordinator {
     inner: Arc<CoordinatorInner>,
 }
@@ -120,6 +122,7 @@ struct CoordinatorInner {
     telemetry: Arc<dyn AsrRuntimeObserver>,
     translation: parking_lot::RwLock<Option<Arc<StreamingTranslationCoordinator>>>,
     partial_versions: parking_lot::Mutex<HashMap<String, u64>>,
+    pending_translations: parking_lot::Mutex<HashMap<String, Vec<tokio::task::JoinHandle<()>>>>,
     state: AsyncMutex<CoordinatorState>,
     lifecycle_guard: AsyncMutex<()>,
     feed_guard: AsyncMutex<()>,
@@ -185,14 +188,18 @@ impl SubscriberMailbox {
         if self.closed.load(Ordering::Acquire) {
             return;
         }
-        let is_guaranteed = event
-            .update
-            .upsert_segments
-            .iter()
-            .any(|segment| segment.is_final)
-            || !event.update.remove_ids.is_empty();
+        let is_enrichment = event.stage == "enrichment" || event.stage == "catchup_translation";
+        let is_guaranteed = !is_enrichment
+            && (event
+                .update
+                .upsert_segments
+                .iter()
+                .any(|segment| segment.is_final)
+                || !event.update.remove_ids.is_empty());
         let mut state = self.state.lock().unwrap_or_else(|error| error.into_inner());
-        if is_guaranteed {
+        if is_enrichment {
+            state.guaranteed.push_back(Delivery::Transcript(event));
+        } else if is_guaranteed {
             if let Some(partial) = state.latest_partial.take() {
                 state.guaranteed.push_back(partial);
             }
@@ -385,6 +392,7 @@ impl LiveTranscriptionCoordinator {
                 telemetry,
                 translation: parking_lot::RwLock::new(translation),
                 partial_versions: parking_lot::Mutex::new(HashMap::new()),
+                pending_translations: parking_lot::Mutex::new(HashMap::new()),
                 state: AsyncMutex::new(CoordinatorState::default()),
                 lifecycle_guard: AsyncMutex::new(()),
                 feed_guard: AsyncMutex::new(()),
@@ -609,7 +617,8 @@ impl LiveTranscriptionCoordinator {
             let mut state = self.inner.state.lock().await;
             let pipeline_id = state
                 .consumer_to_pipeline
-                .remove(consumer_id)
+                .get(consumer_id)
+                .cloned()
                 .ok_or_else(|| {
                     AsrPortError::runtime(format!(
                         "Live transcription consumer {consumer_id} is not active"
@@ -627,6 +636,7 @@ impl LiveTranscriptionCoordinator {
                     .expect("consumer subscription must exist");
                 ReleaseAction::StopLast {
                     pipeline_id,
+                    consumer_id: consumer_id.to_string(),
                     session: Arc::clone(&pipeline.session),
                     observer: Arc::clone(&pipeline.observer),
                     mailbox: Arc::clone(&subscriber.mailbox),
@@ -636,7 +646,7 @@ impl LiveTranscriptionCoordinator {
                     .subscribers
                     .remove(consumer_id)
                     .expect("consumer subscription must exist");
-                if pipeline.at_boundary || pipeline.audio_since_boundary.is_empty() {
+                let action = if pipeline.at_boundary || pipeline.audio_since_boundary.is_empty() {
                     ReleaseAction::DetachOnly(subscriber.mailbox)
                 } else {
                     ReleaseAction::Replay {
@@ -646,7 +656,9 @@ impl LiveTranscriptionCoordinator {
                         observer: subscriber.mailbox,
                         visible_partial_ids: subscriber.visible_partial_ids,
                     }
-                }
+                };
+                state.consumer_to_pipeline.remove(consumer_id);
+                action
             }
         };
 
@@ -658,15 +670,27 @@ impl LiveTranscriptionCoordinator {
             }
             ReleaseAction::StopLast {
                 pipeline_id,
+                consumer_id,
                 session,
                 observer,
                 mailbox,
             } => {
                 let flush_result = session.flush().await;
                 observer.drain().await;
+                let handles = self.inner.take_pending_translations(&pipeline_id);
+                for handle in handles {
+                    let _ =
+                        tokio::time::timeout(std::time::Duration::from_millis(5500), handle).await;
+                }
                 let stop_result = session.stop().await;
                 observer.drain().await;
+                let handles = self.inner.take_pending_translations(&pipeline_id);
+                for handle in handles {
+                    let _ =
+                        tokio::time::timeout(std::time::Duration::from_millis(5500), handle).await;
+                }
                 let mut state = self.inner.state.lock().await;
+                state.consumer_to_pipeline.remove(&consumer_id);
                 state.pipelines.remove(&pipeline_id);
                 let has_no_pipelines = state.pipelines.is_empty();
                 drop(state);
@@ -771,11 +795,60 @@ impl LiveTranscriptionCoordinator {
         *self.inner.translation.write() = translation;
     }
 
+    pub fn is_translation_enabled(&self) -> bool {
+        self.inner.translation.read().is_some()
+    }
+
     pub fn clear_translation(&self) {
         self.inner.partial_versions.lock().clear();
+        self.inner.pending_translations.lock().clear();
         if let Some(translator) = self.inner.translation.read().as_ref() {
             translator.clear();
         }
+    }
+
+    pub async fn broadcast_transcript_update_for_consumer(
+        &self,
+        target_consumer_id: Option<&str>,
+        update: TranscriptUpdate,
+    ) {
+        let state = self.inner.state.lock().await;
+        if let Some(consumer_id) = target_consumer_id {
+            let pipeline_id = state.consumer_to_pipeline.get(consumer_id).cloned();
+            if let Some(pipeline_id) = &pipeline_id
+                && let Some(pipeline) = state.pipelines.get(pipeline_id)
+                && let Some(subscriber) = pipeline.subscribers.get(consumer_id)
+            {
+                subscriber
+                    .mailbox
+                    .push_transcript(AsrTranscriptUpdateEvent {
+                        instance_id: consumer_id.to_string(),
+                        stage: "catchup_translation".to_string(),
+                        update,
+                    });
+            }
+        } else {
+            for pipeline in state.pipelines.values() {
+                for (consumer_id, subscriber) in &pipeline.subscribers {
+                    subscriber
+                        .mailbox
+                        .push_transcript(AsrTranscriptUpdateEvent {
+                            instance_id: consumer_id.clone(),
+                            stage: "catchup_translation".to_string(),
+                            update: update.clone(),
+                        });
+                }
+            }
+        }
+    }
+
+    pub async fn broadcast_transcript_update(&self, update: TranscriptUpdate) {
+        self.broadcast_transcript_update_for_consumer(None, update)
+            .await;
+    }
+
+    pub fn current_translation(&self) -> Option<Arc<StreamingTranslationCoordinator>> {
+        self.inner.translation.read().clone()
     }
     pub async fn metrics(&self) -> LiveTranscriptionMetrics {
         let state = self.inner.state.lock().await;
@@ -866,6 +939,7 @@ enum ReleaseAction {
     DetachOnly(Arc<SubscriberMailbox>),
     StopLast {
         pipeline_id: String,
+        consumer_id: String,
         session: Arc<dyn AsrStreamingSession>,
         observer: Arc<PipelineObserver>,
         mailbox: Arc<SubscriberMailbox>,
@@ -950,16 +1024,64 @@ impl CoordinatorInner {
             observer.drain().await;
         }
     }
+    fn track_pending_translation(&self, pipeline_id: &str, handle: tokio::task::JoinHandle<()>) {
+        let mut pending = self.pending_translations.lock();
+        let tasks = pending.entry(pipeline_id.to_string()).or_default();
+        tasks.retain(|h| !h.is_finished());
+        tasks.push(handle);
+    }
 
-    async fn broadcast_transcript(&self, event: AsrTranscriptUpdateEvent) {
+    fn take_pending_translations(&self, pipeline_id: &str) -> Vec<tokio::task::JoinHandle<()>> {
+        let mut pending = self.pending_translations.lock();
+        pending.remove(pipeline_id).unwrap_or_default()
+    }
+
+    async fn send_enrichment_to_consumer(&self, consumer_id: &str, update: TranscriptUpdate) {
+        let state = self.state.lock().await;
+        let subscriber = if let Some(pipeline_id) = state.consumer_to_pipeline.get(consumer_id) {
+            state
+                .pipelines
+                .get(pipeline_id)
+                .and_then(|p| p.subscribers.get(consumer_id))
+        } else {
+            state
+                .pipelines
+                .values()
+                .find_map(|p| p.subscribers.get(consumer_id))
+        };
+        if let Some(subscriber) = subscriber {
+            subscriber
+                .mailbox
+                .push_transcript(AsrTranscriptUpdateEvent {
+                    instance_id: consumer_id.to_string(),
+                    stage: "enrichment".to_string(),
+                    update,
+                });
+        }
+    }
+
+    async fn broadcast_transcript(
+        &self,
+        event: AsrTranscriptUpdateEvent,
+    ) -> Vec<(String, Vec<TranscriptSegment>)> {
         let mut state = self.state.lock().await;
         let Some(pipeline) = state.pipelines.get_mut(&event.instance_id) else {
-            return;
+            return Vec::new();
         };
+        let mut consumer_final_segments = Vec::new();
         for (consumer_id, subscriber) in &mut pipeline.subscribers {
             let update = subscriber
                 .output_policy
                 .process_update(event.update.clone());
+            let final_segments: Vec<TranscriptSegment> = update
+                .upsert_segments
+                .iter()
+                .filter(|segment| segment.is_final)
+                .cloned()
+                .collect();
+            if !final_segments.is_empty() {
+                consumer_final_segments.push((consumer_id.clone(), final_segments));
+            }
             subscriber.visible_partial_ids = update
                 .upsert_segments
                 .iter()
@@ -974,12 +1096,13 @@ impl CoordinatorInner {
                     update,
                 });
         }
+        consumer_final_segments
     }
 
     async fn dispatch_transcript(self: &Arc<Self>, mut event: AsrTranscriptUpdateEvent) {
         let translator = self.translation.read().clone();
         let Some(translator) = translator else {
-            self.broadcast_transcript(event).await;
+            let _ = self.broadcast_transcript(event).await;
             return;
         };
 
@@ -1001,8 +1124,115 @@ impl CoordinatorInner {
                     versions.remove(id);
                 }
             }
-            translator.enrich_update(&mut event.update).await;
-            self.broadcast_transcript(event).await;
+            translator.remove_states(&event.update.remove_ids);
+
+            // 1. Fill cached translations so partials display existing translations if any
+            translator.fill_cached(&mut event.update);
+
+            let pipeline_id = event.instance_id.clone();
+
+            // 2. Broadcast original transcript event immediately so ASR text appears with zero latency
+            let consumer_final_segments = self.broadcast_transcript(event.clone()).await;
+
+            // 3. Decouple final segment translation into asynchronous background tasks using postprocessed segments
+            for (consumer_id, final_segments) in consumer_final_segments {
+                let this = Arc::clone(self);
+                let translator_clone = Arc::clone(&translator);
+                let handle = tokio::spawn(async move {
+                    let mut update = TranscriptUpdate {
+                        remove_ids: Vec::new(),
+                        upsert_segments: final_segments,
+                    };
+                    translator_clone.enrich_update(&mut update).await;
+
+                    let is_still_active = {
+                        let current = this.translation.read();
+                        current
+                            .as_ref()
+                            .is_some_and(|t| Arc::ptr_eq(t, &translator_clone))
+                    };
+                    if !is_still_active {
+                        return;
+                    }
+
+                    let enrichment_segments: Vec<TranscriptSegment> = update
+                        .upsert_segments
+                        .into_iter()
+                        .filter(|s| s.translation.is_some())
+                        .collect();
+
+                    if !enrichment_segments.is_empty() {
+                        this.send_enrichment_to_consumer(
+                            &consumer_id,
+                            TranscriptUpdate {
+                                remove_ids: Vec::new(),
+                                upsert_segments: enrichment_segments,
+                            },
+                        )
+                        .await;
+                    }
+                });
+                self.track_pending_translation(&pipeline_id, handle);
+            }
+
+            // 4. If there were also partial segments in this mixed update, handle them
+            let partial_segments: Vec<TranscriptSegment> = event
+                .update
+                .upsert_segments
+                .iter()
+                .filter(|s| !s.is_final)
+                .cloned()
+                .collect();
+
+            if !partial_segments.is_empty() {
+                let segment_versions: Vec<(String, u64)> = {
+                    let versions = self.partial_versions.lock();
+                    partial_segments
+                        .iter()
+                        .filter_map(|s| versions.get(&s.id).map(|v| (s.id.clone(), *v)))
+                        .collect()
+                };
+
+                let partial_update = TranscriptUpdate {
+                    remove_ids: Vec::new(),
+                    upsert_segments: partial_segments,
+                };
+                let delay = translator.debounce_delay(&partial_update);
+                let this = Arc::clone(self);
+                let translator_clone = Arc::clone(&translator);
+                let instance_id = event.instance_id.clone();
+                let stage = event.stage.clone();
+                tokio::spawn(async move {
+                    if !delay.is_zero() {
+                        tokio::time::sleep(delay).await;
+                        let is_stale = {
+                            let versions = this.partial_versions.lock();
+                            segment_versions
+                                .iter()
+                                .any(|(id, v)| versions.get(id) != Some(v))
+                        };
+                        if is_stale {
+                            return;
+                        }
+                    }
+                    let mut update = partial_update;
+                    translator_clone.enrich_update(&mut update).await;
+                    let is_stale = {
+                        let versions = this.partial_versions.lock();
+                        segment_versions
+                            .iter()
+                            .any(|(id, v)| versions.get(id) != Some(v))
+                    };
+                    if !is_stale {
+                        this.broadcast_transcript(AsrTranscriptUpdateEvent {
+                            instance_id,
+                            stage,
+                            update,
+                        })
+                        .await;
+                    }
+                });
+            }
         } else {
             // 1. Fill cached translation immediately so partials display existing translations
             translator.fill_cached(&mut event.update);
@@ -1027,6 +1257,7 @@ impl CoordinatorInner {
 
             let delay = translator.debounce_delay(&event.update);
             let this = Arc::clone(self);
+            let translator_clone = Arc::clone(&translator);
             tokio::spawn(async move {
                 if !delay.is_zero() {
                     tokio::time::sleep(delay).await;
@@ -1040,7 +1271,7 @@ impl CoordinatorInner {
                         return;
                     }
                 }
-                translator.enrich_update(&mut event.update).await;
+                translator_clone.enrich_update(&mut event.update).await;
                 let is_stale = {
                     let versions = this.partial_versions.lock();
                     segment_versions
@@ -1111,6 +1342,15 @@ impl CoordinatorInner {
             let Some(mut redundant) = state.pipelines.remove(&redundant_id) else {
                 return;
             };
+            {
+                let mut pending = self.pending_translations.lock();
+                if let Some(handles) = pending.remove(&redundant_id) {
+                    pending
+                        .entry(canonical_id.clone())
+                        .or_default()
+                        .extend(handles);
+                }
+            }
             let moved_subscribers = redundant.subscribers.drain().collect::<Vec<_>>();
             let Some(canonical) = state.pipelines.get_mut(&canonical_id) else {
                 state.pipelines.insert(redundant_id, redundant);

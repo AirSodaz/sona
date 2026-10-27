@@ -25,4 +25,4 @@ tokio = { workspace = true, features = ["rt", "sync", "time"] }
 sona-sqlite = { workspace = true }
 sona-runtime-fs = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "time", "test-util"] }

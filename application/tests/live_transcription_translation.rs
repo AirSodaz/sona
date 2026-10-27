@@ -23,6 +23,7 @@ struct MockTranslationEngine {
     fail_on: Mutex<Option<String>>,
     call_count: Mutex<usize>,
     delay: Mutex<Option<Duration>>,
+    last_languages: Mutex<Option<(String, String)>>,
 }
 
 impl MockTranslationEngine {
@@ -39,6 +40,7 @@ impl MockTranslationEngine {
             fail_on: Mutex::new(None),
             call_count: Mutex::new(0),
             delay: Mutex::new(None),
+            last_languages: Mutex::new(None),
         }
     }
 
@@ -53,6 +55,10 @@ impl MockTranslationEngine {
     fn call_count(&self) -> usize {
         *self.call_count.lock().unwrap()
     }
+
+    fn last_languages(&self) -> Option<(String, String)> {
+        self.last_languages.lock().unwrap().clone()
+    }
 }
 
 #[async_trait]
@@ -60,10 +66,12 @@ impl TranslationEnginePort for MockTranslationEngine {
     async fn translate(
         &self,
         text: &str,
-        _source_lang: &str,
-        _target_lang: &str,
+        source_lang: &str,
+        target_lang: &str,
     ) -> Result<String, TranslationPortError> {
         *self.call_count.lock().unwrap() += 1;
+        *self.last_languages.lock().unwrap() =
+            Some((source_lang.to_string(), target_lang.to_string()));
         let delay = *self.delay.lock().unwrap();
         if let Some(d) = delay {
             tokio::time::sleep(d).await;
@@ -380,11 +388,11 @@ async fn test_live_transcription_final_failure_falls_back_to_frozen_prefix() {
     };
     coord.enrich_update(&mut update3).await;
 
-    // Should gracefully fall back to the previously stabilized frozen_prefix
+    // Should gracefully fall back to the previously stabilized frozen + draft
     assert_eq!(
         update3.upsert_segments[0].translation,
-        Some("我喜欢".into()),
-        "Final translation failure must fall back to stabilized frozen prefix"
+        Some("我喜欢看书".into()),
+        "Final translation failure must fall back to combined frozen prefix and draft translation"
     );
     assert_eq!(update3.upsert_segments[0].draft_translation, None);
 }
@@ -620,4 +628,328 @@ async fn test_word_correction_zero_char_delta_translates_after_debounce() {
     coordinator.enrich_update(&mut update2).await;
     // Word correction with char_delta == 0 should translate after debounce!
     assert_eq!(engine.call_count(), 2);
+}
+
+#[tokio::test]
+async fn test_slow_final_translation_does_not_block_release_or_hang() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    // Simulate slow translation (500ms delay)
+    translation_engine.set_delay(Duration::from_millis(500));
+
+    let streaming_coord = Arc::new(
+        StreamingTranslationCoordinator::new(
+            Arc::clone(&translation_engine) as Arc<dyn TranslationEnginePort>,
+            "en",
+            "zh",
+        )
+        .with_debounce(100, 3),
+    );
+    let coordinator = Arc::new(LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(streaming_coord),
+    ));
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-slow-final",
+            LiveSourceEpoch::new("src-slow-final", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit final segment
+    session.emit("I like to read books every day.", 3.0, true);
+
+    // The un-translated final segment must be broadcast with zero latency (< 60ms)
+    tokio::time::sleep(Duration::from_millis(30)).await;
+    {
+        let updates = observer.updates.lock().unwrap().clone();
+        assert!(
+            !updates.is_empty(),
+            "Immediate final update should have been broadcast"
+        );
+        let immediate_final = &updates[0].update.upsert_segments[0];
+        assert_eq!(immediate_final.text, "I like to read books every day.");
+        assert_eq!(immediate_final.translation, None);
+    }
+
+    // Call release immediately while translation is still pending in background
+    let release_res = coordinator.release("consumer-slow-final").await;
+    assert!(release_res.is_ok());
+
+    // The teardown barrier guarantees that the pending final translation was awaited and delivered to observer
+    let updates = observer.updates.lock().unwrap().clone();
+    assert!(
+        updates.len() >= 2,
+        "Expected immediate and enrichment updates, got {}",
+        updates.len()
+    );
+    let final_update = updates
+        .iter()
+        .find(|u| u.stage == "enrichment")
+        .expect("enrichment update should be delivered");
+    assert!(
+        final_update.update.upsert_segments[0].translation.is_some(),
+        "final segment should have received translation before release completed"
+    );
+}
+#[tokio::test]
+async fn test_language_detection_and_same_language_skip() {
+    let engine = Arc::new(MockTranslationEngine::new());
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "auto",
+        "en",
+    );
+
+    // 1. Japanese text with "auto" source -> detects "ja"
+    let mut ja_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-ja", "こんにちは世界", true)],
+    };
+    coordinator.enrich_update(&mut ja_update).await;
+    assert_eq!(
+        engine.last_languages(),
+        Some(("ja".to_string(), "en".to_string()))
+    );
+    assert!(ja_update.upsert_segments[0].translation.is_some());
+
+    // 2. Chinese text with "auto" source -> detects "zh"
+    let mut zh_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-zh", "你好世界", true)],
+    };
+    coordinator.enrich_update(&mut zh_update).await;
+    assert_eq!(
+        engine.last_languages(),
+        Some(("zh".to_string(), "en".to_string()))
+    );
+    assert!(zh_update.upsert_segments[0].translation.is_some());
+
+    // 3. English text with target "en" -> detected "en" equals target "en", skips translation
+    let initial_calls = engine.call_count();
+    let mut en_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-en", "Hello world", true)],
+    };
+    coordinator.enrich_update(&mut en_update).await;
+    // Skipped!
+    assert_eq!(engine.call_count(), initial_calls);
+    assert_eq!(en_update.upsert_segments[0].translation, None);
+
+    // 4. Explicit same language ("zh" to "zh-CN") skips translation
+    let same_lang_coord = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "zh",
+        "zh-CN",
+    );
+    let mut zh_same_update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-zh-same", "测试内容", true)],
+    };
+    same_lang_coord.enrich_update(&mut zh_same_update).await;
+    assert_eq!(engine.call_count(), initial_calls);
+    assert_eq!(zh_same_update.upsert_segments[0].translation, None);
+}
+
+#[tokio::test]
+async fn test_final_translation_timeout_falls_back_gracefully() {
+    tokio::time::pause();
+    let engine = Arc::new(MockTranslationEngine::new());
+    // Delay 5200ms (> 5000ms timeout)
+    engine.set_delay(Duration::from_millis(5200));
+    let coordinator = StreamingTranslationCoordinator::new(
+        Arc::clone(&engine) as Arc<dyn TranslationEnginePort>,
+        "en",
+        "zh",
+    );
+
+    let mut update = TranscriptUpdate {
+        remove_ids: Vec::new(),
+        upsert_segments: vec![make_segment("seg-timeout", "Timeout test text", true)],
+    };
+    coordinator.enrich_update(&mut update).await;
+    assert_eq!(update.upsert_segments[0].draft_translation, None);
+}
+
+#[tokio::test]
+async fn test_final_translation_enrichment_broadcast_to_active_consumer() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(translation_engine, "en", "zh").with_debounce(50, 2),
+    );
+
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-1",
+            LiveSourceEpoch::new("src-1", 1),
+            0,
+            LiveInputTransform::default(),
+            sample_request(),
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit a final segment
+    session.emit("I like to read books every day.", 3.0, true);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    assert!(
+        updates.len() >= 2,
+        "expected at least 2 updates (immediate + enrichment), got {}",
+        updates.len()
+    );
+
+    // First update is immediate ASR (no translation yet)
+    let first = &updates[0];
+    assert_eq!(first.stage, "final");
+    assert_eq!(first.update.upsert_segments[0].translation, None);
+
+    // Second update is enrichment broadcast
+    let enriched = &updates[1];
+    assert_eq!(enriched.stage, "enrichment");
+    assert_eq!(
+        enriched.update.upsert_segments[0].translation,
+        Some("我喜欢每天看书。".into())
+    );
+}
+
+#[tokio::test]
+async fn test_final_translation_with_timeline_normalization() {
+    let factory = Arc::new(TestFactory::default());
+    let translation_engine = Arc::new(MockTranslationEngine::new());
+    let translation_coord = Arc::new(
+        StreamingTranslationCoordinator::new(translation_engine, "en", "zh").with_debounce(50, 2),
+    );
+
+    let coordinator = LiveTranscriptionCoordinator::with_optional_translation(
+        Arc::clone(&factory) as Arc<dyn StreamingAsrFactoryPort>,
+        Arc::new(NoopAsrRuntimeObserver),
+        Some(translation_coord),
+    );
+
+    let mut request = sample_request();
+    request.normalization_options.enable_timeline = true;
+
+    let observer = Arc::new(RecordingObserver::default());
+    let sub = coordinator
+        .acquire(
+            "consumer-1",
+            LiveSourceEpoch::new("src-1", 1),
+            0,
+            LiveInputTransform::default(),
+            request,
+            Arc::clone(&observer) as Arc<dyn AsrRuntimeObserver>,
+        )
+        .await
+        .expect("subscription should succeed");
+
+    let session = {
+        let sessions = factory.sessions.lock().unwrap();
+        Arc::clone(sessions.get(&sub.pipeline_id).expect("session exists"))
+    };
+
+    // Emit a multi-sentence final segment
+    session.emit("I like to read books. It is very fun.", 3.0, true);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let updates = observer.updates.lock().unwrap().clone();
+    assert!(
+        updates.len() >= 2,
+        "expected at least 2 updates (immediate + enrichment), got {}",
+        updates.len()
+    );
+
+    // 1. Immediate broadcast splits the segment into timeline-0 for subsequent sentences
+    let imm = &updates[0];
+    assert_eq!(imm.stage, "final");
+    let segment_ids: Vec<String> = imm
+        .update
+        .upsert_segments
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert!(
+        segment_ids.iter().any(|id| id.starts_with("timeline-")),
+        "immediate broadcast should have generated a timeline id, got {:?}",
+        segment_ids
+    );
+
+    // 2. Background enrichment broadcast delivers translations for both split segments without generating duplicate timeline-1 IDs
+    let enriched = &updates[1];
+    assert_eq!(enriched.stage, "enrichment");
+    assert_eq!(
+        enriched.update.upsert_segments.len(),
+        2,
+        "expected enrichment for both split segments, got {:?}",
+        enriched.update.upsert_segments
+    );
+    let enriched_ids: Vec<String> = enriched
+        .update
+        .upsert_segments
+        .iter()
+        .map(|s| s.id.clone())
+        .collect();
+    assert!(
+        enriched_ids.iter().any(|id| id.starts_with("timeline-")),
+        "enrichment broadcast should include the split timeline segment, got {:?}",
+        enriched_ids
+    );
+    for seg in &enriched.update.upsert_segments {
+        assert!(
+            seg.translation.is_some(),
+            "segment {} should be translated",
+            seg.id
+        );
+        assert_ne!(
+            seg.text, "I like to read books. It is very fun.",
+            "segment {} text should not be overwritten with unsplit sentence",
+            seg.id
+        );
+    }
+
+    // Ensure both updates share the same timeline ID (timeline-0) and no duplicate (e.g. timeline-1) was generated
+    let mut timeline_ids = Vec::new();
+    for u in &updates {
+        for s in &u.update.upsert_segments {
+            if s.id.starts_with("timeline-") {
+                timeline_ids.push(s.id.clone());
+            }
+        }
+    }
+    assert!(
+        timeline_ids.iter().all(|id| id == "timeline-0"),
+        "all timeline ids should be timeline-0, got {:?}",
+        timeline_ids
+    );
+    assert!(
+        !timeline_ids.iter().any(|id| id == "timeline-1"),
+        "enrichment must not generate duplicate timeline-1 id"
+    );
 }

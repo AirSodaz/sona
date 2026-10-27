@@ -153,6 +153,8 @@ export interface TranscriptStore {
   addSegment: (segment: Omit<TranscriptSegment, 'id'>) => string;
   upsertSegment: (segment: TranscriptSegment) => void;
   updateSegment: (id: string, updates: Partial<Omit<TranscriptSegment, 'id'>>) => void;
+  patchSegmentTranslation: (id: string, translation: string) => void;
+  patchSegmentTranslations: (updates: Array<{ id: string; translation: string }>) => void;
   updateSegmentForSession: (
     sessionId: string,
     id: string,
@@ -216,10 +218,14 @@ function updateActiveSession(
 ) {
   set((state: TranscriptStore) => {
     const session = state.sessions[state.activeSessionId] || DEFAULT_SESSION_DATA;
+    const patch = updater(session);
+    if (!patch || Object.keys(patch).length === 0) {
+      return state;
+    }
     return {
       sessions: {
         ...state.sessions,
-        [state.activeSessionId]: { ...session, ...updater(session) },
+        [state.activeSessionId]: { ...session, ...patch },
       },
     };
   });
@@ -448,6 +454,25 @@ export const useTranscriptStore = create<TranscriptStore>((set, get) => ({
         s.id === id ? normalizeTranscriptSegment({ ...s, ...updates }) : s
       ),
     }));
+  },
+  patchSegmentTranslation: (id, translation) => {
+    get().patchSegmentTranslations([{ id, translation }]);
+  },
+  patchSegmentTranslations: (updates) => {
+    if (updates.length === 0) return;
+    const translationMap = new Map(updates.map((u) => [u.id, u.translation]));
+    updateActiveSession(set, (session) => {
+      let changed = false;
+      const nextSegments = session.segments.map((s) => {
+        const tr = translationMap.get(s.id);
+        if (tr !== undefined && (s.translation !== tr || s.draftTranslation !== undefined)) {
+          changed = true;
+          return { ...s, translation: tr, draftTranslation: undefined };
+        }
+        return s;
+      });
+      return changed ? { segments: nextSegments } : {};
+    });
   },
   updateSegmentForSession: (sessionId, id, updates) => {
     set((state: TranscriptStore) => {
@@ -810,6 +835,15 @@ export const updateTranscriptSegmentForSession = (
   updates: Partial<Omit<TranscriptSegment, 'id'>>
 ): void => {
   useTranscriptStore.getState().updateSegmentForSession(sessionId, id, updates);
+};
+
+export const patchSegmentTranslation = (id: string, translation: string): void => {
+  useTranscriptStore.getState().patchSegmentTranslation(id, translation);
+};
+export const patchSegmentTranslations = (
+  updates: Array<{ id: string; translation: string }>
+): void => {
+  useTranscriptStore.getState().patchSegmentTranslations(updates);
 };
 
 export const setRecordingSessionId = (id: string | null): void => {

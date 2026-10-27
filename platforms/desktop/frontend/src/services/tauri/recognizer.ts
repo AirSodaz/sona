@@ -233,3 +233,20 @@ export async function testOnlineAsrProvider(
     config,
   });
 }
+
+export interface ToggleLiveTranslationOptions {
+  enabled: boolean;
+  sourceLang?: string | null;
+  targetLang?: string | null;
+  catchupSegments?: TranscriptSegment[] | null;
+}
+
+/** Toggles real-time streaming translation on the active live transcription session. */
+export async function toggleLiveTranslation(options: ToggleLiveTranslationOptions): Promise<void> {
+  await invokeTauri(TauriCommand.recognizer.toggleLiveTranslation, {
+    enabled: options.enabled,
+    sourceLang: options.sourceLang ?? null,
+    targetLang: options.targetLang ?? null,
+    catchupSegments: options.catchupSegments ?? null,
+  });
+}

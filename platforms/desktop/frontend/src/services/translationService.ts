@@ -2,8 +2,10 @@ import { LANGUAGE_OPTIONS } from '../constants/languages';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
 import { useHistoryStore } from '../stores/historyStore';
 import { useProjectStore } from '../stores/projectStore';
+import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { useTranscriptSidecarStore } from '../stores/transcriptSidecarStore';
+import { useTranscriptStore } from '../stores/transcriptStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment } from '../types/transcript';
 import { formatCjkTypography } from '../utils/cjkTypography';
@@ -20,6 +22,7 @@ import type {
 import { resolveItemPipeline } from './projectPipeline';
 import { createLlmTaskLedgerId, isTaskLedgerCancelRequested } from './taskLedgerBuilders';
 import { translateTranscriptSegments } from './tauri/llm';
+import { toggleLiveTranslation } from './tauri/recognizer';
 import { transcriptAutoSaveRuntime } from './transcriptAutoSaveRuntime';
 
 interface RetryTranslateTranscriptJobOptions {
@@ -59,6 +62,7 @@ export interface TranslationServicePorts {
   runTranscriptLlmJob: typeof runTranscriptLlmJob;
   translateTranscriptSegments: typeof translateTranscriptSegments;
   listenToTranscriptLlmJobUpdates: typeof listenToTranscriptLlmJobUpdates;
+  toggleLiveTranslation?: typeof toggleLiveTranslation;
   rebaselineTranscriptAutoSave?: (historyId: string, segments: TranscriptSegment[]) => void;
 }
 
@@ -112,7 +116,36 @@ export class TranslationService {
   }
 
   async translateCurrentTranscript(targetLanguageOverride?: string) {
+    const isRecording = useTranscriptRuntimeStore.getState().isRecording;
     const sessionStore = this.ports.getTranscriptSessionStore();
+    const recordingSessionId = useTranscriptStore.getState().recordingSessionId;
+    const isLiveSession =
+      isRecording &&
+      (recordingSessionId
+        ? sessionStore.sourceHistoryId === recordingSessionId
+        : !sessionStore.sourceHistoryId || sessionStore.sourceHistoryId === 'current');
+
+    if (isLiveSession) {
+      const currentHistoryId = sessionStore.sourceHistoryId || 'current';
+      const sidecarStore = this.ports.getTranscriptSidecarStore();
+      sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
+      const config = this.ports.getEffectiveConfigSnapshot();
+      const targetLang =
+        targetLanguageOverride ||
+        config.realtimeTranslationTargetLanguage ||
+        config.translationLanguage ||
+        'zh';
+      const sourceLang = config.realtimeTranslationSourceLanguage || 'auto';
+      const toggleFn = this.ports.toggleLiveTranslation ?? toggleLiveTranslation;
+      await toggleFn({
+        enabled: true,
+        sourceLang,
+        targetLang,
+        catchupSegments: sessionStore.segments.filter((s) => s.isFinal),
+      });
+      return;
+    }
+
     await this.retryTranslateTranscriptJob({
       segments: sessionStore.segments,
       historyId: sessionStore.sourceHistoryId,
@@ -286,7 +319,15 @@ export class TranslationService {
       return;
     }
 
-    this.ports.getTranscriptSessionStore().setSegments(payload.segments);
+    const sessionStore = this.ports.getTranscriptSessionStore();
+    const updates = payload.segments
+      .filter((seg): seg is typeof seg & { translation: string } => Boolean(seg.translation))
+      .map((seg) => ({ id: seg.id, translation: seg.translation }));
+    if (updates.length > 0) {
+      sessionStore.patchSegmentTranslations(updates);
+    }
+    const sidecarStore = this.ports.getTranscriptSidecarStore();
+    sidecarStore.updateLlmState({ isTranslationVisible: true }, currentHistoryId);
   }
 }
 
@@ -303,6 +344,7 @@ export const translationService = createTranslationService({
   runTranscriptLlmJob,
   translateTranscriptSegments,
   listenToTranscriptLlmJobUpdates,
+  toggleLiveTranslation,
   rebaselineTranscriptAutoSave: (historyId, segments) =>
     transcriptAutoSaveRuntime.rebaseline(historyId, segments),
 });

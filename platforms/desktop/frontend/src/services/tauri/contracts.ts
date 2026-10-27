@@ -535,6 +535,15 @@ type ManualTauriCommandContractMap = {
     args: { providerId: string; config: Record<string, unknown> };
     result: number;
   };
+  [TauriCommand.recognizer.toggleLiveTranslation]: {
+    args: {
+      enabled: boolean;
+      sourceLang?: string | null;
+      targetLang?: string | null;
+      catchupSegments?: TranscriptSegment[] | null;
+    };
+    result: undefined;
+  };
   [TauriCommand.backup.exportArchive]: {
     args: { request: ExportBackupArchiveRequest };
     result: BackupManifestV1;

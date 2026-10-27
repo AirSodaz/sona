@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
 import { useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
@@ -93,9 +94,13 @@ vi.mock('../taskLedgerStore', () => ({
   },
 }));
 
-vi.mock('../../services/tauri/recognizer', () => ({
-  cancelBatchTask: vi.fn().mockResolvedValue(undefined),
-}));
+vi.mock('../../services/tauri/recognizer', async (importOriginal) => {
+  const actual = await importOriginal<typeof RecognizerModule>();
+  return {
+    ...actual,
+    cancelBatchTask: vi.fn().mockResolvedValue(undefined),
+  };
+});
 
 describe('batchQueueStore', () => {
   beforeEach(() => {
