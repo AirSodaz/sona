@@ -2035,8 +2035,8 @@ describe('ProjectsView', () => {
 
     render(<ProjectsView />);
     await waitForInitialHistoryLoad();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Project Item' }));
+    const item = await screen.findByRole('button', { name: 'Project Item' });
+    fireEvent.click(item);
     await waitFor(() => {
       expect(getDetailPlaceholder()).not.toBeNull();
     });
