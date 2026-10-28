@@ -20,6 +20,10 @@ impl<'a> TaskLedgerService<'a> {
         Self { store, clock }
     }
 
+    pub fn list_tasks(&self) -> Result<Vec<TaskLedgerRecord>, TaskLedgerError> {
+        self.store.load_records()
+    }
+
     pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.load_snapshot_at(self.clock.now_ms()?)
     }

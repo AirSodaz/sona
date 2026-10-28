@@ -1,15 +1,48 @@
 use crate::{CliError, CliOutput, CliResult};
 use clap::Args;
-use sona_core::ports::asr::{AsrMode, BatchTranscriberPort};
+use sona_core::ports::asr::{AsrMode, BatchTranscriberPort, BatchTranscriptionObserver};
 use sona_core::runtime::config::TranscribeConfigSection;
 use sona_core::transcription::runtime::{
     BatchOutputPlan, BatchTranscribeOptions, OutputTarget, resolve_export_format,
     resolve_output_target,
 };
-use sona_core::transcription::transcript::TranscriptSegment;
+use sona_core::transcription::transcript::{TranscriptSegment, TranscriptUpdate};
 use std::future::Future;
 use std::path::PathBuf;
 use std::sync::Arc;
+
+struct CliStreamBatchObserver {
+    segments: std::sync::Mutex<Vec<TranscriptSegment>>,
+    tx: tokio::sync::mpsc::UnboundedSender<TranscriptSegment>,
+    cancelled: std::sync::atomic::AtomicBool,
+}
+
+impl BatchTranscriptionObserver for CliStreamBatchObserver {
+    fn on_progress(&self, _progress: f32) {}
+
+    fn on_transcript_update(&self, update: &TranscriptUpdate) {
+        let mut segments = self.segments.lock().unwrap();
+        if !update.remove_ids.is_empty() {
+            segments.retain(|s| !update.remove_ids.contains(&s.id));
+        }
+        for seg in &update.upsert_segments {
+            let is_new = if let Some(existing) = segments.iter_mut().find(|s| s.id == seg.id) {
+                *existing = seg.clone();
+                false
+            } else {
+                segments.push(seg.clone());
+                true
+            };
+            if seg.is_final || is_new {
+                let _ = self.tx.send(seg.clone());
+            }
+        }
+    }
+
+    fn is_cancelled(&self) -> bool {
+        self.cancelled.load(std::sync::atomic::Ordering::Relaxed)
+    }
+}
 
 #[derive(Debug, Args)]
 #[command(
@@ -247,6 +280,8 @@ pub async fn run_transcribe(
         )
         .await;
     }
+    let is_network_stream =
+        sona_core::history::is_network_url(&actual_single_input.to_string_lossy());
     let options = BatchTranscribeOptions {
         input: actual_single_input,
         output: args.output,
@@ -282,12 +317,64 @@ pub async fn run_transcribe(
     let export_format = plan.export_format;
     let output_target = plan.output_target.clone();
     let transcriber = crate::asr_adapter::local_batch_transcriber();
-    let segments = tokio::select! {
-        res = transcriber.transcribe(plan) => {
-            res.map_err(crate::online_asr::map_asr_error)?
+    let segments = if is_network_stream {
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let observer = Arc::new(CliStreamBatchObserver {
+            segments: std::sync::Mutex::new(Vec::new()),
+            tx,
+            cancelled: std::sync::atomic::AtomicBool::new(false),
+        });
+        let transcribe_task = transcriber.transcribe_with_observer(
+            plan,
+            Arc::clone(&observer) as Arc<dyn BatchTranscriptionObserver>,
+        );
+        tokio::pin!(transcribe_task);
+
+        loop {
+            tokio::select! {
+                res = &mut transcribe_task => {
+                    if !args.quiet {
+                        while let Ok(segment) = rx.try_recv() {
+                            let _ = writeln!(io.stderr(), "{}", segment.text);
+                        }
+                    }
+                    match res {
+                        Ok(segs) => {
+                            break segs;
+                        }
+                        Err(err) => {
+                            let collected = observer.segments.lock().unwrap().clone();
+                            if !collected.is_empty() && !args.quiet {
+                                let _ = writeln!(io.stderr(), "Warning: Stream transcription ended prematurely: {err}");
+                            }
+                            return Err(crate::online_asr::map_asr_error(err));
+                        }
+                    }
+                }
+                Some(segment) = rx.recv() => {
+                    if !args.quiet {
+                        let _ = writeln!(io.stderr(), "{}", segment.text);
+                    }
+                }
+                _ = tokio::signal::ctrl_c() => {
+                    observer.cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if !args.quiet {
+                        while let Ok(segment) = rx.try_recv() {
+                            let _ = writeln!(io.stderr(), "{}", segment.text);
+                        }
+                    }
+                    return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
+                }
+            }
         }
-        _ = tokio::signal::ctrl_c() => {
-            return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
+    } else {
+        tokio::select! {
+            res = transcriber.transcribe(plan) => {
+                res.map_err(crate::online_asr::map_asr_error)?
+            }
+            _ = tokio::signal::ctrl_c() => {
+                return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
+            }
         }
     };
     render_transcription(segments, export_format, output_target, export_mode)
@@ -719,13 +806,23 @@ fn validate_online_paths(
     output: Option<&PathBuf>,
     force: bool,
 ) -> CliResult<()> {
-    match std::fs::metadata(input) {
-        Ok(metadata) if metadata.is_file() => {}
-        Ok(_) | Err(_) => {
-            return Err(CliError::Validation(format!(
-                "Input file must be an existing file: {}",
-                input.display()
-            )));
+    let input_str = input.to_string_lossy();
+    if sona_core::history::is_network_url(&input_str) {
+        let trimmed = input_str.trim().to_ascii_lowercase();
+        if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
+            return Err(CliError::Validation(
+                "Online ASR only supports HTTP/HTTPS audio streams".into(),
+            ));
+        }
+    } else {
+        match std::fs::metadata(input) {
+            Ok(metadata) if metadata.is_file() => {}
+            Ok(_) | Err(_) => {
+                return Err(CliError::Validation(format!(
+                    "Input file must be an existing file: {}",
+                    input.display()
+                )));
+            }
         }
     }
     if let Some(output) = output
@@ -1164,5 +1261,93 @@ mod tests {
         let captured = io.into_output();
         assert!(captured.stderr.contains("[1/2] Transcribed"));
         assert!(captured.stderr.contains("[2/2] [FAIL]"));
+    }
+
+    #[test]
+    fn test_validate_online_paths_network_url() {
+        use std::path::Path;
+        // HTTP URL succeeds
+        assert!(
+            validate_online_paths(Path::new("http://example.com/audio.mp3"), None, false).is_ok()
+        );
+        assert!(
+            validate_online_paths(Path::new("https://example.com/stream"), None, false).is_ok()
+        );
+
+        // RTMP/RTSP fails
+        let err_rtmp = validate_online_paths(Path::new("rtmp://live.example.com/app"), None, false)
+            .unwrap_err();
+        assert!(
+            err_rtmp
+                .to_string()
+                .contains("Online ASR only supports HTTP/HTTPS audio streams")
+        );
+        let err_rtsp =
+            validate_online_paths(Path::new("rtsp://192.168.1.1/live"), None, false).unwrap_err();
+        assert!(
+            err_rtsp
+                .to_string()
+                .contains("Online ASR only supports HTTP/HTTPS audio streams")
+        );
+
+        // Non-existent local file fails
+        let err_missing =
+            validate_online_paths(Path::new("non_existent_file.wav"), None, false).unwrap_err();
+        assert!(
+            err_missing
+                .to_string()
+                .contains("Input file must be an existing file")
+        );
+    }
+
+    #[tokio::test]
+    async fn test_cli_stream_batch_observer_deduplicates_interim_segments() {
+        use sona_core::transcription::transcript::TranscriptUpdate;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let observer = CliStreamBatchObserver {
+            segments: std::sync::Mutex::new(Vec::new()),
+            tx,
+            cancelled: std::sync::atomic::AtomicBool::new(false),
+        };
+        let make_seg = |id: &str, text: &str, is_final: bool| TranscriptSegment {
+            id: id.to_string(),
+            start: 0.0,
+            end: 1.0,
+            text: text.to_string(),
+            is_final,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+
+        // First update: new interim segment
+        let seg1 = make_seg("seg-1", "Hello", false);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1],
+            remove_ids: vec![],
+        });
+        assert_eq!(rx.recv().await.unwrap().text, "Hello");
+
+        // Second update: updated interim segment with same ID (should NOT send to channel)
+        let seg1_update = make_seg("seg-1", "Hello world", false);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1_update],
+            remove_ids: vec![],
+        });
+        // Channel must be empty (interim update skipped)
+        assert!(rx.try_recv().is_err());
+
+        // Third update: finalized segment with same ID (should send to channel)
+        let seg1_final = make_seg("seg-1", "Hello world!", true);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1_final],
+            remove_ids: vec![],
+        });
+        assert_eq!(rx.recv().await.unwrap().text, "Hello world!");
     }
 }

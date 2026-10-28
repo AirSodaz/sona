@@ -13,6 +13,11 @@ use crate::platform::{ApiServerPlatform, ApiServerTranscriptionDefaults, OnlineB
 
 type HmacSha256 = Hmac<Sha256>;
 
+async fn remove_job_file_if_local(path: &StdPath) {
+    if !sona_core::history::is_network_url(&path.to_string_lossy()) {
+        let _ = tokio::fs::remove_file(path).await;
+    }
+}
 pub(crate) async fn send_webhook(job: &TranscriptionJob, status: &JobStatus) {
     let Some(webhook_url) = &job.webhook_url else {
         return;
@@ -177,7 +182,7 @@ pub(crate) async fn start_worker_loop(
         let handle = tokio::spawn(async move {
             let _permit = permit;
             if job_manager.get_job(&job.job_id).await.is_none() {
-                let _ = tokio::fs::remove_file(&job.file_path).await;
+                remove_job_file_if_local(&job.file_path).await;
                 return;
             }
             job_manager
@@ -217,7 +222,7 @@ pub(crate) async fn start_worker_loop(
             };
 
             if job_manager.get_job(&job.job_id).await.is_none() {
-                let _ = tokio::fs::remove_file(&job.file_path).await;
+                remove_job_file_if_local(&job.file_path).await;
                 return;
             }
             job_manager
@@ -233,7 +238,7 @@ pub(crate) async fn start_worker_loop(
             }
 
             if matches!(final_status, JobStatus::Failed(_)) {
-                let _ = tokio::fs::remove_file(&job.file_path).await;
+                remove_job_file_if_local(&job.file_path).await;
             }
         });
         let handle_abort = handle.abort_handle();
@@ -242,7 +247,7 @@ pub(crate) async fn start_worker_loop(
             .await;
         if !was_set {
             handle.abort();
-            let _ = tokio::fs::remove_file(&file_path).await;
+            remove_job_file_if_local(&file_path).await;
         }
     }
 }

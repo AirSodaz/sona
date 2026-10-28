@@ -7,30 +7,117 @@ use sona_core::transcription::transcript::TranscriptSegment;
 
 use super::types::{
     EditTranscriptRequest, EditTranscriptResult, PatchSegmentsRequest, PatchSegmentsResult,
-    ReadTranscriptResult, RevertTranscriptResult, SegmentPatchInput, UpdateTranslationsRequest,
-    UpdateTranslationsResult,
+    ReadTranscriptRequest, ReadTranscriptResult, RevertTranscriptResult, SegmentPatchInput,
+    UpdateTranslationsRequest, UpdateTranslationsResult,
 };
 
 pub async fn read_transcript(
     services: &DesktopServices,
-    history_id: String,
+    req: ReadTranscriptRequest,
 ) -> Result<ReadTranscriptResult, String> {
-    let hid = history_id.clone();
-    let segments = services
+    let (task_status, error_message) = match services.task_ledger.list_tasks().await {
+        Ok(tasks) => {
+            let matching_tasks = tasks
+                .iter()
+                .filter(|t| t.history_id.as_deref() == Some(&req.history_id));
+            let selected_task = matching_tasks
+                .clone()
+                .filter(|t| {
+                    matches!(
+                        t.status,
+                        sona_core::task_ledger::types::TaskLedgerStatus::Running
+                            | sona_core::task_ledger::types::TaskLedgerStatus::Pending
+                            | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                    )
+                })
+                .max_by_key(|t| t.updated_at)
+                .or_else(|| matching_tasks.max_by_key(|t| t.updated_at));
+
+            if let Some(task) = selected_task {
+                let status_str = match task.status {
+                    sona_core::task_ledger::types::TaskLedgerStatus::Running => "running",
+                    sona_core::task_ledger::types::TaskLedgerStatus::Pending => "pending",
+                    sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested => {
+                        "cancelling"
+                    }
+                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled => "cancelled",
+                    sona_core::task_ledger::types::TaskLedgerStatus::Failed => "failed",
+                    sona_core::task_ledger::types::TaskLedgerStatus::Succeeded => "completed",
+                    sona_core::task_ledger::types::TaskLedgerStatus::Recoverable
+                    | sona_core::task_ledger::types::TaskLedgerStatus::Interrupted => "failed",
+                };
+                (status_str.to_string(), task.error_message.clone())
+            } else {
+                ("completed".to_string(), None)
+            }
+        }
+        Err(err) => {
+            log::warn!(
+                "Failed to query task ledger for history {}: {}",
+                req.history_id,
+                err
+            );
+            ("unknown".to_string(), Some(err))
+        }
+    };
+
+    let hid = req.history_id.clone();
+    let all_segments = match services
         .history
         .query_db(move |service| service.load_transcript(&hid))
         .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_default();
+    {
+        Ok(segments) => segments.unwrap_or_default(),
+        Err(_err) if task_status == "failed" || task_status == "cancelled" => Vec::new(),
+        Err(err) => return Err(err.to_string()),
+    };
+    let total_segments_in_history = all_segments.len();
 
-    let text = segments
+    let mut filtered: Vec<TranscriptSegment> = all_segments;
+
+    if let Some(since_id) = &req.since_segment_id {
+        if let Some(idx) = filtered.iter().position(|seg| seg.id == *since_id) {
+            filtered = filtered.split_off(idx + 1);
+        } else {
+            filtered.clear();
+        }
+    }
+
+    if req.start_seconds.is_some() || req.end_seconds.is_some() {
+        let start = req.start_seconds.unwrap_or(0.0);
+        let end = req.end_seconds.unwrap_or(f64::INFINITY);
+        filtered.retain(|seg| seg.end >= start && seg.start <= end);
+    }
+
+    let offset = req.offset.unwrap_or(0);
+    let limit = req.limit;
+    let filtered_len = filtered.len();
+
+    let (paged, has_more) = if offset >= filtered_len {
+        (Vec::new(), false)
+    } else {
+        let remaining = &filtered[offset..];
+        if let Some(lim) = limit {
+            if remaining.len() > lim {
+                (remaining[..lim].to_vec(), true)
+            } else {
+                (remaining.to_vec(), false)
+            }
+        } else {
+            (remaining.to_vec(), false)
+        }
+    };
+
+    let returned_segments = paged.len();
+
+    let text = paged
         .iter()
         .map(|s| s.text.trim())
         .filter(|s| !s.is_empty())
         .collect::<Vec<_>>()
         .join(" ");
 
-    let translations: Vec<&str> = segments
+    let translations: Vec<&str> = paged
         .iter()
         .filter_map(|s| s.translation.as_deref())
         .map(|t| t.trim())
@@ -45,10 +132,15 @@ pub async fn read_transcript(
     };
 
     Ok(ReadTranscriptResult {
-        history_id,
-        segments,
+        history_id: req.history_id,
+        task_status,
+        error_message,
+        segments: paged,
         text,
         translation_text,
+        total_segments_in_history,
+        returned_segments,
+        has_more,
     })
 }
 

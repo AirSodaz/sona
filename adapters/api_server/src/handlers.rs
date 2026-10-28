@@ -8,7 +8,7 @@ use crate::jobs::{JobStatus, TranscriptionJob};
 use crate::state::ServerState;
 use axum::{
     Json,
-    extract::{ConnectInfo, Multipart, Path, Query, Request, State},
+    extract::{ConnectInfo, FromRequest, Multipart, Path, Query, Request, State},
     http::StatusCode,
     middleware::Next,
     response::{IntoResponse, Response},
@@ -296,12 +296,22 @@ pub async fn handle_list_jobs(
     Json(map)
 }
 
+#[derive(Debug, serde::Deserialize)]
+pub struct JsonTranscribeRequest {
+    pub url: String,
+    pub model_id: String,
+    pub language: Option<String>,
+    pub hotwords: Option<String>,
+    pub webhook_url: Option<String>,
+    pub webhook_secret: Option<String>,
+}
+
 pub async fn handle_transcribe(
     State(state): State<ServerState>,
-    multipart: Multipart,
+    req: Request,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let mut temp_file_path = None;
-    let result = handle_transcribe_inner(&state, multipart, &mut temp_file_path).await;
+    let result = handle_transcribe_inner(&state, req, &mut temp_file_path).await;
     if result.is_err()
         && let Some(path) = &temp_file_path
     {
@@ -312,93 +322,152 @@ pub async fn handle_transcribe(
 
 async fn handle_transcribe_inner(
     state: &ServerState,
-    mut multipart: Multipart,
+    req: Request,
     temp_file_path: &mut Option<std::path::PathBuf>,
 ) -> Result<Json<serde_json::Value>, ApiError> {
     let job_id = uuid::Uuid::new_v4().to_string();
-    let mut model_id = None;
-    let mut language = "auto".to_string();
-    let mut hotwords = None;
-    let mut webhook_url = None;
-    let mut webhook_secret = None;
+    let content_type = req
+        .headers()
+        .get(axum::http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_ascii_lowercase();
 
-    while let Some(mut field) = multipart
-        .next_field()
-        .await
-        .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
-    {
-        let name = field.name().unwrap_or("").to_string();
-        if name == "file" {
-            if temp_file_path.is_some() {
+    let (file_path, m_id, language, hotwords, webhook_url, webhook_secret) =
+        if content_type.starts_with("application/json") {
+            let bytes = axum::body::to_bytes(req.into_body(), 10 * 1024 * 1024)
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            let json_req: JsonTranscribeRequest = serde_json::from_slice(&bytes)
+                .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid JSON body: {e}")))?;
+            let trimmed_url = json_req.url.trim();
+            if !sona_core::history::is_network_url(trimmed_url) {
+                return Err((StatusCode::BAD_REQUEST, "Invalid stream URL".to_string()).into());
+            }
+            (
+                std::path::PathBuf::from(trimmed_url),
+                json_req.model_id,
+                json_req.language.unwrap_or_else(|| "auto".to_string()),
+                json_req.hotwords,
+                json_req.webhook_url,
+                json_req.webhook_secret,
+            )
+        } else if content_type.starts_with("multipart/form-data") {
+            let mut multipart = Multipart::from_request(req, state)
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+            let mut model_id = None;
+            let mut language = "auto".to_string();
+            let mut hotwords = None;
+            let mut webhook_url = None;
+            let mut webhook_secret = None;
+            let mut url_field = None;
+
+            while let Some(mut field) = multipart
+                .next_field()
+                .await
+                .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?
+            {
+                let name = field.name().unwrap_or("").to_string();
+                if name == "file" {
+                    if temp_file_path.is_some() {
+                        return Err((
+                            StatusCode::BAD_REQUEST,
+                            "Multiple file fields are not allowed".to_string(),
+                        )
+                            .into());
+                    }
+                    let raw_ext = field
+                        .file_name()
+                        .and_then(|name| std::path::Path::new(name).extension())
+                        .and_then(|ext| ext.to_str())
+                        .map(|ext| ext.to_lowercase())
+                        .unwrap_or_default();
+                    let extension = match raw_ext.as_str() {
+                        "wav" => "wav",
+                        "mp3" => "mp3",
+                        "m4a" => "m4a",
+                        "ogg" => "ogg",
+                        "flac" => "flac",
+                        "aac" => "aac",
+                        "opus" => "opus",
+                        "webm" => "webm",
+                        "mp4" => "mp4",
+                        "mkv" => "mkv",
+                        "avi" => "avi",
+                        "mov" => "mov",
+                        "wma" => "wma",
+                        _ => "wav",
+                    };
+                    let file_path = state.temp_dir.join(format!("{}.{}", job_id, extension));
+                    let mut file = tokio::fs::File::create(&file_path)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    *temp_file_path = Some(file_path.clone());
+
+                    while let Some(chunk) = field.next().await {
+                        let data = chunk.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
+                        file.write_all(&data)
+                            .await
+                            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    }
+                    file.flush()
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    drop(file);
+
+                    if !state.media_validator.is_valid_media_file(&file_path).await {
+                        return Err((
+                            StatusCode::BAD_REQUEST,
+                            "Unsupported file type or corrupted file".to_string(),
+                        )
+                            .into());
+                    }
+                } else if name == "url" {
+                    url_field = Some(field.text().await.unwrap_or_default());
+                } else if name == "model_id" {
+                    model_id = Some(field.text().await.unwrap_or_default());
+                } else if name == "language" {
+                    language = field.text().await.unwrap_or_default();
+                } else if name == "hotwords" {
+                    hotwords = Some(field.text().await.unwrap_or_default());
+                } else if name == "webhook_url" {
+                    webhook_url = Some(field.text().await.unwrap_or_default());
+                } else if name == "webhook_secret" {
+                    webhook_secret = Some(field.text().await.unwrap_or_default());
+                }
+            }
+
+            let file_path = if temp_file_path.is_some() && url_field.is_some() {
                 return Err((
                     StatusCode::BAD_REQUEST,
-                    "Multiple file fields are not allowed".to_string(),
+                    "Cannot specify both file and url".to_string(),
                 )
                     .into());
-            }
-            let raw_ext = field
-                .file_name()
-                .and_then(|name| std::path::Path::new(name).extension())
-                .and_then(|ext| ext.to_str())
-                .map(|ext| ext.to_lowercase())
-                .unwrap_or_default();
-            let extension = match raw_ext.as_str() {
-                "wav" => "wav",
-                "mp3" => "mp3",
-                "m4a" => "m4a",
-                "ogg" => "ogg",
-                "flac" => "flac",
-                "aac" => "aac",
-                "opus" => "opus",
-                "webm" => "webm",
-                "mp4" => "mp4",
-                "mkv" => "mkv",
-                "avi" => "avi",
-                "mov" => "mov",
-                "wma" => "wma",
-                _ => "wav",
+            } else if let Some(path) = temp_file_path.clone() {
+                path
+            } else if let Some(url_str) = url_field {
+                let trimmed = url_str.trim();
+                if !sona_core::history::is_network_url(trimmed) {
+                    return Err((StatusCode::BAD_REQUEST, "Invalid stream URL".to_string()).into());
+                }
+                std::path::PathBuf::from(trimmed)
+            } else {
+                return Err((StatusCode::BAD_REQUEST, "Missing file or url".to_string()).into());
             };
-            let file_path = state.temp_dir.join(format!("{}.{}", job_id, extension));
-            let mut file = tokio::fs::File::create(&file_path)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            *temp_file_path = Some(file_path.clone());
 
-            while let Some(chunk) = field.next().await {
-                let data = chunk.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
-                file.write_all(&data)
-                    .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            }
-            file.flush()
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            drop(file);
-
-            if !state.media_validator.is_valid_media_file(&file_path).await {
-                return Err((
-                    StatusCode::BAD_REQUEST,
-                    "Unsupported file type or corrupted file".to_string(),
-                )
-                    .into());
-            }
-        } else if name == "model_id" {
-            model_id = Some(field.text().await.unwrap_or_default());
-        } else if name == "language" {
-            language = field.text().await.unwrap_or_default();
-        } else if name == "hotwords" {
-            hotwords = Some(field.text().await.unwrap_or_default());
-        } else if name == "webhook_url" {
-            webhook_url = Some(field.text().await.unwrap_or_default());
-        } else if name == "webhook_secret" {
-            webhook_secret = Some(field.text().await.unwrap_or_default());
-        }
-    }
-
-    let file_path = temp_file_path
-        .clone()
-        .ok_or((StatusCode::BAD_REQUEST, "Missing file".to_string()))?;
-    let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
+            let m_id = model_id.ok_or((StatusCode::BAD_REQUEST, "Missing model_id".to_string()))?;
+            (
+                file_path,
+                m_id,
+                language,
+                hotwords,
+                webhook_url,
+                webhook_secret,
+            )
+        } else {
+            return Err((StatusCode::BAD_REQUEST, "Missing file or url".to_string()).into());
+        };
     if m_id.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -476,7 +545,7 @@ async fn handle_transcribe_inner(
     Ok(Json(serde_json::json!({ "job_id": job_id })))
 }
 
-pub(crate) async fn handle_job_audio(
+pub async fn handle_job_audio(
     State(state): State<ServerState>,
     Path(job_id): Path<String>,
     req: Request,
@@ -491,6 +560,14 @@ pub(crate) async fn handle_job_audio(
         StatusCode::NOT_FOUND,
         "Audio file not found or already cleaned up".to_string(),
     ))?;
+
+    if sona_core::history::is_network_url(&file_path.to_string_lossy()) {
+        return Err((
+            StatusCode::NOT_FOUND,
+            "Audio source is a remote network stream".to_string(),
+        )
+            .into());
+    }
 
     if !file_path.exists() {
         return Err((
@@ -518,6 +595,7 @@ pub(crate) async fn handle_delete_job(
         .ok_or((StatusCode::NOT_FOUND, "Job not found".to_string()))?;
 
     if let Some(file_path) = file_path_opt
+        && !sona_core::history::is_network_url(&file_path.to_string_lossy())
         && tokio::fs::remove_file(&file_path).await.is_err()
     {
         tokio::spawn(async move {

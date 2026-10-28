@@ -236,13 +236,33 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "sona_read_transcript",
             title: Some("Read Transcript"),
-            description: "Read full transcript segments and text of a history record.",
+            description: "Read transcript segments and text of a history record, with optional time filtering, cursor pagination, and task status.",
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "history_id": {
                         "type": "string",
                         "description": "Target history record ID"
+                    },
+                    "start_seconds": {
+                        "type": "number",
+                        "description": "Optional start time in seconds to filter segments"
+                    },
+                    "end_seconds": {
+                        "type": "number",
+                        "description": "Optional end time in seconds to filter segments"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Optional number of segments to skip"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Optional maximum number of segments to return"
+                    },
+                    "since_segment_id": {
+                        "type": "string",
+                        "description": "Optional segment ID cursor: only return segments occurring after this ID"
                     }
                 },
                 "required": ["history_id"]
@@ -421,13 +441,17 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "sona_transcribe_file",
             title: Some("Transcribe File"),
-            description: "Transcribe a local audio or video file in batch mode and save into history.",
+            description: "Start background transcription for a local audio/video file or remote network stream (HTTP/HTTPS/RTMP/RTSP/m3u8), returning task and history IDs immediately.",
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Absolute path to local media file"
+                        "description": "Absolute path to local media file or remote stream URL"
+                    },
+                    "input": {
+                        "type": "string",
+                        "description": "Alias for file_path: local media file path or remote stream URL"
                     },
                     "project_id": {
                         "type": "string",
@@ -446,7 +470,10 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                         "description": "Optional custom instance ID for tracking and cancelling this batch task"
                     }
                 },
-                "required": ["file_path"]
+                "anyOf": [
+                    { "required": ["file_path"] },
+                    { "required": ["input"] }
+                ]
             }),
         },
         ToolDefinition {
@@ -831,6 +858,30 @@ pub async fn call_tool(
                 })),
             }
         }
+        "sona_transcribe_file" => {
+            let mut args = arguments;
+            if let Some(obj) = args.as_object_mut() {
+                let file_path_missing_or_empty = obj
+                    .get("file_path")
+                    .map(|v| {
+                        v.is_null() || v.as_str().map(|s| s.trim().is_empty()).unwrap_or(false)
+                    })
+                    .unwrap_or(true);
+                if file_path_missing_or_empty
+                    && let Some(input) = obj.get("input").cloned()
+                    && input
+                        .as_str()
+                        .map(|s| !s.trim().is_empty())
+                        .unwrap_or(false)
+                {
+                    obj.insert("file_path".to_string(), input);
+                }
+            }
+            match client.call("sona_transcribe_file", args).await {
+                Ok(val) => ToolCallResult::json(&val),
+                Err(err) => ToolCallResult::error(err),
+            }
+        }
         "sona_cancel_batch_task" => {
             let mut args = arguments;
             if let Some(obj) = args.as_object_mut() {
@@ -1014,5 +1065,35 @@ mod tests {
             .and_then(|r| r.as_array())
             .expect("required array present");
         assert!(req.iter().any(|v| v.as_str() == Some("history_id")));
+    }
+
+    #[test]
+    fn test_stream_transcription_sync_tool_schemas() {
+        let tools = list_tools();
+        let transcribe_tool = tools
+            .iter()
+            .find(|t| t.name == "sona_transcribe_file")
+            .expect("sona_transcribe_file should be listed");
+        let any_of = transcribe_tool
+            .input_schema
+            .get("anyOf")
+            .and_then(|v| v.as_array())
+            .expect("anyOf should be present on sona_transcribe_file");
+        assert_eq!(any_of.len(), 2);
+
+        let read_tool = tools
+            .iter()
+            .find(|t| t.name == "sona_read_transcript")
+            .expect("sona_read_transcript should be listed");
+        let props = read_tool
+            .input_schema
+            .get("properties")
+            .and_then(|v| v.as_object())
+            .expect("properties should be an object");
+        assert!(props.contains_key("start_seconds"));
+        assert!(props.contains_key("end_seconds"));
+        assert!(props.contains_key("offset"));
+        assert!(props.contains_key("limit"));
+        assert!(props.contains_key("since_segment_id"));
     }
 }

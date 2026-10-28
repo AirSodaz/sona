@@ -249,9 +249,9 @@ impl AgentControlFacade {
 
     pub async fn read_transcript(
         &self,
-        history_id: String,
+        req: impl Into<ReadTranscriptRequest>,
     ) -> Result<ReadTranscriptResult, String> {
-        transcript::read_transcript(&self.services, history_id).await
+        transcript::read_transcript(&self.services, req.into()).await
     }
 
     pub async fn edit_transcript(

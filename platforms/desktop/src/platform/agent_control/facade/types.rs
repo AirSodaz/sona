@@ -92,14 +92,64 @@ pub struct HistoryItemSummary {
     pub project_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadTranscriptRequest {
+    #[serde(alias = "historyId", alias = "history_id")]
+    pub history_id: String,
+    #[serde(default, alias = "startSeconds", alias = "start_seconds")]
+    pub start_seconds: Option<f64>,
+    #[serde(default, alias = "endSeconds", alias = "end_seconds")]
+    pub end_seconds: Option<f64>,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default, alias = "sinceSegmentId", alias = "since_segment_id")]
+    pub since_segment_id: Option<String>,
+}
+
+impl From<String> for ReadTranscriptRequest {
+    fn from(history_id: String) -> Self {
+        Self {
+            history_id,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<&str> for ReadTranscriptRequest {
+    fn from(history_id: &str) -> Self {
+        Self {
+            history_id: history_id.to_string(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadTranscriptResult {
+    #[serde(alias = "history_id")]
     pub history_id: String,
+    #[serde(default = "default_completed_status", alias = "task_status")]
+    pub task_status: String,
+    #[serde(default, alias = "error_message")]
+    pub error_message: Option<String>,
     pub segments: Vec<TranscriptSegment>,
     pub text: String,
     #[serde(default, alias = "translation_text")]
     pub translation_text: Option<String>,
+    #[serde(default, alias = "total_segments_in_history")]
+    pub total_segments_in_history: usize,
+    #[serde(default, alias = "returned_segments")]
+    pub returned_segments: usize,
+    #[serde(default, alias = "has_more")]
+    pub has_more: bool,
+}
+
+fn default_completed_status() -> String {
+    "completed".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -235,7 +285,7 @@ pub struct UpdateSettingRequest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TranscribeFileRequest {
-    #[serde(alias = "filePath", alias = "file_path")]
+    #[serde(alias = "filePath", alias = "file_path", alias = "input")]
     pub file_path: String,
     #[serde(default, alias = "projectId", alias = "project_id")]
     pub project_id: Option<String>,
@@ -243,16 +293,32 @@ pub struct TranscribeFileRequest {
     pub language: Option<String>,
     #[serde(default, alias = "saveToPath", alias = "save_to_path")]
     pub save_to_path: Option<String>,
-    #[serde(default, alias = "instanceId", alias = "instance_id")]
+    #[serde(
+        default,
+        alias = "instanceId",
+        alias = "instance_id",
+        alias = "taskId",
+        alias = "task_id"
+    )]
     pub instance_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscribeFileResult {
+    #[serde(alias = "history_id")]
     pub history_id: String,
+    #[serde(alias = "task_id")]
+    pub task_id: String,
+    pub status: String,
+    #[serde(alias = "is_stream")]
+    pub is_stream: bool,
+    pub message: String,
+    #[serde(default, alias = "duration_seconds")]
     pub duration_seconds: f64,
+    #[serde(default, alias = "segment_count")]
     pub segment_count: usize,
+    #[serde(default)]
     pub text: String,
 }
 

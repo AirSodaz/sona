@@ -777,7 +777,9 @@ pub fn resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
     config: Option<TranscribeConfigSection>,
     models_dir_status: fn(&Path) -> ModelsDirStatus,
 ) -> Result<BatchTranscribePlan, RuntimeFsError> {
-    ensure_input_file_exists(&options.input)?;
+    if !sona_core::history::is_network_url(&options.input.to_string_lossy()) {
+        ensure_input_file_exists(&options.input)?;
+    }
     ensure_output_can_be_written(options.output.as_ref(), options.force)?;
     sona_core::transcription::runtime::resolve_batch_transcribe_plan_with_install_checker_and_models_dir_status(
         options,
@@ -867,7 +869,9 @@ fn expand_input_patterns(inputs: &[PathBuf]) -> Result<Vec<PathBuf>, RuntimeFsEr
     let mut expanded = Vec::new();
 
     for input in inputs {
-        if path_contains_glob_pattern(input) {
+        if sona_core::history::is_network_url(&input.to_string_lossy()) {
+            expanded.push(input.clone());
+        } else if path_contains_glob_pattern(input) {
             let pattern = input.to_string_lossy().to_string();
             let mut matches = glob::glob(&pattern)
                 .map_err(|error| {

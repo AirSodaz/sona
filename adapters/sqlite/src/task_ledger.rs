@@ -52,6 +52,10 @@ where
         }
     }
 
+    pub fn list_tasks(&self) -> Result<Vec<TaskLedgerRecord>, TaskLedgerError> {
+        self.service().list_tasks()
+    }
+
     pub fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, TaskLedgerError> {
         self.service().load_snapshot()
     }

@@ -1,8 +1,9 @@
 use crate::platform::agent_control::facade::{
     AgentControlFacade, CreateProjectRequest, DownloadPresetModelRequest, EditTranscriptRequest,
     ExportTranscriptRequest, PatchSegmentsRequest, QueryHistoryRequest, QueryTrashRequest,
-    SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest, TranscribeFileRequest,
-    UpdateHistoryMetaRequest, UpdateProjectRequest, UpdateTranslationsRequest,
+    ReadTranscriptRequest, SaveSummaryRequest, StartRecordingRequest, StopRecordingRequest,
+    TranscribeFileRequest, UpdateHistoryMetaRequest, UpdateProjectRequest,
+    UpdateTranslationsRequest,
 };
 use serde::{Deserialize, Serialize};
 use sona_core::config::AppConfig;
@@ -271,7 +272,7 @@ pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
     (
         "sona_read_transcript",
         "Read Transcript",
-        "Read full transcript segments and text of a history record.",
+        "Read transcript segments and text of a history record, with optional time filtering, cursor pagination, and task status.",
         ToolPermissionCategory::ReadOnly,
     ),
     (
@@ -361,7 +362,7 @@ pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
     (
         "sona_transcribe_file",
         "Transcribe File",
-        "Transcribe a local audio or video file in batch mode and save into history.",
+        "Start background transcription for a local audio/video file or remote network stream (HTTP/HTTPS/RTMP/RTSP/m3u8), returning task and history IDs immediately.",
         ToolPermissionCategory::TranscriptEdit,
     ),
     (
@@ -614,11 +615,14 @@ pub async fn dispatch_rpc_call(
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "read_transcript" => {
-            let history_id = extract_history_id(&params)?;
-            let res = facade
-                .read_transcript(history_id)
-                .await
-                .map_err(map_rpc_error)?;
+            let req: ReadTranscriptRequest = match &params {
+                Some(serde_json::Value::String(s)) => ReadTranscriptRequest {
+                    history_id: s.clone(),
+                    ..Default::default()
+                },
+                _ => parse_params(params)?,
+            };
+            let res = facade.read_transcript(req).await.map_err(map_rpc_error)?;
             serde_json::to_value(res).map_err(|e| (-32603, e.to_string()))
         }
         "edit_transcript" => {
