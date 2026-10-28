@@ -236,13 +236,33 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "sona_read_transcript",
             title: Some("Read Transcript"),
-            description: "Read full transcript segments and text of a history record.",
+            description: "Read transcript segments and text of a history record, with optional time filtering, cursor pagination, and task status.",
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "history_id": {
                         "type": "string",
                         "description": "Target history record ID"
+                    },
+                    "start_seconds": {
+                        "type": "number",
+                        "description": "Optional start time in seconds to filter segments"
+                    },
+                    "end_seconds": {
+                        "type": "number",
+                        "description": "Optional end time in seconds to filter segments"
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Optional number of segments to skip"
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Optional maximum number of segments to return"
+                    },
+                    "since_segment_id": {
+                        "type": "string",
+                        "description": "Optional segment ID cursor: only return segments occurring after this ID"
                     }
                 },
                 "required": ["history_id"]
@@ -421,13 +441,17 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
         ToolDefinition {
             name: "sona_transcribe_file",
             title: Some("Transcribe File"),
-            description: "Transcribe a local audio or video file in batch mode and save into history.",
+            description: "Start background transcription for a local audio/video file or remote network stream (HTTP/HTTPS/RTMP/RTSP/m3u8), returning task and history IDs immediately.",
             input_schema: serde_json::json!({
                 "type": "object",
                 "properties": {
                     "file_path": {
                         "type": "string",
-                        "description": "Absolute path to local media file"
+                        "description": "Absolute path to local media file or remote stream URL"
+                    },
+                    "input": {
+                        "type": "string",
+                        "description": "Alias for file_path: local media file path or remote stream URL"
                     },
                     "project_id": {
                         "type": "string",
@@ -445,8 +469,7 @@ fn build_tool_definitions() -> Vec<ToolDefinition> {
                         "type": "string",
                         "description": "Optional custom instance ID for tracking and cancelling this batch task"
                     }
-                },
-                "required": ["file_path"]
+                }
             }),
         },
         ToolDefinition {

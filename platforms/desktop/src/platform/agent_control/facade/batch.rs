@@ -10,11 +10,9 @@ pub async fn transcribe_file(
     services: &DesktopServices,
     req: TranscribeFileRequest,
 ) -> Result<TranscribeFileResult, String> {
-    let _sleep_guard = crate::platform::system::power::SleepPreventionGuard::acquire(
-        "Agent Audio Batch Transcription",
-    );
+    let is_stream = sona_core::history::is_network_url(&req.file_path);
     let path = std::path::PathBuf::from(&req.file_path);
-    if !path.exists() {
+    if !is_stream && !path.exists() {
         return Err(format!("File not found: {}", req.file_path));
     }
 
@@ -29,16 +27,35 @@ pub async fn transcribe_file(
     let instance_id = req
         .instance_id
         .unwrap_or_else(|| format!("mcp-transcribe-{}", uuid::Uuid::new_v4()));
+    let history_id = uuid::Uuid::new_v4().to_string();
 
     let now_ms = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_err(|e| e.to_string())?
         .as_millis() as u64;
-    let title = path
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("batch-file")
-        .to_string();
+    let title = if is_stream {
+        req.file_path.clone()
+    } else {
+        path.file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("batch-file")
+            .to_string()
+    };
+
+    let save_req = sona_core::history::HistorySaveImportedFileRequest {
+        id: Some(history_id.clone()),
+        source_path: req.file_path.clone(),
+        segments: vec![],
+        duration: 0.0,
+        tag_ids: Vec::new(),
+        project_id: req.project_id.clone(),
+        converted_source_path: None,
+    };
+    let _ = services
+        .history
+        .mutation_file(move |s| s.save_imported_file(save_req))
+        .await
+        .map_err(|e| format!("Failed to create history record: {e}"))?;
 
     let initial_record = sona_core::task_ledger::types::TaskLedgerRecord {
         id: instance_id.clone(),
@@ -52,7 +69,7 @@ pub async fn transcribe_file(
         cancelable: true,
         recoverable: false,
         stage: Some("transcribing".to_string()),
-        history_id: None,
+        history_id: Some(history_id.clone()),
         tag_ids: req.project_id.clone().into_iter().collect(),
         file_path: Some(req.file_path.clone()),
         automation_rule_id: None,
@@ -66,124 +83,132 @@ pub async fn transcribe_file(
     };
     let _ = services.task_ledger.upsert_task(initial_record).await;
 
-    let segments = match crate::integrations::asr::process_batch_file(
-        services.emitter.clone(),
-        &services.asr,
-        path,
-        save_to,
-        asr_req,
-        None,
-        Some(instance_id.clone()),
-    )
-    .await
-    {
-        Ok(s) => s,
-        Err(e) => {
-            let is_cancelled = e.code() == "TASK_CANCELLED" || e.message.contains("Task cancelled");
-            let status = if is_cancelled {
-                sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
-            } else {
-                sona_core::task_ledger::types::TaskLedgerStatus::Failed
-            };
-            let stage = if is_cancelled {
-                "cancelled".to_string()
-            } else {
-                "failed".to_string()
-            };
-            let err_str = if is_cancelled {
-                super::AgentControlError::TaskCancelled(e.message).to_string()
-            } else {
-                e.to_string()
-            };
-            let _ = services
-                .task_ledger
-                .patch_task(
-                    instance_id,
-                    sona_core::task_ledger::types::TaskLedgerPatch {
-                        status: Some(status),
-                        error_message: if is_cancelled {
-                            None
-                        } else {
-                            Some(Some(err_str.clone()))
-                        },
-                        stage: Some(Some(stage)),
-                        ..Default::default()
-                    },
-                )
-                .await;
-            return Err(err_str);
-        }
-    };
-
-    let duration_seconds = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
-    let segment_count = segments.len();
-    let text = segments
-        .iter()
-        .map(|s| s.text.trim())
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ");
-
-    let save_req = sona_core::history::HistorySaveImportedFileRequest {
-        id: None,
-        source_path: req.file_path.clone(),
-        segments,
-        duration: duration_seconds,
-        tag_ids: Vec::new(),
-        project_id: req.project_id,
-        converted_source_path: None,
-    };
-    let history_item = match services
-        .history
-        .mutation_file(move |s| s.save_imported_file(save_req))
-        .await
-    {
-        Ok(item) => item,
-        Err(e) => {
-            let err_str = e.to_string();
-            let _ = services
-                .task_ledger
-                .patch_task(
-                    instance_id,
-                    sona_core::task_ledger::types::TaskLedgerPatch {
-                        status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Failed),
-                        error_message: Some(Some(err_str.clone())),
-                        stage: Some(Some("failed".to_string())),
-                        ..Default::default()
-                    },
-                )
-                .await;
-            return Err(err_str);
-        }
-    };
-    let history_id = history_item.id;
-
-    let _ = services
-        .task_ledger
-        .patch_task(
-            instance_id,
-            sona_core::task_ledger::types::TaskLedgerPatch {
-                status: Some(sona_core::task_ledger::types::TaskLedgerStatus::Succeeded),
-                progress: Some(100.0),
-                history_id: Some(Some(history_id.clone())),
-                stage: Some(Some("completed".to_string())),
-                ..Default::default()
-            },
+    let task_services = services.clone();
+    let task_instance_id = instance_id.clone();
+    let task_history_id = history_id.clone();
+    tokio::spawn(async move {
+        let _sleep_guard = crate::platform::system::power::SleepPreventionGuard::acquire(
+            "Agent Audio Batch Transcription",
+        );
+        let result = crate::integrations::asr::process_batch_file(
+            task_services.emitter.clone(),
+            &task_services.asr,
+            path,
+            save_to,
+            asr_req,
+            None,
+            Some(task_instance_id.clone()),
         )
         .await;
 
-    let _ = services.emitter.emit(
-        "transcript-updated",
-        serde_json::json!({ "historyId": &history_id }),
-    );
+        match result {
+            Ok(segments) => {
+                let duration_seconds = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
+                let hid = task_history_id.clone();
+                let segs_clone = segments.clone();
+                let _ = task_services
+                    .history
+                    .mutation_file(move |s| {
+                        s.update_transcript(
+                            sona_core::history::mutation_repository::HistoryUpdateTranscriptRequest {
+                                history_id: hid,
+                                segments: segs_clone,
+                            },
+                        )
+                    })
+                    .await;
+
+                let hid_meta = task_history_id.clone();
+                let _ = task_services
+                    .history
+                    .mutation_file(move |s| {
+                        s.update_item_meta(
+                            sona_core::history::mutation_repository::HistoryUpdateItemMetaRequest {
+                                history_id: hid_meta,
+                                updates:
+                                    sona_core::history::mutation_repository::HistoryItemMetaPatch {
+                                        duration: Some(duration_seconds),
+                                        ..Default::default()
+                                    },
+                            },
+                        )
+                    })
+                    .await;
+
+                let _ = task_services
+                    .task_ledger
+                    .patch_task(
+                        task_instance_id,
+                        sona_core::task_ledger::types::TaskLedgerPatch {
+                            status: Some(
+                                sona_core::task_ledger::types::TaskLedgerStatus::Succeeded,
+                            ),
+                            progress: Some(100.0),
+                            history_id: Some(Some(task_history_id.clone())),
+                            stage: Some(Some("completed".to_string())),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+
+                let _ = task_services.emitter.emit(
+                    "transcript-updated",
+                    serde_json::json!({ "historyId": &task_history_id }),
+                );
+            }
+            Err(e) => {
+                let is_cancelled =
+                    e.code() == "TASK_CANCELLED" || e.message.contains("Task cancelled");
+                let status = if is_cancelled {
+                    sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
+                } else {
+                    sona_core::task_ledger::types::TaskLedgerStatus::Failed
+                };
+                let stage = if is_cancelled {
+                    "cancelled".to_string()
+                } else {
+                    "failed".to_string()
+                };
+                let err_str = if is_cancelled {
+                    super::AgentControlError::TaskCancelled(e.message).to_string()
+                } else {
+                    e.to_string()
+                };
+                let _ = task_services
+                    .task_ledger
+                    .patch_task(
+                        task_instance_id,
+                        sona_core::task_ledger::types::TaskLedgerPatch {
+                            status: Some(status),
+                            error_message: if is_cancelled {
+                                None
+                            } else {
+                                Some(Some(err_str.clone()))
+                            },
+                            stage: Some(Some(stage)),
+                            ..Default::default()
+                        },
+                    )
+                    .await;
+            }
+        }
+    });
+
     Ok(TranscribeFileResult {
         history_id,
-        duration_seconds,
-        segment_count,
-        text,
+        task_id: instance_id,
+        status: "started".to_string(),
+        is_stream,
+        message: if is_stream {
+            "Stream transcription task started in background".to_string()
+        } else {
+            "File transcription task started in background".to_string()
+        },
+        duration_seconds: 0.0,
+        segment_count: 0,
+        text: String::new(),
     })
 }
-
 pub async fn cancel_batch_task(
     services: &DesktopServices,
     instance_id: String,

@@ -55,6 +55,10 @@ impl TaskLedgerService {
         .await
     }
 
+    pub async fn list_tasks(&self) -> Result<Vec<TaskLedgerRecord>, String> {
+        self.run_adapter(|adapter| adapter.list_tasks()).await
+    }
+
     pub async fn load_snapshot(&self) -> Result<TaskLedgerSnapshot, String> {
         let snapshot = self.run_adapter(|adapter| adapter.load_snapshot()).await?;
         sona_ts_bind::validate_task_ledger_snapshot_for_typescript(&snapshot)

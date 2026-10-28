@@ -28,6 +28,7 @@ use sona_runtime_fs::{
     collect_automation_runtime_candidate_paths, ensure_directory_exists,
     is_preset_model_installed_at, load_transcribe_config_file, load_transcribe_live_config_file,
     path_exists, plan_batch_output_files, remove_path_if_exists, resolve_batch_input_source,
+    resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status,
     resolve_live_transcribe_plan_with_runtime_paths, resolve_runtime_path_status,
     save_bootstrap_config, select_desktop_models_dir_from_app_roots,
     validate_native_automation_rule_activation, write_cli_config_template_file,
@@ -851,4 +852,62 @@ fn select_desktop_models_dir_honors_custom_models_dir_even_when_not_yet_created(
 
     let selected = select_desktop_models_dir_from_app_roots(vec![root1, root2]);
     assert_eq!(selected, Some(custom_models));
+}
+
+#[test]
+fn runtime_capability_batch_plan_resolver_allows_network_url() {
+    let directory = tempfile::tempdir().unwrap();
+    let model = find_preset_model("whisper-turbo").unwrap();
+    let install_path = model.resolve_install_path(directory.path());
+    std::fs::create_dir_all(&install_path).unwrap();
+    for artifact in &model.artifacts {
+        std::fs::write(install_path.join(&artifact.filename), b"dummy").unwrap();
+    }
+    let vad = find_preset_model(DEFAULT_SILERO_VAD_MODEL_ID).unwrap();
+    std::fs::write(vad.resolve_install_path(directory.path()), b"vad").unwrap();
+
+    let plan = resolve_batch_transcribe_plan_with_runtime_paths_and_models_dir_status(
+        BatchTranscribeOptions {
+            input: PathBuf::from("https://example.com/audio.mp3"),
+            output: None,
+            format: Some("txt".into()),
+            language: None,
+            model_id: Some("whisper-turbo".into()),
+            models_dir: Some(directory.path().to_path_buf()),
+            default_models_dir: Some(directory.path().to_path_buf()),
+            vad_model_id: None,
+            punctuation_model_id: None,
+            threads: None,
+            enable_itn: None,
+            hotwords: None,
+            gpu_acceleration: None,
+            vad_buffer: None,
+            save_wav: None,
+            quiet: true,
+            force: true,
+            ffmpeg_path: None,
+        },
+        None,
+        |_| sona_core::models::paths::ModelsDirStatus::Directory,
+    )
+    .unwrap();
+
+    assert_eq!(
+        plan.input_path,
+        PathBuf::from("https://example.com/audio.mp3")
+    );
+}
+
+#[test]
+fn resolve_batch_input_source_allows_network_url() {
+    let source = resolve_batch_input_source(
+        None,
+        &[PathBuf::from("https://example.com/stream.m3u8")],
+        false,
+    )
+    .unwrap();
+    assert_eq!(
+        source.inputs,
+        vec![PathBuf::from("https://example.com/stream.m3u8")]
+    );
 }

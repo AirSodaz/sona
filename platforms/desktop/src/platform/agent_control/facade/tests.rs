@@ -1218,3 +1218,185 @@ async fn test_facade_shares_recording_operation_lock_with_services() {
         "facade.recording_op_lock must be free after guard is dropped"
     );
 }
+
+#[tokio::test]
+async fn test_transcribe_file_async_task_creation_and_stream_url() {
+    let (facade, _dir) = create_test_facade().await;
+    let batch_cfg = serde_json::json!({
+        "batchModelPath": "C:/models/model.onnx",
+        "language": "zh"
+    });
+    facade.services.config.save(&batch_cfg).unwrap();
+    let req = TranscribeFileRequest {
+        file_path: "https://example.com/audio.mp3".to_string(),
+        project_id: None,
+        language: None,
+        save_to_path: None,
+        instance_id: Some("task-stream-123".to_string()),
+    };
+
+    let res = facade.transcribe_file(req).await.unwrap();
+    assert_eq!(res.status, "started");
+    assert!(res.is_stream);
+    assert_eq!(res.task_id, "task-stream-123");
+    assert!(!res.history_id.is_empty());
+
+    // Verify task ledger has initial record in running status
+    let tasks = facade.services.task_ledger.list_tasks().await.unwrap();
+    let task = tasks.iter().find(|t| t.id == "task-stream-123").unwrap();
+    assert_eq!(
+        task.status,
+        sona_core::task_ledger::types::TaskLedgerStatus::Running
+    );
+    assert_eq!(task.history_id.as_deref(), Some(res.history_id.as_str()));
+
+    // Verify history item exists with 0 segments initially
+    let hid = res.history_id.clone();
+    let read = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id: hid,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(read.task_status, "running");
+    assert_eq!(read.total_segments_in_history, 0);
+    assert_eq!(read.returned_segments, 0);
+}
+
+#[tokio::test]
+async fn test_read_transcript_windowing_pagination_and_task_status() {
+    let (facade, _dir) = create_test_facade().await;
+    let dummy_path = _dir.path().join("test_read.wav");
+    std::fs::write(&dummy_path, b"audio").unwrap();
+    let history_id = "test-hist-windowing".to_string();
+    let hid_clone = history_id.clone();
+
+    let make_seg =
+        |id: &str, start: f64, end: f64, text: &str, translation: Option<&str>| TranscriptSegment {
+            id: id.to_string(),
+            start,
+            end,
+            text: text.to_string(),
+            is_final: true,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: translation.map(String::from),
+            draft_translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+    let segments = vec![
+        make_seg("seg-1", 0.0, 2.0, "first segment", Some("premier")),
+        make_seg("seg-2", 2.0, 4.0, "second segment", Some("deuxieme")),
+        make_seg("seg-3", 4.0, 6.0, "third segment", Some("troisieme")),
+        make_seg("seg-4", 6.0, 8.0, "fourth segment", None),
+        make_seg("seg-5", 8.0, 10.0, "fifth segment", None),
+    ];
+
+    facade
+        .services
+        .history
+        .mutation_file(move |s| {
+            s.save_imported_file(sona_core::history::HistorySaveImportedFileRequest {
+                id: Some(hid_clone),
+                source_path: dummy_path.to_string_lossy().to_string(),
+                segments,
+                duration: 10.0,
+                tag_ids: Vec::new(),
+                project_id: None,
+                converted_source_path: None,
+            })
+        })
+        .await
+        .unwrap();
+
+    // 1. Full read without filters (backwards compatibility test)
+    let full = facade.read_transcript(history_id.clone()).await.unwrap();
+    assert_eq!(full.total_segments_in_history, 5);
+    assert_eq!(full.returned_segments, 5);
+    assert_eq!(full.segments.len(), 5);
+    assert!(!full.has_more);
+    assert_eq!(full.task_status, "completed");
+
+    // 2. Time range filter [2.0, 6.0]
+    let windowed = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id: history_id.clone(),
+            start_seconds: Some(2.5),
+            end_seconds: Some(5.5),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(windowed.returned_segments, 2);
+    assert_eq!(windowed.segments[0].id, "seg-2");
+    assert_eq!(windowed.segments[1].id, "seg-3");
+    assert_eq!(windowed.total_segments_in_history, 5);
+
+    // 3. Cursor filter since_segment_id: "seg-2"
+    let cursor = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id: history_id.clone(),
+            since_segment_id: Some("seg-2".to_string()),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(cursor.returned_segments, 3);
+    assert_eq!(cursor.segments[0].id, "seg-3");
+    assert_eq!(cursor.segments[1].id, "seg-4");
+    assert_eq!(cursor.segments[2].id, "seg-5");
+
+    // 4. Pagination with offset and limit
+    let paged = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id: history_id.clone(),
+            offset: Some(1),
+            limit: Some(2),
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(paged.returned_segments, 2);
+    assert_eq!(paged.segments[0].id, "seg-2");
+    assert_eq!(paged.segments[1].id, "seg-3");
+    assert!(paged.has_more);
+
+    // 5. Inlined task status from ledger
+    let task_record = sona_core::task_ledger::types::TaskLedgerRecord {
+        id: "task-status-test".to_string(),
+        kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+        status: sona_core::task_ledger::types::TaskLedgerStatus::Running,
+        title: "task".to_string(),
+        progress: 50.0,
+        created_at: 0,
+        updated_at: 0,
+        retryable: false,
+        cancelable: true,
+        recoverable: false,
+        stage: Some("transcribing".to_string()),
+        history_id: Some(history_id.clone()),
+        tag_ids: Vec::new(),
+        file_path: None,
+        automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
+        source_fingerprint: None,
+        error_message: None,
+        template_id: None,
+        target_language: None,
+    };
+    facade
+        .services
+        .task_ledger
+        .upsert_task(task_record)
+        .await
+        .unwrap();
+
+    let running_read = facade.read_transcript(history_id.clone()).await.unwrap();
+    assert_eq!(running_read.task_status, "running");
+}

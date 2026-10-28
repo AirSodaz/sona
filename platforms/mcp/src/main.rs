@@ -419,6 +419,11 @@ pub(crate) fn maybe_inject_transcribe_instance_id(req: &mut JsonRpcRequest) -> O
             *args_val = serde_json::json!({});
         }
         if let Some(args_obj) = args_val.as_object_mut() {
+            if !args_obj.contains_key("file_path")
+                && let Some(input) = args_obj.get("input").cloned()
+            {
+                args_obj.insert("file_path".to_string(), input);
+            }
             let instance_id = match args_obj.get("instance_id").and_then(|v| v.as_str()) {
                 Some(id) if !id.trim().is_empty() => id.to_string(),
                 _ => {

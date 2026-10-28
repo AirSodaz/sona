@@ -1608,3 +1608,107 @@ fn test_resolve_rpc_timeout() {
         Duration::from_secs(30)
     );
 }
+
+#[tokio::test]
+async fn test_mcp_transcribe_file_async_stream_and_read_transcript() {
+    let (client, server) = tokio::io::duplex(4096);
+
+    tokio::spawn(async move {
+        let (srv_read, mut srv_write) = tokio::io::split(server);
+        let mut reader = tokio::io::BufReader::new(srv_read);
+        let mut line = String::new();
+
+        // 1. Handle transcribe_file
+        reader.read_line(&mut line).await.unwrap();
+        let req1: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(req1["method"], "sona_transcribe_file");
+        let params = &req1["params"];
+        assert_eq!(params["file_path"], "https://example.com/audio.mp3");
+
+        let resp1 = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": req1["id"],
+            "result": {
+                "historyId": "hist-mcp-1",
+                "taskId": "task-mcp-1",
+                "status": "started",
+                "isStream": true,
+                "message": "Stream transcription task started in background"
+            }
+        });
+        srv_write
+            .write_all(format!("{}\n", serde_json::to_string(&resp1).unwrap()).as_bytes())
+            .await
+            .unwrap();
+        srv_write.flush().await.unwrap();
+
+        // 2. Handle read_transcript with limit: 1 and since_segment_id
+        line.clear();
+        reader.read_line(&mut line).await.unwrap();
+        let req2: serde_json::Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(req2["method"], "sona_read_transcript");
+        let params2 = &req2["params"];
+        assert_eq!(params2["history_id"], "hist-mcp-1");
+        assert_eq!(params2["limit"], 1);
+        assert_eq!(params2["since_segment_id"], "seg-1");
+
+        let resp2 = serde_json::json!({
+            "jsonrpc": "2.0",
+            "id": req2["id"],
+            "result": {
+                "historyId": "hist-mcp-1",
+                "taskStatus": "running",
+                "segments": [
+                    { "id": "seg-2", "start": 2.0, "end": 4.0, "text": "next segment", "isFinal": true }
+                ],
+                "text": "next segment",
+                "totalSegmentsInHistory": 5,
+                "returnedSegments": 1,
+                "hasMore": true
+            }
+        });
+        srv_write
+            .write_all(format!("{}\n", serde_json::to_string(&resp2).unwrap()).as_bytes())
+            .await
+            .unwrap();
+        srv_write.flush().await.unwrap();
+    });
+
+    let (read_half, mut write_half) = tokio::io::split(client);
+    let mut buf_reader = tokio::io::BufReader::new(read_half);
+
+    let start_instant = std::time::Instant::now();
+    let res1 = IpcClient::send_receive_io(
+        &mut buf_reader,
+        &mut write_half,
+        "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"sona_transcribe_file\",\"params\":{\"file_path\":\"https://example.com/audio.mp3\"}}\n",
+        1,
+        Duration::from_secs(300),
+    )
+    .await
+    .unwrap();
+    let elapsed = start_instant.elapsed();
+    assert!(
+        elapsed < Duration::from_millis(100),
+        "Latency must be < 100ms, was {elapsed:?}"
+    );
+    assert_eq!(res1["status"], "started");
+    assert_eq!(res1["isStream"], true);
+    assert_eq!(res1["taskId"], "task-mcp-1");
+    assert_eq!(res1["historyId"], "hist-mcp-1");
+
+    let res2 = IpcClient::send_receive_io(
+        &mut buf_reader,
+        &mut write_half,
+        "{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"sona_read_transcript\",\"params\":{\"history_id\":\"hist-mcp-1\",\"limit\":1,\"since_segment_id\":\"seg-1\"}}\n",
+        2,
+        Duration::from_secs(30),
+    )
+    .await
+    .unwrap();
+    assert_eq!(res2["taskStatus"], "running");
+    assert_eq!(res2["returnedSegments"], 1);
+    assert_eq!(res2["totalSegmentsInHistory"], 5);
+    assert_eq!(res2["hasMore"], true);
+    assert_eq!(res2["segments"][0]["id"], "seg-2");
+}

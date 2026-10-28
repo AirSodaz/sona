@@ -92,14 +92,62 @@ pub struct HistoryItemSummary {
     pub project_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct ReadTranscriptRequest {
+    #[serde(alias = "historyId", alias = "history_id")]
+    pub history_id: String,
+    #[serde(default, alias = "startSeconds", alias = "start_seconds")]
+    pub start_seconds: Option<f64>,
+    #[serde(default, alias = "endSeconds", alias = "end_seconds")]
+    pub end_seconds: Option<f64>,
+    #[serde(default)]
+    pub offset: Option<usize>,
+    #[serde(default)]
+    pub limit: Option<usize>,
+    #[serde(default, alias = "sinceSegmentId", alias = "since_segment_id")]
+    pub since_segment_id: Option<String>,
+}
+
+impl From<String> for ReadTranscriptRequest {
+    fn from(history_id: String) -> Self {
+        Self {
+            history_id,
+            ..Default::default()
+        }
+    }
+}
+
+impl From<&str> for ReadTranscriptRequest {
+    fn from(history_id: &str) -> Self {
+        Self {
+            history_id: history_id.to_string(),
+            ..Default::default()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadTranscriptResult {
     pub history_id: String,
+    #[serde(default = "default_completed_status")]
+    pub task_status: String,
+    pub error_message: Option<String>,
     pub segments: Vec<TranscriptSegment>,
     pub text: String,
     #[serde(default, alias = "translation_text")]
     pub translation_text: Option<String>,
+    #[serde(default)]
+    pub total_segments_in_history: usize,
+    #[serde(default)]
+    pub returned_segments: usize,
+    #[serde(default)]
+    pub has_more: bool,
+}
+
+fn default_completed_status() -> String {
+    "completed".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -235,7 +283,7 @@ pub struct UpdateSettingRequest {
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct TranscribeFileRequest {
-    #[serde(alias = "filePath", alias = "file_path")]
+    #[serde(alias = "filePath", alias = "file_path", alias = "input")]
     pub file_path: String,
     #[serde(default, alias = "projectId", alias = "project_id")]
     pub project_id: Option<String>,
@@ -243,7 +291,13 @@ pub struct TranscribeFileRequest {
     pub language: Option<String>,
     #[serde(default, alias = "saveToPath", alias = "save_to_path")]
     pub save_to_path: Option<String>,
-    #[serde(default, alias = "instanceId", alias = "instance_id")]
+    #[serde(
+        default,
+        alias = "instanceId",
+        alias = "instance_id",
+        alias = "taskId",
+        alias = "task_id"
+    )]
     pub instance_id: Option<String>,
 }
 
@@ -251,8 +305,15 @@ pub struct TranscribeFileRequest {
 #[serde(rename_all = "camelCase")]
 pub struct TranscribeFileResult {
     pub history_id: String,
+    pub task_id: String,
+    pub status: String,
+    pub is_stream: bool,
+    pub message: String,
+    #[serde(default)]
     pub duration_seconds: f64,
+    #[serde(default)]
     pub segment_count: usize,
+    #[serde(default)]
     pub text: String,
 }
 
