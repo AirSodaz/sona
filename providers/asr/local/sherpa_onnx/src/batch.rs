@@ -605,6 +605,34 @@ fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
 
     false
 }
+impl From<BatchTranscriptionJob> for crate::stream_transcriber::StreamTranscriptionJob {
+    fn from(job: BatchTranscriptionJob) -> Self {
+        Self {
+            url: job.input_path.to_string_lossy().to_string(),
+            save_to_path: job.save_to_path,
+            model_path: job.model_path,
+            num_threads: job.num_threads,
+            enable_itn: job.enable_itn,
+            language: job.language,
+            punctuation_model: job.punctuation_model,
+            alignment_model: job.alignment_model,
+            vad_model: job.vad_model,
+            vad_buffer: job.vad_buffer,
+            batch_segmentation_mode: job.batch_segmentation_mode,
+            model_type: job.model_type,
+            file_config: job.file_config,
+            hotwords: job.hotwords,
+            speaker_processing: job.speaker_processing,
+            gpu_acceleration: job.gpu_acceleration,
+            quiet: job.quiet,
+            vad_engines: job.vad_engines,
+            punct_engines: job.punct_engines,
+            aligner_engines: job.aligner_engines,
+            ffmpeg_enabled: job.ffmpeg_enabled,
+            ffmpeg_path: job.ffmpeg_path,
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -805,33 +833,5 @@ mod tests {
             .filter(|d| !d.is_empty())
             .or_else(|| fallback_durations.clone());
         assert_eq!(fallback_for_empty, fallback_durations);
-    }
-}
-impl From<BatchTranscriptionJob> for crate::stream_transcriber::StreamTranscriptionJob {
-    fn from(job: BatchTranscriptionJob) -> Self {
-        Self {
-            url: job.input_path.to_string_lossy().to_string(),
-            save_to_path: job.save_to_path,
-            model_path: job.model_path,
-            num_threads: job.num_threads,
-            enable_itn: job.enable_itn,
-            language: job.language,
-            punctuation_model: job.punctuation_model,
-            alignment_model: job.alignment_model,
-            vad_model: job.vad_model,
-            vad_buffer: job.vad_buffer,
-            batch_segmentation_mode: job.batch_segmentation_mode,
-            model_type: job.model_type,
-            file_config: job.file_config,
-            hotwords: job.hotwords,
-            speaker_processing: job.speaker_processing,
-            gpu_acceleration: job.gpu_acceleration,
-            quiet: job.quiet,
-            vad_engines: job.vad_engines,
-            punct_engines: job.punct_engines,
-            aligner_engines: job.aligner_engines,
-            ffmpeg_enabled: job.ffmpeg_enabled,
-            ffmpeg_path: job.ffmpeg_path,
-        }
     }
 }
