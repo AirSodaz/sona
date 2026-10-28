@@ -171,7 +171,7 @@ export function QueueSummaryBar({
             menuItems={[
               {
                 key: 'files',
-                label: t('batch.add_more', { defaultValue: 'Add More' }),
+                label: t('batch.add_more_files', { defaultValue: 'Add More Files' }),
                 description: t('batch.add_more_desc', {
                   defaultValue: 'Add more audio/video files to queue',
                 }),

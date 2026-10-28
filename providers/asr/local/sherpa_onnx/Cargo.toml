@@ -18,7 +18,7 @@ sona-core = { workspace = true }
 sherpa-onnx = { workspace = true }
 sherpa-onnx-sys = { workspace = true }
 sysinfo = { workspace = true }
-tokio = { workspace = true, features = ["process", "rt", "macros", "fs", "io-util", "sync"] }
+tokio = { workspace = true, features = ["process", "rt", "macros", "fs", "io-util", "sync", "time"] }
 uuid = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "rustls"] }
 

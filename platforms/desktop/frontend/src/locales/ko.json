@@ -262,6 +262,8 @@
     "stop": "중지",
     "recording_paused": "녹음이 일시정지되었습니다",
     "recording_active": "녹음 중... 버튼으로 제어하세요",
+    "agent_recording_active": "AI Agent 녹음이 진행 중이며 마이크가 사용 중입니다",
+    "agent_recording_locked": "AI Agent가 녹음 중입니다. 수동 녹음이 현재 잠겨 있습니다",
     "start_hint": "빨간 버튼을 눌러 녹음을 시작하세요",
     "mic_error": "마이크에 접근하지 못했습니다. 권한을 확인하세요.",
     "start_recording": "녹음 시작",
@@ -2644,7 +2646,8 @@
       "reasoning_level_xhigh": "매우 높음",
       "reasoning_level_max": "최대",
       "reasoning_budget": "추론 토큰 예산",
-      "reasoning_budget_hint": "단일 추론에 허용되는 최대 사고 토큰 수"
+      "reasoning_budget_hint": "단일 추론에 허용되는 최대 사고 토큰 수",
+      "builtin_reasoning": "기본 내장 추론 (별도 설정 불필요)"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

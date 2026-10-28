@@ -221,31 +221,35 @@ impl StreamTranscriptionJob {
             );
         }
 
-        let mut vad_detector = if let Some(vad_path) = self.vad_model.as_deref() {
-            let options = VadDetectorOptions {
-                threshold: 0.5,
-                min_silence_duration: 0.6,
-                min_speech_duration: 0.25,
-                max_speech_duration: 15.0,
-                window_size: 512,
-                sample_rate: 16000,
-                num_threads: 1,
-            };
-            let buffer_size = (15.0
-                + if self.vad_buffer > 0.0 {
-                    self.vad_buffer
-                } else {
-                    5.0
-                })
-            .max(30.0);
-            match create_vad_config(vad_path, options) {
-                Ok(config) => VoiceActivityDetector::create(&config, buffer_size),
-                Err(err) => {
-                    log::warn!(
-                        "Failed to create stream VAD detector: {err}; falling back to fixed chunks"
-                    );
-                    None
+        let mut vad_detector = if self.batch_segmentation_mode == BatchSegmentationMode::Vad {
+            if let Some(vad_path) = self.vad_model.as_deref() {
+                let options = VadDetectorOptions {
+                    threshold: 0.5,
+                    min_silence_duration: 0.6,
+                    min_speech_duration: 0.25,
+                    max_speech_duration: 15.0,
+                    window_size: 512,
+                    sample_rate: 16000,
+                    num_threads: 1,
+                };
+                let buffer_size = (15.0
+                    + if self.vad_buffer > 0.0 {
+                        self.vad_buffer
+                    } else {
+                        5.0
+                    })
+                .max(30.0);
+                match create_vad_config(vad_path, options) {
+                    Ok(config) => VoiceActivityDetector::create(&config, buffer_size),
+                    Err(err) => {
+                        log::warn!(
+                            "Failed to create stream VAD detector: {err}; falling back to fixed chunks"
+                        );
+                        None
+                    }
                 }
+            } else {
+                None
             }
         } else {
             None
@@ -349,6 +353,10 @@ impl StreamTranscriptionJob {
         if let Some(detector) = vad_detector.as_mut() {
             detector.flush();
             while !detector.is_empty() {
+                if observer.is_cancelled() {
+                    reader.finish();
+                    return Err(AsrPortError::runtime("Task cancelled."));
+                }
                 if let Some(speech_segment) = detector.front() {
                     let seg_samples = speech_segment.samples().to_vec();
                     let start_sample = speech_segment.start().max(0);
@@ -371,6 +379,10 @@ impl StreamTranscriptionJob {
                 detector.pop();
             }
         } else if !chunk_buffer.is_empty() {
+            if observer.is_cancelled() {
+                reader.finish();
+                return Err(AsrPortError::runtime("Task cancelled."));
+            }
             let chunk_duration = chunk_buffer.len() as f64 / 16000.0;
             let chunk_start =
                 total_samples_streamed.saturating_sub(chunk_buffer.len()) as f64 / 16000.0;

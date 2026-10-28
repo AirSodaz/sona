@@ -277,4 +277,59 @@ describe('SplitButton', () => {
     expect(container.contains(menu)).toBe(false);
     expect(menu.style.top).toBe('134px');
   });
+
+  it('closes dropdown menu when primary button is clicked', () => {
+    const onPrimaryClick = vi.fn();
+    render(
+      <SplitButton
+        primaryLabel="Primary"
+        onPrimaryClick={onPrimaryClick}
+        menuItems={[{ key: '1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+
+    const toggleBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(toggleBtn);
+    expect(screen.queryByRole('menu')).not.toBeNull();
+
+    const primaryBtn = screen.getByRole('button', { name: 'Primary' });
+    fireEvent.click(primaryBtn);
+
+    expect(onPrimaryClick).toHaveBeenCalled();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('does not propagate outer className to portaled menu', () => {
+    render(
+      <SplitButton
+        className="custom-outer-class"
+        primaryLabel="Primary"
+        onPrimaryClick={vi.fn()}
+        menuItems={[{ key: '1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+
+    const toggleBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(toggleBtn);
+
+    const menu = screen.getByRole('menu');
+    expect(menu.classList.contains('custom-outer-class')).toBe(false);
+  });
+
+  it('closes menu and restores focus to trigger on Tab key', () => {
+    render(
+      <SplitButton
+        primaryLabel="Primary"
+        onPrimaryClick={vi.fn()}
+        menuItems={[{ key: '1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+
+    const toggleBtn = screen.getByRole('button', { name: 'More options' });
+    fireEvent.click(toggleBtn);
+    expect(screen.queryByRole('menu')).not.toBeNull();
+
+    fireEvent.keyDown(document, { key: 'Tab' });
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
 });

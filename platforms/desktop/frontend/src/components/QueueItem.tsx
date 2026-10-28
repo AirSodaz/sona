@@ -261,7 +261,6 @@ export const QueueItem = memo(function QueueItem({
                 await cancelBatchTask(item.activeInstanceId);
               } catch (err) {
                 console.error('Failed to finish stream task:', err);
-              } finally {
                 setIsFinishing(false);
               }
             }}

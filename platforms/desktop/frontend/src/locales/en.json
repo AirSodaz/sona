@@ -262,6 +262,8 @@
     "stop": "Stop",
     "recording_paused": "Recording Paused",
     "recording_active": "Recording... Click buttons to control",
+    "agent_recording_active": "AI Agent recording in progress, microphone occupied",
+    "agent_recording_locked": "AI Agent is recording. Manual recording is currently locked.",
     "start_hint": "Click red button to start recording",
     "mic_error": "Failed to access microphone. Please check permissions.",
     "start_recording": "Start Recording",
@@ -2606,7 +2608,8 @@
       "reasoning_level_xhigh": "Extra High",
       "reasoning_level_max": "Maximum",
       "reasoning_budget": "Thinking Token Budget",
-      "reasoning_budget_hint": "Maximum thinking tokens allowed per inference"
+      "reasoning_budget_hint": "Maximum thinking tokens allowed per inference",
+      "builtin_reasoning": "Built-in deep thinking (no configuration required)"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

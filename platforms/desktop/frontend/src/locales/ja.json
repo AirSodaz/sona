@@ -262,6 +262,8 @@
     "stop": "停止",
     "recording_paused": "録音が一時停止されました",
     "recording_active": "録音... ボタンをクリックして制御します",
+    "agent_recording_active": "AI Agent の録音が進行中です。マイクは使用されています",
+    "agent_recording_locked": "AI Agent が録音中です。手動録音は現在ロックされています",
     "start_hint": "赤いボタンをクリックして録音を開始します",
     "mic_error": "マイクにアクセスできませんでした。権限を確認してください。",
     "start_recording": "録音を開始する",
@@ -2644,7 +2646,8 @@
       "reasoning_level_xhigh": "非常に高い",
       "reasoning_level_max": "最大",
       "reasoning_budget": "思考トークン予算",
-      "reasoning_budget_hint": "1回の推論で許可される最大思考トークン数"
+      "reasoning_budget_hint": "1回の推論で許可される最大思考トークン数",
+      "builtin_reasoning": "組み込みの深い思考（設定不要）"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

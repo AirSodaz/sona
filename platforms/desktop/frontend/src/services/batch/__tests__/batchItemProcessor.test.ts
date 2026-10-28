@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
+import type { AsrTranscriptionRequest } from '../../asrConfigService';
 import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -260,5 +261,86 @@ describe('BatchItemProcessor', () => {
     expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalled();
     expect(callbacks.onHistorySaved).toHaveBeenCalled();
     expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalled();
+  });
+
+  it('rethrows Task cancelled when stream is cancelled with zero segments', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-stream-empty',
+      filename: 'Empty Stream',
+      filePath: 'https://live.example.com/empty.m3u8',
+      sourceType: 'url_stream',
+      status: 'processing',
+      progress: 0,
+      segments: [],
+      projectId: null,
+    };
+
+    const config: AppConfig = { language: 'en' } as unknown as AppConfig;
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockRejectedValue(
+      new Error('Task cancelled.')
+    );
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Task cancelled.'
+    );
+    expect(mockPorts.historyService.saveImportedFileToProject).not.toHaveBeenCalled();
+    expect(callbacks.onInstanceIdAssigned).toHaveBeenCalledWith(null);
+  });
+
+  it('passes convertedPath when retainAudio is true for stream', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-stream-retain',
+      filename: 'Retained Audio Stream',
+      filePath: 'https://live.example.com/audio.m3u8',
+      sourceType: 'url_stream',
+      retainAudio: true,
+      status: 'processing',
+      progress: 0,
+      segments: [],
+      projectId: null,
+    };
+
+    const config: AppConfig = { language: 'en' } as unknown as AppConfig;
+    vi.mocked(mockPorts.asrConfigService.resolveAsrTranscriptionRequest).mockReturnValue({
+      engine: 'local',
+      mode: 'batch',
+      modelPath: '/path/to/model',
+    } as unknown as AsrTranscriptionRequest);
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockResolvedValue([
+      { id: 'seg-1', start: 0, end: 2, text: 'Hello', isFinal: true },
+    ]);
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalledWith(
+      'https://live.example.com/audio.m3u8',
+      expect.any(Array),
+      2,
+      expect.stringContaining('.wav'),
+      null,
+      'queue-stream-retain'
+    );
   });
 });

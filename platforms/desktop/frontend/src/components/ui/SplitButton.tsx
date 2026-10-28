@@ -132,6 +132,7 @@ export function SplitButton({
 
       if (event.key === 'Tab') {
         setIsOpen(false);
+        triggerRef.current?.focus();
         return;
       }
 
@@ -221,7 +222,7 @@ export function SplitButton({
       ref={containerRef}
       className={`split-button-container ${variant === 'secondary' ? 'is-secondary' : ''} ${className}`.trim()}
       onBlur={(e) => {
-        if (e.relatedTarget && !isMovingInside(e.relatedTarget as Node)) {
+        if (!isMovingInside(e.relatedTarget as Node | null)) {
           setIsOpen(false);
         }
       }}
@@ -229,7 +230,10 @@ export function SplitButton({
       <button
         type="button"
         className={`split-button-primary ${baseBtnClass} ${sizeClass}`.trim()}
-        onClick={onPrimaryClick}
+        onClick={() => {
+          setIsOpen(false);
+          onPrimaryClick();
+        }}
         disabled={disabled}
         aria-label={ariaLabel}
       >
@@ -271,13 +275,13 @@ export function SplitButton({
             id={menuId}
             role="menu"
             aria-labelledby={triggerId}
-            className={`split-button-portal-menu split-button-menu ${hasDescriptions ? 'has-descriptions' : ''} ${className}`.trim()}
+            className={`split-button-portal-menu split-button-menu ${hasDescriptions ? 'has-descriptions' : ''}`.trim()}
             style={{
               top: `${menuPosition.top}px`,
               left: `${menuPosition.left}px`,
             }}
             onBlur={(e) => {
-              if (e.relatedTarget && !isMovingInside(e.relatedTarget as Node)) {
+              if (!isMovingInside(e.relatedTarget as Node | null)) {
                 setIsOpen(false);
               }
             }}

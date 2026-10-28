@@ -313,10 +313,10 @@ fn map_content_type_to_audio_mime(content_type: &str) -> Option<&'static str> {
         "audio/mpeg" | "audio/mp3" => Some("audio/mp3"),
         "audio/wav" | "audio/x-wav" | "audio/wave" => Some("audio/wav"),
         "audio/ogg" | "application/ogg" | "audio/opus" => Some("audio/ogg"),
-        "audio/m4a" | "audio/x-m4a" | "audio/mp4" => Some("audio/m4a"),
+        "audio/m4a" | "audio/x-m4a" | "audio/mp4" | "video/mp4" => Some("audio/m4a"),
         "audio/aac" | "audio/x-aac" => Some("audio/aac"),
         "audio/flac" | "audio/x-flac" => Some("audio/flac"),
-        "audio/webm" => Some("audio/webm"),
+        "audio/webm" | "video/webm" => Some("audio/webm"),
         _ => None,
     }
 }
@@ -339,6 +339,8 @@ fn sniff_audio_mime_type(bytes: &[u8]) -> Option<&'static str> {
         Some("audio/m4a")
     } else if bytes.len() >= 4 && &bytes[0..4] == b"fLaC" {
         Some("audio/flac")
+    } else if bytes.len() >= 4 && bytes[0..4] == [0x1A, 0x45, 0xDF, 0xA3] {
+        Some("audio/webm")
     } else {
         None
     }
@@ -471,15 +473,16 @@ pub async fn execute_aimux_batch(
         let media_type = if let Some(mime) = header_mime {
             mime
         } else {
-            let clean_url = path_str
+            let clean_url = trimmed_url
                 .split('?')
                 .next()
-                .unwrap_or(&path_str)
+                .unwrap_or(trimmed_url)
                 .split('#')
                 .next()
-                .unwrap_or(&path_str);
+                .unwrap_or(trimmed_url);
             let ext_mime = detect_audio_mime_type(Path::new(clean_url));
-            if ext_mime == "audio/wav" && !clean_url.ends_with(".wav") {
+            let clean_lower = clean_url.to_ascii_lowercase();
+            if ext_mime == "audio/wav" && !clean_lower.ends_with(".wav") {
                 sniff_audio_mime_type(&stream_bytes).unwrap_or("audio/mp3")
             } else {
                 ext_mime
@@ -498,8 +501,8 @@ pub async fn execute_aimux_batch(
         (bytes, media_type)
     };
 
-    let mut call_options =
-        TranscriptionCallOptions::new(AudioInput::Binary(bytes.clone()), media_type);
+    let buffered_samples = bytes.len() / 2;
+    let mut call_options = TranscriptionCallOptions::new(AudioInput::Binary(bytes), media_type);
     // Build provider options
     let mut po = std::collections::HashMap::new();
 
@@ -691,7 +694,7 @@ pub async fn execute_aimux_batch(
     Ok(OnlineBatchTranscriptionOutput {
         segments,
         audio_duration_ms,
-        buffered_samples: bytes.len() / 2,
+        buffered_samples,
         stage,
     })
 }
@@ -1386,6 +1389,18 @@ mod tests {
             Some("audio/m4a")
         );
         assert_eq!(
+            map_content_type_to_audio_mime("video/mp4"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/webm"),
+            Some("audio/webm")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("video/webm"),
+            Some("audio/webm")
+        );
+        assert_eq!(
             map_content_type_to_audio_mime("audio/aac"),
             Some("audio/aac")
         );
@@ -1937,5 +1952,21 @@ mod tests {
         append_word_to_sentence(&mut cjk, "你好");
         append_word_to_sentence(&mut cjk, "世界");
         assert_eq!(cjk, "你好世界");
+    }
+
+    #[test]
+    fn test_sniff_audio_mime_type() {
+        assert_eq!(
+            sniff_audio_mime_type(&[0x1A, 0x45, 0xDF, 0xA3, 0x01]),
+            Some("audio/webm")
+        );
+        assert_eq!(
+            sniff_audio_mime_type(b"RIFF\0\0\0\0WAVE"),
+            Some("audio/wav")
+        );
+        assert_eq!(sniff_audio_mime_type(b"ID3\x03\0"), Some("audio/mp3"));
+        assert_eq!(sniff_audio_mime_type(b"\0\0\0\x18ftyp"), Some("audio/m4a"));
+        assert_eq!(sniff_audio_mime_type(b"fLaC\0\0"), Some("audio/flac"));
+        assert_eq!(sniff_audio_mime_type(b"unknown bytes"), None);
     }
 }

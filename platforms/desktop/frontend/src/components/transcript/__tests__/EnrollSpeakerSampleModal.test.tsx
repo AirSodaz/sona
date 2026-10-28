@@ -81,8 +81,8 @@ describe('EnrollSpeakerSampleModal', () => {
 
     expect(screen.getByText(/Hello, this is a clear reference sentence/)).toBeDefined();
     expect(screen.getByText('4.7s')).toBeDefined();
-    expect(screen.getByText('已有说话人')).toBeDefined();
-    expect(screen.getByText('新建说话人')).toBeDefined();
+    expect(screen.getByText('Existing Profile')).toBeDefined();
+    expect(screen.getByText('New Speaker')).toBeDefined();
   });
 
   it('submits enrollment for an existing speaker profile', async () => {
@@ -106,7 +106,7 @@ describe('EnrollSpeakerSampleModal', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '确定录入' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enroll Voice Sample' }));
     await waitFor(() => {
       expect(speakerService.enrollProfileSampleFromAudio).toHaveBeenCalledWith(
         'spk-alice',
@@ -149,12 +149,12 @@ describe('EnrollSpeakerSampleModal', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '新建说话人' }));
+    fireEvent.click(screen.getByRole('button', { name: 'New Speaker' }));
 
-    const input = screen.getByPlaceholderText('新说话人姓名');
+    const input = screen.getByPlaceholderText('Speaker name');
     fireEvent.change(input, { target: { value: 'Charlie' } });
 
-    fireEvent.click(screen.getByRole('button', { name: '确定录入' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enroll Voice Sample' }));
     await waitFor(() => {
       expect(speakerService.enrollProfileSampleFromAudio).toHaveBeenCalledWith(
         expect.any(String),
@@ -176,10 +176,10 @@ describe('EnrollSpeakerSampleModal', () => {
       <EnrollSpeakerSampleModal isOpen onClose={vi.fn()} segment={mockSegment} audioPath={null} />
     );
 
-    expect(screen.getByText('当前会话未找到音频文件，无法提取声纹')).toBeDefined();
-    expect((screen.getByRole('button', { name: '确定录入' }) as HTMLButtonElement).disabled).toBe(
-      true
-    );
+    expect(screen.getByText('No audio file found for the current session.')).toBeDefined();
+    expect(
+      (screen.getByRole('button', { name: 'Enroll Voice Sample' }) as HTMLButtonElement).disabled
+    ).toBe(true);
     expect(speakerService.enrollProfileSampleFromAudio).not.toHaveBeenCalled();
   });
 
@@ -216,7 +216,7 @@ describe('EnrollSpeakerSampleModal', () => {
       />
     );
 
-    fireEvent.click(screen.getByRole('button', { name: '确定录入' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Enroll Voice Sample' }));
     await waitFor(() => {
       expect(speakerService.enrollProfileSampleFromAudio).toHaveBeenCalled();
       expect(speakerCorrectionService.assignProfileToSpeakerGroup).toHaveBeenCalledWith(
@@ -247,7 +247,7 @@ describe('EnrollSpeakerSampleModal', () => {
     expect(screen.getByRole('status')).toBeDefined();
     expect(
       screen.getByText(
-        '当前片段时长不足 4 秒。声纹引擎将忽略 4 秒以下的样本，建议选择更长的语音片段进行录入。'
+        'Selected segment is under 4 seconds. The speaker recognition engine ignores samples shorter than 4 seconds. It is recommended to choose a longer segment.'
       )
     ).toBeDefined();
   });

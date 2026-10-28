@@ -262,6 +262,8 @@
     "stop": "停止",
     "recording_paused": "錄音已暫停",
     "recording_active": "正在錄音... 點選按鈕進行控制",
+    "agent_recording_active": "AI Agent 錄音進行中，麥克風已被佔用",
+    "agent_recording_locked": "AI Agent 正在錄音，手動錄音已鎖定",
     "start_hint": "點選紅色按鈕開始錄音",
     "mic_error": "無法存取麥克風。請檢查權限。",
     "start_recording": "開始錄音",
@@ -2644,7 +2646,8 @@
       "reasoning_level_xhigh": "極高",
       "reasoning_level_max": "最大",
       "reasoning_budget": "思考 Token 預算",
-      "reasoning_budget_hint": "單次思考允許消耗的最大 Token 數量"
+      "reasoning_budget_hint": "單次思考允許消耗的最大 Token 數量",
+      "builtin_reasoning": "內建深度思考（無需配置檔位）"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",

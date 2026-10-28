@@ -354,24 +354,27 @@ impl AudioStreamReader {
                 }
 
                 if offset < 2 {
-                    if let Ok(Ok(status)) =
-                        tokio::time::timeout(std::time::Duration::from_millis(100), child.wait()).await
-                        && !status.success()
-                    {
-                        let stderr_output = if let Some(task) = stderr_task.take() {
-                            task.await.unwrap_or_default()
-                        } else {
-                            String::new()
-                        };
-                        let stderr_trimmed = stderr_output.trim();
-                        return Err(AsrPortError::new(
-                            AsrPortErrorKind::Runtime,
-                            if stderr_trimmed.is_empty() {
-                                format!("FFmpeg stream process exited with status {status}")
+                    let wait_result =
+                        tokio::time::timeout(std::time::Duration::from_secs(2), child.wait()).await;
+                    if let Ok(Ok(status)) = wait_result {
+                        if !status.success() {
+                            let stderr_output = if let Some(task) = stderr_task.take() {
+                                task.await.unwrap_or_default()
                             } else {
-                                format!("FFmpeg stream error ({status}): {stderr_trimmed}")
-                            },
-                        ));
+                                String::new()
+                            };
+                            let stderr_trimmed = stderr_output.trim();
+                            return Err(AsrPortError::new(
+                                AsrPortErrorKind::Runtime,
+                                if stderr_trimmed.is_empty() {
+                                    format!("FFmpeg stream process exited with status {status}")
+                                } else {
+                                    format!("FFmpeg stream error ({status}): {stderr_trimmed}")
+                                },
+                            ));
+                        }
+                    } else if wait_result.is_err() {
+                        let _ = child.start_kill();
                     }
                     return Ok(None);
                 }

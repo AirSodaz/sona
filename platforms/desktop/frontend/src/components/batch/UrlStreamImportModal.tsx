@@ -56,7 +56,7 @@ export function UrlStreamImportModal({
       return;
     }
 
-    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/[^\s/]\S*$/i.test(url));
+    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/[^\s/?#]\S*$/i.test(url));
 
     if (invalidUrls.length > 0) {
       setErrorMessage(
@@ -104,9 +104,9 @@ export function UrlStreamImportModal({
             {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
           <button
-            type="button"
+            type="submit"
+            form={`${textareaId}-form`}
             className="btn btn-primary"
-            onClick={() => handleSubmit()}
             disabled={urls.length === 0}
           >
             {t('batch.add_to_queue', { defaultValue: 'Add to Queue' })}
@@ -115,7 +115,14 @@ export function UrlStreamImportModal({
       }
     >
       <form
+        id={`${textareaId}-form`}
         onSubmit={handleSubmit}
+        onKeyDown={(e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            handleSubmit();
+          }
+        }}
         style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}
       >
         <div>

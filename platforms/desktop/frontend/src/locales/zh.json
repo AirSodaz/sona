@@ -262,6 +262,8 @@
     "stop": "停止",
     "recording_paused": "录音已暂停",
     "recording_active": "正在录音... 点击按钮进行控制",
+    "agent_recording_active": "AI Agent 录音进行中，麦克风已占用",
+    "agent_recording_locked": "AI Agent 正在录音，手动录音已锁定",
     "start_hint": "点击红色按钮开始录音",
     "mic_error": "无法访问麦克风。请检查权限。",
     "start_recording": "开始录音",
@@ -2606,7 +2608,8 @@
       "reasoning_level_xhigh": "极高",
       "reasoning_level_max": "最大",
       "reasoning_budget": "思考 Token 预算",
-      "reasoning_budget_hint": "单次思考允许消耗的最大 Token 数量"
+      "reasoning_budget_hint": "单次思考允许消耗的最大 Token 数量",
+      "builtin_reasoning": "内置深度思考（无需配置档位）"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",
