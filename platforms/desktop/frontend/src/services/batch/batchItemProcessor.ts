@@ -1,4 +1,5 @@
 import { v4 as uuidv4 } from 'uuid';
+import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
@@ -10,6 +11,13 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
+import {
+  downloadEmbyAudio,
+  generateBilingualSrt,
+  generateOriginalSrt,
+  generatePureTranslationSrt,
+  uploadEmbySubtitle,
+} from '../emby/embyService';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
 import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
@@ -161,6 +169,10 @@ export class BatchItemProcessor {
         }
       }
 
+      if (item.embyContext && savedHistoryId) {
+        useEmbyHistoryStore.getState().setContext(savedHistoryId, item.embyContext);
+      }
+
       this.ports.useHistoryStore.getState().addItem(historyItem);
       await callbacks.onHistorySaved(historyItem);
     };
@@ -186,6 +198,15 @@ export class BatchItemProcessor {
         this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
+
+      if (item.embyContext && !item.filePath) {
+        callbacks.updateStatus('processing', 0);
+        const downloadedPath = await downloadEmbyAudio(
+          item.embyContext.itemId,
+          item.embyContext.audioStreamIndex
+        );
+        item.filePath = downloadedPath;
+      }
 
       const isStream =
         item.sourceType === 'url_stream' ||
@@ -289,6 +310,58 @@ export class BatchItemProcessor {
       }
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
+      }
+      if (item.embyContext && currentSegments.length > 0) {
+        const { embyContext } = item;
+        try {
+          if (embyContext.subtitleMode === 'pure_translation') {
+            const content = generatePureTranslationSrt(currentSegments);
+            await uploadEmbySubtitle(
+              {
+                itemId: embyContext.itemId,
+                language: embyContext.targetLanguage || 'zh-CN',
+                format: 'srt',
+                isForced: false,
+                content,
+              },
+              embyContext.existingExternalSubtitleIndex
+            );
+          } else if (embyContext.subtitleMode === 'bilingual') {
+            const content = generateBilingualSrt(currentSegments);
+            await uploadEmbySubtitle(
+              {
+                itemId: embyContext.itemId,
+                language: embyContext.targetLanguage || 'zh-CN',
+                format: 'srt',
+                isForced: false,
+                content,
+              },
+              embyContext.existingExternalSubtitleIndex
+            );
+          } else if (embyContext.subtitleMode === 'separate_tracks') {
+            const origContent = generateOriginalSrt(currentSegments);
+            await uploadEmbySubtitle({
+              itemId: embyContext.itemId,
+              language: embyContext.sourceLanguage || 'und',
+              format: 'srt',
+              isForced: false,
+              content: origContent,
+            });
+            const transContent = generatePureTranslationSrt(currentSegments);
+            await uploadEmbySubtitle(
+              {
+                itemId: embyContext.itemId,
+                language: embyContext.targetLanguage || 'zh-CN',
+                format: 'srt',
+                isForced: false,
+                content: transContent,
+              },
+              embyContext.existingExternalSubtitleIndex
+            );
+          }
+        } catch (uploadError) {
+          logger.warn('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+        }
       }
     } catch (error) {
       flushSegmentBuffer();

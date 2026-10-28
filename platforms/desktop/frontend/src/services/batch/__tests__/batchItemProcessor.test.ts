@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
 import type { AsrTranscriptionRequest } from '../../asrConfigService';
+import { downloadEmbyAudio, uploadEmbySubtitle } from '../../emby/embyService';
 import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -16,6 +18,13 @@ vi.mock('../../tauri/platform/fs', async (importOriginal) => {
     remove: vi.fn(() => Promise.resolve()),
   };
 });
+vi.mock('../../emby/embyService', () => ({
+  downloadEmbyAudio: vi.fn().mockResolvedValue('/tmp/downloaded_emby.mp3'),
+  uploadEmbySubtitle: vi.fn().mockResolvedValue(undefined),
+  generateBilingualSrt: vi.fn().mockReturnValue('1\n00:00:00,000 --> 00:00:05,000\n你好\nHello'),
+  generatePureTranslationSrt: vi.fn().mockReturnValue('1\n00:00:00,000 --> 00:00:05,000\n你好'),
+  generateOriginalSrt: vi.fn().mockReturnValue('1\n00:00:00,000 --> 00:00:05,000\nHello'),
+}));
 
 describe('BatchItemProcessor', () => {
   let mockPorts: BatchItemProcessorPorts;
@@ -342,5 +351,52 @@ describe('BatchItemProcessor', () => {
       null,
       'queue-stream-retain'
     );
+  });
+
+  it('downloads audio and uploads subtitles when embyContext is present', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-emby-1',
+      filename: 'Emby Movie',
+      filePath: '',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-1',
+        itemName: 'Emby Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: 2,
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-1', 1);
+    expect(uploadEmbySubtitle).toHaveBeenCalledWith(
+      expect.objectContaining({
+        itemId: 'movie-1',
+        language: 'zh-CN',
+        format: 'srt',
+        content: expect.stringContaining('你好'),
+      }),
+      2
+    );
+    expect(useEmbyHistoryStore.getState().getContext('hist-1')).toEqual(item.embyContext);
   });
 });

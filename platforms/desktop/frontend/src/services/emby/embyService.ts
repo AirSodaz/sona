@@ -1,0 +1,128 @@
+import type {
+  EmbyConnectionConfig,
+  EmbyItemListResult,
+  EmbyLibrary,
+  EmbyServerInfo,
+  SubtitleUploadPayload,
+} from '../../types/emby';
+import type { TranscriptSegment } from '../../types/transcript';
+import { TauriCommand } from '../tauri/commands';
+import { invokeTauri } from '../tauri/invoke';
+
+export function formatSrtTimestamp(seconds: number): string {
+  const clamped = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const secs = Math.floor(clamped % 60);
+  const millis = Math.floor((clamped % 1) * 1000);
+  return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
+}
+
+export function cleanSubtitleText(text: string): string {
+  return text
+    .replace(/<[^>]+>/g, '')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .trim();
+}
+
+/**
+ * Format segments into SRT format.
+ */
+function buildSrt(
+  segments: TranscriptSegment[],
+  textExtractor: (seg: TranscriptSegment) => string
+): string {
+  const blocks: string[] = [];
+  let index = 1;
+
+  for (const seg of segments) {
+    const text = textExtractor(seg).trim();
+    if (!text) continue;
+
+    const start = formatSrtTimestamp(seg.start);
+    const end = formatSrtTimestamp(seg.end);
+    blocks.push(`${index}\n${start} --> ${end}\n${text}`);
+    index++;
+  }
+
+  return blocks.join('\n\n');
+}
+
+export function generatePureTranslationSrt(segments: TranscriptSegment[]): string {
+  return buildSrt(segments, (seg) => {
+    const trans = cleanSubtitleText(seg.translation || '');
+    return trans || cleanSubtitleText(seg.text || '');
+  });
+}
+
+export function generateOriginalSrt(segments: TranscriptSegment[]): string {
+  return buildSrt(segments, (seg) => cleanSubtitleText(seg.text || ''));
+}
+
+export function generateBilingualSrt(segments: TranscriptSegment[]): string {
+  return buildSrt(segments, (seg) => {
+    const trans = cleanSubtitleText(seg.translation || '');
+    const orig = cleanSubtitleText(seg.text || '');
+    if (trans && orig) {
+      return `${trans}\n${orig}`;
+    }
+    return trans || orig;
+  });
+}
+
+export async function testEmbyConnection(config: EmbyConnectionConfig): Promise<EmbyServerInfo> {
+  return invokeTauri(TauriCommand.emby.testConnection, { config });
+}
+
+export async function saveEmbyConfig(config: EmbyConnectionConfig): Promise<void> {
+  return invokeTauri(TauriCommand.emby.saveConfig, { config });
+}
+
+export async function getEmbyConfig(): Promise<EmbyConnectionConfig | null> {
+  return invokeTauri(TauriCommand.emby.getConfig);
+}
+
+export async function getEmbyLibraries(): Promise<EmbyLibrary[]> {
+  return invokeTauri(TauriCommand.emby.getLibraries);
+}
+
+export async function getEmbyItems(params: {
+  parentId?: string;
+  searchTerm?: string;
+  startIndex: number;
+  limit: number;
+}): Promise<EmbyItemListResult> {
+  return invokeTauri(TauriCommand.emby.getItems, {
+    parentId: params.parentId,
+    searchTerm: params.searchTerm,
+    startIndex: params.startIndex,
+    limit: params.limit,
+  });
+}
+
+export async function downloadEmbyAudio(
+  itemId: string,
+  streamIndex?: number,
+  tempDir?: string
+): Promise<string> {
+  return invokeTauri(TauriCommand.emby.downloadAudio, {
+    itemId,
+    streamIndex,
+    tempDir,
+  });
+}
+
+export async function uploadEmbySubtitle(
+  payload: SubtitleUploadPayload,
+  deleteExistingExternalIndex?: number
+): Promise<void> {
+  return invokeTauri(TauriCommand.emby.uploadSubtitle, {
+    payload,
+    deleteExistingExternalIndex,
+  });
+}

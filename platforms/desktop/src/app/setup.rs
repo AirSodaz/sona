@@ -109,6 +109,40 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if mcp_config.mcp_enabled.unwrap_or(true) {
         mcp_controller.start(Some(app.handle().clone()), agent_facade);
     }
+    let emby_state = crate::integrations::emby::EmbyState::default();
+    if let Some(config_val) = initial_config.as_ref() {
+        let server_url = config_val
+            .get("embyServerUrl")
+            .or_else(|| config_val.get("emby_server_url"))
+            .and_then(|v| v.as_str());
+        let api_key = config_val
+            .get("embyApiKey")
+            .or_else(|| config_val.get("emby_api_key"))
+            .and_then(|v| v.as_str());
+        let allow_invalid_certs = config_val
+            .get("embyAllowInvalidCerts")
+            .or_else(|| config_val.get("emby_allow_invalid_certs"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+
+        if let (Some(url), Some(key)) = (server_url, api_key)
+            && !url.trim().is_empty()
+            && !key.trim().is_empty()
+            && let Ok(client) = crate::integrations::emby::EmbyClient::new(
+                crate::integrations::emby::EmbyConnectionConfig {
+                    server_url: url.to_string(),
+                    api_key: key.to_string(),
+                    allow_invalid_certs,
+                },
+            )
+        {
+            let emby_state_clone = emby_state.clone();
+            tauri::async_runtime::spawn(async move {
+                emby_state_clone.set_client(client).await;
+            });
+        }
+    }
+    app.manage(emby_state);
     app.manage(desktop_services);
     crate::app::window::create_main_window(app.handle(), start_silently)?;
     let listener_app_handle = app_handle_for_listener.clone();

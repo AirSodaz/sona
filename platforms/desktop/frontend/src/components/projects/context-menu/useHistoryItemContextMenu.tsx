@@ -9,9 +9,11 @@ import {
   RotateCcw,
   Tags,
   Trash2,
+  Tv,
   X,
 } from 'lucide-react';
 import React from 'react';
+import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import type { HistoryItem } from '../../../types/history';
 import type { ContextMenuOpenRequest } from '../../context-menu/trigger';
 import type { ContextMenuAction, OpenContextMenuOptions } from '../../context-menu/types';
@@ -349,6 +351,19 @@ export function useHistoryItemContextMenu({
           onRenameHistoryItem(id);
         },
       });
+      const embyContext = useEmbyHistoryStore.getState().getContext(id);
+      if (embyContext) {
+        actions.push({
+          id: 'resync_emby',
+          label: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
+          icon: <Tv size={16} />,
+          dividerBefore: true,
+          disabled: locked,
+          onSelect: () => {
+            onOpenItem(item);
+          },
+        });
+      }
 
       // File Manager / External Reveal
       if (onShowInFolder) {

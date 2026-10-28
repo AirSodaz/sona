@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
 import { ToolApiServerPanel } from './panels/ToolApiServerPanel';
+import { ToolEmbySyncPanel } from './panels/ToolEmbySyncPanel';
 import { ToolMcpPanel } from './panels/ToolMcpPanel';
 import { ToolSubtitlesPanel } from './panels/ToolSubtitlesPanel';
 import { ToolVoiceTypingPanel } from './panels/ToolVoiceTypingPanel';
@@ -20,7 +21,8 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
-    activeTool === 'mcp'
+    activeTool === 'mcp' ||
+    activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';
   const detailPaneRef = useRef<HTMLDivElement>(null);
@@ -56,6 +58,9 @@ export function ToolsView({ isActive = true }: ToolsViewProps): React.JSX.Elemen
         </div>
         <div style={{ display: resolvedTool === 'mcp' ? 'block' : 'none' }}>
           <ToolMcpPanel />
+        </div>
+        <div style={{ display: resolvedTool === 'emby_sync' ? 'block' : 'none' }}>
+          <ToolEmbySyncPanel />
         </div>
       </div>
     </div>

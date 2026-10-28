@@ -1,12 +1,13 @@
-import { Bot, Keyboard, Server, Subtitles } from 'lucide-react';
+import { Bot, Keyboard, Server, Subtitles, Tv } from 'lucide-react';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import {
   isAsrRequestConfigured,
   resolveAsrTranscriptionRequest,
 } from '../../services/asrConfigService';
+import { getEmbyConfig, testEmbyConnection } from '../../services/emby/embyService';
 import {
   useApiServerConfig,
   useConfigStore,
@@ -54,6 +55,16 @@ export function ToolsSidebar(): React.JSX.Element {
       void useMcpStore.getState().fetchStatus();
     }
   }, [mcpStatus]);
+  const [embyServerName, setEmbyServerName] = useState<string | null>(null);
+  useEffect(() => {
+    void getEmbyConfig().then((cfg) => {
+      if (cfg?.serverUrl && cfg.apiKey) {
+        void testEmbyConnection(cfg)
+          .then((info) => setEmbyServerName(info.serverName))
+          .catch(() => setEmbyServerName(null));
+      }
+    });
+  }, []);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',
@@ -125,12 +136,25 @@ export function ToolsSidebar(): React.JSX.Element {
             : t('tools.status_running', { defaultValue: 'Running' }),
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
+    {
+      id: 'emby_sync',
+      nameKey: 'tools.emby_sync',
+      defaultName: 'Emby Sync',
+      descKey: 'tools.emby_sync_desc',
+      defaultDesc: 'Transcribe and sync subtitles to Emby',
+      Icon: Tv,
+      statusText: embyServerName
+        ? embyServerName
+        : t('tools.status_not_connected', { defaultValue: 'Not Connected' }),
+      statusType: embyServerName ? 'active' : 'inactive',
+    },
   ];
   const resolvedTool: ToolId =
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
-    activeTool === 'mcp'
+    activeTool === 'mcp' ||
+    activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';
   const selectedIndex = tools.findIndex((tool) => tool.id === resolvedTool);
