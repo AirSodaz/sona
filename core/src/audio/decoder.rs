@@ -54,12 +54,15 @@ pub fn decode_audio_slice(
 }
 
 impl BuiltinAudioDecoder {
-    /// Decodes an audio file at `path` into 16kHz (or `target_sample_rate`) mono PCM f32 samples.
+    /// Decodes in-memory audio bytes into 16kHz (or `target_sample_rate`) mono PCM f32 samples.
     pub fn decode_bytes(
         bytes: Vec<u8>,
         hint_ext: Option<&str>,
         target_sample_rate: u32,
     ) -> Result<Vec<f32>, AudioDecodeError> {
+        if bytes.is_empty() {
+            return Err(AudioDecodeError::EmptyAudio);
+        }
         if target_sample_rate == 0 {
             return Err(AudioDecodeError::Resample(
                 AudioResampleError::ZeroSampleRate,

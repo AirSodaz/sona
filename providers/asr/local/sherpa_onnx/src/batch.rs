@@ -209,7 +209,7 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
 }
 
 #[derive(Clone)]
-struct BatchTranscriptionJob {
+pub(crate) struct BatchTranscriptionJob {
     input_path: PathBuf,
     save_to_path: Option<PathBuf>,
     model_path: PathBuf,
@@ -235,7 +235,7 @@ struct BatchTranscriptionJob {
 }
 
 impl BatchTranscriptionJob {
-    fn from_plan(
+    pub(crate) fn from_plan(
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
         punct_engines: &PunctuationEngineSet,
@@ -288,30 +288,7 @@ impl BatchTranscriptionJob {
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         if sona_core::history::is_network_url(&self.input_path.to_string_lossy()) {
-            let stream_job = crate::stream_transcriber::StreamTranscriptionJob {
-                url: self.input_path.to_string_lossy().to_string(),
-                save_to_path: self.save_to_path,
-                model_path: self.model_path,
-                num_threads: self.num_threads,
-                enable_itn: self.enable_itn,
-                language: self.language,
-                punctuation_model: self.punctuation_model,
-                alignment_model: self.alignment_model,
-                vad_model: self.vad_model,
-                vad_buffer: self.vad_buffer,
-                batch_segmentation_mode: self.batch_segmentation_mode,
-                model_type: self.model_type,
-                file_config: self.file_config,
-                hotwords: self.hotwords,
-                speaker_processing: self.speaker_processing,
-                gpu_acceleration: self.gpu_acceleration,
-                quiet: self.quiet,
-                vad_engines: self.vad_engines,
-                punct_engines: self.punct_engines,
-                aligner_engines: self.aligner_engines,
-                ffmpeg_enabled: self.ffmpeg_enabled,
-                ffmpeg_path: self.ffmpeg_path,
-            };
+            let stream_job: crate::stream_transcriber::StreamTranscriptionJob = self.into();
             return stream_job.transcribe(observer).await;
         }
 
@@ -828,5 +805,33 @@ mod tests {
             .filter(|d| !d.is_empty())
             .or_else(|| fallback_durations.clone());
         assert_eq!(fallback_for_empty, fallback_durations);
+    }
+}
+impl From<BatchTranscriptionJob> for crate::stream_transcriber::StreamTranscriptionJob {
+    fn from(job: BatchTranscriptionJob) -> Self {
+        Self {
+            url: job.input_path.to_string_lossy().to_string(),
+            save_to_path: job.save_to_path,
+            model_path: job.model_path,
+            num_threads: job.num_threads,
+            enable_itn: job.enable_itn,
+            language: job.language,
+            punctuation_model: job.punctuation_model,
+            alignment_model: job.alignment_model,
+            vad_model: job.vad_model,
+            vad_buffer: job.vad_buffer,
+            batch_segmentation_mode: job.batch_segmentation_mode,
+            model_type: job.model_type,
+            file_config: job.file_config,
+            hotwords: job.hotwords,
+            speaker_processing: job.speaker_processing,
+            gpu_acceleration: job.gpu_acceleration,
+            quiet: job.quiet,
+            vad_engines: job.vad_engines,
+            punct_engines: job.punct_engines,
+            aligner_engines: job.aligner_engines,
+            ffmpeg_enabled: job.ffmpeg_enabled,
+            ffmpeg_path: job.ffmpeg_path,
+        }
     }
 }

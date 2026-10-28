@@ -15,7 +15,9 @@ pub struct HistoryItemGeneratedValues {
 pub fn is_network_url(path: &str) -> bool {
     let trimmed = path.trim();
     for scheme in &["http://", "https://", "rtmp://", "rtsp://"] {
-        if trimmed.len() > scheme.len() && trimmed[..scheme.len()].eq_ignore_ascii_case(scheme) {
+        if let Some(prefix) = trimmed.get(..scheme.len())
+            && prefix.eq_ignore_ascii_case(scheme)
+        {
             let rest = trimmed[scheme.len()..].trim_start();
             let host_part = rest.split(['/', '?', '#']).next().unwrap_or("");
             return !host_part.trim().is_empty();
@@ -161,8 +163,8 @@ fn file_name_from_path(path: &str, fallback: &str) -> String {
             .next()
             .unwrap_or(path);
         let without_scheme = clean
-            .split("://")
-            .nth(1)
+            .split_once("://")
+            .map(|(_, rest)| rest)
             .unwrap_or(clean)
             .trim_end_matches('/');
         if without_scheme.contains('/') {
@@ -231,7 +233,10 @@ mod tests {
         assert!(!is_network_url("C:\\path\\to\\audio.wav"));
         assert!(!is_network_url("/home/user/audio.mp3"));
         assert!(!is_network_url("relative/audio.flac"));
+        assert!(!is_network_url("会议录音.wav"));
+        assert!(!is_network_url("/tmp/录音.wav"));
     }
+
     #[test]
     fn test_file_name_from_path_for_urls() {
         assert_eq!(
@@ -257,8 +262,14 @@ mod tests {
             file_name_from_path("https://example.com/audio/%20segment%20/ ", "Fallback"),
             "%20segment%20"
         );
+        assert_eq!(
+            file_name_from_path(
+                "http://proxy.example.com/stream/https://origin.example.com/audio.aac",
+                "Fallback"
+            ),
+            "audio.aac"
+        );
     }
-
     #[test]
     fn test_create_imported_file_item_stream_url() {
         let generated = HistoryItemGeneratedValues {

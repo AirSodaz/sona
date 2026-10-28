@@ -134,20 +134,41 @@ impl AudioStreamReader {
                 command.creation_flags(0x0800_0000);
             }
 
+            command.stdin(std::process::Stdio::null());
+            command.arg("-nostdin");
             command.arg("-loglevel").arg("error");
-            let is_http = config.url.starts_with("http://") || config.url.starts_with("https://");
+            let trimmed_url = config.url.trim();
+            let is_http = trimmed_url
+                .get(..7)
+                .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
+                || trimmed_url
+                    .get(..8)
+                    .is_some_and(|s| s.eq_ignore_ascii_case("https://"));
             if is_http {
                 command
                     .arg("-reconnect")
                     .arg("1")
                     .arg("-reconnect_streamed")
                     .arg("1")
+                    .arg("-reconnect_on_network_error")
+                    .arg("1")
                     .arg("-reconnect_delay_max")
                     .arg("5");
             }
+            if is_http
+                || trimmed_url
+                    .get(..7)
+                    .is_some_and(|s| s.eq_ignore_ascii_case("rtmp://"))
+                || trimmed_url
+                    .get(..7)
+                    .is_some_and(|s| s.eq_ignore_ascii_case("rtsp://"))
+            {
+                command.arg("-rw_timeout").arg("15000000");
+            }
             command
                 .arg("-i")
-                .arg(config.url)
+                .arg(trimmed_url)
+                .arg("-vn")
                 .arg("-f")
                 .arg("s16le")
                 .arg("-acodec")
@@ -173,9 +194,25 @@ impl AudioStreamReader {
 
             let stderr_task = child.stderr.take().map(|mut stderr| {
                 tokio::spawn(async move {
-                    let mut msg = String::new();
-                    let _ = tokio::io::AsyncReadExt::read_to_string(&mut stderr, &mut msg).await;
-                    msg
+                    use tokio::io::AsyncReadExt;
+                    let mut buffer = [0u8; 4096];
+                    let mut collected = Vec::new();
+                    const MAX_STDERR_BYTES: usize = 64 * 1024;
+                    while let Ok(n) = stderr.read(&mut buffer).await {
+                        if n == 0 {
+                            break;
+                        }
+                        if collected.len() + n > MAX_STDERR_BYTES {
+                            let excess = (collected.len() + n) - MAX_STDERR_BYTES;
+                            if excess < collected.len() {
+                                collected.drain(0..excess);
+                            } else {
+                                collected.clear();
+                            }
+                        }
+                        collected.extend_from_slice(&buffer[..n]);
+                    }
+                    String::from_utf8_lossy(&collected).to_string()
                 })
             });
 
@@ -187,7 +224,22 @@ impl AudioStreamReader {
                 carryover_byte: None,
             })
         } else {
-            if is_video_or_playlist_url(config.url) {
+            let trimmed_url = config.url.trim();
+            let is_http = trimmed_url
+                .get(..7)
+                .is_some_and(|s| s.eq_ignore_ascii_case("http://"))
+                || trimmed_url
+                    .get(..8)
+                    .is_some_and(|s| s.eq_ignore_ascii_case("https://"));
+            if !is_http {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "RTSP and RTMP streams require FFmpeg. Please enable FFmpeg in settings: {trimmed_url}"
+                    ),
+                ));
+            }
+            if is_video_or_playlist_url(trimmed_url) {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     "Video stream or HLS playlist requires FFmpeg. Please enable FFmpeg in settings.",
@@ -200,13 +252,12 @@ impl AudioStreamReader {
                 .build()
                 .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
 
-            let mut response = client.get(config.url).send().await.map_err(|e| {
+            let mut response = client.get(trimmed_url).send().await.map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!("Failed to fetch stream URL: {e}"),
                 )
             })?;
-
             if !response.status().is_success() {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
@@ -279,10 +330,11 @@ impl AudioStreamReader {
     ) -> Result<Option<Vec<f32>>, AsrPortError> {
         match self {
             AudioStreamReader::Ffmpeg {
+                child,
                 stdout,
+                stderr_task,
                 wav_writer,
                 carryover_byte,
-                ..
             } => {
                 let mut buf = vec![0u8; chunk_size * 2];
                 let mut offset = 0;
@@ -302,9 +354,27 @@ impl AudioStreamReader {
                 }
 
                 if offset < 2 {
+                    if let Ok(Ok(status)) =
+                        tokio::time::timeout(std::time::Duration::from_millis(100), child.wait()).await
+                        && !status.success()
+                    {
+                        let stderr_output = if let Some(task) = stderr_task.take() {
+                            task.await.unwrap_or_default()
+                        } else {
+                            String::new()
+                        };
+                        let stderr_trimmed = stderr_output.trim();
+                        return Err(AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            if stderr_trimmed.is_empty() {
+                                format!("FFmpeg stream process exited with status {status}")
+                            } else {
+                                format!("FFmpeg stream error ({status}): {stderr_trimmed}")
+                            },
+                        ));
+                    }
                     return Ok(None);
                 }
-
                 let total_bytes = offset;
                 let usable_bytes = total_bytes - (total_bytes % 2);
                 if total_bytes % 2 != 0 {
@@ -315,10 +385,12 @@ impl AudioStreamReader {
                 if let Some(writer) = wav_writer.as_mut() {
                     for chunk in buf[..usable_bytes].as_chunks::<2>().0 {
                         let sample = i16::from_le_bytes(*chunk);
-                        let _ = writer.write_sample(sample);
+                        if let Err(e) = writer.write_sample(sample) {
+                            log::warn!("Failed to write sample to wav writer: {e}");
+                            break;
+                        }
                     }
                 }
-
                 Ok(Some(samples))
             }
             AudioStreamReader::InMemory {

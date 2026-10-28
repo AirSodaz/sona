@@ -56,7 +56,7 @@ export function UrlStreamImportModal({
       return;
     }
 
-    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/\S+$/i.test(url));
+    const invalidUrls = urls.filter((url) => !/^(https?|rtmp|rtsp):\/\/[^\s/]\S*$/i.test(url));
 
     if (invalidUrls.length > 0) {
       setErrorMessage(
@@ -67,11 +67,11 @@ export function UrlStreamImportModal({
       return;
     }
 
-    useBatchQueueStore.getState().addStreamItems(urls, {
+    const uniqueUrls = Array.from(new Set(urls));
+    useBatchQueueStore.getState().addStreamItems(uniqueUrls, {
       alias: isSingleUrl && alias.trim() ? alias.trim() : undefined,
       retainAudio,
     });
-
     handleModalClose();
   };
 
@@ -157,7 +157,12 @@ export function UrlStreamImportModal({
               resize: 'vertical',
               boxSizing: 'border-box',
             }}
-            autoFocus
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+                e.preventDefault();
+                handleSubmit();
+              }
+            }}
           />
           <div
             style={{

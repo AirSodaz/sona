@@ -325,9 +325,14 @@ fn sniff_audio_mime_type(bytes: &[u8]) -> Option<&'static str> {
     if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
         Some("audio/wav")
     } else if (bytes.len() >= 3 && &bytes[0..3] == b"ID3")
-        || (bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xE0) == 0xE0)
+        || (bytes.len() >= 2
+            && bytes[0] == 0xFF
+            && (bytes[1] & 0xFE) == 0xFA
+            && (bytes[1] & 0x06) == 0x02)
     {
         Some("audio/mp3")
+    } else if bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xF6) == 0xF0 {
+        Some("audio/aac")
     } else if bytes.len() >= 4 && &bytes[0..4] == b"OggS" {
         Some("audio/ogg")
     } else if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
@@ -345,15 +350,38 @@ pub async fn execute_aimux_batch(
     input: OnlineBatchTranscriptionRequest,
 ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
     let path_str = input.file_path.to_string_lossy();
-    let is_network_stream = sona_core::history::is_network_url(&path_str);
-    if is_network_stream && !path_str.starts_with("http://") && !path_str.starts_with("https://") {
+    let trimmed_url = path_str.trim();
+    let is_network_stream = sona_core::history::is_network_url(trimmed_url);
+    let lower_url = trimmed_url.to_ascii_lowercase();
+    if is_network_stream && !lower_url.starts_with("http://") && !lower_url.starts_with("https://")
+    {
         return Err(AsrPortError::new(
             AsrPortErrorKind::Unsupported,
             format!(
-                "Online batch ASR only supports HTTP/HTTPS audio streams; cannot fetch: {path_str}"
+                "Online batch ASR only supports HTTP/HTTPS audio streams; cannot fetch: {trimmed_url}"
             ),
         ));
     }
+    let clean_path = lower_url
+        .split('?')
+        .next()
+        .unwrap_or(&lower_url)
+        .split('#')
+        .next()
+        .unwrap_or(&lower_url);
+    if is_network_stream && (clean_path.ends_with(".m3u8") || clean_path.ends_with(".mpd")) {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            "Online batch ASR does not support playlist streams (.m3u8, .mpd). Please use local transcription or provide a direct audio stream URL.",
+        ));
+    }
+    let max_stream_bytes = if input.request.provider_id() == OPENAI_WHISPER_PROVIDER_ID
+        || input.request.provider_id() == GROQ_WHISPER_PROVIDER_ID
+    {
+        25 * 1024 * 1024
+    } else {
+        MAX_ONLINE_STREAM_DOWNLOAD_BYTES
+    };
     let (bytes, media_type) = if is_network_stream {
         let client = reqwest::Client::builder()
             .connect_timeout(std::time::Duration::from_secs(15))
@@ -361,7 +389,7 @@ pub async fn execute_aimux_batch(
             .build()
             .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
 
-        let response = client.get(path_str.as_ref()).send().await.map_err(|e| {
+        let response = client.get(trimmed_url).send().await.map_err(|e| {
             let kind = if e.is_timeout() {
                 AsrPortErrorKind::Timeout
             } else {
@@ -386,12 +414,12 @@ pub async fn execute_aimux_batch(
         }
 
         if let Some(content_length) = response.content_length()
-            && content_length > MAX_ONLINE_STREAM_DOWNLOAD_BYTES as u64
+            && content_length > max_stream_bytes as u64
         {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
-                    "Stream content length ({content_length} bytes) exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)"
+                    "Stream content length ({content_length} bytes) exceeds maximum limit ({max_stream_bytes} bytes)"
                 ),
             ));
         }
@@ -402,14 +430,17 @@ pub async fn execute_aimux_batch(
             .and_then(|v| v.to_str().ok())
         {
             let ct_lower = content_type.to_ascii_lowercase();
-            if ct_lower.starts_with("text/html") || ct_lower.starts_with("application/json") {
+            if ct_lower.starts_with("text/html")
+                || ct_lower.starts_with("application/json")
+                || ct_lower.contains("mpegurl")
+                || ct_lower.contains("dash+xml")
+            {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!("Stream URL returned non-audio Content-Type: {content_type}"),
                 ));
             }
         }
-
         let header_mime = response
             .headers()
             .get(reqwest::header::CONTENT_TYPE)
@@ -419,16 +450,18 @@ pub async fn execute_aimux_batch(
         let mut stream_bytes = Vec::new();
         let mut resp = response;
         while let Some(chunk) = resp.chunk().await.map_err(|e| {
-            AsrPortError::new(
-                AsrPortErrorKind::Network,
-                format!("Failed reading stream chunk: {e}"),
-            )
+            let kind = if e.is_timeout() {
+                AsrPortErrorKind::Timeout
+            } else {
+                AsrPortErrorKind::Network
+            };
+            AsrPortError::new(kind, format!("Failed reading stream chunk: {e}"))
         })? {
-            if stream_bytes.len() + chunk.len() > MAX_ONLINE_STREAM_DOWNLOAD_BYTES {
+            if stream_bytes.len() + chunk.len() > max_stream_bytes {
                 return Err(AsrPortError::new(
                     AsrPortErrorKind::InvalidRequest,
                     format!(
-                        "Stream downloaded size exceeds maximum limit ({MAX_ONLINE_STREAM_DOWNLOAD_BYTES} bytes)"
+                        "Stream downloaded size exceeds maximum limit ({max_stream_bytes} bytes)"
                     ),
                 ));
             }

@@ -269,12 +269,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     setIsDragOver(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      void handleClick();
-    }
-  };
-
   // Render the queue view when we have items
   if (hasQueueItems) {
     return (
@@ -305,8 +299,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        aria-label={t('batch.drop_desc')}
       >
         <div className="drop-zone-icon">
           <UploadIcon />

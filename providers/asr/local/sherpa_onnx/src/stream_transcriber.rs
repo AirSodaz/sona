@@ -116,31 +116,13 @@ impl StreamTranscriptionJob {
         punct_engines: &PunctuationEngineSet,
         aligner_engines: &AlignerEngineSet,
     ) -> Result<Self, AsrPortError> {
-        let url = plan.input_path.to_string_lossy().to_string();
-        Ok(Self {
-            url,
-            save_to_path: plan.save_to_path,
-            model_path: PathBuf::from(plan.model_path),
-            num_threads: plan.num_threads,
-            enable_itn: plan.enable_itn,
-            language: plan.language,
-            punctuation_model: plan.punctuation_model.map(PathBuf::from),
-            alignment_model: plan.alignment_model.map(PathBuf::from),
-            vad_model: plan.vad_model.map(PathBuf::from),
-            vad_buffer: plan.vad_buffer,
-            batch_segmentation_mode: plan.batch_segmentation_mode,
-            model_type: plan.model_type,
-            file_config: plan.file_config,
-            hotwords: plan.hotwords,
-            speaker_processing: plan.speaker_processing,
-            gpu_acceleration: plan.gpu_acceleration,
-            quiet: plan.quiet,
-            vad_engines: vad_engines.clone(),
-            punct_engines: punct_engines.clone(),
-            aligner_engines: aligner_engines.clone(),
-            ffmpeg_enabled: plan.ffmpeg_enabled,
-            ffmpeg_path: plan.ffmpeg_path.map(PathBuf::from),
-        })
+        let batch_job = crate::batch::BatchTranscriptionJob::from_plan(
+            plan,
+            vad_engines,
+            punct_engines,
+            aligner_engines,
+        )?;
+        Ok(batch_job.into())
     }
 
     pub async fn transcribe(
@@ -152,64 +134,72 @@ impl StreamTranscriptionJob {
             resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref(), is_int8).await;
         let mut last_error = None;
         let mut fallback_notice: Option<GpuFallbackNotice> = None;
+        let mut active_recognizer = None;
 
         for provider in gpu_plan.provider_options() {
             if observer.is_cancelled() {
                 return Err(AsrPortError::runtime("Task cancelled."));
             }
-            match self
-                .transcribe_with_provider(provider.as_deref(), Arc::clone(&observer))
-                .await
-            {
-                Ok(segments) => {
-                    if let Some(notice) = fallback_notice.take()
-                        && !self.quiet
-                    {
-                        log::warn!(
-                            "DirectML stream transcription failed, retrying with CPU: {}",
-                            notice.error
-                        );
-                    }
-                    return Ok(segments);
+            let cache_key = OfflineRecognizerCacheKey {
+                model_path: self.model_path.clone(),
+                model_type: self.model_type.clone(),
+                file_config: self.file_config.clone(),
+                enable_itn: self.enable_itn,
+                language: self.language.clone(),
+                hotwords: self.hotwords.clone(),
+                num_threads: self.num_threads,
+                provider: provider.clone(),
+            };
+            match get_or_create_offline_recognizer(cache_key) {
+                Ok(recognizer) => {
+                    active_recognizer = Some(recognizer);
+                    break;
                 }
-                Err(error)
+                Err(error) => {
                     if provider
                         .as_deref()
-                        .map(|provider| gpu_plan.should_retry_after_failure(provider))
-                        .unwrap_or(false) =>
-                {
-                    fallback_notice = Some(GpuFallbackNotice::directml_retry(error.to_string()));
-                    last_error = Some(error);
+                        .map(|p| gpu_plan.should_retry_after_failure(p))
+                        .unwrap_or(false)
+                    {
+                        fallback_notice =
+                            Some(GpuFallbackNotice::directml_retry(error.to_string()));
+                        last_error = Some(error);
+                    } else {
+                        return Err(error);
+                    }
                 }
-                Err(error) => return Err(error),
             }
         }
 
-        Err(last_error.unwrap_or_else(|| AsrPortError::runtime("Recognizer creation failed.")))
+        let recognizer = match active_recognizer {
+            Some(r) => r,
+            None => {
+                return Err(last_error
+                    .unwrap_or_else(|| AsrPortError::runtime("Recognizer creation failed.")));
+            }
+        };
+
+        if let Some(notice) = fallback_notice.take()
+            && !self.quiet
+        {
+            log::warn!(
+                "DirectML stream recognizer initialization failed, retrying with CPU: {}",
+                notice.error
+            );
+        }
+
+        self.transcribe_with_recognizer(recognizer, observer).await
     }
 
-    async fn transcribe_with_provider(
+    async fn transcribe_with_recognizer(
         &self,
-        provider: Option<&str>,
+        recognizer: Arc<SafeOfflineRecognizer>,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
         let punctuation =
             get_or_create_punctuation(&self.punct_engines, self.punctuation_model.as_deref())?;
-
-        let cache_key = OfflineRecognizerCacheKey {
-            model_path: self.model_path.clone(),
-            model_type: self.model_type.clone(),
-            file_config: self.file_config.clone(),
-            enable_itn: self.enable_itn,
-            language: self.language.clone(),
-            hotwords: self.hotwords.clone(),
-            num_threads: self.num_threads,
-            provider: provider.map(str::to_string),
-        };
-        let recognizer = get_or_create_offline_recognizer(cache_key)?;
         let is_funasr_nano = recognizer.model_type() == "funasr-nano";
         let effective_punctuation = if is_funasr_nano { None } else { punctuation };
-
         let stream_config = AudioStreamSourceConfig {
             url: &self.url,
             target_sample_rate: 16000,
@@ -241,11 +231,13 @@ impl StreamTranscriptionJob {
                 sample_rate: 16000,
                 num_threads: 1,
             };
-            let buffer_size = if self.vad_buffer > 0.0 {
-                self.vad_buffer
-            } else {
-                60.0
-            };
+            let buffer_size = (15.0
+                + if self.vad_buffer > 0.0 {
+                    self.vad_buffer
+                } else {
+                    5.0
+                })
+            .max(30.0);
             match create_vad_config(vad_path, options) {
                 Ok(config) => VoiceActivityDetector::create(&config, buffer_size),
                 Err(err) => {

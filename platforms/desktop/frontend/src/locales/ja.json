@@ -355,7 +355,21 @@
     "continue_transcribing": "文字起こしを続ける",
     "clear_queue_confirm_title": "文字起こしキューをクリアしますか？",
     "clear_queue_confirm_message": "現在文字起こし処理中のファイルがあります。キューをクリアすると処理が中止され、進捗が破棄されます。すべてクリアしますか？",
-    "clear_all_confirm_action": "中止してすべてクリア"
+    "clear_all_confirm_action": "中止してすべてクリア",
+    "more_options": "その他のオプション",
+    "import_stream": "ネットワークストリームをインポート...",
+    "import_stream_title": "ネットワーク音声/動画ストリームをインポート",
+    "stream_badge": "ネットワークストリーム",
+    "finish_and_save": "完了して保存",
+    "stream_modal_empty_error": "音声または動画のストリームURLを1つ以上入力してください。",
+    "stream_modal_invalid_error": "URLは http://、https://、rtmp://、または rtsp:// で始まる必要があります。",
+    "stream_urls_label": "ネットワークストリームURL (複数行の一括入力対応)",
+    "stream_urls_hint": "ネットワークストリームから直接文字起こしを行います。処理後の音声スライスは即座に破棄され、ローカルディスク容量を消費しません。",
+    "stream_alias_label": "カスタム名 (省略可)",
+    "stream_alias_placeholder": "例: AI ポッドキャスト 第42回",
+    "stream_retain_audio": "変換後の音声コピーを保持 (保存後にワークベンチで再生可能)",
+    "stream_retain_audio_desc": "チェックを外すと、音声はメモリ内でのみ処理され即座に破棄されます（ディスク容量ゼロ）。",
+    "add_to_queue": "キューに追加"
   },
   "player": {
     "play": "再生",

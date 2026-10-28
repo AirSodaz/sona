@@ -147,11 +147,19 @@ export class BatchItemProcessor {
         return;
       }
 
+      if (isStream && item.filename && item.filename !== historyItem.title) {
+        if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
+          await this.ports.useHistoryStore.getState().updateItemMeta(historyItem.id, {
+            title: item.filename,
+          });
+        }
+        historyItem.title = item.filename;
+      }
+
       savedHistoryId = historyItem.id;
       this.ports.useHistoryStore.getState().addItem(historyItem);
       await callbacks.onHistorySaved(historyItem);
     };
-
     const setCurrentSegments = (segments: TranscriptSegment[]): void => {
       currentSegments = segments;
       callbacks.updateSegments(segments);
@@ -178,11 +186,11 @@ export class BatchItemProcessor {
       const isStream =
         item.sourceType === 'url_stream' ||
         /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
-      const tempDirectory = await tempDir();
-      tempWavPath =
-        isLlamaCpp || batchAsr.engine === 'online' || (isStream && !item.retainAudio)
-          ? undefined
-          : await join(tempDirectory, `${uuidv4()}.wav`);
+      const shouldCreateTempWav =
+        !isLlamaCpp && batchAsr.engine !== 'online' && (!isStream || Boolean(item.retainAudio));
+      tempWavPath = shouldCreateTempWav
+        ? await join(await tempDir(), `${uuidv4()}.wav`)
+        : undefined;
       this.throwIfCancelRequested(callbacks);
 
       const inputSource = item.streamUrl || item.filePath;
@@ -265,8 +273,68 @@ export class BatchItemProcessor {
       const isStream =
         item.sourceType === 'url_stream' ||
         /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
-      const isCancelled =
-        callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
+      const isExplicitCancel = callbacks.isCancelRequested();
+      const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
+
+      if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
+        try {
+          await ensureHistorySaved();
+          await persistHistorySnapshot();
+
+          const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
+          const pipeline =
+            item.pipelineSnapshot ??
+            resolveItemPipeline(
+              item.projectId,
+              this.ports.useProjectStore?.getState?.().projects ?? [],
+              config
+            );
+
+          const pipelineResult = await engine.execute({
+            historyId: savedHistoryId || '',
+            projectId: item.projectId,
+            segments: currentSegments,
+            pipeline: {
+              ...pipeline,
+              autoExport: pipeline.autoExport || Boolean(item.exportConfig),
+              exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
+              exportFormat:
+                (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
+              exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
+            },
+            globalConfig: config,
+            baseFileName: this.buildAutomationExportBaseName(item),
+            onProgress: (stage, progress) => {
+              callbacks.updateStatus(
+                'processing',
+                progress,
+                stage === 'summarizing' ? undefined : stage
+              );
+            },
+            onSegmentsUpdated: async (updatedSegments) => {
+              setCurrentSegments(updatedSegments);
+              await persistHistorySnapshot();
+            },
+            onExportComplete: (exportPath) => {
+              callbacks.onExportComplete(exportPath);
+            },
+            isCancelRequested: () => callbacks.isCancelRequested(),
+          });
+
+          if (pipelineResult.segments) {
+            currentSegments = pipelineResult.segments;
+          }
+          if (savedHistoryId && callbacks.isActiveItem()) {
+            await this.ports.summaryService.persistSummary(savedHistoryId);
+          }
+          return;
+        } catch (pipelineError) {
+          logger.error('[BatchQueue] Pipeline execution failed on finished stream:', pipelineError);
+          throw pipelineError;
+        }
+      }
+
+      const isCancelled = isExplicitCancel || isTaskCancelError;
       try {
         if ((!isCancelled || isStream) && currentSegments.length > 0) {
           await ensureHistorySaved();

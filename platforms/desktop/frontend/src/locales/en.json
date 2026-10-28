@@ -356,6 +356,7 @@
     "clear_queue_confirm_title": "Clear Transcription Queue?",
     "clear_queue_confirm_message": "There are files currently being transcribed. Clearing the queue will stop ongoing transcriptions and discard progress. Are you sure you want to clear all?",
     "clear_all_confirm_action": "Stop & Clear All",
+    "more_options": "More options",
     "import_stream": "Import Network Stream...",
     "import_stream_title": "Import Network Audio/Video Stream",
     "stream_badge": "Network Stream",

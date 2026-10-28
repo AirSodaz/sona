@@ -355,7 +355,21 @@
     "continue_transcribing": "繼續轉錄",
     "clear_queue_confirm_title": "清空轉錄佇列？",
     "clear_queue_confirm_message": "佇列中有正在轉錄的檔案。清空佇列將終止轉錄並遺失目前進度，確定要清空全部嗎？",
-    "clear_all_confirm_action": "終止並清空"
+    "clear_all_confirm_action": "終止並清空",
+    "more_options": "更多選項",
+    "import_stream": "匯入網路音訊/視訊串流...",
+    "import_stream_title": "匯入網路音訊/視訊連結",
+    "stream_badge": "網路串流",
+    "finish_and_save": "完成並儲存",
+    "stream_modal_empty_error": "請輸入至少一個音訊/視訊網路串流連結。",
+    "stream_modal_invalid_error": "連結必須以 http://, https://, rtmp:// 或 rtsp:// 開頭。",
+    "stream_urls_label": "網路音訊/視訊連結 (支援多行批次輸入)",
+    "stream_urls_hint": "直接透過網路串流轉錄，完成轉錄的音訊切片隨用隨棄，不佔用長期磁碟空間。",
+    "stream_alias_label": "自訂名稱 (選填)",
+    "stream_alias_placeholder": "例如：AI 播客第 42 集",
+    "stream_retain_audio": "保留轉碼音訊副本 (儲存後可在工作台回放)",
+    "stream_retain_audio_desc": "未勾選時，音訊只在記憶體中滑動處理後即時銷毀，零本機磁碟佔用。",
+    "add_to_queue": "加入佇列"
   },
   "player": {
     "play": "播放",

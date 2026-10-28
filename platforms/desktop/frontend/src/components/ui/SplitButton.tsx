@@ -1,5 +1,6 @@
 import type React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ChevronDownIcon } from '../Icons';
 
 export interface SplitButtonItem {
@@ -35,20 +36,29 @@ export function SplitButton({
   toggleAriaLabel,
 }: SplitButtonProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
+  const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const wasOpenRef = useRef(false);
   const menuId = useId();
+  const triggerId = `${menuId}-trigger`;
 
   useEffect(() => {
-    if (isOpen) {
+    if (isOpen && !wasOpenRef.current) {
       const firstEnabledIndex = menuItems.findIndex((item) => !item.disabled);
       if (firstEnabledIndex !== -1) {
         menuItemRefs.current[firstEnabledIndex]?.focus();
       }
     }
+    wasOpenRef.current = isOpen;
   }, [isOpen, menuItems]);
 
+  useEffect(() => {
+    if (disabled && isOpen) {
+      setIsOpen(false);
+    }
+  }, [disabled, isOpen]);
   useEffect(() => {
     if (!isOpen) return undefined;
     const handleClickOutside = (event: MouseEvent) => {
@@ -62,6 +72,17 @@ export function SplitButton({
         event.stopPropagation();
         setIsOpen(false);
         triggerRef.current?.focus();
+        return;
+      }
+
+      if (event.key === 'Tab') {
+        setIsOpen(false);
+        return;
+      }
+
+      const isTargetInContainer = containerRef.current?.contains(event.target as Node);
+      const isActiveElementInContainer = containerRef.current?.contains(document.activeElement);
+      if (!isTargetInContainer && !isActiveElementInContainer) {
         return;
       }
 
@@ -159,6 +180,7 @@ export function SplitButton({
 
       <button
         ref={triggerRef}
+        id={triggerId}
         type="button"
         className={`${baseBtnClass} ${sizeClass}`}
         onClick={() => setIsOpen((prev) => !prev)}
@@ -172,7 +194,12 @@ export function SplitButton({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={isOpen ? menuId : undefined}
-        aria-label={toggleAriaLabel ?? (ariaLabel ? `${ariaLabel} options` : 'More options')}
+        aria-label={
+          toggleAriaLabel ??
+          (ariaLabel
+            ? `${ariaLabel} options`
+            : t('batch.more_options', { defaultValue: 'More options' }))
+        }
         style={{
           borderTopLeftRadius: 0,
           borderBottomLeftRadius: 0,
@@ -187,10 +214,11 @@ export function SplitButton({
         <ChevronDownIcon width={12} height={12} aria-hidden="true" />
       </button>
 
-      {isOpen && (
+      {isOpen && !disabled && (
         <div
           id={menuId}
           role="menu"
+          aria-labelledby={triggerId}
           style={{
             position: 'absolute',
             top: 'calc(100% + 4px)',
@@ -215,6 +243,7 @@ export function SplitButton({
               }}
               type="button"
               role="menuitem"
+              tabIndex={-1}
               disabled={item.disabled}
               onClick={() => {
                 setIsOpen(false);

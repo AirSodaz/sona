@@ -176,4 +176,89 @@ describe('BatchItemProcessor', () => {
     expect(mockPorts.historyService.saveImportedFileToProject).not.toHaveBeenCalled();
     expect(callbacks.onHistorySaved).not.toHaveBeenCalled();
   });
+
+  it('preserves custom alias when saving stream history item', async () => {
+    const updateItemMetaMock = vi.fn().mockResolvedValue(undefined);
+    vi.mocked(mockPorts.useHistoryStore.getState).mockReturnValue({
+      addItem: vi.fn(),
+      updateTranscript: vi.fn(),
+      updateItemMeta: updateItemMetaMock,
+    } as unknown as never);
+
+    const item: BatchQueueItem = {
+      id: 'queue-stream-1',
+      filename: 'Custom Podcast Title',
+      filePath: 'https://example.com/audio/stream.mp3',
+      sourceType: 'url_stream',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+    };
+
+    const config: AppConfig = { language: 'en' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(updateItemMetaMock).toHaveBeenCalledWith('hist-1', {
+      title: 'Custom Podcast Title',
+    });
+    expect(callbacks.onHistorySaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 'hist-1',
+        title: 'Custom Podcast Title',
+      })
+    );
+  });
+
+  it('gracefully completes and executes pipeline when stream is stopped via Finish and Save', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-stream-finish',
+      filename: 'Live Stream',
+      filePath: 'https://live.example.com/stream.m3u8',
+      sourceType: 'url_stream',
+      status: 'processing',
+      progress: 50,
+      segments: [],
+      projectId: null,
+    };
+
+    const config: AppConfig = { language: 'en' } as unknown as AppConfig;
+
+    // Simulate transcribeFile streaming chunks and then terminating on cancelBatchTask
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockImplementation(
+      async (_input, _onProgress, onSegment) => {
+        if (onSegment) {
+          onSegment({ id: 'seg-1', start: 0, end: 5, text: 'Stream speech chunk', isFinal: true });
+        }
+        throw new Error('Task cancelled.');
+      }
+    );
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false), // User did NOT cancel the queue item
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await expect(
+      processor.processBatchQueueItem({ item, config, callbacks })
+    ).resolves.toBeUndefined();
+    expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalled();
+    expect(callbacks.onHistorySaved).toHaveBeenCalled();
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalled();
+  });
 });
