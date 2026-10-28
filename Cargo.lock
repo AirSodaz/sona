@@ -6425,6 +6425,7 @@ dependencies = [
  "sona-recovery-fs",
  "sona-runtime-fs",
  "sona-sherpa-onnx",
+ "sona-shim",
  "sona-sqlite",
  "sona-sync",
  "sona-sync-s3",
@@ -6753,6 +6754,15 @@ dependencies = [
  "sysinfo",
  "tokio",
  "uuid",
+]
+
+[[package]]
+name = "sona-shim"
+version = "0.9.8"
+dependencies = [
+ "serde",
+ "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

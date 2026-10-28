@@ -54,6 +54,7 @@ export async function prepareDesktopBundle({
   stageRuntimeLibraries(sherpaLibDir, target, runtimeLibDir);
   buildStandaloneCli(repoRoot, target, runtimeLibDir, runCommand);
   buildStandaloneMcp(repoRoot, target, runCommand);
+  buildStandaloneShim(repoRoot, target, runCommand);
   stageLlamaCppRuntimeLibraries(repoRoot, target, runtimeLibDir);
   cleanupDanglingRuntimeSymlinks(repoRoot, target);
   if (target.includes('apple')) {
@@ -61,6 +62,7 @@ export async function prepareDesktopBundle({
   }
   stageCliSidecar(repoRoot, target, sidecarsDir);
   stageMcpSidecar(repoRoot, target, sidecarsDir);
+  stageShimSidecar(repoRoot, target, sidecarsDir);
   if (includeFfmpeg) {
     await stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand);
   }
@@ -120,6 +122,25 @@ function stageMcpSidecar(repoRoot, target, sidecarsDir) {
 
 function mcpBinaryName(target) {
   return target.includes('windows') ? 'sona-mcp.exe' : 'sona-mcp';
+}
+function buildStandaloneShim(repoRoot, target, runCommand) {
+  const options = { cwd: repoRoot };
+  const cargoArgs = ['build', '-p', 'sona-shim', '--release', '--target', target];
+  runCommand('cargo', cargoArgs, options);
+}
+
+function stageShimSidecar(repoRoot, target, sidecarsDir) {
+  const sourcePath = path.join(repoRoot, 'target', target, 'release', shimBinaryName(target));
+  if (!fs.existsSync(sourcePath)) {
+    throw new Error(`Missing release sona-shim binary for ${target}: ${sourcePath}`);
+  }
+  const destinationPath = path.join(sidecarsDir, sidecarFileName('sona-shim', target));
+  fs.copyFileSync(sourcePath, destinationPath);
+  makeExecutableIfNeeded(target, destinationPath);
+}
+
+function shimBinaryName(target) {
+  return target.includes('windows') ? 'sona-shim.exe' : 'sona-shim';
 }
 
 async function stageFfmpegSidecar(target, sidecarsDir, ffmpegLockPath, stagingRoot, runCommand) {
@@ -489,6 +510,7 @@ function writeBundleConfig(baseConfigPath, generatedConfigPath, sidecarsDir, run
   const externalBin = [
     path.join(sidecarsDir, 'sona-cli'),
     path.join(sidecarsDir, 'sona-mcp'),
+    path.join(sidecarsDir, 'sona-shim'),
   ];
   if (includeFfmpeg) {
     externalBin.push(path.join(sidecarsDir, 'ffmpeg'));

@@ -9,7 +9,8 @@ pub use tracker::*;
 use super::facade::AgentControlFacade;
 use serde::{Deserialize, Serialize};
 pub use sona_core::runtime::ipc::{
-    WINDOWS_PIPE_NAME, get_ipc_endpoint, get_unix_socket_path, resolve_ipc_endpoint,
+    WINDOWS_PIPE_NAME, get_ipc_endpoint, get_ipc_endpoint_for_channel, get_unix_socket_path,
+    resolve_ipc_endpoint,
 };
 use std::collections::VecDeque;
 use std::sync::Arc;

@@ -56,7 +56,10 @@ mod tests {
         let dirs = resolve_api_server_runtime_dirs(&provider).unwrap();
 
         assert_eq!(dirs.temp_dir, app_local_data.join("api_temp"));
-        assert_eq!(dirs.models_dir, app_local_data.join("models"));
+        assert_eq!(
+            dirs.models_dir,
+            crate::platform::storage_location::resolve_default_models_dir(&app_local_data)
+        );
     }
 
     #[test]

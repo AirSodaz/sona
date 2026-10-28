@@ -48,6 +48,7 @@ import type {
   RuntimeEnvironmentStatus,
   RuntimePathStatus,
 } from '../../types/runtime';
+import type { DesktopShimStatus, ShimChannel } from '../../types/shim';
 import type {
   SpeakerProcessingConfig,
   SpeakerProfileSample,
@@ -815,6 +816,22 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.mcp.getClientConfigs]: {
     args: undefined;
     result: McpClientConfigMap;
+  };
+  [TauriCommand.system.getShimStatus]: {
+    args: undefined;
+    result: DesktopShimStatus;
+  };
+  [TauriCommand.system.installShim]: {
+    args: undefined;
+    result: undefined;
+  };
+  [TauriCommand.system.uninstallShim]: {
+    args: undefined;
+    result: undefined;
+  };
+  [TauriCommand.system.setDefaultChannel]: {
+    args: { channel: ShimChannel };
+    result: undefined;
   };
 };
 

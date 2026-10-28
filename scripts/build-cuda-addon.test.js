@@ -23,14 +23,85 @@ test('normalizePlatform handles win32 and linux correctly', () => {
 
 test('resolveLocalCudaRuntimeDir resolves platform-specific paths', () => {
   const mockWinAppData = path.join(repoRoot, 'target', 'mock-appdata');
-  const winDir = resolveLocalCudaRuntimeDir('win32', { LOCALAPPDATA: mockWinAppData });
+  const mockWinHome = path.join(repoRoot, 'target', 'mock-win-home');
+  const winDir = resolveLocalCudaRuntimeDir('win32', {
+    LOCALAPPDATA: mockWinAppData,
+    USERPROFILE: mockWinHome,
+  });
   assert.equal(winDir, path.join(mockWinAppData, 'com.asoda.sona', 'runtimes', 'cuda'));
 
   const mockLinuxData = path.join(repoRoot, 'target', 'mock-xdg-data');
-  const linuxDir = resolveLocalCudaRuntimeDir('linux', { XDG_DATA_HOME: mockLinuxData });
+  const mockLinuxHome = path.join(repoRoot, 'target', 'mock-linux-home');
+  const linuxDir = resolveLocalCudaRuntimeDir('linux', {
+    XDG_DATA_HOME: mockLinuxData,
+    HOME: mockLinuxHome,
+  });
   assert.equal(linuxDir, path.join(mockLinuxData, 'com.asoda.sona', 'runtimes', 'cuda'));
 
   assert.equal(resolveLocalCudaRuntimeDir('darwin'), null);
+});
+
+test('resolveLocalCudaRuntimeDir probes nightly and shared runtime directories when present', () => {
+  const tempDir = path.join(repoRoot, 'target', 'test-cuda-probing');
+  fs.rmSync(tempDir, { recursive: true, force: true });
+  try {
+    const mockNightlyAppData = path.join(tempDir, 'appdata');
+    const nightlyCudaDir = path.join(mockNightlyAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    fs.mkdirSync(nightlyCudaDir, { recursive: true });
+
+    const winDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: mockNightlyAppData,
+      USERPROFILE: path.join(tempDir, 'home'),
+    });
+    assert.equal(winDir, nightlyCudaDir);
+    // Fresh installation probing: only nightly app root exists without runtimes/cuda
+    const freshNightlyAppData = path.join(tempDir, 'fresh-nightly-appdata');
+    fs.mkdirSync(path.join(freshNightlyAppData, 'com.asoda.sona.nightly'), { recursive: true });
+    const freshNightlyDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: freshNightlyAppData,
+      USERPROFILE: path.join(tempDir, 'empty-home'),
+    });
+    assert.equal(freshNightlyDir, path.join(freshNightlyAppData, 'com.asoda.sona.nightly', 'runtimes', 'cuda'));
+
+    const mockSharedHome = path.join(tempDir, 'shared-home');
+    const sharedCudaDir = path.join(mockSharedHome, '.sona', 'runtimes', 'cuda');
+    fs.mkdirSync(sharedCudaDir, { recursive: true });
+
+    const sharedDir = resolveLocalCudaRuntimeDir('win32', {
+      LOCALAPPDATA: path.join(tempDir, 'empty-appdata'),
+      USERPROFILE: mockSharedHome,
+    });
+    assert.equal(sharedDir, sharedCudaDir);
+
+    // Linux probing coverage
+    const mockLinuxData = path.join(tempDir, 'linux-xdg');
+    const nightlyLinuxDir = path.join(mockLinuxData, 'com.asoda.sona.nightly', 'runtimes', 'cuda');
+    fs.mkdirSync(nightlyLinuxDir, { recursive: true });
+    const linuxDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: mockLinuxData,
+      HOME: path.join(tempDir, 'linux-home'),
+    });
+    assert.equal(linuxDir, nightlyLinuxDir);
+    // Fresh installation probing on Linux: only nightly app root exists without runtimes/cuda
+    const freshLinuxData = path.join(tempDir, 'fresh-linux-xdg');
+    fs.mkdirSync(path.join(freshLinuxData, 'com.asoda.sona.nightly'), { recursive: true });
+    const freshLinuxDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: freshLinuxData,
+      HOME: path.join(tempDir, 'empty-linux-home'),
+    });
+    assert.equal(
+      freshLinuxDir,
+      path.join(freshLinuxData, 'com.asoda.sona.nightly', 'runtimes', 'cuda')
+    );
+
+    const linuxSharedDir = resolveLocalCudaRuntimeDir('linux', {
+      XDG_DATA_HOME: path.join(tempDir, 'empty-linux-data'),
+      HOME: mockSharedHome,
+    });
+    assert.equal(linuxSharedDir, sharedCudaDir);
+  } finally {
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('detectCudaEnvironment inspects mock environment without crashing', () => {

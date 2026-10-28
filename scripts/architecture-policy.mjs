@@ -39,6 +39,7 @@ export const EXPECTED_ROLES = new Map([
   ['sona-cli', 'host'],
   ['sona-uniffi-bind', 'host'],
   ['sona-mcp', 'host'],
+  ['sona-shim', 'host'],
   ['sona-uniffi-bindgen', 'tool'],
 ]);
 
@@ -55,7 +56,9 @@ export const ALLOWED_TARGET_ROLES = new Map([
   ['tool', new Set()],
 ]);
 
-export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map();
+export const REVIEWED_OUTBOUND_ADAPTER_EDGES = new Map([
+  ['sona->sona-shim', 'Desktop host integrates channel registration and universal command shims'],
+]);
 
 export const ROLE_DIRECTORY_ROOTS = new Map([
   ['core', 'core'],
