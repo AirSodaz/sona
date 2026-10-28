@@ -17,10 +17,23 @@ pub async fn read_transcript(
 ) -> Result<ReadTranscriptResult, String> {
     let (task_status, error_message) = match services.task_ledger.list_tasks().await {
         Ok(tasks) => {
-            if let Some(task) = tasks
+            let matching_tasks = tasks
                 .iter()
-                .find(|t| t.history_id.as_deref() == Some(&req.history_id))
-            {
+                .filter(|t| t.history_id.as_deref() == Some(&req.history_id));
+            let selected_task = matching_tasks
+                .clone()
+                .filter(|t| {
+                    matches!(
+                        t.status,
+                        sona_core::task_ledger::types::TaskLedgerStatus::Running
+                            | sona_core::task_ledger::types::TaskLedgerStatus::Pending
+                            | sona_core::task_ledger::types::TaskLedgerStatus::CancelRequested
+                    )
+                })
+                .max_by_key(|t| t.updated_at)
+                .or_else(|| matching_tasks.max_by_key(|t| t.updated_at));
+
+            if let Some(task) = selected_task {
                 let status_str = match task.status {
                     sona_core::task_ledger::types::TaskLedgerStatus::Running => "running",
                     sona_core::task_ledger::types::TaskLedgerStatus::Pending => "pending",
@@ -38,7 +51,14 @@ pub async fn read_transcript(
                 ("completed".to_string(), None)
             }
         }
-        Err(_) => ("completed".to_string(), None),
+        Err(err) => {
+            log::warn!(
+                "Failed to query task ledger for history {}: {}",
+                req.history_id,
+                err
+            );
+            ("unknown".to_string(), Some(err))
+        }
     };
 
     let hid = req.history_id.clone();
@@ -52,16 +72,18 @@ pub async fn read_transcript(
 
     let mut filtered: Vec<TranscriptSegment> = all_segments;
 
+    if let Some(since_id) = &req.since_segment_id {
+        if let Some(idx) = filtered.iter().position(|seg| seg.id == *since_id) {
+            filtered = filtered.split_off(idx + 1);
+        } else {
+            filtered.clear();
+        }
+    }
+
     if req.start_seconds.is_some() || req.end_seconds.is_some() {
         let start = req.start_seconds.unwrap_or(0.0);
         let end = req.end_seconds.unwrap_or(f64::INFINITY);
         filtered.retain(|seg| seg.end >= start && seg.start <= end);
-    }
-
-    if let Some(since_id) = &req.since_segment_id
-        && let Some(idx) = filtered.iter().position(|seg| seg.id == *since_id)
-    {
-        filtered = filtered.split_off(idx + 1);
     }
 
     let offset = req.offset.unwrap_or(0);

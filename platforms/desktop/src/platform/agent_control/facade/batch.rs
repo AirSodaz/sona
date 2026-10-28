@@ -83,10 +83,14 @@ pub async fn transcribe_file(
     };
     let _ = services.task_ledger.upsert_task(initial_record).await;
 
+    let (cancel_rx, cancel_guard) = services.asr.batch_cancel.register(&instance_id).await;
+    let _ = cancel_rx;
+
     let task_services = services.clone();
     let task_instance_id = instance_id.clone();
     let task_history_id = history_id.clone();
     tokio::spawn(async move {
+        let _cancel_guard = cancel_guard;
         let _sleep_guard = crate::platform::system::power::SleepPreventionGuard::acquire(
             "Agent Audio Batch Transcription",
         );
@@ -106,7 +110,7 @@ pub async fn transcribe_file(
                 let duration_seconds = segments.iter().map(|s| s.end).fold(0.0f64, f64::max);
                 let hid = task_history_id.clone();
                 let segs_clone = segments.clone();
-                let _ = task_services
+                let update_res = task_services
                     .history
                     .mutation_file(move |s| {
                         s.update_transcript(
@@ -117,9 +121,27 @@ pub async fn transcribe_file(
                         )
                     })
                     .await;
+                if let Err(e) = update_res {
+                    let err_str = e.to_string();
+                    let _ = task_services
+                        .task_ledger
+                        .patch_task(
+                            task_instance_id,
+                            sona_core::task_ledger::types::TaskLedgerPatch {
+                                status: Some(
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+                                ),
+                                error_message: Some(Some(err_str)),
+                                stage: Some(Some("failed".to_string())),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    return;
+                }
 
                 let hid_meta = task_history_id.clone();
-                let _ = task_services
+                let meta_res = task_services
                     .history
                     .mutation_file(move |s| {
                         s.update_item_meta(
@@ -134,6 +156,24 @@ pub async fn transcribe_file(
                         )
                     })
                     .await;
+                if let Err(e) = meta_res {
+                    let err_str = e.to_string();
+                    let _ = task_services
+                        .task_ledger
+                        .patch_task(
+                            task_instance_id,
+                            sona_core::task_ledger::types::TaskLedgerPatch {
+                                status: Some(
+                                    sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+                                ),
+                                error_message: Some(Some(err_str)),
+                                stage: Some(Some("failed".to_string())),
+                                ..Default::default()
+                            },
+                        )
+                        .await;
+                    return;
+                }
 
                 let _ = task_services
                     .task_ledger
@@ -174,6 +214,19 @@ pub async fn transcribe_file(
                 } else {
                     e.to_string()
                 };
+
+                let hid_to_purge = task_history_id.clone();
+                let _ = task_services
+                    .history
+                    .mutation_file(move |s| {
+                        s.purge_items(
+                            sona_core::history::mutation_repository::HistoryDeleteItemsRequest {
+                                ids: vec![hid_to_purge],
+                            },
+                        )
+                    })
+                    .await;
+
                 let _ = task_services
                     .task_ledger
                     .patch_task(
@@ -214,7 +267,24 @@ pub async fn cancel_batch_task(
     instance_id: String,
 ) -> Result<bool, String> {
     let cancelled = services.asr.batch_cancel.cancel(&instance_id).await;
-    if cancelled {
+    let ledger_active = if !cancelled {
+        if let Ok(tasks) = services.task_ledger.list_tasks().await {
+            tasks.iter().any(|t| {
+                t.id == instance_id
+                    && matches!(
+                        t.status,
+                        sona_core::task_ledger::types::TaskLedgerStatus::Running
+                            | sona_core::task_ledger::types::TaskLedgerStatus::Pending
+                    )
+            })
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
+    if cancelled || ledger_active {
         let _ = services
             .task_ledger
             .patch_task(
@@ -226,8 +296,10 @@ pub async fn cancel_batch_task(
                 },
             )
             .await;
+        Ok(true)
+    } else {
+        Ok(false)
     }
-    Ok(cancelled)
 }
 
 pub async fn export_transcript(

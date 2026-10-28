@@ -39,6 +39,7 @@ impl Drop for BatchCancelGuard {
             && senders
                 .get(&id)
                 .is_some_and(|current| Arc::ptr_eq(current, &self.sender))
+            && Arc::strong_count(&self.sender) <= 2
         {
             senders.remove(&id);
         }
@@ -63,17 +64,36 @@ impl BatchCancelRegistry {
     /// Returns the receiver that the processor should watch along with a
     /// RAII `BatchCancelGuard` that removes the registration automatically on drop.
     pub async fn register(&self, instance_id: &str) -> (watch::Receiver<bool>, BatchCancelGuard) {
-        let (tx, rx) = watch::channel(false);
-        let tx = Arc::new(tx);
         if let Ok(mut senders) = self.senders.lock() {
+            if let Some(existing_tx) = senders.get(instance_id) {
+                let rx = existing_tx.subscribe();
+                let guard = BatchCancelGuard {
+                    senders: Arc::clone(&self.senders),
+                    instance_id: Some(instance_id.to_string()),
+                    sender: existing_tx.clone(),
+                };
+                return (rx, guard);
+            }
+            let (tx, rx) = watch::channel(false);
+            let tx = Arc::new(tx);
             senders.insert(instance_id.to_string(), tx.clone());
+            let guard = BatchCancelGuard {
+                senders: Arc::clone(&self.senders),
+                instance_id: Some(instance_id.to_string()),
+                sender: tx,
+            };
+            (rx, guard)
+        } else {
+            let (tx, rx) = watch::channel(false);
+            (
+                rx,
+                BatchCancelGuard {
+                    senders: Arc::clone(&self.senders),
+                    instance_id: Some(instance_id.to_string()),
+                    sender: Arc::new(tx),
+                },
+            )
         }
-        let guard = BatchCancelGuard {
-            senders: Arc::clone(&self.senders),
-            instance_id: Some(instance_id.to_string()),
-            sender: tx.clone(),
-        };
-        (rx, guard)
     }
 
     /// Send the cancellation signal for `instance_id`.

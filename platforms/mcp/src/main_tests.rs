@@ -643,6 +643,21 @@ fn test_batch_instance_id_injection() {
             .to_string();
         assert_eq!(injected, id);
     }
+    // Verify input alias normalizes to file_path when file_path is missing, null, or empty
+    for payload in [
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sona_transcribe_file","arguments":{"input":"https://example.com/stream.mp3"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sona_transcribe_file","arguments":{"file_path":null,"input":"https://example.com/stream.mp3"}}}"#,
+        r#"{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"sona_transcribe_file","arguments":{"file_path":"","input":"https://example.com/stream.mp3"}}}"#,
+    ] {
+        let mut req: JsonRpcRequest = serde_json::from_str(payload).unwrap();
+        let id = maybe_inject_transcribe_instance_id(&mut req);
+        assert!(id.is_some());
+        let args = &req.params.unwrap()["arguments"];
+        assert_eq!(
+            args["file_path"].as_str(),
+            Some("https://example.com/stream.mp3")
+        );
+    }
 
     // Verify non-transcribe tool does not get injected
     let mut non_transcribe: JsonRpcRequest = serde_json::from_str(

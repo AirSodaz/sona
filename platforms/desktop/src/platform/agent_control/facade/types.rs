@@ -131,18 +131,19 @@ impl From<&str> for ReadTranscriptRequest {
 #[serde(rename_all = "camelCase")]
 pub struct ReadTranscriptResult {
     pub history_id: String,
-    #[serde(default = "default_completed_status")]
+    #[serde(default = "default_completed_status", alias = "task_status")]
     pub task_status: String,
+    #[serde(default, alias = "error_message")]
     pub error_message: Option<String>,
     pub segments: Vec<TranscriptSegment>,
     pub text: String,
     #[serde(default, alias = "translation_text")]
     pub translation_text: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "total_segments_in_history")]
     pub total_segments_in_history: usize,
-    #[serde(default)]
+    #[serde(default, alias = "returned_segments")]
     pub returned_segments: usize,
-    #[serde(default)]
+    #[serde(default, alias = "has_more")]
     pub has_more: bool,
 }
 

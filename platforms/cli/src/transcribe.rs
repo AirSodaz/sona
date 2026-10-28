@@ -329,6 +329,11 @@ pub async fn run_transcribe(
         loop {
             tokio::select! {
                 res = &mut transcribe_task => {
+                    if !args.quiet {
+                        while let Ok(segment) = rx.try_recv() {
+                            let _ = writeln!(io.stderr(), "{}", segment.text);
+                        }
+                    }
                     match res {
                         Ok(segs) => {
                             break segs;
@@ -349,6 +354,11 @@ pub async fn run_transcribe(
                 }
                 _ = tokio::signal::ctrl_c() => {
                     observer.cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+                    if !args.quiet {
+                        while let Ok(segment) = rx.try_recv() {
+                            let _ = writeln!(io.stderr(), "{}", segment.text);
+                        }
+                    }
                     let collected = observer.segments.lock().unwrap().clone();
                     if collected.is_empty() {
                         return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));

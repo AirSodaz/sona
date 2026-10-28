@@ -419,8 +419,16 @@ pub(crate) fn maybe_inject_transcribe_instance_id(req: &mut JsonRpcRequest) -> O
             *args_val = serde_json::json!({});
         }
         if let Some(args_obj) = args_val.as_object_mut() {
-            if !args_obj.contains_key("file_path")
+            let file_path_missing_or_empty = args_obj
+                .get("file_path")
+                .map(|v| v.is_null() || v.as_str().map(|s| s.trim().is_empty()).unwrap_or(false))
+                .unwrap_or(true);
+            if file_path_missing_or_empty
                 && let Some(input) = args_obj.get("input").cloned()
+                && input
+                    .as_str()
+                    .map(|s| !s.trim().is_empty())
+                    .unwrap_or(false)
             {
                 args_obj.insert("file_path".to_string(), input);
             }
