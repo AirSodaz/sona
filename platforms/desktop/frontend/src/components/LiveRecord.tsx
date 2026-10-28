@@ -207,7 +207,7 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
   function getRecordingStatusText(): string {
     if (isAgentRecording) {
       return t('live.agent_recording_active', {
-        defaultValue: 'AI Agent 录音进行中，麦克风已占用',
+        defaultValue: 'AI Agent recording in progress, microphone occupied',
       });
     }
     if (isRecording) {
@@ -296,12 +296,16 @@ export function LiveRecord({ className = '' }: LiveRecordProps): React.ReactElem
               disabled={isInitializing || isTransitioning || isAgentRecording}
               aria-label={
                 isAgentRecording
-                  ? t('live.agent_recording_locked', { defaultValue: 'AI Agent 录音进行中' })
+                  ? t('live.agent_recording_locked', {
+                      defaultValue: 'AI Agent recording in progress',
+                    })
                   : t('live.start_recording')
               }
               data-tooltip={
                 isAgentRecording
-                  ? t('live.agent_recording_locked', { defaultValue: 'AI Agent 录音进行中' })
+                  ? t('live.agent_recording_locked', {
+                      defaultValue: 'AI Agent recording in progress',
+                    })
                   : isInitializing
                     ? 'Initializing...'
                     : t('live.start_recording')

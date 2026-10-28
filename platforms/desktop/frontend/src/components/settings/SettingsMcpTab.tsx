@@ -44,7 +44,8 @@ function getClientTip(
 ): string {
   const key = `settings.mcp.tip_${id.replace(/-/g, '_')}`;
   return t(key, {
-    defaultValue: '将生成的配置复制到对应智能体客户端的配置文件中，即可直接使用 Sona MCP 工具。',
+    defaultValue:
+      'Copy the generated configuration into your agent client configuration file to use Sona MCP tools directly.',
   });
 }
 

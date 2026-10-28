@@ -830,7 +830,7 @@ export function FeatureCard({
                     modelCandidates.length === 0 &&
                     !isLoadingCandidates
                       ? t('settings.llm.no_local_models_available', {
-                          defaultValue: '未下载本地模型（请先在下方下载）',
+                          defaultValue: 'No local models downloaded (download below first)',
                         })
                       : getModelPlaceholder(localProvider)
                   }
@@ -901,7 +901,8 @@ export function FeatureCard({
                 </div>
                 <span className="feature-reasoning-hint">
                   {t('settings.llm.reasoning_mode_hint', {
-                    defaultValue: '针对复杂逻辑与多步推理任务开启思维链深度推导',
+                    defaultValue:
+                      'Enable chain-of-thought deep reasoning for complex logic and multi-step tasks',
                   })}
                 </span>
               </div>
@@ -930,7 +931,7 @@ export function FeatureCard({
                     <Sparkles size={14} className="feature-builtin-icon" />
                     <span>
                       {t('settings.llm.builtin_reasoning', {
-                        defaultValue: '内置深度思考（无需配置档位）',
+                        defaultValue: 'Built-in deep thinking (no configuration required)',
                       })}
                     </span>
                   </div>
@@ -947,7 +948,7 @@ export function FeatureCard({
                       </label>
                       <span className="feature-field-subhint">
                         {t('settings.llm.reasoning_budget_hint', {
-                          defaultValue: '单次思考允许消耗的最大 Token 数量',
+                          defaultValue: 'Maximum tokens allowed per thinking step',
                         })}
                       </span>
                     </div>
@@ -981,7 +982,7 @@ export function FeatureCard({
                       </label>
                       <span className="feature-field-subhint">
                         {t('settings.llm.reasoning_level_hint', {
-                          defaultValue: '调节思维链思考过程的深度与详细度',
+                          defaultValue: 'Adjust reasoning depth and detail of the thinking process',
                         })}
                       </span>
                     </div>
@@ -1043,7 +1044,8 @@ export function FeatureCard({
                 </span>
                 <span className="feature-temperature-subhint">
                   {t('settings.llm.temperature_hint', {
-                    defaultValue: '控制回复随机度：较低值严谨聚焦，较高值发散创新',
+                    defaultValue:
+                      'Controls randomness: lower values are focused and deterministic, higher values are more creative',
                   })}
                 </span>
               </div>

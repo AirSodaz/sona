@@ -121,7 +121,7 @@ function SortableProjectItem({
           {project.pipeline?.enabled && (
             <span
               className="projects-rail-pipeline-badge"
-              title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+              title={t('projects.pipeline_enabled', { defaultValue: 'Pipeline enabled' })}
             >
               <Zap size={13} />
             </span>
@@ -377,7 +377,9 @@ export function ProjectsRail({
                       {activeDragProject?.pipeline?.enabled && (
                         <span
                           className="projects-rail-pipeline-badge"
-                          title={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+                          title={t('projects.pipeline_enabled', {
+                            defaultValue: 'Pipeline enabled',
+                          })}
                         >
                           <Zap size={13} />
                         </span>

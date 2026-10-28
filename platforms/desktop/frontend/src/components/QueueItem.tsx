@@ -101,7 +101,7 @@ export const QueueItem = memo(function QueueItem({
     isTranscodeError &&
     (rawErrorMessage.startsWith('Failed to decode audio file') ||
       rawErrorMessage.startsWith('Failed to extract audio slice'))
-      ? t('batch.transcode_failed', { defaultValue: '转码失败' })
+      ? t('batch.transcode_failed', { defaultValue: 'Transcode failed' })
       : rawErrorMessage;
   const retryLabel = t('batch.retry', {
     defaultValue: t('common.retry', { defaultValue: 'Retry' }),

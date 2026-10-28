@@ -1,11 +1,14 @@
 import type React from 'react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import '../../styles/split-button.css';
 import { ChevronDownIcon } from '../Icons';
+import { ModalPortal } from '../ModalPortal';
 
 export interface SplitButtonItem {
   key: string;
   label: React.ReactNode;
+  description?: React.ReactNode;
   icon?: React.ReactNode;
   onClick: () => void;
   disabled?: boolean;
@@ -23,6 +26,9 @@ export interface SplitButtonProps {
   ariaLabel?: string;
   toggleAriaLabel?: string;
 }
+
+const useIsomorphicLayoutEffect = typeof window !== 'undefined' ? useLayoutEffect : useEffect;
+
 export function SplitButton({
   primaryLabel,
   primaryIcon,
@@ -36,13 +42,54 @@ export function SplitButton({
   toggleAriaLabel,
 }: SplitButtonProps): React.JSX.Element {
   const [isOpen, setIsOpen] = useState(false);
+  const [menuPosition, setMenuPosition] = useState<{ top: number; left: number }>({
+    top: 0,
+    left: 0,
+  });
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const menuItemRefs = useRef<(HTMLButtonElement | null)[]>([]);
   const wasOpenRef = useRef(false);
   const menuId = useId();
   const triggerId = `${menuId}-trigger`;
+
+  const hasDescriptions = menuItems.some((i) => Boolean(i.description));
+
+  const updatePosition = useCallback(() => {
+    if (!triggerRef.current) return;
+    const triggerRect = triggerRef.current.getBoundingClientRect();
+    const menuEl = menuRef.current;
+    const menuWidth = menuEl?.offsetWidth || (hasDescriptions ? 270 : 260);
+    const menuHeight = menuEl?.offsetHeight || 160;
+
+    const spaceBelow = window.innerHeight - triggerRect.bottom;
+    const spaceAbove = triggerRect.top;
+
+    let top: number;
+    if (spaceBelow < menuHeight + 8 && spaceAbove > spaceBelow) {
+      top = Math.max(8, triggerRect.top - menuHeight - 4);
+    } else {
+      top = Math.max(8, Math.min(triggerRect.bottom + 4, window.innerHeight - menuHeight - 8));
+    }
+
+    let left = triggerRect.right - menuWidth;
+    left = Math.max(8, Math.min(left, window.innerWidth - menuWidth - 8));
+
+    setMenuPosition({ top, left });
+  }, [hasDescriptions]);
+
+  useIsomorphicLayoutEffect(() => {
+    if (!isOpen) return undefined;
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, updatePosition]);
 
   useEffect(() => {
     if (isOpen && !wasOpenRef.current) {
@@ -59,10 +106,18 @@ export function SplitButton({
       setIsOpen(false);
     }
   }, [disabled, isOpen]);
+
   useEffect(() => {
     if (!isOpen) return undefined;
+
     const handleClickOutside = (event: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (
+        containerRef.current &&
+        !containerRef.current.contains(target) &&
+        menuRef.current &&
+        !menuRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
@@ -80,9 +135,14 @@ export function SplitButton({
         return;
       }
 
-      const isTargetInContainer = containerRef.current?.contains(event.target as Node);
-      const isActiveElementInContainer = containerRef.current?.contains(document.activeElement);
-      if (!isTargetInContainer && !isActiveElementInContainer) {
+      const isTargetInMenuOrContainer =
+        Boolean(containerRef.current?.contains(event.target as Node)) ||
+        Boolean(menuRef.current?.contains(event.target as Node));
+      const isActiveElementInMenuOrContainer =
+        Boolean(containerRef.current?.contains(document.activeElement)) ||
+        Boolean(menuRef.current?.contains(document.activeElement));
+
+      if (!isTargetInMenuOrContainer && !isActiveElementInMenuOrContainer) {
         return;
       }
 
@@ -141,38 +201,37 @@ export function SplitButton({
     };
   }, [isOpen, menuItems]);
 
+  const isMovingInside = (related: Node | null) => {
+    if (!related) return false;
+    return Boolean(containerRef.current?.contains(related) || menuRef.current?.contains(related));
+  };
+
+  const handleToggle = () => {
+    if (!isOpen) {
+      updatePosition();
+    }
+    setIsOpen((prev) => !prev);
+  };
+
   const baseBtnClass = variant === 'primary' ? 'btn btn-primary' : 'btn btn-secondary-soft';
   const sizeClass = size === 'sm' ? 'btn-sm' : '';
 
   return (
     <div
       ref={containerRef}
-      className={`split-button-container ${className}`}
+      className={`split-button-container ${variant === 'secondary' ? 'is-secondary' : ''} ${className}`.trim()}
       onBlur={(e) => {
-        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+        if (e.relatedTarget && !isMovingInside(e.relatedTarget as Node)) {
           setIsOpen(false);
         }
-      }}
-      style={{
-        display: 'inline-flex',
-        alignItems: 'stretch',
-        position: 'relative',
-        borderRadius: 'var(--radius-md, 6px)',
       }}
     >
       <button
         type="button"
-        className={`${baseBtnClass} ${sizeClass}`}
+        className={`split-button-primary ${baseBtnClass} ${sizeClass}`.trim()}
         onClick={onPrimaryClick}
         disabled={disabled}
         aria-label={ariaLabel}
-        style={{
-          borderTopRightRadius: 0,
-          borderBottomRightRadius: 0,
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: '6px',
-        }}
       >
         {primaryIcon}
         <span>{primaryLabel}</span>
@@ -182,12 +241,13 @@ export function SplitButton({
         ref={triggerRef}
         id={triggerId}
         type="button"
-        className={`${baseBtnClass} ${sizeClass}`}
-        onClick={() => setIsOpen((prev) => !prev)}
+        className={`split-button-toggle ${baseBtnClass} ${sizeClass}`.trim()}
+        onClick={handleToggle}
         disabled={disabled || menuItems.length === 0}
         onKeyDown={(e) => {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
+            updatePosition();
             setIsOpen(true);
           }
         }}
@@ -200,96 +260,64 @@ export function SplitButton({
             ? `${ariaLabel} options`
             : t('batch.more_options', { defaultValue: 'More options' }))
         }
-        style={{
-          borderTopLeftRadius: 0,
-          borderBottomLeftRadius: 0,
-          borderLeft: '1px solid rgba(255, 255, 255, 0.2)',
-          paddingLeft: '6px',
-          paddingRight: '6px',
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-        }}
       >
         <ChevronDownIcon width={12} height={12} aria-hidden="true" />
       </button>
 
       {isOpen && !disabled && (
-        <div
-          id={menuId}
-          role="menu"
-          aria-labelledby={triggerId}
-          style={{
-            position: 'absolute',
-            top: 'calc(100% + 4px)',
-            right: 0,
-            zIndex: 1000,
-            minWidth: '180px',
-            backgroundColor: 'var(--color-bg-surface, #1e1e24)',
-            border: '1px solid var(--color-border, #333)',
-            borderRadius: 'var(--radius-md, 6px)',
-            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.4)',
-            padding: '4px',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: '2px',
-          }}
-        >
-          {menuItems.map((item, index) => (
-            <button
-              key={item.key}
-              ref={(el) => {
-                menuItemRefs.current[index] = el;
-              }}
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              disabled={item.disabled}
-              onClick={() => {
+        <ModalPortal>
+          <div
+            ref={menuRef}
+            id={menuId}
+            role="menu"
+            aria-labelledby={triggerId}
+            className={`split-button-portal-menu split-button-menu ${hasDescriptions ? 'has-descriptions' : ''} ${className}`.trim()}
+            style={{
+              top: `${menuPosition.top}px`,
+              left: `${menuPosition.left}px`,
+            }}
+            onBlur={(e) => {
+              if (e.relatedTarget && !isMovingInside(e.relatedTarget as Node)) {
                 setIsOpen(false);
-                item.onClick();
-              }}
-              onFocus={(e) => {
-                if (!item.disabled) {
-                  e.currentTarget.style.backgroundColor =
-                    'var(--color-bg-hover, rgba(255, 255, 255, 0.08))';
-                }
-              }}
-              onBlur={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                width: '100%',
-                padding: '8px 10px',
-                fontSize: '13px',
-                textAlign: 'left',
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--color-text, #eee)',
-                borderRadius: 'var(--radius-sm, 4px)',
-                cursor: item.disabled ? 'not-allowed' : 'pointer',
-                opacity: item.disabled ? 0.5 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!item.disabled) {
-                  e.currentTarget.style.backgroundColor =
-                    'var(--color-bg-hover, rgba(255, 255, 255, 0.08))';
-                }
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = 'transparent';
-              }}
-            >
-              {item.icon && (
-                <span style={{ display: 'inline-flex', alignItems: 'center' }}>{item.icon}</span>
-              )}
-              <span>{item.label}</span>
-            </button>
-          ))}
-        </div>
+              }
+            }}
+          >
+            {menuItems.map((item, index) => (
+              <button
+                key={item.key}
+                ref={(el) => {
+                  menuItemRefs.current[index] = el;
+                }}
+                type="button"
+                role="menuitem"
+                tabIndex={-1}
+                disabled={item.disabled}
+                onClick={() => {
+                  setIsOpen(false);
+                  item.onClick();
+                }}
+                className={`split-button-item ${item.description ? 'has-description' : ''}`.trim()}
+              >
+                {item.icon &&
+                  (item.description ? (
+                    <span className="split-button-item-icon-box" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                  ) : (
+                    <span className="split-button-item-icon" aria-hidden="true">
+                      {item.icon}
+                    </span>
+                  ))}
+                <div className="split-button-item-content">
+                  <span className="split-button-item-title">{item.label}</span>
+                  {item.description && (
+                    <span className="split-button-item-desc">{item.description}</span>
+                  )}
+                </div>
+              </button>
+            ))}
+          </div>
+        </ModalPortal>
       )}
     </div>
   );

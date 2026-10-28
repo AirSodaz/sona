@@ -50,7 +50,7 @@ export function UrlStreamImportModal({
     if (urls.length === 0) {
       setErrorMessage(
         t('batch.stream_modal_empty_error', {
-          defaultValue: '请输入至少一个音视频网络流链接。',
+          defaultValue: 'Please enter at least one audio or video stream URL.',
         })
       );
       return;
@@ -61,7 +61,7 @@ export function UrlStreamImportModal({
     if (invalidUrls.length > 0) {
       setErrorMessage(
         t('batch.stream_modal_invalid_error', {
-          defaultValue: '链接必须以 http://, https://, rtmp:// 或 rtsp:// 开头。',
+          defaultValue: 'URLs must begin with http://, https://, rtmp://, or rtsp://.',
         })
       );
       return;
@@ -85,7 +85,7 @@ export function UrlStreamImportModal({
           <Globe size={18} />
           <span>
             {t('batch.import_stream_title', {
-              defaultValue: '导入网络音视频链接',
+              defaultValue: 'Import Network Audio/Video Stream',
             })}
           </span>
         </div>
@@ -101,7 +101,7 @@ export function UrlStreamImportModal({
           }}
         >
           <button type="button" className="btn btn-secondary-soft" onClick={handleModalClose}>
-            {t('common.cancel', { defaultValue: '取消' })}
+            {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
           <button
             type="button"
@@ -109,7 +109,7 @@ export function UrlStreamImportModal({
             onClick={() => handleSubmit()}
             disabled={urls.length === 0}
           >
-            {t('batch.add_to_queue', { defaultValue: '加入队列' })}
+            {t('batch.add_to_queue', { defaultValue: 'Add to Queue' })}
           </button>
         </div>
       }
@@ -130,7 +130,7 @@ export function UrlStreamImportModal({
             }}
           >
             {t('batch.stream_urls_label', {
-              defaultValue: '网络音视频链接 (支持多行批量输入)',
+              defaultValue: 'Network Stream URLs (one per line)',
             })}
           </label>
           <textarea
@@ -172,7 +172,8 @@ export function UrlStreamImportModal({
             }}
           >
             {t('batch.stream_urls_hint', {
-              defaultValue: '直接通过网络流转录，完成转录的音频切片随用随弃，不占用长期磁盘空间。',
+              defaultValue:
+                'Transcribes directly from the network stream; processed audio slices are discarded immediately without consuming permanent disk space.',
             })}
           </div>
         </div>
@@ -190,7 +191,7 @@ export function UrlStreamImportModal({
               }}
             >
               {t('batch.stream_alias_label', {
-                defaultValue: '自定义名称 (可选)',
+                defaultValue: 'Custom Name (Optional)',
               })}
             </label>
             <input
@@ -199,7 +200,7 @@ export function UrlStreamImportModal({
               value={alias}
               onChange={(e) => setAlias(e.target.value)}
               placeholder={t('batch.stream_alias_placeholder', {
-                defaultValue: '例如：AI 播客第 42 期',
+                defaultValue: 'e.g., AI Podcast Episode 42',
               })}
               style={{
                 width: '100%',
@@ -227,7 +228,7 @@ export function UrlStreamImportModal({
             checked={retainAudio}
             onChange={setRetainAudio}
             label={t('batch.stream_retain_audio', {
-              defaultValue: '保留转码音频副本 (保存后可在工作台回放)',
+              defaultValue: 'Keep Transcoded Audio Copy (allows workbench playback after saving)',
             })}
           />
           <div
@@ -239,7 +240,8 @@ export function UrlStreamImportModal({
             }}
           >
             {t('batch.stream_retain_audio_desc', {
-              defaultValue: '未勾选时，音频只在内存中滑动处理后即时销毁，零本地磁盘占用。',
+              defaultValue:
+                'When unchecked, audio is kept only in memory during processing and discarded immediately with zero local disk footprint.',
             })}
           </div>
         </div>

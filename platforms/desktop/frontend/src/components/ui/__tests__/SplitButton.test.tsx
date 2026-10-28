@@ -186,4 +186,95 @@ describe('SplitButton', () => {
     fireEvent.keyDown(document, { key: 'ArrowDown' });
     expect(document.activeElement).toBe(item3);
   });
+
+  it('renders two-line card item with title, description, and icon badge when description is provided', () => {
+    render(
+      <SplitButton
+        primaryLabel="Import"
+        onPrimaryClick={vi.fn()}
+        menuItems={[
+          {
+            key: 'item-1',
+            label: 'Two-line Title',
+            description: 'Subtext description',
+            icon: <span data-testid="test-icon">icon</span>,
+            onClick: vi.fn(),
+          },
+        ]}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'More options' }));
+
+    const menu = screen.getByRole('menu');
+    expect(menu.classList.contains('has-descriptions')).toBe(true);
+
+    const item = screen.getByRole('menuitem');
+    expect(item.classList.contains('has-description')).toBe(true);
+
+    const titleEl = item.querySelector('.split-button-item-title');
+    expect(titleEl?.textContent).toBe('Two-line Title');
+
+    const descEl = item.querySelector('.split-button-item-desc');
+    expect(descEl?.textContent).toBe('Subtext description');
+
+    const iconBox = item.querySelector('.split-button-item-icon-box');
+    expect(iconBox).toBeDefined();
+    expect(iconBox?.contains(screen.getByTestId('test-icon'))).toBe(true);
+  });
+
+  it('applies is-secondary class when variant="secondary"', () => {
+    const { container: primaryContainer } = render(
+      <SplitButton
+        primaryLabel="Primary"
+        onPrimaryClick={vi.fn()}
+        menuItems={[{ key: '1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+    const primaryRoot = primaryContainer.querySelector('.split-button-container');
+    expect(primaryRoot?.classList.contains('is-secondary')).toBe(false);
+
+    const { container: secondaryContainer } = render(
+      <SplitButton
+        primaryLabel="Secondary"
+        variant="secondary"
+        onPrimaryClick={vi.fn()}
+        menuItems={[{ key: '1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+    const secondaryRoot = secondaryContainer.querySelector('.split-button-container');
+    expect(secondaryRoot?.classList.contains('is-secondary')).toBe(true);
+  });
+
+  it('mounts menu in document.body via ModalPortal and computes bounded absolute position', () => {
+    const { container } = render(
+      <SplitButton
+        primaryLabel="Import"
+        onPrimaryClick={vi.fn()}
+        menuItems={[{ key: 'item-1', label: 'Item 1', onClick: vi.fn() }]}
+      />
+    );
+
+    const toggleBtn = screen.getByRole('button', { name: 'More options' });
+    vi.spyOn(toggleBtn, 'getBoundingClientRect').mockReturnValue({
+      top: 100,
+      bottom: 130,
+      left: 200,
+      right: 230,
+      width: 30,
+      height: 30,
+      x: 200,
+      y: 100,
+      toJSON: () => {},
+    });
+
+    fireEvent.click(toggleBtn);
+
+    const menu = screen.getByRole('menu');
+    expect(menu).toBeDefined();
+    expect(menu.parentElement).toBe(document.body);
+    expect(menu.classList.contains('split-button-portal-menu')).toBe(true);
+    expect(container.contains(menu)).toBe(false);
+    expect(menu.style.top).toBe('134px');
+  });
 });

@@ -462,7 +462,7 @@ export function SegmentItem({
                     <Mic size={14} />
                     <span>
                       {t('editor.enroll_speaker_sample', {
-                        defaultValue: '设为声纹样本',
+                        defaultValue: 'Enroll as Voice Sample',
                       })}
                     </span>
                   </button>
@@ -695,8 +695,12 @@ export function SegmentItem({
                 onEnrollSample?.(segment);
               }}
               disabled={isLocked}
-              data-tooltip={t('editor.enroll_speaker_sample', { defaultValue: '设为声纹样本' })}
-              aria-label={t('editor.enroll_speaker_sample', { defaultValue: '设为声纹样本' })}
+              data-tooltip={t('editor.enroll_speaker_sample', {
+                defaultValue: 'Enroll as Voice Sample',
+              })}
+              aria-label={t('editor.enroll_speaker_sample', {
+                defaultValue: 'Enroll as Voice Sample',
+              })}
             >
               <Mic size={14} />
             </button>

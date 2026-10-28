@@ -165,13 +165,16 @@ export function QueueSummaryBar({
           <SplitButton
             variant="secondary"
             size="sm"
-            primaryLabel={t('batch.add_more_files')}
+            primaryLabel={t('batch.add_more', { defaultValue: 'Add More' })}
             primaryIcon={<UploadIcon width={13} height={13} />}
             onPrimaryClick={onAddFiles}
             menuItems={[
               {
                 key: 'files',
-                label: t('batch.add_more_files'),
+                label: t('batch.add_more', { defaultValue: 'Add More' }),
+                description: t('batch.add_more_desc', {
+                  defaultValue: 'Add more audio/video files to queue',
+                }),
                 icon: <UploadIcon width={13} height={13} />,
                 onClick: onAddFiles,
               },
@@ -180,6 +183,9 @@ export function QueueSummaryBar({
                     {
                       key: 'stream',
                       label: t('batch.import_stream', { defaultValue: 'Import Network Stream...' }),
+                      description: t('batch.import_stream_desc', {
+                        defaultValue: 'Enter HTTP, HTTPS, RTMP or HLS stream URL',
+                      }),
                       icon: <Globe size={13} />,
                       onClick: onAddStream,
                     },

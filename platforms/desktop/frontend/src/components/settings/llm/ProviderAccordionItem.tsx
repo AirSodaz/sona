@@ -230,9 +230,11 @@ export function ProviderAccordionItem({
 
           {def.id !== 'google_translate' && (
             <SettingsItem
-              title={t('settings.llm.models_management_title', { defaultValue: '模型管理' })}
+              title={t('settings.llm.models_management_title', {
+                defaultValue: 'Model Management',
+              })}
               hint={t('settings.llm.models_management_hint', {
-                defaultValue: '管理和测试该供应商下的模型列表',
+                defaultValue: 'Manage and test models for this provider',
               })}
             >
               <button
@@ -259,7 +261,7 @@ export function ProviderAccordionItem({
 
           {def.id === 'google_translate' && (
             <SettingsItem
-              title={t('settings.llm.test_connection_title', { defaultValue: '连接测试' })}
+              title={t('settings.llm.test_connection_title', { defaultValue: 'Connection Test' })}
             >
               <div
                 style={{

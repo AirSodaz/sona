@@ -1,0 +1,300 @@
+/* SplitButton Component & Batch Import Tile Buttons Styles */
+
+/* ==========================================================================
+   Batch Import Tile Buttons (Option 1, Color A)
+   ========================================================================== */
+.batch-import-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+.btn-select-file-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  background: #ffffff;
+  color: #2f2f2f;
+  border: 1px solid rgba(55, 53, 47, 0.22);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 550;
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-select-file-primary:hover {
+  background: #f7f6f3;
+  border-color: rgba(55, 53, 47, 0.35);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.btn-select-file-primary:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-select-file-primary {
+  background: #2c2c2e;
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.16);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+[data-theme="dark"] .btn-select-file-primary:hover {
+  background: #37373a;
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn-select-file-primary {
+    background: #2c2c2e;
+    color: #f5f5f7;
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  }
+
+  :root:not([data-theme="light"]) .btn-select-file-primary:hover {
+    background: #37373a;
+    border-color: rgba(255, 255, 255, 0.28);
+    box-shadow:
+      0 4px 12px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    transform: translateY(-1px);
+  }
+}
+
+.btn-select-stream-secondary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  color: #5c5955;
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  border-radius: var(--radius-md, 8px);
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 150ms ease;
+}
+
+.btn-select-stream-secondary:hover {
+  background: #eeedea;
+  color: #2f2f2f;
+  border-color: rgba(55, 53, 47, 0.28);
+}
+
+.btn-select-stream-secondary:active {
+  transform: translateY(0);
+}
+
+[data-theme="dark"] .btn-select-stream-secondary {
+  color: #98989d;
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+[data-theme="dark"] .btn-select-stream-secondary:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .btn-select-stream-secondary {
+    color: #98989d;
+    border-color: rgba(255, 255, 255, 0.12);
+  }
+
+  :root:not([data-theme="light"]) .btn-select-stream-secondary:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f5f5f7;
+    border-color: rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* ==========================================================================
+   SplitButton Component Styles
+   ========================================================================== */
+.split-button-container {
+  display: inline-flex;
+  align-items: stretch;
+  position: relative;
+  border-radius: var(--radius-md, 6px);
+}
+
+.split-button-primary {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.split-button-toggle {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  margin-left: -1px;
+  padding-left: 6px;
+  padding-right: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Divider rules */
+.split-button-container:not(.is-secondary) .split-button-toggle {
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.split-button-container.is-secondary .split-button-toggle {
+  border-left: 1px solid var(--color-border);
+}
+
+/* ==========================================================================
+   ModalPortal Dropdown Panel
+   ========================================================================== */
+@keyframes split-menu-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.split-button-portal-menu,
+.split-button-menu {
+  position: fixed;
+  z-index: 1400;
+  width: 260px;
+  max-width: calc(100vw - 16px);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 10px);
+  box-shadow:
+    var(--shadow-lg),
+    0 2px 8px rgba(0, 0, 0, 0.06);
+  padding: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  outline: none;
+  animation: split-menu-fade-in 100ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.split-button-portal-menu.has-descriptions,
+.split-button-menu.has-descriptions {
+  width: 270px;
+}
+
+/* Menu Item */
+.split-button-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 9px;
+  font-size: 13px;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--color-text-primary);
+  border-radius: calc(var(--radius-md, 6px) - 2px);
+  cursor: pointer;
+  transition: background 120ms ease;
+  outline: none;
+}
+
+.split-button-item:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.split-button-item:hover:not(:disabled),
+.split-button-item:focus-visible:not(:disabled) {
+  background: var(--color-bg-hover);
+  color: var(--color-text-primary);
+}
+
+.split-button-item:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.split-button-item-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* Two-line card layout (when description is provided) */
+.split-button-item.has-description {
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: calc(var(--radius-md, 6px) - 2px);
+}
+
+.split-button-item-icon-box {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border-subtle, rgba(0, 0, 0, 0.04));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  color: var(--color-text-primary);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.split-button-item:hover:not(:disabled) .split-button-item-icon-box,
+.split-button-item:focus-visible:not(:disabled) .split-button-item-icon-box {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+}
+
+.split-button-item-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1;
+  min-width: 0;
+}
+
+.split-button-item-title {
+  font-size: 12.5px;
+  font-weight: 550;
+  line-height: 1.25;
+  color: var(--color-text-primary);
+}
+
+.split-button-item-desc {
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
