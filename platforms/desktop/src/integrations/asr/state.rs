@@ -39,9 +39,18 @@ impl Drop for BatchCancelGuard {
             && senders
                 .get(&id)
                 .is_some_and(|current| Arc::ptr_eq(current, &self.sender))
-            && Arc::strong_count(&self.sender) <= 2
         {
-            senders.remove(&id);
+            let sender = std::mem::replace(
+                &mut self.sender,
+                Arc::new(tokio::sync::watch::channel(false).0),
+            );
+            drop(sender);
+            if senders
+                .get(&id)
+                .is_some_and(|current| Arc::strong_count(current) <= 1)
+            {
+                senders.remove(&id);
+            }
         }
     }
 }
@@ -65,7 +74,10 @@ impl BatchCancelRegistry {
     /// RAII `BatchCancelGuard` that removes the registration automatically on drop.
     pub async fn register(&self, instance_id: &str) -> (watch::Receiver<bool>, BatchCancelGuard) {
         if let Ok(mut senders) = self.senders.lock() {
-            if let Some(existing_tx) = senders.get(instance_id) {
+            if let Some(existing_tx) = senders.get(instance_id)
+                && Arc::strong_count(existing_tx) > 1
+                && !*existing_tx.borrow()
+            {
                 let rx = existing_tx.subscribe();
                 let guard = BatchCancelGuard {
                     senders: Arc::clone(&self.senders),

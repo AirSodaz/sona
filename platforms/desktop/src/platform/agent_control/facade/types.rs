@@ -130,6 +130,7 @@ impl From<&str> for ReadTranscriptRequest {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadTranscriptResult {
+    #[serde(alias = "history_id")]
     pub history_id: String,
     #[serde(default = "default_completed_status", alias = "task_status")]
     pub task_status: String,
@@ -305,14 +306,17 @@ pub struct TranscribeFileRequest {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TranscribeFileResult {
+    #[serde(alias = "history_id")]
     pub history_id: String,
+    #[serde(alias = "task_id")]
     pub task_id: String,
     pub status: String,
+    #[serde(alias = "is_stream")]
     pub is_stream: bool,
     pub message: String,
-    #[serde(default)]
+    #[serde(default, alias = "duration_seconds")]
     pub duration_seconds: f64,
-    #[serde(default)]
+    #[serde(default, alias = "segment_count")]
     pub segment_count: usize,
     #[serde(default)]
     pub text: String,

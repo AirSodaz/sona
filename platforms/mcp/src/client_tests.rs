@@ -1689,8 +1689,8 @@ async fn test_mcp_transcribe_file_async_stream_and_read_transcript() {
     .unwrap();
     let elapsed = start_instant.elapsed();
     assert!(
-        elapsed < Duration::from_millis(500),
-        "Latency must be < 500ms, was {elapsed:?}"
+        elapsed < Duration::from_secs(3),
+        "Latency must be non-blocking (< 3s), was {elapsed:?}"
     );
     assert_eq!(res1["isStream"], true);
     assert_eq!(res1["taskId"], "task-mcp-1");

@@ -340,11 +340,12 @@ async fn handle_transcribe_inner(
                 .map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))?;
             let json_req: JsonTranscribeRequest = serde_json::from_slice(&bytes)
                 .map_err(|e| (StatusCode::BAD_REQUEST, format!("Invalid JSON body: {e}")))?;
-            if !sona_core::history::is_network_url(&json_req.url) {
+            let trimmed_url = json_req.url.trim();
+            if !sona_core::history::is_network_url(trimmed_url) {
                 return Err((StatusCode::BAD_REQUEST, "Invalid stream URL".to_string()).into());
             }
             (
-                std::path::PathBuf::from(json_req.url),
+                std::path::PathBuf::from(trimmed_url),
                 json_req.model_id,
                 json_req.language.unwrap_or_else(|| "auto".to_string()),
                 json_req.hotwords,
@@ -437,13 +438,20 @@ async fn handle_transcribe_inner(
                 }
             }
 
-            let file_path = if let Some(path) = temp_file_path.clone() {
+            let file_path = if temp_file_path.is_some() && url_field.is_some() {
+                return Err((
+                    StatusCode::BAD_REQUEST,
+                    "Cannot specify both file and url".to_string(),
+                )
+                    .into());
+            } else if let Some(path) = temp_file_path.clone() {
                 path
             } else if let Some(url_str) = url_field {
-                if !sona_core::history::is_network_url(&url_str) {
+                let trimmed = url_str.trim();
+                if !sona_core::history::is_network_url(trimmed) {
                     return Err((StatusCode::BAD_REQUEST, "Invalid stream URL".to_string()).into());
                 }
-                std::path::PathBuf::from(url_str)
+                std::path::PathBuf::from(trimmed)
             } else {
                 return Err((StatusCode::BAD_REQUEST, "Missing file or url".to_string()).into());
             };

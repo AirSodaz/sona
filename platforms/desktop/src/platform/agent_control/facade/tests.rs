@@ -1446,3 +1446,59 @@ async fn test_cancel_batch_task_immediate_after_transcribe_file() {
         sona_core::task_ledger::types::TaskLedgerStatus::Cancelled
     );
 }
+
+#[tokio::test]
+async fn test_read_transcript_returns_failed_status_when_history_item_purged() {
+    let (facade, _dir) = create_test_facade().await;
+    let history_id = "test-hist-purged-on-failure".to_string();
+    let task_id = "task-purged-123".to_string();
+
+    let record = sona_core::task_ledger::types::TaskLedgerRecord {
+        id: task_id,
+        kind: sona_core::task_ledger::types::TaskLedgerKind::BatchImport,
+        status: sona_core::task_ledger::types::TaskLedgerStatus::Failed,
+        title: "failed-stream-task".to_string(),
+        progress: 0.0,
+        created_at: 1000,
+        updated_at: 1000,
+        retryable: false,
+        cancelable: false,
+        recoverable: false,
+        stage: Some("failed".to_string()),
+        history_id: Some(history_id.clone()),
+        tag_ids: vec![],
+        file_path: Some("audio.mp3".to_string()),
+        automation_rule_id: None,
+        tag_automation_rule_id: None,
+        automation_profile_id: None,
+        automation_profile_source: None,
+        source_fingerprint: None,
+        error_message: Some("Stream connection failed".to_string()),
+        template_id: None,
+        target_language: None,
+    };
+    facade
+        .services
+        .task_ledger
+        .upsert_task(record)
+        .await
+        .unwrap();
+
+    let read = facade
+        .read_transcript(ReadTranscriptRequest {
+            history_id,
+            ..Default::default()
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(read.task_status, "failed");
+    assert_eq!(
+        read.error_message.as_deref(),
+        Some("Stream connection failed")
+    );
+    assert_eq!(read.segments.len(), 0);
+    assert_eq!(read.total_segments_in_history, 0);
+    assert_eq!(read.returned_segments, 0);
+    assert!(!read.has_more);
+}

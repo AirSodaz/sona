@@ -62,12 +62,15 @@ pub async fn read_transcript(
     };
 
     let hid = req.history_id.clone();
-    let all_segments = services
+    let all_segments = match services
         .history
         .query_db(move |service| service.load_transcript(&hid))
         .await
-        .map_err(|e| e.to_string())?
-        .unwrap_or_default();
+    {
+        Ok(segments) => segments.unwrap_or_default(),
+        Err(_err) if task_status == "failed" || task_status == "cancelled" => Vec::new(),
+        Err(err) => return Err(err.to_string()),
+    };
     let total_segments_in_history = all_segments.len();
 
     let mut filtered: Vec<TranscriptSegment> = all_segments;

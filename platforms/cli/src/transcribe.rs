@@ -26,12 +26,16 @@ impl BatchTranscriptionObserver for CliStreamBatchObserver {
             segments.retain(|s| !update.remove_ids.contains(&s.id));
         }
         for seg in &update.upsert_segments {
-            if let Some(existing) = segments.iter_mut().find(|s| s.id == seg.id) {
+            let is_new = if let Some(existing) = segments.iter_mut().find(|s| s.id == seg.id) {
                 *existing = seg.clone();
+                false
             } else {
                 segments.push(seg.clone());
+                true
+            };
+            if seg.is_final || is_new {
+                let _ = self.tx.send(seg.clone());
             }
-            let _ = self.tx.send(seg.clone());
         }
     }
 
@@ -340,8 +344,8 @@ pub async fn run_transcribe(
                         }
                         Err(err) => {
                             let collected = observer.segments.lock().unwrap().clone();
-                            if !collected.is_empty() {
-                                break collected;
+                            if !collected.is_empty() && !args.quiet {
+                                let _ = writeln!(io.stderr(), "Warning: Stream transcription ended prematurely: {err}");
                             }
                             return Err(crate::online_asr::map_asr_error(err));
                         }
@@ -359,12 +363,7 @@ pub async fn run_transcribe(
                             let _ = writeln!(io.stderr(), "{}", segment.text);
                         }
                     }
-                    let collected = observer.segments.lock().unwrap().clone();
-                    if collected.is_empty() {
-                        return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
-                    } else {
-                        break collected;
-                    }
+                    return Err(CliError::Cancelled("Transcription cancelled by user".to_string()));
                 }
             }
         }
@@ -1299,5 +1298,56 @@ mod tests {
                 .to_string()
                 .contains("Input file must be an existing file")
         );
+    }
+
+    #[tokio::test]
+    async fn test_cli_stream_batch_observer_deduplicates_interim_segments() {
+        use sona_core::transcription::transcript::TranscriptUpdate;
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
+        let observer = CliStreamBatchObserver {
+            segments: std::sync::Mutex::new(Vec::new()),
+            tx,
+            cancelled: std::sync::atomic::AtomicBool::new(false),
+        };
+        let make_seg = |id: &str, text: &str, is_final: bool| TranscriptSegment {
+            id: id.to_string(),
+            start: 0.0,
+            end: 1.0,
+            text: text.to_string(),
+            is_final,
+            timing: None,
+            tokens: None,
+            timestamps: None,
+            durations: None,
+            translation: None,
+            draft_translation: None,
+            speaker: None,
+            speaker_attribution: None,
+        };
+
+        // First update: new interim segment
+        let seg1 = make_seg("seg-1", "Hello", false);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1],
+            remove_ids: vec![],
+        });
+        assert_eq!(rx.recv().await.unwrap().text, "Hello");
+
+        // Second update: updated interim segment with same ID (should NOT send to channel)
+        let seg1_update = make_seg("seg-1", "Hello world", false);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1_update],
+            remove_ids: vec![],
+        });
+        // Channel must be empty (interim update skipped)
+        assert!(rx.try_recv().is_err());
+
+        // Third update: finalized segment with same ID (should send to channel)
+        let seg1_final = make_seg("seg-1", "Hello world!", true);
+        observer.on_transcript_update(&TranscriptUpdate {
+            upsert_segments: vec![seg1_final],
+            remove_ids: vec![],
+        });
+        assert_eq!(rx.recv().await.unwrap().text, "Hello world!");
     }
 }

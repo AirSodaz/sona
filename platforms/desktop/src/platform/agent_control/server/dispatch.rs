@@ -272,7 +272,7 @@ pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
     (
         "sona_read_transcript",
         "Read Transcript",
-        "Read full transcript segments and text of a history record.",
+        "Read transcript segments and text of a history record, with optional time filtering, cursor pagination, and task status.",
         ToolPermissionCategory::ReadOnly,
     ),
     (
@@ -362,7 +362,7 @@ pub static TOOLS_CATALOG: &[(&str, &str, &str, ToolPermissionCategory)] = &[
     (
         "sona_transcribe_file",
         "Transcribe File",
-        "Transcribe a local audio or video file in batch mode and save into history.",
+        "Start background transcription for a local audio/video file or remote network stream (HTTP/HTTPS/RTMP/RTSP/m3u8), returning task and history IDs immediately.",
         ToolPermissionCategory::TranscriptEdit,
     ),
     (

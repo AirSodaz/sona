@@ -11,8 +11,9 @@ mod worker;
 
 pub use error::*;
 pub use handlers::{
-    api_key_auth_middleware, extract_api_key_from_request, handle_health, handle_info,
-    handle_job_audio, handle_job_status, handle_list_jobs, handle_transcribe,
+    ApiError, JsonTranscribeRequest, api_key_auth_middleware, extract_api_key_from_request,
+    handle_health, handle_info, handle_job_audio, handle_job_status, handle_list_jobs,
+    handle_transcribe,
 };
 pub use info::{
     ApiServerAvailableModel, ApiServerModelInfo, HealthResponse, InfoResponse,
@@ -2019,5 +2020,86 @@ mod tests {
             .unwrap();
 
         assert_eq!(res.status(), StatusCode::OK);
+    }
+
+    #[tokio::test]
+    async fn transcribe_json_body_with_untrimmed_url_queues_job_and_trims() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        let (tx, _rx) = mpsc::channel(10);
+        state.job_manager = JobManager::new(tx);
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state.clone());
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header("content-type", "application/json")
+                    .body(Body::from(
+                        r#"{"url":"  https://example.com/audio.mp3 \n\t ","model_id":"sensevoice"}"#,
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::OK);
+        let bytes = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        let job_id = json["job_id"].as_str().unwrap();
+        let file_path = state.job_manager.get_job_file_path(job_id).await.unwrap();
+        assert_eq!(
+            file_path,
+            std::path::PathBuf::from("https://example.com/audio.mp3")
+        );
+    }
+
+    #[tokio::test]
+    async fn transcribe_multipart_with_both_file_and_url_returns_400() {
+        let temp = tempfile::tempdir().unwrap();
+        let mut state = streaming_authorization_state("", 1, "127.0.0.1/32");
+        let (tx, _rx) = mpsc::channel(10);
+        state.job_manager = JobManager::new(tx);
+        state.temp_dir = temp.path().to_path_buf();
+        state.media_validator = Arc::new(AcceptingMediaValidator);
+
+        let boundary = "sona-test-boundary-both";
+        let body = format!(
+            "--{boundary}\r\nContent-Disposition: form-data; name=\"file\"; filename=\"sample.wav\"\r\nContent-Type: audio/wav\r\n\r\nRIFF....WAVEfmt \r\n--{boundary}\r\nContent-Disposition: form-data; name=\"url\"\r\n\r\nhttps://example.com/stream.m3u8\r\n--{boundary}\r\nContent-Disposition: form-data; name=\"model_id\"\r\n\r\nsensevoice\r\n--{boundary}--\r\n"
+        );
+
+        let app = Router::new()
+            .route("/v1/transcriptions", post(handle_transcribe))
+            .with_state(state);
+
+        let res = app
+            .oneshot(
+                Request::builder()
+                    .method("POST")
+                    .uri("/v1/transcriptions")
+                    .header(
+                        "content-type",
+                        format!("multipart/form-data; boundary={boundary}"),
+                    )
+                    .body(Body::from(body))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+
+        assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(res.into_body(), 1024 * 1024)
+            .await
+            .unwrap();
+        let text = String::from_utf8(bytes.to_vec()).unwrap();
+        assert!(text.contains("Cannot specify both file and url"));
     }
 }
