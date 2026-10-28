@@ -1,12 +1,14 @@
+import { Globe } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { CompleteIcon, ErrorIcon, PauseIcon, PlayIcon, ProcessingIcon, UploadIcon } from './Icons';
 import { QueueClearMenu } from './QueueClearMenu';
-
+import { SplitButton } from './ui/SplitButton';
 export interface QueueSummaryBarProps {
   onAddFiles: () => void;
+  onAddStream?: () => void;
   className?: string;
 }
 
@@ -16,6 +18,7 @@ export interface QueueSummaryBarProps {
  */
 export function QueueSummaryBar({
   onAddFiles,
+  onAddStream,
   className = '',
 }: QueueSummaryBarProps): React.JSX.Element | null {
   const { t } = useTranslation();
@@ -158,15 +161,38 @@ export function QueueSummaryBar({
             </button>
           ) : null}
 
-          {/* Add more files button */}
-          <button
-            className="btn btn-secondary-soft btn-sm queue-btn-action"
-            onClick={onAddFiles}
-            aria-label={t('batch.add_more_files')}
-          >
-            <UploadIcon width={13} height={13} />
-            <span>{t('batch.add_more_files')}</span>
-          </button>
+          {/* Add more files / stream split button */}
+          <SplitButton
+            variant="secondary"
+            size="sm"
+            primaryLabel={t('batch.add_more', { defaultValue: 'Add More' })}
+            primaryIcon={<UploadIcon width={13} height={13} />}
+            onPrimaryClick={onAddFiles}
+            menuItems={[
+              {
+                key: 'files',
+                label: t('batch.add_more_files', { defaultValue: 'Add More Files' }),
+                description: t('batch.add_more_desc', {
+                  defaultValue: 'Add more audio/video files to queue',
+                }),
+                icon: <UploadIcon width={13} height={13} />,
+                onClick: onAddFiles,
+              },
+              ...(onAddStream
+                ? [
+                    {
+                      key: 'stream',
+                      label: t('batch.import_stream', { defaultValue: 'Import Network Stream...' }),
+                      description: t('batch.import_stream_desc', {
+                        defaultValue: 'Enter HTTP, HTTPS, RTMP or HLS stream URL',
+                      }),
+                      icon: <Globe size={13} />,
+                      onClick: onAddStream,
+                    },
+                  ]
+                : []),
+            ]}
+          />
         </div>
 
         {/* Clear queue dropdown menu */}

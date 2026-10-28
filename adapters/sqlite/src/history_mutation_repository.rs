@@ -116,11 +116,15 @@ impl HistoryMutationRepository for DeferredSqliteHistoryMutationRepository {
         &self,
         request: HistorySaveImportedFileRequest,
     ) -> Result<HistoryItemRecord, HistoryMutationError> {
-        let copy_source = request
-            .converted_source_path
-            .as_deref()
-            .unwrap_or(&request.source_path);
-        validate_copy_source("import source file", copy_source)?;
+        let is_url_stream = sona_core::history::is_network_url(&request.source_path)
+            && request.converted_source_path.is_none();
+        if !is_url_stream {
+            let copy_source = request
+                .converted_source_path
+                .as_deref()
+                .unwrap_or(&request.source_path);
+            validate_copy_source("import source file", copy_source)?;
+        }
         self.with_store(|store| HistoryMutationRepository::save_imported_file(store, request))
     }
 

@@ -460,4 +460,5 @@ pub mod transcript_diff;
 pub mod transcript_payload;
 pub mod workspace_query;
 
+pub use item_factory::is_network_url;
 pub use store::{HistoryStore, HistoryStoreError};

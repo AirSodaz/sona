@@ -156,6 +156,22 @@ describe('BatchImport Integration', () => {
     expect(screen.queryByRole('button', { name: 'automation.open_settings' })).toBeNull();
   });
 
+  it('renders primary select file button and secondary stream button in drop zone', async () => {
+    vi.mocked(open).mockResolvedValue(['/path/to/test.wav']);
+    render(<BatchImport />);
+
+    const selectFileBtn = screen.getByRole('button', { name: 'batch.select_file' });
+    expect(selectFileBtn.classList.contains('btn-select-file-primary')).toBe(true);
+
+    const streamBtn = screen.getByRole('button', { name: 'batch.import_stream' });
+    expect(streamBtn.classList.contains('btn-select-stream-secondary')).toBe(true);
+
+    fireEvent.click(selectFileBtn);
+    await waitFor(() => {
+      expect(open).toHaveBeenCalled();
+    });
+  });
+
   it('adds files to queue and starts processing automatically', async () => {
     let finishTranscription!: () => void;
     const transcriptionGate = new Promise<void>((resolve) => {
@@ -318,7 +334,7 @@ describe('BatchImport Integration', () => {
 
     // Check if "Add more files" button is present and NOT disabled
     const addButton = screen.getByRole('button', {
-      name: 'batch.add_more_files',
+      name: 'batch.add_more',
     }) as HTMLButtonElement;
     expect(addButton).toBeDefined();
     expect(addButton.disabled).toBe(false);
@@ -338,9 +354,9 @@ describe('BatchImport Integration', () => {
 
     render(<BatchImport />);
 
-    const dropZone = screen.getByRole('button', { name: 'batch.drop_desc' });
+    const selectButton = screen.getByRole('button', { name: 'batch.select_file' });
     await act(async () => {
-      fireEvent.click(dropZone);
+      fireEvent.click(selectButton);
     });
 
     expect(useOnboardingStore.getState().isOpen).toBe(true);

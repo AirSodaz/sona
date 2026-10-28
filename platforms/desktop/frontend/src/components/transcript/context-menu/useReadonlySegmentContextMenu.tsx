@@ -127,7 +127,7 @@ export function useReadonlySegmentContextMenu({
                 {
                   id: 'enroll-speaker-sample',
                   label: t('editor.enroll_speaker_sample', {
-                    defaultValue: '设为声纹样本',
+                    defaultValue: 'Enroll as Voice Sample',
                   }),
                   icon: <Mic size={16} />,
                   onSelect: onEnrollSample,

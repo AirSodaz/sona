@@ -187,7 +187,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
     setQuery('');
   };
 
-  const title = active?.name ?? t('projects.inbox', { defaultValue: '收件箱' });
+  const title = active?.name ?? t('projects.inbox', { defaultValue: 'Inbox' });
 
   return (
     <>
@@ -201,7 +201,9 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
           aria-expanded={open}
           title={
             locked
-              ? t('projects.locked_during_recording', { defaultValue: '录音中无法切换项目' })
+              ? t('projects.locked_during_recording', {
+                  defaultValue: 'Cannot switch projects during recording',
+                })
               : undefined
           }
         >
@@ -213,7 +215,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
           <span>{title}</span>
           {active?.pipeline?.enabled && (
             <ZapIcon
-              aria-label={t('projects.pipeline_enabled', { defaultValue: '流水线已启用' })}
+              aria-label={t('projects.pipeline_enabled', { defaultValue: 'Pipeline enabled' })}
             />
           )}
           <ChevronDownIcon width={14} height={14} />
@@ -246,7 +248,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
                   setQuery(event.target.value);
                   setIndex(0);
                 }}
-                placeholder={t('projects.search_projects', { defaultValue: '搜索项目...' })}
+                placeholder={t('projects.search_projects', { defaultValue: 'Search projects...' })}
               />
             </label>
 
@@ -256,7 +258,7 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
               onClick={() => choose(null)}
             >
               <InboxIcon width={14} height={14} />
-              <span>{t('projects.inbox', { defaultValue: '收件箱' })}</span>
+              <span>{t('projects.inbox', { defaultValue: 'Inbox' })}</span>
               {activeProjectId === null && <CheckIcon width={14} height={14} />}
               <span className="project-selector-count">{countInbox}</span>
             </button>
@@ -287,10 +289,10 @@ export function ProjectSelectorDropdown({ onOpenProjects }: Props): React.JSX.El
                 }}
               >
                 <PlusIcon />
-                {t('projects.new_project_button', { defaultValue: '新建项目' })}
+                {t('projects.new_project_button', { defaultValue: 'New Project' })}
               </button>
               <button type="button" onClick={onOpenProjects}>
-                {t('projects.open_projects_center', { defaultValue: '打开项目中心' })}
+                {t('projects.open_projects_center', { defaultValue: 'Open Project Center' })}
               </button>
             </div>
           </div>

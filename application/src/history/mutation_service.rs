@@ -13,6 +13,7 @@ use sona_core::history::transcript_payload::canonicalize_history_transcript_segm
 use sona_core::history::{
     HistoryCreateLiveDraftRequest, HistoryItemRecord, HistorySaveImportedFileRequest,
     HistorySaveRecordingRequest, LiveRecordingDraftResult, TranscriptSnapshotMetadata,
+    is_network_url,
 };
 
 const MAX_HISTORY_ID_UTF16_UNITS: usize = 238;
@@ -336,6 +337,9 @@ fn validate_audio_extension(label: &str, value: &str) -> Result<(), HistoryMutat
 }
 
 fn validate_import_audio_extension(path: &str) -> Result<(), HistoryMutationError> {
+    if is_network_url(path) {
+        return Ok(());
+    }
     let Some(extension) = Path::new(path).extension().and_then(|value| value.to_str()) else {
         return Ok(());
     };

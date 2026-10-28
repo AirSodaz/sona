@@ -36,6 +36,14 @@ pub fn decode_audio_file(
     BuiltinAudioDecoder::decode_file(path, target_sample_rate)
 }
 
+pub fn decode_audio_bytes(
+    bytes: Vec<u8>,
+    hint_ext: Option<&str>,
+    target_sample_rate: u32,
+) -> Result<Vec<f32>, AudioDecodeError> {
+    BuiltinAudioDecoder::decode_bytes(bytes, hint_ext, target_sample_rate)
+}
+
 pub fn decode_audio_slice(
     path: &Path,
     start_seconds: f64,
@@ -46,7 +54,32 @@ pub fn decode_audio_slice(
 }
 
 impl BuiltinAudioDecoder {
-    /// Decodes an audio file at `path` into 16kHz (or `target_sample_rate`) mono PCM f32 samples.
+    /// Decodes in-memory audio bytes into 16kHz (or `target_sample_rate`) mono PCM f32 samples.
+    pub fn decode_bytes(
+        bytes: Vec<u8>,
+        hint_ext: Option<&str>,
+        target_sample_rate: u32,
+    ) -> Result<Vec<f32>, AudioDecodeError> {
+        if bytes.is_empty() {
+            return Err(AudioDecodeError::EmptyAudio);
+        }
+        if target_sample_rate == 0 {
+            return Err(AudioDecodeError::Resample(
+                AudioResampleError::ZeroSampleRate,
+            ));
+        }
+        let cursor = std::io::Cursor::new(bytes);
+        let mss = MediaSourceStream::new(Box::new(cursor), Default::default());
+        let mut hint = Hint::new();
+        if let Some(ext) = hint_ext {
+            let clean_ext = ext.trim().trim_start_matches('.').to_ascii_lowercase();
+            if !clean_ext.is_empty() {
+                hint.with_extension(&clean_ext);
+            }
+        }
+        Self::decode_media_source_stream(mss, hint, target_sample_rate)
+    }
+
     pub fn decode_file(path: &Path, target_sample_rate: u32) -> Result<Vec<f32>, AudioDecodeError> {
         if target_sample_rate == 0 {
             return Err(AudioDecodeError::Resample(
@@ -61,7 +94,14 @@ impl BuiltinAudioDecoder {
         if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
             hint.with_extension(ext);
         }
+        Self::decode_media_source_stream(mss, hint, target_sample_rate)
+    }
 
+    fn decode_media_source_stream(
+        mss: MediaSourceStream,
+        hint: Hint,
+        target_sample_rate: u32,
+    ) -> Result<Vec<f32>, AudioDecodeError> {
         let format_opts = FormatOptions {
             enable_gapless: true,
             ..Default::default()
@@ -242,6 +282,10 @@ impl BuiltinAudioDecoder {
             AudioDecodeError::Decode("Decoded audio sample rate is unknown".into())
         })?;
 
+        drop(decoder);
+        drop(format);
+        drop(sample_buf);
+
         // Resample to target_sample_rate if needed
         if input_rate == target_sample_rate {
             Ok(mono_samples)
@@ -321,6 +365,19 @@ mod tests {
         let decoded = decode_audio_file(temp_file.path(), 16000).unwrap();
         assert_eq!(decoded.len(), 16000);
         // Verify first sample close to 0.0
+        assert!((decoded[0] - (pcm_samples[0] as f32 / 32768.0)).abs() < 0.01);
+    }
+
+    #[test]
+    fn test_decode_audio_bytes_wav_16k() {
+        let pcm_samples: Vec<i16> = (0..16000)
+            .map(|i| (i as f32 / 16000.0 * 1000.0) as i16)
+            .collect();
+        let temp_file = create_test_wav_file(16000, 1, &pcm_samples);
+        let bytes = std::fs::read(temp_file.path()).unwrap();
+
+        let decoded = decode_audio_bytes(bytes, Some("wav"), 16000).unwrap();
+        assert_eq!(decoded.len(), 16000);
         assert!((decoded[0] - (pcm_samples[0] as f32 / 32768.0)).abs() < 0.01);
     }
 

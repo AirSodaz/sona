@@ -44,6 +44,46 @@ import {
   useTranscriptStore,
 } from './transcriptStore';
 
+export function deriveTitleFromUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const pathname = parsed.pathname.replace(/\/+$/, '');
+    const segment = pathname.split('/').pop();
+    if (segment?.trim()) {
+      try {
+        const decoded = decodeURIComponent(segment.trim()).trim();
+        if (decoded) return decoded;
+      } catch {
+        const raw = segment.trim();
+        if (raw) return raw;
+      }
+    }
+    if (parsed.hostname?.trim()) {
+      return parsed.hostname.trim();
+    }
+  } catch {
+    const clean = url.split('?')[0].split('#')[0];
+    const segment = clean.replace(/\/+$/, '').split('/').pop();
+    if (segment?.trim()) {
+      const trimmed = segment.trim();
+      if (!/^(https?|rtmp|rtsp):?$/i.test(trimmed)) {
+        return trimmed;
+      }
+    }
+  }
+  return 'Network Stream';
+}
+
+export interface AddStreamOptions {
+  alias?: string;
+  retainAudio?: boolean;
+  projectId?: string | null;
+  pipelineSnapshot?: EffectivePipelineSnapshot;
+  resolvedConfigSnapshot?: AppConfig;
+  exportConfig?: AutomationExportConfig | null;
+  stageConfig?: AutomationStageConfig | null;
+}
+
 interface AddFilesOptions {
   origin?: BatchQueueItemOrigin;
   automationRuleId?: string;
@@ -88,6 +128,13 @@ interface BatchQueueState {
    * @param options Optional queue metadata.
    */
   addFiles: (filePaths: string[], options?: AddFilesOptions) => void;
+  /**
+   * Adds online network stream URLs to the queue.
+   *
+   * @param urls Array of stream URLs to add.
+   * @param options Optional stream and queue metadata.
+   */
+  addStreamItems: (urls: string[], options?: AddStreamOptions) => void;
   /**
    * Re-enqueues items restored by the recovery center.
    *
@@ -290,6 +337,65 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         lastKnownStage: 'queued',
       };
     });
+
+    let nextQueueItems: BatchQueueItem[] = [];
+    set((state) => {
+      nextQueueItems = [...state.queueItems, ...newItems];
+      return {
+        queueItems: nextQueueItems,
+      };
+    });
+    scheduleRecoverySnapshotSync(nextQueueItems, true);
+    newItems.forEach((item) => {
+      upsertQueueItemTask(item, 'pending');
+    });
+
+    const state = get();
+    if (!state.activeItemId && newItems.length > 0) {
+      get().setActiveItem(newItems[0].id);
+    }
+
+    if (!state.isQueueProcessing && !state.isQueuePaused) {
+      void get().processQueue();
+    }
+  },
+  addStreamItems: (urls, options) => {
+    const projectStore = useProjectStore.getState();
+    const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
+    const resolvedConfigSnapshot = options?.resolvedConfigSnapshot ?? getEffectiveConfigSnapshot();
+
+    const validUrls = urls.map((u) => u.trim()).filter((u) => u.length > 0);
+
+    const newItems: BatchQueueItem[] = validUrls.map((url) => {
+      const filename =
+        validUrls.length === 1 && options?.alias?.trim()
+          ? options.alias.trim()
+          : deriveTitleFromUrl(url);
+      return {
+        id: uuidv4(),
+        filename,
+        filePath: url,
+        sourceType: 'url_stream',
+        streamUrl: url,
+        retainAudio: options?.retainAudio ?? false,
+        status: 'pending',
+        progress: 0,
+        segments: [],
+        audioUrl: null,
+        projectId: activeProjectId,
+        pipelineSnapshot: options?.pipelineSnapshot,
+        tagIds: undefined,
+        origin: 'manual',
+        resolvedConfigSnapshot,
+        exportConfig: options?.exportConfig || null,
+        stageConfig: options?.stageConfig || null,
+        lastKnownStage: 'queued',
+      };
+    });
+
+    if (newItems.length === 0) {
+      return;
+    }
 
     let nextQueueItems: BatchQueueItem[] = [];
     set((state) => {

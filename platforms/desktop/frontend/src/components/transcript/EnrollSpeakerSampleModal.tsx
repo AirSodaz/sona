@@ -90,7 +90,7 @@ export function EnrollSpeakerSampleModal({
     if (!audioPath) {
       setErrorBanner(
         t('editor.enroll_speaker_no_audio', {
-          defaultValue: '当前会话未找到音频文件，无法提取声纹',
+          defaultValue: 'No audio file found for the current session.',
         })
       );
       return;
@@ -104,7 +104,7 @@ export function EnrollSpeakerSampleModal({
       if (!trimmed) {
         setErrorBanner(
           t('editor.enroll_speaker_name_required', {
-            defaultValue: '请输入说话人姓名',
+            defaultValue: 'Please enter a speaker name.',
           })
         );
         return;
@@ -116,7 +116,7 @@ export function EnrollSpeakerSampleModal({
       if (!found) {
         setErrorBanner(
           t('editor.enroll_speaker_select_required', {
-            defaultValue: '请选择目标说话人',
+            defaultValue: 'Please select a target speaker profile.',
           })
         );
         return;
@@ -199,7 +199,7 @@ export function EnrollSpeakerSampleModal({
           <Mic size={18} />
           <span>
             {t('editor.enroll_speaker_sample_title', {
-              defaultValue: '录入说话人声纹样本',
+              defaultValue: 'Enroll Speaker Voice Sample',
             })}
           </span>
         </div>
@@ -212,7 +212,7 @@ export function EnrollSpeakerSampleModal({
             onClick={onClose}
             disabled={isSubmitting}
           >
-            {t('common.cancel', { defaultValue: '取消' })}
+            {t('common.cancel', { defaultValue: 'Cancel' })}
           </button>
           <button
             type="button"
@@ -221,7 +221,9 @@ export function EnrollSpeakerSampleModal({
             disabled={isSubmitting || !audioPath}
           >
             {isSubmitting ? <Loader2 size={14} className="queue-icon-spin" /> : <Mic size={14} />}
-            <span>{t('editor.enroll_speaker_submit', { defaultValue: '确定录入' })}</span>
+            <span>
+              {t('editor.enroll_speaker_submit', { defaultValue: 'Enroll Voice Sample' })}
+            </span>
           </button>
         </>
       }
@@ -245,7 +247,7 @@ export function EnrollSpeakerSampleModal({
           <span>
             {t('editor.enroll_speaker_short_warning', {
               defaultValue:
-                '当前片段时长不足 4 秒。声纹引擎将忽略 4 秒以下的样本，建议选择更长的语音片段进行录入。',
+                'Selected segment is under 4 seconds. The speaker recognition engine ignores samples shorter than 4 seconds. It is recommended to choose a longer segment.',
             })}
           </span>
         </div>
@@ -253,7 +255,7 @@ export function EnrollSpeakerSampleModal({
 
       <form onSubmit={handleSubmit}>
         <FormField
-          label={t('editor.enroll_speaker_target_profile', { defaultValue: '目标说话人' })}
+          label={t('editor.enroll_speaker_target_profile', { defaultValue: 'Target Speaker' })}
         >
           <div className="enroll-speaker-segmented-tabs">
             <button
@@ -263,7 +265,9 @@ export function EnrollSpeakerSampleModal({
               onClick={() => setMode('existing')}
             >
               <User size={13} />
-              <span>{t('editor.enroll_speaker_use_existing', { defaultValue: '已有说话人' })}</span>
+              <span>
+                {t('editor.enroll_speaker_use_existing', { defaultValue: 'Existing Profile' })}
+              </span>
             </button>
             <button
               type="button"
@@ -271,7 +275,7 @@ export function EnrollSpeakerSampleModal({
               onClick={() => setMode('new')}
             >
               <Plus size={13} />
-              <span>{t('editor.enroll_speaker_create_new', { defaultValue: '新建说话人' })}</span>
+              <span>{t('editor.enroll_speaker_create_new', { defaultValue: 'New Speaker' })}</span>
             </button>
           </div>
 
@@ -284,7 +288,7 @@ export function EnrollSpeakerSampleModal({
               {profiles.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name} ({p.samples.length}{' '}
-                  {t('editor.enroll_speaker_sample_count', { defaultValue: '个样本' })})
+                  {t('editor.enroll_speaker_sample_count', { defaultValue: 'samples' })})
                 </option>
               ))}
             </select>
@@ -295,7 +299,7 @@ export function EnrollSpeakerSampleModal({
               value={newProfileName}
               onChange={(e) => setNewProfileName(e.target.value)}
               placeholder={t('editor.enroll_speaker_new_name_placeholder', {
-                defaultValue: '新说话人姓名',
+                defaultValue: 'Speaker name',
               })}
               autoFocus
             />
@@ -303,7 +307,9 @@ export function EnrollSpeakerSampleModal({
         </FormField>
 
         <FormField
-          label={t('editor.enroll_speaker_sample_name', { defaultValue: '样本备注（可选）' })}
+          label={t('editor.enroll_speaker_sample_name', {
+            defaultValue: 'Sample Label (optional)',
+          })}
         >
           <input
             type="text"
@@ -311,7 +317,7 @@ export function EnrollSpeakerSampleModal({
             value={sampleName}
             onChange={(e) => setSampleName(e.target.value)}
             placeholder={t('editor.enroll_speaker_sample_name_placeholder', {
-              defaultValue: '例如：清晰发言片段',
+              defaultValue: 'e.g. Clear speech segment',
             })}
           />
         </FormField>
@@ -320,7 +326,7 @@ export function EnrollSpeakerSampleModal({
           <div className="enroll-speaker-error-banner">
             {!audioPath
               ? t('editor.enroll_speaker_no_audio', {
-                  defaultValue: '当前会话未找到音频文件，无法提取声纹',
+                  defaultValue: 'No audio file found for the current session.',
                 })
               : errorBanner}
           </div>

@@ -196,11 +196,13 @@ export function TranscriptSpeakerReviewPanel({
         <div className="transcript-speaker-distribution-container">
           <div className="transcript-speaker-distribution-header">
             <span className="transcript-speaker-distribution-title">
-              {t('editor.speaker_review_distribution', { defaultValue: '发言时长分布' })}
+              {t('editor.speaker_review_distribution', {
+                defaultValue: 'Speaking Time Distribution',
+              })}
             </span>
             <span className="transcript-speaker-distribution-meta">
               {snapshot.groups.length}{' '}
-              {t('editor.speaker_review_speakers_count', { defaultValue: '位说话人' })}
+              {t('editor.speaker_review_speakers_count', { defaultValue: 'speakers' })}
             </span>
           </div>
           <div className="transcript-speaker-distribution-bar">

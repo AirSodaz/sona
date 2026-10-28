@@ -117,13 +117,14 @@ pub fn detect_audio_mime_type(file_path: &Path) -> &'static str {
         "wav" => "audio/wav",
         "mp3" => "audio/mp3",
         "ogg" => "audio/ogg",
-        "m4a" => "audio/m4a",
+        "m4a" | "mp4" => "audio/m4a",
         "aac" => "audio/aac",
         "flac" => "audio/flac",
+        "webm" => "audio/webm",
+        "opus" => "audio/ogg",
         _ => "audio/wav",
     }
 }
-
 fn normalize_language_hint(language: &str) -> Option<String> {
     let lang = language.trim();
     if lang.is_empty() || lang.eq_ignore_ascii_case("auto") {
@@ -304,22 +305,204 @@ pub fn is_cloud_speaker_diarization_enabled(request: &AsrTranscriptionRequest) -
     true
 }
 
+const MAX_ONLINE_STREAM_DOWNLOAD_BYTES: usize = 100 * 1024 * 1024;
+
+fn map_content_type_to_audio_mime(content_type: &str) -> Option<&'static str> {
+    let raw = content_type.split(';').next()?.trim().to_ascii_lowercase();
+    match raw.as_str() {
+        "audio/mpeg" | "audio/mp3" => Some("audio/mp3"),
+        "audio/wav" | "audio/x-wav" | "audio/wave" => Some("audio/wav"),
+        "audio/ogg" | "application/ogg" | "audio/opus" => Some("audio/ogg"),
+        "audio/m4a" | "audio/x-m4a" | "audio/mp4" | "video/mp4" => Some("audio/m4a"),
+        "audio/aac" | "audio/x-aac" => Some("audio/aac"),
+        "audio/flac" | "audio/x-flac" => Some("audio/flac"),
+        "audio/webm" | "video/webm" => Some("audio/webm"),
+        _ => None,
+    }
+}
+
+fn sniff_audio_mime_type(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.len() >= 12 && &bytes[0..4] == b"RIFF" && &bytes[8..12] == b"WAVE" {
+        Some("audio/wav")
+    } else if (bytes.len() >= 3 && &bytes[0..3] == b"ID3")
+        || (bytes.len() >= 2
+            && bytes[0] == 0xFF
+            && (bytes[1] & 0xFE) == 0xFA
+            && (bytes[1] & 0x06) == 0x02)
+    {
+        Some("audio/mp3")
+    } else if bytes.len() >= 2 && bytes[0] == 0xFF && (bytes[1] & 0xF6) == 0xF0 {
+        Some("audio/aac")
+    } else if bytes.len() >= 4 && &bytes[0..4] == b"OggS" {
+        Some("audio/ogg")
+    } else if bytes.len() >= 8 && &bytes[4..8] == b"ftyp" {
+        Some("audio/m4a")
+    } else if bytes.len() >= 4 && &bytes[0..4] == b"fLaC" {
+        Some("audio/flac")
+    } else if bytes.len() >= 4 && bytes[0..4] == [0x1A, 0x45, 0xDF, 0xA3] {
+        Some("audio/webm")
+    } else {
+        None
+    }
+}
+
 /// Execute batch transcription through an aimux [`TranscriptionModel`].
 pub async fn execute_aimux_batch(
     model: &dyn TranscriptionModel,
     input: OnlineBatchTranscriptionRequest,
 ) -> Result<OnlineBatchTranscriptionOutput, AsrPortError> {
-    let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
-        AsrPortError::new(
-            AsrPortErrorKind::FileSystem,
-            format!("Failed to read audio file: {error}"),
-        )
-    })?;
+    let path_str = input.file_path.to_string_lossy();
+    let trimmed_url = path_str.trim();
+    let is_network_stream = sona_core::history::is_network_url(trimmed_url);
+    let lower_url = trimmed_url.to_ascii_lowercase();
+    if is_network_stream && !lower_url.starts_with("http://") && !lower_url.starts_with("https://")
+    {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::Unsupported,
+            format!(
+                "Online batch ASR only supports HTTP/HTTPS audio streams; cannot fetch: {trimmed_url}"
+            ),
+        ));
+    }
+    let clean_path = lower_url
+        .split('?')
+        .next()
+        .unwrap_or(&lower_url)
+        .split('#')
+        .next()
+        .unwrap_or(&lower_url);
+    if is_network_stream && (clean_path.ends_with(".m3u8") || clean_path.ends_with(".mpd")) {
+        return Err(AsrPortError::new(
+            AsrPortErrorKind::InvalidRequest,
+            "Online batch ASR does not support playlist streams (.m3u8, .mpd). Please use local transcription or provide a direct audio stream URL.",
+        ));
+    }
+    let max_stream_bytes = if input.request.provider_id() == OPENAI_WHISPER_PROVIDER_ID
+        || input.request.provider_id() == GROQ_WHISPER_PROVIDER_ID
+    {
+        25 * 1024 * 1024
+    } else {
+        MAX_ONLINE_STREAM_DOWNLOAD_BYTES
+    };
+    let (bytes, media_type) = if is_network_stream {
+        let client = reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(15))
+            .timeout(std::time::Duration::from_secs(300))
+            .build()
+            .map_err(|e| AsrPortError::runtime(format!("Failed to build HTTP client: {e}")))?;
 
-    let media_type = detect_audio_mime_type(&input.file_path);
-    let mut call_options =
-        TranscriptionCallOptions::new(AudioInput::Binary(bytes.clone()), media_type);
+        let response = client.get(trimmed_url).send().await.map_err(|e| {
+            let kind = if e.is_timeout() {
+                AsrPortErrorKind::Timeout
+            } else {
+                AsrPortErrorKind::Network
+            };
+            AsrPortError::new(kind, format!("Failed to fetch stream URL: {e}"))
+        })?;
 
+        let status = response.status();
+        if !status.is_success() {
+            let kind = if status.is_server_error() {
+                AsrPortErrorKind::Unavailable
+            } else if status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+                AsrPortErrorKind::RateLimited
+            } else {
+                AsrPortErrorKind::InvalidRequest
+            };
+            return Err(AsrPortError::new(
+                kind,
+                format!("Stream URL returned status {status}: {path_str}"),
+            ));
+        }
+
+        if let Some(content_length) = response.content_length()
+            && content_length > max_stream_bytes as u64
+        {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::InvalidRequest,
+                format!(
+                    "Stream content length ({content_length} bytes) exceeds maximum limit ({max_stream_bytes} bytes)"
+                ),
+            ));
+        }
+
+        if let Some(content_type) = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+        {
+            let ct_lower = content_type.to_ascii_lowercase();
+            if ct_lower.starts_with("text/html")
+                || ct_lower.starts_with("application/json")
+                || ct_lower.contains("mpegurl")
+                || ct_lower.contains("dash+xml")
+            {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!("Stream URL returned non-audio Content-Type: {content_type}"),
+                ));
+            }
+        }
+        let header_mime = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(map_content_type_to_audio_mime);
+
+        let mut stream_bytes = Vec::new();
+        let mut resp = response;
+        while let Some(chunk) = resp.chunk().await.map_err(|e| {
+            let kind = if e.is_timeout() {
+                AsrPortErrorKind::Timeout
+            } else {
+                AsrPortErrorKind::Network
+            };
+            AsrPortError::new(kind, format!("Failed reading stream chunk: {e}"))
+        })? {
+            if stream_bytes.len() + chunk.len() > max_stream_bytes {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::InvalidRequest,
+                    format!(
+                        "Stream downloaded size exceeds maximum limit ({max_stream_bytes} bytes)"
+                    ),
+                ));
+            }
+            stream_bytes.extend_from_slice(&chunk);
+        }
+
+        let media_type = if let Some(mime) = header_mime {
+            mime
+        } else {
+            let clean_url = trimmed_url
+                .split('?')
+                .next()
+                .unwrap_or(trimmed_url)
+                .split('#')
+                .next()
+                .unwrap_or(trimmed_url);
+            let ext_mime = detect_audio_mime_type(Path::new(clean_url));
+            let clean_lower = clean_url.to_ascii_lowercase();
+            if ext_mime == "audio/wav" && !clean_lower.ends_with(".wav") {
+                sniff_audio_mime_type(&stream_bytes).unwrap_or("audio/mp3")
+            } else {
+                ext_mime
+            }
+        };
+
+        (stream_bytes, media_type)
+    } else {
+        let bytes = tokio::fs::read(&input.file_path).await.map_err(|error| {
+            AsrPortError::new(
+                AsrPortErrorKind::FileSystem,
+                format!("Failed to read audio file: {error}"),
+            )
+        })?;
+        let media_type = detect_audio_mime_type(&input.file_path);
+        (bytes, media_type)
+    };
+
+    let buffered_samples = bytes.len() / 2;
+    let mut call_options = TranscriptionCallOptions::new(AudioInput::Binary(bytes), media_type);
     // Build provider options
     let mut po = std::collections::HashMap::new();
 
@@ -511,7 +694,7 @@ pub async fn execute_aimux_batch(
     Ok(OnlineBatchTranscriptionOutput {
         segments,
         audio_duration_ms,
-        buffered_samples: bytes.len() / 2,
+        buffered_samples,
         stage,
     })
 }
@@ -1172,6 +1355,67 @@ mod tests {
     }
 
     #[test]
+    fn test_map_content_type_to_audio_mime() {
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mpeg"),
+            Some("audio/mp3")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mp3; charset=utf-8"),
+            Some("audio/mp3")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/wav"),
+            Some("audio/wav")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/x-wav"),
+            Some("audio/wav")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/ogg"),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("application/ogg"),
+            Some("audio/ogg")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/m4a"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/mp4"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("video/mp4"),
+            Some("audio/m4a")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/webm"),
+            Some("audio/webm")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("video/webm"),
+            Some("audio/webm")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/aac"),
+            Some("audio/aac")
+        );
+        assert_eq!(
+            map_content_type_to_audio_mime("audio/flac"),
+            Some("audio/flac")
+        );
+        assert_eq!(map_content_type_to_audio_mime("text/html"), None);
+        assert_eq!(
+            map_content_type_to_audio_mime("application/octet-stream"),
+            None
+        );
+    }
+
+    #[test]
     fn creates_aimux_model_for_openai_whisper() {
         let request = online_request(
             OPENAI_WHISPER_PROVIDER_ID,
@@ -1708,5 +1952,21 @@ mod tests {
         append_word_to_sentence(&mut cjk, "你好");
         append_word_to_sentence(&mut cjk, "世界");
         assert_eq!(cjk, "你好世界");
+    }
+
+    #[test]
+    fn test_sniff_audio_mime_type() {
+        assert_eq!(
+            sniff_audio_mime_type(&[0x1A, 0x45, 0xDF, 0xA3, 0x01]),
+            Some("audio/webm")
+        );
+        assert_eq!(
+            sniff_audio_mime_type(b"RIFF\0\0\0\0WAVE"),
+            Some("audio/wav")
+        );
+        assert_eq!(sniff_audio_mime_type(b"ID3\x03\0"), Some("audio/mp3"));
+        assert_eq!(sniff_audio_mime_type(b"\0\0\0\x18ftyp"), Some("audio/m4a"));
+        assert_eq!(sniff_audio_mime_type(b"fLaC\0\0"), Some("audio/flac"));
+        assert_eq!(sniff_audio_mime_type(b"unknown bytes"), None);
     }
 }

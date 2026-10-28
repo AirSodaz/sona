@@ -1,5 +1,7 @@
 import type { TFunction } from 'i18next';
-import { memo } from 'react';
+import { Globe } from 'lucide-react';
+import { memo, useState } from 'react';
+import { cancelBatchTask } from '../services/tauri/recognizer';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useDialogStore } from '../stores/dialogStore';
 import { useProjectStore } from '../stores/projectStore';
@@ -92,13 +94,14 @@ export const QueueItem = memo(function QueueItem({
   onRetry,
   t,
 }: QueueItemProps): React.JSX.Element {
+  const [isFinishing, setIsFinishing] = useState(false);
   const isTranscodeError = item.status === 'error' && isTranscodeOrFormatFailure(item);
   const rawErrorMessage = item.errorMessage || t('batch.file_failed');
   const displayErrorMessage =
     isTranscodeError &&
     (rawErrorMessage.startsWith('Failed to decode audio file') ||
       rawErrorMessage.startsWith('Failed to extract audio slice'))
-      ? t('batch.transcode_failed', { defaultValue: '转码失败' })
+      ? t('batch.transcode_failed', { defaultValue: 'Transcode failed' })
       : rawErrorMessage;
   const retryLabel = t('batch.retry', {
     defaultValue: t('common.retry', { defaultValue: 'Retry' }),
@@ -181,6 +184,27 @@ export const QueueItem = memo(function QueueItem({
         )}
 
         <div className="queue-item-meta">
+          {item.sourceType === 'url_stream' && (
+            <span
+              className="queue-item-stream-badge"
+              title={item.streamUrl || item.filePath}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                color: 'var(--color-primary, #3b82f6)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                padding: '1px 6px',
+                borderRadius: '4px',
+              }}
+            >
+              <Globe size={11} strokeWidth={2} />
+              <span>{t('batch.stream_badge', { defaultValue: 'Network Stream' })}</span>
+            </span>
+          )}
           {project && (
             <span className="queue-item-project-badge">
               <span
@@ -224,6 +248,30 @@ export const QueueItem = memo(function QueueItem({
       </div>
 
       <div className="queue-item-actions">
+        {item.sourceType === 'url_stream' && item.status === 'processing' && (
+          <button
+            type="button"
+            className="btn btn-icon queue-item-finish-save"
+            disabled={!item.activeInstanceId || isFinishing}
+            onClick={async (e) => {
+              e.stopPropagation();
+              if (!item.activeInstanceId || isFinishing) return;
+              setIsFinishing(true);
+              try {
+                await cancelBatchTask(item.activeInstanceId);
+              } catch (err) {
+                console.error('Failed to finish stream task:', err);
+                setIsFinishing(false);
+              }
+            }}
+            aria-label={t('batch.finish_and_save', { defaultValue: 'Finish and Save' })}
+            data-tooltip={t('batch.finish_and_save', { defaultValue: 'Finish and Save' })}
+            data-tooltip-pos="left"
+            style={{ color: 'var(--color-success, #22c55e)' }}
+          >
+            <CompleteIcon width={13} height={13} />
+          </button>
+        )}
         {(item.status === 'error' || item.status === 'cancelled') && (
           <button
             className="btn btn-icon queue-item-retry"

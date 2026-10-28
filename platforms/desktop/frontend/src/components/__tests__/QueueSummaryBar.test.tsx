@@ -125,7 +125,7 @@ describe('QueueSummaryBar', () => {
     });
 
     render(<QueueSummaryBar onAddFiles={onAddFiles} />);
-    const addBtn = screen.getByRole('button', { name: 'batch.add_more_files' });
+    const addBtn = screen.getByRole('button', { name: 'batch.add_more' });
     fireEvent.click(addBtn);
     expect(onAddFiles).toHaveBeenCalled();
   });

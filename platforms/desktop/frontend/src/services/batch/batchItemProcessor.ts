@@ -33,7 +33,7 @@ export interface BatchItemProcessorCallbacks {
   isActiveItem: () => boolean;
   isCancelRequested: () => boolean;
   /** Called as soon as the batch `instanceId` is known, so the store can persist it for cancellation. */
-  onInstanceIdAssigned: (instanceId: string) => void;
+  onInstanceIdAssigned: (instanceId: string | null) => void;
 }
 
 export interface ProcessBatchItemOptions {
@@ -116,11 +116,18 @@ export class BatchItemProcessor {
       }
 
       const duration = this.calculateDuration(currentSegments);
-      const convertedPath = batchAsr.engine === 'local' && !isLlamaCpp ? tempWavPath : undefined;
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+      const convertedPath =
+        batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
+          ? tempWavPath
+          : undefined;
+      const inputSource = item.streamUrl || item.filePath;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
-              item.filePath,
+              inputSource,
               currentSegments,
               duration,
               convertedPath,
@@ -128,7 +135,7 @@ export class BatchItemProcessor {
               item.id
             )
           : await this.ports.historyService.saveImportedFile(
-              item.filePath,
+              inputSource,
               currentSegments,
               duration,
               convertedPath,
@@ -141,10 +148,22 @@ export class BatchItemProcessor {
       }
 
       savedHistoryId = historyItem.id;
+      if (isStream && item.filename && item.filename !== historyItem.title) {
+        historyItem.title = item.filename;
+        if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
+          try {
+            await this.ports.useHistoryStore.getState().updateItemMeta(historyItem.id, {
+              title: item.filename,
+            });
+          } catch (metaErr) {
+            logger.warn('[BatchQueue] Failed to update stream history title meta:', metaErr);
+          }
+        }
+      }
+
       this.ports.useHistoryStore.getState().addItem(historyItem);
       await callbacks.onHistorySaved(historyItem);
     };
-
     const setCurrentSegments = (segments: TranscriptSegment[]): void => {
       currentSegments = segments;
       callbacks.updateSegments(segments);
@@ -168,36 +187,57 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      const tempDirectory = await tempDir();
-      tempWavPath =
-        isLlamaCpp || batchAsr.engine === 'online'
-          ? undefined
-          : await join(tempDirectory, `${uuidv4()}.wav`);
-
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+      const shouldCreateTempWav =
+        !isLlamaCpp && batchAsr.engine !== 'online' && (!isStream || Boolean(item.retainAudio));
+      tempWavPath = shouldCreateTempWav
+        ? await join(await tempDir(), `${uuidv4()}.wav`)
+        : undefined;
       this.throwIfCancelRequested(callbacks);
 
-      const segments = await this.ports.transcriptionService.transcribeFile(
-        item.filePath,
-        (progress) => {
-          callbacks.updateStatus('processing', progress);
-        },
-        (segment) => {
-          segmentBuffer.set(segment.id, segment);
-          const now = Date.now();
+      const inputSource = item.streamUrl || item.filePath;
+      let segments: TranscriptSegment[];
+      try {
+        segments = await this.ports.transcriptionService.transcribeFile(
+          inputSource,
+          (progress) => {
+            callbacks.updateStatus('processing', progress);
+          },
+          (segment) => {
+            segmentBuffer.set(segment.id, segment);
+            const now = Date.now();
 
-          if (segmentBuffer.size >= 50 || now - lastUpdateTime > 500) {
-            flushSegmentBuffer();
-            lastUpdateTime = now;
-          }
-        },
-        language === 'auto' ? undefined : language,
-        tempWavPath,
-        config,
-        (instanceId) => {
-          callbacks.onInstanceIdAssigned(instanceId);
-        },
-        item.projectId
-      );
+            if (segmentBuffer.size >= 50 || now - lastUpdateTime > 500) {
+              flushSegmentBuffer();
+              lastUpdateTime = now;
+            }
+          },
+          language === 'auto' ? undefined : language,
+          tempWavPath,
+          config,
+          (instanceId) => {
+            callbacks.onInstanceIdAssigned(instanceId);
+          },
+          item.projectId
+        );
+      } catch (transcribeError) {
+        flushSegmentBuffer();
+        const isStream =
+          item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        const isExplicitCancel = callbacks.isCancelRequested();
+        const isTaskCancelError = extractErrorMessage(transcribeError).includes('Task cancelled');
+
+        if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
+          segments = currentSegments;
+        } else {
+          throw transcribeError;
+        }
+      } finally {
+        callbacks.onInstanceIdAssigned(null);
+      }
 
       this.throwIfCancelRequested(callbacks);
       setCurrentSegments(segments);
@@ -251,10 +291,15 @@ export class BatchItemProcessor {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
     } catch (error) {
-      const isCancelled =
-        callbacks.isCancelRequested() || extractErrorMessage(error).includes('Task cancelled');
+      flushSegmentBuffer();
+      const isStream =
+        item.sourceType === 'url_stream' ||
+        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+      const isExplicitCancel = callbacks.isCancelRequested();
+      const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
+      const isCancelled = isExplicitCancel || isTaskCancelError;
       try {
-        if (!isCancelled && currentSegments.length > 0) {
+        if ((!isCancelled || isStream) && currentSegments.length > 0) {
           await ensureHistorySaved();
           await persistHistorySnapshot();
         }

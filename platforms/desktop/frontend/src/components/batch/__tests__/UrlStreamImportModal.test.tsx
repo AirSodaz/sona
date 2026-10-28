@@ -1,0 +1,202 @@
+vi.mock('@tauri-apps/api/core', () => ({
+  convertFileSrc: vi.fn((path) => `asset://${path}`),
+  invoke: vi.fn().mockResolvedValue(undefined),
+}));
+
+vi.mock('../../../services/tauri/invoke', () => ({
+  invokeTauri: vi.fn().mockResolvedValue(undefined),
+}));
+
+import { fireEvent, render, screen } from '@testing-library/react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useBatchQueueStore } from '../../../stores/batchQueueStore';
+import { UrlStreamImportModal } from '../UrlStreamImportModal';
+
+describe('UrlStreamImportModal', () => {
+  beforeEach(() => {
+    useBatchQueueStore.setState({ queueItems: [] });
+  });
+
+  it('renders modal when open and validates input', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    expect(screen.getByText(/导入网络音视频链接|Import Network/i)).toBeDefined();
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'invalid-url' } });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+  });
+
+  it('rejects URLs containing unencoded whitespace', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: { value: 'https://example.com/audio file with spaces.mp3' },
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+    expect(handleClose).not.toHaveBeenCalled();
+
+    // Typing valid text clears error
+    fireEvent.change(textarea, {
+      target: { value: 'https://example.com/audio.mp3' },
+    });
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
+  });
+
+  it('submits valid stream URLs and enqueues items', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByPlaceholderText(/https:\/\/example.com\/podcast.mp3/);
+    fireEvent.change(textarea, {
+      target: { value: 'https://example.com/audio/podcast.mp3' },
+    });
+
+    const aliasInput = screen.getByPlaceholderText(/例如：AI 播客第 42 期|AI Podcast Episode 42/i);
+    fireEvent.change(aliasInput, { target: { value: 'My Stream Episode' } });
+
+    const retainCheckbox = screen.getByRole('checkbox');
+    fireEvent.click(retainCheckbox);
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(handleClose).toHaveBeenCalled();
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items).toHaveLength(1);
+    expect(items[0].sourceType).toBe('url_stream');
+    expect(items[0].streamUrl).toBe('https://example.com/audio/podcast.mp3');
+    expect(items[0].filename).toBe('My Stream Episode');
+    expect(items[0].retainAudio).toBe(true);
+  });
+
+  it('handles multi-line stream URLs, hides alias input, and derives titles', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: {
+        value: 'https://example.com/audio/stream1.mp3\nhttps://example.com/live/stream2.m3u8',
+      },
+    });
+
+    expect(
+      screen.queryByPlaceholderText(/例如：AI 播客第 42 期|AI Podcast Episode 42/i)
+    ).toBeNull();
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(handleClose).toHaveBeenCalled();
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items).toHaveLength(2);
+    expect(items[0].streamUrl).toBe('https://example.com/audio/stream1.mp3');
+    expect(items[0].filename).toBe('stream1.mp3');
+    expect(items[1].streamUrl).toBe('https://example.com/live/stream2.m3u8');
+    expect(items[1].filename).toBe('stream2.m3u8');
+  });
+
+  it('resets form state after closing on an invalid submission', () => {
+    let isOpen = true;
+    const handleClose = vi.fn(() => {
+      isOpen = false;
+    });
+    const { rerender } = render(<UrlStreamImportModal isOpen={isOpen} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, { target: { value: 'ftp://invalid-scheme.com/audio.mp3' } });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+
+    const cancelBtn = screen.getByRole('button', { name: /cancel|取消/i });
+    fireEvent.click(cancelBtn);
+    expect(handleClose).toHaveBeenCalled();
+
+    rerender(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+    const textareaReopened = screen.getByRole('textbox') as HTMLTextAreaElement;
+    expect(textareaReopened.value).toBe('');
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
+  });
+
+  it('accepts case-insensitive schemes (HTTP://, RTSP://)', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: { value: 'HTTP://example.com/stream.mp3\nRTSP://192.168.1.100:554/live' },
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(handleClose).toHaveBeenCalled();
+    expect(screen.queryByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeNull();
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items).toHaveLength(2);
+    expect(items[0].streamUrl).toBe('HTTP://example.com/stream.mp3');
+    expect(items[1].streamUrl).toBe('RTSP://192.168.1.100:554/live');
+  });
+
+  it('rejects host-less stream URLs beginning with query or fragment', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: { value: 'http://?query=1\nhttps://#live' },
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(screen.getByText(/链接必须以 http:\/\/|URLs must begin with http:\/\//i)).toBeDefined();
+    expect(handleClose).not.toHaveBeenCalled();
+  });
+
+  it('shows empty error when submitting empty input via Ctrl+Enter', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+
+    expect(screen.getByText(/请输入至少一个音视频流链接|Please enter at least one/i)).toBeDefined();
+    expect(handleClose).not.toHaveBeenCalled();
+  });
+
+  it('deduplicates identical URLs in batch input', () => {
+    const handleClose = vi.fn();
+    render(<UrlStreamImportModal isOpen={true} onClose={handleClose} />);
+
+    const textarea = screen.getByRole('textbox');
+    fireEvent.change(textarea, {
+      target: {
+        value:
+          'https://example.com/stream.mp3\nhttps://example.com/stream.mp3\nhttps://example.com/other.mp3',
+      },
+    });
+
+    const submitBtn = screen.getByRole('button', { name: /加入队列|Add to Queue/i });
+    fireEvent.click(submitBtn);
+
+    expect(handleClose).toHaveBeenCalled();
+    const items = useBatchQueueStore.getState().queueItems;
+    expect(items).toHaveLength(2);
+  });
+});

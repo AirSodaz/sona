@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { useBatchQueueStore } from '../batchQueueStore';
+import { deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
 
 const taskLedgerContext = vi.hoisted(() => ({
@@ -818,5 +818,59 @@ describe('batchQueueStore', () => {
     expect(state.queueItems).toHaveLength(1);
     expect(state.queueItems[0].id).toBe('item-2');
     expect(state.activeItemId).toBe('item-2');
+  });
+
+  describe('stream url support', () => {
+    it('deriveTitleFromUrl extracts clean title from urls', () => {
+      expect(deriveTitleFromUrl('https://example.com/audio/podcast.mp3?token=123')).toBe(
+        'podcast.mp3'
+      );
+      expect(deriveTitleFromUrl('https://live.example.com/stream-live')).toBe('stream-live');
+      expect(deriveTitleFromUrl('https://example.com/')).toBe('example.com');
+      expect(deriveTitleFromUrl('not-a-url')).toBe('not-a-url');
+      expect(deriveTitleFromUrl('https://example.com/%20/')).toBe('example.com');
+      expect(deriveTitleFromUrl('https://example.com/episode%2042.mp3')).toBe('episode 42.mp3');
+      expect(deriveTitleFromUrl('https://')).toBe('Network Stream');
+      expect(deriveTitleFromUrl('http://192.168.1.1:8000/live#stream')).toBe('live');
+    });
+
+    it('addStreamItems enqueues url_stream items with options', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore
+        .getState()
+        .addStreamItems(['https://example.com/audio/podcast.mp3?token=123'], {
+          alias: 'My Custom Podcast',
+          retainAudio: true,
+        });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].sourceType).toBe('url_stream');
+      expect(items[0].streamUrl).toBe('https://example.com/audio/podcast.mp3?token=123');
+      expect(items[0].filename).toBe('My Custom Podcast');
+      expect(items[0].retainAudio).toBe(true);
+      expect(items[0].status).toBe('pending');
+    });
+
+    it('addStreamItems enqueues multiple items and ignores alias for multi-item batches', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore
+        .getState()
+        .addStreamItems(
+          ['https://example.com/audio/podcast1.mp3', 'https://example.com/audio/podcast2.mp3'],
+          {
+            alias: 'Ignored Alias',
+            retainAudio: false,
+          }
+        );
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(2);
+      expect(items[0].filename).toBe('podcast1.mp3');
+      expect(items[1].filename).toBe('podcast2.mp3');
+      expect(items[0].retainAudio).toBe(false);
+    });
   });
 });

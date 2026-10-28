@@ -6747,10 +6747,12 @@ dependencies = [
  "async-trait",
  "hound",
  "log",
+ "reqwest 0.13.5",
  "sherpa-onnx",
  "sherpa-onnx-sys",
  "sona-core",
  "sysinfo",
+ "tempfile",
  "tokio",
  "uuid",
 ]

@@ -1,3 +1,4 @@
+import { Globe } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +19,7 @@ import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptStore } from '../stores/transcriptStore';
 import { logger } from '../utils/logger';
 import { getResumeOnboardingStep } from '../utils/onboarding';
+import { UrlStreamImportModal } from './batch/UrlStreamImportModal';
 import { UploadIcon } from './Icons';
 import { QueueGroupedList } from './QueueGroupedList';
 import { QueueSummaryBar } from './QueueSummaryBar';
@@ -38,6 +40,7 @@ interface BatchImportProps {
  */
 export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Element {
   const showError = useDialogStore((state) => state.showError);
+  const [isStreamModalOpen, setIsStreamModalOpen] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
   const { t } = useTranslation();
   const platform = usePlatform();
@@ -265,12 +268,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
     setIsDragOver(false);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent): void => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      void handleClick();
-    }
-  };
-
   // Render the queue view when we have items
   if (hasQueueItems) {
     return (
@@ -281,8 +278,12 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
       >
-        <QueueSummaryBar onAddFiles={handleClick} />
+        <QueueSummaryBar onAddFiles={handleClick} onAddStream={() => setIsStreamModalOpen(true)} />
         <QueueGroupedList />
+        <UrlStreamImportModal
+          isOpen={isStreamModalOpen}
+          onClose={() => setIsStreamModalOpen(false)}
+        />
       </div>
     );
   }
@@ -297,10 +298,6 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         onDragEnter={handleDragEnter}
         onDragLeave={handleDragLeave}
         onClick={handleClick}
-        onKeyDown={handleKeyDown}
-        role="button"
-        tabIndex={0}
-        aria-label={t('batch.drop_desc')}
       >
         <div className="drop-zone-icon">
           <UploadIcon />
@@ -312,17 +309,38 @@ export function BatchImport({ className = '' }: BatchImportProps): React.JSX.Ele
         </div>
 
         <div
-          className="btn btn-primary"
-          style={{ marginTop: '8px', pointerEvents: 'none' }}
-          aria-hidden="true"
+          className="batch-import-actions"
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
         >
-          {t('batch.select_file')}
+          <button
+            type="button"
+            className="btn-select-file-primary"
+            onClick={handleClick}
+            aria-label={t('batch.select_file', { defaultValue: 'Select File' })}
+          >
+            <UploadIcon width={14} height={14} />
+            <span>{t('batch.select_file', { defaultValue: 'Select File' })}</span>
+          </button>
+          <button
+            type="button"
+            className="btn-select-stream-secondary"
+            onClick={() => setIsStreamModalOpen(true)}
+            aria-label={t('batch.import_stream', { defaultValue: 'Import Network Stream...' })}
+          >
+            <Globe size={14} />
+            <span>{t('batch.import_stream', { defaultValue: 'Import Network Stream...' })}</span>
+          </button>
         </div>
 
         <p className="supported-formats" style={{ marginTop: '8px' }}>
           {t('batch.supports', { formats: SUPPORTED_MEDIA_EXTENSIONS.join(', ') })}
         </p>
       </div>
+      <UrlStreamImportModal
+        isOpen={isStreamModalOpen}
+        onClose={() => setIsStreamModalOpen(false)}
+      />
     </div>
   );
 }

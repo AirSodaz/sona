@@ -209,7 +209,7 @@ impl BatchTranscriberPort for LocalBatchAsrAdapter {
 }
 
 #[derive(Clone)]
-struct BatchTranscriptionJob {
+pub(crate) struct BatchTranscriptionJob {
     input_path: PathBuf,
     save_to_path: Option<PathBuf>,
     model_path: PathBuf,
@@ -235,7 +235,7 @@ struct BatchTranscriptionJob {
 }
 
 impl BatchTranscriptionJob {
-    fn from_plan(
+    pub(crate) fn from_plan(
         plan: BatchTranscribePlan,
         vad_engines: &VadEngineSet,
         punct_engines: &PunctuationEngineSet,
@@ -247,7 +247,8 @@ impl BatchTranscriptionJob {
                 plan.engine,
             ));
         }
-        if !plan.input_path.is_file() {
+        let is_stream = sona_core::history::is_network_url(&plan.input_path.to_string_lossy());
+        if !is_stream && !plan.input_path.is_file() {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::InvalidRequest,
                 format!(
@@ -286,6 +287,11 @@ impl BatchTranscriptionJob {
         self,
         observer: Arc<dyn BatchTranscriptionObserver>,
     ) -> Result<Vec<TranscriptSegment>, AsrPortError> {
+        if sona_core::history::is_network_url(&self.input_path.to_string_lossy()) {
+            let stream_job: crate::stream_transcriber::StreamTranscriptionJob = self.into();
+            return stream_job.transcribe(observer).await;
+        }
+
         let is_int8 = is_int8_model(&self.model_path, self.file_config.as_ref());
         let gpu_plan =
             resolve_gpu_acceleration_plan(self.gpu_acceleration.as_deref(), is_int8).await;
@@ -540,7 +546,7 @@ fn transcribe_samples(
     Ok(results)
 }
 
-fn finalize_transcript_text(
+pub(crate) fn finalize_transcript_text(
     cleaned_text: &str,
     punctuation: Option<&dyn PunctuationModel>,
 ) -> String {
@@ -599,6 +605,34 @@ fn is_same_model_target(path_a: &Path, path_b: &Path) -> bool {
 
     false
 }
+impl From<BatchTranscriptionJob> for crate::stream_transcriber::StreamTranscriptionJob {
+    fn from(job: BatchTranscriptionJob) -> Self {
+        Self {
+            url: job.input_path.to_string_lossy().to_string(),
+            save_to_path: job.save_to_path,
+            model_path: job.model_path,
+            num_threads: job.num_threads,
+            enable_itn: job.enable_itn,
+            language: job.language,
+            punctuation_model: job.punctuation_model,
+            alignment_model: job.alignment_model,
+            vad_model: job.vad_model,
+            vad_buffer: job.vad_buffer,
+            batch_segmentation_mode: job.batch_segmentation_mode,
+            model_type: job.model_type,
+            file_config: job.file_config,
+            hotwords: job.hotwords,
+            speaker_processing: job.speaker_processing,
+            gpu_acceleration: job.gpu_acceleration,
+            quiet: job.quiet,
+            vad_engines: job.vad_engines,
+            punct_engines: job.punct_engines,
+            aligner_engines: job.aligner_engines,
+            ffmpeg_enabled: job.ffmpeg_enabled,
+            ffmpeg_path: job.ffmpeg_path,
+        }
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -643,6 +677,45 @@ mod tests {
             sona_core::ports::asr::AsrPortErrorKind::InvalidRequest
         );
         assert!(error.message.contains("existing file"));
+    }
+
+    #[test]
+    fn batch_transcription_accepts_network_stream_url_in_plan() {
+        let plan = BatchTranscribePlan {
+            input_path: PathBuf::from("https://example.com/audio/podcast.mp3?token=secret"),
+            save_to_path: None,
+            engine: sona_core::ports::asr::LocalAsrEngine::SherpaOnnx,
+            model_path: "C:/models/demo".to_string(),
+            num_threads: 4,
+            enable_itn: false,
+            language: "auto".to_string(),
+            punctuation_model: None,
+            alignment_model: None,
+            vad_model: None,
+            vad_buffer: 5.0,
+            batch_segmentation_mode: sona_core::ports::asr::BatchSegmentationMode::Vad,
+            model_type: "whisper".to_string(),
+            file_config: None,
+            hotwords: None,
+            speaker_processing: None,
+            gpu_acceleration: Some("cpu".to_string()),
+            export_format: ExportFormat::Json,
+            output_target: OutputTarget::Stdout,
+            quiet: true,
+            ffmpeg_enabled: false,
+            ffmpeg_path: None,
+        };
+
+        let vad_engines = VadEngineSet::default();
+        let punct_engines = PunctuationEngineSet::default();
+        let aligner_engines = AlignerEngineSet::default();
+
+        let job =
+            BatchTranscriptionJob::from_plan(plan, &vad_engines, &punct_engines, &aligner_engines);
+        assert!(
+            job.is_ok(),
+            "Network stream URL should be accepted in BatchTranscriptionJob::from_plan"
+        );
     }
 
     #[tokio::test]

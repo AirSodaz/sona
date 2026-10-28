@@ -1088,6 +1088,8 @@ where
             converted_source_path,
         } = request;
 
+        let is_url_stream =
+            sona_core::history::is_network_url(&source_path) && converted_source_path.is_none();
         let normalized_transcript = canonicalize_history_transcript_segments(segments);
         let generated = self.generated_values()?;
         let imported = sona_core::history::item_factory::create_imported_file_item(
@@ -1102,6 +1104,30 @@ where
         let mut item = imported.item;
         item.preview_text = normalized_transcript.preview_text;
         item.search_content = normalized_transcript.search_content;
+        if is_url_stream {
+            item.audio_path = String::new();
+            item.audio_status = HistoryAudioStatus::Removed;
+
+            let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
+
+            let save_result: Result<(), DatabaseError> = self.get_db()?.with_transaction(|tx| {
+                Self::insert_history_item_and_transcript(tx, &item, &segments_str)?;
+                Self::record_history_item_sync(tx, &item, item.timestamp)?;
+                Self::record_transcript_sync(
+                    tx,
+                    &item.id,
+                    &serde_json::to_value(&normalized_transcript.segments)?,
+                    item.timestamp,
+                )?;
+                Ok(())
+            });
+
+            if let Err(error) = save_result {
+                return Err(error.into());
+            }
+
+            return Ok(item);
+        }
 
         let source = PathBuf::from(imported.copy_source_path);
         require_history_source_file(&source, || {
@@ -1113,7 +1139,6 @@ where
 
         let target_path = self.audio_path(&item.audio_path)?;
         let staged_audio = self.stage_audio_copy(&source, target_path)?;
-
         let segments_str = serde_json::to_string(&normalized_transcript.segments)?;
 
         let promoted = Cell::new(false);
