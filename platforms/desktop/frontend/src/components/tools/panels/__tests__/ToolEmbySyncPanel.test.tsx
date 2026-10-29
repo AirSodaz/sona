@@ -183,7 +183,7 @@ describe('ToolEmbySyncPanel', () => {
       expect(screen.getByText(/E1 - 绝命毒师 Pilot/)).toBeDefined();
     });
 
-    const filterCheckbox = screen.getByLabelText('Only missing Chinese subtitles');
+    const filterCheckbox = screen.getByLabelText(/Only show items missing/i);
     fireEvent.click(filterCheckbox);
 
     // Inception has Chinese subtitles, so it should be filtered out

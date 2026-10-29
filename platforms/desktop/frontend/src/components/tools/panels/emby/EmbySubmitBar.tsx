@@ -11,6 +11,7 @@ export interface EmbySubmitBarProps {
   onOverwriteExistingExternalChange: (overwrite: boolean) => void;
   onSubmitBatch: () => void;
   submittedNotice?: string | null;
+  isSubmitting?: boolean;
 }
 
 export function EmbySubmitBar({
@@ -21,6 +22,7 @@ export function EmbySubmitBar({
   onOverwriteExistingExternalChange,
   onSubmitBatch,
   submittedNotice,
+  isSubmitting = false,
 }: EmbySubmitBarProps): React.JSX.Element {
   const { t } = useTranslation();
 
@@ -41,7 +43,9 @@ export function EmbySubmitBar({
             </span>
             <select
               className="emby-select"
+              aria-label={t('emby.subtitle_mode', { defaultValue: 'Subtitle Mode:' })}
               value={subtitleMode}
+              disabled={selectedCount === 0 || isSubmitting}
               onChange={(e) => onSubtitleModeChange(e.target.value as EmbySubtitleMode)}
             >
               <option value="bilingual">
@@ -62,6 +66,7 @@ export function EmbySubmitBar({
             <input
               type="checkbox"
               checked={overwriteExistingExternal}
+              disabled={selectedCount === 0 || isSubmitting}
               onChange={(e) => onOverwriteExistingExternalChange(e.target.checked)}
             />
             <span>
@@ -76,7 +81,7 @@ export function EmbySubmitBar({
           <button
             type="button"
             className="btn btn-primary emby-submit-btn"
-            disabled={selectedCount === 0}
+            disabled={selectedCount === 0 || isSubmitting}
             onClick={onSubmitBatch}
           >
             <Download size={15} style={{ marginRight: 6 }} />

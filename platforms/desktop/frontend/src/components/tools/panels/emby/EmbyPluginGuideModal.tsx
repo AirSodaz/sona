@@ -1,8 +1,8 @@
 import { ExternalLink } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { openUrl } from '../../../../services/tauri/platform/opener';
 import { Modal } from '../../../Modal';
-
 export interface EmbyPluginGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -50,15 +50,24 @@ export function EmbyPluginGuideModal({
                 'Get the latest Emby.SubtitleManager.dll from the official GitHub Release:',
             })}
           </p>
-          <a
-            href="https://github.com/dianbaer/Emby.SubtitleManager/releases"
-            target="_blank"
-            rel="noreferrer"
+          <button
+            type="button"
+            onClick={async () => {
+              try {
+                await openUrl('https://github.com/dianbaer/Emby.SubtitleManager/releases');
+              } catch {
+                window.open(
+                  'https://github.com/dianbaer/Emby.SubtitleManager/releases',
+                  '_blank',
+                  'noopener,noreferrer'
+                );
+              }
+            }}
             className="btn btn-sm btn-secondary emby-github-link"
           >
             <ExternalLink size={14} />
             <span>{t('emby.plugin_step1_btn', { defaultValue: 'Visit GitHub Releases' })}</span>
-          </a>
+          </button>
         </div>
 
         <div className="emby-guide-step-card">
@@ -69,22 +78,24 @@ export function EmbyPluginGuideModal({
           </div>
           <ul className="emby-guide-paths-list">
             <li>
-              <strong>Docker:</strong>{' '}
-              {t('emby.plugin_docker', { defaultValue: 'mount volume path /config/plugins/' })}
-            </li>
-            <li>
-              <strong>Synology NAS:</strong>{' '}
-              {t('emby.plugin_synology', { defaultValue: '/var/packages/EmbyServer/var/plugins/' })}
-            </li>
-            <li>
-              <strong>Windows Server:</strong>{' '}
-              {t('emby.plugin_windows', {
-                defaultValue: '%APPDATA%\\Emby-Server\\programdata\\plugins\\',
+              {t('emby.plugin_docker', {
+                defaultValue: 'Docker deployment: mount volume path /config/plugins/',
               })}
             </li>
             <li>
-              <strong>Linux Native:</strong>{' '}
-              {t('emby.plugin_linux', { defaultValue: '/var/lib/emby/plugins/' })}
+              {t('emby.plugin_synology', {
+                defaultValue: 'Synology NAS: /var/packages/EmbyServer/var/plugins/',
+              })}
+            </li>
+            <li>
+              {t('emby.plugin_windows', {
+                defaultValue: 'Windows Server: %APPDATA%\\Emby-Server\\programdata\\plugins\\',
+              })}
+            </li>
+            <li>
+              {t('emby.plugin_linux', {
+                defaultValue: 'Linux Native: /var/lib/emby/plugins/',
+              })}
             </li>
           </ul>
         </div>

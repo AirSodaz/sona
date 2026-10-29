@@ -109,8 +109,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if mcp_config.mcp_enabled.unwrap_or(true) {
         mcp_controller.start(Some(app.handle().clone()), agent_facade);
     }
-    let emby_state = crate::integrations::emby::EmbyState::default();
-    if let Some(config_val) = initial_config.as_ref() {
+    let emby_client = if let Some(config_val) = initial_config.as_ref() {
         let server_url = config_val
             .get("embyServerUrl")
             .or_else(|| config_val.get("emby_server_url"))
@@ -128,20 +127,31 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
         if let (Some(url), Some(key)) = (server_url, api_key)
             && !url.trim().is_empty()
             && !key.trim().is_empty()
-            && let Ok(client) = crate::integrations::emby::EmbyClient::new(
+        {
+            match crate::integrations::emby::EmbyClient::new(
                 crate::integrations::emby::EmbyConnectionConfig {
-                    server_url: url.to_string(),
-                    api_key: key.to_string(),
+                    server_url: url.trim().to_string(),
+                    api_key: key.trim().to_string(),
                     allow_invalid_certs,
                 },
-            )
-        {
-            let emby_state_clone = emby_state.clone();
-            tauri::async_runtime::spawn(async move {
-                emby_state_clone.set_client(client).await;
-            });
+            ) {
+                Ok(client) => Some(client),
+                Err(err) => {
+                    log::warn!("[Emby] Failed to initialize client on startup: {err}");
+                    None
+                }
+            }
+        } else {
+            None
         }
-    }
+    } else {
+        None
+    };
+
+    let emby_state = match emby_client {
+        Some(client) => crate::integrations::emby::EmbyState::with_client(client),
+        None => crate::integrations::emby::EmbyState::default(),
+    };
     app.manage(emby_state);
     app.manage(desktop_services);
     crate::app::window::create_main_window(app.handle(), start_silently)?;

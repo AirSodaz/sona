@@ -103,22 +103,36 @@ pub enum EmbyError {
     DuplicateSubtitle,
     #[error("Emby server error: {0}")]
     ServerError(String),
+    #[error("IO error: {0}")]
+    Io(String),
+    #[error("Invalid configuration: {0}")]
+    InvalidConfig(String),
 }
 
 /// Normalizes server URL by trimming whitespace, ensuring scheme, and removing trailing slashes.
 pub fn normalize_server_url(raw: &str) -> String {
-    let mut trimmed = raw.trim();
+    let trimmed = raw.trim();
     if trimmed.is_empty() {
         return String::new();
     }
 
-    let owned;
-    if !trimmed.starts_with("http://") && !trimmed.starts_with("https://") {
-        owned = format!("http://{trimmed}");
-        trimmed = &owned;
+    let lower = trimmed.to_ascii_lowercase();
+    if lower == "http:" || lower == "https:" || lower == "http://" || lower == "https://" {
+        return String::new();
     }
 
-    let without_trailing = trimmed.trim_end_matches('/');
+    let with_scheme = if lower.starts_with("http://") || lower.starts_with("https://") {
+        trimmed.to_string()
+    } else {
+        format!("http://{trimmed}")
+    };
+
+    let without_trailing = with_scheme.trim_end_matches('/');
+    if without_trailing.eq_ignore_ascii_case("http:")
+        || without_trailing.eq_ignore_ascii_case("https:")
+    {
+        return String::new();
+    }
     without_trailing.to_string()
 }
 
@@ -145,7 +159,6 @@ pub fn is_chinese_language(lang: Option<&str>, display_title: Option<&str>) -> b
             || clean.contains("国语")
             || clean.contains("粤语")
             || clean.contains("chinese")
-            || clean.contains("chi")
         {
             return true;
         }
@@ -180,7 +193,7 @@ fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
         "de" | "deu" | "ger" | "german" => s == "de" || s == "deu" || s == "ger" || s == "german",
         "es" | "spa" | "spanish" => s == "es" || s == "spa" || s == "spanish",
         "ru" | "rus" | "russian" => s == "ru" || s == "rus" || s == "russian",
-        _ => s.starts_with(&p) || p.starts_with(&s),
+        _ => s == p,
     }
 }
 
@@ -252,6 +265,18 @@ mod tests {
             "http://192.168.1.50:8096/emby"
         );
         assert_eq!(normalize_server_url(""), "");
+        assert_eq!(
+            normalize_server_url("HTTP://localhost:8096/"),
+            "HTTP://localhost:8096"
+        );
+        assert_eq!(
+            normalize_server_url("HTTPS://localhost:8920/"),
+            "HTTPS://localhost:8920"
+        );
+        assert_eq!(normalize_server_url("http:"), "");
+        assert_eq!(normalize_server_url("https:"), "");
+        assert_eq!(normalize_server_url("http://"), "");
+        assert_eq!(normalize_server_url("https://"), "");
     }
 
     #[test]
@@ -265,8 +290,10 @@ mod tests {
         assert!(is_chinese_language(None, Some("简体中文")));
         assert!(!is_chinese_language(Some("eng"), Some("English")));
         assert!(!is_chinese_language(Some("jpn"), Some("Japanese")));
+        assert!(!is_chinese_language(None, Some("Children of Men")));
+        assert!(!is_chinese_language(None, Some("The Machine")));
+        assert!(!is_chinese_language(None, Some("Architects")));
     }
-
     #[test]
     fn test_select_best_audio_stream() {
         let streams = vec![

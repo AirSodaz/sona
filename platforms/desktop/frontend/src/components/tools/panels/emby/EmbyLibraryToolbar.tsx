@@ -69,6 +69,9 @@ export function EmbyLibraryToolbar({
           <input
             type="text"
             className="emby-search-input"
+            aria-label={t('emby.search_placeholder', {
+              defaultValue: 'Search movies and TV shows...',
+            })}
             placeholder={t('emby.search_placeholder', {
               defaultValue: 'Search movies and TV shows...',
             })}
@@ -83,6 +86,7 @@ export function EmbyLibraryToolbar({
           </span>
           <select
             className="emby-select"
+            aria-label={t('emby.target_lang', { defaultValue: 'Target Language:' })}
             value={targetLanguage}
             onChange={(e) => onTargetLanguageChange(e.target.value)}
           >
@@ -99,9 +103,6 @@ export function EmbyLibraryToolbar({
             type="checkbox"
             checked={onlyMissingTargetSubtitles}
             onChange={(e) => onOnlyMissingTargetSubtitlesChange(e.target.checked)}
-            aria-label={t('emby.only_missing_chinese', {
-              defaultValue: 'Only missing Chinese subtitles',
-            })}
           />
           <span>
             {t('emby.only_missing_target', {

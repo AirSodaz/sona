@@ -40,6 +40,7 @@ export interface BatchItemProcessorCallbacks {
   onExportComplete: (exportPath: string) => void;
   isActiveItem: () => boolean;
   isCancelRequested: () => boolean;
+  updateFilePath?: (filePath: string) => void;
   /** Called as soon as the batch `instanceId` is known, so the store can persist it for cancellation. */
   onInstanceIdAssigned: (instanceId: string | null) => void;
 }
@@ -206,6 +207,7 @@ export class BatchItemProcessor {
           item.embyContext.audioStreamIndex
         );
         item.filePath = downloadedPath;
+        callbacks.updateFilePath?.(downloadedPath);
       }
 
       const isStream =
@@ -280,6 +282,8 @@ export class BatchItemProcessor {
         segments: currentSegments,
         pipeline: {
           ...pipeline,
+          autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
+          targetLanguage: item.embyContext?.targetLanguage || pipeline.targetLanguage,
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
           exportFormat:
@@ -340,27 +344,28 @@ export class BatchItemProcessor {
             );
           } else if (embyContext.subtitleMode === 'separate_tracks') {
             const origContent = generateOriginalSrt(currentSegments);
-            await uploadEmbySubtitle({
-              itemId: embyContext.itemId,
-              language: embyContext.sourceLanguage || 'und',
-              format: 'srt',
-              isForced: false,
-              content: origContent,
-            });
-            const transContent = generatePureTranslationSrt(currentSegments);
             await uploadEmbySubtitle(
               {
                 itemId: embyContext.itemId,
-                language: embyContext.targetLanguage || 'zh-CN',
+                language: embyContext.sourceLanguage || 'und',
                 format: 'srt',
                 isForced: false,
-                content: transContent,
+                content: origContent,
               },
               embyContext.existingExternalSubtitleIndex
             );
+            const transContent = generatePureTranslationSrt(currentSegments);
+            await uploadEmbySubtitle({
+              itemId: embyContext.itemId,
+              language: embyContext.targetLanguage || 'zh-CN',
+              format: 'srt',
+              isForced: false,
+              content: transContent,
+            });
           }
         } catch (uploadError) {
-          logger.warn('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+          logger.error('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+          throw uploadError;
         }
       }
     } catch (error) {

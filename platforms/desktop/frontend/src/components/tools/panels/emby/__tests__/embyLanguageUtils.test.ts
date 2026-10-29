@@ -25,6 +25,8 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('chs')).toBe('zh-CN');
       expect(normalizeLanguageCode('cmn')).toBe('zh-CN');
       expect(normalizeLanguageCode('简体')).toBe('zh-CN');
+      expect(normalizeLanguageCode('zh_CN')).toBe('zh-CN');
+      expect(normalizeLanguageCode('zh_cn')).toBe('zh-CN');
     });
 
     it('normalizes Traditional Chinese variants to zh-TW', () => {
@@ -33,6 +35,9 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('cht')).toBe('zh-TW');
       expect(normalizeLanguageCode('traditional chinese')).toBe('zh-TW');
       expect(normalizeLanguageCode('繁体')).toBe('zh-TW');
+      expect(normalizeLanguageCode('zh_tw')).toBe('zh-TW');
+      expect(normalizeLanguageCode('zh-hk')).toBe('zh-TW');
+      expect(normalizeLanguageCode('zh_HK')).toBe('zh-TW');
     });
 
     it('normalizes other common language codes', () => {
@@ -42,6 +47,10 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('japanese')).toBe('ja');
       expect(normalizeLanguageCode('kor')).toBe('ko');
       expect(normalizeLanguageCode('korean')).toBe('ko');
+      expect(normalizeLanguageCode('en-US')).toBe('en');
+      expect(normalizeLanguageCode('en_US')).toBe('en');
+      expect(normalizeLanguageCode('ja-JP')).toBe('ja');
+      expect(normalizeLanguageCode('ko-KR')).toBe('ko');
     });
   });
 
@@ -74,6 +83,10 @@ describe('embyLanguageUtils', () => {
     it('returns false when no match', () => {
       expect(matchSubtitleLanguage('eng', 'English [SDH]', 'zh-CN')).toBe(false);
       expect(matchSubtitleLanguage(undefined, undefined, 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'English (GB)', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('und', '1080p 2GB', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'Avengers', 'en')).toBe(false);
+      expect(matchSubtitleLanguage('ja', 'English Commentary', 'en')).toBe(false);
     });
   });
 
@@ -211,6 +224,17 @@ describe('embyLanguageUtils', () => {
         isDefault: true,
       };
       expect(getAudioTrackLabel(stream)).toBe('Japanese Stereo AAC (Default)');
+    });
+    it('does not duplicate (Default) if displayTitle already contains default', () => {
+      const stream: EmbyStreamInfo = {
+        index: 1,
+        streamType: 'Audio',
+        displayTitle: 'English [Default]',
+        isExternal: false,
+        isForced: false,
+        isDefault: true,
+      };
+      expect(getAudioTrackLabel(stream)).toBe('English [Default]');
     });
 
     it('falls back to language and codec', () => {

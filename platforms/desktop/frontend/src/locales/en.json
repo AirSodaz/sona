@@ -239,6 +239,7 @@
     "status_ready": "Ready",
     "status_disabled": "Disabled",
     "status_needs_config": "Needs Config",
+    "status_not_connected": "Not Connected",
     "clients_unit": "clients",
     "migrated_notice": "This setting has been moved to the homepage Tools workbench for faster control, configuration, and monitoring.",
     "migrated_notice_desc": "Standalone extension and service tools have been consolidated into the unified homepage workbench.",

@@ -9,7 +9,7 @@ pub use types::*;
 
 #[derive(Clone, Default)]
 pub struct EmbyState {
-    pub client: Arc<RwLock<Option<EmbyClient>>>,
+    client: Arc<RwLock<Option<EmbyClient>>>,
 }
 
 impl EmbyState {
@@ -17,9 +17,20 @@ impl EmbyState {
         Self::default()
     }
 
-    pub async fn set_client(&self, client: EmbyClient) {
+    pub fn with_client(client: EmbyClient) -> Self {
+        Self {
+            client: Arc::new(RwLock::new(Some(client))),
+        }
+    }
+
+    pub async fn set_client(&self, client: Option<EmbyClient>) {
         let mut guard = self.client.write().await;
-        *guard = Some(client);
+        *guard = client;
+    }
+
+    pub async fn clear_client(&self) {
+        let mut guard = self.client.write().await;
+        *guard = None;
     }
 
     pub async fn get_client(&self) -> Result<EmbyClient, EmbyError> {

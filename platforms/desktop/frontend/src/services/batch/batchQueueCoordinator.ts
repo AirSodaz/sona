@@ -40,6 +40,7 @@ export interface BatchQueueLifecyclePorts {
     historyItem: HistoryItem
   ) => void | Promise<void>;
   setItemExportPath: (itemId: string, exportPath: string) => void;
+  updateItemFilePath?: (itemId: string, filePath: string) => void;
   /** Persists or clears the active Rust instance ID used for real-time cancellation. */
   setItemActiveInstanceId: (itemId: string, instanceId: string | null) => void;
   isActiveItem: (itemId: string) => boolean;
@@ -209,6 +210,9 @@ export class BatchQueueCoordinator {
           },
           onExportComplete: (exportPath) => {
             lifecyclePorts.setItemExportPath(itemId, exportPath);
+          },
+          updateFilePath: (filePath) => {
+            lifecyclePorts.updateItemFilePath?.(itemId, filePath);
           },
           isActiveItem: () => lifecyclePorts.isActiveItem(itemId),
           isCancelRequested: () =>

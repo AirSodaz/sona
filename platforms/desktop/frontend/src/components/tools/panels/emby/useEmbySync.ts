@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   getEmbyConfig,
@@ -17,13 +17,33 @@ import type {
   EmbyServerInfo,
 } from '../../../../types/emby';
 import { extractErrorMessage } from '../../../../utils/errorUtils';
-import { findBestAudioStream, hasTargetSubtitle, normalizeLanguageCode } from './embyLanguageUtils';
+import {
+  findBestAudioStream,
+  hasTargetSubtitle,
+  matchSubtitleLanguage,
+  normalizeLanguageCode,
+} from './embyLanguageUtils';
+
+export function getSeasonGroupKey(item: EmbyMediaItem): string {
+  const series = item.seriesName || 'Series';
+  const season =
+    item.seasonName ||
+    (item.seasonIndex !== undefined && item.seasonIndex !== null
+      ? `Season ${item.seasonIndex}`
+      : 'Season 1');
+  return `${series} - ${season}`;
+}
 
 function resolveInitialTargetLanguage(lang?: string): string {
   if (!lang) return 'zh-CN';
   const norm = normalizeLanguageCode(lang);
   if (['zh-CN', 'zh-TW', 'en', 'ja', 'ko'].includes(norm)) {
     return norm;
+  }
+  const primary = lang.toLowerCase().split(/[-_]/)[0];
+  const primaryNorm = normalizeLanguageCode(primary);
+  if (['zh-CN', 'zh-TW', 'en', 'ja', 'ko'].includes(primaryNorm)) {
+    return primaryNorm;
   }
   return 'zh-CN';
 }
@@ -140,40 +160,58 @@ export function useEmbySync(): UseEmbySyncReturn {
     return set;
   }, [queueItems]);
 
+  const configRef = useRef(config);
+  configRef.current = config;
+  const noticeTimeoutRef = useRef<number | null>(null);
+  const hasLoadedRef = useRef(false);
+
+  useEffect(() => {
+    return () => {
+      clearTimeout(noticeTimeoutRef.current ?? undefined);
+    };
+  }, []);
+
+  // Clear selected items on library change
+  useEffect(() => {
+    if (selectedLibraryId !== undefined) {
+      setSelectedItemIds(new Set());
+    }
+  }, [selectedLibraryId]);
+
   // Connect to Emby server
-  const handleConnect = useCallback(
-    async (cfgToTest?: EmbyConnectionConfig) => {
-      const targetConfig = cfgToTest || config;
-      if (!targetConfig.serverUrl.trim() || !targetConfig.apiKey.trim()) {
-        setIsConfigModalOpen(true);
-        return;
-      }
+  const handleConnect = useCallback(async (cfgToTest?: EmbyConnectionConfig) => {
+    const targetConfig = cfgToTest || configRef.current;
+    if (!targetConfig.serverUrl.trim() || !targetConfig.apiKey.trim()) {
+      setIsConfigModalOpen(true);
+      return;
+    }
 
-      setIsConnecting(true);
-      setConnectionError(null);
-      try {
-        const info = await testEmbyConnection(targetConfig);
-        setServerInfo(info);
-        await saveEmbyConfig(targetConfig);
-        setIsConfigModalOpen(false);
+    setIsConnecting(true);
+    setConnectionError(null);
+    try {
+      const info = await testEmbyConnection(targetConfig);
+      setServerInfo(info);
+      await saveEmbyConfig(targetConfig);
+      setIsConfigModalOpen(false);
 
-        const libs = await getEmbyLibraries();
-        setLibraries(libs);
-        if (libs.length > 0 && !selectedLibraryId) {
-          setSelectedLibraryId(libs[0].id);
-        }
-      } catch (err: unknown) {
-        setConnectionError(extractErrorMessage(err) || String(err));
-        setServerInfo(null);
-      } finally {
-        setIsConnecting(false);
+      const libs = await getEmbyLibraries();
+      setLibraries(libs);
+      if (libs.length > 0) {
+        setSelectedLibraryId((prev) => prev ?? libs[0].id);
       }
-    },
-    [config, selectedLibraryId]
-  );
+    } catch (err: unknown) {
+      setConnectionError(extractErrorMessage(err) || String(err));
+      setServerInfo(null);
+    } finally {
+      setIsConnecting(false);
+    }
+  }, []);
 
   // Load initial saved config on mount
   useEffect(() => {
+    if (hasLoadedRef.current) return;
+    hasLoadedRef.current = true;
+
     async function loadConfig() {
       try {
         const saved = await getEmbyConfig();
@@ -188,7 +226,61 @@ export function useEmbySync(): UseEmbySyncReturn {
     loadConfig();
   }, [handleConnect]);
 
-  // Fetch items for selected library and search term
+  // Fetch items for selected library and search term with debounce and race cancellation
+  useEffect(() => {
+    if (!serverInfo) return;
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setIsLoadingItems(true);
+      try {
+        const res = await getEmbyItems({
+          parentId: selectedLibraryId || undefined,
+          searchTerm: searchTerm.trim() || undefined,
+          startIndex: 0,
+          limit: 300,
+        });
+        if (cancelled) return;
+        setItems(res.items);
+
+        setAudioTrackMap((prev) => {
+          const next = { ...prev };
+          for (const item of res.items) {
+            if (next[item.id] === undefined) {
+              const bestAudio = findBestAudioStream(item.mediaStreams);
+              next[item.id] = bestAudio ? bestAudio.index : 0;
+            }
+          }
+          return next;
+        });
+
+        setExpandedSeasons((prev) => {
+          if (prev.size > 0) return prev;
+          const seasons = new Set<string>();
+          for (const item of res.items) {
+            if (item.seriesName || item.itemType?.toLowerCase() === 'episode') {
+              seasons.add(getSeasonGroupKey(item));
+            }
+          }
+          return seasons;
+        });
+      } catch (err) {
+        if (!cancelled) {
+          console.error('Failed to fetch items:', err);
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoadingItems(false);
+        }
+      }
+    }, 300);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [serverInfo, selectedLibraryId, searchTerm]);
+
   const fetchItems = useCallback(async () => {
     if (!serverInfo) return;
     setIsLoadingItems(true);
@@ -201,33 +293,33 @@ export function useEmbySync(): UseEmbySyncReturn {
       });
       setItems(res.items);
 
-      // Initialize default audio tracks
-      const newMap: Record<string, number> = {};
-      const seasons = new Set<string>();
-      for (const item of res.items) {
-        const bestAudio = findBestAudioStream(item.mediaStreams);
-        newMap[item.id] = bestAudio ? bestAudio.index : 0;
-        if (item.seriesName || item.seasonName) {
-          const seasonKey = `${item.seriesName || ''} - ${item.seasonName || 'Season 1'}`;
-          seasons.add(seasonKey);
+      setAudioTrackMap((prev) => {
+        const next = { ...prev };
+        for (const item of res.items) {
+          if (next[item.id] === undefined) {
+            const bestAudio = findBestAudioStream(item.mediaStreams);
+            next[item.id] = bestAudio ? bestAudio.index : 0;
+          }
         }
-      }
-      setAudioTrackMap(newMap);
-      setExpandedSeasons(seasons);
+        return next;
+      });
+
+      setExpandedSeasons((prev) => {
+        if (prev.size > 0) return prev;
+        const seasons = new Set<string>();
+        for (const item of res.items) {
+          if (item.seriesName || item.itemType?.toLowerCase() === 'episode') {
+            seasons.add(getSeasonGroupKey(item));
+          }
+        }
+        return seasons;
+      });
     } catch (err) {
       console.error('Failed to fetch items:', err);
     } finally {
       setIsLoadingItems(false);
     }
   }, [serverInfo, selectedLibraryId, searchTerm]);
-
-  useEffect(() => {
-    if (serverInfo) {
-      fetchItems();
-    }
-  }, [serverInfo, fetchItems]);
-
-  // Filter items based on search term and target subtitle presence
   const filteredItems = useMemo(() => {
     let result = items;
     if (searchTerm.trim()) {
@@ -250,7 +342,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
     for (const item of filteredItems) {
       if (item.seriesName || item.itemType?.toLowerCase() === 'episode') {
-        const key = `${item.seriesName || 'Series'} - ${item.seasonName || 'Season'}`;
+        const key = getSeasonGroupKey(item);
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
       } else {
@@ -358,7 +450,10 @@ export function useEmbySync(): UseEmbySyncReturn {
       let existingExternalSubtitleIndex: number | undefined;
       if (overwriteExistingExternal) {
         const extSub = item.mediaStreams.find(
-          (s) => s.streamType.toLowerCase() === 'subtitle' && s.isExternal
+          (s) =>
+            s.streamType.toLowerCase() === 'subtitle' &&
+            s.isExternal &&
+            matchSubtitleLanguage(s.language, s.displayTitle, targetLanguage)
         );
         if (extSub) {
           existingExternalSubtitleIndex = extSub.index;
@@ -392,7 +487,11 @@ export function useEmbySync(): UseEmbySyncReturn {
         defaultValue: `Successfully added ${entries.length} tasks to the transcription queue`,
       })
     );
-    setTimeout(() => setSubmittedNotice(null), 4000);
+    clearTimeout(noticeTimeoutRef.current ?? undefined);
+    noticeTimeoutRef.current = window.setTimeout(() => {
+      setSubmittedNotice(null);
+      noticeTimeoutRef.current = null;
+    }, 4000);
 
     // Redirect to batch queue view
     useTranscriptStore.getState().setMode('create', 'batch');

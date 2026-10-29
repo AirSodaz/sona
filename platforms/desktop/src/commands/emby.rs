@@ -1,20 +1,15 @@
-use std::path::PathBuf;
 use tauri::State;
 
 use crate::integrations::emby::{
-    EmbyClient, EmbyConnectionConfig, EmbyItemListResult, EmbyLibrary, EmbyServerInfo, EmbyState,
-    SubtitleUploadPayload,
+    EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyServerInfo,
+    EmbyState, SubtitleUploadPayload,
 };
 use crate::services::DesktopServices;
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn emby_test_connection(
-    emby_state: State<'_, EmbyState>,
-    config: EmbyConnectionConfig,
-) -> Result<EmbyServerInfo, String> {
+pub async fn emby_test_connection(config: EmbyConnectionConfig) -> Result<EmbyServerInfo, String> {
     let client = EmbyClient::new(config).map_err(|e| e.to_string())?;
     let info = client.test_connection().await.map_err(|e| e.to_string())?;
-    emby_state.set_client(client).await;
     Ok(info)
 }
 
@@ -24,9 +19,8 @@ pub async fn emby_save_config(
     emby_state: State<'_, EmbyState>,
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
-    if let Ok(client) = EmbyClient::new(config.clone()) {
-        emby_state.set_client(client).await;
-    }
+    let client = EmbyClient::new(config.clone()).map_err(|e| e.to_string())?;
+    emby_state.set_client(Some(client)).await;
 
     let mut current_config = services
         .config
@@ -49,6 +43,13 @@ pub async fn emby_save_config(
     }
 
     services.config.save(&current_config)?;
+    let _ = services.emitter.emit(
+        "app-setting-updated",
+        serde_json::json!({
+            "key": "sona-config",
+            "value": &current_config,
+        }),
+    );
     Ok(())
 }
 
@@ -126,18 +127,34 @@ pub async fn emby_download_audio(
     emby_state: State<'_, EmbyState>,
     item_id: String,
     stream_index: Option<i32>,
-    temp_dir: Option<String>,
+    _temp_dir: Option<String>,
 ) -> Result<String, String> {
+    let clean_id = item_id.trim();
+    if clean_id.is_empty()
+        || !clean_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid item ID format".to_string());
+    }
+
+    if let Some(idx) = stream_index
+        && idx < 0
+    {
+        return Err("Stream index cannot be negative".to_string());
+    }
+
     let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
-    let dir = match temp_dir {
-        Some(d) if !d.trim().is_empty() => PathBuf::from(d),
-        _ => std::env::temp_dir().join("sona").join("emby_audio"),
-    };
-    let filename = format!("emby_{}_{}.mp3", item_id, stream_index.unwrap_or(0));
+    let dir = std::env::temp_dir().join("sona").join("emby_audio");
+    tokio::fs::create_dir_all(&dir)
+        .await
+        .map_err(|e| format!("Failed to create download directory: {e}"))?;
+
+    let filename = format!("emby_{}_{}.mp3", clean_id, stream_index.unwrap_or(0));
     let target_path = dir.join(filename);
 
     client
-        .download_audio_stream(&item_id, stream_index, &target_path)
+        .download_audio_stream(clean_id, stream_index, &target_path)
         .await
         .map_err(|e| e.to_string())?;
 
@@ -150,18 +167,83 @@ pub async fn emby_upload_subtitle(
     payload: SubtitleUploadPayload,
     delete_existing_external_index: Option<i32>,
 ) -> Result<(), String> {
-    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
-
-    if let Some(idx) = delete_existing_external_index
-        && let Err(e) = client.delete_subtitle(&payload.item_id, idx).await
+    if payload.item_id.trim().is_empty()
+        || payload.language.trim().is_empty()
+        || payload.content.trim().is_empty()
     {
-        log::warn!("Failed to delete existing external subtitle {idx}: {e}");
+        return Err(
+            "Invalid upload payload: item_id, language, and content must not be empty".to_string(),
+        );
     }
 
-    client
-        .upload_subtitle(&payload)
-        .await
-        .map_err(|e| e.to_string())?;
+    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
+
+    let mut deleted_any = false;
+    if let Some(idx) = delete_existing_external_index {
+        if idx < 0 {
+            return Err("Invalid external subtitle index: cannot be negative".to_string());
+        }
+        match client.delete_subtitle(&payload.item_id, idx).await {
+            Ok(_) => {
+                deleted_any = true;
+            }
+            Err(e) => {
+                log::warn!("Failed to delete existing external subtitle {idx}: {e}");
+            }
+        }
+    }
+
+    let upload_result = client.upload_subtitle(&payload).await;
+    match upload_result {
+        Ok(_) => {}
+        Err(EmbyError::DuplicateSubtitle) if !deleted_any => {
+            log::info!(
+                "[Emby] Duplicate subtitle detected for item {}, attempting auto-recovery",
+                payload.item_id
+            );
+            let streams = client
+                .get_item_streams(&payload.item_id)
+                .await
+                .map_err(|e| e.to_string())?;
+
+            let is_target_zh =
+                crate::integrations::emby::is_chinese_language(Some(&payload.language), None);
+            let matching_external = streams.iter().find(|s| {
+                if !s.stream_type.eq_ignore_ascii_case("Subtitle") || !s.is_external {
+                    return false;
+                }
+                if is_target_zh {
+                    crate::integrations::emby::is_chinese_language(
+                        s.language.as_deref(),
+                        s.display_title.as_deref(),
+                    )
+                } else if let Some(l) = &s.language {
+                    l.trim().eq_ignore_ascii_case(payload.language.trim())
+                } else {
+                    false
+                }
+            });
+
+            if let Some(stream) = matching_external {
+                log::info!(
+                    "[Emby] Auto-recovering: deleting existing external subtitle track index {}",
+                    stream.index
+                );
+                client
+                    .delete_subtitle(&payload.item_id, stream.index)
+                    .await
+                    .map_err(|e| e.to_string())?;
+
+                client
+                    .upload_subtitle(&payload)
+                    .await
+                    .map_err(|e| e.to_string())?;
+            } else {
+                return Err(EmbyError::DuplicateSubtitle.to_string());
+            }
+        }
+        Err(e) => return Err(e.to_string()),
+    }
 
     if let Err(e) = client.refresh_item_metadata(&payload.item_id).await {
         log::warn!(

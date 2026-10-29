@@ -358,7 +358,7 @@ export function useHistoryItemContextMenu({
           label: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
           icon: <Tv size={16} />,
           dividerBefore: true,
-          disabled: locked,
+          disabled: locked || isOpenDisabled(id),
           onSelect: () => {
             onOpenItem(item);
           },

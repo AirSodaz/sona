@@ -57,14 +57,27 @@ export function ToolsSidebar(): React.JSX.Element {
   }, [mcpStatus]);
   const [embyServerName, setEmbyServerName] = useState<string | null>(null);
   useEffect(() => {
-    void getEmbyConfig().then((cfg) => {
-      if (cfg?.serverUrl && cfg.apiKey) {
-        void testEmbyConnection(cfg)
-          .then((info) => setEmbyServerName(info.serverName))
-          .catch(() => setEmbyServerName(null));
-      }
-    });
-  }, []);
+    let unmounted = false;
+    if (activeTool) {
+      void getEmbyConfig().then((cfg) => {
+        if (unmounted) return;
+        if (cfg?.serverUrl && cfg.apiKey) {
+          void testEmbyConnection(cfg)
+            .then((info) => {
+              if (!unmounted) setEmbyServerName(info.serverName);
+            })
+            .catch(() => {
+              if (!unmounted) setEmbyServerName(null);
+            });
+        } else {
+          if (!unmounted) setEmbyServerName(null);
+        }
+      });
+    }
+    return () => {
+      unmounted = true;
+    };
+  }, [activeTool]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',

@@ -10,7 +10,7 @@ import type { EmbyStreamInfo } from '../../../../types/emby';
  */
 export function normalizeLanguageCode(code?: string): string {
   if (!code) return '';
-  const trimmed = code.trim().toLowerCase();
+  const trimmed = code.trim().replace(/_/g, '-').toLowerCase();
 
   // Traditional Chinese checks first
   if (
@@ -18,6 +18,7 @@ export function normalizeLanguageCode(code?: string): string {
       'zh-tw',
       'zh-hant',
       'zh-hk',
+      'zh-mo',
       'cht',
       'zht',
       'traditional chinese',
@@ -25,7 +26,11 @@ export function normalizeLanguageCode(code?: string): string {
       '繁體',
       '繁體中文',
       '繁体中文',
-    ].includes(trimmed)
+    ].includes(trimmed) ||
+    trimmed.startsWith('zh-tw') ||
+    trimmed.startsWith('zh-hant') ||
+    trimmed.startsWith('zh-hk') ||
+    trimmed.startsWith('zh-mo')
   ) {
     return 'zh-TW';
   }
@@ -38,6 +43,7 @@ export function normalizeLanguageCode(code?: string): string {
       'zho',
       'chinese',
       'zh-cn',
+      'zh-sg',
       'zh-hans',
       'chs',
       'cmn',
@@ -47,43 +53,70 @@ export function normalizeLanguageCode(code?: string): string {
       '中文',
       '国语',
       '普通话',
-    ].includes(trimmed)
+    ].includes(trimmed) ||
+    trimmed.startsWith('zh-cn') ||
+    trimmed.startsWith('zh-sg') ||
+    trimmed.startsWith('zh-hans')
   ) {
     return 'zh-CN';
   }
 
   // English
-  if (['en', 'eng', 'english'].includes(trimmed)) {
+  if (trimmed === 'en' || trimmed.startsWith('en-') || ['eng', 'english'].includes(trimmed)) {
     return 'en';
   }
 
   // Japanese
-  if (['ja', 'jpn', 'japanese', '日本語', '日文', '日语'].includes(trimmed)) {
+  if (
+    trimmed === 'ja' ||
+    trimmed.startsWith('ja-') ||
+    ['jpn', 'japanese', '日本語', '日文', '日语'].includes(trimmed)
+  ) {
     return 'ja';
   }
 
   // Korean
-  if (['ko', 'kor', 'korean', '한국어', '韩文', '韩语'].includes(trimmed)) {
+  if (
+    trimmed === 'ko' ||
+    trimmed.startsWith('ko-') ||
+    ['kor', 'korean', '한국어', '韩文', '韩语'].includes(trimmed)
+  ) {
     return 'ko';
   }
 
   // French
-  if (['fr', 'fra', 'fre', 'french', 'français'].includes(trimmed)) {
+  if (
+    trimmed === 'fr' ||
+    trimmed.startsWith('fr-') ||
+    ['fra', 'fre', 'french', 'français'].includes(trimmed)
+  ) {
     return 'fr';
   }
 
   // German
-  if (['de', 'deu', 'ger', 'german', 'deutsch'].includes(trimmed)) {
+  if (
+    trimmed === 'de' ||
+    trimmed.startsWith('de-') ||
+    ['deu', 'ger', 'german', 'deutsch'].includes(trimmed)
+  ) {
     return 'de';
   }
 
   // Spanish
-  if (['es', 'spa', 'spanish', 'español'].includes(trimmed)) {
+  if (
+    trimmed === 'es' ||
+    trimmed.startsWith('es-') ||
+    ['spa', 'spanish', 'español'].includes(trimmed)
+  ) {
     return 'es';
   }
 
   // Russian
-  if (['ru', 'rus', 'russian', 'русский'].includes(trimmed)) {
+  if (
+    trimmed === 'ru' ||
+    trimmed.startsWith('ru-') ||
+    ['rus', 'russian', 'русский'].includes(trimmed)
+  ) {
     return 'ru';
   }
 
@@ -108,6 +141,24 @@ export function matchSubtitleLanguage(
   const normTarget = normalizeLanguageCode(targetLanguage);
   const normStreamLang = normalizeLanguageCode(streamLanguage);
   const titleLower = streamDisplayTitle ? streamDisplayTitle.toLowerCase() : '';
+
+  const isStreamChinese =
+    normStreamLang === 'zh-CN' || normStreamLang === 'zh-TW' || normStreamLang === 'yue';
+  const isTargetChinese = normTarget === 'zh-CN' || normTarget === 'zh-TW' || normTarget === 'yue';
+  const isRecognizedStreamLang = Boolean(
+    normStreamLang && !['und', 'unknown', ''].includes(normStreamLang)
+  );
+
+  // If stream language is an explicit recognized language distinct from target language
+  // (and neither is Chinese), prevent title heuristics from overriding the container tag.
+  if (
+    isRecognizedStreamLang &&
+    normStreamLang !== normTarget &&
+    !isStreamChinese &&
+    !isTargetChinese
+  ) {
+    return false;
+  }
 
   // 1. If target is Traditional Chinese (zh-TW)
   if (normTarget === 'zh-TW') {
@@ -141,11 +192,10 @@ export function matchSubtitleLanguage(
     if (normStreamLang === 'zh-CN') return true;
     if (
       titleLower.includes('简') ||
-      titleLower.includes('chs') ||
+      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('simplified') ||
       titleLower.includes('zh-cn') ||
       titleLower.includes('zh-hans') ||
-      titleLower.includes('gb') ||
       titleLower.includes('中文') ||
       titleLower.includes('chinese') ||
       titleLower.includes('国语')
@@ -161,13 +211,16 @@ export function matchSubtitleLanguage(
   }
 
   if (titleLower) {
-    if (normTarget === 'en' && (titleLower.includes('english') || titleLower.includes('eng'))) {
+    if (
+      normTarget === 'en' &&
+      (titleLower.includes('english') || /(?:^|[^a-z0-9])eng(?:[^a-z0-9]|$)/i.test(titleLower))
+    ) {
       return true;
     }
     if (
       normTarget === 'ja' &&
       (titleLower.includes('japanese') ||
-        titleLower.includes('jpn') ||
+        /(?:^|[^a-z0-9])jpn(?:[^a-z0-9]|$)/i.test(titleLower) ||
         titleLower.includes('日文') ||
         titleLower.includes('日语') ||
         titleLower.includes('日本語'))
@@ -177,7 +230,7 @@ export function matchSubtitleLanguage(
     if (
       normTarget === 'ko' &&
       (titleLower.includes('korean') ||
-        titleLower.includes('kor') ||
+        /(?:^|[^a-z0-9])kor(?:[^a-z0-9]|$)/i.test(titleLower) ||
         titleLower.includes('韩文') ||
         titleLower.includes('韩语') ||
         titleLower.includes('한국어'))
@@ -230,6 +283,9 @@ export function getAudioTrackLabel(stream: EmbyStreamInfo): string {
     if (stream.language) parts.push(stream.language.toUpperCase());
     if (stream.codec) parts.push(stream.codec.toUpperCase());
   }
-  if (stream.isDefault) parts.push('(Default)');
+  const hasDefaultInTitle = Boolean(stream.displayTitle?.toLowerCase().includes('default'));
+  if (stream.isDefault && !hasDefaultInTitle) {
+    parts.push('(Default)');
+  }
   return parts.join(' ') || `Track #${stream.index}`;
 }

@@ -1,5 +1,6 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import type React from 'react';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyConnectionConfig } from '../../../../types/emby';
 import { Modal } from '../../../Modal';
@@ -24,6 +25,24 @@ export function EmbyServerConfigModal({
   onConnect,
 }: EmbyServerConfigModalProps): React.JSX.Element {
   const { t } = useTranslation();
+  const urlInputRef = useRef<HTMLInputElement>(null);
+
+  const handleSubmit = () => {
+    if (isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()) return;
+    onChangeConfig((prev) => ({
+      ...prev,
+      serverUrl: prev.serverUrl.trim(),
+      apiKey: prev.apiKey.trim(),
+    }));
+    void onConnect();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSubmit();
+    }
+  };
 
   return (
     <Modal
@@ -33,6 +52,10 @@ export function EmbyServerConfigModal({
         defaultValue: 'Configure Emby Server Connection',
       })}
       size="md"
+      initialFocusRef={urlInputRef}
+      closeOnOverlayClick={!isConnecting}
+      closeOnEsc={!isConnecting}
+      hideCloseButton={isConnecting}
       footer={
         <div className="emby-modal-footer-actions">
           <button
@@ -47,9 +70,7 @@ export function EmbyServerConfigModal({
             type="button"
             className="btn btn-primary"
             disabled={isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()}
-            onClick={() => {
-              void onConnect();
-            }}
+            onClick={handleSubmit}
           >
             {isConnecting ? (
               <>
@@ -63,7 +84,7 @@ export function EmbyServerConfigModal({
         </div>
       }
     >
-      <div className="emby-config-modal-body">
+      <div className="emby-config-modal-body" onKeyDown={handleKeyDown}>
         {connectionError && (
           <div className="emby-alert-box emby-alert-error" role="alert">
             <AlertCircle size={16} />
@@ -78,11 +99,13 @@ export function EmbyServerConfigModal({
             })}
           </span>
           <input
+            ref={urlInputRef}
             type="text"
             className="emby-input"
             placeholder="http://192.168.1.100:8096"
             value={config.serverUrl}
             onChange={(e) => onChangeConfig((prev) => ({ ...prev, serverUrl: e.target.value }))}
+            onBlur={() => onChangeConfig((prev) => ({ ...prev, serverUrl: prev.serverUrl.trim() }))}
             disabled={isConnecting}
           />
         </label>
@@ -97,6 +120,7 @@ export function EmbyServerConfigModal({
             placeholder="Emby API Key"
             value={config.apiKey}
             onChange={(e) => onChangeConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
+            onBlur={() => onChangeConfig((prev) => ({ ...prev, apiKey: prev.apiKey.trim() }))}
             disabled={isConnecting}
           />
         </label>

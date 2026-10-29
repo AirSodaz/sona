@@ -239,6 +239,7 @@
     "status_ready": "準備完了",
     "status_disabled": "無効",
     "status_needs_config": "設定が必要",
+    "status_not_connected": "未接続",
     "clients_unit": "クライアント",
     "migrated_notice": "この設定項目は、より迅速な起動・停止、設定調整、および実行ステータス監視のために、ホームページの「ツール」ワークベンチに移行されました。",
     "migrated_notice_desc": "独立した拡張機能とサービスツールはホームページの統一ワークベンチに統合されました。",

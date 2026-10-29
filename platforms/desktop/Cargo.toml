@@ -56,7 +56,7 @@ tauri-plugin-fs = "2"
 tauri-plugin-shell = "2"
 tauri-plugin-http = "2"
 async-trait = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time", "net", "io-util", "fs"] }
 cpal = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "rustls", "json", "query"] }
 futures-util = { workspace = true }

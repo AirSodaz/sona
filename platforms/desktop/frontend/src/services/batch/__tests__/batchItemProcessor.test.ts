@@ -383,6 +383,7 @@ describe('BatchItemProcessor', () => {
       isActiveItem: vi.fn().mockReturnValue(true),
       isCancelRequested: vi.fn().mockReturnValue(false),
       onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
     };
 
     await processor.processBatchQueueItem({ item, config, callbacks });
@@ -398,5 +399,51 @@ describe('BatchItemProcessor', () => {
       2
     );
     expect(useEmbyHistoryStore.getState().getContext('hist-1')).toEqual(item.embyContext);
+    expect(callbacks.updateFilePath).toHaveBeenCalledWith('/tmp/downloaded_emby.mp3');
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipeline: expect.objectContaining({
+          autoTranslate: true,
+          targetLanguage: 'zh-CN',
+        }),
+      })
+    );
+  });
+  it('propagates subtitle upload error when uploadEmbySubtitle fails', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-fail',
+      filename: 'Emby Movie Fail',
+      filePath: '/tmp/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-fail',
+        itemName: 'Emby Movie Fail',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(uploadEmbySubtitle).mockRejectedValueOnce(new Error('Network error on upload'));
+
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Network error on upload'
+    );
   });
 });

@@ -18,14 +18,16 @@ pub struct EmbyClient {
 }
 
 impl EmbyClient {
-    pub fn new(config: EmbyConnectionConfig) -> Result<Self, EmbyError> {
+    pub fn new(mut config: EmbyConnectionConfig) -> Result<Self, EmbyError> {
+        config.server_url = config.server_url.trim().to_string();
+        config.api_key = config.api_key.trim().to_string();
         let base_url = normalize_server_url(&config.server_url);
         if base_url.is_empty() {
             return Err(EmbyError::Network("Server URL cannot be empty".to_string()));
         }
 
         let mut builder = reqwest::Client::builder()
-            .timeout(Duration::from_secs(30))
+            .connect_timeout(Duration::from_secs(10))
             .user_agent("Sona-Desktop/1.0");
 
         if config.allow_invalid_certs {
@@ -367,6 +369,81 @@ impl EmbyClient {
             total_record_count,
         })
     }
+    pub async fn get_item_streams(&self, item_id: &str) -> Result<Vec<EmbyStreamInfo>, EmbyError> {
+        let url = self.url(&format!("/Items/{item_id}"));
+        let req = self.apply_auth(self.client.get(&url).query(&[
+            ("Fields", "MediaStreams"),
+            ("api_key", &self.config.api_key),
+        ]));
+
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| EmbyError::Network(e.to_string()))?;
+
+        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
+            || resp.status() == reqwest::StatusCode::FORBIDDEN
+        {
+            return Err(EmbyError::Unauthorized);
+        }
+
+        if !resp.status().is_success() {
+            return Err(EmbyError::ServerError(format!(
+                "Failed to get item details: HTTP {}",
+                resp.status()
+            )));
+        }
+
+        let raw: Value = resp
+            .json()
+            .await
+            .map_err(|e| EmbyError::ServerError(format!("Invalid item JSON: {e}")))?;
+
+        let mut media_streams = Vec::new();
+        if let Some(streams) = raw.get("MediaStreams").and_then(|v| v.as_array()) {
+            for s in streams {
+                let stream_type = s
+                    .get("Type")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let index = s.get("Index").and_then(|v| v.as_i64()).unwrap_or(0) as i32;
+                let language = s
+                    .get("Language")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                let display_title = s
+                    .get("DisplayTitle")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                let codec = s
+                    .get("Codec")
+                    .and_then(|v| v.as_str())
+                    .map(|v| v.to_string());
+                let is_external = s
+                    .get("IsExternal")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+                let is_forced = s.get("IsForced").and_then(|v| v.as_bool()).unwrap_or(false);
+                let is_default = s
+                    .get("IsDefault")
+                    .and_then(|v| v.as_bool())
+                    .unwrap_or(false);
+
+                media_streams.push(EmbyStreamInfo {
+                    index,
+                    stream_type,
+                    language,
+                    display_title,
+                    codec,
+                    is_external,
+                    is_forced,
+                    is_default,
+                });
+            }
+        }
+        Ok(media_streams)
+    }
 
     pub async fn download_audio_stream(
         &self,
@@ -388,6 +465,7 @@ impl EmbyClient {
             let mut req = self.apply_auth(
                 self.client
                     .get(&url)
+                    .timeout(Duration::from_secs(600))
                     .query(&[("api_key", &self.config.api_key)]),
             );
 
@@ -411,7 +489,7 @@ impl EmbyClient {
                         )));
                     }
 
-                    let mut file = match tokio::fs::File::create(destination_path).await {
+                    let file = match tokio::fs::File::create(destination_path).await {
                         Ok(f) => f,
                         Err(e) => {
                             return Err(EmbyError::ServerError(format!(
@@ -419,15 +497,22 @@ impl EmbyClient {
                             )));
                         }
                     };
+                    let mut file_opt = Some(file);
 
                     let mut stream = resp.bytes_stream();
                     let mut bytes_written: u64 = 0;
-                    let mut stream_failed = false;
 
                     while let Some(chunk_res) = stream.next().await {
                         match chunk_res {
                             Ok(chunk) => {
-                                if let Err(e) = file.write_all(&chunk).await {
+                                let write_res = if let Some(f) = file_opt.as_mut() {
+                                    f.write_all(&chunk).await
+                                } else {
+                                    Ok(())
+                                };
+                                if let Err(e) = write_res {
+                                    drop(file_opt.take());
+                                    let _ = tokio::fs::remove_file(destination_path).await;
                                     return Err(EmbyError::ServerError(format!(
                                         "Failed to write audio chunk: {e}"
                                     )));
@@ -435,7 +520,8 @@ impl EmbyClient {
                                 bytes_written += chunk.len() as u64;
                             }
                             Err(e) => {
-                                stream_failed = true;
+                                drop(file_opt.take());
+                                let _ = tokio::fs::remove_file(destination_path).await;
                                 last_err = Some(EmbyError::Network(format!(
                                     "Stream interrupted on attempt {attempt}: {e}"
                                 )));
@@ -444,8 +530,10 @@ impl EmbyClient {
                         }
                     }
 
-                    if !stream_failed {
+                    if let Some(mut file) = file_opt {
                         if let Err(e) = file.flush().await {
+                            drop(file);
+                            let _ = tokio::fs::remove_file(destination_path).await;
                             return Err(EmbyError::ServerError(format!(
                                 "Failed to flush file: {e}"
                             )));
@@ -502,6 +590,12 @@ impl EmbyClient {
             )));
         }
 
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| EmbyError::Network(e.to_string()))?;
+        check_plugin_response_body(&body_text)?;
+
         Ok(())
     }
 
@@ -550,6 +644,12 @@ impl EmbyClient {
             )));
         }
 
+        let body_text = resp
+            .text()
+            .await
+            .map_err(|e| EmbyError::Network(e.to_string()))?;
+        check_plugin_response_body(&body_text)?;
+
         Ok(())
     }
 
@@ -572,6 +672,12 @@ impl EmbyClient {
             return Err(EmbyError::Unauthorized);
         }
 
+        if !resp.status().is_success() {
+            return Err(EmbyError::ServerError(format!(
+                "Failed to refresh item metadata: HTTP {}",
+                resp.status()
+            )));
+        }
         // Lightweight poll up to 3 times with 1-second delay
         let item_url = self.url(&format!("/Items/{item_id}"));
         for _ in 0..3 {
@@ -589,6 +695,51 @@ impl EmbyClient {
 
         Ok(())
     }
+}
+pub(crate) fn check_plugin_response_body(body_text: &str) -> Result<(), EmbyError> {
+    if let Ok(json) = serde_json::from_str::<Value>(body_text) {
+        let is_success = json
+            .get("Success")
+            .or_else(|| json.get("success"))
+            .and_then(|v| v.as_bool());
+        if is_success == Some(false) {
+            let msg = json
+                .get("Message")
+                .or_else(|| json.get("message"))
+                .and_then(|v| v.as_str())
+                .unwrap_or("Operation failed");
+            let lower = msg.to_ascii_lowercase();
+            if lower.contains("duplicate") || msg.contains("已存在") {
+                return Err(EmbyError::DuplicateSubtitle);
+            } else {
+                return Err(EmbyError::ServerError(msg.to_string()));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+pub(crate) fn map_plugin_response_status(
+    status: reqwest::StatusCode,
+    body_text: Option<&str>,
+) -> Result<(), EmbyError> {
+    if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+        return Err(EmbyError::Unauthorized);
+    }
+    if status == reqwest::StatusCode::NOT_FOUND {
+        return Err(EmbyError::PluginMissing);
+    }
+    if status == reqwest::StatusCode::CONFLICT {
+        return Err(EmbyError::DuplicateSubtitle);
+    }
+    if !status.is_success() {
+        return Err(EmbyError::ServerError(format!("HTTP {status}")));
+    }
+    if let Some(body) = body_text {
+        check_plugin_response_body(body)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -623,12 +774,44 @@ mod tests {
 
     #[test]
     fn test_plugin_missing_classification() {
-        // Test that 404 on SubtitleManager results in PluginMissing
-        let err_status = reqwest::StatusCode::NOT_FOUND;
-        let is_plugin_missing = err_status == reqwest::StatusCode::NOT_FOUND;
-        assert!(is_plugin_missing);
+        assert_eq!(
+            map_plugin_response_status(reqwest::StatusCode::NOT_FOUND, None),
+            Err(EmbyError::PluginMissing)
+        );
+        assert_eq!(
+            map_plugin_response_status(reqwest::StatusCode::UNAUTHORIZED, None),
+            Err(EmbyError::Unauthorized)
+        );
+        assert_eq!(
+            map_plugin_response_status(reqwest::StatusCode::CONFLICT, None),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"Duplicate subtitle already exists"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"该字幕已存在"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"Internal error occurred"}"#)
+            ),
+            Err(EmbyError::ServerError("Internal error occurred".into()))
+        );
+        assert_eq!(
+            map_plugin_response_status(reqwest::StatusCode::OK, Some(r#"{"Success":true}"#)),
+            Ok(())
+        );
     }
-
     #[test]
     fn test_emby_error_display() {
         assert_eq!(

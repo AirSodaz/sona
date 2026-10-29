@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import type React from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyMediaItem } from '../../../../types/emby';
 import { EmbyMediaRow } from './EmbyMediaRow';
@@ -34,9 +35,11 @@ export function EmbySeasonGroup({
 }: EmbySeasonGroupProps): React.JSX.Element {
   const { t } = useTranslation();
 
-  const missingCount = seasonItems.filter(
-    (item) => !hasTargetSubtitle(item.mediaStreams, targetLanguage)
-  ).length;
+  const missingCount = useMemo(
+    () =>
+      seasonItems.filter((item) => !hasTargetSubtitle(item.mediaStreams, targetLanguage)).length,
+    [seasonItems, targetLanguage]
+  );
 
   return (
     <div className="emby-season-group">
@@ -76,11 +79,16 @@ export function EmbySeasonGroup({
           )}
         </div>
 
-        <div onClick={(e) => e.stopPropagation()} className="emby-season-actions">
+        <div
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          className="emby-season-actions"
+        >
           <button
             type="button"
             className="btn btn-xs btn-secondary"
             onClick={() => onSelectAllMissingInSeason(seasonItems)}
+            disabled={missingCount === 0}
           >
             {t('emby.select_season_missing', {
               defaultValue: 'Select Missing Episodes in Season',

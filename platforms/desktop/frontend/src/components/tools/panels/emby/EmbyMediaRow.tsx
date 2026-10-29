@@ -1,5 +1,5 @@
 import { Clock, Film } from 'lucide-react';
-import type React from 'react';
+import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyMediaItem } from '../../../../types/emby';
 import { getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
@@ -12,9 +12,11 @@ export function formatDurationTicks(ticks?: number): string {
   if (hours > 0) {
     return `${hours}h ${minutes}m`;
   }
-  return `${minutes}m`;
+  if (minutes > 0) {
+    return `${minutes}m`;
+  }
+  return `${seconds}s`;
 }
-
 export interface EmbyMediaRowProps {
   item: EmbyMediaItem;
   targetLanguage: string;
@@ -25,7 +27,7 @@ export interface EmbyMediaRowProps {
   onAudioTrackChange: (itemId: string, streamIndex: number) => void;
 }
 
-export function EmbyMediaRow({
+export const EmbyMediaRow = React.memo(function EmbyMediaRow({
   item,
   targetLanguage,
   isSelected,
@@ -36,8 +38,9 @@ export function EmbyMediaRow({
 }: EmbyMediaRowProps): React.JSX.Element {
   const { t } = useTranslation();
 
-  const audios = item.mediaStreams.filter((s) => s.streamType?.toLowerCase() === 'audio');
-  const hasSub = hasTargetSubtitle(item.mediaStreams, targetLanguage);
+  const streams = item.mediaStreams ?? [];
+  const audios = streams.filter((s) => s.streamType?.toLowerCase() === 'audio');
+  const hasSub = hasTargetSubtitle(streams, targetLanguage);
   const duration = formatDurationTicks(item.runtimeTicks);
 
   return (
@@ -111,4 +114,4 @@ export function EmbyMediaRow({
       </div>
     </div>
   );
-}
+});

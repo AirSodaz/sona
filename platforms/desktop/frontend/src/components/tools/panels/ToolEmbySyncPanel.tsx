@@ -62,17 +62,19 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     handleSubmitBatch,
     submittedNotice,
   } = useEmbySync();
-  const statusTone: ToolHeroStatusTone = !isConnected
-    ? 'inactive'
-    : serverInfo && !serverInfo.hasSubtitleManagerPlugin
-      ? 'warning'
-      : 'active';
+  const statusTone: ToolHeroStatusTone = isConnecting
+    ? 'active'
+    : !isConnected
+      ? 'inactive'
+      : serverInfo && !serverInfo.hasSubtitleManagerPlugin
+        ? 'warning'
+        : 'active';
 
-  const statusText =
-    !isConnected || !serverInfo
+  const statusText = isConnecting
+    ? t('emby.connecting', { defaultValue: 'Connecting...' })
+    : !isConnected || !serverInfo
       ? t('emby.not_connected', { defaultValue: 'Not Connected' })
       : `${serverInfo.serverName} (v${serverInfo.version})`;
-
   return (
     <SettingsTabContainer id="tools-panel-emby_sync" ariaLabelledby="tools-tab-emby_sync">
       <div className="emby-sync-panel">
@@ -141,12 +143,27 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
 
         {/* Main Content Area */}
         <div className="emby-sync-main-content">
-          {!isConnected ? (
+          {isConnecting ? (
+            <div className="emby-loading-state" style={{ margin: 'auto' }}>
+              <RefreshCw size={28} className="spin" />
+              <p>{t('emby.connecting', { defaultValue: 'Connecting to Emby Server...' })}</p>
+            </div>
+          ) : !isConnected ? (
             <div className="emby-disconnected-card">
               <div className="emby-empty-icon-wrap">
                 <Tv size={36} />
               </div>
               <h3>{t('emby.welcome_title', { defaultValue: 'Connect to your Emby Server' })}</h3>
+              {connectionError && (
+                <div
+                  className="emby-alert-box emby-alert-error"
+                  role="alert"
+                  style={{ maxWidth: 460, margin: '0 auto', textAlign: 'left' }}
+                >
+                  <AlertTriangle size={15} style={{ flexShrink: 0 }} />
+                  <span>{connectionError}</span>
+                </div>
+              )}
               <p>
                 {t('emby.welcome_desc', {
                   defaultValue:

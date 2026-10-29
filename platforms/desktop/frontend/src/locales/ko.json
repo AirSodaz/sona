@@ -239,6 +239,7 @@
     "status_ready": "준비 완료",
     "status_disabled": "비활성화됨",
     "status_needs_config": "구성 필요",
+    "status_not_connected": "연결되지 않음",
     "clients_unit": "클라이언트",
     "migrated_notice": "이 설정 항목은 더 빠른 시작/중지, 매개변수 조정 및 상태 모니터링을 위해 홈의 '도구' 워크벤치로 이동되었습니다.",
     "migrated_notice_desc": "독립 확장 및 서비스 도구가 홈 통합 워크벤치로 통합되었습니다.",

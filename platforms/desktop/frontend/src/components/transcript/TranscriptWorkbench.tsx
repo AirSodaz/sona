@@ -1,10 +1,11 @@
 import {
   Tv as EmbyIcon,
+  Loader2,
   Users as SpeakerReviewIcon,
   History as VersionHistoryIcon,
 } from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
@@ -14,6 +15,7 @@ import {
   generatePureTranslationSrt,
   uploadEmbySubtitle,
 } from '../../services/emby/embyService';
+import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
@@ -114,6 +116,17 @@ export function TranscriptWorkbench({
   );
   const [isSyncingEmby, setIsSyncingEmby] = useState(false);
   const [embySyncSuccess, setEmbySyncSuccess] = useState(false);
+  const syncSuccessTimerRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    if (sourceHistoryId !== undefined) {
+      setEmbySyncSuccess(false);
+      clearTimeout(syncSuccessTimerRef.current ?? undefined);
+    }
+    return () => {
+      clearTimeout(syncSuccessTimerRef.current ?? undefined);
+    };
+  }, [sourceHistoryId]);
 
   const handleResyncEmby = async () => {
     if (!embyContext || isSyncingEmby || segments.length === 0) return;
@@ -146,29 +159,38 @@ export function TranscriptWorkbench({
         );
       } else if (embyContext.subtitleMode === 'separate_tracks') {
         const origContent = generateOriginalSrt(segments);
-        await uploadEmbySubtitle({
-          itemId: embyContext.itemId,
-          language: embyContext.sourceLanguage || 'und',
-          format: 'srt',
-          isForced: false,
-          content: origContent,
-        });
-        const transContent = generatePureTranslationSrt(segments);
         await uploadEmbySubtitle(
           {
             itemId: embyContext.itemId,
-            language: embyContext.targetLanguage || 'zh-CN',
+            language: embyContext.sourceLanguage || 'und',
             format: 'srt',
             isForced: false,
-            content: transContent,
+            content: origContent,
           },
           embyContext.existingExternalSubtitleIndex
         );
+        const transContent = generatePureTranslationSrt(segments);
+        await uploadEmbySubtitle({
+          itemId: embyContext.itemId,
+          language: embyContext.targetLanguage || 'zh-CN',
+          format: 'srt',
+          isForced: false,
+          content: transContent,
+        });
       }
       setEmbySyncSuccess(true);
-      setTimeout(() => setEmbySyncSuccess(false), 3000);
-    } catch (err) {
+      clearTimeout(syncSuccessTimerRef.current ?? undefined);
+      syncSuccessTimerRef.current = window.setTimeout(() => {
+        setEmbySyncSuccess(false);
+        syncSuccessTimerRef.current = null;
+      }, 3000);
+    } catch (err: unknown) {
       console.error('Failed to resync to Emby:', err);
+      void useDialogStore.getState().showError({
+        code: 'emby.resync_failed',
+        messageKey: 'errors.common.operation_failed',
+        cause: err,
+      });
     } finally {
       setIsSyncingEmby(false);
     }
@@ -337,7 +359,7 @@ export function TranscriptWorkbench({
                 })}
                 data-tooltip-pos="bottom"
               >
-                <EmbyIcon size={14} className={isSyncingEmby ? 'spin' : ''} />
+                {isSyncingEmby ? <Loader2 size={14} className="spin" /> : <EmbyIcon size={14} />}
                 <span>
                   {isSyncingEmby
                     ? t('emby.syncing', { defaultValue: 'Syncing...' })

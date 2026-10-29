@@ -11,22 +11,25 @@ import { invokeTauri } from '../tauri/invoke';
 
 export function formatSrtTimestamp(seconds: number): string {
   const clamped = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
-  const hours = Math.floor(clamped / 3600);
-  const minutes = Math.floor((clamped % 3600) / 60);
-  const secs = Math.floor(clamped % 60);
-  const millis = Math.floor((clamped % 1) * 1000);
+  const totalMillis = Math.round(clamped * 1000);
+  const hours = Math.floor(totalMillis / 3600000);
+  const minutes = Math.floor((totalMillis % 3600000) / 60000);
+  const secs = Math.floor((totalMillis % 60000) / 1000);
+  const millis = totalMillis % 1000;
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')},${String(millis).padStart(3, '0')}`;
 }
 
 export function cleanSubtitleText(text: string): string {
   return text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&amp;/g, '&')
     .trim();
 }
 
@@ -41,6 +44,7 @@ function buildSrt(
   let index = 1;
 
   for (const seg of segments) {
+    if (seg.isFinal === false) continue;
     const text = textExtractor(seg).trim();
     if (!text) continue;
 
@@ -50,7 +54,7 @@ function buildSrt(
     index++;
   }
 
-  return blocks.join('\n\n');
+  return blocks.length > 0 ? `${blocks.join('\n\n')}\n` : '';
 }
 
 export function generatePureTranslationSrt(segments: TranscriptSegment[]): string {

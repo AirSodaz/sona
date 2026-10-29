@@ -196,6 +196,13 @@ interface BatchQueueState {
    */
   updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
   /**
+   * Updates an item's file path.
+   *
+   * @param id Item ID.
+   * @param filePath New file path.
+   */
+  updateItemFilePath: (id: string, filePath: string) => void;
+  /**
    * Sets error state for an item.
    *
    * @param id Item ID.
@@ -442,10 +449,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     }
   },
   addEmbyItems: (options) => {
+    if (!options?.items || options.items.length === 0) {
+      return;
+    }
     const projectStore = useProjectStore.getState();
     const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
     const resolvedConfigSnapshot = getEffectiveConfigSnapshot();
-
     const newItems: BatchQueueItem[] = options.items.map((opt) => ({
       id: uuidv4(),
       filename: opt.itemName,
@@ -600,6 +609,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           ),
         }));
       },
+      updateItemFilePath: (id, filePath) => {
+        get().updateItemFilePath(id, filePath);
+      },
       setItemActiveInstanceId: (id, instanceId) => {
         set((currentState) => ({
           queueItems: currentState.queueItems.map((queueItem) =>
@@ -732,6 +744,11 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         setTranscriptSegments(segments);
       }
     }
+  },
+  updateItemFilePath: (id, filePath) => {
+    set((state) => ({
+      queueItems: state.queueItems.map((item) => (item.id === id ? { ...item, filePath } : item)),
+    }));
   },
 
   setItemError: (id, message) => {

@@ -3,10 +3,8 @@
 .emby-sync-panel {
   display: flex;
   flex-direction: column;
-  height: 100%;
   box-sizing: border-box;
   background: var(--color-bg-primary);
-  overflow: hidden;
   position: relative;
 }
 
@@ -73,7 +71,7 @@
   height: 64px;
   border-radius: var(--radius-lg);
   background: var(--color-bg-secondary);
-  color: var(--color-accent);
+  color: var(--color-accent-primary, #2f2f2f);
   border: 1px solid var(--color-border);
 }
 
@@ -136,9 +134,9 @@
 }
 
 .emby-library-tab.active {
-  background: var(--color-accent);
-  color: var(--color-accent-contrast, #ffffff);
-  border-color: var(--color-accent);
+  background: var(--color-accent-primary, #2f2f2f);
+  color: var(--button-primary-text, #ffffff);
+  border-color: var(--color-accent-primary, #2f2f2f);
 }
 
 .emby-library-controls {
@@ -177,7 +175,7 @@
 }
 
 .emby-search-input:focus {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-primary, #2f2f2f);
 }
 
 .emby-toolbar-select-group {
@@ -200,7 +198,7 @@
 }
 
 .emby-select:focus {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-primary, #2f2f2f);
 }
 
 .emby-toolbar-checkbox {
@@ -352,8 +350,8 @@
 }
 
 .emby-media-row.selected {
-  border-color: var(--color-accent);
-  background: color-mix(in srgb, var(--color-accent) 6%, var(--color-bg-elevated));
+  border-color: var(--color-accent-primary, #2f2f2f);
+  background: color-mix(in srgb, var(--color-accent-primary, #2f2f2f) 6%, var(--color-bg-elevated));
 }
 
 .emby-media-row.queued {
@@ -489,15 +487,13 @@
 
 /* Bottom Sticky Action Bar */
 .emby-submit-bar-wrapper {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  position: sticky;
+  bottom: -32px;
   z-index: 10;
+  margin-top: auto;
   display: flex;
   flex-direction: column;
 }
-
 .emby-submitted-notice {
   display: flex;
   align-items: center;
@@ -613,7 +609,7 @@
 }
 
 .emby-input:focus {
-  border-color: var(--color-accent);
+  border-color: var(--color-accent-primary, #2f2f2f);
 }
 
 .emby-checkbox-field {
@@ -679,4 +675,61 @@
   font-size: 12px;
   color: var(--color-text-tertiary);
   font-style: italic;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .emby-submit-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .emby-submit-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .emby-submit-action {
+    width: 100%;
+  }
+
+  .emby-submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+
+  .emby-submitted-notice {
+    animation: none;
+  }
 }

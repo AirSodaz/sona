@@ -2,6 +2,20 @@ import { create } from 'zustand';
 import type { EmbyTaskContext } from '../types/batchQueue';
 
 const STORAGE_KEY = 'sona:emby:history_contexts';
+const MAX_STORED_CONTEXTS = 200;
+
+function trimContexts(contexts: Record<string, EmbyTaskContext>): Record<string, EmbyTaskContext> {
+  const keys = Object.keys(contexts);
+  if (keys.length <= MAX_STORED_CONTEXTS) {
+    return contexts;
+  }
+  const excess = keys.length - MAX_STORED_CONTEXTS;
+  const pruned = { ...contexts };
+  for (let i = 0; i < excess; i++) {
+    delete pruned[keys[i]];
+  }
+  return pruned;
+}
 
 function loadStoredContexts(): Record<string, EmbyTaskContext> {
   try {
@@ -9,7 +23,7 @@ function loadStoredContexts(): Record<string, EmbyTaskContext> {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    return parsed && typeof parsed === 'object' ? trimContexts(parsed) : {};
   } catch {
     return {};
   }
@@ -36,7 +50,7 @@ export const useEmbyHistoryStore = create<EmbyHistoryStore>((set, get) => ({
 
   setContext: (historyId, context) => {
     set((state) => {
-      const next = { ...state.contexts, [historyId]: context };
+      const next = trimContexts({ ...state.contexts, [historyId]: context });
       saveStoredContexts(next);
       return { contexts: next };
     });
