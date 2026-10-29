@@ -12,7 +12,7 @@ export interface EmbyServerConfigModalProps {
   onChangeConfig: React.Dispatch<React.SetStateAction<EmbyConnectionConfig>>;
   isConnecting: boolean;
   connectionError: string | null;
-  onConnect: () => void | Promise<void>;
+  onConnect: (config?: EmbyConnectionConfig) => void | Promise<void>;
 }
 
 export function EmbyServerConfigModal({
@@ -29,12 +29,13 @@ export function EmbyServerConfigModal({
 
   const handleSubmit = () => {
     if (isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()) return;
-    onChangeConfig((prev) => ({
-      ...prev,
-      serverUrl: prev.serverUrl.trim(),
-      apiKey: prev.apiKey.trim(),
-    }));
-    void onConnect();
+    const trimmed: EmbyConnectionConfig = {
+      ...config,
+      serverUrl: config.serverUrl.trim(),
+      apiKey: config.apiKey.trim(),
+    };
+    onChangeConfig(trimmed);
+    void onConnect(trimmed);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

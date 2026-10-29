@@ -164,6 +164,7 @@ export function useEmbySync(): UseEmbySyncReturn {
   configRef.current = config;
   const noticeTimeoutRef = useRef<number | null>(null);
   const hasLoadedRef = useRef(false);
+  const fetchSeqRef = useRef(0);
 
   useEffect(() => {
     return () => {
@@ -171,12 +172,13 @@ export function useEmbySync(): UseEmbySyncReturn {
     };
   }, []);
 
-  // Clear selected items on library change
+  // Clear selected items and expanded seasons on library or search change
   useEffect(() => {
-    if (selectedLibraryId !== undefined) {
-      setSelectedItemIds(new Set());
-    }
-  }, [selectedLibraryId]);
+    void selectedLibraryId;
+    void searchTerm;
+    setSelectedItemIds(new Set());
+    setExpandedSeasons(new Set());
+  }, [selectedLibraryId, searchTerm]);
 
   // Connect to Emby server
   const handleConnect = useCallback(async (cfgToTest?: EmbyConnectionConfig) => {
@@ -197,7 +199,14 @@ export function useEmbySync(): UseEmbySyncReturn {
       const libs = await getEmbyLibraries();
       setLibraries(libs);
       if (libs.length > 0) {
-        setSelectedLibraryId((prev) => prev ?? libs[0].id);
+        setSelectedLibraryId((prev) => {
+          if (prev && libs.some((lib) => lib.id === prev)) {
+            return prev;
+          }
+          return libs[0].id;
+        });
+      } else {
+        setSelectedLibraryId(null);
       }
     } catch (err: unknown) {
       setConnectionError(extractErrorMessage(err) || String(err));
@@ -232,6 +241,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
     let cancelled = false;
     const timer = setTimeout(async () => {
+      const seq = ++fetchSeqRef.current;
       setIsLoadingItems(true);
       try {
         const res = await getEmbyItems({
@@ -240,7 +250,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           startIndex: 0,
           limit: 300,
         });
-        if (cancelled) return;
+        if (cancelled || seq !== fetchSeqRef.current) return;
         setItems(res.items);
 
         setAudioTrackMap((prev) => {
@@ -265,11 +275,11 @@ export function useEmbySync(): UseEmbySyncReturn {
           return seasons;
         });
       } catch (err) {
-        if (!cancelled) {
+        if (!cancelled && seq === fetchSeqRef.current) {
           console.error('Failed to fetch items:', err);
         }
       } finally {
-        if (!cancelled) {
+        if (!cancelled && seq === fetchSeqRef.current) {
           setIsLoadingItems(false);
         }
       }
@@ -283,6 +293,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
   const fetchItems = useCallback(async () => {
     if (!serverInfo) return;
+    const seq = ++fetchSeqRef.current;
     setIsLoadingItems(true);
     try {
       const res = await getEmbyItems({
@@ -291,6 +302,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         startIndex: 0,
         limit: 300,
       });
+      if (seq !== fetchSeqRef.current) return;
       setItems(res.items);
 
       setAudioTrackMap((prev) => {
@@ -315,25 +327,23 @@ export function useEmbySync(): UseEmbySyncReturn {
         return seasons;
       });
     } catch (err) {
-      console.error('Failed to fetch items:', err);
+      if (seq === fetchSeqRef.current) {
+        console.error('Failed to fetch items:', err);
+      }
     } finally {
-      setIsLoadingItems(false);
+      if (seq === fetchSeqRef.current) {
+        setIsLoadingItems(false);
+      }
     }
   }, [serverInfo, selectedLibraryId, searchTerm]);
+
   const filteredItems = useMemo(() => {
     let result = items;
-    if (searchTerm.trim()) {
-      const term = searchTerm.trim().toLowerCase();
-      result = result.filter(
-        (item) =>
-          item.name.toLowerCase().includes(term) || item.seriesName?.toLowerCase().includes(term)
-      );
-    }
     if (onlyMissingTargetSubtitles) {
       result = result.filter((item) => !hasTargetSubtitle(item.mediaStreams, targetLanguage));
     }
     return result;
-  }, [items, searchTerm, onlyMissingTargetSubtitles, targetLanguage]);
+  }, [items, onlyMissingTargetSubtitles, targetLanguage]);
 
   // Group items by season for TV episodes or standalone for movies
   const groupedEpisodes = useMemo(() => {
@@ -460,10 +470,15 @@ export function useEmbySync(): UseEmbySyncReturn {
         }
       }
 
+      const seasonPart =
+        item.seasonName ||
+        (item.seasonIndex !== undefined && item.seasonIndex !== null
+          ? `Season ${item.seasonIndex}`
+          : '');
+      const episodePart = item.episodeIndex !== undefined ? `E${item.episodeIndex} - ` : '';
       const displayName = item.seriesName
-        ? `${item.seriesName} ${item.seasonName || ''} E${item.episodeIndex ?? ''} - ${item.name}`
+        ? `${item.seriesName} ${seasonPart} ${episodePart}${item.name}`.replace(/\s+/g, ' ').trim()
         : item.name;
-
       entries.push({
         itemId: item.id,
         itemName: displayName,

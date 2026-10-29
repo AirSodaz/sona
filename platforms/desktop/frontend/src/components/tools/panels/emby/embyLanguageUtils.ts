@@ -19,6 +19,7 @@ export function normalizeLanguageCode(code?: string): string {
       'zh-hant',
       'zh-hk',
       'zh-mo',
+      'zh-cht',
       'cht',
       'zht',
       'traditional chinese',
@@ -30,7 +31,8 @@ export function normalizeLanguageCode(code?: string): string {
     trimmed.startsWith('zh-tw') ||
     trimmed.startsWith('zh-hant') ||
     trimmed.startsWith('zh-hk') ||
-    trimmed.startsWith('zh-mo')
+    trimmed.startsWith('zh-mo') ||
+    trimmed.startsWith('zh-cht')
   ) {
     return 'zh-TW';
   }
@@ -45,6 +47,7 @@ export function normalizeLanguageCode(code?: string): string {
       'zh-cn',
       'zh-sg',
       'zh-hans',
+      'zh-chs',
       'chs',
       'cmn',
       'simplified chinese',
@@ -56,11 +59,11 @@ export function normalizeLanguageCode(code?: string): string {
     ].includes(trimmed) ||
     trimmed.startsWith('zh-cn') ||
     trimmed.startsWith('zh-sg') ||
-    trimmed.startsWith('zh-hans')
+    trimmed.startsWith('zh-hans') ||
+    trimmed.startsWith('zh-chs')
   ) {
     return 'zh-CN';
   }
-
   // English
   if (trimmed === 'en' || trimmed.startsWith('en-') || ['eng', 'english'].includes(trimmed)) {
     return 'en';
@@ -121,10 +124,9 @@ export function normalizeLanguageCode(code?: string): string {
   }
 
   // Cantonese
-  if (['yue', 'cantonese', '粤语'].includes(trimmed)) {
+  if (['yue', 'cantonese', '粤语', 'zh-yue'].includes(trimmed) || trimmed.startsWith('zh-yue')) {
     return 'yue';
   }
-
   return trimmed;
 }
 
@@ -154,8 +156,7 @@ export function matchSubtitleLanguage(
   if (
     isRecognizedStreamLang &&
     normStreamLang !== normTarget &&
-    !isStreamChinese &&
-    !isTargetChinese
+    !(isStreamChinese && isTargetChinese)
   ) {
     return false;
   }
@@ -165,11 +166,10 @@ export function matchSubtitleLanguage(
     if (normStreamLang === 'zh-TW') return true;
     if (
       titleLower.includes('繁') ||
-      titleLower.includes('cht') ||
+      /(?:^|[^a-z0-9])(cht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('traditional') ||
       titleLower.includes('zh-tw') ||
-      titleLower.includes('zh-hant') ||
-      titleLower.includes('big5')
+      titleLower.includes('zh-hant')
     ) {
       return true;
     }
@@ -178,24 +178,27 @@ export function matchSubtitleLanguage(
 
   // 2. If target is Simplified Chinese (zh-CN)
   if (normTarget === 'zh-CN') {
-    // Exclude if title explicitly specifies Traditional
-    if (
+    const hasTraditionalMarker =
       titleLower.includes('繁') ||
-      titleLower.includes('cht') ||
+      /(?:^|[^a-z0-9])(cht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('traditional') ||
       titleLower.includes('zh-tw') ||
-      titleLower.includes('zh-hant') ||
-      titleLower.includes('big5')
-    ) {
-      return false;
-    }
-    if (normStreamLang === 'zh-CN') return true;
-    if (
+      titleLower.includes('zh-hant');
+
+    const hasSimplifiedMarker =
       titleLower.includes('简') ||
       /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('simplified') ||
       titleLower.includes('zh-cn') ||
-      titleLower.includes('zh-hans') ||
+      titleLower.includes('zh-hans');
+
+    // Exclude only if title explicitly specifies Traditional without Simplified markers
+    if (hasTraditionalMarker && !hasSimplifiedMarker) {
+      return false;
+    }
+    if (normStreamLang === 'zh-CN') return true;
+    if (
+      hasSimplifiedMarker ||
       titleLower.includes('中文') ||
       titleLower.includes('chinese') ||
       titleLower.includes('国语')
@@ -204,7 +207,6 @@ export function matchSubtitleLanguage(
     }
     return false;
   }
-
   // 3. For any other language (e.g. en, ja, ko)
   if (normStreamLang && normStreamLang === normTarget) {
     return true;
@@ -277,15 +279,16 @@ export function findBestAudioStream(
  */
 export function getAudioTrackLabel(stream: EmbyStreamInfo): string {
   const parts: string[] = [];
-  if (stream.displayTitle) {
-    parts.push(stream.displayTitle);
+  const cleanTitle = stream.displayTitle?.trim();
+  if (cleanTitle) {
+    parts.push(cleanTitle);
   } else {
     if (stream.language) parts.push(stream.language.toUpperCase());
     if (stream.codec) parts.push(stream.codec.toUpperCase());
   }
-  const hasDefaultInTitle = Boolean(stream.displayTitle?.toLowerCase().includes('default'));
+  const hasDefaultInTitle = Boolean(cleanTitle?.toLowerCase().includes('default'));
   if (stream.isDefault && !hasDefaultInTitle) {
     parts.push('(Default)');
   }
-  return parts.join(' ') || `Track #${stream.index}`;
+  return parts.join(' ').trim() || `Track #${stream.index}`;
 }

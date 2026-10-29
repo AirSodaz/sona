@@ -23,7 +23,9 @@ function loadStoredContexts(): Record<string, EmbyTaskContext> {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? trimContexts(parsed) : {};
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? trimContexts(parsed)
+      : {};
   } catch {
     return {};
   }
@@ -50,9 +52,12 @@ export const useEmbyHistoryStore = create<EmbyHistoryStore>((set, get) => ({
 
   setContext: (historyId, context) => {
     set((state) => {
-      const next = trimContexts({ ...state.contexts, [historyId]: context });
-      saveStoredContexts(next);
-      return { contexts: next };
+      const next = { ...state.contexts };
+      delete next[historyId];
+      next[historyId] = context;
+      const trimmed = trimContexts(next);
+      saveStoredContexts(trimmed);
+      return { contexts: trimmed };
     });
   },
 
@@ -60,6 +65,7 @@ export const useEmbyHistoryStore = create<EmbyHistoryStore>((set, get) => ({
 
   removeContext: (historyId) => {
     set((state) => {
+      if (!(historyId in state.contexts)) return state;
       const next = { ...state.contexts };
       delete next[historyId];
       saveStoredContexts(next);

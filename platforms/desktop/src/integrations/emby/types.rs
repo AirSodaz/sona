@@ -32,22 +32,27 @@ pub struct EmbyLibrary {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbyStreamInfo {
+    #[serde(alias = "Index")]
     pub index: i32,
+    #[serde(alias = "Type")]
     pub stream_type: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "Language")]
     pub language: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        skip_serializing_if = "Option::is_none",
+        alias = "DisplayTitle"
+    )]
     pub display_title: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "Codec")]
     pub codec: Option<String>,
-    #[serde(default)]
+    #[serde(default, alias = "IsExternal")]
     pub is_external: bool,
-    #[serde(default)]
+    #[serde(default, alias = "IsForced")]
     pub is_forced: bool,
-    #[serde(default)]
+    #[serde(default, alias = "IsDefault")]
     pub is_default: bool,
 }
-
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct EmbyMediaItem {
@@ -109,6 +114,23 @@ pub enum EmbyError {
     InvalidConfig(String),
 }
 
+impl From<std::io::Error> for EmbyError {
+    fn from(err: std::io::Error) -> Self {
+        EmbyError::Io(err.to_string())
+    }
+}
+
+impl From<reqwest::Error> for EmbyError {
+    fn from(err: reqwest::Error) -> Self {
+        EmbyError::Network(err.to_string())
+    }
+}
+
+impl From<serde_json::Error> for EmbyError {
+    fn from(err: serde_json::Error) -> Self {
+        EmbyError::ServerError(err.to_string())
+    }
+}
 /// Normalizes server URL by trimming whitespace, ensuring scheme, and removing trailing slashes.
 pub fn normalize_server_url(raw: &str) -> String {
     let trimmed = raw.trim();
@@ -136,37 +158,93 @@ pub fn normalize_server_url(raw: &str) -> String {
     without_trailing.to_string()
 }
 
+/// Checks if a language code represents Chinese.
+fn is_chinese_code(clean: &str) -> bool {
+    clean == "zh"
+        || clean == "chi"
+        || clean == "zho"
+        || clean == "cmn"
+        || clean == "chinese"
+        || clean.starts_with("zh-")
+        || clean.starts_with("zh_")
+}
+
+/// Checks if a language code explicitly represents a known non-Chinese language.
+fn is_explicit_non_chinese_code(clean: &str) -> bool {
+    clean == "ja"
+        || clean == "jpn"
+        || clean == "japanese"
+        || clean.starts_with("ja-")
+        || clean.starts_with("ja_")
+        || clean == "en"
+        || clean == "eng"
+        || clean == "english"
+        || clean.starts_with("en-")
+        || clean.starts_with("en_")
+        || clean == "ko"
+        || clean == "kor"
+        || clean == "korean"
+        || clean.starts_with("ko-")
+        || clean.starts_with("ko_")
+        || clean == "fr"
+        || clean == "fra"
+        || clean == "fre"
+        || clean == "french"
+        || clean.starts_with("fr-")
+        || clean.starts_with("fr_")
+        || clean == "de"
+        || clean == "deu"
+        || clean == "ger"
+        || clean == "german"
+        || clean.starts_with("de-")
+        || clean.starts_with("de_")
+        || clean == "es"
+        || clean == "spa"
+        || clean == "spanish"
+        || clean.starts_with("es-")
+        || clean.starts_with("es_")
+        || clean == "ru"
+        || clean == "rus"
+        || clean == "russian"
+        || clean.starts_with("ru-")
+        || clean.starts_with("ru_")
+}
+
 /// Detects if language code or title corresponds to Chinese.
 pub fn is_chinese_language(lang: Option<&str>, display_title: Option<&str>) -> bool {
     if let Some(l) = lang {
         let clean = l.trim().to_ascii_lowercase();
-        if clean == "zh"
-            || clean == "chi"
-            || clean == "zho"
-            || clean.starts_with("zh-")
-            || clean == "chinese"
-            || clean == "cmn"
-        {
+        if is_chinese_code(&clean) {
             return true;
+        }
+        if is_explicit_non_chinese_code(&clean) {
+            return false;
         }
     }
     if let Some(t) = display_title {
         let clean = t.trim().to_ascii_lowercase();
-        if clean.contains('中')
-            || clean.contains('简')
-            || clean.contains('繁')
-            || clean.contains('汉')
-            || clean.contains("国语")
-            || clean.contains("粤语")
-            || clean.contains("chinese")
-        {
+        let chinese_phrases = [
+            "中文",
+            "中字",
+            "简中",
+            "繁中",
+            "简体",
+            "繁体",
+            "普通话",
+            "国语",
+            "粤语",
+            "汉语",
+            "chinese",
+        ];
+        if chinese_phrases.iter().any(|phrase| clean.contains(phrase)) {
             return true;
         }
     }
     false
 }
+
 /// Matches preferred language with audio stream language.
-fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
+pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
     let Some(sl) = stream_lang else {
         return false;
     };
@@ -178,22 +256,120 @@ fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
     }
 
     match p.as_str() {
-        "zh" | "zh-cn" | "zh-tw" | "chinese" | "chi" | "zho" => {
+        "zh" | "zh-cn" | "zh-tw" | "zh-hans" | "zh-hant" | "zh_cn" | "zh_tw" | "zh_hans"
+        | "zh_hant" | "zh-chs" | "zh-cht" | "zh-yue" | "chinese" | "chi" | "zho" | "cmn" => {
             s == "zh"
                 || s == "chi"
                 || s == "zho"
-                || s.starts_with("zh-")
-                || s == "chinese"
                 || s == "cmn"
+                || s == "chinese"
+                || s.starts_with("zh-")
+                || s.starts_with("zh_")
         }
-        "ja" | "jpn" | "japanese" => s == "ja" || s == "jpn" || s == "japanese",
-        "en" | "eng" | "english" => s == "en" || s == "eng" || s == "english",
-        "ko" | "kor" | "korean" => s == "ko" || s == "kor" || s == "korean",
-        "fr" | "fra" | "fre" | "french" => s == "fr" || s == "fra" || s == "fre" || s == "french",
-        "de" | "deu" | "ger" | "german" => s == "de" || s == "deu" || s == "ger" || s == "german",
-        "es" | "spa" | "spanish" => s == "es" || s == "spa" || s == "spanish",
-        "ru" | "rus" | "russian" => s == "ru" || s == "rus" || s == "russian",
-        _ => s == p,
+        "ja" | "jpn" | "japanese" => {
+            s == "ja"
+                || s == "jpn"
+                || s == "japanese"
+                || s.starts_with("ja-")
+                || s.starts_with("ja_")
+        }
+        "en" | "eng" | "english" => {
+            s == "en"
+                || s == "eng"
+                || s == "english"
+                || s.starts_with("en-")
+                || s.starts_with("en_")
+        }
+        "ko" | "kor" | "korean" => {
+            s == "ko" || s == "kor" || s == "korean" || s.starts_with("ko-") || s.starts_with("ko_")
+        }
+        "fr" | "fra" | "fre" | "french" => {
+            s == "fr"
+                || s == "fra"
+                || s == "fre"
+                || s == "french"
+                || s.starts_with("fr-")
+                || s.starts_with("fr_")
+        }
+        "de" | "deu" | "ger" | "german" => {
+            s == "de"
+                || s == "deu"
+                || s == "ger"
+                || s == "german"
+                || s.starts_with("de-")
+                || s.starts_with("de_")
+        }
+        "es" | "spa" | "spanish" => {
+            s == "es"
+                || s == "spa"
+                || s == "spanish"
+                || s.starts_with("es-")
+                || s.starts_with("es_")
+        }
+        "ru" | "rus" | "russian" => {
+            s == "ru"
+                || s == "rus"
+                || s == "russian"
+                || s.starts_with("ru-")
+                || s.starts_with("ru_")
+        }
+        _ => {
+            if p.starts_with("zh-") || p.starts_with("zh_") {
+                s == "zh"
+                    || s == "chi"
+                    || s == "zho"
+                    || s == "cmn"
+                    || s == "chinese"
+                    || s.starts_with("zh-")
+                    || s.starts_with("zh_")
+            } else if p.starts_with("ja-") || p.starts_with("ja_") {
+                s == "ja"
+                    || s == "jpn"
+                    || s == "japanese"
+                    || s.starts_with("ja-")
+                    || s.starts_with("ja_")
+            } else if p.starts_with("en-") || p.starts_with("en_") {
+                s == "en"
+                    || s == "eng"
+                    || s == "english"
+                    || s.starts_with("en-")
+                    || s.starts_with("en_")
+            } else if p.starts_with("ko-") || p.starts_with("ko_") {
+                s == "ko"
+                    || s == "kor"
+                    || s == "korean"
+                    || s.starts_with("ko-")
+                    || s.starts_with("ko_")
+            } else if p.starts_with("fr-") || p.starts_with("fr_") {
+                s == "fr"
+                    || s == "fra"
+                    || s == "fre"
+                    || s == "french"
+                    || s.starts_with("fr-")
+                    || s.starts_with("fr_")
+            } else if p.starts_with("de-") || p.starts_with("de_") {
+                s == "de"
+                    || s == "deu"
+                    || s == "ger"
+                    || s == "german"
+                    || s.starts_with("de-")
+                    || s.starts_with("de_")
+            } else if p.starts_with("es-") || p.starts_with("es_") {
+                s == "es"
+                    || s == "spa"
+                    || s == "spanish"
+                    || s.starts_with("es-")
+                    || s.starts_with("es_")
+            } else if p.starts_with("ru-") || p.starts_with("ru_") {
+                s == "ru"
+                    || s == "rus"
+                    || s == "russian"
+                    || s.starts_with("ru-")
+                    || s.starts_with("ru_")
+            } else {
+                s == p
+            }
+        }
     }
 }
 
@@ -288,11 +464,67 @@ mod tests {
         assert!(is_chinese_language(Some("zh-Hans"), None));
         assert!(is_chinese_language(None, Some("官方中字")));
         assert!(is_chinese_language(None, Some("简体中文")));
+        assert!(is_chinese_language(Some("zh_CN"), None));
+        assert!(is_chinese_language(None, Some("繁體中文")));
+        assert!(is_chinese_language(None, Some("粤语中字")));
         assert!(!is_chinese_language(Some("eng"), Some("English")));
         assert!(!is_chinese_language(Some("jpn"), Some("Japanese")));
+        assert!(!is_chinese_language(
+            Some("jpn"),
+            Some("日本語（作中用語解説）")
+        ));
+        assert!(!is_chinese_language(Some("ja"), Some("劇中歌")));
+        assert!(!is_chinese_language(None, Some("日本語（作中用語解説）")));
         assert!(!is_chinese_language(None, Some("Children of Men")));
         assert!(!is_chinese_language(None, Some("The Machine")));
         assert!(!is_chinese_language(None, Some("Architects")));
+    }
+
+    #[test]
+    fn test_language_matches() {
+        assert!(language_matches(Some("en-US"), "en"));
+        assert!(language_matches(Some("eng"), "en"));
+        assert!(language_matches(Some("ja-JP"), "ja"));
+        assert!(language_matches(Some("jpn"), "ja"));
+        assert!(language_matches(Some("zh-Hans"), "zh-CN"));
+        assert!(language_matches(Some("zh_CN"), "zh"));
+        assert!(language_matches(Some("chi"), "zh-Hans"));
+        assert!(!language_matches(Some("ja"), "en"));
+        assert!(!language_matches(Some("eng"), "ja"));
+    }
+
+    #[test]
+    fn test_emby_stream_info_serde_aliases() {
+        let json = r#"{
+            "Index": 1,
+            "Type": "Audio",
+            "Language": "eng",
+            "DisplayTitle": "English",
+            "Codec": "aac",
+            "IsExternal": true,
+            "IsForced": false,
+            "IsDefault": true
+        }"#;
+        let stream: EmbyStreamInfo = serde_json::from_str(json).unwrap();
+        assert_eq!(stream.index, 1);
+        assert_eq!(stream.stream_type, "Audio");
+        assert_eq!(stream.language.as_deref(), Some("eng"));
+        assert_eq!(stream.display_title.as_deref(), Some("English"));
+        assert_eq!(stream.codec.as_deref(), Some("aac"));
+        assert!(stream.is_external);
+        assert!(!stream.is_forced);
+        assert!(stream.is_default);
+    }
+
+    #[test]
+    fn test_emby_error_from() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::NotFound, "file not found");
+        let emby_io: EmbyError = io_err.into();
+        assert!(matches!(emby_io, EmbyError::Io(_)));
+
+        let json_err = serde_json::from_str::<serde_json::Value>("invalid json").unwrap_err();
+        let emby_json: EmbyError = json_err.into();
+        assert!(matches!(emby_json, EmbyError::ServerError(_)));
     }
     #[test]
     fn test_select_best_audio_stream() {

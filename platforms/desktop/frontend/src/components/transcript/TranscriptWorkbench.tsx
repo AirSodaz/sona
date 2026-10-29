@@ -9,12 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
-import {
-  generateBilingualSrt,
-  generateOriginalSrt,
-  generatePureTranslationSrt,
-  uploadEmbySubtitle,
-} from '../../services/emby/embyService';
+import { syncEmbySubtitles } from '../../services/emby/embyService';
 import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
@@ -119,12 +114,14 @@ export function TranscriptWorkbench({
   const syncSuccessTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (sourceHistoryId !== undefined) {
-      setEmbySyncSuccess(false);
-      clearTimeout(syncSuccessTimerRef.current ?? undefined);
-    }
+    void sourceHistoryId;
+    setEmbySyncSuccess(false);
+    setIsSyncingEmby(false);
+    clearTimeout(syncSuccessTimerRef.current ?? undefined);
+    syncSuccessTimerRef.current = null;
     return () => {
       clearTimeout(syncSuccessTimerRef.current ?? undefined);
+      syncSuccessTimerRef.current = null;
     };
   }, [sourceHistoryId]);
 
@@ -133,51 +130,7 @@ export function TranscriptWorkbench({
     setIsSyncingEmby(true);
     setEmbySyncSuccess(false);
     try {
-      if (embyContext.subtitleMode === 'pure_translation') {
-        const content = generatePureTranslationSrt(segments);
-        await uploadEmbySubtitle(
-          {
-            itemId: embyContext.itemId,
-            language: embyContext.targetLanguage || 'zh-CN',
-            format: 'srt',
-            isForced: false,
-            content,
-          },
-          embyContext.existingExternalSubtitleIndex
-        );
-      } else if (embyContext.subtitleMode === 'bilingual') {
-        const content = generateBilingualSrt(segments);
-        await uploadEmbySubtitle(
-          {
-            itemId: embyContext.itemId,
-            language: embyContext.targetLanguage || 'zh-CN',
-            format: 'srt',
-            isForced: false,
-            content,
-          },
-          embyContext.existingExternalSubtitleIndex
-        );
-      } else if (embyContext.subtitleMode === 'separate_tracks') {
-        const origContent = generateOriginalSrt(segments);
-        await uploadEmbySubtitle(
-          {
-            itemId: embyContext.itemId,
-            language: embyContext.sourceLanguage || 'und',
-            format: 'srt',
-            isForced: false,
-            content: origContent,
-          },
-          embyContext.existingExternalSubtitleIndex
-        );
-        const transContent = generatePureTranslationSrt(segments);
-        await uploadEmbySubtitle({
-          itemId: embyContext.itemId,
-          language: embyContext.targetLanguage || 'zh-CN',
-          format: 'srt',
-          isForced: false,
-          content: transContent,
-        });
-      }
+      await syncEmbySubtitles(segments, embyContext);
       setEmbySyncSuccess(true);
       clearTimeout(syncSuccessTimerRef.current ?? undefined);
       syncSuccessTimerRef.current = window.setTimeout(() => {
@@ -352,8 +305,7 @@ export function TranscriptWorkbench({
                 type="button"
                 className={`btn btn-sm ${embySyncSuccess ? 'btn-success' : 'btn-secondary'}`}
                 onClick={handleResyncEmby}
-                disabled={isSyncingEmby || isManualHeaderActionsDisabled}
-                style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                disabled={isSyncingEmby || isManualHeaderActionsDisabled || segments.length === 0}
                 data-tooltip={t('emby.resync_tooltip', {
                   defaultValue: 'Re-sync subtitles to Emby server',
                 })}

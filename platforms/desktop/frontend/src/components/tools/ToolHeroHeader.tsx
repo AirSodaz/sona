@@ -62,7 +62,7 @@ export function ToolHeroHeader({
                 });
               }
             }}
-            aria-label={switchAriaLabel}
+            aria-label={switchAriaLabel || title}
           />
         )}
       </div>

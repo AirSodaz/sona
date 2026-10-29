@@ -1,3 +1,4 @@
+import type { EmbyTaskContext } from '../../types/batchQueue';
 import type {
   EmbyConnectionConfig,
   EmbyItemListResult,
@@ -8,7 +9,6 @@ import type {
 import type { TranscriptSegment } from '../../types/transcript';
 import { TauriCommand } from '../tauri/commands';
 import { invokeTauri } from '../tauri/invoke';
-
 export function formatSrtTimestamp(seconds: number): string {
   const clamped = Math.max(0, Number.isFinite(seconds) ? seconds : 0);
   const totalMillis = Math.round(clamped * 1000);
@@ -20,7 +20,9 @@ export function formatSrtTimestamp(seconds: number): string {
 }
 
 export function cleanSubtitleText(text: string): string {
+  if (!text || typeof text !== 'string') return '';
   return text
+    .replace(/\r\n|\r/g, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/p>/gi, '\n')
     .replace(/<[^>]+>/g, '')
@@ -29,7 +31,10 @@ export function cleanSubtitleText(text: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&#x27;/gi, "'")
     .replace(/&amp;/g, '&')
+    .replace(/\n{2,}/g, '\n')
     .trim();
 }
 
@@ -47,9 +52,10 @@ function buildSrt(
     if (seg.isFinal === false) continue;
     const text = textExtractor(seg).trim();
     if (!text) continue;
-
-    const start = formatSrtTimestamp(seg.start);
-    const end = formatSrtTimestamp(seg.end);
+    const startSec = Math.max(0, Number.isFinite(seg.start) ? seg.start : 0);
+    const endSec = Math.max(startSec + 0.05, Number.isFinite(seg.end) ? seg.end : startSec + 0.05);
+    const start = formatSrtTimestamp(startSec);
+    const end = formatSrtTimestamp(endSec);
     blocks.push(`${index}\n${start} --> ${end}\n${text}`);
     index++;
   }
@@ -72,7 +78,7 @@ export function generateBilingualSrt(segments: TranscriptSegment[]): string {
   return buildSrt(segments, (seg) => {
     const trans = cleanSubtitleText(seg.translation || '');
     const orig = cleanSubtitleText(seg.text || '');
-    if (trans && orig) {
+    if (trans && orig && trans.toLowerCase() !== orig.toLowerCase()) {
       return `${trans}\n${orig}`;
     }
     return trans || orig;
@@ -109,18 +115,12 @@ export async function getEmbyItems(params: {
   });
 }
 
-export async function downloadEmbyAudio(
-  itemId: string,
-  streamIndex?: number,
-  tempDir?: string
-): Promise<string> {
+export async function downloadEmbyAudio(itemId: string, streamIndex?: number): Promise<string> {
   return invokeTauri(TauriCommand.emby.downloadAudio, {
     itemId,
     streamIndex,
-    tempDir,
   });
 }
-
 export async function uploadEmbySubtitle(
   payload: SubtitleUploadPayload,
   deleteExistingExternalIndex?: number
@@ -129,4 +129,74 @@ export async function uploadEmbySubtitle(
     payload,
     deleteExistingExternalIndex,
   });
+}
+
+export async function syncEmbySubtitles(
+  segments: TranscriptSegment[],
+  embyContext: EmbyTaskContext,
+  options?: { deleteExistingIndex?: number }
+): Promise<void> {
+  const targetLang = embyContext.targetLanguage || 'zh-CN';
+  const deleteIndex = options?.deleteExistingIndex ?? embyContext.existingExternalSubtitleIndex;
+
+  switch (embyContext.subtitleMode) {
+    case 'pure_translation': {
+      const content = generatePureTranslationSrt(segments);
+      if (!content.trim()) return;
+      await uploadEmbySubtitle(
+        {
+          itemId: embyContext.itemId,
+          language: targetLang,
+          format: 'srt',
+          isForced: false,
+          content,
+        },
+        deleteIndex
+      );
+      break;
+    }
+    case 'bilingual': {
+      const content = generateBilingualSrt(segments);
+      if (!content.trim()) return;
+      await uploadEmbySubtitle(
+        {
+          itemId: embyContext.itemId,
+          language: targetLang,
+          format: 'srt',
+          isForced: false,
+          content,
+        },
+        deleteIndex
+      );
+      break;
+    }
+    case 'separate_tracks': {
+      const origContent = generateOriginalSrt(segments);
+      if (origContent.trim()) {
+        await uploadEmbySubtitle({
+          itemId: embyContext.itemId,
+          language: embyContext.sourceLanguage || 'und',
+          format: 'srt',
+          isForced: false,
+          content: origContent,
+        });
+      }
+      const transContent = generatePureTranslationSrt(segments);
+      if (transContent.trim()) {
+        await uploadEmbySubtitle(
+          {
+            itemId: embyContext.itemId,
+            language: targetLang,
+            format: 'srt',
+            isForced: false,
+            content: transContent,
+          },
+          deleteIndex
+        );
+      }
+      break;
+    }
+    default:
+      throw new Error(`Unsupported Emby subtitle mode: ${String(embyContext.subtitleMode)}`);
+  }
 }

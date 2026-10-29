@@ -11,13 +11,7 @@ import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
-import {
-  downloadEmbyAudio,
-  generateBilingualSrt,
-  generateOriginalSrt,
-  generatePureTranslationSrt,
-  uploadEmbySubtitle,
-} from '../emby/embyService';
+import { downloadEmbyAudio, syncEmbySubtitles } from '../emby/embyService';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
 import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
@@ -110,6 +104,10 @@ export class BatchItemProcessor {
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
+
+    if (item.embyContext && item.historyId) {
+      useEmbyHistoryStore.getState().setContext(item.historyId, item.embyContext);
+    }
 
     const persistHistorySnapshot = async (): Promise<void> => {
       if (!savedHistoryId) {
@@ -283,8 +281,11 @@ export class BatchItemProcessor {
         pipeline: {
           ...pipeline,
           autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
-          targetLanguage: item.embyContext?.targetLanguage || pipeline.targetLanguage,
-          autoExport: pipeline.autoExport || Boolean(item.exportConfig),
+          targetLanguage:
+            item.embyContext?.targetLanguage ||
+            pipeline.targetLanguage ||
+            config.translationLanguage ||
+            'zh-CN',
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
           exportFormat:
             (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
@@ -318,51 +319,16 @@ export class BatchItemProcessor {
       if (item.embyContext && currentSegments.length > 0) {
         const { embyContext } = item;
         try {
-          if (embyContext.subtitleMode === 'pure_translation') {
-            const content = generatePureTranslationSrt(currentSegments);
-            await uploadEmbySubtitle(
-              {
-                itemId: embyContext.itemId,
-                language: embyContext.targetLanguage || 'zh-CN',
-                format: 'srt',
-                isForced: false,
-                content,
-              },
-              embyContext.existingExternalSubtitleIndex
-            );
-          } else if (embyContext.subtitleMode === 'bilingual') {
-            const content = generateBilingualSrt(currentSegments);
-            await uploadEmbySubtitle(
-              {
-                itemId: embyContext.itemId,
-                language: embyContext.targetLanguage || 'zh-CN',
-                format: 'srt',
-                isForced: false,
-                content,
-              },
-              embyContext.existingExternalSubtitleIndex
-            );
-          } else if (embyContext.subtitleMode === 'separate_tracks') {
-            const origContent = generateOriginalSrt(currentSegments);
-            await uploadEmbySubtitle(
-              {
-                itemId: embyContext.itemId,
-                language: embyContext.sourceLanguage || 'und',
-                format: 'srt',
-                isForced: false,
-                content: origContent,
-              },
-              embyContext.existingExternalSubtitleIndex
-            );
-            const transContent = generatePureTranslationSrt(currentSegments);
-            await uploadEmbySubtitle({
-              itemId: embyContext.itemId,
-              language: embyContext.targetLanguage || 'zh-CN',
-              format: 'srt',
-              isForced: false,
-              content: transContent,
-            });
-          }
+          const targetLanguage =
+            embyContext.targetLanguage ||
+            pipeline.targetLanguage ||
+            config.translationLanguage ||
+            'zh-CN';
+          await syncEmbySubtitles(
+            currentSegments,
+            { ...embyContext, targetLanguage },
+            { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+          );
         } catch (uploadError) {
           logger.error('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
           throw uploadError;

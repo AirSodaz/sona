@@ -38,6 +38,6 @@ impl EmbyState {
         guard
             .as_ref()
             .cloned()
-            .ok_or_else(|| EmbyError::Network("Emby client is not connected".to_string()))
+            .ok_or_else(|| EmbyError::InvalidConfig("Emby client is not connected".to_string()))
     }
 }

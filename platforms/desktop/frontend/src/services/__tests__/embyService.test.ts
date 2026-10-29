@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import {
@@ -7,7 +7,10 @@ import {
   generateBilingualSrt,
   generateOriginalSrt,
   generatePureTranslationSrt,
+  syncEmbySubtitles,
 } from '../emby/embyService';
+import { TauriCommand } from '../tauri/commands';
+import * as tauriInvoke from '../tauri/invoke';
 
 describe('embyService SRT & text helpers', () => {
   it('formats SRT timestamp accurately without float truncation', () => {
@@ -29,6 +32,35 @@ describe('embyService SRT & text helpers', () => {
     expect(cleanSubtitleText('&quot;Quote&#39;s&quot; &nbsp; space')).toBe('"Quote\'s"   space');
   });
 
+  it('handles null, non-string, Windows newlines, and entity edge cases in cleanSubtitleText', () => {
+    expect(cleanSubtitleText(null as unknown as string)).toBe('');
+    expect(cleanSubtitleText(undefined as unknown as string)).toBe('');
+    expect(cleanSubtitleText(123 as unknown as string)).toBe('');
+    expect(cleanSubtitleText('Line 1\r\nLine 2\rLine 3')).toBe('Line 1\nLine 2\nLine 3');
+    expect(cleanSubtitleText('It&#39;s &apos;good&#x27;')).toBe("It's 'good'");
+    expect(cleanSubtitleText('Line 1\n\n\n\nLine 2')).toBe('Line 1\nLine 2');
+  });
+
+  it('enforces positive minimum cue duration in buildSrt', () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 5.0, end: 5.0, text: 'Instant cue', isFinal: true },
+      { id: '2', start: 10.0, end: 8.0, text: 'Inverted cue', isFinal: true },
+    ];
+    const srt = generateOriginalSrt(segments);
+    expect(srt).toContain('00:00:05,000 --> 00:00:05,050\nInstant cue');
+    expect(srt).toContain('00:00:10,000 --> 00:00:10,050\nInverted cue');
+  });
+
+  it('deduplicates identical translation and original text in generateBilingualSrt', () => {
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 2, text: 'Hello', translation: 'hello', isFinal: true },
+      { id: '2', start: 3, end: 5, text: 'World', translation: '世界', isFinal: true },
+    ];
+    const srt = generateBilingualSrt(segments);
+    expect(srt).toContain('1\n00:00:00,000 --> 00:00:02,000\nhello');
+    expect(srt).not.toContain('hello\nHello');
+    expect(srt).toContain('2\n00:00:03,000 --> 00:00:05,000\n世界\nWorld');
+  });
   it('builds SRT, filters unfinalized segments, and adds trailing newline', () => {
     const segments: TranscriptSegment[] = [
       { id: '1', start: 0, end: 1.5, text: 'Hello', translation: '你好', isFinal: true },
@@ -78,5 +110,77 @@ describe('useEmbyHistoryStore storage cap', () => {
     expect(store.getContext('hist-4')).toBeUndefined();
     expect(store.getContext('hist-5')).toBeDefined();
     expect(store.getContext('hist-204')).toBeDefined();
+  });
+});
+
+describe('syncEmbySubtitles workflow', () => {
+  it('routes pure_translation, bilingual, and separate_tracks correctly to invokeTauri', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined as never);
+
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 2, text: 'Original line', translation: '翻译文本', isFinal: true },
+    ];
+
+    // 1. pure_translation
+    await syncEmbySubtitles(segments, {
+      serverId: 's1',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-1',
+      itemName: 'Test',
+      audioStreamIndex: 1,
+      subtitleMode: 'pure_translation',
+      targetLanguage: 'zh-CN',
+      existingExternalSubtitleIndex: 4,
+    });
+
+    expect(invokeSpy).toHaveBeenLastCalledWith(TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-1',
+        language: 'zh-CN',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('翻译文本'),
+      },
+      deleteExistingExternalIndex: 4,
+    });
+
+    // 2. separate_tracks
+    invokeSpy.mockClear();
+    await syncEmbySubtitles(segments, {
+      serverId: 's1',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-2',
+      itemName: 'Test 2',
+      audioStreamIndex: 1,
+      subtitleMode: 'separate_tracks',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+      existingExternalSubtitleIndex: 7,
+    });
+
+    expect(invokeSpy).toHaveBeenCalledTimes(2);
+    // First call: origContent (sourceLanguage) WITHOUT deleteExistingExternalIndex
+    expect(invokeSpy).toHaveBeenNthCalledWith(1, TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-2',
+        language: 'en',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('Original line'),
+      },
+    });
+    // Second call: transContent (targetLanguage) WITH deleteExistingExternalIndex: 7
+    expect(invokeSpy).toHaveBeenNthCalledWith(2, TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-2',
+        language: 'zh-CN',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('翻译文本'),
+      },
+      deleteExistingExternalIndex: 7,
+    });
+
+    invokeSpy.mockRestore();
   });
 });

@@ -19,9 +19,11 @@ pub async fn emby_save_config(
     emby_state: State<'_, EmbyState>,
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
-    let client = EmbyClient::new(config.clone()).map_err(|e| e.to_string())?;
-    emby_state.set_client(Some(client)).await;
+    if config.server_url.trim().is_empty() || config.api_key.trim().is_empty() {
+        return Err("Server URL and API key cannot be empty".to_string());
+    }
 
+    let client = EmbyClient::new(config.clone()).map_err(|e| e.to_string())?;
     let mut current_config = services
         .config
         .load()?
@@ -43,6 +45,7 @@ pub async fn emby_save_config(
     }
 
     services.config.save(&current_config)?;
+    emby_state.set_client(Some(client)).await;
     let _ = services.emitter.emit(
         "app-setting-updated",
         serde_json::json!({
@@ -127,7 +130,6 @@ pub async fn emby_download_audio(
     emby_state: State<'_, EmbyState>,
     item_id: String,
     stream_index: Option<i32>,
-    _temp_dir: Option<String>,
 ) -> Result<String, String> {
     let clean_id = item_id.trim();
     if clean_id.is_empty()
@@ -150,7 +152,12 @@ pub async fn emby_download_audio(
         .await
         .map_err(|e| format!("Failed to create download directory: {e}"))?;
 
-    let filename = format!("emby_{}_{}.mp3", clean_id, stream_index.unwrap_or(0));
+    let filename = format!(
+        "emby_{}_{}_{}.mp3",
+        clean_id,
+        stream_index.unwrap_or(0),
+        uuid::Uuid::new_v4()
+    );
     let target_path = dir.join(filename);
 
     client
@@ -167,12 +174,20 @@ pub async fn emby_upload_subtitle(
     payload: SubtitleUploadPayload,
     delete_existing_external_index: Option<i32>,
 ) -> Result<(), String> {
-    if payload.item_id.trim().is_empty()
-        || payload.language.trim().is_empty()
+    let clean_id = payload.item_id.trim();
+    if clean_id.is_empty()
+        || !clean_id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        return Err("Invalid item ID format".to_string());
+    }
+    if payload.language.trim().is_empty()
+        || payload.format.trim().is_empty()
         || payload.content.trim().is_empty()
     {
         return Err(
-            "Invalid upload payload: item_id, language, and content must not be empty".to_string(),
+            "Invalid upload payload: language, format, and content must not be empty".to_string(),
         );
     }
 
@@ -217,10 +232,11 @@ pub async fn emby_upload_subtitle(
                         s.language.as_deref(),
                         s.display_title.as_deref(),
                     )
-                } else if let Some(l) = &s.language {
-                    l.trim().eq_ignore_ascii_case(payload.language.trim())
                 } else {
-                    false
+                    crate::integrations::emby::language_matches(
+                        s.language.as_deref(),
+                        &payload.language,
+                    )
                 }
             });
 

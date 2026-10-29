@@ -144,8 +144,13 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
         {/* Main Content Area */}
         <div className="emby-sync-main-content">
           {isConnecting ? (
-            <div className="emby-loading-state" style={{ margin: 'auto' }}>
-              <RefreshCw size={28} className="spin" />
+            <div
+              className="emby-loading-state"
+              style={{ margin: 'auto' }}
+              role="status"
+              aria-live="polite"
+            >
+              <RefreshCw size={28} className="spin" aria-hidden="true" />
               <p>{t('emby.connecting', { defaultValue: 'Connecting to Emby Server...' })}</p>
             </div>
           ) : !isConnected ? (
@@ -176,7 +181,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                 onClick={() => setIsConfigModalOpen(true)}
               >
                 <Settings size={15} style={{ marginRight: 6 }} />
-                <span>{t('emby.connect_server', { defaultValue: 'Configure Server' })}</span>
+                <span>{t('emby.configure_now', { defaultValue: 'Configure Server' })}</span>
               </button>
             </div>
           ) : (
@@ -197,8 +202,8 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
 
               <div className="emby-media-list-container">
                 {isLoadingItems ? (
-                  <div className="emby-loading-state">
-                    <RefreshCw size={24} className="spin" />
+                  <div className="emby-loading-state" role="status" aria-live="polite">
+                    <RefreshCw size={24} className="spin" aria-hidden="true" />
                     <p>
                       {t('emby.loading_items', { defaultValue: 'Loading media library items...' })}
                     </p>

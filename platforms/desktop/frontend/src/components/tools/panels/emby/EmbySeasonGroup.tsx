@@ -43,20 +43,20 @@ export function EmbySeasonGroup({
 
   return (
     <div className="emby-season-group">
-      <div
-        className="emby-season-header"
-        onClick={() => onToggleExpand(seasonKey)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onToggleExpand(seasonKey);
-          }
-        }}
-        aria-expanded={isExpanded}
-      >
-        <div className="emby-season-title">
+      <div className="emby-season-header">
+        <div
+          className="emby-season-title"
+          onClick={() => onToggleExpand(seasonKey)}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              onToggleExpand(seasonKey);
+            }
+          }}
+          aria-expanded={isExpanded}
+        >
           {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           <span className="emby-season-name">{seasonKey}</span>
           <span className="emby-season-count">
@@ -79,11 +79,7 @@ export function EmbySeasonGroup({
           )}
         </div>
 
-        <div
-          onClick={(e) => e.stopPropagation()}
-          onKeyDown={(e) => e.stopPropagation()}
-          className="emby-season-actions"
-        >
+        <div className="emby-season-actions">
           <button
             type="button"
             className="btn btn-xs btn-secondary"

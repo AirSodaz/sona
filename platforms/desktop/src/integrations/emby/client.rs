@@ -28,8 +28,8 @@ impl EmbyClient {
 
         let mut builder = reqwest::Client::builder()
             .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
             .user_agent("Sona-Desktop/1.0");
-
         if config.allow_invalid_certs {
             builder = builder.danger_accept_invalid_certs(true);
         }
@@ -56,6 +56,20 @@ impl EmbyClient {
     fn url(&self, endpoint: &str) -> String {
         let clean_endpoint = endpoint.trim_start_matches('/');
         format!("{}/{}", self.base_url, clean_endpoint)
+    }
+
+    fn validate_item_id(item_id: &str) -> Result<&str, EmbyError> {
+        let trimmed = item_id.trim();
+        if trimmed.is_empty()
+            || !trimmed
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            return Err(EmbyError::InvalidConfig(format!(
+                "Invalid item ID: '{item_id}'"
+            )));
+        }
+        Ok(trimmed)
     }
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
@@ -370,12 +384,12 @@ impl EmbyClient {
         })
     }
     pub async fn get_item_streams(&self, item_id: &str) -> Result<Vec<EmbyStreamInfo>, EmbyError> {
-        let url = self.url(&format!("/Items/{item_id}"));
+        let clean_id = Self::validate_item_id(item_id)?;
+        let url = self.url(&format!("/Items/{clean_id}"));
         let req = self.apply_auth(self.client.get(&url).query(&[
             ("Fields", "MediaStreams"),
             ("api_key", &self.config.api_key),
         ]));
-
         let resp = req
             .send()
             .await
@@ -451,17 +465,20 @@ impl EmbyClient {
         stream_index: Option<i32>,
         destination_path: &Path,
     ) -> Result<u64, EmbyError> {
-        let endpoint = format!("/Audio/{item_id}/stream.mp3");
+        let clean_id = Self::validate_item_id(item_id)?;
+        let endpoint = format!("/Audio/{clean_id}/stream.mp3");
         let url = self.url(&endpoint);
 
         if let Some(parent) = destination_path.parent() {
             tokio::fs::create_dir_all(parent)
                 .await
-                .map_err(|e| EmbyError::ServerError(format!("Failed to create directory: {e}")))?;
+                .map_err(|e| EmbyError::Io(e.to_string()))?;
         }
 
         let mut last_err = None;
         for attempt in 0..3 {
+            let part_path =
+                destination_path.with_extension(format!("part_{}", uuid::Uuid::new_v4()));
             let mut req = self.apply_auth(
                 self.client
                     .get(&url)
@@ -489,12 +506,10 @@ impl EmbyClient {
                         )));
                     }
 
-                    let file = match tokio::fs::File::create(destination_path).await {
+                    let file = match tokio::fs::File::create(&part_path).await {
                         Ok(f) => f,
                         Err(e) => {
-                            return Err(EmbyError::ServerError(format!(
-                                "Failed to create target file: {e}"
-                            )));
+                            return Err(EmbyError::Io(e.to_string()));
                         }
                     };
                     let mut file_opt = Some(file);
@@ -512,16 +527,14 @@ impl EmbyClient {
                                 };
                                 if let Err(e) = write_res {
                                     drop(file_opt.take());
-                                    let _ = tokio::fs::remove_file(destination_path).await;
-                                    return Err(EmbyError::ServerError(format!(
-                                        "Failed to write audio chunk: {e}"
-                                    )));
+                                    let _ = tokio::fs::remove_file(&part_path).await;
+                                    return Err(EmbyError::Io(e.to_string()));
                                 }
                                 bytes_written += chunk.len() as u64;
                             }
                             Err(e) => {
                                 drop(file_opt.take());
-                                let _ = tokio::fs::remove_file(destination_path).await;
+                                let _ = tokio::fs::remove_file(&part_path).await;
                                 last_err = Some(EmbyError::Network(format!(
                                     "Stream interrupted on attempt {attempt}: {e}"
                                 )));
@@ -533,11 +546,23 @@ impl EmbyClient {
                     if let Some(mut file) = file_opt {
                         if let Err(e) = file.flush().await {
                             drop(file);
-                            let _ = tokio::fs::remove_file(destination_path).await;
-                            return Err(EmbyError::ServerError(format!(
-                                "Failed to flush file: {e}"
-                            )));
+                            let _ = tokio::fs::remove_file(&part_path).await;
+                            return Err(EmbyError::Io(e.to_string()));
                         }
+                        drop(file);
+
+                        if bytes_written == 0 {
+                            let _ = tokio::fs::remove_file(&part_path).await;
+                            return Err(EmbyError::ServerError(
+                                "Downloaded audio stream is empty (0 bytes)".into(),
+                            ));
+                        }
+
+                        if let Err(e) = tokio::fs::rename(&part_path, destination_path).await {
+                            let _ = tokio::fs::remove_file(&part_path).await;
+                            return Err(EmbyError::Io(e.to_string()));
+                        }
+
                         return Ok(bytes_written);
                     }
                 }
@@ -559,14 +584,14 @@ impl EmbyClient {
         item_id: &str,
         subtitle_index: i32,
     ) -> Result<(), EmbyError> {
+        let clean_id = Self::validate_item_id(item_id)?;
         let url = self.url("/SubtitleManager/DeleteSubtitle");
         let idx_str = subtitle_index.to_string();
         let query = [
-            ("ItemId", item_id),
+            ("ItemId", clean_id),
             ("SubtitleIndex", &idx_str),
             ("api_key", &self.config.api_key),
         ];
-
         let req = self.apply_auth(self.client.post(&url).query(&query));
         let resp = req
             .send()
@@ -600,16 +625,16 @@ impl EmbyClient {
     }
 
     pub async fn upload_subtitle(&self, req: &SubtitleUploadPayload) -> Result<(), EmbyError> {
+        let clean_id = Self::validate_item_id(&req.item_id)?;
         let url = self.url("/SubtitleManager/Upload");
         let forced_str = req.is_forced.to_string();
         let query = [
-            ("ItemId", req.item_id.as_str()),
+            ("ItemId", clean_id),
             ("Language", req.language.as_str()),
             ("Format", req.format.as_str()),
             ("IsForced", &forced_str),
             ("api_key", &self.config.api_key),
         ];
-
         let request = self.apply_auth(
             self.client
                 .post(&url)
@@ -654,7 +679,8 @@ impl EmbyClient {
     }
 
     pub async fn refresh_item_metadata(&self, item_id: &str) -> Result<(), EmbyError> {
-        let url = self.url(&format!("/Items/{item_id}/Refresh"));
+        let clean_id = Self::validate_item_id(item_id)?;
+        let url = self.url(&format!("/Items/{clean_id}/Refresh"));
         let req = self.apply_auth(
             self.client
                 .post(&url)
@@ -679,7 +705,7 @@ impl EmbyClient {
             )));
         }
         // Lightweight poll up to 3 times with 1-second delay
-        let item_url = self.url(&format!("/Items/{item_id}"));
+        let item_url = self.url(&format!("/Items/{clean_id}"));
         for _ in 0..3 {
             tokio::time::sleep(Duration::from_millis(1000)).await;
             let poll_req = self.apply_auth(self.client.get(&item_url).query(&[
@@ -692,7 +718,6 @@ impl EmbyClient {
                 break;
             }
         }
-
         Ok(())
     }
 }
@@ -709,7 +734,11 @@ pub(crate) fn check_plugin_response_body(body_text: &str) -> Result<(), EmbyErro
                 .and_then(|v| v.as_str())
                 .unwrap_or("Operation failed");
             let lower = msg.to_ascii_lowercase();
-            if lower.contains("duplicate") || msg.contains("已存在") {
+            if lower.contains("duplicate")
+                || lower.contains("already exist")
+                || msg.contains("已存在")
+                || msg.contains("重复")
+            {
                 return Err(EmbyError::DuplicateSubtitle);
             } else {
                 return Err(EmbyError::ServerError(msg.to_string()));
@@ -803,6 +832,20 @@ mod tests {
         assert_eq!(
             map_plugin_response_status(
                 reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"Subtitle already exists for item"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"字幕文件重复"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
                 Some(r#"{"Success":false,"Message":"Internal error occurred"}"#)
             ),
             Err(EmbyError::ServerError("Internal error occurred".into()))
@@ -826,5 +869,19 @@ mod tests {
             EmbyError::DuplicateSubtitle.to_string(),
             "Duplicate subtitle already exists"
         );
+    }
+
+    #[test]
+    fn test_validate_item_id() {
+        assert_eq!(EmbyClient::validate_item_id("12345").unwrap(), "12345");
+        assert_eq!(
+            EmbyClient::validate_item_id("item-abc_123").unwrap(),
+            "item-abc_123"
+        );
+        assert!(EmbyClient::validate_item_id("").is_err());
+        assert!(EmbyClient::validate_item_id("  ").is_err());
+        assert!(EmbyClient::validate_item_id("../etc/passwd").is_err());
+        assert!(EmbyClient::validate_item_id("item/123").is_err());
+        assert!(EmbyClient::validate_item_id("item?query=1").is_err());
     }
 }

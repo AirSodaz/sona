@@ -2,8 +2,7 @@ import { Clock, Film } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyMediaItem } from '../../../../types/emby';
-import { getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
-
+import { findBestAudioStream, getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
 export function formatDurationTicks(ticks?: number): string {
   if (!ticks) return '';
   const seconds = Math.floor(ticks / 10_000_000);
@@ -40,9 +39,10 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
 
   const streams = item.mediaStreams ?? [];
   const audios = streams.filter((s) => s.streamType?.toLowerCase() === 'audio');
+  const bestAudio = findBestAudioStream(item.mediaStreams);
+  const currentAudioIndex = selectedAudioIndex ?? bestAudio?.index ?? audios[0]?.index;
   const hasSub = hasTargetSubtitle(streams, targetLanguage);
   const duration = formatDurationTicks(item.runtimeTicks);
-
   return (
     <div className={`emby-media-row ${isSelected ? 'selected' : ''} ${isQueued ? 'queued' : ''}`}>
       <div className="emby-item-left">
@@ -99,10 +99,11 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
         {audios.length > 0 && (
           <select
             className="emby-audio-select"
-            value={selectedAudioIndex ?? audios[0].index}
+            value={currentAudioIndex}
             onChange={(e) => onAudioTrackChange(item.id, Number(e.target.value))}
             disabled={isQueued}
             title={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
+            aria-label={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
           >
             {audios.map((stream) => (
               <option key={stream.index} value={stream.index}>

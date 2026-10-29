@@ -58,26 +58,24 @@ export function ToolsSidebar(): React.JSX.Element {
   const [embyServerName, setEmbyServerName] = useState<string | null>(null);
   useEffect(() => {
     let unmounted = false;
-    if (activeTool) {
-      void getEmbyConfig().then((cfg) => {
-        if (unmounted) return;
-        if (cfg?.serverUrl && cfg.apiKey) {
-          void testEmbyConnection(cfg)
-            .then((info) => {
-              if (!unmounted) setEmbyServerName(info.serverName);
-            })
-            .catch(() => {
-              if (!unmounted) setEmbyServerName(null);
-            });
-        } else {
-          if (!unmounted) setEmbyServerName(null);
-        }
-      });
-    }
+    void getEmbyConfig().then((cfg) => {
+      if (unmounted) return;
+      if (cfg?.serverUrl && cfg.apiKey) {
+        void testEmbyConnection(cfg)
+          .then((info) => {
+            if (!unmounted) setEmbyServerName(info.serverName);
+          })
+          .catch(() => {
+            if (!unmounted) setEmbyServerName(null);
+          });
+      } else {
+        if (!unmounted) setEmbyServerName(null);
+      }
+    });
     return () => {
       unmounted = true;
     };
-  }, [activeTool]);
+  }, []);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',

@@ -844,7 +844,7 @@ type ManualTauriCommandContractMap = {
     result: EmbyItemListResult;
   };
   [TauriCommand.emby.downloadAudio]: {
-    args: { itemId: string; streamIndex?: number; tempDir?: string };
+    args: { itemId: string; streamIndex?: number };
     result: string;
   };
   [TauriCommand.emby.uploadSubtitle]: {

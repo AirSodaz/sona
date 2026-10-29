@@ -27,6 +27,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('简体')).toBe('zh-CN');
       expect(normalizeLanguageCode('zh_CN')).toBe('zh-CN');
       expect(normalizeLanguageCode('zh_cn')).toBe('zh-CN');
+      expect(normalizeLanguageCode('zh-chs')).toBe('zh-CN');
     });
 
     it('normalizes Traditional Chinese variants to zh-TW', () => {
@@ -38,6 +39,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh_tw')).toBe('zh-TW');
       expect(normalizeLanguageCode('zh-hk')).toBe('zh-TW');
       expect(normalizeLanguageCode('zh_HK')).toBe('zh-TW');
+      expect(normalizeLanguageCode('zh-cht')).toBe('zh-TW');
     });
 
     it('normalizes other common language codes', () => {
@@ -51,6 +53,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('en_US')).toBe('en');
       expect(normalizeLanguageCode('ja-JP')).toBe('ja');
       expect(normalizeLanguageCode('ko-KR')).toBe('ko');
+      expect(normalizeLanguageCode('zh-yue')).toBe('yue');
     });
   });
 
@@ -73,6 +76,21 @@ describe('embyLanguageUtils', () => {
       expect(matchSubtitleLanguage('zh-tw', undefined, 'zh-CN')).toBe(false);
     });
 
+    it('supports bilingual Chinese subtitles in zh-CN matching', () => {
+      expect(matchSubtitleLanguage('und', '简繁双语', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('und', 'CHS & CHT', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('und', 'CHS/CHT', 'zh-CN')).toBe(true);
+    });
+
+    it('does not falsely match word substrings like yacht or Nacht as Traditional Chinese', () => {
+      expect(matchSubtitleLanguage('und', 'The Yacht Race', 'zh-TW')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'Eine kleine Nachtmusik', 'zh-TW')).toBe(false);
+    });
+
+    it('prevents Japanese stream with Kanji title from matching as Chinese', () => {
+      expect(matchSubtitleLanguage('ja', '日本語（作中用語解説）', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('jpn', '劇中歌', 'zh-CN')).toBe(false);
+    });
     it('matches Japanese and Korean by code or title', () => {
       expect(matchSubtitleLanguage('jpn', undefined, 'ja')).toBe(true);
       expect(matchSubtitleLanguage('und', 'Japanese [CC]', 'ja')).toBe(true);

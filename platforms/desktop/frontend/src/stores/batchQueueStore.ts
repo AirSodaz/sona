@@ -746,9 +746,20 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     }
   },
   updateItemFilePath: (id, filePath) => {
-    set((state) => ({
-      queueItems: state.queueItems.map((item) => (item.id === id ? { ...item, filePath } : item)),
-    }));
+    let nextQueueItems: BatchQueueItem[] = [];
+    set((state) => {
+      nextQueueItems = state.queueItems.map((item) =>
+        item.id === id ? { ...item, filePath } : item
+      );
+      return {
+        queueItems: nextQueueItems,
+      };
+    });
+    scheduleRecoverySnapshotSync(nextQueueItems);
+    const updatedItem = nextQueueItems.find((item) => item.id === id);
+    if (updatedItem) {
+      patchQueueItemTask(updatedItem, { filePath });
+    }
   },
 
   setItemError: (id, message) => {
