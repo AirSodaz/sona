@@ -54,10 +54,10 @@ export function EmbyPluginGuideModal({
             type="button"
             onClick={async () => {
               try {
-                await openUrl('https://github.com/dianbaer/Emby.SubtitleManager/releases');
+                await openUrl('https://github.com/Kectai/Emby.SubtitleManager/releases');
               } catch {
                 window.open(
-                  'https://github.com/dianbaer/Emby.SubtitleManager/releases',
+                  'https://github.com/Kectai/Emby.SubtitleManager/releases',
                   '_blank',
                   'noopener,noreferrer'
                 );
