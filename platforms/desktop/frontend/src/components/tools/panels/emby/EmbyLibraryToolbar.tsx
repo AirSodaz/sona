@@ -1,8 +1,17 @@
 import { Check, Film, Search, Tv } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Dropdown, type DropdownOption } from '../../../../components/Dropdown';
 import type { EmbyLibrary, EmbyMediaItem } from '../../../../types/emby';
 import { hasTargetSubtitle } from './embyLanguageUtils';
+
+const supportedLanguageOptions: DropdownOption[] = [
+  { value: 'zh-CN', label: '简体中文 (zh-CN)' },
+  { value: 'zh-TW', label: '繁體中文 (zh-TW)' },
+  { value: 'en', label: 'English (en)' },
+  { value: 'ja', label: '日本語 (ja)' },
+  { value: 'ko', label: '한국어 (ko)' },
+];
 
 export interface EmbyLibraryToolbarProps {
   libraries: EmbyLibrary[];
@@ -65,69 +74,67 @@ export function EmbyLibraryToolbar({
 
       {/* 2. Controls: Search, Target Lang, Filter Missing, Movie Bulk Action */}
       <div className="emby-library-controls">
-        <div className="emby-search-box">
-          <Search size={14} className="emby-search-icon" aria-hidden="true" />
-          <input
-            type="text"
-            className="emby-search-input"
-            aria-label={t('emby.search_placeholder', {
-              defaultValue: 'Search movies and TV shows...',
-            })}
-            placeholder={t('emby.search_placeholder', {
-              defaultValue: 'Search movies and TV shows...',
-            })}
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-          />
-        </div>
-
-        <div className="emby-toolbar-select-group">
-          <span className="emby-toolbar-label">
-            {t('emby.target_lang', { defaultValue: 'Target Language:' })}
-          </span>
-          <select
-            className="emby-select"
-            aria-label={t('emby.target_lang', { defaultValue: 'Target Language:' })}
-            value={targetLanguage}
-            onChange={(e) => onTargetLanguageChange(e.target.value)}
-          >
-            <option value="zh-CN">简体中文 (zh-CN)</option>
-            <option value="zh-TW">繁體中文 (zh-TW)</option>
-            <option value="en">English (en)</option>
-            <option value="ja">日本語 (ja)</option>
-            <option value="ko">한국어 (ko)</option>
-          </select>
-        </div>
-
-        <label className="emby-toolbar-checkbox">
-          <input
-            type="checkbox"
-            checked={onlyMissingTargetSubtitles}
-            onChange={(e) => onOnlyMissingTargetSubtitlesChange(e.target.checked)}
-          />
-          <span>
-            {t('emby.only_missing_target', {
-              defaultValue: 'Only show items missing {{lang}} subtitles',
-              lang: targetLanguage,
-            })}
-          </span>
-        </label>
-
-        {isMovieLib &&
-          standaloneMovies.length > 0 &&
-          standaloneMovies.some((m) => !hasTargetSubtitle(m.mediaStreams, targetLanguage)) &&
-          onSelectAllMissingMovies && (
-            <button
-              type="button"
-              className="btn btn-sm btn-secondary emby-bulk-movie-btn"
-              onClick={() => onSelectAllMissingMovies(standaloneMovies)}
-            >
-              <Check size={14} style={{ marginRight: 4 }} />
-              {t('emby.select_all_missing_movies', {
-                defaultValue: 'Select All Missing Movies in Library',
+        <div className="emby-controls-row">
+          <div className="emby-search-box">
+            <Search size={14} className="emby-search-icon" aria-hidden="true" />
+            <input
+              type="text"
+              className="emby-search-input"
+              aria-label={t('emby.search_placeholder', {
+                defaultValue: 'Search movies and TV shows...',
               })}
-            </button>
-          )}
+              placeholder={t('emby.search_placeholder', {
+                defaultValue: 'Search movies and TV shows...',
+              })}
+              value={searchTerm}
+              onChange={(e) => onSearchChange(e.target.value)}
+            />
+          </div>
+
+          <div className="emby-toolbar-select-group">
+            <span className="emby-toolbar-label">
+              {t('emby.target_lang', { defaultValue: 'Target Language:' })}
+            </span>
+            <Dropdown
+              className="emby-dropdown"
+              options={supportedLanguageOptions}
+              value={targetLanguage}
+              onChange={onTargetLanguageChange}
+              aria-label={t('emby.target_lang', { defaultValue: 'Target Language:' })}
+            />
+          </div>
+        </div>
+
+        <div className="emby-controls-subrow">
+          <label className="emby-toolbar-checkbox">
+            <input
+              type="checkbox"
+              checked={onlyMissingTargetSubtitles}
+              onChange={(e) => onOnlyMissingTargetSubtitlesChange(e.target.checked)}
+            />
+            <span>
+              {t('emby.only_missing_target', {
+                defaultValue: 'Only show items missing subtitles',
+              })}
+            </span>
+          </label>
+
+          {isMovieLib &&
+            standaloneMovies.length > 0 &&
+            standaloneMovies.some((m) => !hasTargetSubtitle(m.mediaStreams, targetLanguage)) &&
+            onSelectAllMissingMovies && (
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary emby-bulk-movie-btn"
+                onClick={() => onSelectAllMissingMovies(standaloneMovies)}
+              >
+                <Check size={14} style={{ marginRight: 4 }} />
+                {t('emby.select_all_missing_movies', {
+                  defaultValue: 'Select All Missing Movies in Library',
+                })}
+              </button>
+            )}
+        </div>
       </div>
     </div>
   );

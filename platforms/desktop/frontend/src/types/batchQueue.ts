@@ -55,6 +55,8 @@ export interface BatchQueueItem {
   segments: TranscriptSegment[];
   /** Error message if status is 'error'. */
   errorMessage?: string;
+  /** Specific stage where an error occurred, used for targeted retries. */
+  errorStage?: 'transcribe' | 'upload';
   /** Managed asset URL for audio playback, or null until a history copy is available. */
   audioUrl?: string | null;
   /** ID of the saved history item for this queue item. */

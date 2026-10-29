@@ -81,10 +81,10 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
         <ToolHeroHeader
           id="emby-hero-header"
           icon={<Tv size={20} />}
-          title={t('emby.title', { defaultValue: 'Emby Subtitle Sync' })}
+          title={t('emby.title', { defaultValue: 'Emby Subtitle Assistant' })}
           description={t('emby.subtitle', {
             defaultValue:
-              'Pull audio streams, transcribe offline, and sync subtitles back to Emby media libraries',
+              'Detect missing subtitles in Emby media libraries, transcribe audio offline, and auto-complete subtitles',
           })}
           statusText={statusText}
           statusTone={statusTone}

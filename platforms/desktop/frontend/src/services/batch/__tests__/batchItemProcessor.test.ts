@@ -442,6 +442,110 @@ describe('BatchItemProcessor', () => {
     await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
       'Network error on upload'
     );
+    expect(item.errorStage).toBe('upload');
+    expect(item.segments.length).toBeGreaterThan(0);
+  });
+
+  it('fast-paths upload retry without invoking audio download or transcription', async () => {
+    const existingSegments = [
+      { id: 'seg-1', start: 0, end: 2, text: 'Hello from previous transcription', isFinal: true },
+    ];
+    const item: BatchQueueItem = {
+      id: 'batch-emby-fastpath',
+      filename: 'Emby Movie Fastpath',
+      filePath: '/tmp/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: existingSegments,
+      projectId: null,
+      errorStage: 'upload',
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-fastpath',
+        itemName: 'Emby Movie Fastpath',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockClear();
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockClear();
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(downloadEmbyAudio).not.toHaveBeenCalled();
+    expect(mockPorts.transcriptionService.transcribeFile).not.toHaveBeenCalled();
+    expect(syncEmbySubtitles).toHaveBeenCalledWith(
+      existingSegments,
+      expect.objectContaining({ itemId: 'movie-fastpath', targetLanguage: 'zh-CN' }),
+      expect.anything()
+    );
+    expect(item.errorStage).toBeUndefined();
+  });
+
+  it('executes downloadEmbyAudio before transcription and uses downloadedPath as inputSource', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-precedence',
+      filename: 'Emby Movie Precedence',
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/movie-prec/stream',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-prec',
+        itemName: 'Emby Movie Precedence',
+        audioStreamIndex: 2,
+        subtitleMode: 'pure_translation',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockClear();
+    vi.mocked(downloadEmbyAudio).mockResolvedValueOnce('/tmp/downloaded-track.mp3');
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockClear();
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-prec', 2);
+    expect(item.filePath).toBe('/tmp/downloaded-track.mp3');
+    expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
+    expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
+      '/tmp/downloaded-track.mp3'
+    );
   });
 
   it('correctly maps existingExternalSubtitleIndex to target language in separate_tracks mode', async () => {

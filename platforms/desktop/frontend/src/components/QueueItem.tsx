@@ -1,5 +1,5 @@
 import type { TFunction } from 'i18next';
-import { Globe } from 'lucide-react';
+import { Globe, Tv } from 'lucide-react';
 import { memo, useState } from 'react';
 import { cancelBatchTask } from '../services/tauri/recognizer';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
@@ -95,17 +95,22 @@ export const QueueItem = memo(function QueueItem({
   t,
 }: QueueItemProps): React.JSX.Element {
   const [isFinishing, setIsFinishing] = useState(false);
+  const isEmbyUploadError =
+    item.status === 'error' && Boolean(item.embyContext && item.errorStage === 'upload');
   const isTranscodeError = item.status === 'error' && isTranscodeOrFormatFailure(item);
   const rawErrorMessage = item.errorMessage || t('batch.file_failed');
-  const displayErrorMessage =
-    isTranscodeError &&
-    (rawErrorMessage.startsWith('Failed to decode audio file') ||
-      rawErrorMessage.startsWith('Failed to extract audio slice'))
+  const displayErrorMessage = isEmbyUploadError
+    ? t('batch.emby_upload_failed', { defaultValue: 'Subtitle upload to Emby failed' })
+    : isTranscodeError &&
+        (rawErrorMessage.startsWith('Failed to decode audio file') ||
+          rawErrorMessage.startsWith('Failed to extract audio slice'))
       ? t('batch.transcode_failed', { defaultValue: 'Transcode failed' })
       : rawErrorMessage;
-  const retryLabel = t('batch.retry', {
-    defaultValue: t('common.retry', { defaultValue: 'Retry' }),
-  });
+  const retryLabel = isEmbyUploadError
+    ? t('batch.retry_upload_only', { defaultValue: 'Retry Subtitle Upload' })
+    : t('batch.retry', {
+        defaultValue: t('common.retry', { defaultValue: 'Retry' }),
+      });
 
   const handleClick = () => {
     onActivate(item.id);
@@ -163,11 +168,25 @@ export const QueueItem = memo(function QueueItem({
           <div className="queue-item-filename" title={item.filename}>
             {item.filename}
           </div>
-          {item.status === 'processing' && (
-            <span className="queue-item-progress-pct" aria-hidden="true">
-              {Math.round(item.progress)}%
-            </span>
-          )}
+          {item.status === 'processing' &&
+            (item.embyContext && !item.filePath ? (
+              <span
+                className="queue-item-emby-pulling"
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  color: 'var(--color-primary, #3b82f6)',
+                }}
+              >
+                {t('emby.pulling_audio', { defaultValue: 'Fetching audio track...' })}
+              </span>
+            ) : (
+              <span className="queue-item-progress-pct" aria-hidden="true">
+                {Math.round(item.progress)}%
+              </span>
+            ))}
         </div>
 
         {item.status === 'processing' && (
@@ -184,6 +203,27 @@ export const QueueItem = memo(function QueueItem({
         )}
 
         <div className="queue-item-meta">
+          {item.embyContext && (
+            <span
+              className="queue-item-emby-badge"
+              title={item.embyContext.itemName}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                fontSize: '11px',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                color: 'var(--color-success, #22c55e)',
+                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                padding: '1px 6px',
+                borderRadius: '4px',
+              }}
+            >
+              <Tv size={11} strokeWidth={2} />
+              <span>Emby</span>
+            </span>
+          )}
           {item.sourceType === 'url_stream' && (
             <span
               className="queue-item-stream-badge"
@@ -248,7 +288,7 @@ export const QueueItem = memo(function QueueItem({
       </div>
 
       <div className="queue-item-actions">
-        {item.sourceType === 'url_stream' && item.status === 'processing' && (
+        {item.sourceType === 'url_stream' && !item.embyContext && item.status === 'processing' && (
           <button
             type="button"
             className="btn btn-icon queue-item-finish-save"

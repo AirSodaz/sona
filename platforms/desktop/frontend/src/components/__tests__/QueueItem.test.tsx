@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { TFunction } from 'i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReactI18nextMock } from '../../__tests__/testUtils/i18n';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -236,5 +237,123 @@ describe('QueueItem', () => {
     expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
     expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
+  });
+
+  it('renders both Emby and Network Stream badges for Emby item', () => {
+    const item = createItem({
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/123/stream',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('Emby')).toBeDefined();
+    expect(screen.getByText('batch.stream_badge')).toBeDefined();
+  });
+
+  it('suppresses finish and save button for Emby items during processing', () => {
+    const item = createItem({
+      status: 'processing',
+      sourceType: 'url_stream',
+      activeInstanceId: 'inst-1',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    const { container } = render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(container.querySelector('.queue-item-finish-save')).toBeNull();
+  });
+
+  it('renders pulling audio indicator when Emby item is processing without filePath', () => {
+    const item = createItem({
+      status: 'processing',
+      filePath: '',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('emby.pulling_audio')).toBeDefined();
+  });
+
+  it('renders upload failed error and retry upload tooltip when errorStage is upload', () => {
+    const item = createItem({
+      status: 'error',
+      errorStage: 'upload',
+      errorMessage: 'Network timeout during Emby upload',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('batch.emby_upload_failed')).toBeDefined();
+    const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
+    expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry_upload_only');
   });
 });

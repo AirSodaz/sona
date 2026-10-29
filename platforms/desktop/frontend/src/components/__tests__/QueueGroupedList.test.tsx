@@ -145,4 +145,117 @@ describe('QueueGroupedList', () => {
     fireEvent.click(retryAllBtn);
     expect(retryAllSpy).toHaveBeenCalled();
   });
+
+  it('partitions Emby items into dedicated Emby Subtitle Tasks group sorted by status priority', () => {
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'standard-pending',
+          filename: 'standard.mp3',
+          filePath: '/path/standard.mp3',
+          status: 'pending',
+          progress: 0,
+          segments: [],
+          projectId: null,
+        },
+        {
+          id: 'emby-complete',
+          filename: 'Emby Ep 4 Complete',
+          filePath: '/path/emby4.mp3',
+          status: 'complete',
+          progress: 100,
+          segments: [],
+          projectId: null,
+          embyContext: {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'item-4',
+            itemName: 'Emby Ep 4 Complete',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        },
+        {
+          id: 'emby-processing',
+          filename: 'Emby Ep 1 Processing',
+          filePath: '',
+          status: 'processing',
+          progress: 25,
+          segments: [],
+          projectId: null,
+          embyContext: {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'item-1',
+            itemName: 'Emby Ep 1 Processing',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        },
+        {
+          id: 'emby-error',
+          filename: 'Emby Ep 3 Error',
+          filePath: '/path/emby3.mp3',
+          status: 'error',
+          progress: 95,
+          segments: [],
+          projectId: null,
+          errorStage: 'upload',
+          embyContext: {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'item-3',
+            itemName: 'Emby Ep 3 Error',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        },
+        {
+          id: 'emby-pending',
+          filename: 'Emby Ep 2 Pending',
+          filePath: '',
+          status: 'pending',
+          progress: 0,
+          segments: [],
+          projectId: null,
+          embyContext: {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'item-2',
+            itemName: 'Emby Ep 2 Pending',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        },
+      ],
+    });
+
+    render(<QueueGroupedList />);
+
+    // Emby group header is rendered
+    expect(screen.getByText('batch.group_emby_tasks')).toBeDefined();
+    // Standard pending group is rendered for standard item
+    expect(screen.getByText('batch.group_pending')).toBeDefined();
+
+    // Verify all Emby items are present
+    expect(screen.getByText('Emby Ep 1 Processing')).toBeDefined();
+    expect(screen.getByText('Emby Ep 2 Pending')).toBeDefined();
+    expect(screen.getByText('Emby Ep 3 Error')).toBeDefined();
+    expect(screen.getByText('Emby Ep 4 Complete')).toBeDefined();
+
+    // Verify order in DOM within the Emby group
+    const embyGroup = screen.getByRole('group', { name: /batch\.group_emby_tasks/ });
+    const itemElements = embyGroup.querySelectorAll('.queue-item-filename');
+    const names = Array.from(itemElements).map((el) => el.textContent?.trim());
+    expect(names).toEqual([
+      'Emby Ep 1 Processing',
+      'Emby Ep 2 Pending',
+      'Emby Ep 3 Error',
+      'Emby Ep 4 Complete',
+    ]);
+  });
 });

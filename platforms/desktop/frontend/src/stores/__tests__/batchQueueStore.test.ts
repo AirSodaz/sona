@@ -873,4 +873,115 @@ describe('batchQueueStore', () => {
       expect(items[0].retainAudio).toBe(false);
     });
   });
+
+  describe('emby queue and errorStage support', () => {
+    it('addEmbyItems sets sourceType url_stream and streamUrl', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://192.168.1.10:8096',
+            itemId: 'video-999',
+            itemName: 'Episode 1',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].sourceType).toBe('url_stream');
+      expect(items[0].streamUrl).toBe('http://192.168.1.10:8096/Videos/video-999/stream');
+      expect(items[0].filename).toBe('Episode 1');
+      expect(items[0].embyContext?.itemId).toBe('video-999');
+    });
+
+    it('setItemError sets errorMessage and errorStage', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-1',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'processing',
+            progress: 50,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().setItemError('item-1', 'Upload failed', 'upload');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('error');
+      expect(item.errorMessage).toBe('Upload failed');
+      expect(item.errorStage).toBe('upload');
+    });
+
+    it('retryItem preserves errorStage when moving item back to pending', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'error',
+            progress: 95,
+            segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hi', isFinal: true }],
+            projectId: null,
+            errorStage: 'upload',
+            errorMessage: 'Emby error',
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().retryItem('item-failed');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('pending');
+      expect(item.errorMessage).toBeUndefined();
+      expect(item.errorStage).toBe('upload');
+      expect(item.segments).toHaveLength(1);
+    });
+
+    it('retryAllFailed preserves errorStage on all failed items', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed-upload',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'error',
+            progress: 95,
+            segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hi', isFinal: true }],
+            projectId: null,
+            errorStage: 'upload',
+          },
+          {
+            id: 'item-failed-transcribe',
+            filename: 'Ep 2',
+            filePath: '/tmp/test2.mp3',
+            status: 'error',
+            progress: 10,
+            segments: [],
+            projectId: null,
+            errorStage: 'transcribe',
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().retryAllFailed();
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items[0].status).toBe('pending');
+      expect(items[0].errorStage).toBe('upload');
+      expect(items[1].status).toBe('pending');
+      expect(items[1].errorStage).toBe('transcribe');
+    });
+  });
 });

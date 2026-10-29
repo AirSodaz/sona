@@ -1,3 +1,4 @@
+import { Tv } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -5,6 +6,14 @@ import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { RestoreIcon } from './Icons';
 import { QueueGroup } from './QueueGroup';
 import { QueueItemContainer } from './QueueItem';
+
+const STATUS_PRIORITY: Record<string, number> = {
+  processing: 0,
+  pending: 1,
+  error: 2,
+  cancelled: 3,
+  complete: 4,
+};
 
 export interface QueueGroupedListProps {
   className?: string;
@@ -22,21 +31,37 @@ export function QueueGroupedList({
 }: QueueGroupedListProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
+  const embyIds = useBatchQueueStore(
+    useShallow((state) =>
+      state.queueItems
+        .filter((i) => Boolean(i.embyContext))
+        .sort((a, b) => {
+          const priorityA = STATUS_PRIORITY[a.status] ?? 99;
+          const priorityB = STATUS_PRIORITY[b.status] ?? 99;
+          return priorityA - priorityB;
+        })
+        .map((i) => i.id)
+    )
+  );
   const processingIds = useBatchQueueStore(
     useShallow((state) =>
-      state.queueItems.filter((i) => i.status === 'processing').map((i) => i.id)
+      state.queueItems.filter((i) => !i.embyContext && i.status === 'processing').map((i) => i.id)
     )
   );
   const pendingIds = useBatchQueueStore(
-    useShallow((state) => state.queueItems.filter((i) => i.status === 'pending').map((i) => i.id))
+    useShallow((state) =>
+      state.queueItems.filter((i) => !i.embyContext && i.status === 'pending').map((i) => i.id)
+    )
   );
   const completeIds = useBatchQueueStore(
-    useShallow((state) => state.queueItems.filter((i) => i.status === 'complete').map((i) => i.id))
+    useShallow((state) =>
+      state.queueItems.filter((i) => !i.embyContext && i.status === 'complete').map((i) => i.id)
+    )
   );
   const failedIds = useBatchQueueStore(
     useShallow((state) =>
       state.queueItems
-        .filter((i) => i.status === 'error' || i.status === 'cancelled')
+        .filter((i) => !i.embyContext && (i.status === 'error' || i.status === 'cancelled'))
         .map((i) => i.id)
     )
   );
@@ -52,6 +77,21 @@ export function QueueGroupedList({
       role="list"
       aria-label={t('batch.queue_title', { count: totalCount })}
     >
+      {/* 0. Dedicated Emby Subtitle Tasks group */}
+      {embyIds.length > 0 && (
+        <QueueGroup
+          title={t('batch.group_emby_tasks', { defaultValue: 'Emby Subtitle Tasks' })}
+          count={embyIds.length}
+          statusVariant="emby"
+          icon={<Tv size={14} />}
+          defaultExpanded={true}
+        >
+          {embyIds.map((id) => (
+            <QueueItemContainer key={id} id={id} t={t} />
+          ))}
+        </QueueGroup>
+      )}
+
       {/* 1. Processing group */}
       {processingIds.length > 0 && (
         <QueueGroup

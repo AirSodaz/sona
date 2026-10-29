@@ -1,6 +1,7 @@
 import { Check, Download } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Dropdown, type DropdownOption } from '../../../../components/Dropdown';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
 
 export interface EmbySubmitBarProps {
@@ -28,6 +29,22 @@ export function EmbySubmitBar({
 }: EmbySubmitBarProps): React.JSX.Element {
   const { t } = useTranslation();
 
+  const subtitleModeOptions: DropdownOption[] = [
+    {
+      value: 'bilingual',
+      label: t('emby.mode_bilingual', { defaultValue: 'Bilingual Subtitles' }),
+    },
+    {
+      value: 'pure_translation',
+      label: t('emby.mode_pure', { defaultValue: 'Translation Only' }),
+    },
+    {
+      value: 'separate_tracks',
+      label: t('emby.mode_separate', {
+        defaultValue: 'Separate Original & Translation Tracks',
+      }),
+    },
+  ];
   return (
     <div className="emby-submit-bar-wrapper">
       {submittedNotice && (
@@ -43,25 +60,14 @@ export function EmbySubmitBar({
             <span className="emby-submit-label">
               {t('emby.subtitle_mode', { defaultValue: 'Subtitle Mode:' })}
             </span>
-            <select
-              className="emby-select"
-              aria-label={t('emby.subtitle_mode', { defaultValue: 'Subtitle Mode:' })}
+            <Dropdown
+              className="emby-dropdown"
+              options={subtitleModeOptions}
               value={subtitleMode}
               disabled={isSubmitting}
-              onChange={(e) => onSubtitleModeChange(e.target.value as EmbySubtitleMode)}
-            >
-              <option value="bilingual">
-                {t('emby.mode_bilingual', { defaultValue: 'Bilingual Subtitles' })}
-              </option>
-              <option value="pure_translation">
-                {t('emby.mode_pure', { defaultValue: 'Translation Only' })}
-              </option>
-              <option value="separate_tracks">
-                {t('emby.mode_separate', {
-                  defaultValue: 'Separate Original & Translation Tracks',
-                })}
-              </option>
-            </select>
+              onChange={(val) => onSubtitleModeChange(val as EmbySubtitleMode)}
+              aria-label={t('emby.subtitle_mode', { defaultValue: 'Subtitle Mode:' })}
+            />
           </div>
 
           <label className="emby-submit-checkbox">

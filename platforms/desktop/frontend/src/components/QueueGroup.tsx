@@ -4,9 +4,10 @@ import { ChevronDownIcon, ChevronRightIcon } from './Icons';
 export interface QueueGroupProps {
   title: string;
   count: number;
-  statusVariant?: 'processing' | 'pending' | 'complete' | 'failed';
+  statusVariant?: 'processing' | 'pending' | 'complete' | 'failed' | 'emby';
   defaultExpanded?: boolean;
   action?: React.ReactNode;
+  icon?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -19,6 +20,7 @@ export function QueueGroup({
   statusVariant = 'pending',
   defaultExpanded = true,
   action,
+  icon,
   children,
 }: QueueGroupProps): React.JSX.Element | null {
   const [isExpanded, setIsExpanded] = useState(defaultExpanded);
@@ -51,6 +53,15 @@ export function QueueGroup({
               <ChevronRightIcon width={12} height={12} />
             )}
           </span>
+          {icon && (
+            <span
+              className="queue-group-icon"
+              aria-hidden="true"
+              style={{ display: 'inline-flex', alignItems: 'center' }}
+            >
+              {icon}
+            </span>
+          )}
           <span className="queue-group-title">{title}</span>
           <span className="queue-group-badge">{count}</span>
         </button>

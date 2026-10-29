@@ -259,9 +259,9 @@ describe('ToolEmbySyncPanel', () => {
     expect(screen.queryByText('Has Subtitles')).toBeNull();
 
     // Change target language to Japanese (ja)
-    const targetLangSelect = screen.getByDisplayValue('简体中文 (zh-CN)');
-    fireEvent.change(targetLangSelect, { target: { value: 'ja' } });
-
+    const targetLangBtn = screen.getByRole('button', { name: /Target Language:/i });
+    fireEvent.click(targetLangBtn);
+    fireEvent.click(screen.getByRole('option', { name: /日本語/i }));
     // Now it matches the Japanese subtitle!
     expect(screen.getByText('Has Subtitles')).toBeDefined();
     expect(screen.queryByText('Missing Subtitles')).toBeNull();

@@ -208,7 +208,7 @@ interface BatchQueueState {
    * @param id Item ID.
    * @param message Error message.
    */
-  setItemError: (id: string, message: string) => void;
+  setItemError: (id: string, message: string, errorStage?: 'transcribe' | 'upload') => void;
   /** Sets an item's target project and refreshes its pipeline snapshot. */
   setItemProjectId: (id: string, projectId: string | null) => void;
   /**
@@ -289,6 +289,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           status: 'pending' as BatchQueueItemStatus,
           progress: 0,
           errorMessage: undefined,
+          errorStage: item.errorStage,
         };
       });
       return { queueItems: nextQueueItems };
@@ -315,6 +316,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             status: 'pending' as BatchQueueItemStatus,
             progress: 0,
             errorMessage: undefined,
+            errorStage: item.errorStage,
           };
         }
         return item;
@@ -459,6 +461,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       id: uuidv4(),
       filename: opt.itemName,
       filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: `${opt.serverUrl}/Videos/${opt.itemId}/stream`,
       status: 'pending',
       progress: 0,
       segments: [],
@@ -554,8 +558,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       updateItemSegments: (id, segments) => {
         get().updateItemSegments(id, segments);
       },
-      setItemError: (id, message) => {
-        get().setItemError(id, message);
+      setItemError: (id, message, errorStage) => {
+        get().setItemError(id, message, errorStage);
       },
       applySavedHistory: async (id, item, historyItem) => {
         const savedMeta = await resolveSavedBatchHistoryMeta({
@@ -713,6 +717,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           status,
           progress: progress !== undefined ? progress : item.progress,
           lastKnownStage: lastKnownStage ?? item.lastKnownStage,
+          ...(status === 'complete' ? { errorMessage: undefined, errorStage: undefined } : {}),
         };
       });
 
@@ -762,11 +767,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     }
   },
 
-  setItemError: (id, message) => {
+  setItemError: (id, message, errorStage) => {
     let nextQueueItems: BatchQueueItem[] = [];
     set((state) => {
       nextQueueItems = state.queueItems.map((item) =>
-        item.id === id ? { ...item, status: 'error', errorMessage: message } : item
+        item.id === id
+          ? {
+              ...item,
+              status: 'error',
+              errorMessage: message,
+              errorStage,
+            }
+          : item
       );
       return {
         queueItems: nextQueueItems,

@@ -44,6 +44,7 @@
   min-height: 0;
   overflow: visible;
   position: relative;
+  gap: 16px;
 }
 
 /* Disconnected Empty State Card */
@@ -58,7 +59,7 @@
   padding: 40px 32px;
   background: var(--color-bg-elevated);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-md, 8px);
   box-shadow: var(--shadow-sm);
   gap: 16px;
 }
@@ -93,9 +94,11 @@
 .emby-library-toolbar {
   display: flex;
   flex-direction: column;
-  padding: 12px 20px;
+  padding: 14px 18px;
   background: var(--color-bg-elevated);
-  border-bottom: 1px solid var(--color-border);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
   gap: 12px;
   flex-shrink: 0;
 }
@@ -141,7 +144,20 @@
 
 .emby-library-controls {
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.emby-controls-row {
+  display: flex;
   align-items: center;
+  gap: 12px;
+}
+
+.emby-controls-subrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
 }
@@ -152,7 +168,6 @@
   align-items: center;
   flex: 1;
   min-width: 180px;
-  max-width: 280px;
 }
 
 .emby-search-icon {
@@ -160,12 +175,14 @@
   left: 10px;
   color: var(--color-text-tertiary);
   pointer-events: none;
+  z-index: 1;
 }
 
-.emby-search-input {
+.emby-search-box input[type="text"].emby-search-input,
+.emby-search-box input.emby-search-input {
   width: 100%;
-  padding: 6px 10px 6px 30px;
-  border-radius: var(--radius-sm);
+  padding: 6px 12px 6px 32px;
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border);
   background: var(--color-bg-primary);
   color: var(--color-text-primary);
@@ -174,7 +191,8 @@
   transition: border-color var(--transition-fast);
 }
 
-.emby-search-input:focus {
+.emby-search-box input[type="text"].emby-search-input:focus,
+.emby-search-box input.emby-search-input:focus {
   border-color: var(--color-accent-primary, #2f2f2f);
 }
 
@@ -184,21 +202,26 @@
   gap: 6px;
   font-size: 12px;
   color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-.emby-select {
-  padding: 5px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+.emby-toolbar-label,
+.emby-submit-label {
+  white-space: nowrap;
+  flex-shrink: 0;
   font-size: 12px;
-  outline: none;
-  cursor: pointer;
+  color: var(--color-text-secondary);
 }
 
-.emby-select:focus {
-  border-color: var(--color-accent-primary, #2f2f2f);
+/* Custom Dropdowns */
+.emby-dropdown {
+  min-width: 160px;
+}
+
+.emby-dropdown .dropdown-trigger,
+.emby-audio-dropdown .dropdown-trigger {
+  border-radius: var(--radius-md, 8px);
 }
 
 .emby-toolbar-checkbox {
@@ -209,6 +232,8 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .emby-bulk-movie-btn {
@@ -218,11 +243,10 @@
 /* Media List Container */
 .emby-media-list-container {
   flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px 80px 20px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: 0 0 16px 0;
 }
 
 .emby-loading-state,
@@ -268,6 +292,7 @@
   cursor: pointer;
   user-select: none;
   gap: 12px;
+  border-radius: var(--radius-md, 8px);
   border-bottom: 1px solid transparent;
   transition: background-color var(--transition-fast);
 }
@@ -337,7 +362,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-md, 8px);
   border: 1px solid var(--color-border);
   background: var(--color-bg-elevated);
   transition: all var(--transition-fast);
@@ -469,20 +494,10 @@
   background: var(--color-warning);
 }
 
-.emby-audio-select {
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  border: 1px solid var(--color-border);
-  background: var(--color-bg-primary);
-  color: var(--color-text-primary);
+.emby-audio-dropdown {
+  min-width: 140px;
+  max-width: 220px;
   font-size: 12px;
-  max-width: 170px;
-  outline: none;
-}
-
-.emby-audio-select:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 /* Bottom Sticky Action Bar */
@@ -515,8 +530,9 @@
   justify-content: space-between;
   padding: 12px 20px;
   background: var(--color-bg-elevated);
-  border-top: 1px solid var(--color-border);
-  box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.05);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -544,6 +560,8 @@
   color: var(--color-text-secondary);
   cursor: pointer;
   user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .emby-submit-action {

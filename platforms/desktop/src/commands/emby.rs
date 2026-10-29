@@ -21,7 +21,7 @@ fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> St
         result.push_str(&remaining[..pos + 8]);
         let after_key = &remaining[pos + 8..];
         let end_pos = after_key
-            .find(|c: char| c == '&' || c == ' ' || c == '"' || c == '\'' || c == '\n' || c == '\r')
+            .find(['&', ' ', '"', '\'', '\n', '\r'])
             .unwrap_or(after_key.len());
         result.push_str("[REDACTED]");
         remaining = &after_key[end_pos..];
@@ -51,6 +51,20 @@ pub async fn emby_save_config(
         return Err("Server URL and API key cannot be empty".to_string());
     }
 
+    let mut config = config;
+    if config
+        .admin_user_id
+        .as_deref()
+        .map(str::trim)
+        .unwrap_or("")
+        .is_empty()
+    {
+        config.admin_user_id = None;
+        if let Ok(temp_client) = EmbyClient::new(config.clone()) {
+            config.admin_user_id = temp_client.discover_admin_user_id().await;
+        }
+    }
+
     let client = EmbyClient::new(config.clone())
         .map_err(|e| sanitize_emby_error(e, Some(&config.api_key)))?;
     let mut current_config = services
@@ -72,8 +86,15 @@ pub async fn emby_save_config(
             "embyAllowInvalidCerts".to_string(),
             serde_json::Value::Bool(config.allow_invalid_certs),
         );
+        if let Some(ref admin_id) = config.admin_user_id {
+            obj.insert(
+                "embyAdminUserId".to_string(),
+                serde_json::Value::String(admin_id.clone()),
+            );
+        } else {
+            obj.remove("embyAdminUserId");
+        }
     }
-
     services
         .config
         .save(&current_config)
@@ -116,6 +137,14 @@ pub fn emby_get_config(
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
 
+    let admin_user_id = config_val
+        .get("embyAdminUserId")
+        .or_else(|| config_val.get("emby_admin_user_id"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
+
     if let (Some(server_url), Some(api_key)) = (server_url, api_key)
         && !server_url.trim().is_empty()
         && !api_key.trim().is_empty()
@@ -124,6 +153,7 @@ pub fn emby_get_config(
             server_url,
             api_key,
             allow_invalid_certs,
+            admin_user_id,
         }));
     }
 

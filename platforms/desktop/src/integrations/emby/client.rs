@@ -150,25 +150,59 @@ impl EmbyClient {
             .unwrap_or("unknown")
             .to_string();
 
-        // 2. Check SubtitleManager plugin presence
-        let plugin_url = self.url("/SubtitleManager/Libraries");
-        let plugin_req = self.apply_auth(
+        // 2. Check SubtitleManager plugin presence via /Plugins
+        let plugins_url = self.url("/Plugins");
+        let plugins_req = self.apply_auth(
             self.client
-                .get(&plugin_url)
+                .get(&plugins_url)
                 .query(&[("api_key", &self.config.api_key)]),
         );
 
-        let has_subtitle_manager_plugin = match plugin_req.send().await {
-            Ok(plugin_resp) => plugin_resp.status().is_success(),
-            Err(_) => false,
+        let has_subtitle_manager_plugin = match plugins_req.send().await {
+            Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
+                Ok(json) => has_subtitle_manager_plugin_in_list(&json),
+                Err(_) => false,
+            },
+            _ => false,
         };
+
+        // 3. Discover administrator user ID
+        let admin_user_id = self.discover_admin_user_id().await;
 
         Ok(EmbyServerInfo {
             id,
             server_name,
             version,
             has_subtitle_manager_plugin,
+            admin_user_id,
         })
+    }
+
+    pub async fn discover_admin_user_id(&self) -> Option<String> {
+        let users_url = self.url("/Users");
+        let req = self.apply_auth(
+            self.client
+                .get(&users_url)
+                .query(&[("api_key", &self.config.api_key)]),
+        );
+
+        let resp = req.send().await.ok()?;
+        if !resp.status().is_success() {
+            return None;
+        }
+
+        let json: Value = resp.json().await.ok()?;
+        parse_admin_user_id(&json)
+    }
+
+    pub async fn resolve_admin_user_id(&self) -> Option<String> {
+        if let Some(ref id) = self.config.admin_user_id {
+            let trimmed = id.trim();
+            if !trimmed.is_empty() {
+                return Some(trimmed.to_string());
+            }
+        }
+        self.discover_admin_user_id().await
     }
 
     pub async fn get_libraries(&self) -> Result<Vec<EmbyLibrary>, EmbyError> {
@@ -602,12 +636,27 @@ impl EmbyClient {
         let clean_id = Self::validate_item_id(item_id)?;
         let url = self.url("/SubtitleManager/DeleteSubtitle");
         let idx_str = subtitle_index.to_string();
-        let query = [
+        let admin_id_opt = self.resolve_admin_user_id().await;
+
+        let mut query = vec![
             ("ItemId", clean_id),
-            ("SubtitleIndex", &idx_str),
-            ("api_key", &self.config.api_key),
+            ("SubtitleIndex", idx_str.as_str()),
+            ("api_key", self.config.api_key.as_str()),
         ];
-        let req = self.apply_auth(self.client.post(&url).query(&query));
+        if let Some(ref admin_id) = admin_id_opt {
+            query.push(("UserId", admin_id.as_str()));
+        }
+
+        let mut req = self.apply_auth(self.client.post(&url).query(&query));
+        if let Some(ref admin_id) = admin_id_opt {
+            req = req.header(
+                "X-Emby-Authorization",
+                format!(
+                    "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\", UserId=\"{admin_id}\""
+                ),
+            );
+        }
+
         let resp = req
             .send()
             .await
@@ -643,20 +692,34 @@ impl EmbyClient {
         let clean_id = Self::validate_item_id(&req.item_id)?;
         let url = self.url("/SubtitleManager/Upload");
         let forced_str = req.is_forced.to_string();
-        let query = [
+        let admin_id_opt = self.resolve_admin_user_id().await;
+
+        let mut query = vec![
             ("ItemId", clean_id),
             ("Language", req.language.as_str()),
             ("Format", req.format.as_str()),
-            ("IsForced", &forced_str),
-            ("api_key", &self.config.api_key),
+            ("IsForced", forced_str.as_str()),
+            ("api_key", self.config.api_key.as_str()),
         ];
-        let request = self.apply_auth(
+        if let Some(ref admin_id) = admin_id_opt {
+            query.push(("UserId", admin_id.as_str()));
+        }
+
+        let mut request = self.apply_auth(
             self.client
                 .post(&url)
                 .query(&query)
                 .header("Content-Type", "text/plain; charset=utf-8")
                 .body(req.content.clone().into_bytes()),
         );
+        if let Some(ref admin_id) = admin_id_opt {
+            request = request.header(
+                "X-Emby-Authorization",
+                format!(
+                    "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\", UserId=\"{admin_id}\""
+                ),
+            );
+        }
 
         let resp = request
             .send()
@@ -767,6 +830,75 @@ pub(crate) fn check_plugin_response_body(body_text: &str) -> Result<(), EmbyErro
     Ok(())
 }
 
+pub(crate) fn is_subtitle_manager_plugin(plugin: &Value) -> bool {
+    const TARGET_PLUGIN_ID: &str = "944151cb-7308-487b-8023-3e5c352bc545";
+    const TARGET_CONFIG_FILE: &str = "Emby.SubtitleManager.xml";
+
+    if let Some(id) = plugin.get("Id").and_then(|v| v.as_str())
+        && id.eq_ignore_ascii_case(TARGET_PLUGIN_ID)
+    {
+        return true;
+    }
+
+    if let Some(name) = plugin
+        .get("Name")
+        .or_else(|| plugin.get("name"))
+        .and_then(|v| v.as_str())
+    {
+        let name_lower = name.to_ascii_lowercase();
+        if name_lower.contains("subtitlemanager")
+            || name_lower.contains("subtitle manager")
+            || name.contains("字幕管理")
+        {
+            return true;
+        }
+    }
+
+    if let Some(config_file) = plugin.get("ConfigurationFileName").and_then(|v| v.as_str())
+        && config_file.eq_ignore_ascii_case(TARGET_CONFIG_FILE)
+    {
+        return true;
+    }
+
+    false
+}
+
+pub(crate) fn has_subtitle_manager_plugin_in_list(plugins_json: &Value) -> bool {
+    if let Some(array) = plugins_json.as_array() {
+        array.iter().any(is_subtitle_manager_plugin)
+    } else {
+        false
+    }
+}
+
+pub(crate) fn parse_admin_user_id(users_json: &Value) -> Option<String> {
+    let users = users_json.as_array()?;
+    for user in users {
+        let policy = user.get("Policy").or_else(|| user.get("policy"));
+        let is_admin = policy
+            .and_then(|p| {
+                p.get("IsAdministrator")
+                    .or_else(|| p.get("isAdministrator"))
+            })
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let is_disabled = policy
+            .and_then(|p| p.get("IsDisabled").or_else(|| p.get("isDisabled")))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        if is_admin && !is_disabled {
+            let id_val = user.get("Id").or_else(|| user.get("id"));
+            if let Some(id) = id_val.and_then(|v| v.as_str()) {
+                let trimmed = id.trim();
+                if !trimmed.is_empty() {
+                    return Some(trimmed.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 pub(crate) fn map_plugin_response_status(
     status: reqwest::StatusCode,
@@ -800,6 +932,7 @@ mod tests {
             server_url: "http://192.168.1.100:8096/emby/".into(),
             api_key: "test_key".into(),
             allow_invalid_certs: true,
+            admin_user_id: None,
         };
         let client = EmbyClient::new(config).unwrap();
         assert_eq!(client.base_url(), "http://192.168.1.100:8096/emby");
@@ -815,6 +948,7 @@ mod tests {
             server_url: "   ".into(),
             api_key: "test_key".into(),
             allow_invalid_certs: false,
+            admin_user_id: None,
         };
         let res = EmbyClient::new(config);
         assert!(matches!(res, Err(EmbyError::Network(_))));
@@ -953,5 +1087,131 @@ mod tests {
             guard.disarm();
         }
         assert!(file_path.exists());
+    }
+
+    #[test]
+    fn test_is_subtitle_manager_plugin_by_guid() {
+        let json = serde_json::json!({
+            "Id": "944151CB-7308-487B-8023-3E5C352BC545",
+            "Name": "Custom Subtitle Extension",
+            "ConfigurationFileName": "other.xml"
+        });
+        assert!(is_subtitle_manager_plugin(&json));
+    }
+
+    #[test]
+    fn test_is_subtitle_manager_plugin_by_name() {
+        let json1 = serde_json::json!({
+            "Id": "some-other-guid",
+            "Name": "SubtitleManager Plugin",
+            "ConfigurationFileName": "plugin.xml"
+        });
+        assert!(is_subtitle_manager_plugin(&json1));
+
+        let json2 = serde_json::json!({
+            "Id": "some-other-guid",
+            "Name": "Emby Subtitle Manager",
+            "ConfigurationFileName": "plugin.xml"
+        });
+        assert!(is_subtitle_manager_plugin(&json2));
+
+        let json3 = serde_json::json!({
+            "Id": "some-other-guid",
+            "Name": "通用字幕管理插件",
+            "ConfigurationFileName": "plugin.xml"
+        });
+        assert!(is_subtitle_manager_plugin(&json3));
+    }
+
+    #[test]
+    fn test_is_subtitle_manager_plugin_by_config_file() {
+        let json = serde_json::json!({
+            "Id": "some-other-guid",
+            "Name": "Custom Plugin",
+            "ConfigurationFileName": "emby.subtitlemanager.xml"
+        });
+        assert!(is_subtitle_manager_plugin(&json));
+    }
+
+    #[test]
+    fn test_is_subtitle_manager_plugin_negative() {
+        let json = serde_json::json!({
+            "Id": "12345678-1234-1234-1234-123456789abc",
+            "Name": "Trakt",
+            "ConfigurationFileName": "Trakt.xml"
+        });
+        assert!(!is_subtitle_manager_plugin(&json));
+    }
+
+    #[test]
+    fn test_has_subtitle_manager_plugin_in_list() {
+        let list = serde_json::json!([
+            {
+                "Id": "11111111-1111-1111-1111-111111111111",
+                "Name": "Open Subtitles",
+                "ConfigurationFileName": "OpenSubtitles.xml"
+            },
+            {
+                "Id": "944151cb-7308-487b-8023-3e5c352bc545",
+                "Name": "SubtitleManager",
+                "ConfigurationFileName": "Emby.SubtitleManager.xml"
+            }
+        ]);
+        assert!(has_subtitle_manager_plugin_in_list(&list));
+
+        let list_without = serde_json::json!([
+            {
+                "Id": "11111111-1111-1111-1111-111111111111",
+                "Name": "Open Subtitles",
+                "ConfigurationFileName": "OpenSubtitles.xml"
+            }
+        ]);
+        assert!(!has_subtitle_manager_plugin_in_list(&list_without));
+    }
+
+    #[test]
+    fn test_parse_admin_user_id() {
+        let users = serde_json::json!([
+            {
+                "Id": "user_normal",
+                "Name": "Guest",
+                "Policy": {
+                    "IsAdministrator": false
+                }
+            },
+            {
+                "Id": "admin_uuid_123",
+                "Name": "Admin",
+                "Policy": {
+                    "IsAdministrator": true
+                }
+            },
+            {
+                "Id": "second_admin",
+                "Name": "Admin2",
+                "Policy": {
+                    "IsAdministrator": true
+                }
+            }
+        ]);
+
+        assert_eq!(
+            parse_admin_user_id(&users),
+            Some("admin_uuid_123".to_string())
+        );
+
+        let no_admins = serde_json::json!([
+            {
+                "Id": "user1",
+                "Name": "Normal",
+                "Policy": {
+                    "IsAdministrator": false
+                }
+            }
+        ]);
+        assert_eq!(parse_admin_user_id(&no_admins), None);
+
+        let empty_list = serde_json::json!([]);
+        assert_eq!(parse_admin_user_id(&empty_list), None);
     }
 }

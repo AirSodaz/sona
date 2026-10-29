@@ -1,6 +1,7 @@
 import { Clock, Film } from 'lucide-react';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Dropdown } from '../../../../components/Dropdown';
 import type { EmbyMediaItem } from '../../../../types/emby';
 import { findBestAudioStream, getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
 export function formatDurationTicks(ticks?: number): string {
@@ -97,20 +98,17 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
 
         {/* Audio track selector */}
         {audios.length > 0 && (
-          <select
-            className="emby-audio-select"
-            value={currentAudioIndex}
-            onChange={(e) => onAudioTrackChange(item.id, Number(e.target.value))}
+          <Dropdown
+            className="emby-audio-dropdown"
+            options={audios.map((stream) => ({
+              value: String(stream.index),
+              label: getAudioTrackLabel(stream),
+            }))}
+            value={currentAudioIndex !== undefined ? String(currentAudioIndex) : ''}
+            onChange={(val) => onAudioTrackChange(item.id, Number(val))}
             disabled={isQueued}
-            title={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
             aria-label={`${t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })} - ${item.name}`}
-          >
-            {audios.map((stream) => (
-              <option key={stream.index} value={stream.index}>
-                {getAudioTrackLabel(stream)}
-              </option>
-            ))}
-          </select>
+          />
         )}
       </div>
     </div>

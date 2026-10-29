@@ -333,6 +333,11 @@
   color: var(--color-error);
 }
 
+.queue-group-emby .queue-group-badge {
+  background: color-mix(in srgb, var(--color-success) 14%, transparent);
+  color: var(--color-success);
+}
+
 .queue-group-action {
   display: flex;
   align-items: center;

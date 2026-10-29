@@ -9,6 +9,12 @@ pub struct EmbyConnectionConfig {
     pub api_key: String,
     #[serde(default, alias = "allow_invalid_certs")]
     pub allow_invalid_certs: bool,
+    #[serde(
+        default,
+        alias = "admin_user_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub admin_user_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -18,6 +24,12 @@ pub struct EmbyServerInfo {
     pub server_name: String,
     pub version: String,
     pub has_subtitle_manager_plugin: bool,
+    #[serde(
+        default,
+        alias = "admin_user_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub admin_user_id: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

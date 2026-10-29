@@ -123,6 +123,13 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .or_else(|| config_val.get("emby_allow_invalid_certs"))
             .and_then(|v| v.as_bool())
             .unwrap_or(false);
+        let admin_user_id = config_val
+            .get("embyAdminUserId")
+            .or_else(|| config_val.get("emby_admin_user_id"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
 
         if let (Some(url), Some(key)) = (server_url, api_key)
             && !url.trim().is_empty()
@@ -133,6 +140,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                     server_url: url.trim().to_string(),
                     api_key: key.trim().to_string(),
                     allow_invalid_certs,
+                    admin_user_id,
                 },
             ) {
                 Ok(client) => Some(client),

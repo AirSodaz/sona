@@ -155,9 +155,9 @@ export function ToolsSidebar(): React.JSX.Element {
     {
       id: 'emby_sync',
       nameKey: 'tools.emby_sync',
-      defaultName: 'Emby Sync',
+      defaultName: 'Emby Subtitle Assistant',
       descKey: 'tools.emby_sync_desc',
-      defaultDesc: 'Transcribe and sync subtitles to Emby',
+      defaultDesc: 'Detect missing subtitles and auto-complete with local transcription',
       Icon: Tv,
       statusText: embyServerName
         ? embyServerName

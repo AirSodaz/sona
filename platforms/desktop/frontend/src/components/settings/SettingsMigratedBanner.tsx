@@ -36,7 +36,7 @@ const TOOL_META_MAP: Record<
   },
   emby_sync: {
     titleKey: 'tools.emby_sync',
-    defaultTitle: 'Emby Sync',
+    defaultTitle: 'Emby Subtitle Assistant',
     icon: <Tv width={28} height={28} />,
   },
 };

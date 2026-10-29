@@ -192,13 +192,54 @@ export class BatchItemProcessor {
       setCurrentSegments([...merged.values()].sort((left, right) => left.start - right.start));
     };
 
+    if (
+      item.embyContext &&
+      item.errorStage === 'upload' &&
+      item.segments &&
+      item.segments.length > 0
+    ) {
+      this.throwIfCancelRequested(callbacks);
+      callbacks.updateStatus('processing', 95);
+      callbacks.updateSegments(item.segments);
+      const { embyContext } = item;
+      try {
+        const pipeline =
+          item.pipelineSnapshot ??
+          resolveItemPipeline(
+            item.projectId,
+            this.ports.useProjectStore?.getState?.().projects ?? [],
+            config
+          );
+        const targetLanguage =
+          embyContext.targetLanguage ||
+          pipeline.targetLanguage ||
+          config.translationLanguage ||
+          'zh-CN';
+        await syncEmbySubtitles(
+          item.segments,
+          { ...embyContext, targetLanguage },
+          { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+        );
+        item.errorStage = undefined;
+        return;
+      } catch (uploadError) {
+        logger.error(
+          '[BatchQueue] Fast-path retry failed to upload subtitle to Emby:',
+          uploadError
+        );
+        item.errorStage = 'upload';
+        throw uploadError;
+      }
+    }
+
+    item.errorStage = undefined;
     try {
       if (batchAsr.engine === 'local') {
         this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      if (item.embyContext && !item.filePath) {
+      if (item.embyContext) {
         callbacks.updateStatus('processing', 0);
         const downloadedPath = await downloadEmbyAudio(
           item.embyContext.itemId,
@@ -209,8 +250,9 @@ export class BatchItemProcessor {
       }
 
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !item.embyContext &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const shouldCreateTempWav =
         !isLlamaCpp && batchAsr.engine !== 'online' && (!isStream || Boolean(item.retainAudio));
       tempWavPath = shouldCreateTempWav
@@ -218,7 +260,7 @@ export class BatchItemProcessor {
         : undefined;
       this.throwIfCancelRequested(callbacks);
 
-      const inputSource = item.streamUrl || item.filePath;
+      const inputSource = item.embyContext ? item.filePath : item.streamUrl || item.filePath;
       let segments: TranscriptSegment[];
       try {
         segments = await this.ports.transcriptionService.transcribeFile(
@@ -246,11 +288,11 @@ export class BatchItemProcessor {
       } catch (transcribeError) {
         flushSegmentBuffer();
         const isStream =
-          item.sourceType === 'url_stream' ||
-          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+          !item.embyContext &&
+          (item.sourceType === 'url_stream' ||
+            /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
         const isExplicitCancel = callbacks.isCancelRequested();
         const isTaskCancelError = extractErrorMessage(transcribeError).includes('Task cancelled');
-
         if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
           segments = currentSegments;
         } else {
@@ -332,14 +374,18 @@ export class BatchItemProcessor {
           );
         } catch (uploadError) {
           logger.error('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+          item.errorStage = 'upload';
+          item.segments = currentSegments;
+          callbacks.updateSegments(currentSegments);
           throw uploadError;
         }
       }
     } catch (error) {
       flushSegmentBuffer();
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !item.embyContext &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const isExplicitCancel = callbacks.isCancelRequested();
       const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
       const isCancelled = isExplicitCancel || isTaskCancelError;
@@ -350,6 +396,13 @@ export class BatchItemProcessor {
         }
       } catch (historyError) {
         logger.error('[BatchQueue] Failed to persist partial result after error:', historyError);
+      }
+      if (currentSegments.length > 0) {
+        item.segments = currentSegments;
+        callbacks.updateSegments(currentSegments);
+      }
+      if (!item.errorStage) {
+        item.errorStage = 'transcribe';
       }
 
       throw error;
