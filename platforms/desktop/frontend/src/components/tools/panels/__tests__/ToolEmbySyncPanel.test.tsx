@@ -3,6 +3,7 @@ import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as embyService from '../../../../services/emby/embyService';
 import { useBatchQueueStore } from '../../../../stores/batchQueueStore';
+import { useTranscriptStore } from '../../../../stores/transcriptStore';
 import type { EmbyItemListResult, EmbyLibrary, EmbyServerInfo } from '../../../../types/emby';
 import { ToolEmbySyncPanel } from '../ToolEmbySyncPanel';
 
@@ -26,6 +27,7 @@ vi.mock('../../../../services/emby/embyService', () => ({
   downloadEmbyAudio: vi.fn(),
   uploadEmbySubtitle: vi.fn(),
 }));
+
 vi.mock('../../../../services/recoveryService', () => ({
   persistQueueRecoverySnapshot: vi.fn(),
   toBatchQueueItem: vi.fn((x) => x),
@@ -145,6 +147,7 @@ describe('ToolEmbySyncPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+    useTranscriptStore.setState({ mode: 'tools', ingestionFocus: 'batch' });
 
     vi.mocked(embyService.getEmbyConfig).mockResolvedValue({
       serverUrl: 'http://192.168.1.100:8096',
@@ -172,7 +175,7 @@ describe('ToolEmbySyncPanel', () => {
     expect(screen.getByText('Plugin Guide')).toBeDefined();
   });
 
-  it('filters items when checking "仅看缺失中文字幕"', async () => {
+  it('filters items when checking only missing target subtitles', async () => {
     render(<ToolEmbySyncPanel />);
 
     await waitFor(() => {
@@ -191,6 +194,79 @@ describe('ToolEmbySyncPanel', () => {
     expect(screen.queryByText(/E2 - 绝命毒师 Cat in the Bag/)).toBeNull();
   });
 
+  it('treats embedded and external subtitles equally as present (binary check)', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+      expect(screen.getByText(/E1 - 绝命毒师 Pilot/)).toBeDefined();
+      expect(screen.getByText(/E2 - 绝命毒师 Cat in the Bag/)).toBeDefined();
+    });
+
+    // Inception has embedded Chinese -> Has Subtitles
+    // Episode 2 has external Chinese -> Has Subtitles
+    const presentTags = screen.getAllByText('Has Subtitles');
+    expect(presentTags.length).toBe(2);
+
+    // Episode 1 has no subtitle -> Missing Subtitles
+    const missingTags = screen.getAllByText('Missing Subtitles');
+    expect(missingTags.length).toBe(1);
+  });
+
+  it('dynamically updates subtitle presence when target language is changed', async () => {
+    const customItemsResult: EmbyItemListResult = {
+      totalRecordCount: 1,
+      items: [
+        {
+          id: 'movie_ja',
+          name: '千与千寻 Spirited Away',
+          itemType: 'Movie',
+          hasChineseSubtitles: false,
+          hasEmbeddedChinese: false,
+          mediaStreams: [
+            {
+              index: 0,
+              streamType: 'Audio',
+              language: 'jpn',
+              isExternal: false,
+              isForced: false,
+              isDefault: true,
+            },
+            {
+              index: 1,
+              streamType: 'Subtitle',
+              language: 'jpn',
+              displayTitle: 'Japanese',
+              isExternal: false,
+              isForced: false,
+              isDefault: false,
+            },
+          ],
+        },
+      ],
+    };
+
+    vi.mocked(embyService.getEmbyItems).mockResolvedValue(customItemsResult);
+
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('千与千寻 Spirited Away')).toBeDefined();
+    });
+
+    // Initially target language is zh-CN, so Japanese subtitle is missing
+    expect(screen.getByText('Missing Subtitles')).toBeDefined();
+    expect(screen.queryByText('Has Subtitles')).toBeNull();
+
+    // Change target language to Japanese (ja)
+    const targetLangSelect = screen.getByDisplayValue('简体中文 (zh-CN)');
+    fireEvent.change(targetLangSelect, { target: { value: 'ja' } });
+
+    // Now it matches the Japanese subtitle!
+    expect(screen.getByText('Has Subtitles')).toBeDefined();
+    expect(screen.queryByText('Missing Subtitles')).toBeNull();
+  });
+
   it('supports season accordion expansion and selecting all missing episodes', async () => {
     render(<ToolEmbySyncPanel />);
 
@@ -206,17 +282,18 @@ describe('ToolEmbySyncPanel', () => {
     expect(screen.getByText(/Transcribe and Sync \(1 selected\)/)).toBeDefined();
   });
 
-  it('submits selected items to batchQueueStore with complete embyContext', async () => {
+  it('submits selected items to batchQueueStore with complete embyContext and navigates to batch queue', async () => {
     render(<ToolEmbySyncPanel />);
 
     await waitFor(() => {
       expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
     });
 
-    // Select Inception and Episode 1
-    const checkboxes = screen.getAllByRole('checkbox');
-    // First checkbox is filter, second is Inception, third is Episode 1, fourth is Episode 2, fifth is overwrite
-    fireEvent.click(checkboxes[1]); // Inception
+    // Select Inception
+    const inceptionCheckbox = screen.getByRole('checkbox', {
+      name: /Select 盗梦空间 Inception/i,
+    });
+    fireEvent.click(inceptionCheckbox);
 
     expect(screen.getByText(/Transcribe and Sync \(1 selected\)/)).toBeDefined();
 
@@ -233,7 +310,58 @@ describe('ToolEmbySyncPanel', () => {
     expect(queue[0].embyContext?.serverId).toBe('server_123');
     expect(queue[0].embyContext?.serverUrl).toBe('http://192.168.1.100:8096');
     expect(queue[0].embyContext?.audioStreamIndex).toBe(1); // Audio track index
+    expect(queue[0].embyContext?.sourceLanguage).toBe('en'); // Normalized from audio stream 'eng'
     expect(queue[0].embyContext?.subtitleMode).toBe('bilingual');
     expect(queue[0].embyContext?.targetLanguage).toBe('zh-CN');
+
+    // Verify navigation triggered: transcript mode set to 'create', focus to 'batch'
+    const transcriptState = useTranscriptStore.getState();
+    expect(transcriptState.mode).toBe('create');
+    expect(transcriptState.ingestionFocus).toBe('batch');
+  });
+
+  it('locks out items already pending or processing in batchQueueStore', async () => {
+    // Pre-populate queue with ep_1 as pending
+    useBatchQueueStore.setState({
+      queueItems: [
+        {
+          id: 'q-item-1',
+          filename: '绝命毒师 Season 1 E1 - 绝命毒师 Pilot',
+          filePath: '',
+          status: 'pending',
+          progress: 0,
+          projectId: null,
+          segments: [],
+          embyContext: {
+            serverId: 'server_123',
+            serverUrl: 'http://192.168.1.100:8096',
+            itemId: 'ep_1',
+            itemName: '绝命毒师 Season 1 E1 - 绝命毒师 Pilot',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        },
+      ],
+      activeItemId: null,
+    });
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText(/绝命毒师 - Season 1/)).toBeDefined();
+    });
+
+    // ep_1 row displays "In Queue"
+    expect(screen.getByText('In Queue')).toBeDefined();
+    // Checkbox for ep_1 is disabled
+    const ep1Checkbox = screen.getByRole('checkbox', { name: /Select 绝命毒师 Pilot/i });
+    expect(ep1Checkbox.hasAttribute('disabled')).toBe(true);
+
+    // Clicking "Select Missing Episodes in Season" should not select ep_1 because it is in queue
+    const selectAllBtn = screen.getByText('Select Missing Episodes in Season');
+    fireEvent.click(selectAllBtn);
+
+    // No new items selected
+    expect(screen.queryByText(/Transcribe and Sync \(1 selected\)/)).toBeNull();
   });
 });

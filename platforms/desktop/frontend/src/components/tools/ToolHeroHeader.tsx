@@ -10,10 +10,11 @@ export interface ToolHeroHeaderProps {
   description?: string;
   statusText: string;
   statusTone: ToolHeroStatusTone;
-  enabled: boolean;
+  hideSwitch?: boolean;
+  enabled?: boolean;
   disabled?: boolean;
-  onToggle: (nextState: boolean) => void | Promise<void>;
-  switchAriaLabel: string;
+  onToggle?: (nextState: boolean) => void | Promise<void>;
+  switchAriaLabel?: string;
   actions?: React.ReactNode;
 }
 
@@ -24,10 +25,11 @@ export function ToolHeroHeader({
   description,
   statusText,
   statusTone,
-  enabled,
+  hideSwitch = false,
+  enabled = false,
   disabled,
   onToggle,
-  switchAriaLabel,
+  switchAriaLabel = '',
   actions,
 }: ToolHeroHeaderProps): React.JSX.Element {
   return (
@@ -49,16 +51,20 @@ export function ToolHeroHeader({
             <span>{statusText}</span>
           </span>
         </div>
-        <Switch
-          checked={enabled}
-          disabled={disabled}
-          onChange={(val) => {
-            Promise.resolve(onToggle(val)).catch(() => {
-              // Rejection handled by caller
-            });
-          }}
-          aria-label={switchAriaLabel}
-        />
+        {!hideSwitch && (
+          <Switch
+            checked={enabled}
+            disabled={disabled}
+            onChange={(val) => {
+              if (onToggle) {
+                Promise.resolve(onToggle(val)).catch(() => {
+                  // Rejection handled by caller
+                });
+              }
+            }}
+            aria-label={switchAriaLabel}
+          />
+        )}
       </div>
     </div>
   );

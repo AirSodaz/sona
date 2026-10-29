@@ -1,0 +1,114 @@
+import { Clock, Film } from 'lucide-react';
+import type React from 'react';
+import { useTranslation } from 'react-i18next';
+import type { EmbyMediaItem } from '../../../../types/emby';
+import { getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
+
+export function formatDurationTicks(ticks?: number): string {
+  if (!ticks) return '';
+  const seconds = Math.floor(ticks / 10_000_000);
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours > 0) {
+    return `${hours}h ${minutes}m`;
+  }
+  return `${minutes}m`;
+}
+
+export interface EmbyMediaRowProps {
+  item: EmbyMediaItem;
+  targetLanguage: string;
+  isSelected: boolean;
+  isQueued: boolean;
+  selectedAudioIndex?: number;
+  onToggleSelect: (id: string) => void;
+  onAudioTrackChange: (itemId: string, streamIndex: number) => void;
+}
+
+export function EmbyMediaRow({
+  item,
+  targetLanguage,
+  isSelected,
+  isQueued,
+  selectedAudioIndex,
+  onToggleSelect,
+  onAudioTrackChange,
+}: EmbyMediaRowProps): React.JSX.Element {
+  const { t } = useTranslation();
+
+  const audios = item.mediaStreams.filter((s) => s.streamType?.toLowerCase() === 'audio');
+  const hasSub = hasTargetSubtitle(item.mediaStreams, targetLanguage);
+  const duration = formatDurationTicks(item.runtimeTicks);
+
+  return (
+    <div className={`emby-media-row ${isSelected ? 'selected' : ''} ${isQueued ? 'queued' : ''}`}>
+      <div className="emby-item-left">
+        <label className="emby-row-checkbox-label">
+          <input
+            type="checkbox"
+            checked={isQueued ? true : isSelected}
+            disabled={isQueued}
+            onChange={() => onToggleSelect(item.id)}
+            aria-label={`Select ${item.name}`}
+          />
+        </label>
+
+        {item.episodeIndex !== undefined ? (
+          <span className="emby-episode-badge">E{item.episodeIndex}</span>
+        ) : (
+          <span className="emby-movie-icon-badge" aria-hidden="true">
+            <Film size={14} />
+          </span>
+        )}
+        <div className="emby-item-title-meta">
+          <span className="emby-item-name" title={item.name}>
+            {item.episodeIndex !== undefined ? `E${item.episodeIndex} - ${item.name}` : item.name}
+          </span>
+          {duration && (
+            <span className="emby-item-duration">
+              <Clock size={11} aria-hidden="true" />
+              <span>{duration}</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="emby-item-right">
+        {/* Subtitle status badge */}
+        {isQueued ? (
+          <span className="emby-status-tag emby-tag-queued" role="status">
+            <span className="emby-tag-dot" aria-hidden="true" />
+            <span>{t('emby.status_in_queue', { defaultValue: 'In Queue' })}</span>
+          </span>
+        ) : hasSub ? (
+          <span className="emby-status-tag emby-tag-present" role="status">
+            <span className="emby-tag-dot" aria-hidden="true" />
+            <span>{t('emby.status_has_sub', { defaultValue: 'Has Subtitles' })}</span>
+          </span>
+        ) : (
+          <span className="emby-status-tag emby-tag-missing" role="status">
+            <span className="emby-tag-dot" aria-hidden="true" />
+            <span>{t('emby.status_missing_sub', { defaultValue: 'Missing Subtitles' })}</span>
+          </span>
+        )}
+
+        {/* Audio track selector */}
+        {audios.length > 0 && (
+          <select
+            className="emby-audio-select"
+            value={selectedAudioIndex ?? audios[0].index}
+            onChange={(e) => onAudioTrackChange(item.id, Number(e.target.value))}
+            disabled={isQueued}
+            title={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
+          >
+            {audios.map((stream) => (
+              <option key={stream.index} value={stream.index}>
+                {getAudioTrackLabel(stream)}
+              </option>
+            ))}
+          </select>
+        )}
+      </div>
+    </div>
+  );
+}

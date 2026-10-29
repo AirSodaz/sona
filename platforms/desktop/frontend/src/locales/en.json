@@ -3086,6 +3086,15 @@
     "resync": "Re-sync to Emby",
     "resync_tooltip": "Re-sync subtitles to Emby server",
     "syncing": "Syncing...",
-    "synced": "Synced"
+    "synced": "Synced",
+    "loading_items": "Loading media library items...",
+    "only_missing_target": "Only show items missing {{lang}} subtitles",
+    "select_all_missing_movies": "Select All Missing Movies in Library",
+    "status_in_queue": "In Queue",
+    "status_has_sub": "Has Subtitles",
+    "status_missing_sub": "Missing Subtitles",
+    "select_audio_track": "Select Audio Track",
+    "missing_target_count": "{{count}} missing",
+    "all_have_target": "All have subtitles"
   }
 }

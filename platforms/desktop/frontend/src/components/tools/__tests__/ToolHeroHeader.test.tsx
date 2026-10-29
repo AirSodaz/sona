@@ -109,4 +109,20 @@ describe('ToolHeroHeader', () => {
     fireEvent.click(switchEl);
     expect(handleToggle).not.toHaveBeenCalled();
   });
+
+  it('renders without switch when hideSwitch is true', () => {
+    render(
+      <ToolHeroHeader
+        icon={<Wrench />}
+        title="No Switch Tool"
+        statusText="Active"
+        statusTone="active"
+        hideSwitch={true}
+      />
+    );
+
+    expect(screen.getByText('No Switch Tool')).toBeDefined();
+    expect(screen.getByText('Active')).toBeDefined();
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
 });

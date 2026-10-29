@@ -3086,6 +3086,15 @@
     "resync": "Emby에 다시 동기화",
     "resync_tooltip": "자막을 Emby 서버에 다시 동기화",
     "syncing": "동기화 중...",
-    "synced": "동기화됨"
+    "synced": "동기화됨",
+    "loading_items": "미디어 라이브러리 항목 로드 중...",
+    "only_missing_target": "{{lang}} 자막 누락 항목만 표시",
+    "select_all_missing_movies": "라이브러리 내 자막 누락 영화 전체 선택",
+    "status_in_queue": "대기열 처리 중",
+    "status_has_sub": "자막 보유",
+    "status_missing_sub": "자막 누락",
+    "select_audio_track": "오디오 트랙 선택",
+    "missing_target_count": "{{count}}개 누락",
+    "all_have_target": "모든 자막 완료"
   }
 }

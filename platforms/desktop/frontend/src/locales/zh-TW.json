@@ -3086,6 +3086,15 @@
     "resync": "重新同步到 Emby",
     "resync_tooltip": "重新同步字幕到 Emby 伺服器",
     "syncing": "同步中...",
-    "synced": "已同步"
+    "synced": "已同步",
+    "loading_items": "正在載入媒體庫內容...",
+    "only_missing_target": "僅顯示缺失 {{lang}} 字幕",
+    "select_all_missing_movies": "全選本庫缺失電影",
+    "status_in_queue": "佇列處理中",
+    "status_has_sub": "已配字幕",
+    "status_missing_sub": "缺失字幕",
+    "select_audio_track": "選取音訊軌",
+    "missing_target_count": "{{count}} 缺失",
+    "all_have_target": "全配齊"
   }
 }
