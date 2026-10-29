@@ -280,6 +280,7 @@ export class BatchItemProcessor {
         segments: currentSegments,
         pipeline: {
           ...pipeline,
+          autoExport: pipeline.autoExport || Boolean(item.exportConfig),
           autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
           targetLanguage:
             item.embyContext?.targetLanguage ||
@@ -316,7 +317,7 @@ export class BatchItemProcessor {
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
-      if (item.embyContext && currentSegments.length > 0) {
+      if (item.embyContext && currentSegments.length > 0 && !callbacks.isCancelRequested()) {
         const { embyContext } = item;
         try {
           const targetLanguage =

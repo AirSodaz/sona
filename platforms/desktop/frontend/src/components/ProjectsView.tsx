@@ -129,6 +129,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const searchInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
   const browseScopeRef = useRef('inbox');
+  const syncingEmbyIdsRef = useRef<Set<string>>(new Set());
   const activeHistoryItem = useMemo(
     () => historyItems.find((item) => item.id === sourceHistoryId) || null,
     [historyItems, sourceHistoryId]
@@ -659,8 +660,14 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   };
 
   const handleResyncEmby = async (item: HistoryItemType, context: EmbyTaskContext) => {
+    if (syncingEmbyIdsRef.current.has(item.id)) return;
+    syncingEmbyIdsRef.current.add(item.id);
     try {
-      const segments = await historyService.loadTranscript(item.id);
+      const activeSession = useTranscriptSessionStore.getState();
+      const segments =
+        activeSession.sourceHistoryId === item.id && activeSession.segments.length > 0
+          ? activeSession.segments
+          : await historyService.loadTranscript(item.id);
       if (!segments || segments.length === 0) {
         await showError({
           code: 'emby.resync_failed',
@@ -689,6 +696,8 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
         messageKey: 'errors.common.operation_failed',
         cause: error,
       });
+    } finally {
+      syncingEmbyIdsRef.current.delete(item.id);
     }
   };
   const { openRailContextMenu } = useProjectRailContextMenu({

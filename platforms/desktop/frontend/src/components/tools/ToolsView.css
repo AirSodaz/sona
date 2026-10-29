@@ -264,7 +264,7 @@
   align-items: center;
   gap: 16px;
   flex: 1;
-  min-width: 0;
+  min-width: min(100%, 280px);
 }
 
 .tool-hero-icon-tile {

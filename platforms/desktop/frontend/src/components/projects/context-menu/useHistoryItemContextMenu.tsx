@@ -362,8 +362,6 @@ export function useHistoryItemContextMenu({
           onSelect: () => {
             if (onResyncEmby) {
               void onResyncEmby(item, embyContext);
-            } else {
-              onOpenItem(item);
             }
           },
         });

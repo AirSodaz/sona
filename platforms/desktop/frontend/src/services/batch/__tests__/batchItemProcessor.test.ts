@@ -527,4 +527,98 @@ describe('BatchItemProcessor', () => {
 
     expect(useEmbyHistoryStore.getState().getContext('existing-hist-42')).toEqual(item.embyContext);
   });
+
+  it('preserves autoExport when item.exportConfig is provided', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-export-config',
+      filename: 'audio.mp3',
+      filePath: '/path/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: 'proj-1',
+      exportConfig: {
+        mode: 'original',
+        format: 'srt',
+        directory: '/custom/export',
+      },
+      pipelineSnapshot: {
+        isProjectPipeline: true,
+        enabled: true,
+        autoPolish: false,
+        autoTranslate: false,
+        autoSummary: false,
+        autoExport: false,
+      },
+    };
+
+    const config: AppConfig = { language: 'en' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        pipeline: expect.objectContaining({
+          autoExport: true,
+          exportDirectory: '/custom/export',
+          exportFormat: 'srt',
+        }),
+      })
+    );
+  });
+
+  it('does not call syncEmbySubtitles when callbacks.isCancelRequested() returns true', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-emby-cancel',
+      filename: 'Emby Movie Cancelled',
+      filePath: '/tmp/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: [{ id: 'seg-1', start: 0, end: 10, text: 'Some text', isFinal: true }],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-cancel',
+        itemName: 'Emby Movie Cancelled',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    let cancelRequested = false;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockImplementation(() => cancelRequested),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(mockPorts.pipelineExecutionEngine!.execute).mockImplementation(async () => {
+      cancelRequested = true;
+      return {
+        segments: [{ id: 'seg-1', start: 0, end: 10, text: 'Polished text', isFinal: true }],
+      };
+    });
+
+    vi.mocked(syncEmbySubtitles).mockClear();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(syncEmbySubtitles).not.toHaveBeenCalled();
+  });
 });

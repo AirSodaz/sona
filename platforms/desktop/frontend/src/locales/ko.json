@@ -3088,6 +3088,9 @@
     "status_missing_sub": "자막 누락",
     "select_audio_track": "오디오 트랙 선택",
     "missing_target_count": "{{count}}개 누락",
-    "all_have_target": "모든 자막 완료"
+    "all_have_target": "모든 자막 완료",
+    "resync_no_segments": "Emby에 다시 동기화할 수 없습니다: 전사 세그먼트가 없습니다.",
+    "resync_success": "Emby에 자막을 성공적으로 동기화했습니다.",
+    "clear_selection": "선택 해제"
   }
 }

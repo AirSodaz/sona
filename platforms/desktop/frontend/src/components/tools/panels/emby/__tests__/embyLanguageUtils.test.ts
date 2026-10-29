@@ -28,6 +28,10 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh_CN')).toBe('zh-CN');
       expect(normalizeLanguageCode('zh_cn')).toBe('zh-CN');
       expect(normalizeLanguageCode('zh-chs')).toBe('zh-CN');
+      expect(normalizeLanguageCode('简中')).toBe('zh-CN');
+      expect(normalizeLanguageCode('簡體')).toBe('zh-CN');
+      expect(normalizeLanguageCode('簡中')).toBe('zh-CN');
+      expect(normalizeLanguageCode('簡')).toBe('zh-CN');
     });
 
     it('normalizes Traditional Chinese variants to zh-TW', () => {
@@ -40,6 +44,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh-hk')).toBe('zh-TW');
       expect(normalizeLanguageCode('zh_HK')).toBe('zh-TW');
       expect(normalizeLanguageCode('zh-cht')).toBe('zh-TW');
+      expect(normalizeLanguageCode('繁中')).toBe('zh-TW');
     });
 
     it('normalizes other common language codes', () => {
@@ -54,6 +59,8 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('ja-JP')).toBe('ja');
       expect(normalizeLanguageCode('ko-KR')).toBe('ko');
       expect(normalizeLanguageCode('zh-yue')).toBe('yue');
+      expect(normalizeLanguageCode('yue-HK')).toBe('yue');
+      expect(normalizeLanguageCode('yue-mo')).toBe('yue');
     });
   });
 
@@ -74,6 +81,11 @@ describe('embyLanguageUtils', () => {
       expect(matchSubtitleLanguage('chi', '繁體中文', 'zh-TW')).toBe(true);
       expect(matchSubtitleLanguage('zh-tw', undefined, 'zh-TW')).toBe(true);
       expect(matchSubtitleLanguage('zh-tw', undefined, 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('zh-tw', 'Chinese Subtitles', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('yue', '粤语中文字幕', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('yue', '粤语简中', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('zh-tw', '繁简双语', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('und', '簡體字幕', 'zh-CN')).toBe(true);
     });
 
     it('supports bilingual Chinese subtitles in zh-CN matching', () => {

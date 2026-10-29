@@ -192,8 +192,8 @@ export function useEmbySync(): UseEmbySyncReturn {
     setConnectionError(null);
     try {
       const info = await testEmbyConnection(targetConfig);
-      setServerInfo(info);
       await saveEmbyConfig(targetConfig);
+      setConfig(targetConfig);
       setIsConfigModalOpen(false);
 
       const libs = await getEmbyLibraries();
@@ -208,6 +208,7 @@ export function useEmbySync(): UseEmbySyncReturn {
       } else {
         setSelectedLibraryId(null);
       }
+      setServerInfo(info);
     } catch (err: unknown) {
       setConnectionError(extractErrorMessage(err) || String(err));
       setServerInfo(null);
@@ -287,6 +288,7 @@ export function useEmbySync(): UseEmbySyncReturn {
 
     return () => {
       cancelled = true;
+      fetchSeqRef.current++;
       clearTimeout(timer);
     };
   }, [serverInfo, selectedLibraryId, searchTerm]);
@@ -371,11 +373,13 @@ export function useEmbySync(): UseEmbySyncReturn {
   // Selection actions with queue lockout protection
   const toggleItemSelection = useCallback(
     (id: string) => {
-      if (queuedItemIds.has(id)) return;
       setSelectedItemIds((prev) => {
         const next = new Set(prev);
-        if (next.has(id)) next.delete(id);
-        else next.add(id);
+        if (next.has(id)) {
+          next.delete(id);
+        } else if (!queuedItemIds.has(id)) {
+          next.add(id);
+        }
         return next;
       });
     },

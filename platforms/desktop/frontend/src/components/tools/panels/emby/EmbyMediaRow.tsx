@@ -79,17 +79,17 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
       <div className="emby-item-right">
         {/* Subtitle status badge */}
         {isQueued ? (
-          <span className="emby-status-tag emby-tag-queued" role="status">
+          <span className="emby-status-tag emby-tag-queued">
             <span className="emby-tag-dot" aria-hidden="true" />
             <span>{t('emby.status_in_queue', { defaultValue: 'In Queue' })}</span>
           </span>
         ) : hasSub ? (
-          <span className="emby-status-tag emby-tag-present" role="status">
+          <span className="emby-status-tag emby-tag-present">
             <span className="emby-tag-dot" aria-hidden="true" />
             <span>{t('emby.status_has_sub', { defaultValue: 'Has Subtitles' })}</span>
           </span>
         ) : (
-          <span className="emby-status-tag emby-tag-missing" role="status">
+          <span className="emby-status-tag emby-tag-missing">
             <span className="emby-tag-dot" aria-hidden="true" />
             <span>{t('emby.status_missing_sub', { defaultValue: 'Missing Subtitles' })}</span>
           </span>
@@ -103,7 +103,7 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
             onChange={(e) => onAudioTrackChange(item.id, Number(e.target.value))}
             disabled={isQueued}
             title={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
-            aria-label={t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })}
+            aria-label={`${t('emby.select_audio_track', { defaultValue: 'Select Audio Track' })} - ${item.name}`}
           >
             {audios.map((stream) => (
               <option key={stream.index} value={stream.index}>

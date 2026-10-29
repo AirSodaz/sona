@@ -6,10 +6,38 @@ use crate::integrations::emby::{
 };
 use crate::services::DesktopServices;
 
+fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> String {
+    let mut msg = err.to_string();
+    if let Some(key) = api_key {
+        let trimmed_key = key.trim();
+        if !trimmed_key.is_empty() {
+            msg = msg.replace(trimmed_key, "[REDACTED]");
+        }
+    }
+
+    let mut result = String::with_capacity(msg.len());
+    let mut remaining = &msg[..];
+    while let Some(pos) = remaining.to_ascii_lowercase().find("api_key=") {
+        result.push_str(&remaining[..pos + 8]);
+        let after_key = &remaining[pos + 8..];
+        let end_pos = after_key
+            .find(|c: char| c == '&' || c == ' ' || c == '"' || c == '\'' || c == '\n' || c == '\r')
+            .unwrap_or(after_key.len());
+        result.push_str("[REDACTED]");
+        remaining = &after_key[end_pos..];
+    }
+    result.push_str(remaining);
+    result
+}
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn emby_test_connection(config: EmbyConnectionConfig) -> Result<EmbyServerInfo, String> {
-    let client = EmbyClient::new(config).map_err(|e| e.to_string())?;
-    let info = client.test_connection().await.map_err(|e| e.to_string())?;
+    let api_key = config.api_key.clone();
+    let client = EmbyClient::new(config).map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
+    let info = client
+        .test_connection()
+        .await
+        .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
     Ok(info)
 }
 
@@ -23,12 +51,14 @@ pub async fn emby_save_config(
         return Err("Server URL and API key cannot be empty".to_string());
     }
 
-    let client = EmbyClient::new(config.clone()).map_err(|e| e.to_string())?;
+    let client = EmbyClient::new(config.clone())
+        .map_err(|e| sanitize_emby_error(e, Some(&config.api_key)))?;
     let mut current_config = services
         .config
-        .load()?
+        .load()
+        .map_err(|e| sanitize_emby_error(e, Some(&config.api_key)))?
+        .filter(|v| v.is_object())
         .unwrap_or_else(|| serde_json::json!({}));
-
     if let Some(obj) = current_config.as_object_mut() {
         obj.insert(
             "embyServerUrl".to_string(),
@@ -44,7 +74,10 @@ pub async fn emby_save_config(
         );
     }
 
-    services.config.save(&current_config)?;
+    services
+        .config
+        .save(&current_config)
+        .map_err(|e| sanitize_emby_error(e, Some(&config.api_key)))?;
     emby_state.set_client(Some(client)).await;
     let _ = services.emitter.emit(
         "app-setting-updated",
@@ -101,8 +134,15 @@ pub fn emby_get_config(
 pub async fn emby_get_libraries(
     emby_state: State<'_, EmbyState>,
 ) -> Result<Vec<EmbyLibrary>, String> {
-    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
-    client.get_libraries().await.map_err(|e| e.to_string())
+    let client = emby_state
+        .get_client()
+        .await
+        .map_err(|e| sanitize_emby_error(e, None))?;
+    let api_key = client.config().api_key.clone();
+    client
+        .get_libraries()
+        .await
+        .map_err(|e| sanitize_emby_error(e, Some(&api_key)))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -113,7 +153,11 @@ pub async fn emby_get_items(
     start_index: u32,
     limit: u32,
 ) -> Result<EmbyItemListResult, String> {
-    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
+    let client = emby_state
+        .get_client()
+        .await
+        .map_err(|e| sanitize_emby_error(e, None))?;
+    let api_key = client.config().api_key.clone();
     client
         .get_items(
             parent_id.as_deref(),
@@ -122,7 +166,7 @@ pub async fn emby_get_items(
             limit,
         )
         .await
-        .map_err(|e| e.to_string())
+        .map_err(|e| sanitize_emby_error(e, Some(&api_key)))
 }
 
 #[tauri::command(rename_all = "camelCase")]
@@ -146,7 +190,11 @@ pub async fn emby_download_audio(
         return Err("Stream index cannot be negative".to_string());
     }
 
-    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
+    let client = emby_state
+        .get_client()
+        .await
+        .map_err(|e| sanitize_emby_error(e, None))?;
+    let api_key = client.config().api_key.clone();
     let dir = std::env::temp_dir().join("sona").join("emby_audio");
     tokio::fs::create_dir_all(&dir)
         .await
@@ -163,7 +211,7 @@ pub async fn emby_download_audio(
     client
         .download_audio_stream(clean_id, stream_index, &target_path)
         .await
-        .map_err(|e| e.to_string())?;
+        .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
     Ok(target_path.to_string_lossy().to_string())
 }
@@ -191,7 +239,11 @@ pub async fn emby_upload_subtitle(
         );
     }
 
-    let client = emby_state.get_client().await.map_err(|e| e.to_string())?;
+    let client = emby_state
+        .get_client()
+        .await
+        .map_err(|e| sanitize_emby_error(e, None))?;
+    let api_key = client.config().api_key.clone();
 
     let mut deleted_any = false;
     if let Some(idx) = delete_existing_external_index {
@@ -203,7 +255,10 @@ pub async fn emby_upload_subtitle(
                 deleted_any = true;
             }
             Err(e) => {
-                log::warn!("Failed to delete existing external subtitle {idx}: {e}");
+                log::warn!(
+                    "Failed to delete existing external subtitle {idx}: {}",
+                    sanitize_emby_error(&e, Some(&api_key))
+                );
             }
         }
     }
@@ -219,7 +274,7 @@ pub async fn emby_upload_subtitle(
             let streams = client
                 .get_item_streams(&payload.item_id)
                 .await
-                .map_err(|e| e.to_string())?;
+                .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
             let is_target_zh =
                 crate::integrations::emby::is_chinese_language(Some(&payload.language), None);
@@ -248,25 +303,47 @@ pub async fn emby_upload_subtitle(
                 client
                     .delete_subtitle(&payload.item_id, stream.index)
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
 
                 client
                     .upload_subtitle(&payload)
                     .await
-                    .map_err(|e| e.to_string())?;
+                    .map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
             } else {
-                return Err(EmbyError::DuplicateSubtitle.to_string());
+                return Err(sanitize_emby_error(
+                    EmbyError::DuplicateSubtitle,
+                    Some(&api_key),
+                ));
             }
         }
-        Err(e) => return Err(e.to_string()),
+        Err(e) => return Err(sanitize_emby_error(e, Some(&api_key))),
     }
 
     if let Err(e) = client.refresh_item_metadata(&payload.item_id).await {
         log::warn!(
-            "Failed to refresh metadata after upload for {}: {e}",
-            payload.item_id
+            "Failed to refresh metadata after upload for {}: {}",
+            payload.item_id,
+            sanitize_emby_error(&e, Some(&api_key))
         );
     }
-
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_sanitize_emby_error_redacts_api_key_and_query() {
+        let err = "Failed to connect to http://127.0.0.1:8096/emby/System/Info?api_key=secret_12345&foo=bar";
+        let sanitized = sanitize_emby_error(err, Some("secret_12345"));
+        assert!(!sanitized.contains("secret_12345"));
+        assert!(sanitized.contains("api_key=[REDACTED]"));
+        assert!(sanitized.contains("&foo=bar"));
+
+        let err_no_key_provided = "Error at http://emby.local?Api_Key=supersecret";
+        let sanitized_no_key = sanitize_emby_error(err_no_key_provided, None);
+        assert!(!sanitized_no_key.contains("supersecret"));
+        assert!(sanitized_no_key.contains("Api_Key=[REDACTED]"));
+    }
 }

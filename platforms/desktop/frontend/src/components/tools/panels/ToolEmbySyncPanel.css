@@ -488,19 +488,21 @@
 /* Bottom Sticky Action Bar */
 .emby-submit-bar-wrapper {
   position: sticky;
-  bottom: -32px;
+  bottom: 0;
   z-index: 10;
   margin-top: auto;
   display: flex;
   flex-direction: column;
 }
+
 .emby-submitted-notice {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
-  background: var(--color-success);
-  color: #ffffff;
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-bg-elevated));
+  color: var(--color-success);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-success) 28%, var(--color-border));
   padding: 6px 16px;
   font-size: 12px;
   font-weight: 500;

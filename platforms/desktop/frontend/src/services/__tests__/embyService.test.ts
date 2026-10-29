@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import {
@@ -12,6 +12,15 @@ import {
 import { TauriCommand } from '../tauri/commands';
 import * as tauriInvoke from '../tauri/invoke';
 
+beforeEach(() => {
+  useEmbyHistoryStore.setState({ contexts: {} });
+  localStorage.removeItem('sona:emby:history_contexts');
+});
+
+afterEach(() => {
+  useEmbyHistoryStore.setState({ contexts: {} });
+  localStorage.removeItem('sona:emby:history_contexts');
+});
 describe('embyService SRT & text helpers', () => {
   it('formats SRT timestamp accurately without float truncation', () => {
     expect(formatSrtTimestamp(0)).toBe('00:00:00,000');
@@ -159,18 +168,8 @@ describe('syncEmbySubtitles workflow', () => {
     });
 
     expect(invokeSpy).toHaveBeenCalledTimes(2);
-    // First call: origContent (sourceLanguage) WITHOUT deleteExistingExternalIndex
+    // First call: transContent (targetLanguage) WITH deleteExistingExternalIndex: 7
     expect(invokeSpy).toHaveBeenNthCalledWith(1, TauriCommand.emby.uploadSubtitle, {
-      payload: {
-        itemId: 'item-2',
-        language: 'en',
-        format: 'srt',
-        isForced: false,
-        content: expect.stringContaining('Original line'),
-      },
-    });
-    // Second call: transContent (targetLanguage) WITH deleteExistingExternalIndex: 7
-    expect(invokeSpy).toHaveBeenNthCalledWith(2, TauriCommand.emby.uploadSubtitle, {
       payload: {
         itemId: 'item-2',
         language: 'zh-CN',
@@ -179,6 +178,82 @@ describe('syncEmbySubtitles workflow', () => {
         content: expect.stringContaining('翻译文本'),
       },
       deleteExistingExternalIndex: 7,
+    });
+    // Second call: origContent (sourceLanguage) WITHOUT deleteExistingExternalIndex
+    expect(invokeSpy).toHaveBeenNthCalledWith(2, TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-2',
+        language: 'en',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('Original line'),
+      },
+    });
+
+    invokeSpy.mockRestore();
+  });
+
+  it('uploads combined text in bilingual mode', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined as never);
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 2, text: 'Hello world', translation: '你好世界', isFinal: true },
+    ];
+
+    await syncEmbySubtitles(
+      segments,
+      {
+        serverId: 's1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'item-bilingual',
+        itemName: 'Bilingual Movie',
+        audioStreamIndex: 0,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+      { deleteExistingIndex: 3 }
+    );
+
+    expect(invokeSpy).toHaveBeenCalledTimes(1);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-bilingual',
+        language: 'zh-CN',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('你好世界\nHello world'),
+      },
+      deleteExistingExternalIndex: 3,
+    });
+
+    invokeSpy.mockRestore();
+  });
+
+  it('does not upload transContent when segments lack translation in separate_tracks mode', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined as never);
+    const segments: TranscriptSegment[] = [
+      { id: '1', start: 0, end: 2, text: 'Only original', isFinal: true },
+    ];
+
+    await syncEmbySubtitles(segments, {
+      serverId: 's1',
+      serverUrl: 'http://localhost:8096',
+      itemId: 'item-no-trans',
+      itemName: 'No Trans Movie',
+      audioStreamIndex: 0,
+      subtitleMode: 'separate_tracks',
+      sourceLanguage: 'en',
+      targetLanguage: 'zh-CN',
+    });
+
+    expect(invokeSpy).toHaveBeenCalledTimes(1);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.uploadSubtitle, {
+      payload: {
+        itemId: 'item-no-trans',
+        language: 'en',
+        format: 'srt',
+        isForced: false,
+        content: expect.stringContaining('Only original'),
+      },
     });
 
     invokeSpy.mockRestore();

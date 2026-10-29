@@ -164,9 +164,14 @@ fn is_chinese_code(clean: &str) -> bool {
         || clean == "chi"
         || clean == "zho"
         || clean == "cmn"
+        || clean == "chs"
+        || clean == "cht"
+        || clean == "yue"
         || clean == "chinese"
         || clean.starts_with("zh-")
         || clean.starts_with("zh_")
+        || clean.starts_with("yue-")
+        || clean.starts_with("yue_")
 }
 
 /// Checks if a language code explicitly represents a known non-Chinese language.
@@ -257,14 +262,20 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
 
     match p.as_str() {
         "zh" | "zh-cn" | "zh-tw" | "zh-hans" | "zh-hant" | "zh_cn" | "zh_tw" | "zh_hans"
-        | "zh_hant" | "zh-chs" | "zh-cht" | "zh-yue" | "chinese" | "chi" | "zho" | "cmn" => {
+        | "zh_hant" | "zh-chs" | "zh-cht" | "zh-yue" | "chinese" | "chi" | "zho" | "cmn"
+        | "chs" | "cht" | "yue" => {
             s == "zh"
                 || s == "chi"
                 || s == "zho"
                 || s == "cmn"
+                || s == "chs"
+                || s == "cht"
+                || s == "yue"
                 || s == "chinese"
                 || s.starts_with("zh-")
                 || s.starts_with("zh_")
+                || s.starts_with("yue-")
+                || s.starts_with("yue_")
         }
         "ja" | "jpn" | "japanese" => {
             s == "ja"
@@ -467,6 +478,11 @@ mod tests {
         assert!(is_chinese_language(Some("zh_CN"), None));
         assert!(is_chinese_language(None, Some("繁體中文")));
         assert!(is_chinese_language(None, Some("粤语中字")));
+        assert!(is_chinese_language(Some("chs"), None));
+        assert!(is_chinese_language(Some("cht"), None));
+        assert!(is_chinese_language(Some("yue"), None));
+        assert!(is_chinese_language(Some("yue-HK"), None));
+        assert!(is_chinese_language(Some("yue_CN"), None));
         assert!(!is_chinese_language(Some("eng"), Some("English")));
         assert!(!is_chinese_language(Some("jpn"), Some("Japanese")));
         assert!(!is_chinese_language(
@@ -491,6 +507,11 @@ mod tests {
         assert!(language_matches(Some("chi"), "zh-Hans"));
         assert!(!language_matches(Some("ja"), "en"));
         assert!(!language_matches(Some("eng"), "ja"));
+        assert!(language_matches(Some("chs"), "zh"));
+        assert!(language_matches(Some("cht"), "zh-TW"));
+        assert!(language_matches(Some("yue"), "zh-CN"));
+        assert!(language_matches(Some("yue-HK"), "zh"));
+        assert!(language_matches(Some("zh-CN"), "yue"));
     }
 
     #[test]

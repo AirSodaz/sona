@@ -51,7 +51,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     toggleItemSelection,
     selectAllMissingInSeason,
     selectAllMissingMovies,
-
+    clearSelection,
     audioTrackMap,
     handleAudioTrackChange,
     subtitleMode,
@@ -264,6 +264,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                 overwriteExistingExternal={overwriteExistingExternal}
                 onOverwriteExistingExternalChange={setOverwriteExistingExternal}
                 onSubmitBatch={handleSubmitBatch}
+                onClearSelection={clearSelection}
                 submittedNotice={submittedNotice}
               />
             </>

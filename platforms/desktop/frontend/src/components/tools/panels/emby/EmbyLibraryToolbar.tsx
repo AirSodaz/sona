@@ -2,6 +2,7 @@ import { Check, Film, Search, Tv } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import type { EmbyLibrary, EmbyMediaItem } from '../../../../types/emby';
+import { hasTargetSubtitle } from './embyLanguageUtils';
 
 export interface EmbyLibraryToolbarProps {
   libraries: EmbyLibrary[];
@@ -112,18 +113,21 @@ export function EmbyLibraryToolbar({
           </span>
         </label>
 
-        {isMovieLib && standaloneMovies.length > 0 && onSelectAllMissingMovies && (
-          <button
-            type="button"
-            className="btn btn-sm btn-secondary emby-bulk-movie-btn"
-            onClick={() => onSelectAllMissingMovies(standaloneMovies)}
-          >
-            <Check size={14} style={{ marginRight: 4 }} />
-            {t('emby.select_all_missing_movies', {
-              defaultValue: 'Select All Missing Movies in Library',
-            })}
-          </button>
-        )}
+        {isMovieLib &&
+          standaloneMovies.length > 0 &&
+          standaloneMovies.some((m) => !hasTargetSubtitle(m.mediaStreams, targetLanguage)) &&
+          onSelectAllMissingMovies && (
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary emby-bulk-movie-btn"
+              onClick={() => onSelectAllMissingMovies(standaloneMovies)}
+            >
+              <Check size={14} style={{ marginRight: 4 }} />
+              {t('emby.select_all_missing_movies', {
+                defaultValue: 'Select All Missing Movies in Library',
+              })}
+            </button>
+          )}
       </div>
     </div>
   );

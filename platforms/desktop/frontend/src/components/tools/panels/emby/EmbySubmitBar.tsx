@@ -10,6 +10,7 @@ export interface EmbySubmitBarProps {
   overwriteExistingExternal: boolean;
   onOverwriteExistingExternalChange: (overwrite: boolean) => void;
   onSubmitBatch: () => void;
+  onClearSelection?: () => void;
   submittedNotice?: string | null;
   isSubmitting?: boolean;
 }
@@ -21,6 +22,7 @@ export function EmbySubmitBar({
   overwriteExistingExternal,
   onOverwriteExistingExternalChange,
   onSubmitBatch,
+  onClearSelection,
   submittedNotice,
   isSubmitting = false,
 }: EmbySubmitBarProps): React.JSX.Element {
@@ -45,7 +47,7 @@ export function EmbySubmitBar({
               className="emby-select"
               aria-label={t('emby.subtitle_mode', { defaultValue: 'Subtitle Mode:' })}
               value={subtitleMode}
-              disabled={selectedCount === 0 || isSubmitting}
+              disabled={isSubmitting}
               onChange={(e) => onSubtitleModeChange(e.target.value as EmbySubtitleMode)}
             >
               <option value="bilingual">
@@ -66,7 +68,7 @@ export function EmbySubmitBar({
             <input
               type="checkbox"
               checked={overwriteExistingExternal}
-              disabled={selectedCount === 0 || isSubmitting}
+              disabled={isSubmitting}
               onChange={(e) => onOverwriteExistingExternalChange(e.target.checked)}
             />
             <span>
@@ -78,6 +80,16 @@ export function EmbySubmitBar({
         </div>
 
         <div className="emby-submit-action">
+          {selectedCount > 0 && onClearSelection && (
+            <button
+              type="button"
+              className="btn btn-secondary emby-clear-btn"
+              disabled={isSubmitting}
+              onClick={onClearSelection}
+            >
+              <span>{t('emby.clear_selection', { defaultValue: 'Clear Selection' })}</span>
+            </button>
+          )}
           <button
             type="button"
             className="btn btn-primary emby-submit-btn"

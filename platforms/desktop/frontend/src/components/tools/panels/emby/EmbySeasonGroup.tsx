@@ -41,6 +41,15 @@ export function EmbySeasonGroup({
     [seasonItems, targetLanguage]
   );
 
+  const selectableMissingCount = useMemo(
+    () =>
+      seasonItems.filter(
+        (item) =>
+          !hasTargetSubtitle(item.mediaStreams, targetLanguage) && !queuedItemIds.has(item.id)
+      ).length,
+    [seasonItems, targetLanguage, queuedItemIds]
+  );
+
   return (
     <div className="emby-season-group">
       <div className="emby-season-header">
@@ -84,7 +93,7 @@ export function EmbySeasonGroup({
             type="button"
             className="btn btn-xs btn-secondary"
             onClick={() => onSelectAllMissingInSeason(seasonItems)}
-            disabled={missingCount === 0}
+            disabled={selectableMissingCount === 0}
           >
             {t('emby.select_season_missing', {
               defaultValue: 'Select Missing Episodes in Season',

@@ -56,26 +56,31 @@ export function ToolsSidebar(): React.JSX.Element {
     }
   }, [mcpStatus]);
   const [embyServerName, setEmbyServerName] = useState<string | null>(null);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh Emby connection status when active tool changes
   useEffect(() => {
     let unmounted = false;
-    void getEmbyConfig().then((cfg) => {
-      if (unmounted) return;
-      if (cfg?.serverUrl && cfg.apiKey) {
-        void testEmbyConnection(cfg)
-          .then((info) => {
-            if (!unmounted) setEmbyServerName(info.serverName);
-          })
-          .catch(() => {
-            if (!unmounted) setEmbyServerName(null);
-          });
-      } else {
+    void getEmbyConfig()
+      .then((cfg) => {
+        if (unmounted) return;
+        if (cfg?.serverUrl && cfg.apiKey) {
+          void testEmbyConnection(cfg)
+            .then((info) => {
+              if (!unmounted) setEmbyServerName(info.serverName);
+            })
+            .catch(() => {
+              if (!unmounted) setEmbyServerName(null);
+            });
+        } else {
+          if (!unmounted) setEmbyServerName(null);
+        }
+      })
+      .catch(() => {
         if (!unmounted) setEmbyServerName(null);
-      }
-    });
+      });
     return () => {
       unmounted = true;
     };
-  }, []);
+  }, [activeTool]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',

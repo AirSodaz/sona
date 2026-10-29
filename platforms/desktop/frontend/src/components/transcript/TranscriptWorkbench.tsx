@@ -127,10 +127,12 @@ export function TranscriptWorkbench({
 
   const handleResyncEmby = async () => {
     if (!embyContext || isSyncingEmby || segments.length === 0) return;
+    const targetHistoryId = sourceHistoryId;
     setIsSyncingEmby(true);
     setEmbySyncSuccess(false);
     try {
       await syncEmbySubtitles(segments, embyContext);
+      if (useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId) return;
       setEmbySyncSuccess(true);
       clearTimeout(syncSuccessTimerRef.current ?? undefined);
       syncSuccessTimerRef.current = window.setTimeout(() => {
@@ -138,6 +140,7 @@ export function TranscriptWorkbench({
         syncSuccessTimerRef.current = null;
       }, 3000);
     } catch (err: unknown) {
+      if (useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId) return;
       console.error('Failed to resync to Emby:', err);
       void useDialogStore.getState().showError({
         code: 'emby.resync_failed',
@@ -145,7 +148,9 @@ export function TranscriptWorkbench({
         cause: err,
       });
     } finally {
-      setIsSyncingEmby(false);
+      if (useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId) {
+        setIsSyncingEmby(false);
+      }
     }
   };
 

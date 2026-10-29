@@ -17,6 +17,32 @@ pub struct EmbyClient {
     base_url: String,
 }
 
+struct PartFileGuard<'a> {
+    path: &'a Path,
+    disarmed: bool,
+}
+
+impl<'a> PartFileGuard<'a> {
+    fn new(path: &'a Path) -> Self {
+        Self {
+            path,
+            disarmed: false,
+        }
+    }
+
+    fn disarm(&mut self) {
+        self.disarmed = true;
+    }
+}
+
+impl<'a> Drop for PartFileGuard<'a> {
+    fn drop(&mut self) {
+        if !self.disarmed {
+            let _ = std::fs::remove_file(self.path);
+        }
+    }
+}
+
 impl EmbyClient {
     pub fn new(mut config: EmbyConnectionConfig) -> Result<Self, EmbyError> {
         config.server_url = config.server_url.trim().to_string();
@@ -133,14 +159,7 @@ impl EmbyClient {
         );
 
         let has_subtitle_manager_plugin = match plugin_req.send().await {
-            Ok(plugin_resp) => {
-                if plugin_resp.status() == reqwest::StatusCode::UNAUTHORIZED
-                    || plugin_resp.status() == reqwest::StatusCode::FORBIDDEN
-                {
-                    return Err(EmbyError::Unauthorized);
-                }
-                plugin_resp.status().is_success()
-            }
+            Ok(plugin_resp) => plugin_resp.status().is_success(),
             Err(_) => false,
         };
 
@@ -479,6 +498,7 @@ impl EmbyClient {
         for attempt in 0..3 {
             let part_path =
                 destination_path.with_extension(format!("part_{}", uuid::Uuid::new_v4()));
+            let mut part_guard = PartFileGuard::new(&part_path);
             let mut req = self.apply_auth(
                 self.client
                     .get(&url)
@@ -527,14 +547,12 @@ impl EmbyClient {
                                 };
                                 if let Err(e) = write_res {
                                     drop(file_opt.take());
-                                    let _ = tokio::fs::remove_file(&part_path).await;
                                     return Err(EmbyError::Io(e.to_string()));
                                 }
                                 bytes_written += chunk.len() as u64;
                             }
                             Err(e) => {
                                 drop(file_opt.take());
-                                let _ = tokio::fs::remove_file(&part_path).await;
                                 last_err = Some(EmbyError::Network(format!(
                                     "Stream interrupted on attempt {attempt}: {e}"
                                 )));
@@ -546,24 +564,21 @@ impl EmbyClient {
                     if let Some(mut file) = file_opt {
                         if let Err(e) = file.flush().await {
                             drop(file);
-                            let _ = tokio::fs::remove_file(&part_path).await;
                             return Err(EmbyError::Io(e.to_string()));
                         }
                         drop(file);
 
                         if bytes_written == 0 {
-                            let _ = tokio::fs::remove_file(&part_path).await;
-                            return Err(EmbyError::ServerError(
+                            last_err = Some(EmbyError::ServerError(
                                 "Downloaded audio stream is empty (0 bytes)".into(),
                             ));
-                        }
-
-                        if let Err(e) = tokio::fs::rename(&part_path, destination_path).await {
-                            let _ = tokio::fs::remove_file(&part_path).await;
+                        } else if let Err(e) = tokio::fs::rename(&part_path, destination_path).await
+                        {
                             return Err(EmbyError::Io(e.to_string()));
+                        } else {
+                            part_guard.disarm();
+                            return Ok(bytes_written);
                         }
-
-                        return Ok(bytes_written);
                     }
                 }
                 Err(e) => {
@@ -738,6 +753,10 @@ pub(crate) fn check_plugin_response_body(body_text: &str) -> Result<(), EmbyErro
                 || lower.contains("already exist")
                 || msg.contains("已存在")
                 || msg.contains("重复")
+                || msg.contains("既に存在")
+                || msg.contains("重複")
+                || msg.contains("이미 있습니다")
+                || msg.contains("중복")
             {
                 return Err(EmbyError::DuplicateSubtitle);
             } else {
@@ -846,6 +865,34 @@ mod tests {
         assert_eq!(
             map_plugin_response_status(
                 reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"字幕は既に存在します"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"重複する字幕です"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"자막이 이미 있습니다"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
+                Some(r#"{"Success":false,"Message":"중복된 자막 파일"}"#)
+            ),
+            Err(EmbyError::DuplicateSubtitle)
+        );
+        assert_eq!(
+            map_plugin_response_status(
+                reqwest::StatusCode::OK,
                 Some(r#"{"Success":false,"Message":"Internal error occurred"}"#)
             ),
             Err(EmbyError::ServerError("Internal error occurred".into()))
@@ -883,5 +930,28 @@ mod tests {
         assert!(EmbyClient::validate_item_id("../etc/passwd").is_err());
         assert!(EmbyClient::validate_item_id("item/123").is_err());
         assert!(EmbyClient::validate_item_id("item?query=1").is_err());
+    }
+
+    #[test]
+    fn test_part_file_guard() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let file_path = temp_dir.path().join("test.part");
+
+        // Case 1: dropped without disarm -> deletes file
+        std::fs::write(&file_path, b"data").unwrap();
+        assert!(file_path.exists());
+        {
+            let _guard = PartFileGuard::new(&file_path);
+        }
+        assert!(!file_path.exists());
+
+        // Case 2: disarmed before drop -> retains file
+        std::fs::write(&file_path, b"data").unwrap();
+        assert!(file_path.exists());
+        {
+            let mut guard = PartFileGuard::new(&file_path);
+            guard.disarm();
+        }
+        assert!(file_path.exists());
     }
 }

@@ -27,6 +27,7 @@ export function normalizeLanguageCode(code?: string): string {
       '繁體',
       '繁體中文',
       '繁体中文',
+      '繁中',
     ].includes(trimmed) ||
     trimmed.startsWith('zh-tw') ||
     trimmed.startsWith('zh-hant') ||
@@ -56,6 +57,10 @@ export function normalizeLanguageCode(code?: string): string {
       '中文',
       '国语',
       '普通话',
+      '简中',
+      '簡體',
+      '簡中',
+      '簡',
     ].includes(trimmed) ||
     trimmed.startsWith('zh-cn') ||
     trimmed.startsWith('zh-sg') ||
@@ -124,7 +129,11 @@ export function normalizeLanguageCode(code?: string): string {
   }
 
   // Cantonese
-  if (['yue', 'cantonese', '粤语', 'zh-yue'].includes(trimmed) || trimmed.startsWith('zh-yue')) {
+  if (
+    ['yue', 'cantonese', '粤语', 'zh-yue'].includes(trimmed) ||
+    trimmed.startsWith('zh-yue') ||
+    trimmed.startsWith('yue-')
+  ) {
     return 'yue';
   }
   return trimmed;
@@ -187,6 +196,7 @@ export function matchSubtitleLanguage(
 
     const hasSimplifiedMarker =
       titleLower.includes('简') ||
+      titleLower.includes('簡') ||
       /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('simplified') ||
       titleLower.includes('zh-cn') ||
@@ -195,6 +205,9 @@ export function matchSubtitleLanguage(
     // Exclude only if title explicitly specifies Traditional without Simplified markers
     if (hasTraditionalMarker && !hasSimplifiedMarker) {
       return false;
+    }
+    if (normStreamLang === 'zh-TW' || normStreamLang === 'yue') {
+      return hasSimplifiedMarker;
     }
     if (normStreamLang === 'zh-CN') return true;
     if (

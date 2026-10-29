@@ -171,18 +171,9 @@ export async function syncEmbySubtitles(
       break;
     }
     case 'separate_tracks': {
-      const origContent = generateOriginalSrt(segments);
-      if (origContent.trim()) {
-        await uploadEmbySubtitle({
-          itemId: embyContext.itemId,
-          language: embyContext.sourceLanguage || 'und',
-          format: 'srt',
-          isForced: false,
-          content: origContent,
-        });
-      }
+      const hasTranslation = segments.some((seg) => Boolean(seg.translation?.trim()));
       const transContent = generatePureTranslationSrt(segments);
-      if (transContent.trim()) {
+      if (hasTranslation && transContent.trim()) {
         await uploadEmbySubtitle(
           {
             itemId: embyContext.itemId,
@@ -193,6 +184,16 @@ export async function syncEmbySubtitles(
           },
           deleteIndex
         );
+      }
+      const origContent = generateOriginalSrt(segments);
+      if (origContent.trim()) {
+        await uploadEmbySubtitle({
+          itemId: embyContext.itemId,
+          language: embyContext.sourceLanguage || 'und',
+          format: 'srt',
+          isForced: false,
+          content: origContent,
+        });
       }
       break;
     }

@@ -3088,6 +3088,9 @@
     "status_missing_sub": "Missing Subtitles",
     "select_audio_track": "Select Audio Track",
     "missing_target_count": "{{count}} missing",
-    "all_have_target": "All have subtitles"
+    "all_have_target": "All have subtitles",
+    "resync_no_segments": "Cannot re-sync to Emby: Transcript has no segments.",
+    "resync_success": "Successfully synced subtitles to Emby.",
+    "clear_selection": "Clear Selection"
   }
 }

@@ -29,9 +29,10 @@ export function EmbyServerConfigModal({
 
   const handleSubmit = () => {
     if (isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()) return;
+    const serverUrl = config.serverUrl.trim().replace(/\/+$/, '');
     const trimmed: EmbyConnectionConfig = {
       ...config,
-      serverUrl: config.serverUrl.trim(),
+      serverUrl,
       apiKey: config.apiKey.trim(),
     };
     onChangeConfig(trimmed);
@@ -39,6 +40,7 @@ export function EmbyServerConfigModal({
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.nativeEvent.isComposing) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       handleSubmit();

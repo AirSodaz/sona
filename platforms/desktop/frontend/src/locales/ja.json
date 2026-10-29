@@ -3088,6 +3088,9 @@
     "status_missing_sub": "字幕なし",
     "select_audio_track": "音声トラックを選択",
     "missing_target_count": "{{count}} 件なし",
-    "all_have_target": "すべて字幕あり"
+    "all_have_target": "すべて字幕あり",
+    "resync_no_segments": "Emby に再同期できません: 文字起こしセグメントがありません。",
+    "resync_success": "Emby への字幕同期が完了しました。",
+    "clear_selection": "選択を解除"
   }
 }

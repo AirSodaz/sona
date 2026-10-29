@@ -3088,6 +3088,9 @@
     "status_missing_sub": "缺失字幕",
     "select_audio_track": "选择音频轨",
     "missing_target_count": "{{count}} 缺失",
-    "all_have_target": "全配齐"
+    "all_have_target": "全配齐",
+    "resync_no_segments": "无法重新同步至 Emby：转录内容无文本片段。",
+    "resync_success": "已成功同步字幕至 Emby。",
+    "clear_selection": "清除选择"
   }
 }
