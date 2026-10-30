@@ -453,7 +453,7 @@ function stageCudaAddonFiles({
   llamaLibDir,
   cudaLibPaths = [],
   platform = process.platform,
-  version = '0.2.0',
+  version = '0.2.1',
   cudaVersion = '12.4',
 }) {
   fs.mkdirSync(stagedDir, { recursive: true });
@@ -590,7 +590,7 @@ function runCli() {
     process.exit(1);
   }
 
-  const addonVersion = options['addon-version'] || '0.2.0';
+  const addonVersion = options['addon-version'] || '0.2.1';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
   const sherpaVersion = options['sherpa-version'] || '2.0.1';
   const ortVersion = options['ort-version'] || '1.28.2';

@@ -7,9 +7,9 @@ on:
   workflow_dispatch:
     inputs:
       addon_version:
-        description: "CUDA addon version (e.g. 0.2.0)"
+        description: "CUDA addon version (e.g. 0.2.1)"
         required: true
-        default: "0.2.0"
+        default: "0.2.1"
         type: string
       cuda_version:
         description: "Target CUDA Toolkit version"
@@ -66,7 +66,7 @@ jobs:
             echo "release_tag=$TAG" >> "$GITHUB_OUTPUT"
             echo "should_publish=true" >> "$GITHUB_OUTPUT"
           else
-            VERSION="${{ inputs.addon_version || '0.2.0' }}"
+            VERSION="${{ inputs.addon_version || '0.2.1' }}"
             node scripts/cuda-addon-manifest.js validate-tag --tag "cuda-addon-v${VERSION}" --version "$VERSION"
             echo "addon_version=$VERSION" >> "$GITHUB_OUTPUT"
             echo "release_tag=cuda-addon-v${VERSION}" >> "$GITHUB_OUTPUT"
