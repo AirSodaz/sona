@@ -1,8 +1,8 @@
 use tauri::State;
 
 use crate::integrations::emby::{
-    EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyServerInfo,
-    EmbyState, SubtitleUploadPayload,
+    EmbyClient, EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyLoginPayload,
+    EmbyServerInfo, EmbyState, SubtitleUploadPayload,
 };
 use crate::services::DesktopServices;
 
@@ -49,6 +49,105 @@ pub async fn emby_test_connection(
 }
 
 #[tauri::command(rename_all = "camelCase")]
+pub async fn emby_login(
+    services: State<'_, DesktopServices>,
+    emby_state: State<'_, EmbyState>,
+    payload: EmbyLoginPayload,
+) -> Result<EmbyServerInfo, String> {
+    let clean_url = payload.server_url.trim().to_string();
+    let clean_user = payload.username.trim().to_string();
+    let password = payload.password.unwrap_or_default();
+    if clean_url.is_empty() || clean_user.is_empty() {
+        return Err("Server URL and username cannot be empty".to_string());
+    }
+
+    let login_res = EmbyClient::authenticate_by_name(
+        &clean_url,
+        &clean_user,
+        &password,
+        payload.allow_invalid_certs,
+    )
+    .await
+    .map_err(|e| match e {
+        EmbyError::Unauthorized => "Invalid username or password".to_string(),
+        other => sanitize_emby_error(other, None),
+    })?;
+
+    if !login_res.is_admin {
+        return Err(
+            "The account is not an administrator. Subtitle management requires administrator privileges."
+                .to_string(),
+        );
+    }
+
+    let config = EmbyConnectionConfig {
+        server_url: clean_url.clone(),
+        api_key: login_res.access_token.clone(),
+        username: Some(login_res.user_name.clone()),
+        allow_invalid_certs: payload.allow_invalid_certs,
+        admin_user_id: Some(login_res.user_id.clone()),
+    };
+
+    let client = EmbyClient::new(config.clone())
+        .map_err(|e| sanitize_emby_error(e, Some(&login_res.access_token)))?;
+
+    let info = client
+        .test_connection()
+        .await
+        .map_err(|e| sanitize_emby_error(e, Some(&login_res.access_token)))?;
+
+    let mut current_config = services
+        .config
+        .load()
+        .map_err(|e| sanitize_emby_error(e, Some(&login_res.access_token)))?
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+
+    if let Some(obj) = current_config.as_object_mut() {
+        obj.insert(
+            "embyServerUrl".to_string(),
+            serde_json::Value::String(clean_url),
+        );
+        obj.insert(
+            "embyToken".to_string(),
+            serde_json::Value::String(login_res.access_token.clone()),
+        );
+        obj.insert(
+            "embyApiKey".to_string(),
+            serde_json::Value::String(login_res.access_token.clone()),
+        );
+        obj.insert(
+            "embyUsername".to_string(),
+            serde_json::Value::String(login_res.user_name),
+        );
+        obj.insert(
+            "embyAdminUserId".to_string(),
+            serde_json::Value::String(login_res.user_id),
+        );
+        obj.insert(
+            "embyAllowInvalidCerts".to_string(),
+            serde_json::Value::Bool(payload.allow_invalid_certs),
+        );
+    }
+
+    services
+        .config
+        .save(&current_config)
+        .map_err(|e| sanitize_emby_error(e, Some(&login_res.access_token)))?;
+
+    emby_state.set_client(Some(client)).await;
+    let _ = services.emitter.emit(
+        "app-setting-updated",
+        serde_json::json!({
+            "key": "sona-config",
+            "value": &current_config,
+        }),
+    );
+
+    Ok(info)
+}
+
+#[tauri::command(rename_all = "camelCase")]
 pub async fn emby_save_config(
     services: State<'_, DesktopServices>,
     emby_state: State<'_, EmbyState>,
@@ -86,14 +185,24 @@ pub async fn emby_save_config(
             serde_json::Value::String(config.server_url.clone()),
         );
         obj.insert(
+            "embyToken".to_string(),
+            serde_json::Value::String(config.api_key.clone()),
+        );
+        obj.insert(
             "embyApiKey".to_string(),
             serde_json::Value::String(config.api_key.clone()),
         );
+        if let Some(user) = &config.username {
+            obj.insert(
+                "embyUsername".to_string(),
+                serde_json::Value::String(user.clone()),
+            );
+        }
         obj.insert(
             "embyAllowInvalidCerts".to_string(),
             serde_json::Value::Bool(config.allow_invalid_certs),
         );
-        if let Some(ref admin_id) = config.admin_user_id {
+        if let Some(admin_id) = &config.admin_user_id {
             obj.insert(
                 "embyAdminUserId".to_string(),
                 serde_json::Value::String(admin_id.clone()),
@@ -133,11 +242,20 @@ pub fn emby_get_config(
         .map(|s| s.to_string());
 
     let api_key = config_val
-        .get("embyApiKey")
+        .get("embyToken")
+        .or_else(|| config_val.get("emby_token"))
+        .or_else(|| config_val.get("embyApiKey"))
         .or_else(|| config_val.get("emby_api_key"))
         .and_then(|v| v.as_str())
         .map(|s| s.to_string());
 
+    let username = config_val
+        .get("embyUsername")
+        .or_else(|| config_val.get("emby_username"))
+        .and_then(|v| v.as_str())
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string());
     let allow_invalid_certs = config_val
         .get("embyAllowInvalidCerts")
         .or_else(|| config_val.get("emby_allow_invalid_certs"))
@@ -159,6 +277,7 @@ pub fn emby_get_config(
             return Ok(Some(EmbyConnectionConfig {
                 server_url: clean_url.to_string(),
                 api_key: clean_key.to_string(),
+                username,
                 allow_invalid_certs,
                 admin_user_id,
             }));

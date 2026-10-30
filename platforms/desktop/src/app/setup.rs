@@ -115,9 +115,18 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
             .or_else(|| config_val.get("emby_server_url"))
             .and_then(|v| v.as_str());
         let api_key = config_val
-            .get("embyApiKey")
+            .get("embyToken")
+            .or_else(|| config_val.get("emby_token"))
+            .or_else(|| config_val.get("embyApiKey"))
             .or_else(|| config_val.get("emby_api_key"))
             .and_then(|v| v.as_str());
+        let username = config_val
+            .get("embyUsername")
+            .or_else(|| config_val.get("emby_username"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
         let allow_invalid_certs = config_val
             .get("embyAllowInvalidCerts")
             .or_else(|| config_val.get("emby_allow_invalid_certs"))
@@ -139,6 +148,7 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                 crate::integrations::emby::EmbyConnectionConfig {
                     server_url: url.trim().to_string(),
                     api_key: key.trim().to_string(),
+                    username,
                     allow_invalid_certs,
                     admin_user_id,
                 },

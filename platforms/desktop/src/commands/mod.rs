@@ -214,6 +214,7 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::mcp::mcp_clear_activity_logs,
         crate::commands::mcp::mcp_get_tools_catalog,
         crate::commands::mcp::mcp_get_client_configs,
+        crate::commands::emby::emby_login,
         crate::commands::emby::emby_test_connection,
         crate::commands::emby::emby_save_config,
         crate::commands::emby::emby_get_config,

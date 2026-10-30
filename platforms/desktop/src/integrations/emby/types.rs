@@ -5,8 +5,10 @@ use serde::{Deserialize, Serialize};
 pub struct EmbyConnectionConfig {
     #[serde(alias = "server_url")]
     pub server_url: String,
-    #[serde(alias = "api_key")]
+    #[serde(alias = "api_key", alias = "token")]
     pub api_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
     #[serde(default, alias = "allow_invalid_certs")]
     pub allow_invalid_certs: bool,
     #[serde(
@@ -15,6 +17,26 @@ pub struct EmbyConnectionConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub admin_user_id: Option<String>,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbyLoginPayload {
+    pub server_url: String,
+    pub username: String,
+    #[serde(default)]
+    pub password: Option<String>,
+    #[serde(default)]
+    pub allow_invalid_certs: bool,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EmbyLoginResult {
+    pub access_token: String,
+    pub user_id: String,
+    pub user_name: String,
+    pub is_admin: bool,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -30,6 +52,8 @@ pub struct EmbyServerInfo {
         skip_serializing_if = "Option::is_none"
     )]
     pub admin_user_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

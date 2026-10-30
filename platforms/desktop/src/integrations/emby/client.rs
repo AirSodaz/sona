@@ -5,8 +5,8 @@ use std::time::Duration;
 use tokio::io::AsyncWriteExt;
 
 use super::types::{
-    EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyMediaItem,
-    EmbyServerInfo, EmbyStreamInfo, SubtitleUploadPayload, is_chinese_language,
+    EmbyConnectionConfig, EmbyError, EmbyItemListResult, EmbyLibrary, EmbyLoginResult,
+    EmbyMediaItem, EmbyServerInfo, EmbyStreamInfo, SubtitleUploadPayload, is_chinese_language,
     normalize_server_url,
 };
 
@@ -71,6 +71,72 @@ impl EmbyClient {
         })
     }
 
+    pub async fn authenticate_by_name(
+        server_url: &str,
+        username: &str,
+        password: &str,
+        allow_invalid_certs: bool,
+    ) -> Result<EmbyLoginResult, EmbyError> {
+        let clean_url = normalize_server_url(server_url);
+        if clean_url.is_empty() {
+            return Err(EmbyError::Network("Server URL cannot be empty".to_string()));
+        }
+        let trimmed_user = username.trim();
+        if trimmed_user.is_empty() {
+            return Err(EmbyError::InvalidConfig("Username cannot be empty".into()));
+        }
+
+        let mut builder = reqwest::Client::builder()
+            .connect_timeout(Duration::from_secs(10))
+            .timeout(Duration::from_secs(30))
+            .user_agent("Sona-Desktop/1.0");
+        if allow_invalid_certs {
+            builder = builder.danger_accept_invalid_certs(true);
+        }
+        let client = builder
+            .build()
+            .map_err(|e| EmbyError::Network(e.to_string()))?;
+
+        let auth_url = format!("{}/Users/AuthenticateByName", clean_url);
+        let auth_header = "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\"";
+
+        let body = serde_json::json!({
+            "Username": trimmed_user,
+            "Pw": password,
+        });
+
+        let resp = client
+            .post(&auth_url)
+            .header("X-Emby-Authorization", auth_header)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| EmbyError::Network(e.to_string()))?;
+
+        let status = resp.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
+            return Err(EmbyError::Unauthorized);
+        }
+
+        if !status.is_success() {
+            let body_text = resp.text().await.unwrap_or_default();
+            let msg = if body_text.trim().is_empty() {
+                format!("Login failed: HTTP {}", status)
+            } else {
+                format!("Login failed: HTTP {} - {}", status, body_text.trim())
+            };
+            return Err(EmbyError::ServerError(msg));
+        }
+
+        let json: Value = resp
+            .json()
+            .await
+            .map_err(|e| EmbyError::ServerError(format!("Invalid login response: {e}")))?;
+
+        parse_login_response(&json, trimmed_user)
+    }
+
     pub fn config(&self) -> &EmbyConnectionConfig {
         &self.config
     }
@@ -100,6 +166,17 @@ impl EmbyClient {
 
     fn apply_auth(&self, req: reqwest::RequestBuilder) -> reqwest::RequestBuilder {
         req.header("X-Emby-Token", &self.config.api_key)
+    }
+
+    fn build_auth_header(&self, admin_id: Option<&str>) -> String {
+        let mut header = format!(
+            "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\", Token=\"{}\"",
+            self.config.api_key
+        );
+        if let Some(id) = admin_id {
+            header.push_str(&format!(", UserId=\"{id}\""));
+        }
+        header
     }
 
     pub async fn test_connection(&self) -> Result<EmbyServerInfo, EmbyError> {
@@ -166,15 +243,15 @@ impl EmbyClient {
             _ => false,
         };
 
-        // 3. Discover administrator user ID
-        let admin_user_id = self.discover_admin_user_id().await;
-
+        // 3. Resolve administrator user ID
+        let admin_user_id = self.resolve_admin_user_id().await;
         Ok(EmbyServerInfo {
             id,
             server_name,
             version,
             has_subtitle_manager_plugin,
             admin_user_id,
+            username: self.config.username.clone(),
         })
     }
 
@@ -681,16 +758,10 @@ impl EmbyClient {
             query.push(("UserId", admin_id.as_str()));
         }
 
-        let mut req = self.apply_auth(self.client.post(&url).query(&query));
-        if let Some(ref admin_id) = admin_id_opt {
-            req = req.header(
-                "X-Emby-Authorization",
-                format!(
-                    "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\", UserId=\"{admin_id}\""
-                ),
-            );
-        }
-
+        let auth_header = self.build_auth_header(admin_id_opt.as_deref());
+        let req = self
+            .apply_auth(self.client.post(&url).query(&query))
+            .header("X-Emby-Authorization", auth_header);
         let resp = req
             .send()
             .await
@@ -746,22 +817,16 @@ impl EmbyClient {
             query.push(("UserId", admin_id.as_str()));
         }
 
-        let mut request = self.apply_auth(
-            self.client
-                .post(&url)
-                .query(&query)
-                .header("Content-Type", "text/plain; charset=utf-8")
-                .body(req.content.clone().into_bytes()),
-        );
-        if let Some(ref admin_id) = admin_id_opt {
-            request = request.header(
-                "X-Emby-Authorization",
-                format!(
-                    "MediaBrowser Client=\"Sona\", Device=\"Desktop\", DeviceId=\"sona-desktop\", Version=\"1.0\", UserId=\"{admin_id}\""
-                ),
-            );
-        }
-
+        let auth_header = self.build_auth_header(admin_id_opt.as_deref());
+        let request = self
+            .apply_auth(
+                self.client
+                    .post(&url)
+                    .query(&query)
+                    .header("Content-Type", "text/plain; charset=utf-8")
+                    .body(req.content.clone().into_bytes()),
+            )
+            .header("X-Emby-Authorization", auth_header);
         let resp = request
             .send()
             .await
@@ -963,6 +1028,47 @@ pub(crate) fn map_plugin_response_status(
     Ok(())
 }
 
+pub(crate) fn parse_login_response(
+    json: &Value,
+    fallback_user: &str,
+) -> Result<EmbyLoginResult, EmbyError> {
+    let access_token = json
+        .get("AccessToken")
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.trim().is_empty())
+        .ok_or_else(|| EmbyError::ServerError("Missing AccessToken in login response".into()))?
+        .to_string();
+
+    let user_obj = json.get("User").and_then(|v| v.as_object());
+    let user_id = user_obj
+        .and_then(|u| u.get("Id").or_else(|| u.get("id")))
+        .and_then(|v| v.as_str())
+        .unwrap_or_default()
+        .to_string();
+
+    let user_name = user_obj
+        .and_then(|u| u.get("Name").or_else(|| u.get("name")))
+        .and_then(|v| v.as_str())
+        .unwrap_or(fallback_user)
+        .to_string();
+
+    let is_admin = user_obj
+        .and_then(|u| u.get("Policy").or_else(|| u.get("policy")))
+        .and_then(|p| {
+            p.get("IsAdministrator")
+                .or_else(|| p.get("isAdministrator"))
+        })
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
+
+    Ok(EmbyLoginResult {
+        access_token,
+        user_id,
+        user_name,
+        is_admin,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -972,6 +1078,7 @@ mod tests {
         let config = EmbyConnectionConfig {
             server_url: "http://192.168.1.100:8096/emby/".into(),
             api_key: "test_key".into(),
+            username: None,
             allow_invalid_certs: true,
             admin_user_id: None,
         };
@@ -984,10 +1091,65 @@ mod tests {
     }
 
     #[test]
+    fn test_parse_login_response() {
+        let admin_json = serde_json::json!({
+            "AccessToken": "admin_access_token_abc",
+            "User": {
+                "Id": "admin_guid_123",
+                "Name": "emby_admin",
+                "Policy": {
+                    "IsAdministrator": true
+                }
+            }
+        });
+        let res = parse_login_response(&admin_json, "fallback").unwrap();
+        assert_eq!(res.access_token, "admin_access_token_abc");
+        assert_eq!(res.user_id, "admin_guid_123");
+        assert_eq!(res.user_name, "emby_admin");
+        assert!(res.is_admin);
+
+        let non_admin_json = serde_json::json!({
+            "AccessToken": "user_token_xyz",
+            "User": {
+                "Id": "user_guid_456",
+                "Name": "regular_user",
+                "Policy": {
+                    "IsAdministrator": false
+                }
+            }
+        });
+        let res_non_admin = parse_login_response(&non_admin_json, "fallback").unwrap();
+        assert!(!res_non_admin.is_admin);
+
+        let invalid_json = serde_json::json!({ "Error": "Unauthorized" });
+        assert!(parse_login_response(&invalid_json, "fallback").is_err());
+    }
+
+    #[test]
+    fn test_build_auth_header() {
+        let config = EmbyConnectionConfig {
+            server_url: "http://192.168.1.100:8096".into(),
+            api_key: "secret_token_123".into(),
+            username: None,
+            allow_invalid_certs: false,
+            admin_user_id: None,
+        };
+        let client = EmbyClient::new(config).unwrap();
+        let header_with_admin = client.build_auth_header(Some("admin_guid_456"));
+        assert!(header_with_admin.contains("Token=\"secret_token_123\""));
+        assert!(header_with_admin.contains("UserId=\"admin_guid_456\""));
+
+        let header_without_admin = client.build_auth_header(None);
+        assert!(header_without_admin.contains("Token=\"secret_token_123\""));
+        assert!(!header_without_admin.contains("UserId"));
+    }
+
+    #[test]
     fn test_emby_client_empty_url() {
         let config = EmbyConnectionConfig {
             server_url: "   ".into(),
             api_key: "test_key".into(),
+            username: None,
             allow_invalid_certs: false,
             admin_user_id: None,
         };

@@ -1,8 +1,8 @@
 import { AlertCircle, RefreshCw } from 'lucide-react';
 import type React from 'react';
-import { useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { EmbyConnectionConfig } from '../../../../types/emby';
+import type { EmbyConnectionConfig, EmbyLoginPayload } from '../../../../types/emby';
 import { Modal } from '../../../Modal';
 
 export interface EmbyServerConfigModalProps {
@@ -13,6 +13,7 @@ export interface EmbyServerConfigModalProps {
   isConnecting: boolean;
   connectionError: string | null;
   onConnect: (config?: EmbyConnectionConfig) => void | Promise<void>;
+  onLogin?: (payload: EmbyLoginPayload) => void | Promise<void>;
 }
 
 export function EmbyServerConfigModal({
@@ -23,20 +24,63 @@ export function EmbyServerConfigModal({
   isConnecting,
   connectionError,
   onConnect,
+  onLogin,
 }: EmbyServerConfigModalProps): React.JSX.Element {
   const { t } = useTranslation();
   const urlInputRef = useRef<HTMLInputElement>(null);
 
+  const [serverUrl, setServerUrl] = useState(config.serverUrl || '');
+  const [username, setUsername] = useState(config.username || '');
+  const [password, setPassword] = useState('');
+  const [allowInvalidCerts, setAllowInvalidCerts] = useState(config.allowInvalidCerts || false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setServerUrl(config.serverUrl || '');
+      setUsername(config.username || '');
+      setPassword('');
+      setAllowInvalidCerts(config.allowInvalidCerts || false);
+    }
+  }, [isOpen, config.serverUrl, config.username, config.allowInvalidCerts]);
+
+  const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
+  const cleanUser = username.trim();
+  const isSubmitDisabled = isConnecting || !cleanUrl || (!cleanUser && !config.apiKey);
+
   const handleSubmit = () => {
-    if (isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()) return;
-    const serverUrl = config.serverUrl.trim().replace(/\/+$/, '');
-    const trimmed: EmbyConnectionConfig = {
-      ...config,
-      serverUrl,
-      apiKey: config.apiKey.trim(),
-    };
-    onChangeConfig(trimmed);
-    void onConnect(trimmed);
+    if (isSubmitDisabled) return;
+
+    if (onLogin && (password || !config.apiKey || cleanUser !== (config.username || ''))) {
+      if (!cleanUser) return;
+      void onLogin({
+        serverUrl: cleanUrl,
+        username: cleanUser,
+        password: password || undefined,
+        allowInvalidCerts,
+      });
+      return;
+    }
+
+    if (config.apiKey) {
+      const updated: EmbyConnectionConfig = {
+        ...config,
+        serverUrl: cleanUrl,
+        username: cleanUser || config.username,
+        allowInvalidCerts,
+      };
+      onChangeConfig(updated);
+      void onConnect(updated);
+      return;
+    }
+
+    if (onLogin && cleanUser) {
+      void onLogin({
+        serverUrl: cleanUrl,
+        username: cleanUser,
+        password: password || undefined,
+        allowInvalidCerts,
+      });
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -72,7 +116,7 @@ export function EmbyServerConfigModal({
           <button
             type="button"
             className="btn btn-primary"
-            disabled={isConnecting || !config.serverUrl.trim() || !config.apiKey.trim()}
+            disabled={isSubmitDisabled}
             onClick={handleSubmit}
           >
             {isConnecting ? (
@@ -80,8 +124,10 @@ export function EmbyServerConfigModal({
                 <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />
                 {t('common.connecting', { defaultValue: 'Connecting...' })}
               </>
+            ) : !config.apiKey || password || cleanUser !== (config.username || '') ? (
+              t('emby.login_and_connect', { defaultValue: 'Login & Connect' })
             ) : (
-              t('emby.connect_and_save', { defaultValue: 'Test & Save' })
+              t('emby.test_connection', { defaultValue: 'Test & Connect' })
             )}
           </button>
         </div>
@@ -106,35 +152,57 @@ export function EmbyServerConfigModal({
             type="text"
             className="emby-input"
             placeholder="http://192.168.1.100:8096"
-            value={config.serverUrl}
-            onChange={(e) => onChangeConfig((prev) => ({ ...prev, serverUrl: e.target.value }))}
-            onBlur={() => onChangeConfig((prev) => ({ ...prev, serverUrl: prev.serverUrl.trim() }))}
+            value={serverUrl}
+            onChange={(e) => setServerUrl(e.target.value)}
+            onBlur={() => setServerUrl((prev) => prev.trim())}
             disabled={isConnecting}
           />
         </label>
 
         <label className="emby-form-field">
           <span className="emby-form-label">
-            {t('emby.modal_key_label', { defaultValue: 'API Key (Admin token)' })}
+            {t('emby.modal_username_label', { defaultValue: 'Admin Username' })}
+          </span>
+          <input
+            type="text"
+            className="emby-input"
+            placeholder={t('emby.modal_username_placeholder', { defaultValue: 'e.g. admin' })}
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            onBlur={() => setUsername((prev) => prev.trim())}
+            disabled={isConnecting}
+            autoComplete="username"
+          />
+        </label>
+
+        <label className="emby-form-field">
+          <span className="emby-form-label">
+            {t('emby.modal_password_label', { defaultValue: 'Admin Password' })}
           </span>
           <input
             type="password"
             className="emby-input"
-            placeholder="Emby API Key"
-            value={config.apiKey}
-            onChange={(e) => onChangeConfig((prev) => ({ ...prev, apiKey: e.target.value }))}
-            onBlur={() => onChangeConfig((prev) => ({ ...prev, apiKey: prev.apiKey.trim() }))}
+            placeholder={
+              config.apiKey
+                ? t('emby.modal_password_placeholder_saved', {
+                    defaultValue: 'Leave blank to keep existing login',
+                  })
+                : t('emby.modal_password_placeholder', {
+                    defaultValue: 'Password (leave blank if none)',
+                  })
+            }
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             disabled={isConnecting}
+            autoComplete="current-password"
           />
         </label>
 
         <label className="emby-checkbox-field">
           <input
             type="checkbox"
-            checked={config.allowInvalidCerts}
-            onChange={(e) =>
-              onChangeConfig((prev) => ({ ...prev, allowInvalidCerts: e.target.checked }))
-            }
+            checked={allowInvalidCerts}
+            onChange={(e) => setAllowInvalidCerts(e.target.checked)}
             disabled={isConnecting}
           />
           <span>

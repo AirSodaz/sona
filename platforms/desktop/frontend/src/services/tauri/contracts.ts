@@ -34,6 +34,7 @@ import type {
   EmbyConnectionConfig,
   EmbyItemListResult,
   EmbyLibrary,
+  EmbyLoginPayload,
   EmbyServerInfo,
   SubtitleUploadPayload,
 } from '../../types/emby';
@@ -822,6 +823,10 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.mcp.getClientConfigs]: {
     args: undefined;
     result: McpClientConfigMap;
+  };
+  [TauriCommand.emby.login]: {
+    args: { payload: EmbyLoginPayload };
+    result: EmbyServerInfo;
   };
   [TauriCommand.emby.testConnection]: {
     args: { config: EmbyConnectionConfig };

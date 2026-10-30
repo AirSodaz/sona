@@ -240,6 +240,7 @@ export const TauriCommand = {
     getClientConfigs: 'mcp_get_client_configs',
   },
   emby: {
+    login: 'emby_login',
     testConnection: 'emby_test_connection',
     saveConfig: 'emby_save_config',
     getConfig: 'emby_get_config',

@@ -22,6 +22,7 @@ vi.mock('../../../../services/emby/embyService', () => ({
   getEmbyConfig: vi.fn(),
   saveEmbyConfig: vi.fn(),
   testEmbyConnection: vi.fn(),
+  loginEmby: vi.fn(),
   getEmbyLibraries: vi.fn(),
   getEmbyItems: vi.fn(),
   downloadEmbyAudio: vi.fn(),

@@ -4,6 +4,7 @@ import {
   getEmbyConfig,
   getEmbyItems,
   getEmbyLibraries,
+  loginEmby,
   saveEmbyConfig,
   testEmbyConnection,
 } from '../../../../services/emby/embyService';
@@ -14,6 +15,7 @@ import type { EmbySubtitleMode } from '../../../../types/batchQueue';
 import type {
   EmbyConnectionConfig,
   EmbyLibrary,
+  EmbyLoginPayload,
   EmbyMediaItem,
   EmbyServerInfo,
 } from '../../../../types/emby';
@@ -58,6 +60,7 @@ export interface UseEmbySyncReturn {
   connectionError: string | null;
   isConnected: boolean;
   handleConnect: (cfgToTest?: EmbyConnectionConfig) => Promise<void>;
+  handleLogin: (payload: EmbyLoginPayload) => Promise<void>;
 
   // Modals
   isConfigModalOpen: boolean;
@@ -211,6 +214,63 @@ export function useEmbySync(): UseEmbySyncReturn {
       await saveEmbyConfig(targetConfig);
       if (seq !== connectSeqRef.current) return;
       setConfig(targetConfig);
+      setIsConfigModalOpen(false);
+
+      // Clear stale items, selection, and audio tracks on server switch
+      setItems([]);
+      setSelectedItemIds(new Set());
+      setAudioTrackMap({});
+      setExpandedSeasons(new Set());
+
+      const libs = await getEmbyLibraries();
+      if (seq !== connectSeqRef.current) return;
+      setLibraries(libs);
+      if (libs.length > 0) {
+        setSelectedLibraryId((prev) => {
+          if (prev && libs.some((lib) => lib.id === prev)) {
+            return prev;
+          }
+          return libs[0].id;
+        });
+      } else {
+        setSelectedLibraryId(null);
+      }
+      setServerInfo(info);
+      useToolsStore.getState().setEmbyServerName(info.serverName);
+    } catch (err: unknown) {
+      if (seq !== connectSeqRef.current) return;
+      setConnectionError(extractErrorMessage(err) || String(err));
+      setServerInfo(null);
+      useToolsStore.getState().setEmbyServerName(null);
+      setLibraries([]);
+      setSelectedLibraryId(null);
+      setItems([]);
+      setSelectedItemIds(new Set());
+      setAudioTrackMap({});
+    } finally {
+      if (seq === connectSeqRef.current) {
+        setIsConnecting(false);
+      }
+    }
+  }, []);
+
+  // Login to Emby server with username and password
+  const handleLogin = useCallback(async (payload: EmbyLoginPayload) => {
+    if (!payload.serverUrl.trim() || !payload.username.trim()) {
+      setIsConfigModalOpen(true);
+      return;
+    }
+
+    const seq = ++connectSeqRef.current;
+    setIsConnecting(true);
+    setConnectionError(null);
+    try {
+      const info = await loginEmby(payload);
+      if (seq !== connectSeqRef.current) return;
+      const saved = await getEmbyConfig();
+      if (saved) {
+        setConfig(saved);
+      }
       setIsConfigModalOpen(false);
 
       // Clear stale items, selection, and audio tracks on server switch
@@ -581,6 +641,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     connectionError,
     isConnected: Boolean(serverInfo),
     handleConnect,
+    handleLogin,
 
     isConfigModalOpen,
     setIsConfigModalOpen,

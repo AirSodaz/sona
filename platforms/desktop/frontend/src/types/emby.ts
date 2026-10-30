@@ -1,8 +1,16 @@
 export interface EmbyConnectionConfig {
   serverUrl: string;
   apiKey: string;
+  username?: string;
   allowInvalidCerts: boolean;
   adminUserId?: string;
+}
+
+export interface EmbyLoginPayload {
+  serverUrl: string;
+  username: string;
+  password?: string;
+  allowInvalidCerts: boolean;
 }
 
 export interface EmbyServerInfo {
@@ -11,8 +19,8 @@ export interface EmbyServerInfo {
   version: string;
   hasSubtitleManagerPlugin: boolean;
   adminUserId?: string;
+  username?: string;
 }
-
 export interface EmbyLibrary {
   id: string;
   name: string;

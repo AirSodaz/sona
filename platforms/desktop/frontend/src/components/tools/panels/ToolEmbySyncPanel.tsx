@@ -23,7 +23,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     connectionError,
     isConnected,
     handleConnect,
-
+    handleLogin,
     isConfigModalOpen,
     setIsConfigModalOpen,
     isPluginModalOpen,
@@ -194,7 +194,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
               <p>
                 {t('emby.welcome_desc', {
                   defaultValue:
-                    'Connect your Emby media server with an admin API key to browse libraries, select movies or TV series, transcribe audio offline with Sona, and sync subtitles directly back.',
+                    'Connect to your Emby media server with an administrator account to browse libraries, select movies or TV series, transcribe audio offline with Sona, and sync subtitles directly back.',
                 })}
               </p>
               <button
@@ -304,6 +304,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
           isConnecting={isConnecting}
           connectionError={connectionError}
           onConnect={handleConnect}
+          onLogin={handleLogin}
         />
 
         <EmbyPluginGuideModal

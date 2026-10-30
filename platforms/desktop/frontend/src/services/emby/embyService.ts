@@ -3,6 +3,7 @@ import type {
   EmbyConnectionConfig,
   EmbyItemListResult,
   EmbyLibrary,
+  EmbyLoginPayload,
   EmbyServerInfo,
   SubtitleUploadPayload,
 } from '../../types/emby';
@@ -83,6 +84,10 @@ export function generateBilingualSrt(segments: TranscriptSegment[]): string {
     }
     return trans || orig;
   });
+}
+
+export async function loginEmby(payload: EmbyLoginPayload): Promise<EmbyServerInfo> {
+  return invokeTauri(TauriCommand.emby.login, { payload });
 }
 
 export async function testEmbyConnection(config: EmbyConnectionConfig): Promise<EmbyServerInfo> {
