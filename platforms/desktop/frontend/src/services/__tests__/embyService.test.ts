@@ -56,6 +56,9 @@ describe('embyService SRT & text helpers', () => {
     expect(cleanSubtitleText('Line 1\r\nLine 2\rLine 3')).toBe('Line 1\nLine 2\nLine 3');
     expect(cleanSubtitleText('It&#39;s &apos;good&#x27;')).toBe("It's 'good'");
     expect(cleanSubtitleText('Line 1\n\n\n\nLine 2')).toBe('Line 1\nLine 2');
+    expect(cleanSubtitleText('<<script>script>alert(1)</script>Clean text')).toBe(
+      'alert(1)Clean text'
+    );
   });
 
   it('enforces positive minimum cue duration in buildSrt', () => {
