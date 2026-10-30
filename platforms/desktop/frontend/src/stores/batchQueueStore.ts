@@ -457,33 +457,36 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     const projectStore = useProjectStore.getState();
     const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
     const resolvedConfigSnapshot = getEffectiveConfigSnapshot();
-    const newItems: BatchQueueItem[] = options.items.map((opt) => ({
-      id: uuidv4(),
-      filename: opt.itemName,
-      filePath: '',
-      sourceType: 'url_stream',
-      streamUrl: `${opt.serverUrl}/Videos/${opt.itemId}/stream`,
-      status: 'pending',
-      progress: 0,
-      segments: [],
-      audioUrl: null,
-      projectId: activeProjectId,
-      pipelineSnapshot: options?.pipelineSnapshot,
-      origin: 'manual',
-      resolvedConfigSnapshot,
-      lastKnownStage: 'queued',
-      embyContext: {
-        serverId: opt.serverId,
-        serverUrl: opt.serverUrl,
-        itemId: opt.itemId,
-        itemName: opt.itemName,
-        audioStreamIndex: opt.audioStreamIndex,
-        subtitleMode: opt.subtitleMode,
-        targetLanguage: opt.targetLanguage,
-        sourceLanguage: opt.sourceLanguage,
-        existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
-      },
-    }));
+    const newItems: BatchQueueItem[] = options.items.map((opt) => {
+      const baseServerUrl = opt.serverUrl.trim().replace(/\/+$/, '');
+      return {
+        id: uuidv4(),
+        filename: opt.itemName,
+        filePath: '',
+        sourceType: 'url_stream',
+        streamUrl: `${baseServerUrl}/Videos/${opt.itemId}/stream`,
+        status: 'pending',
+        progress: 0,
+        segments: [],
+        audioUrl: null,
+        projectId: activeProjectId,
+        pipelineSnapshot: options?.pipelineSnapshot,
+        origin: 'manual',
+        resolvedConfigSnapshot,
+        lastKnownStage: 'queued',
+        embyContext: {
+          serverId: opt.serverId,
+          serverUrl: baseServerUrl,
+          itemId: opt.itemId,
+          itemName: opt.itemName,
+          audioStreamIndex: opt.audioStreamIndex,
+          subtitleMode: opt.subtitleMode,
+          targetLanguage: opt.targetLanguage,
+          sourceLanguage: opt.sourceLanguage,
+          existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
+        },
+      };
+    });
 
     let nextQueueItems: BatchQueueItem[] = [];
     set((state) => {

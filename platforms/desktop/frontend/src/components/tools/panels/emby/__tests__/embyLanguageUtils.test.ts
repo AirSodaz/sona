@@ -32,6 +32,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('簡體')).toBe('zh-CN');
       expect(normalizeLanguageCode('簡中')).toBe('zh-CN');
       expect(normalizeLanguageCode('簡')).toBe('zh-CN');
+      expect(normalizeLanguageCode('简')).toBe('zh-CN');
     });
 
     it('normalizes Traditional Chinese variants to zh-TW', () => {
@@ -45,6 +46,7 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh_HK')).toBe('zh-TW');
       expect(normalizeLanguageCode('zh-cht')).toBe('zh-TW');
       expect(normalizeLanguageCode('繁中')).toBe('zh-TW');
+      expect(normalizeLanguageCode('繁')).toBe('zh-TW');
     });
 
     it('normalizes other common language codes', () => {
@@ -86,6 +88,10 @@ describe('embyLanguageUtils', () => {
       expect(matchSubtitleLanguage('yue', '粤语简中', 'zh-CN')).toBe(true);
       expect(matchSubtitleLanguage('zh-tw', '繁简双语', 'zh-CN')).toBe(true);
       expect(matchSubtitleLanguage('und', '簡體字幕', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('mul', '中文字幕', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('unk', '中文字幕', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('chi', '简体中文', 'zh-TW')).toBe(false);
+      expect(matchSubtitleLanguage('zh', '简体字幕', 'zh-TW')).toBe(false);
     });
 
     it('supports bilingual Chinese subtitles in zh-CN matching', () => {
@@ -278,6 +284,25 @@ describe('embyLanguageUtils', () => {
         isDefault: false,
       };
       expect(getAudioTrackLabel(stream)).toBe('ENG DTS');
+    });
+    it('falls back to Track #index when title, language, and codec are absent', () => {
+      const stream: EmbyStreamInfo = {
+        index: 3,
+        streamType: 'Audio',
+        isExternal: false,
+        isForced: false,
+        isDefault: false,
+      };
+      expect(getAudioTrackLabel(stream)).toBe('Track #3');
+
+      const defaultStream: EmbyStreamInfo = {
+        index: 0,
+        streamType: 'Audio',
+        isExternal: false,
+        isForced: false,
+        isDefault: true,
+      };
+      expect(getAudioTrackLabel(defaultStream)).toBe('Track #0 (Default)');
     });
   });
 });

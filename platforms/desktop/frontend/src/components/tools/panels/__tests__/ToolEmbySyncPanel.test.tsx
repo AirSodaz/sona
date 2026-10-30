@@ -413,4 +413,39 @@ describe('ToolEmbySyncPanel', () => {
     const submitBtn = screen.getByRole('button', { name: /Transcribe \(0\)/ });
     expect(submitBtn.hasAttribute('disabled')).toBe(true);
   });
+
+  it('toggles season accordion collapse and expand on header click', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+      expect(screen.getByText(/E1 - 绝命毒师 Pilot/)).toBeDefined();
+    });
+
+    const seasonHeader = screen.getByText(/绝命毒师 - Season 1/);
+    fireEvent.click(seasonHeader);
+    expect(screen.queryByText(/E1 - 绝命毒师 Pilot/)).toBeNull();
+
+    fireEvent.click(seasonHeader);
+    expect(screen.getByText(/E1 - 绝命毒师 Pilot/)).toBeDefined();
+  });
+
+  it('opens server config modal and plugin guide modal when clicked', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+    });
+
+    const serverSettingsBtn = screen.getByRole('button', { name: /Server Settings/i });
+    fireEvent.click(serverSettingsBtn);
+    expect(screen.getByText('Configure Emby Server Connection')).toBeDefined();
+
+    const cancelBtn = screen.getByRole('button', { name: /Cancel/i });
+    fireEvent.click(cancelBtn);
+
+    const pluginGuideBtn = screen.getByRole('button', { name: /Plugin Guide/i });
+    fireEvent.click(pluginGuideBtn);
+    expect(screen.getByText('Install Emby.SubtitleManager Plugin')).toBeDefined();
+  });
 });

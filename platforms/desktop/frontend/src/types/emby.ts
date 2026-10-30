@@ -2,6 +2,7 @@ export interface EmbyConnectionConfig {
   serverUrl: string;
   apiKey: string;
   allowInvalidCerts: boolean;
+  adminUserId?: string;
 }
 
 export interface EmbyServerInfo {
@@ -9,6 +10,7 @@ export interface EmbyServerInfo {
   serverName: string;
   version: string;
   hasSubtitleManagerPlugin: boolean;
+  adminUserId?: string;
 }
 
 export interface EmbyLibrary {

@@ -103,6 +103,7 @@ export class BatchItemProcessor {
     const segmentBuffer = new Map<string, TranscriptSegment>();
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
+    let downloadedEmbyPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
 
     if (item.embyContext && item.historyId) {
@@ -124,13 +125,14 @@ export class BatchItemProcessor {
 
       const duration = this.calculateDuration(currentSegments);
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !item.embyContext &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
           : undefined;
-      const inputSource = item.streamUrl || item.filePath;
+      const inputSource = item.embyContext ? item.filePath : item.streamUrl || item.filePath;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
@@ -245,6 +247,7 @@ export class BatchItemProcessor {
           item.embyContext.itemId,
           item.embyContext.audioStreamIndex
         );
+        downloadedEmbyPath = downloadedPath;
         item.filePath = downloadedPath;
         callbacks.updateFilePath?.(downloadedPath);
       }
@@ -359,7 +362,8 @@ export class BatchItemProcessor {
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
-      if (item.embyContext && currentSegments.length > 0 && !callbacks.isCancelRequested()) {
+      this.throwIfCancelRequested(callbacks);
+      if (item.embyContext && currentSegments.length > 0) {
         const { embyContext } = item;
         try {
           const targetLanguage =
@@ -382,6 +386,9 @@ export class BatchItemProcessor {
       }
     } catch (error) {
       flushSegmentBuffer();
+      if (downloadedEmbyPath) {
+        await this.removeTempFile(downloadedEmbyPath);
+      }
       const isStream =
         !item.embyContext &&
         (item.sourceType === 'url_stream' ||

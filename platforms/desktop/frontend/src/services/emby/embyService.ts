@@ -173,6 +173,7 @@ export async function syncEmbySubtitles(
     case 'separate_tracks': {
       const hasTranslation = segments.some((seg) => Boolean(seg.translation?.trim()));
       const transContent = generatePureTranslationSrt(segments);
+      let remainingDeleteIndex = deleteIndex;
       if (hasTranslation && transContent.trim()) {
         await uploadEmbySubtitle(
           {
@@ -182,18 +183,22 @@ export async function syncEmbySubtitles(
             isForced: false,
             content: transContent,
           },
-          deleteIndex
+          remainingDeleteIndex
         );
+        remainingDeleteIndex = undefined;
       }
       const origContent = generateOriginalSrt(segments);
       if (origContent.trim()) {
-        await uploadEmbySubtitle({
-          itemId: embyContext.itemId,
-          language: embyContext.sourceLanguage || 'und',
-          format: 'srt',
-          isForced: false,
-          content: origContent,
-        });
+        await uploadEmbySubtitle(
+          {
+            itemId: embyContext.itemId,
+            language: embyContext.sourceLanguage || 'und',
+            format: 'srt',
+            isForced: false,
+            content: origContent,
+          },
+          remainingDeleteIndex
+        );
       }
       break;
     }

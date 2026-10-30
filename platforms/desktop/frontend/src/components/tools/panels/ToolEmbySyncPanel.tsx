@@ -283,7 +283,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
               </div>
 
               <EmbySubmitBar
-                selectedCount={selectedItemIds.size}
+                selectedCount={selectedInFilteredCount}
                 subtitleMode={subtitleMode}
                 onSubtitleModeChange={setSubtitleMode}
                 overwriteExistingExternal={overwriteExistingExternal}

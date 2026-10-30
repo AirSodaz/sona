@@ -31,7 +31,14 @@ fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> St
 }
 
 #[tauri::command(rename_all = "camelCase")]
-pub async fn emby_test_connection(config: EmbyConnectionConfig) -> Result<EmbyServerInfo, String> {
+pub async fn emby_test_connection(
+    mut config: EmbyConnectionConfig,
+) -> Result<EmbyServerInfo, String> {
+    config.server_url = config.server_url.trim().to_string();
+    config.api_key = config.api_key.trim().to_string();
+    if config.server_url.is_empty() || config.api_key.is_empty() {
+        return Err("Server URL and API key cannot be empty".to_string());
+    }
     let api_key = config.api_key.clone();
     let client = EmbyClient::new(config).map_err(|e| sanitize_emby_error(e, Some(&api_key)))?;
     let info = client
@@ -47,19 +54,19 @@ pub async fn emby_save_config(
     emby_state: State<'_, EmbyState>,
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
-    if config.server_url.trim().is_empty() || config.api_key.trim().is_empty() {
+    let mut config = config;
+    config.server_url = config.server_url.trim().to_string();
+    config.api_key = config.api_key.trim().to_string();
+    if config.server_url.is_empty() || config.api_key.is_empty() {
         return Err("Server URL and API key cannot be empty".to_string());
     }
 
-    let mut config = config;
-    if config
+    config.admin_user_id = config
         .admin_user_id
-        .as_deref()
-        .map(str::trim)
-        .unwrap_or("")
-        .is_empty()
-    {
-        config.admin_user_id = None;
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
+
+    if config.admin_user_id.is_none() {
         if let Ok(temp_client) = EmbyClient::new(config.clone()) {
             config.admin_user_id = temp_client.discover_admin_user_id().await;
         }
@@ -145,16 +152,17 @@ pub fn emby_get_config(
         .filter(|s| !s.is_empty())
         .map(|s| s.to_string());
 
-    if let (Some(server_url), Some(api_key)) = (server_url, api_key)
-        && !server_url.trim().is_empty()
-        && !api_key.trim().is_empty()
-    {
-        return Ok(Some(EmbyConnectionConfig {
-            server_url,
-            api_key,
-            allow_invalid_certs,
-            admin_user_id,
-        }));
+    if let (Some(server_url), Some(api_key)) = (server_url, api_key) {
+        let clean_url = server_url.trim();
+        let clean_key = api_key.trim();
+        if !clean_url.is_empty() && !clean_key.is_empty() {
+            return Ok(Some(EmbyConnectionConfig {
+                server_url: clean_url.to_string(),
+                api_key: clean_key.to_string(),
+                allow_invalid_certs,
+                admin_user_id,
+            }));
+        }
     }
 
     Ok(None)
@@ -188,13 +196,16 @@ pub async fn emby_get_items(
         .await
         .map_err(|e| sanitize_emby_error(e, None))?;
     let api_key = client.config().api_key.clone();
+    let clean_parent_id = parent_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
+    let clean_search_term = search_term
+        .as_deref()
+        .map(str::trim)
+        .filter(|s| !s.is_empty());
     client
-        .get_items(
-            parent_id.as_deref(),
-            search_term.as_deref(),
-            start_index,
-            limit,
-        )
+        .get_items(clean_parent_id, clean_search_term, start_index, limit)
         .await
         .map_err(|e| sanitize_emby_error(e, Some(&api_key)))
 }
@@ -249,7 +260,7 @@ pub async fn emby_download_audio(
 #[tauri::command(rename_all = "camelCase")]
 pub async fn emby_upload_subtitle(
     emby_state: State<'_, EmbyState>,
-    payload: SubtitleUploadPayload,
+    mut payload: SubtitleUploadPayload,
     delete_existing_external_index: Option<i32>,
 ) -> Result<(), String> {
     let clean_id = payload.item_id.trim();
@@ -260,14 +271,21 @@ pub async fn emby_upload_subtitle(
     {
         return Err("Invalid item ID format".to_string());
     }
-    if payload.language.trim().is_empty()
-        || payload.format.trim().is_empty()
-        || payload.content.trim().is_empty()
-    {
+    let clean_language = payload.language.trim();
+    let clean_format = payload.format.trim();
+    let clean_content = payload.content.trim();
+    if clean_language.is_empty() || clean_format.is_empty() || clean_content.is_empty() {
         return Err(
             "Invalid upload payload: language, format, and content must not be empty".to_string(),
         );
     }
+    if !clean_format.chars().all(|c| c.is_ascii_alphanumeric()) {
+        return Err("Invalid subtitle format: must be ASCII alphanumeric".to_string());
+    }
+
+    payload.item_id = clean_id.to_string();
+    payload.language = clean_language.to_string();
+    payload.format = clean_format.to_string();
 
     let client = emby_state
         .get_client()

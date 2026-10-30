@@ -1,6 +1,6 @@
 import { Bot, Keyboard, Server, Subtitles, Tv } from 'lucide-react';
 import type React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import {
@@ -55,9 +55,11 @@ export function ToolsSidebar(): React.JSX.Element {
       void useMcpStore.getState().fetchStatus();
     }
   }, [mcpStatus]);
-  const [embyServerName, setEmbyServerName] = useState<string | null>(null);
-  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh Emby connection status when active tool changes
+  const embyServerName = useToolsStore((state) => state.embyServerName);
+  const setEmbyServerName = useToolsStore((state) => state.setEmbyServerName);
+
   useEffect(() => {
+    if (embyServerName !== null) return;
     let unmounted = false;
     void getEmbyConfig()
       .then((cfg) => {
@@ -80,7 +82,7 @@ export function ToolsSidebar(): React.JSX.Element {
     return () => {
       unmounted = true;
     };
-  }, [activeTool]);
+  }, [embyServerName, setEmbyServerName]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',

@@ -3,11 +3,18 @@ import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import type { TranscriptSegment } from '../../types/transcript';
 import {
   cleanSubtitleText,
+  downloadEmbyAudio,
   formatSrtTimestamp,
   generateBilingualSrt,
   generateOriginalSrt,
   generatePureTranslationSrt,
+  getEmbyConfig,
+  getEmbyItems,
+  getEmbyLibraries,
+  saveEmbyConfig,
   syncEmbySubtitles,
+  testEmbyConnection,
+  uploadEmbySubtitle,
 } from '../emby/embyService';
 import { TauriCommand } from '../tauri/commands';
 import * as tauriInvoke from '../tauri/invoke';
@@ -18,6 +25,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
   useEmbyHistoryStore.setState({ contexts: {} });
   localStorage.removeItem('sona:emby:history_contexts');
 });
@@ -257,5 +265,92 @@ describe('syncEmbySubtitles workflow', () => {
     });
 
     invokeSpy.mockRestore();
+  });
+});
+describe('embyService IPC wrappers', () => {
+  it('calls testEmbyConnection with expected command and payload', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue({
+      id: 'server-1',
+      serverName: 'Emby Server',
+      version: '4.8.8.0',
+      hasSubtitleManagerPlugin: true,
+    });
+    const config = {
+      serverUrl: 'http://localhost:8096',
+      apiKey: 'key-1',
+      allowInvalidCerts: false,
+    };
+    const res = await testEmbyConnection(config);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.testConnection, { config });
+    expect(res.serverName).toBe('Emby Server');
+  });
+
+  it('calls saveEmbyConfig with expected command and payload', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined);
+    const config = {
+      serverUrl: 'http://localhost:8096',
+      apiKey: 'key-1',
+      allowInvalidCerts: false,
+    };
+    await saveEmbyConfig(config);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.saveConfig, { config });
+  });
+
+  it('calls getEmbyConfig with expected command', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue({
+      serverUrl: 'http://localhost:8096',
+      apiKey: 'key-1',
+      allowInvalidCerts: false,
+    });
+    const res = await getEmbyConfig();
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.getConfig);
+    expect(res?.serverUrl).toBe('http://localhost:8096');
+  });
+
+  it('calls getEmbyLibraries with expected command', async () => {
+    const invokeSpy = vi
+      .spyOn(tauriInvoke, 'invokeTauri')
+      .mockResolvedValue([{ id: 'lib-1', name: 'Movies' }]);
+    const res = await getEmbyLibraries();
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.getLibraries);
+    expect(res).toHaveLength(1);
+    expect(res[0].name).toBe('Movies');
+  });
+
+  it('calls getEmbyItems with expected command and params', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue({
+      items: [],
+      totalRecordCount: 0,
+    });
+    const params = { parentId: 'lib-1', searchTerm: 'test', startIndex: 0, limit: 50 };
+    const res = await getEmbyItems(params);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.getItems, params);
+    expect(res.totalRecordCount).toBe(0);
+  });
+
+  it('calls downloadEmbyAudio with expected command and arguments', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue('/tmp/audio.mp3');
+    const res = await downloadEmbyAudio('item-123', 1);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.downloadAudio, {
+      itemId: 'item-123',
+      streamIndex: 1,
+    });
+    expect(res).toBe('/tmp/audio.mp3');
+  });
+
+  it('calls uploadEmbySubtitle with expected command and arguments', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined);
+    const payload = {
+      itemId: 'item-123',
+      language: 'zh-CN',
+      format: 'srt',
+      isForced: false,
+      content: '1\n00:00:00,000 --> 00:00:01,000\nHello\n',
+    };
+    await uploadEmbySubtitle(payload, 2);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.uploadSubtitle, {
+      payload,
+      deleteExistingExternalIndex: 2,
+    });
   });
 });

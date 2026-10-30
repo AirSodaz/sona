@@ -490,6 +490,13 @@ pub struct AppConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub emby_allow_invalid_certs: Option<bool>,
+    #[serde(
+        default,
+        rename = "embyAdminUserId",
+        alias = "emby_admin_user_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_admin_user_id: Option<String>,
     #[serde(flatten)]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub extra: BTreeMap<String, Value>,

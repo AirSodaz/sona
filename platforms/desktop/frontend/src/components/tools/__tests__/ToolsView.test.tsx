@@ -147,6 +147,13 @@ describe('ToolsView', () => {
           ?.closest('.tools-detail-pane > div') as HTMLElement | null
       )?.style.display
     ).toBe('none');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-emby_sync')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
   });
 
   it('switches to voice typing panel when clicking voice typing in sidebar', () => {
@@ -160,6 +167,29 @@ describe('ToolsView', () => {
       (
         document
           .getElementById('tools-panel-voice_typing')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
+  });
+  it('switches to emby sync panel when clicking emby sync in sidebar', () => {
+    render(<ToolsView />);
+
+    const sidebarTabs = screen.getAllByRole('tab');
+    fireEvent.click(sidebarTabs[4]); // emby sync is index 4
+
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
+    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('0');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-emby_sync')
           ?.closest('.tools-detail-pane > div') as HTMLElement | null
       )?.style.display
     ).toBe('block');

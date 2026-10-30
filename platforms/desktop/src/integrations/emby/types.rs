@@ -244,13 +244,20 @@ pub fn is_chinese_language(lang: Option<&str>, display_title: Option<&str>) -> b
             "中文",
             "中字",
             "简中",
+            "簡中",
             "繁中",
             "简体",
+            "簡體",
             "繁体",
+            "繁體",
             "普通话",
+            "普通話",
             "国语",
+            "國語",
             "粤语",
+            "粵語",
             "汉语",
+            "漢語",
             "chinese",
         ];
         if chinese_phrases.iter().any(|phrase| clean.contains(phrase)) {
@@ -272,23 +279,11 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
         return true;
     }
 
+    if is_chinese_code(&p) {
+        return is_chinese_code(&s);
+    }
+
     match p.as_str() {
-        "zh" | "zh-cn" | "zh-tw" | "zh-hans" | "zh-hant" | "zh_cn" | "zh_tw" | "zh_hans"
-        | "zh_hant" | "zh-chs" | "zh-cht" | "zh-yue" | "chinese" | "chi" | "zho" | "cmn"
-        | "chs" | "cht" | "yue" => {
-            s == "zh"
-                || s == "chi"
-                || s == "zho"
-                || s == "cmn"
-                || s == "chs"
-                || s == "cht"
-                || s == "yue"
-                || s == "chinese"
-                || s.starts_with("zh-")
-                || s.starts_with("zh_")
-                || s.starts_with("yue-")
-                || s.starts_with("yue_")
-        }
         "ja" | "jpn" | "japanese" => {
             s == "ja"
                 || s == "jpn"
@@ -337,15 +332,7 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
                 || s.starts_with("ru_")
         }
         _ => {
-            if p.starts_with("zh-") || p.starts_with("zh_") {
-                s == "zh"
-                    || s == "chi"
-                    || s == "zho"
-                    || s == "cmn"
-                    || s == "chinese"
-                    || s.starts_with("zh-")
-                    || s.starts_with("zh_")
-            } else if p.starts_with("ja-") || p.starts_with("ja_") {
+            if p.starts_with("ja-") || p.starts_with("ja_") {
                 s == "ja"
                     || s == "jpn"
                     || s == "japanese"
@@ -401,40 +388,44 @@ pub fn select_best_audio_stream<'a>(
     streams: &'a [EmbyStreamInfo],
     preferred_language: Option<&str>,
 ) -> Option<&'a EmbyStreamInfo> {
-    let audio_streams: Vec<&EmbyStreamInfo> = streams
+    let audio_streams = streams
         .iter()
-        .filter(|s| s.stream_type.eq_ignore_ascii_case("Audio"))
-        .collect();
-
-    if audio_streams.is_empty() {
-        return None;
-    }
+        .filter(|s| s.stream_type.eq_ignore_ascii_case("Audio"));
 
     if let Some(pref) = preferred_language {
         let pref = pref.trim();
         if !pref.is_empty() && !pref.eq_ignore_ascii_case("auto") {
-            // Find matches for preferred language
-            let matches: Vec<&EmbyStreamInfo> = audio_streams
+            let mut first_match = None;
+            for stream in streams
                 .iter()
-                .copied()
-                .filter(|s| language_matches(s.language.as_deref(), pref))
-                .collect();
-
-            if let Some(stream) = matches.iter().find(|s| s.is_default).copied() {
-                return Some(stream);
+                .filter(|s| s.stream_type.eq_ignore_ascii_case("Audio"))
+            {
+                if language_matches(stream.language.as_deref(), pref) {
+                    if stream.is_default {
+                        return Some(stream);
+                    }
+                    if first_match.is_none() {
+                        first_match = Some(stream);
+                    }
+                }
             }
-            if let Some(stream) = matches.first().copied() {
+            if let Some(stream) = first_match {
                 return Some(stream);
             }
         }
     }
 
     // Fallback: default audio stream, or first audio stream
-    audio_streams
-        .iter()
-        .find(|s| s.is_default)
-        .copied()
-        .or_else(|| audio_streams.first().copied())
+    let mut first_audio = None;
+    for stream in audio_streams {
+        if stream.is_default {
+            return Some(stream);
+        }
+        if first_audio.is_none() {
+            first_audio = Some(stream);
+        }
+    }
+    first_audio
 }
 
 #[cfg(test)]

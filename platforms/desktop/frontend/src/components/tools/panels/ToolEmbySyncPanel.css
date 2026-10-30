@@ -22,7 +22,9 @@
   justify-content: space-between;
   padding: 10px 20px;
   background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-elevated));
-  border-bottom: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 16px;
   color: var(--color-warning);
   font-size: 13px;
   flex-shrink: 0;
@@ -316,7 +318,7 @@
   cursor: pointer;
   user-select: none;
   gap: 12px;
-  border-radius: var(--radius-md, 8px);
+  border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0;
   border-bottom: 1px solid transparent;
   transition: background-color var(--transition-fast);
 }
@@ -558,8 +560,7 @@
   border-radius: var(--radius-md, 8px);
   box-shadow: var(--shadow-sm);
   gap: 16px;
-  flex-wrap: nowrap;
-  overflow: hidden;
+  flex-wrap: wrap;
 }
 
 .emby-submit-controls {

@@ -28,6 +28,7 @@ export function normalizeLanguageCode(code?: string): string {
       '繁體中文',
       '繁体中文',
       '繁中',
+      '繁',
     ].includes(trimmed) ||
     trimmed.startsWith('zh-tw') ||
     trimmed.startsWith('zh-hant') ||
@@ -61,6 +62,7 @@ export function normalizeLanguageCode(code?: string): string {
       '簡體',
       '簡中',
       '簡',
+      '简',
     ].includes(trimmed) ||
     trimmed.startsWith('zh-cn') ||
     trimmed.startsWith('zh-sg') ||
@@ -157,7 +159,7 @@ export function matchSubtitleLanguage(
     normStreamLang === 'zh-CN' || normStreamLang === 'zh-TW' || normStreamLang === 'yue';
   const isTargetChinese = normTarget === 'zh-CN' || normTarget === 'zh-TW' || normTarget === 'yue';
   const isRecognizedStreamLang = Boolean(
-    normStreamLang && !['und', 'unknown', ''].includes(normStreamLang)
+    normStreamLang && !['und', 'unknown', 'unk', 'mul', 'mis', 'zxx', ''].includes(normStreamLang)
   );
 
   // If stream language is an explicit recognized language distinct from target language
@@ -172,14 +174,29 @@ export function matchSubtitleLanguage(
 
   // 1. If target is Traditional Chinese (zh-TW)
   if (normTarget === 'zh-TW') {
-    if (normStreamLang === 'zh-TW') return true;
-    if (
+    const hasTraditionalMarker =
       titleLower.includes('繁') ||
       /(?:^|[^a-z0-9])(cht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
       titleLower.includes('traditional') ||
       titleLower.includes('zh-tw') ||
-      titleLower.includes('zh-hant')
-    ) {
+      titleLower.includes('zh-hant');
+
+    const hasSimplifiedMarker =
+      titleLower.includes('简') ||
+      titleLower.includes('簡') ||
+      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
+      titleLower.includes('simplified') ||
+      titleLower.includes('zh-cn') ||
+      titleLower.includes('zh-hans');
+
+    if (hasSimplifiedMarker && !hasTraditionalMarker) {
+      return false;
+    }
+    if (normStreamLang === 'zh-CN') {
+      return hasTraditionalMarker;
+    }
+    if (normStreamLang === 'zh-TW') return true;
+    if (hasTraditionalMarker) {
       return true;
     }
     return false;
@@ -298,6 +315,9 @@ export function getAudioTrackLabel(stream: EmbyStreamInfo): string {
   } else {
     if (stream.language) parts.push(stream.language.toUpperCase());
     if (stream.codec) parts.push(stream.codec.toUpperCase());
+  }
+  if (parts.length === 0) {
+    parts.push(`Track #${stream.index}`);
   }
   const hasDefaultInTitle = Boolean(cleanTitle?.toLowerCase().includes('default'));
   if (stream.isDefault && !hasDefaultInTitle) {

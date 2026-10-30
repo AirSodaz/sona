@@ -983,5 +983,58 @@ describe('batchQueueStore', () => {
       expect(items[1].status).toBe('pending');
       expect(items[1].errorStage).toBe('transcribe');
     });
+
+    it('updateItemFilePath updates state and task ledger', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-1',
+            filename: 'Ep 1',
+            filePath: '',
+            status: 'pending',
+            progress: 0,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().updateItemFilePath('item-1', '/downloads/ep1.mp3');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.filePath).toBe('/downloads/ep1.mp3');
+      expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+        'batch-item-1',
+        expect.objectContaining({
+          filePath: '/downloads/ep1.mp3',
+        })
+      );
+    });
+
+    it('updateItemStatus to complete clears errorMessage and errorStage', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed',
+            filename: 'Ep 1',
+            filePath: '/downloads/ep1.mp3',
+            status: 'error',
+            errorMessage: 'Upload failed',
+            errorStage: 'upload',
+            progress: 50,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().updateItemStatus('item-failed', 'complete', 100);
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('complete');
+      expect(item.errorMessage).toBeUndefined();
+      expect(item.errorStage).toBeUndefined();
+      expect(item.progress).toBe(100);
+    });
   });
 });

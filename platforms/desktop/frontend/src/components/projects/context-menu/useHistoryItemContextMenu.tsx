@@ -352,7 +352,7 @@ export function useHistoryItemContextMenu({
         },
       });
       const embyContext = useEmbyHistoryStore.getState().getContext(id);
-      if (embyContext) {
+      if (onResyncEmby && embyContext) {
         actions.push({
           id: 'resync_emby',
           label: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
@@ -360,9 +360,7 @@ export function useHistoryItemContextMenu({
           dividerBefore: true,
           disabled: locked || isOpenDisabled(id),
           onSelect: () => {
-            if (onResyncEmby) {
-              void onResyncEmby(item, embyContext);
-            }
+            void onResyncEmby(item, embyContext);
           },
         });
       }

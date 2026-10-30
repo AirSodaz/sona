@@ -112,11 +112,17 @@ export function TranscriptWorkbench({
   const [isSyncingEmby, setIsSyncingEmby] = useState(false);
   const [embySyncSuccess, setEmbySyncSuccess] = useState(false);
   const syncSuccessTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     void sourceHistoryId;
     setEmbySyncSuccess(false);
-    setIsSyncingEmby(false);
     clearTimeout(syncSuccessTimerRef.current ?? undefined);
     syncSuccessTimerRef.current = null;
     return () => {
@@ -132,15 +138,24 @@ export function TranscriptWorkbench({
     setEmbySyncSuccess(false);
     try {
       await syncEmbySubtitles(segments, embyContext);
-      if (useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId) return;
+      if (
+        !isMountedRef.current ||
+        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+      )
+        return;
       setEmbySyncSuccess(true);
       clearTimeout(syncSuccessTimerRef.current ?? undefined);
       syncSuccessTimerRef.current = window.setTimeout(() => {
+        if (!isMountedRef.current) return;
         setEmbySyncSuccess(false);
         syncSuccessTimerRef.current = null;
       }, 3000);
     } catch (err: unknown) {
-      if (useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId) return;
+      if (
+        !isMountedRef.current ||
+        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+      )
+        return;
       console.error('Failed to resync to Emby:', err);
       void useDialogStore.getState().showError({
         code: 'emby.resync_failed',
@@ -148,7 +163,10 @@ export function TranscriptWorkbench({
         cause: err,
       });
     } finally {
-      if (useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId) {
+      if (
+        isMountedRef.current &&
+        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
+      ) {
         setIsSyncingEmby(false);
       }
     }

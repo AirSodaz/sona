@@ -8,6 +8,7 @@ import {
   testEmbyConnection,
 } from '../../../../services/emby/embyService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
+import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
 import type {
@@ -153,19 +154,25 @@ export function useEmbySync(): UseEmbySyncReturn {
   const queuedItemIds = useMemo(() => {
     const set = new Set<string>();
     for (const item of queueItems) {
-      if (item.embyContext?.itemId && (item.status === 'pending' || item.status === 'processing')) {
-        set.add(item.embyContext.itemId);
+      const emby = item.embyContext;
+      if (
+        emby?.itemId &&
+        (!serverInfo?.id || emby.serverId === serverInfo.id) &&
+        (item.status === 'pending' || item.status === 'processing')
+      ) {
+        set.add(emby.itemId);
       }
     }
     return set;
-  }, [queueItems]);
+  }, [queueItems, serverInfo?.id]);
 
   const configRef = useRef(config);
   configRef.current = config;
   const noticeTimeoutRef = useRef<number | null>(null);
   const hasLoadedRef = useRef(false);
   const fetchSeqRef = useRef(0);
-
+  const connectSeqRef = useRef(0);
+  const debounceTimerRef = useRef<number | null>(null);
   useEffect(() => {
     return () => {
       clearTimeout(noticeTimeoutRef.current ?? undefined);
@@ -180,6 +187,13 @@ export function useEmbySync(): UseEmbySyncReturn {
     setExpandedSeasons(new Set());
   }, [selectedLibraryId, searchTerm]);
 
+  // Clear stale selection on filter changes
+  useEffect(() => {
+    void targetLanguage;
+    void onlyMissingTargetSubtitles;
+    setSelectedItemIds(new Set());
+  }, [targetLanguage, onlyMissingTargetSubtitles]);
+
   // Connect to Emby server
   const handleConnect = useCallback(async (cfgToTest?: EmbyConnectionConfig) => {
     const targetConfig = cfgToTest || configRef.current;
@@ -188,15 +202,25 @@ export function useEmbySync(): UseEmbySyncReturn {
       return;
     }
 
+    const seq = ++connectSeqRef.current;
     setIsConnecting(true);
     setConnectionError(null);
     try {
       const info = await testEmbyConnection(targetConfig);
+      if (seq !== connectSeqRef.current) return;
       await saveEmbyConfig(targetConfig);
+      if (seq !== connectSeqRef.current) return;
       setConfig(targetConfig);
       setIsConfigModalOpen(false);
 
+      // Clear stale items, selection, and audio tracks on server switch
+      setItems([]);
+      setSelectedItemIds(new Set());
+      setAudioTrackMap({});
+      setExpandedSeasons(new Set());
+
       const libs = await getEmbyLibraries();
+      if (seq !== connectSeqRef.current) return;
       setLibraries(libs);
       if (libs.length > 0) {
         setSelectedLibraryId((prev) => {
@@ -209,11 +233,21 @@ export function useEmbySync(): UseEmbySyncReturn {
         setSelectedLibraryId(null);
       }
       setServerInfo(info);
+      useToolsStore.getState().setEmbyServerName(info.serverName);
     } catch (err: unknown) {
+      if (seq !== connectSeqRef.current) return;
       setConnectionError(extractErrorMessage(err) || String(err));
       setServerInfo(null);
+      useToolsStore.getState().setEmbyServerName(null);
+      setLibraries([]);
+      setSelectedLibraryId(null);
+      setItems([]);
+      setSelectedItemIds(new Set());
+      setAudioTrackMap({});
     } finally {
-      setIsConnecting(false);
+      if (seq === connectSeqRef.current) {
+        setIsConnecting(false);
+      }
     }
   }, []);
 
@@ -241,7 +275,11 @@ export function useEmbySync(): UseEmbySyncReturn {
     if (!serverInfo) return;
 
     let cancelled = false;
-    const timer = setTimeout(async () => {
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+    debounceTimerRef.current = window.setTimeout(async () => {
+      debounceTimerRef.current = null;
       const seq = ++fetchSeqRef.current;
       setIsLoadingItems(true);
       try {
@@ -278,6 +316,8 @@ export function useEmbySync(): UseEmbySyncReturn {
       } catch (err) {
         if (!cancelled && seq === fetchSeqRef.current) {
           console.error('Failed to fetch items:', err);
+          setItems([]);
+          setConnectionError(extractErrorMessage(err) || String(err));
         }
       } finally {
         if (!cancelled && seq === fetchSeqRef.current) {
@@ -289,12 +329,15 @@ export function useEmbySync(): UseEmbySyncReturn {
     return () => {
       cancelled = true;
       fetchSeqRef.current++;
-      clearTimeout(timer);
+      clearTimeout(debounceTimerRef.current ?? undefined);
+      debounceTimerRef.current = null;
     };
   }, [serverInfo, selectedLibraryId, searchTerm]);
 
   const fetchItems = useCallback(async () => {
     if (!serverInfo) return;
+    clearTimeout(debounceTimerRef.current ?? undefined);
+    debounceTimerRef.current = null;
     const seq = ++fetchSeqRef.current;
     setIsLoadingItems(true);
     try {
@@ -331,6 +374,8 @@ export function useEmbySync(): UseEmbySyncReturn {
     } catch (err) {
       if (seq === fetchSeqRef.current) {
         console.error('Failed to fetch items:', err);
+        setItems([]);
+        setConnectionError(extractErrorMessage(err) || String(err));
       }
     } finally {
       if (seq === fetchSeqRef.current) {
@@ -443,7 +488,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     const entries: AddEmbyItemEntry[] = [];
     for (const id of selectedItemIds) {
       if (queuedItemIds.has(id)) continue;
-      const item = items.find((it) => it.id === id);
+      const item = filteredItems.find((it) => it.id === id);
       if (!item) continue;
 
       const bestAudio = findBestAudioStream(item.mediaStreams);
@@ -515,7 +560,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     selectedItemIds,
     queuedItemIds,
     serverInfo,
-    items,
+    filteredItems,
     audioTrackMap,
     overwriteExistingExternal,
     subtitleMode,

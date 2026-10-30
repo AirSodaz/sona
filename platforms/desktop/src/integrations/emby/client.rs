@@ -553,6 +553,14 @@ impl EmbyClient {
                     {
                         return Err(EmbyError::Unauthorized);
                     }
+                    if resp.status().is_server_error() {
+                        last_err = Some(EmbyError::ServerError(format!(
+                            "Audio download failed with server error: HTTP {}",
+                            resp.status()
+                        )));
+                        tokio::time::sleep(Duration::from_millis(500 * (attempt + 1) as u64)).await;
+                        continue;
+                    }
                     if !resp.status().is_success() {
                         return Err(EmbyError::ServerError(format!(
                             "Audio download failed: HTTP {}",
@@ -633,6 +641,11 @@ impl EmbyClient {
         item_id: &str,
         subtitle_index: i32,
     ) -> Result<(), EmbyError> {
+        if subtitle_index < 0 {
+            return Err(EmbyError::InvalidConfig(
+                "Subtitle index cannot be negative".into(),
+            ));
+        }
         let clean_id = Self::validate_item_id(item_id)?;
         let url = self.url("/SubtitleManager/DeleteSubtitle");
         let idx_str = subtitle_index.to_string();
@@ -662,27 +675,34 @@ impl EmbyClient {
             .await
             .map_err(|e| EmbyError::Network(e.to_string()))?;
 
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
-            || resp.status() == reqwest::StatusCode::FORBIDDEN
-        {
+        let status = resp.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(EmbyError::Unauthorized);
         }
 
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        if status == reqwest::StatusCode::NOT_FOUND {
             return Err(EmbyError::PluginMissing);
-        }
-
-        if !resp.status().is_success() {
-            return Err(EmbyError::ServerError(format!(
-                "Failed to delete subtitle: HTTP {}",
-                resp.status()
-            )));
         }
 
         let body_text = resp
             .text()
             .await
             .map_err(|e| EmbyError::Network(e.to_string()))?;
+
+        if !status.is_success() {
+            check_plugin_response_body(&body_text)?;
+            let msg = if body_text.trim().is_empty() {
+                format!("Failed to delete subtitle: HTTP {}", status)
+            } else {
+                format!(
+                    "Failed to delete subtitle: HTTP {} - {}",
+                    status,
+                    body_text.trim()
+                )
+            };
+            return Err(EmbyError::ServerError(msg));
+        }
+
         check_plugin_response_body(&body_text)?;
 
         Ok(())
@@ -726,31 +746,38 @@ impl EmbyClient {
             .await
             .map_err(|e| EmbyError::Network(e.to_string()))?;
 
-        if resp.status() == reqwest::StatusCode::UNAUTHORIZED
-            || resp.status() == reqwest::StatusCode::FORBIDDEN
-        {
+        let status = resp.status();
+        if status == reqwest::StatusCode::UNAUTHORIZED || status == reqwest::StatusCode::FORBIDDEN {
             return Err(EmbyError::Unauthorized);
         }
 
-        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+        if status == reqwest::StatusCode::NOT_FOUND {
             return Err(EmbyError::PluginMissing);
         }
 
-        if resp.status() == reqwest::StatusCode::CONFLICT {
+        if status == reqwest::StatusCode::CONFLICT {
             return Err(EmbyError::DuplicateSubtitle);
-        }
-
-        if !resp.status().is_success() {
-            return Err(EmbyError::ServerError(format!(
-                "Failed to upload subtitle: HTTP {}",
-                resp.status()
-            )));
         }
 
         let body_text = resp
             .text()
             .await
             .map_err(|e| EmbyError::Network(e.to_string()))?;
+
+        if !status.is_success() {
+            check_plugin_response_body(&body_text)?;
+            let msg = if body_text.trim().is_empty() {
+                format!("Failed to upload subtitle: HTTP {}", status)
+            } else {
+                format!(
+                    "Failed to upload subtitle: HTTP {} - {}",
+                    status,
+                    body_text.trim()
+                )
+            };
+            return Err(EmbyError::ServerError(msg));
+        }
+
         check_plugin_response_body(&body_text)?;
 
         Ok(())
@@ -782,20 +809,13 @@ impl EmbyClient {
                 resp.status()
             )));
         }
-        // Lightweight poll up to 3 times with 1-second delay
+        tokio::time::sleep(Duration::from_millis(1500)).await;
         let item_url = self.url(&format!("/Items/{clean_id}"));
-        for _ in 0..3 {
-            tokio::time::sleep(Duration::from_millis(1000)).await;
-            let poll_req = self.apply_auth(self.client.get(&item_url).query(&[
-                ("Fields", "MediaStreams"),
-                ("api_key", &self.config.api_key),
-            ]));
-            if let Ok(poll_resp) = poll_req.send().await
-                && poll_resp.status().is_success()
-            {
-                break;
-            }
-        }
+        let poll_req = self.apply_auth(self.client.get(&item_url).query(&[
+            ("Fields", "MediaStreams"),
+            ("api_key", &self.config.api_key),
+        ]));
+        let _ = poll_req.send().await;
         Ok(())
     }
 }

@@ -721,8 +721,106 @@ describe('BatchItemProcessor', () => {
 
     vi.mocked(syncEmbySubtitles).mockClear();
 
-    await processor.processBatchQueueItem({ item, config, callbacks });
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Task cancelled.'
+    );
 
     expect(syncEmbySubtitles).not.toHaveBeenCalled();
+  });
+
+  it('marks errorStage as transcribe when downloadEmbyAudio fails', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-dl-fail',
+      filename: 'Emby Movie Fail',
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/movie-fail/stream',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-fail',
+        itemName: 'Emby Movie Fail',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockRejectedValueOnce(
+      new Error('Network timeout downloading audio')
+    );
+
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Network timeout downloading audio'
+    );
+
+    expect(item.errorStage).toBe('transcribe');
+  });
+
+  it('passes local item.filePath and non-stream flag to saveImportedFile when item has embyContext', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-save-history',
+      filename: 'Emby Movie History',
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/movie-hist/stream',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-hist',
+        itemName: 'Emby Movie History',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockResolvedValueOnce('/tmp/downloaded-emby-history.mp3');
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockResolvedValueOnce([
+      { id: 'seg-1', start: 0, end: 5, text: 'Hello world', isFinal: true },
+    ]);
+    vi.mocked(mockPorts.historyService.saveImportedFileToProject).mockClear();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockPorts.historyService.saveImportedFileToProject).toHaveBeenCalledWith(
+      '/tmp/downloaded-emby-history.mp3',
+      expect.any(Array),
+      5,
+      undefined,
+      null,
+      'batch-emby-save-history'
+    );
   });
 });

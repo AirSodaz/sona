@@ -358,4 +358,39 @@ describe('QueueItem', () => {
     const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
     expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry_upload_only');
   });
+
+  it('calls onRetry with item id when clicking retry_upload_only button on item with upload errorStage', () => {
+    const onRetry = vi.fn();
+    const item = createItem({
+      id: '123',
+      status: 'error',
+      errorStage: 'upload',
+      errorMessage: 'Network timeout during Emby upload',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'emby-123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={onRetry}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
+    fireEvent.click(retryBtn);
+
+    expect(onRetry).toHaveBeenCalledWith('123');
+  });
 });
