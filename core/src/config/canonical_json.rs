@@ -40,6 +40,10 @@ pub fn strip_config_credentials(config: &mut Value) {
                 let lower_key = key.to_ascii_lowercase();
                 if lower_key == "httpserverapikey"
                     || lower_key == "http_server_api_key"
+                    || lower_key == "embyapikey"
+                    || lower_key == "emby_api_key"
+                    || lower_key == "embytoken"
+                    || lower_key == "emby_token"
                     || lower_key == "apikey"
                     || lower_key == "api_key"
                     || lower_key == "apisecret"
@@ -97,6 +101,8 @@ mod tests {
         let mut config = json!({
             "language": "en",
             "httpServerApiKey": "my-secret-token",
+            "embyApiKey": "emby-secret-key-camel",
+            "emby_api_key": "emby-secret-key-snake",
             "llmSettings": {
                 "providers": {
                     "openai": {
@@ -126,6 +132,8 @@ mod tests {
 
         assert_eq!(config["language"], "en");
         assert_eq!(config["httpServerApiKey"], "");
+        assert_eq!(config["embyApiKey"], "");
+        assert_eq!(config["emby_api_key"], "");
         assert_eq!(config["llmSettings"]["providers"]["openai"]["apiKey"], "");
         assert_eq!(
             config["llmSettings"]["providers"]["openai"]["model"],

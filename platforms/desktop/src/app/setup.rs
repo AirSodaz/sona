@@ -109,6 +109,68 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if mcp_config.mcp_enabled.unwrap_or(true) {
         mcp_controller.start(Some(app.handle().clone()), agent_facade);
     }
+    let emby_client = if let Some(config_val) = initial_config.as_ref() {
+        let server_url = config_val
+            .get("embyServerUrl")
+            .or_else(|| config_val.get("emby_server_url"))
+            .and_then(|v| v.as_str());
+        let api_key = config_val
+            .get("embyToken")
+            .or_else(|| config_val.get("emby_token"))
+            .or_else(|| config_val.get("embyApiKey"))
+            .or_else(|| config_val.get("emby_api_key"))
+            .and_then(|v| v.as_str());
+        let username = config_val
+            .get("embyUsername")
+            .or_else(|| config_val.get("emby_username"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+        let allow_invalid_certs = config_val
+            .get("embyAllowInvalidCerts")
+            .or_else(|| config_val.get("emby_allow_invalid_certs"))
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false);
+        let admin_user_id = config_val
+            .get("embyAdminUserId")
+            .or_else(|| config_val.get("emby_admin_user_id"))
+            .and_then(|v| v.as_str())
+            .map(str::trim)
+            .filter(|s| !s.is_empty())
+            .map(|s| s.to_string());
+
+        if let (Some(url), Some(key)) = (server_url, api_key)
+            && !url.trim().is_empty()
+            && !key.trim().is_empty()
+        {
+            match crate::integrations::emby::EmbyClient::new(
+                crate::integrations::emby::EmbyConnectionConfig {
+                    server_url: url.trim().to_string(),
+                    api_key: key.trim().to_string(),
+                    username,
+                    allow_invalid_certs,
+                    admin_user_id,
+                },
+            ) {
+                Ok(client) => Some(client),
+                Err(err) => {
+                    log::warn!("[Emby] Failed to initialize client on startup: {err}");
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
+    let emby_state = match emby_client {
+        Some(client) => crate::integrations::emby::EmbyState::with_client(client),
+        None => crate::integrations::emby::EmbyState::default(),
+    };
+    app.manage(emby_state);
     app.manage(desktop_services);
     crate::app::window::create_main_window(app.handle(), start_silently)?;
     let listener_app_handle = app_handle_for_listener.clone();

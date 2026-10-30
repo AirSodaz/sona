@@ -9,6 +9,10 @@ import {
   applySavedBatchHistoryToQueue,
   resolveSavedBatchHistoryMeta,
 } from '../services/batch/batchQueueHistorySync';
+import {
+  buildEmbyEffectiveConfig,
+  loadEmbyToolOverrides,
+} from '../services/emby/embySettingsService';
 import { historyService } from '../services/historyService';
 import { type EffectivePipelineSnapshot, resolveItemPipeline } from '../services/projectPipeline';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
@@ -28,6 +32,7 @@ import type {
   BatchQueueItem,
   BatchQueueItemOrigin,
   BatchQueueItemStatus,
+  EmbySubtitleMode,
 } from '../types/batchQueue';
 import type { AppConfig } from '../types/config';
 import type { RecoveredQueueItem } from '../types/recovery';
@@ -43,6 +48,53 @@ import {
   registerBatchActiveItemIdResolver,
   useTranscriptStore,
 } from './transcriptStore';
+
+export interface AddEmbyItemEntry {
+  itemId: string;
+  itemName: string;
+  audioStreamIndex: number;
+  subtitleMode: EmbySubtitleMode;
+  targetLanguage: string;
+  sourceLanguage?: string;
+  existingExternalSubtitleIndex?: number;
+  serverId: string;
+  serverUrl: string;
+  apiKey?: string;
+  mediaSourceId?: string;
+  container?: string;
+}
+
+export function buildEmbyStreamUrl(params: {
+  serverUrl: string;
+  itemId: string;
+  apiKey?: string;
+  mediaSourceId?: string;
+  container?: string;
+  audioStreamIndex?: number;
+}): string {
+  const baseServerUrl = params.serverUrl.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
+  const container = encodeURIComponent((params.container || 'mkv').replace(/^\.+/, ''));
+  const encodedItemId = encodeURIComponent(params.itemId);
+  const mediaSourceId = params.mediaSourceId || `mediasource_${params.itemId}`;
+  const queryParams = new URLSearchParams();
+  if (params.apiKey) {
+    queryParams.set('api_key', params.apiKey);
+  }
+  queryParams.set('Static', 'true');
+  queryParams.set('MediaSourceId', mediaSourceId);
+  if (params.audioStreamIndex !== undefined && params.audioStreamIndex !== null) {
+    queryParams.set('AudioStreamIndex', params.audioStreamIndex.toString());
+  }
+  const query = queryParams.toString();
+  return `${baseServerUrl}/Videos/${encodedItemId}/stream.${container}${query ? `?${query}` : ''}`;
+}
+
+export interface AddEmbyItemsOptions {
+  items: AddEmbyItemEntry[];
+  projectId?: string | null;
+  pipelineSnapshot?: EffectivePipelineSnapshot;
+  resolvedConfigSnapshot?: AppConfig;
+}
 
 export function deriveTitleFromUrl(url: string): string {
   try {
@@ -136,6 +188,10 @@ interface BatchQueueState {
    */
   addStreamItems: (urls: string[], options?: AddStreamOptions) => void;
   /**
+   * Adds Emby streaming video items to the batch transcription queue.
+   */
+  addEmbyItems: (options: AddEmbyItemsOptions) => void;
+  /**
    * Re-enqueues items restored by the recovery center.
    *
    * @param items Recovery items to resume.
@@ -173,12 +229,19 @@ interface BatchQueueState {
    */
   updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
   /**
+   * Updates an item's file path.
+   *
+   * @param id Item ID.
+   * @param filePath New file path.
+   */
+  updateItemFilePath: (id: string, filePath: string) => void;
+  /**
    * Sets error state for an item.
    *
    * @param id Item ID.
    * @param message Error message.
    */
-  setItemError: (id: string, message: string) => void;
+  setItemError: (id: string, message: string, errorStage?: 'transcribe' | 'upload') => void;
   /** Sets an item's target project and refreshes its pipeline snapshot. */
   setItemProjectId: (id: string, projectId: string | null) => void;
   /**
@@ -257,8 +320,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         return {
           ...item,
           status: 'pending' as BatchQueueItemStatus,
-          progress: 0,
+          progress: item.errorStage === 'upload' ? item.progress : 0,
           errorMessage: undefined,
+          errorStage: item.errorStage,
         };
       });
       return { queueItems: nextQueueItems };
@@ -283,8 +347,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           return {
             ...item,
             status: 'pending' as BatchQueueItemStatus,
-            progress: 0,
+            progress: item.errorStage === 'upload' ? item.progress : 0,
             errorMessage: undefined,
+            errorStage: item.errorStage,
           };
         }
         return item;
@@ -418,6 +483,100 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       void get().processQueue();
     }
   },
+  addEmbyItems: (options) => {
+    if (!options?.items || options.items.length === 0) {
+      return;
+    }
+    const state = get();
+    const existingEmbyKeys = new Set(
+      state.queueItems.flatMap((item) =>
+        item.embyContext && (item.status === 'pending' || item.status === 'processing')
+          ? [`${item.embyContext.serverId}::${item.embyContext.itemId}`]
+          : []
+      )
+    );
+    const seenBatchKeys = new Set<string>();
+    const uniqueItems = options.items.filter((opt) => {
+      const key = `${opt.serverId}::${opt.itemId}`;
+      if (existingEmbyKeys.has(key) || seenBatchKeys.has(key)) return false;
+      seenBatchKeys.add(key);
+      return true;
+    });
+    if (uniqueItems.length === 0) {
+      return;
+    }
+    const projectStore = useProjectStore.getState();
+    const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
+    const overrides = loadEmbyToolOverrides();
+    const resolvedConfigSnapshot =
+      options?.resolvedConfigSnapshot ??
+      buildEmbyEffectiveConfig(getEffectiveConfigSnapshot(), overrides);
+    const newItems: BatchQueueItem[] = uniqueItems.map((opt) => {
+      const baseServerUrl = opt.serverUrl.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
+      const streamUrl = buildEmbyStreamUrl({
+        serverUrl: baseServerUrl,
+        itemId: opt.itemId,
+        apiKey: opt.apiKey,
+        mediaSourceId: opt.mediaSourceId,
+        container: opt.container,
+        audioStreamIndex: opt.audioStreamIndex,
+      });
+      const itemConfig =
+        opt.sourceLanguage && opt.sourceLanguage !== resolvedConfigSnapshot.language
+          ? { ...resolvedConfigSnapshot, language: opt.sourceLanguage }
+          : resolvedConfigSnapshot;
+      return {
+        id: uuidv4(),
+        filename: opt.itemName,
+        filePath: '',
+        sourceType: 'url_stream',
+        streamUrl,
+        status: 'pending',
+        progress: 0,
+        segments: [],
+        audioUrl: null,
+        projectId: activeProjectId,
+        pipelineSnapshot: options?.pipelineSnapshot,
+        origin: 'manual',
+        resolvedConfigSnapshot: itemConfig,
+        lastKnownStage: 'queued',
+        embyContext: {
+          serverId: opt.serverId,
+          serverUrl: baseServerUrl,
+          itemId: opt.itemId,
+          itemName: opt.itemName,
+          audioStreamIndex: opt.audioStreamIndex,
+          subtitleMode: opt.subtitleMode,
+          targetLanguage: opt.targetLanguage,
+          sourceLanguage: opt.sourceLanguage,
+          existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
+          mediaSourceId: opt.mediaSourceId,
+          container: opt.container,
+        },
+      };
+    });
+
+    let nextQueueItems: BatchQueueItem[] = [];
+    set((state) => {
+      nextQueueItems = [...state.queueItems, ...newItems];
+      return {
+        queueItems: nextQueueItems,
+      };
+    });
+    scheduleRecoverySnapshotSync(nextQueueItems, true);
+    newItems.forEach((item) => {
+      upsertQueueItemTask(item, 'pending');
+    });
+
+    const currentState = get();
+    if (!currentState.activeItemId && newItems.length > 0) {
+      get().setActiveItem(newItems[0].id);
+    }
+
+    if (!currentState.isQueueProcessing && !currentState.isQueuePaused) {
+      void get().processQueue();
+    }
+  },
 
   enqueueRecoveredItems: (items) => {
     if (items.length === 0) {
@@ -470,8 +629,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       updateItemSegments: (id, segments) => {
         get().updateItemSegments(id, segments);
       },
-      setItemError: (id, message) => {
-        get().setItemError(id, message);
+      setItemError: (id, message, errorStage) => {
+        get().setItemError(id, message, errorStage);
       },
       applySavedHistory: async (id, item, historyItem) => {
         const savedMeta = await resolveSavedBatchHistoryMeta({
@@ -524,6 +683,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
             queueItem.id === id ? { ...queueItem, exportPath } : queueItem
           ),
         }));
+      },
+      updateItemFilePath: (id, filePath) => {
+        get().updateItemFilePath(id, filePath);
       },
       setItemActiveInstanceId: (id, instanceId) => {
         set((currentState) => ({
@@ -626,6 +788,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           status,
           progress: progress !== undefined ? progress : item.progress,
           lastKnownStage: lastKnownStage ?? item.lastKnownStage,
+          ...(status === 'complete' ? { errorMessage: undefined, errorStage: undefined } : {}),
         };
       });
 
@@ -658,12 +821,35 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       }
     }
   },
-
-  setItemError: (id, message) => {
+  updateItemFilePath: (id, filePath) => {
     let nextQueueItems: BatchQueueItem[] = [];
     set((state) => {
       nextQueueItems = state.queueItems.map((item) =>
-        item.id === id ? { ...item, status: 'error', errorMessage: message } : item
+        item.id === id ? { ...item, filePath } : item
+      );
+      return {
+        queueItems: nextQueueItems,
+      };
+    });
+    scheduleRecoverySnapshotSync(nextQueueItems);
+    const updatedItem = nextQueueItems.find((item) => item.id === id);
+    if (updatedItem) {
+      patchQueueItemTask(updatedItem, { filePath });
+    }
+  },
+
+  setItemError: (id, message, errorStage) => {
+    let nextQueueItems: BatchQueueItem[] = [];
+    set((state) => {
+      nextQueueItems = state.queueItems.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              status: 'error',
+              errorMessage: message,
+              errorStage,
+            }
+          : item
       );
       return {
         queueItems: nextQueueItems,

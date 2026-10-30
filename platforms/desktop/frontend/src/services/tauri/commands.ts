@@ -239,6 +239,16 @@ export const TauriCommand = {
     getToolsCatalog: 'mcp_get_tools_catalog',
     getClientConfigs: 'mcp_get_client_configs',
   },
+  emby: {
+    login: 'emby_login',
+    testConnection: 'emby_test_connection',
+    saveConfig: 'emby_save_config',
+    getConfig: 'emby_get_config',
+    getLibraries: 'emby_get_libraries',
+    getItems: 'emby_get_items',
+    downloadAudio: 'emby_download_audio',
+    uploadSubtitle: 'emby_upload_subtitle',
+  },
 } as const;
 
 export type TauriCommandName = DeepValueOf<typeof TauriCommand>;

@@ -161,28 +161,42 @@ export class PipelineExecutionEngine {
           '[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.'
         );
       } else {
-        onProgress?.('translating', 98);
-        const translateConfig: AppConfig = {
-          ...globalConfig,
-          translationLanguage: pipeline.targetLanguage || globalConfig.translationLanguage,
-        };
-        await this.ports.translationService.translateSegmentsWithConfig(
-          translateConfig,
-          currentSegments,
-          async (translatedChunk) => {
-            const formattedChunk = translatedChunk.map((chunk) => ({
-              ...chunk,
-              translation: formatCjkTypography(chunk.translation),
-            }));
-            currentSegments = this.ports.translationService.applyTranslationsInMemory(
-              currentSegments,
-              formattedChunk
-            );
-            await onSegmentsUpdated?.(currentSegments);
+        const untranslatedSegments = pipeline.autoPolish
+          ? currentSegments.filter((seg) => Boolean(seg.text?.trim()))
+          : currentSegments.filter((seg) => Boolean(seg.text?.trim()) && !seg.translation?.trim());
+
+        if (untranslatedSegments.length === 0) {
+          logger.info(
+            '[PipelineExecutionEngine] All segments already translated, skipping auto-translate.'
+          );
+        } else {
+          onProgress?.('translating', 98);
+          const translateConfig: AppConfig = {
+            ...globalConfig,
+            translationLanguage: pipeline.targetLanguage || globalConfig.translationLanguage,
+          };
+          const segmentsToTranslate =
+            untranslatedSegments.length === currentSegments.length
+              ? currentSegments
+              : untranslatedSegments;
+          await this.ports.translationService.translateSegmentsWithConfig(
+            translateConfig,
+            segmentsToTranslate,
+            async (translatedChunk) => {
+              const formattedChunk = translatedChunk.map((chunk) => ({
+                ...chunk,
+                translation: formatCjkTypography(chunk.translation),
+              }));
+              currentSegments = this.ports.translationService.applyTranslationsInMemory(
+                currentSegments,
+                formattedChunk
+              );
+              await onSegmentsUpdated?.(currentSegments);
+            }
+          );
+          if (historyId) {
+            await this.ports.historyService.updateTranscript(historyId, currentSegments);
           }
-        );
-        if (historyId) {
-          await this.ports.historyService.updateTranscript(historyId, currentSegments);
         }
       }
     }

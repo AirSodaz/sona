@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import type { TFunction } from 'i18next';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createReactI18nextMock } from '../../__tests__/testUtils/i18n';
 import { useDialogStore } from '../../stores/dialogStore';
@@ -236,5 +237,198 @@ describe('QueueItem', () => {
     expect(errorEl?.getAttribute('data-tooltip-pos')).toBe('bottom');
     expect(screen.getByRole('listitem').getAttribute('data-tooltip')).toBeNull();
     expect(screen.queryByText('batch.suggest_ffmpeg')).toBeNull();
+  });
+
+  it('renders both Emby and Network Stream badges for Emby item', () => {
+    const item = createItem({
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/123/stream',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('Emby')).toBeDefined();
+    expect(screen.getByText('batch.stream_badge')).toBeDefined();
+  });
+
+  it('suppresses finish and save button for Emby items during processing', () => {
+    const item = createItem({
+      status: 'processing',
+      sourceType: 'url_stream',
+      activeInstanceId: 'inst-1',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    const { container } = render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(container.querySelector('.queue-item-finish-save')).toBeNull();
+  });
+
+  it('renders pulling audio indicator when Emby item is processing without filePath', () => {
+    const item = createItem({
+      status: 'processing',
+      filePath: '',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+    const pullingEl = screen.getByText('emby.pulling_audio');
+    expect(pullingEl).toBeDefined();
+    expect(pullingEl.style.whiteSpace).toBe('nowrap');
+    expect(pullingEl.style.flexShrink).toBe('0');
+  });
+
+  it('renders upload failed error and retry upload tooltip when errorStage is upload', () => {
+    const item = createItem({
+      status: 'error',
+      errorStage: 'upload',
+      errorMessage: 'Network timeout during Emby upload',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: '123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('batch.emby_upload_failed')).toBeDefined();
+    const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
+    expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry_upload_only');
+  });
+
+  it('calls onRetry with item id when clicking retry_upload_only button on item with upload errorStage', () => {
+    const onRetry = vi.fn();
+    const item = createItem({
+      id: '123',
+      status: 'error',
+      errorStage: 'upload',
+      errorMessage: 'Network timeout during Emby upload',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'emby-123',
+        itemName: 'Emby Ep 1',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        onRetry={onRetry}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
+    fireEvent.click(retryBtn);
+
+    expect(onRetry).toHaveBeenCalledWith('123');
+  });
+
+  it('renders progress percentage for streamed Emby items instead of pulling audio message', () => {
+    const item = createItem({
+      status: 'processing',
+      progress: 42,
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/item-1/stream.mkv?api_key=secret-token-123',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'item-1',
+        itemName: 'Streamed Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'pure_translation',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('42%')).toBeDefined();
+    expect(screen.queryByText('emby.pulling_audio')).toBeNull();
+
+    const streamBadge = document.querySelector('.queue-item-stream-badge');
+    expect(streamBadge).not.toBeNull();
+    expect(streamBadge?.getAttribute('title')).toBe(
+      'http://localhost:8096/Videos/item-1/stream.mkv?api_key=***'
+    );
   });
 });

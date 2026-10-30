@@ -31,6 +31,14 @@ import type { AppBuildInfo } from '../../types/build';
 import type { AppConfig, AppLogLevel, ResolvedAppTheme } from '../../types/config';
 import type { DashboardSnapshot } from '../../types/dashboard';
 import type {
+  EmbyConnectionConfig,
+  EmbyItemListResult,
+  EmbyLibrary,
+  EmbyLoginPayload,
+  EmbyServerInfo,
+  SubtitleUploadPayload,
+} from '../../types/emby';
+import type {
   PolishedSegment,
   TranscriptLlmJobResult,
   TranscriptSummaryResult,
@@ -815,6 +823,38 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.mcp.getClientConfigs]: {
     args: undefined;
     result: McpClientConfigMap;
+  };
+  [TauriCommand.emby.login]: {
+    args: { payload: EmbyLoginPayload };
+    result: EmbyServerInfo;
+  };
+  [TauriCommand.emby.testConnection]: {
+    args: { config: EmbyConnectionConfig };
+    result: EmbyServerInfo;
+  };
+  [TauriCommand.emby.saveConfig]: {
+    args: { config: EmbyConnectionConfig };
+    result: undefined;
+  };
+  [TauriCommand.emby.getConfig]: {
+    args: undefined;
+    result: EmbyConnectionConfig | null;
+  };
+  [TauriCommand.emby.getLibraries]: {
+    args: undefined;
+    result: EmbyLibrary[];
+  };
+  [TauriCommand.emby.getItems]: {
+    args: { parentId?: string; searchTerm?: string; startIndex: number; limit: number };
+    result: EmbyItemListResult;
+  };
+  [TauriCommand.emby.downloadAudio]: {
+    args: { itemId: string; streamIndex?: number };
+    result: string;
+  };
+  [TauriCommand.emby.uploadSubtitle]: {
+    args: { payload: SubtitleUploadPayload; deleteExistingExternalIndex?: number };
+    result: undefined;
   };
 };
 

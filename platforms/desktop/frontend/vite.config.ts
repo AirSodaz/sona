@@ -91,6 +91,7 @@ export default defineConfig(async () => ({
             'src/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/platform/**/__tests__/**/*.{test,spec}.tsx',
             'src/services/__tests__/**/*.{test,spec}.?(c|m)[jt]s?(x)',
+            'src/services/emby/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/services/startup/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/services/tauri/**/*.{test,spec}.?(c|m)[jt]s?(x)',
             'src/utils/*.{test,spec}.?(c|m)[jt]s?(x)',

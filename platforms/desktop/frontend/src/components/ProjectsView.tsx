@@ -1,6 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { syncEmbySubtitles } from '../services/emby/embyService';
 import { historyService } from '../services/historyService';
 import { storageOpenPath } from '../services/tauri/storage';
 import { useConfigStore } from '../stores/configStore';
@@ -13,6 +14,7 @@ import {
 } from '../stores/transcriptCoordinator';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
+import type { EmbyTaskContext } from '../types/batchQueue';
 import type { HistoryItem as HistoryItemType } from '../types/history';
 import { isLiveRecordDraftHistoryItem } from '../types/history';
 import type { ProjectRecord } from '../types/project';
@@ -127,6 +129,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
   const searchInputRef = useRef<HTMLInputElement>(null);
   const workspaceMenuSnapshotRef = useRef<WorkspaceMenuSnapshot | null>(null);
   const browseScopeRef = useRef('inbox');
+  const syncingEmbyIdsRef = useRef<Set<string>>(new Set());
   const activeHistoryItem = useMemo(
     () => historyItems.find((item) => item.id === sourceHistoryId) || null,
     [historyItems, sourceHistoryId]
@@ -656,6 +659,47 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     }
   };
 
+  const handleResyncEmby = async (item: HistoryItemType, context: EmbyTaskContext) => {
+    if (syncingEmbyIdsRef.current.has(item.id)) return;
+    syncingEmbyIdsRef.current.add(item.id);
+    try {
+      const activeSession = useTranscriptSessionStore.getState();
+      const segments =
+        activeSession.sourceHistoryId === item.id && activeSession.segments.length > 0
+          ? activeSession.segments
+          : await historyService.loadTranscript(item.id);
+      if (!segments || segments.length === 0) {
+        await showError({
+          code: 'emby.resync_failed',
+          messageKey: 'errors.common.operation_failed',
+          cause: new Error(
+            t('emby.resync_no_segments', {
+              defaultValue: 'Cannot re-sync to Emby: Transcript has no segments.',
+            })
+          ),
+        });
+        return;
+      }
+      await syncEmbySubtitles(segments, context);
+      await useDialogStore.getState().alert(
+        t('emby.resync_success', {
+          defaultValue: 'Successfully synced subtitles to Emby.',
+        }),
+        {
+          title: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
+          variant: 'success',
+        }
+      );
+    } catch (error) {
+      await showError({
+        code: 'emby.resync_failed',
+        messageKey: 'errors.common.operation_failed',
+        cause: error,
+      });
+    } finally {
+      syncingEmbyIdsRef.current.delete(item.id);
+    }
+  };
   const { openRailContextMenu } = useProjectRailContextMenu({
     activeProjectId,
     browseScope: browseState.browseScope,
@@ -722,6 +766,7 @@ export function ProjectsView({ isActive = true }: ProjectsViewProps): React.JSX.
     onRenameHistoryItem: (id) => {
       void handleRenameHistoryItem(id);
     },
+    onResyncEmby: (item, context) => handleResyncEmby(item, context),
     onRestoreHistoryItems: (ids) => {
       void handleRestoreHistoryItems(ids);
     },

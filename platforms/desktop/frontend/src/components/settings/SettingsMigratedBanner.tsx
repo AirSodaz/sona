@@ -1,4 +1,4 @@
-import { ArrowRight, Bot, Keyboard, Server, Subtitles, Wrench } from 'lucide-react';
+import { ArrowRight, Bot, Keyboard, Server, Subtitles, Tv, Wrench } from 'lucide-react';
 import type React from 'react';
 import { useTranslation } from 'react-i18next';
 import { useToolsStore } from '../../stores/toolsStore';
@@ -33,6 +33,11 @@ const TOOL_META_MAP: Record<
     titleKey: 'tools.mcp',
     defaultTitle: 'MCP Agents',
     icon: <Bot width={28} height={28} />,
+  },
+  emby_sync: {
+    titleKey: 'tools.emby_sync',
+    defaultTitle: 'Emby Subtitle Assistant',
+    icon: <Tv width={28} height={28} />,
   },
 };
 

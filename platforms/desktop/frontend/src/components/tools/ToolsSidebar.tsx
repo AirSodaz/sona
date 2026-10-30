@@ -1,12 +1,13 @@
-import { Bot, Keyboard, Server, Subtitles } from 'lucide-react';
+import { Bot, Keyboard, Server, Subtitles, Tv } from 'lucide-react';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import {
   isAsrRequestConfigured,
   resolveAsrTranscriptionRequest,
 } from '../../services/asrConfigService';
+import { getEmbyConfig, testEmbyConnection } from '../../services/emby/embyService';
 import {
   useApiServerConfig,
   useConfigStore,
@@ -54,6 +55,33 @@ export function ToolsSidebar(): React.JSX.Element {
       void useMcpStore.getState().fetchStatus();
     }
   }, [mcpStatus]);
+  const embyServerName = useToolsStore((state) => state.embyServerName);
+  const setEmbyServerName = useToolsStore((state) => state.setEmbyServerName);
+  const hasCheckedRef = useRef(false);
+  useEffect(() => {
+    if (hasCheckedRef.current || useToolsStore.getState().embyServerName !== null) return;
+    hasCheckedRef.current = true;
+    let unmounted = false;
+    void getEmbyConfig()
+      .then((cfg) => {
+        if (unmounted) return;
+        if (cfg?.serverUrl && cfg.apiKey) {
+          void testEmbyConnection(cfg)
+            .then((info) => {
+              if (!unmounted) setEmbyServerName(info.serverName);
+            })
+            .catch(() => {
+              // Ignore failure on initial background probe
+            });
+        }
+      })
+      .catch(() => {
+        // Ignore failure on initial background probe
+      });
+    return () => {
+      unmounted = true;
+    };
+  }, [setEmbyServerName]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',
@@ -125,12 +153,25 @@ export function ToolsSidebar(): React.JSX.Element {
             : t('tools.status_running', { defaultValue: 'Running' }),
       statusType: !isMcpEnabled ? 'inactive' : isMcpRunning ? 'active' : 'warning',
     },
+    {
+      id: 'emby_sync',
+      nameKey: 'tools.emby_sync',
+      defaultName: 'Emby Subtitle Assistant',
+      descKey: 'tools.emby_sync_desc',
+      defaultDesc: 'Detect missing subtitles and auto-complete with local transcription',
+      Icon: Tv,
+      statusText: embyServerName
+        ? embyServerName
+        : t('tools.status_not_connected', { defaultValue: 'Not Connected' }),
+      statusType: embyServerName ? 'active' : 'inactive',
+    },
   ];
   const resolvedTool: ToolId =
     activeTool === 'subtitles' ||
     activeTool === 'voice_typing' ||
     activeTool === 'api_server' ||
-    activeTool === 'mcp'
+    activeTool === 'mcp' ||
+    activeTool === 'emby_sync'
       ? activeTool
       : 'subtitles';
   const selectedIndex = tools.findIndex((tool) => tool.id === resolvedTool);

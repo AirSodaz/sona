@@ -9,14 +9,16 @@ import {
   RotateCcw,
   Tags,
   Trash2,
+  Tv,
   X,
 } from 'lucide-react';
 import React from 'react';
+import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
+import type { EmbyTaskContext } from '../../../types/batchQueue';
 import type { HistoryItem } from '../../../types/history';
 import type { ContextMenuOpenRequest } from '../../context-menu/trigger';
 import type { ContextMenuAction, OpenContextMenuOptions } from '../../context-menu/types';
 import type { TranslationFn } from '../types';
-
 export interface UseHistoryItemContextMenuParams {
   getItemById: (id: string) => HistoryItem | undefined;
   isAllSelected: boolean;
@@ -34,10 +36,10 @@ export interface UseHistoryItemContextMenuParams {
   onMoveToInbox: (ids: string[]) => void;
   onOpenItem: (item: HistoryItem) => void;
   onRenameHistoryItem: (id: string) => void;
+  onResyncEmby?: (item: HistoryItem, context: EmbyTaskContext) => Promise<void>;
   onRestoreHistoryItems: (ids: string[]) => void;
   onSelectAllVisible: () => void;
   onShowInFolder?: (item: HistoryItem) => void;
-
   openContextMenu: (options: OpenContextMenuOptions) => void;
   selectedIds: string[];
   t: TranslationFn;
@@ -65,10 +67,10 @@ export function useHistoryItemContextMenu({
   onMoveToInbox,
   onOpenItem,
   onRenameHistoryItem,
+  onResyncEmby,
   onRestoreHistoryItems,
   onSelectAllVisible,
   onShowInFolder,
-
   openContextMenu,
   selectedIds,
   t,
@@ -349,7 +351,19 @@ export function useHistoryItemContextMenu({
           onRenameHistoryItem(id);
         },
       });
-
+      const embyContext = useEmbyHistoryStore.getState().getContext(id);
+      if (onResyncEmby && embyContext) {
+        actions.push({
+          id: 'resync_emby',
+          label: t('emby.resync', { defaultValue: 'Re-sync to Emby' }),
+          icon: <Tv size={16} />,
+          dividerBefore: true,
+          disabled: locked || isOpenDisabled(id),
+          onSelect: () => {
+            void onResyncEmby(item, embyContext);
+          },
+        });
+      }
       // File Manager / External Reveal
       if (onShowInFolder) {
         actions.push({
@@ -405,6 +419,7 @@ export function useHistoryItemContextMenu({
       onMoveToInbox,
       onOpenItem,
       onRenameHistoryItem,
+      onResyncEmby,
       onRestoreHistoryItems,
       onSelectAllVisible,
       onShowInFolder,

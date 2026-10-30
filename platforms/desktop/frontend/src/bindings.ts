@@ -186,6 +186,16 @@ export type AppConfig_Deserialize = {
 	enableITN?: boolean | null,
 } & {
 	httpServerMaxUploadSizeMB?: number | null,
+} & {
+	embyServerUrl?: string | null,
+} & {
+	embyUsername?: string | null,
+} & {
+	embyApiKey?: string | null,
+} & {
+	embyAllowInvalidCerts?: boolean | null,
+} & {
+	embyAdminUserId?: string | null,
 };
 
 export type AppConfig_Serialize = {
@@ -309,6 +319,11 @@ export type AppConfig_Serialize = {
 	mcpAllowModelManagement?: boolean | null,
 	mcpNotifyOnMutation?: boolean | null,
 	mcpAuditLogEnabled?: boolean | null,
+	embyServerUrl?: string | null,
+	embyUsername?: string | null,
+	embyApiKey?: string | null,
+	embyAllowInvalidCerts?: boolean | null,
+	embyAdminUserId?: string | null,
 };
 
 export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";

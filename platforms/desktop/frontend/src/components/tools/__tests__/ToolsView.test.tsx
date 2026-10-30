@@ -69,7 +69,7 @@ describe('ToolsView', () => {
     cleanup();
   });
 
-  it('renders sidebar with 4 tools and subtitle panel by default', () => {
+  it('renders sidebar with 5 tools and subtitle panel by default', () => {
     const { container } = render(<ToolsView />);
 
     // Check dual-panel alignment classes
@@ -93,7 +93,7 @@ describe('ToolsView', () => {
 
     // Check sidebar tabs
     const sidebarTabs = screen.getAllByRole('tab');
-    expect(sidebarTabs).toHaveLength(4);
+    expect(sidebarTabs).toHaveLength(5);
     expect(sidebarTabs[0].textContent).toContain('Live Subtitles');
     expect(sidebarTabs[0].getAttribute('id')).toBe('tools-tab-subtitles');
     expect(sidebarTabs[0].getAttribute('aria-controls')).toBe('tools-panel-subtitles');
@@ -113,6 +113,10 @@ describe('ToolsView', () => {
     expect(sidebarTabs[3].getAttribute('id')).toBe('tools-tab-mcp');
     expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-mcp');
     expect(sidebarTabs[3].getAttribute('tabindex')).toBe('-1');
+    expect(sidebarTabs[4].textContent).toContain('Emby Subtitle Assistant');
+    expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-emby_sync');
+    expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
+    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('-1');
 
     // Check default subtitles panel is visible and unselected panels are hidden
     expect(
@@ -143,6 +147,13 @@ describe('ToolsView', () => {
           ?.closest('.tools-detail-pane > div') as HTMLElement | null
       )?.style.display
     ).toBe('none');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-emby_sync')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
   });
 
   it('switches to voice typing panel when clicking voice typing in sidebar', () => {
@@ -156,6 +167,29 @@ describe('ToolsView', () => {
       (
         document
           .getElementById('tools-panel-voice_typing')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('block');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-subtitles')
+          ?.closest('.tools-detail-pane > div') as HTMLElement | null
+      )?.style.display
+    ).toBe('none');
+  });
+  it('switches to emby sync panel when clicking emby sync in sidebar', () => {
+    render(<ToolsView />);
+
+    const sidebarTabs = screen.getAllByRole('tab');
+    fireEvent.click(sidebarTabs[4]); // emby sync is index 4
+
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
+    expect(sidebarTabs[4].getAttribute('tabindex')).toBe('0');
+    expect(
+      (
+        document
+          .getElementById('tools-panel-emby_sync')
           ?.closest('.tools-detail-pane > div') as HTMLElement | null
       )?.style.display
     ).toBe('block');
@@ -219,18 +253,17 @@ describe('ToolsView', () => {
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('api_server');
 
-    // End -> mcp (tab 3)
+    // End -> emby_sync (tab 4)
     fireEvent.keyDown(tablist, { key: 'End' });
-    expect(useToolsStore.getState().activeTool).toBe('mcp');
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
 
     // ArrowDown wraps -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');
 
-    // ArrowUp wraps -> mcp (tab 3)
+    // ArrowUp wraps -> emby_sync (tab 4)
     fireEvent.keyDown(tablist, { key: 'ArrowUp' });
-    expect(useToolsStore.getState().activeTool).toBe('mcp');
-
+    expect(useToolsStore.getState().activeTool).toBe('emby_sync');
     // Home -> subtitles (tab 0)
     fireEvent.keyDown(tablist, { key: 'Home' });
     expect(useToolsStore.getState().activeTool).toBe('subtitles');

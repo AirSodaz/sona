@@ -4,6 +4,7 @@ pub mod audio;
 pub mod automation;
 pub mod config;
 pub mod downloads;
+pub mod emby;
 pub mod export;
 pub mod history;
 pub mod llm;
@@ -212,6 +213,14 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::mcp::mcp_get_activity_logs,
         crate::commands::mcp::mcp_clear_activity_logs,
         crate::commands::mcp::mcp_get_tools_catalog,
-        crate::commands::mcp::mcp_get_client_configs
+        crate::commands::mcp::mcp_get_client_configs,
+        crate::commands::emby::emby_login,
+        crate::commands::emby::emby_test_connection,
+        crate::commands::emby::emby_save_config,
+        crate::commands::emby::emby_get_config,
+        crate::commands::emby::emby_get_libraries,
+        crate::commands::emby::emby_get_items,
+        crate::commands::emby::emby_download_audio,
+        crate::commands::emby::emby_upload_subtitle
     ]
 }

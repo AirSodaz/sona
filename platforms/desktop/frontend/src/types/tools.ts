@@ -1,1 +1,1 @@
-export type ToolId = 'subtitles' | 'voice_typing' | 'api_server' | 'mcp';
+export type ToolId = 'subtitles' | 'voice_typing' | 'api_server' | 'mcp' | 'emby_sync';

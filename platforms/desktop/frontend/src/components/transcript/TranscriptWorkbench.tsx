@@ -1,10 +1,18 @@
-import { Users as SpeakerReviewIcon, History as VersionHistoryIcon } from 'lucide-react';
+import {
+  Tv as EmbyIcon,
+  Loader2,
+  Users as SpeakerReviewIcon,
+  History as VersionHistoryIcon,
+} from 'lucide-react';
 import type React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../../hooks/useEscapeKey';
 import { generateAiTitle } from '../../services/aiRenameService';
+import { syncEmbySubtitles } from '../../services/emby/embyService';
+import { useDialogStore } from '../../stores/dialogStore';
 import { useEffectiveConfigStore } from '../../stores/effectiveConfigStore';
+import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useTranscriptPlaybackStore } from '../../stores/transcriptPlaybackStore';
 import { useTranscriptRuntimeStore } from '../../stores/transcriptRuntimeStore';
@@ -98,6 +106,72 @@ export function TranscriptWorkbench({
   const currentHistoryItem = useHistoryStore((state) =>
     sourceHistoryId ? state.items.find((item) => item.id === sourceHistoryId) || null : null
   );
+  const embyContext = useEmbyHistoryStore((state) =>
+    sourceHistoryId ? state.getContext(sourceHistoryId) : undefined
+  );
+  const [isSyncingEmby, setIsSyncingEmby] = useState(false);
+  const [embySyncSuccess, setEmbySyncSuccess] = useState(false);
+  const syncSuccessTimerRef = useRef<number | null>(null);
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    void sourceHistoryId;
+    setIsSyncingEmby(false);
+    setEmbySyncSuccess(false);
+    clearTimeout(syncSuccessTimerRef.current ?? undefined);
+    syncSuccessTimerRef.current = null;
+    return () => {
+      clearTimeout(syncSuccessTimerRef.current ?? undefined);
+      syncSuccessTimerRef.current = null;
+    };
+  }, [sourceHistoryId]);
+
+  const handleResyncEmby = async () => {
+    if (!embyContext || isSyncingEmby || segments.length === 0) return;
+    const targetHistoryId = sourceHistoryId;
+    setIsSyncingEmby(true);
+    setEmbySyncSuccess(false);
+    try {
+      await syncEmbySubtitles(segments, embyContext);
+      if (
+        !isMountedRef.current ||
+        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+      )
+        return;
+      setEmbySyncSuccess(true);
+      clearTimeout(syncSuccessTimerRef.current ?? undefined);
+      syncSuccessTimerRef.current = window.setTimeout(() => {
+        if (!isMountedRef.current) return;
+        setEmbySyncSuccess(false);
+        syncSuccessTimerRef.current = null;
+      }, 3000);
+    } catch (err: unknown) {
+      if (
+        !isMountedRef.current ||
+        useTranscriptSessionStore.getState().sourceHistoryId !== targetHistoryId
+      )
+        return;
+      console.error('Failed to resync to Emby:', err);
+      void useDialogStore.getState().showError({
+        code: 'emby.resync_failed',
+        messageKey: 'errors.common.operation_failed',
+        cause: err,
+      });
+    } finally {
+      if (
+        isMountedRef.current &&
+        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
+      ) {
+        setIsSyncingEmby(false);
+      }
+    }
+  };
 
   useEscapeKey(
     (event) => {
@@ -175,6 +249,28 @@ export function TranscriptWorkbench({
             >
               {displayTitle}
             </h4>
+            {embyContext && (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  fontSize: '11px',
+                  fontWeight: 500,
+                  padding: '2px 8px',
+                  borderRadius: '9999px',
+                  background: 'rgba(82, 196, 26, 0.12)',
+                  color: 'var(--color-success, #52c41a)',
+                  border: '1px solid rgba(82, 196, 26, 0.25)',
+                  whiteSpace: 'nowrap',
+                  marginLeft: '4px',
+                }}
+                title={`Emby: ${embyContext.itemName}`}
+              >
+                <EmbyIcon size={12} />
+                <span>Emby</span>
+              </span>
+            )}
             <button
               className="btn btn-icon btn-sm"
               type="button"
@@ -228,6 +324,31 @@ export function TranscriptWorkbench({
             )}
           </div>
           <div className="projects-detail-header-actions">
+            {embyContext && (
+              <button
+                type="button"
+                className={`btn btn-sm ${embySyncSuccess ? 'btn-success' : 'btn-secondary'}`}
+                onClick={handleResyncEmby}
+                disabled={isSyncingEmby || isManualHeaderActionsDisabled || segments.length === 0}
+                data-tooltip={t('emby.resync_tooltip', {
+                  defaultValue: 'Re-sync subtitles to Emby server',
+                })}
+                data-tooltip-pos="bottom"
+              >
+                {isSyncingEmby ? (
+                  <Loader2 size={14} className="queue-icon-spin" />
+                ) : (
+                  <EmbyIcon size={14} />
+                )}
+                <span>
+                  {isSyncingEmby
+                    ? t('emby.syncing', { defaultValue: 'Syncing...' })
+                    : embySyncSuccess
+                      ? t('emby.synced', { defaultValue: 'Synced' })
+                      : t('emby.resync', { defaultValue: 'Re-sync to Emby' })}
+                </span>
+              </button>
+            )}
             <PolishButton className="projects-detail-header-action" />
             <TranslateButton className="projects-detail-header-action" />
             <ExportButton className="projects-detail-header-action" />

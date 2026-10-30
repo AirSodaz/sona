@@ -1,0 +1,793 @@
+/* ToolEmbySyncPanel: Warm-Minimalism & Token-Compliant Styles */
+
+.emby-sync-panel {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  background: var(--color-bg-primary);
+  position: relative;
+}
+
+/* Header Action Buttons */
+.emby-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Plugin Warning Banner */
+.emby-plugin-warning-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  background: color-mix(in srgb, var(--color-warning) 10%, var(--color-bg-elevated));
+  border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
+  border-radius: var(--radius-md, 8px);
+  margin-bottom: 16px;
+  color: var(--color-text-primary);
+  font-size: 13px;
+  flex-shrink: 0;
+  gap: 12px;
+}
+
+.emby-warning-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.emby-warning-content svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
+}
+
+/* Main Content Area */
+.emby-sync-main-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: visible;
+  position: relative;
+  gap: 16px;
+}
+
+/* Disconnected Empty State Card */
+.emby-disconnected-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  margin: 32px auto;
+  max-width: 480px;
+  padding: 40px 32px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
+  gap: 16px;
+}
+
+.emby-empty-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  color: var(--color-accent-primary, #2f2f2f);
+  border: 1px solid var(--color-border);
+}
+
+.emby-disconnected-card h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.emby-disconnected-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+}
+
+/* Horizontal Library Toolbar */
+.emby-library-toolbar {
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.emby-library-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  flex-shrink: 0;
+}
+
+.emby-library-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.emby-library-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all var(--transition-fast);
+}
+
+.emby-library-tab:hover {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-primary);
+}
+
+.emby-library-tab.active {
+  background: var(--color-accent-primary, #2f2f2f);
+  color: var(--button-primary-text, #ffffff);
+  border-color: var(--color-accent-primary, #2f2f2f);
+}
+
+.emby-library-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.emby-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.emby-controls-subrow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.emby-search-box {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.emby-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.emby-search-box input[type="text"].emby-search-input,
+.emby-search-box input.emby-search-input {
+  width: 100%;
+  padding: 6px 12px 6px 32px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.emby-search-box input[type="text"].emby-search-input:focus,
+.emby-search-box input.emby-search-input:focus {
+  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #2f2f2f));
+  box-shadow: var(--apple-field-focus-shadow, 0 0 0 2px rgba(0, 122, 255, 0.2));
+}
+
+.emby-toolbar-select-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+
+.emby-toolbar-label,
+.emby-submit-label {
+  white-space: nowrap;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Custom Dropdowns */
+.emby-dropdown {
+  min-width: 160px;
+}
+
+.emby-dropdown .dropdown-trigger,
+.emby-audio-dropdown .dropdown-trigger {
+  border-radius: var(--radius-md, 8px);
+}
+
+.emby-toolbar-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.emby-filter-zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emby-selection-zone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+
+.emby-selection-counter {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  padding: 2px 8px;
+  border-radius: var(--radius-full, 9999px);
+  white-space: nowrap;
+}
+
+/* Media List Container */
+.emby-media-list-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 0 16px 0;
+}
+
+.emby-loading-state,
+.emby-empty-media-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  color: var(--color-text-secondary);
+  font-size: 13px;
+  gap: 12px;
+  text-align: center;
+}
+
+.emby-media-groups-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.emby-standalone-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Season Group Accordion Card */
+.emby-season-group {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.emby-season-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--color-bg-secondary);
+  cursor: pointer;
+  user-select: none;
+  gap: 12px;
+  border-radius: var(--radius-md, 8px) var(--radius-md, 8px) 0 0;
+  border-bottom: 1px solid transparent;
+  transition: background-color var(--transition-fast);
+}
+
+.emby-season-header:hover {
+  background: var(--color-bg-tertiary);
+}
+
+.emby-season-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  min-width: 0;
+}
+
+.emby-season-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emby-season-count {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-weight: 400;
+}
+
+.emby-badge {
+  font-size: 11px;
+  padding: 2px 7px;
+  border-radius: 9999px;
+  font-weight: 500;
+}
+
+.emby-badge-missing {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+  border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+
+.emby-badge-complete {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 25%, transparent);
+}
+
+.emby-season-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.emby-season-episodes {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 12px;
+  gap: 6px;
+  border-top: 1px solid var(--color-border);
+}
+
+/* Media Item Row */
+.emby-media-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-radius: var(--radius-md, 8px);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  transition: all var(--transition-fast);
+  gap: 12px;
+}
+
+.emby-media-row:hover {
+  border-color: var(--color-border-hover, var(--color-border));
+  background: var(--color-bg-secondary);
+}
+
+.emby-media-row.selected {
+  border-color: var(--color-accent-primary, #2f2f2f);
+  background: color-mix(in srgb, var(--color-accent-primary, #2f2f2f) 6%, var(--color-bg-elevated));
+}
+
+.emby-media-row.queued {
+  opacity: 0.75;
+  background: var(--color-bg-secondary);
+}
+
+.emby-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.emby-row-checkbox-label {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.emby-episode-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  min-width: 26px;
+  text-align: center;
+}
+
+.emby-movie-icon-badge {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-secondary);
+}
+
+.emby-item-title-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.emby-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.emby-item-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+}
+
+.emby-item-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.emby-status-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.emby-tag-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+}
+
+.emby-tag-present {
+  background: color-mix(in srgb, var(--color-success) 12%, transparent);
+  color: var(--color-success);
+  border: 1px solid color-mix(in srgb, var(--color-success) 25%, transparent);
+}
+.emby-tag-present .emby-tag-dot {
+  background: var(--color-success);
+}
+
+.emby-tag-missing {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+  border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+.emby-tag-missing .emby-tag-dot {
+  background: var(--color-error);
+}
+
+.emby-tag-queued {
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-elevated));
+  color: var(--color-text-secondary);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
+}
+.emby-tag-queued .emby-tag-dot {
+  background: var(--color-warning);
+}
+
+.emby-audio-dropdown {
+  min-width: 140px;
+  max-width: 220px;
+  font-size: 12px;
+}
+
+/* Bottom Sticky Action Bar */
+.emby-submit-bar-wrapper {
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.emby-submitted-notice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: color-mix(in srgb, var(--color-success) 14%, var(--color-bg-elevated));
+  color: var(--color-success);
+  border-bottom: 1px solid color-mix(in srgb, var(--color-success) 28%, var(--color-border));
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 500;
+  animation: slideDown 0.2s ease-out;
+}
+
+.emby-submit-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 20px;
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md, 8px);
+  box-shadow: var(--shadow-sm);
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.emby-submit-controls {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.emby-submit-control-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.emby-submit-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.emby-submit-action {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.emby-submit-btn {
+  display: inline-flex;
+  align-items: center;
+  font-weight: 600;
+  height: 32px;
+  font-size: 13px;
+  padding: 4px 14px;
+  white-space: nowrap;
+}
+
+/* Config & Plugin Guide Modals */
+.emby-modal-footer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 100%;
+}
+
+.emby-config-modal-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.emby-alert-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.emby-alert-error {
+  background: color-mix(in srgb, var(--color-error) 12%, transparent);
+  color: var(--color-error);
+  border: 1px solid color-mix(in srgb, var(--color-error) 25%, transparent);
+}
+
+.emby-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.emby-form-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.emby-input {
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+
+.emby-input:focus {
+  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #2f2f2f));
+  box-shadow: var(--apple-field-focus-shadow, 0 0 0 2px rgba(0, 122, 255, 0.2));
+}
+
+.emby-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.emby-plugin-guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.emby-guide-intro {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--color-text-primary);
+}
+
+.emby-guide-step-card {
+  background: var(--color-bg-secondary);
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.emby-guide-step-title {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.emby-guide-step-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.emby-github-link {
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.emby-guide-paths-list {
+  margin: 4px 0 0 16px;
+  padding: 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.6;
+}
+
+.emby-guide-tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  font-style: italic;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (max-width: 640px) {
+  .emby-submit-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  .emby-submit-controls {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .emby-submit-action {
+    width: 100%;
+  }
+
+  .emby-submit-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+
+  .emby-submitted-notice {
+    animation: none;
+  }
+}

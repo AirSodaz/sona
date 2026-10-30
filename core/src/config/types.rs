@@ -469,6 +469,41 @@ pub struct AppConfig {
     pub mcp_notify_on_mutation: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mcp_audit_log_enabled: Option<bool>,
+    #[serde(
+        default,
+        rename = "embyServerUrl",
+        alias = "emby_server_url",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_server_url: Option<String>,
+    #[serde(
+        default,
+        rename = "embyUsername",
+        alias = "emby_username",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_username: Option<String>,
+    #[serde(
+        default,
+        rename = "embyApiKey",
+        alias = "emby_api_key",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_api_key: Option<String>,
+    #[serde(
+        default,
+        rename = "embyAllowInvalidCerts",
+        alias = "emby_allow_invalid_certs",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_allow_invalid_certs: Option<bool>,
+    #[serde(
+        default,
+        rename = "embyAdminUserId",
+        alias = "emby_admin_user_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_admin_user_id: Option<String>,
     #[serde(flatten)]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub extra: BTreeMap<String, Value>,

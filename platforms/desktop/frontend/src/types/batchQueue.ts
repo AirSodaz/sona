@@ -13,6 +13,22 @@ import type { TranscriptSegment } from './transcript';
  */
 export type BatchQueueItemStatus = 'pending' | 'processing' | 'complete' | 'error' | 'cancelled';
 
+export type EmbySubtitleMode = 'pure_translation' | 'bilingual' | 'separate_tracks';
+
+export interface EmbyTaskContext {
+  serverId: string;
+  serverUrl: string;
+  itemId: string;
+  itemName: string;
+  audioStreamIndex: number;
+  subtitleMode: EmbySubtitleMode;
+  targetLanguage: string;
+  sourceLanguage?: string;
+  existingExternalSubtitleIndex?: number;
+  mediaSourceId?: string;
+  container?: string;
+}
+
 export type BatchQueueItemOrigin = 'manual' | 'automation';
 
 /**
@@ -41,6 +57,8 @@ export interface BatchQueueItem {
   segments: TranscriptSegment[];
   /** Error message if status is 'error'. */
   errorMessage?: string;
+  /** Specific stage where an error occurred, used for targeted retries. */
+  errorStage?: 'transcribe' | 'upload';
   /** Managed asset URL for audio playback, or null until a history copy is available. */
   audioUrl?: string | null;
   /** ID of the saved history item for this queue item. */
@@ -86,4 +104,6 @@ export interface BatchQueueItem {
    * to send a real-time cancellation signal to the Rust backend.
    */
   activeInstanceId?: string | null;
+  /** Emby streaming transcription and closed-loop sync context. */
+  embyContext?: EmbyTaskContext;
 }

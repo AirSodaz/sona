@@ -33,13 +33,14 @@ export interface BatchQueueLifecyclePorts {
     lastKnownStage?: RecoveryItemStage
   ) => void;
   updateItemSegments: (id: string, segments: TranscriptSegment[]) => void;
-  setItemError: (id: string, message: string) => void;
+  setItemError: (id: string, message: string, errorStage?: 'transcribe' | 'upload') => void;
   applySavedHistory: (
     itemId: string,
     item: BatchQueueItem,
     historyItem: HistoryItem
   ) => void | Promise<void>;
   setItemExportPath: (itemId: string, exportPath: string) => void;
+  updateItemFilePath?: (itemId: string, filePath: string) => void;
   /** Persists or clears the active Rust instance ID used for real-time cancellation. */
   setItemActiveInstanceId: (itemId: string, instanceId: string | null) => void;
   isActiveItem: (itemId: string) => boolean;
@@ -182,13 +183,19 @@ export class BatchQueueCoordinator {
       return;
     }
 
+    const isUploadRetry =
+      Boolean(item.embyContext) &&
+      item.errorStage === 'upload' &&
+      Boolean(item.segments && item.segments.length > 0);
+
     if (
+      !isUploadRetry &&
       !this.ports.asrConfigService.isAsrRequestConfigured(
         this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch')
       )
     ) {
       const message = 'Batch ASR is not configured.';
-      lifecyclePorts.setItemError(itemId, message);
+      lifecyclePorts.setItemError(itemId, message, item.errorStage);
       await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
       return;
     }
@@ -209,6 +216,9 @@ export class BatchQueueCoordinator {
           },
           onExportComplete: (exportPath) => {
             lifecyclePorts.setItemExportPath(itemId, exportPath);
+          },
+          updateFilePath: (filePath) => {
+            lifecyclePorts.updateItemFilePath?.(itemId, filePath);
           },
           isActiveItem: () => lifecyclePorts.isActiveItem(itemId),
           isCancelRequested: () =>
@@ -245,7 +255,7 @@ export class BatchQueueCoordinator {
         await this.settleCancelledItem(item, lifecyclePorts);
       } else {
         logger.error(`[BatchQueue] Failed to process ${item.filename}:`, error);
-        lifecyclePorts.setItemError(itemId, message);
+        lifecyclePorts.setItemError(itemId, message, item.errorStage);
         await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
       }
     } finally {

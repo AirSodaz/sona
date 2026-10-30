@@ -252,7 +252,8 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 24px;
+  flex-wrap: wrap;
+  gap: 16px;
   margin-bottom: 28px;
   padding-bottom: 24px;
   border-bottom: 1px solid var(--color-border);
@@ -263,7 +264,7 @@
   align-items: center;
   gap: 16px;
   flex: 1;
-  min-width: 0;
+  min-width: min(100%, 280px);
 }
 
 .tool-hero-icon-tile {
@@ -310,7 +311,9 @@
 .tool-hero-control {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 12px 16px;
+  flex-wrap: wrap;
+  min-width: 0;
   flex-shrink: 0;
   margin-top: 4px;
 }

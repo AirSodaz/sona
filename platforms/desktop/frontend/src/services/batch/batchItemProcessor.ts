@@ -1,15 +1,19 @@
 import { v4 as uuidv4 } from 'uuid';
+import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
-import type { AppConfig } from '../../types/config';
+import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
+import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
+import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
+import { downloadEmbyAudio, syncEmbySubtitles } from '../emby/embyService';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
 import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
@@ -20,6 +24,7 @@ import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
 import { transcriptionService } from '../transcriptionService';
 import { translationService } from '../translationService';
+import { StreamingTranslationScheduler } from './streamingTranslationScheduler';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
@@ -32,6 +37,7 @@ export interface BatchItemProcessorCallbacks {
   onExportComplete: (exportPath: string) => void;
   isActiveItem: () => boolean;
   isCancelRequested: () => boolean;
+  updateFilePath?: (filePath: string) => void;
   /** Called as soon as the batch `instanceId` is known, so the store can persist it for cancellation. */
   onInstanceIdAssigned: (instanceId: string | null) => void;
 }
@@ -53,6 +59,50 @@ export interface BatchItemProcessorPorts {
   useHistoryStore: typeof useHistoryStore;
   useProjectStore?: typeof useProjectStore;
   pipelineExecutionEngine?: typeof pipelineExecutionEngine;
+}
+
+function resolveEffectiveReplacementSets(
+  config: AppConfig,
+  pipeline: { replacementSetIds?: string[]; customTerms?: string[] },
+  projectId?: string | null
+): TextReplacementRuleSet[] {
+  const effectiveReplacementSets: TextReplacementRuleSet[] = [];
+  if (config.dictionaryContent?.trim()) {
+    const parsed = parseYamlDictionary(config.dictionaryContent);
+    const terms = getTermsForProject(parsed, projectId ?? undefined);
+    if (terms.replacements.length > 0) {
+      effectiveReplacementSets.push({
+        id: 'unified-dictionary-replacements',
+        name: 'Unified Dictionary',
+        enabled: true,
+        ignoreCase: false,
+        rules: terms.replacements.map((r, i) => ({
+          id: `rep_${i}`,
+          from: r.from,
+          to: r.to,
+        })),
+      });
+    }
+  } else {
+    if (pipeline.replacementSetIds && pipeline.replacementSetIds.length > 0) {
+      const globalSets = config.textReplacementSets ?? [];
+      for (const setId of pipeline.replacementSetIds) {
+        const found = globalSets.find((s) => s.id === setId);
+        if (found) effectiveReplacementSets.push(found);
+      }
+    }
+    const customReplacements = extractReplacementsFromTerms(pipeline.customTerms);
+    if (customReplacements.length > 0) {
+      effectiveReplacementSets.push({
+        id: 'pipeline-custom-terms',
+        name: 'Project Terms',
+        enabled: true,
+        ignoreCase: false,
+        rules: customReplacements,
+      });
+    }
+  }
+  return effectiveReplacementSets;
 }
 
 export class BatchItemProcessor {
@@ -78,6 +128,39 @@ export class BatchItemProcessor {
         this.ports.useProjectStore?.getState?.().projects ?? [],
         config
       );
+    if (
+      item.embyContext &&
+      item.errorStage === 'upload' &&
+      item.segments &&
+      item.segments.length > 0
+    ) {
+      this.throwIfCancelRequested(callbacks);
+      callbacks.updateStatus('processing', 95);
+      callbacks.updateSegments(item.segments);
+      const { embyContext } = item;
+      try {
+        const targetLanguage =
+          embyContext.targetLanguage ||
+          pipeline.targetLanguage ||
+          config.translationLanguage ||
+          'zh-CN';
+        await syncEmbySubtitles(
+          item.segments,
+          { ...embyContext, targetLanguage },
+          { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+        );
+        item.errorStage = undefined;
+        return;
+      } catch (uploadError) {
+        logger.error(
+          '[BatchQueue] Fast-path retry failed to upload subtitle to Emby:',
+          uploadError
+        );
+        item.errorStage = 'upload';
+        throw uploadError;
+      }
+    }
+
     const hotwordsOverride = this.ports.asrConfigService.buildHotwordsWithPipeline?.(
       config,
       pipeline,
@@ -100,7 +183,12 @@ export class BatchItemProcessor {
     const segmentBuffer = new Map<string, TranscriptSegment>();
     let lastUpdateTime = 0;
     let tempWavPath: string | undefined;
+    let downloadedEmbyPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
+
+    if (item.embyContext && item.historyId) {
+      useEmbyHistoryStore.getState().setContext(item.historyId, item.embyContext);
+    }
 
     const persistHistorySnapshot = async (): Promise<void> => {
       if (!savedHistoryId) {
@@ -117,13 +205,15 @@ export class BatchItemProcessor {
 
       const duration = this.calculateDuration(currentSegments);
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !downloadedEmbyPath &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
+      const isEmbyItem = Boolean(item.embyContext || downloadedEmbyPath);
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
           : undefined;
-      const inputSource = item.streamUrl || item.filePath;
+      const inputSource = downloadedEmbyPath || item.streamUrl || item.filePath;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
@@ -148,7 +238,7 @@ export class BatchItemProcessor {
       }
 
       savedHistoryId = historyItem.id;
-      if (isStream && item.filename && item.filename !== historyItem.title) {
+      if ((isStream || isEmbyItem) && item.filename && item.filename !== historyItem.title) {
         historyItem.title = item.filename;
         if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
           try {
@@ -159,6 +249,10 @@ export class BatchItemProcessor {
             logger.warn('[BatchQueue] Failed to update stream history title meta:', metaErr);
           }
         }
+      }
+
+      if (item.embyContext && savedHistoryId) {
+        useEmbyHistoryStore.getState().setContext(savedHistoryId, item.embyContext);
       }
 
       this.ports.useHistoryStore.getState().addItem(historyItem);
@@ -181,15 +275,72 @@ export class BatchItemProcessor {
       setCurrentSegments([...merged.values()].sort((left, right) => left.start - right.start));
     };
 
+    const resolvedTargetLanguage =
+      item.embyContext?.targetLanguage ||
+      pipeline.targetLanguage ||
+      config.translationLanguage ||
+      'zh-CN';
+    const shouldStreamTranslate =
+      (pipeline.autoTranslate || Boolean(item.embyContext)) && !pipeline.autoPolish;
+
+    const effectiveReplacementSets = resolveEffectiveReplacementSets(
+      config,
+      pipeline,
+      item.projectId
+    );
+
+    let scheduler: StreamingTranslationScheduler | null = null;
+    if (shouldStreamTranslate) {
+      scheduler = new StreamingTranslationScheduler({
+        config,
+        targetLanguage: resolvedTargetLanguage,
+        onBatchTranslated: async (translatedChunk) => {
+          const transMap = new Map(translatedChunk.map((c) => [c.id, c.translation]));
+          for (const [id, translation] of transMap.entries()) {
+            const buffered = segmentBuffer.get(id);
+            if (buffered) {
+              segmentBuffer.set(id, { ...buffered, translation });
+            }
+          }
+          currentSegments = currentSegments.map((seg) => {
+            const translation = transMap.get(seg.id);
+            return translation ? { ...seg, translation } : seg;
+          });
+          callbacks.updateSegments(currentSegments);
+          if (savedHistoryId) {
+            await persistHistorySnapshot();
+          }
+        },
+        onError: (err) => {
+          logger.warn('[BatchQueue] Streaming translation batch error:', err);
+        },
+        isCancelRequested: () => callbacks.isCancelRequested(),
+        translationService: this.ports.translationService,
+      });
+    }
+
+    item.errorStage = undefined;
     try {
       if (batchAsr.engine === 'local') {
         this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
+      if (item.embyContext && !item.streamUrl && !item.filePath) {
+        callbacks.updateStatus('processing', 0);
+        const downloadedPath = await downloadEmbyAudio(
+          item.embyContext.itemId,
+          item.embyContext.audioStreamIndex
+        );
+        downloadedEmbyPath = downloadedPath;
+        item.filePath = downloadedPath;
+        callbacks.updateFilePath?.(downloadedPath);
+      }
+
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !downloadedEmbyPath &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const shouldCreateTempWav =
         !isLlamaCpp && batchAsr.engine !== 'online' && (!isStream || Boolean(item.retainAudio));
       tempWavPath = shouldCreateTempWav
@@ -197,7 +348,7 @@ export class BatchItemProcessor {
         : undefined;
       this.throwIfCancelRequested(callbacks);
 
-      const inputSource = item.streamUrl || item.filePath;
+      const inputSource = downloadedEmbyPath || item.streamUrl || item.filePath;
       let segments: TranscriptSegment[];
       try {
         segments = await this.ports.transcriptionService.transcribeFile(
@@ -206,7 +357,17 @@ export class BatchItemProcessor {
             callbacks.updateStatus('processing', progress);
           },
           (segment) => {
-            segmentBuffer.set(segment.id, segment);
+            const cleanText =
+              effectiveReplacementSets.length > 0
+                ? applyTextReplacements(segment.text, effectiveReplacementSets)
+                : segment.text;
+            const cleanSegment =
+              cleanText === segment.text ? segment : { ...segment, text: cleanText };
+
+            if (cleanSegment.isFinal !== false) {
+              scheduler?.push(cleanSegment);
+            }
+            segmentBuffer.set(cleanSegment.id, cleanSegment);
             const now = Date.now();
 
             if (segmentBuffer.size >= 50 || now - lastUpdateTime > 500) {
@@ -225,33 +386,48 @@ export class BatchItemProcessor {
       } catch (transcribeError) {
         flushSegmentBuffer();
         const isStream =
-          item.sourceType === 'url_stream' ||
-          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+          !downloadedEmbyPath &&
+          (item.sourceType === 'url_stream' ||
+            /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
         const isExplicitCancel = callbacks.isCancelRequested();
         const isTaskCancelError = extractErrorMessage(transcribeError).includes('Task cancelled');
-
         if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
           segments = currentSegments;
         } else {
+          scheduler?.cancel();
           throw transcribeError;
         }
       } finally {
         callbacks.onInstanceIdAssigned(null);
       }
 
+      flushSegmentBuffer();
       this.throwIfCancelRequested(callbacks);
-      setCurrentSegments(segments);
+
+      const cleanedSegments =
+        effectiveReplacementSets.length > 0
+          ? segments.map((seg) => {
+              const cleanText = applyTextReplacements(seg.text, effectiveReplacementSets);
+              return cleanText === seg.text ? seg : { ...seg, text: cleanText };
+            })
+          : segments;
+
+      if (scheduler) {
+        callbacks.updateStatus('processing', 95, 'translating');
+        await scheduler.drain();
+        const translationMap = scheduler.getTranslations();
+        const reconciled = cleanedSegments.map((seg) => ({
+          ...seg,
+          translation: translationMap.get(seg.id) ?? seg.translation,
+        }));
+        setCurrentSegments(reconciled);
+      } else {
+        setCurrentSegments(cleanedSegments);
+      }
       await ensureHistorySaved();
       await persistHistorySnapshot();
 
       const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
-      const pipeline =
-        item.pipelineSnapshot ??
-        resolveItemPipeline(
-          item.projectId,
-          this.ports.useProjectStore?.getState?.().projects ?? [],
-          config
-        );
 
       const pipelineResult = await engine.execute({
         historyId: savedHistoryId || '',
@@ -259,13 +435,17 @@ export class BatchItemProcessor {
         segments: currentSegments,
         pipeline: {
           ...pipeline,
+          replacementSetIds: [],
+          customTerms: [],
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
+          autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
+          targetLanguage: resolvedTargetLanguage,
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
           exportFormat:
             (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
           exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
         },
-        globalConfig: config,
+        globalConfig: { ...config, dictionaryContent: undefined },
         baseFileName: this.buildAutomationExportBaseName(item),
         onProgress: (stage, progress) => {
           callbacks.updateStatus(
@@ -290,11 +470,35 @@ export class BatchItemProcessor {
       if (savedHistoryId && callbacks.isActiveItem()) {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
+      this.throwIfCancelRequested(callbacks);
+      if (item.embyContext && currentSegments.length > 0) {
+        const { embyContext } = item;
+        try {
+          const targetLanguage =
+            embyContext.targetLanguage ||
+            pipeline.targetLanguage ||
+            config.translationLanguage ||
+            'zh-CN';
+          await syncEmbySubtitles(
+            currentSegments,
+            { ...embyContext, targetLanguage },
+            { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+          );
+        } catch (uploadError) {
+          logger.error('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+          item.errorStage = 'upload';
+          item.segments = currentSegments;
+          callbacks.updateSegments(currentSegments);
+          throw uploadError;
+        }
+      }
     } catch (error) {
+      scheduler?.cancel();
       flushSegmentBuffer();
       const isStream =
-        item.sourceType === 'url_stream' ||
-        /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath);
+        !downloadedEmbyPath &&
+        (item.sourceType === 'url_stream' ||
+          /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const isExplicitCancel = callbacks.isCancelRequested();
       const isTaskCancelError = extractErrorMessage(error).includes('Task cancelled');
       const isCancelled = isExplicitCancel || isTaskCancelError;
@@ -306,9 +510,23 @@ export class BatchItemProcessor {
       } catch (historyError) {
         logger.error('[BatchQueue] Failed to persist partial result after error:', historyError);
       }
+      if (downloadedEmbyPath) {
+        item.filePath = '';
+        callbacks.updateFilePath?.('');
+      }
+      if (currentSegments.length > 0) {
+        item.segments = currentSegments;
+        callbacks.updateSegments(currentSegments);
+      }
+      if (!item.errorStage) {
+        item.errorStage = 'transcribe';
+      }
 
       throw error;
     } finally {
+      if (downloadedEmbyPath) {
+        await this.removeTempFile(downloadedEmbyPath);
+      }
       await this.removeTempFile(tempWavPath);
     }
   };

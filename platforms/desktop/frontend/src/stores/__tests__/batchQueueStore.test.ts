@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
+import type { AppConfig } from '../../types/config';
+import { buildEmbyStreamUrl, deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
 
 const taskLedgerContext = vi.hoisted(() => ({
@@ -871,6 +872,268 @@ describe('batchQueueStore', () => {
       expect(items[0].filename).toBe('podcast1.mp3');
       expect(items[1].filename).toBe('podcast2.mp3');
       expect(items[0].retainAudio).toBe(false);
+    });
+  });
+
+  describe('emby queue and errorStage support', () => {
+    it('addEmbyItems sets sourceType url_stream and streamUrl', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://192.168.1.10:8096',
+            itemId: 'video-999',
+            itemName: 'Episode 1',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].sourceType).toBe('url_stream');
+      expect(items[0].streamUrl).toBe(
+        'http://192.168.1.10:8096/Videos/video-999/stream.mkv?Static=true&MediaSourceId=mediasource_video-999&AudioStreamIndex=1'
+      );
+      expect(items[0].filename).toBe('Episode 1');
+      expect(items[0].embyContext?.itemId).toBe('video-999');
+    });
+    it('addEmbyItems sets streamUrl with apiKey, container, and custom mediaSourceId', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://192.168.1.10:8096/emby',
+            apiKey: 'token123',
+            mediaSourceId: 'ms-custom-456',
+            container: 'mp4',
+            itemId: 'video-888',
+            itemName: 'Episode 2',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].sourceType).toBe('url_stream');
+      expect(items[0].streamUrl).toBe(
+        'http://192.168.1.10:8096/emby/Videos/video-888/stream.mp4?api_key=token123&Static=true&MediaSourceId=ms-custom-456&AudioStreamIndex=0'
+      );
+      expect(items[0].embyContext?.mediaSourceId).toBe('ms-custom-456');
+      expect(items[0].embyContext?.container).toBe('mp4');
+      expect(items[0].streamUrl).toContain('api_key=token123');
+      expect(items[0].embyContext && 'apiKey' in items[0].embyContext).toBe(false);
+    });
+
+    it('addEmbyItems applies sourceLanguage to resolvedConfigSnapshot', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'video-lang',
+            itemName: 'Episode with Japanese Audio',
+            audioStreamIndex: 1,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+            sourceLanguage: 'ja',
+          },
+        ],
+        resolvedConfigSnapshot: { language: 'auto' } as unknown as AppConfig,
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].resolvedConfigSnapshot?.language).toBe('ja');
+      expect(items[0].embyContext?.sourceLanguage).toBe('ja');
+    });
+
+    it('addEmbyItems sanitizes serverUrl in embyContext and deduplicates existing items', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096/?api_key=token#hash',
+            itemId: 'video-dup',
+            itemName: 'Episode Duplicate',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096/',
+            itemId: 'video-dup',
+            itemName: 'Episode Duplicate 2',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].embyContext?.serverUrl).toBe('http://localhost:8096');
+    });
+
+    it('buildEmbyStreamUrl encodes itemId and container and strips trailing query from serverUrl', () => {
+      const streamUrl = buildEmbyStreamUrl({
+        serverUrl: 'http://localhost:8096/?foo=bar',
+        itemId: 'item with spaces/slash',
+        container: '.mkv',
+      });
+      expect(streamUrl).toBe(
+        'http://localhost:8096/Videos/item%20with%20spaces%2Fslash/stream.mkv?Static=true&MediaSourceId=mediasource_item+with+spaces%2Fslash'
+      );
+    });
+    it('setItemError sets errorMessage and errorStage', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-1',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'processing',
+            progress: 50,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().setItemError('item-1', 'Upload failed', 'upload');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('error');
+      expect(item.errorMessage).toBe('Upload failed');
+      expect(item.errorStage).toBe('upload');
+    });
+
+    it('retryItem preserves errorStage when moving item back to pending', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'error',
+            progress: 95,
+            segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hi', isFinal: true }],
+            projectId: null,
+            errorStage: 'upload',
+            errorMessage: 'Emby error',
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().retryItem('item-failed');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('pending');
+      expect(item.progress).toBe(95);
+      expect(item.errorMessage).toBeUndefined();
+      expect(item.errorStage).toBe('upload');
+    });
+
+    it('retryAllFailed preserves errorStage on all failed items', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed-upload',
+            filename: 'Ep 1',
+            filePath: '/tmp/test.mp3',
+            status: 'error',
+            progress: 95,
+            segments: [{ id: 'seg-1', start: 0, end: 1, text: 'hi', isFinal: true }],
+            projectId: null,
+            errorStage: 'upload',
+          },
+          {
+            id: 'item-failed-transcribe',
+            filename: 'Ep 2',
+            filePath: '/tmp/test2.mp3',
+            status: 'error',
+            progress: 10,
+            segments: [],
+            projectId: null,
+            errorStage: 'transcribe',
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().retryAllFailed();
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items[0].status).toBe('pending');
+      expect(items[0].errorStage).toBe('upload');
+      expect(items[0].progress).toBe(95);
+      expect(items[1].status).toBe('pending');
+      expect(items[1].errorStage).toBe('transcribe');
+      expect(items[1].progress).toBe(0);
+    });
+    it('updateItemFilePath updates state and task ledger', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-1',
+            filename: 'Ep 1',
+            filePath: '',
+            status: 'pending',
+            progress: 0,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().updateItemFilePath('item-1', '/downloads/ep1.mp3');
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.filePath).toBe('/downloads/ep1.mp3');
+      expect(taskLedgerContext.patchTaskLedgerRecord).toHaveBeenCalledWith(
+        'batch-item-1',
+        expect.objectContaining({
+          filePath: '/downloads/ep1.mp3',
+        })
+      );
+    });
+
+    it('updateItemStatus to complete clears errorMessage and errorStage', () => {
+      useBatchQueueStore.setState({
+        queueItems: [
+          {
+            id: 'item-failed',
+            filename: 'Ep 1',
+            filePath: '/downloads/ep1.mp3',
+            status: 'error',
+            errorMessage: 'Upload failed',
+            errorStage: 'upload',
+            progress: 50,
+            segments: [],
+            projectId: null,
+          },
+        ],
+      });
+
+      useBatchQueueStore.getState().updateItemStatus('item-failed', 'complete', 100);
+
+      const item = useBatchQueueStore.getState().queueItems[0];
+      expect(item.status).toBe('complete');
+      expect(item.errorMessage).toBeUndefined();
+      expect(item.errorStage).toBeUndefined();
+      expect(item.progress).toBe(100);
     });
   });
 });
