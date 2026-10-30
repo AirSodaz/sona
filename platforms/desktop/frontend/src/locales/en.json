@@ -3103,6 +3103,17 @@
     "all_have_target": "All have subtitles",
     "resync_no_segments": "Cannot re-sync to Emby: Transcript has no segments.",
     "resync_success": "Successfully synced subtitles to Emby.",
-    "clear_selection": "Clear Selection"
+    "clear_selection": "Clear Selection",
+    "processing_settings": "Processing Settings",
+    "processing_settings_title": "Emby Processing Settings",
+    "global_default": "Global Default (Follow Settings)",
+    "section_asr": "Speech Recognition (ASR)",
+    "asr_model_selection": "ASR Model Selection",
+    "asr_recognition_language": "Recognition Language",
+    "asr_lang_auto": "auto (Auto-detect from audio)",
+    "section_translation": "Translation Engine",
+    "translation_model_selection": "Translation Model",
+    "section_subtitles": "Subtitle Preferences",
+    "default_subtitle_mode": "Default Subtitle Mode"
   }
 }

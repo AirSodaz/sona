@@ -3103,6 +3103,17 @@
     "all_have_target": "全配齐",
     "resync_no_segments": "无法重新同步至 Emby：转录内容无文本片段。",
     "resync_success": "已成功同步字幕至 Emby。",
-    "clear_selection": "清除选择"
+    "clear_selection": "清除选择",
+    "processing_settings": "处理设置",
+    "processing_settings_title": "Emby 处理设置",
+    "global_default": "全局默认 (跟随主设置)",
+    "section_asr": "语音识别 (ASR)",
+    "asr_model_selection": "ASR 模型选择",
+    "asr_recognition_language": "识别语言",
+    "asr_lang_auto": "auto (从音频自动识别)",
+    "section_translation": "翻译引擎",
+    "translation_model_selection": "翻译模型",
+    "section_subtitles": "字幕偏好",
+    "default_subtitle_mode": "默认字幕模式"
   }
 }

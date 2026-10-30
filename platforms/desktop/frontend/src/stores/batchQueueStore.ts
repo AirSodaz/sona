@@ -9,6 +9,10 @@ import {
   applySavedBatchHistoryToQueue,
   resolveSavedBatchHistoryMeta,
 } from '../services/batch/batchQueueHistorySync';
+import {
+  buildEmbyEffectiveConfig,
+  loadEmbyToolOverrides,
+} from '../services/emby/embySettingsService';
 import { historyService } from '../services/historyService';
 import { type EffectivePipelineSnapshot, resolveItemPipeline } from '../services/projectPipeline';
 import { persistQueueRecoverySnapshot, toBatchQueueItem } from '../services/recoveryService';
@@ -88,6 +92,7 @@ export interface AddEmbyItemsOptions {
   items: AddEmbyItemEntry[];
   projectId?: string | null;
   pipelineSnapshot?: EffectivePipelineSnapshot;
+  resolvedConfigSnapshot?: AppConfig;
 }
 
 export function deriveTitleFromUrl(url: string): string {
@@ -483,7 +488,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     }
     const projectStore = useProjectStore.getState();
     const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
-    const resolvedConfigSnapshot = getEffectiveConfigSnapshot();
+    const overrides = loadEmbyToolOverrides();
+    const resolvedConfigSnapshot =
+      options?.resolvedConfigSnapshot ??
+      buildEmbyEffectiveConfig(getEffectiveConfigSnapshot(), overrides);
     const newItems: BatchQueueItem[] = options.items.map((opt) => {
       const baseServerUrl = opt.serverUrl.trim().replace(/\/+$/, '');
       const streamUrl = buildEmbyStreamUrl({

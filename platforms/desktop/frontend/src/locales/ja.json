@@ -3103,6 +3103,17 @@
     "all_have_target": "すべて字幕あり",
     "resync_no_segments": "Emby に再同期できません: 文字起こしセグメントがありません。",
     "resync_success": "Emby への字幕同期が完了しました。",
-    "clear_selection": "選択を解除"
+    "clear_selection": "選択を解除",
+    "processing_settings": "処理設定",
+    "processing_settings_title": "Emby 処理設定",
+    "global_default": "グローバルデフォルト (設定に従う)",
+    "section_asr": "音声認識 (ASR)",
+    "asr_model_selection": "ASR モデル選択",
+    "asr_recognition_language": "認識言語",
+    "asr_lang_auto": "auto (音声から自動検出)",
+    "section_translation": "翻訳エンジン",
+    "translation_model_selection": "翻訳モデル",
+    "section_subtitles": "字幕の環境設定",
+    "default_subtitle_mode": "デフォルト字幕モード"
   }
 }

@@ -3,13 +3,15 @@ import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
-import type { AppConfig } from '../../types/config';
+import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
 import type { HistoryItem } from '../../types/history';
 import type { RecoveryItemStage } from '../../types/recovery';
 import type { TranscriptSegment } from '../../types/transcript';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
+import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
+import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
 import { downloadEmbyAudio, syncEmbySubtitles } from '../emby/embyService';
 import { exportService } from '../exportService';
@@ -22,6 +24,7 @@ import { remove } from '../tauri/platform/fs';
 import { join, tempDir } from '../tauri/platform/path';
 import { transcriptionService } from '../transcriptionService';
 import { translationService } from '../translationService';
+import { StreamingTranslationScheduler } from './streamingTranslationScheduler';
 
 export interface BatchItemProcessorCallbacks {
   updateStatus: (
@@ -56,6 +59,50 @@ export interface BatchItemProcessorPorts {
   useHistoryStore: typeof useHistoryStore;
   useProjectStore?: typeof useProjectStore;
   pipelineExecutionEngine?: typeof pipelineExecutionEngine;
+}
+
+function resolveEffectiveReplacementSets(
+  config: AppConfig,
+  pipeline: { replacementSetIds?: string[]; customTerms?: string[] },
+  projectId?: string | null
+): TextReplacementRuleSet[] {
+  const effectiveReplacementSets: TextReplacementRuleSet[] = [];
+  if (config.dictionaryContent?.trim()) {
+    const parsed = parseYamlDictionary(config.dictionaryContent);
+    const terms = getTermsForProject(parsed, projectId ?? undefined);
+    if (terms.replacements.length > 0) {
+      effectiveReplacementSets.push({
+        id: 'unified-dictionary-replacements',
+        name: 'Unified Dictionary',
+        enabled: true,
+        ignoreCase: false,
+        rules: terms.replacements.map((r, i) => ({
+          id: `rep_${i}`,
+          from: r.from,
+          to: r.to,
+        })),
+      });
+    }
+  } else {
+    if (pipeline.replacementSetIds && pipeline.replacementSetIds.length > 0) {
+      const globalSets = config.textReplacementSets ?? [];
+      for (const setId of pipeline.replacementSetIds) {
+        const found = globalSets.find((s) => s.id === setId);
+        if (found) effectiveReplacementSets.push(found);
+      }
+    }
+    const customReplacements = extractReplacementsFromTerms(pipeline.customTerms);
+    if (customReplacements.length > 0) {
+      effectiveReplacementSets.push({
+        id: 'pipeline-custom-terms',
+        name: 'Project Terms',
+        enabled: true,
+        ignoreCase: false,
+        rules: customReplacements,
+      });
+    }
+  }
+  return effectiveReplacementSets;
 }
 
 export class BatchItemProcessor {
@@ -234,6 +281,50 @@ export class BatchItemProcessor {
       }
     }
 
+    const resolvedTargetLanguage =
+      item.embyContext?.targetLanguage ||
+      pipeline.targetLanguage ||
+      config.translationLanguage ||
+      'zh-CN';
+    const shouldStreamTranslate =
+      (pipeline.autoTranslate || Boolean(item.embyContext)) && !pipeline.autoPolish;
+
+    const effectiveReplacementSets = resolveEffectiveReplacementSets(
+      config,
+      pipeline,
+      item.projectId
+    );
+
+    let scheduler: StreamingTranslationScheduler | null = null;
+    if (shouldStreamTranslate) {
+      scheduler = new StreamingTranslationScheduler({
+        config,
+        targetLanguage: resolvedTargetLanguage,
+        onBatchTranslated: async (translatedChunk) => {
+          const transMap = new Map(translatedChunk.map((c) => [c.id, c.translation]));
+          for (const [id, translation] of transMap.entries()) {
+            const buffered = segmentBuffer.get(id);
+            if (buffered) {
+              segmentBuffer.set(id, { ...buffered, translation });
+            }
+          }
+          currentSegments = currentSegments.map((seg) => {
+            const translation = transMap.get(seg.id);
+            return translation ? { ...seg, translation } : seg;
+          });
+          callbacks.updateSegments(currentSegments);
+          if (savedHistoryId) {
+            await persistHistorySnapshot();
+          }
+        },
+        onError: (err) => {
+          logger.warn('[BatchQueue] Streaming translation batch error:', err);
+        },
+        isCancelRequested: () => callbacks.isCancelRequested(),
+        translationService: this.ports.translationService,
+      });
+    }
+
     item.errorStage = undefined;
     try {
       if (batchAsr.engine === 'local') {
@@ -272,7 +363,17 @@ export class BatchItemProcessor {
             callbacks.updateStatus('processing', progress);
           },
           (segment) => {
-            segmentBuffer.set(segment.id, segment);
+            const cleanText =
+              effectiveReplacementSets.length > 0
+                ? applyTextReplacements(segment.text, effectiveReplacementSets)
+                : segment.text;
+            const cleanSegment =
+              cleanText === segment.text ? segment : { ...segment, text: cleanText };
+
+            if (cleanSegment.isFinal !== false) {
+              scheduler?.push(cleanSegment);
+            }
+            segmentBuffer.set(cleanSegment.id, cleanSegment);
             const now = Date.now();
 
             if (segmentBuffer.size >= 50 || now - lastUpdateTime > 500) {
@@ -299,25 +400,39 @@ export class BatchItemProcessor {
         if (isStream && !isExplicitCancel && isTaskCancelError && currentSegments.length > 0) {
           segments = currentSegments;
         } else {
+          scheduler?.cancel();
           throw transcribeError;
         }
       } finally {
         callbacks.onInstanceIdAssigned(null);
       }
 
+      flushSegmentBuffer();
       this.throwIfCancelRequested(callbacks);
-      setCurrentSegments(segments);
+
+      if (scheduler) {
+        callbacks.updateStatus('processing', 95, 'translating');
+        await scheduler.drain();
+        const translationMap = scheduler.getTranslations();
+        const cleanedSegments =
+          effectiveReplacementSets.length > 0
+            ? segments.map((seg) => {
+                const cleanText = applyTextReplacements(seg.text, effectiveReplacementSets);
+                return cleanText === seg.text ? seg : { ...seg, text: cleanText };
+              })
+            : segments;
+        const reconciled = cleanedSegments.map((seg) => ({
+          ...seg,
+          translation: translationMap.get(seg.id) ?? seg.translation,
+        }));
+        setCurrentSegments(reconciled);
+      } else {
+        setCurrentSegments(segments);
+      }
       await ensureHistorySaved();
       await persistHistorySnapshot();
 
       const engine = this.ports.pipelineExecutionEngine ?? pipelineExecutionEngine;
-      const pipeline =
-        item.pipelineSnapshot ??
-        resolveItemPipeline(
-          item.projectId,
-          this.ports.useProjectStore?.getState?.().projects ?? [],
-          config
-        );
 
       const pipelineResult = await engine.execute({
         historyId: savedHistoryId || '',
@@ -327,11 +442,7 @@ export class BatchItemProcessor {
           ...pipeline,
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
           autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
-          targetLanguage:
-            item.embyContext?.targetLanguage ||
-            pipeline.targetLanguage ||
-            config.translationLanguage ||
-            'zh-CN',
+          targetLanguage: resolvedTargetLanguage,
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
           exportFormat:
             (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
@@ -385,6 +496,7 @@ export class BatchItemProcessor {
         }
       }
     } catch (error) {
+      scheduler?.cancel();
       flushSegmentBuffer();
       if (downloadedEmbyPath) {
         await this.removeTempFile(downloadedEmbyPath);

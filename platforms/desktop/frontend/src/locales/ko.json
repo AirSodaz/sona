@@ -3103,6 +3103,17 @@
     "all_have_target": "모든 자막 완료",
     "resync_no_segments": "Emby에 다시 동기화할 수 없습니다: 전사 세그먼트가 없습니다.",
     "resync_success": "Emby에 자막을 성공적으로 동기화했습니다.",
-    "clear_selection": "선택 해제"
+    "clear_selection": "선택 해제",
+    "processing_settings": "처리 설정",
+    "processing_settings_title": "Emby 처리 설정",
+    "global_default": "글로벌 기본값 (설정 따름)",
+    "section_asr": "음성 인식 (ASR)",
+    "asr_model_selection": "ASR 모델 선택",
+    "asr_recognition_language": "인식 언어",
+    "asr_lang_auto": "auto (오디오에서 자동 감지)",
+    "section_translation": "번역 엔진",
+    "translation_model_selection": "번역 모델",
+    "section_subtitles": "자막 기본 설정",
+    "default_subtitle_mode": "기본 자막 모드"
   }
 }

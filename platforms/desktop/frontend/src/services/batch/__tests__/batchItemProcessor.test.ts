@@ -869,4 +869,304 @@ describe('BatchItemProcessor', () => {
       'batch-emby-save-history'
     );
   });
+  it('performs concurrent streaming translation during transcribeFile and reconciles translations onto final segments', async () => {
+    const mockTranslate = vi
+      .fn()
+      .mockImplementation(async (_cfg, segs: Array<{ id: string; text: string }>) => {
+        return segs.map((s) => ({ id: s.id, translation: `Translated: ${s.text}` }));
+      });
+    mockPorts.translationService = {
+      translateSegmentsWithConfig: mockTranslate,
+    } as unknown as BatchItemProcessorPorts['translationService'];
+
+    const emittedSegments = Array.from({ length: 12 }, (_, i) => ({
+      id: `seg-${i + 1}`,
+      start: i,
+      end: i + 1,
+      text: `Hello ${i + 1}`,
+      isFinal: true,
+    }));
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockImplementationOnce(
+      async (_src, _onProgress, onSegment) => {
+        for (const seg of emittedSegments) {
+          onSegment?.(seg);
+        }
+        return emittedSegments;
+      }
+    );
+
+    const item: BatchQueueItem = {
+      id: 'queue-concurrent-1',
+      filename: 'video.mp4',
+      filePath: '/path/video.mp4',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      pipelineSnapshot: {
+        isProjectPipeline: false,
+        enabled: true,
+        autoPolish: false,
+        autoTranslate: true,
+        targetLanguage: 'zh-CN',
+        autoSummary: false,
+        autoExport: false,
+      },
+    };
+
+    const config: AppConfig = {
+      language: 'auto',
+      translationLanguage: 'zh-CN',
+    } as unknown as AppConfig;
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockTranslate).toHaveBeenCalled();
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        segments: expect.arrayContaining([
+          expect.objectContaining({ id: 'seg-1', translation: 'Translated: Hello 1' }),
+          expect.objectContaining({ id: 'seg-12', translation: 'Translated: Hello 12' }),
+        ]),
+      })
+    );
+  });
+
+  it('bypasses streaming translation when autoPolish is enabled', async () => {
+    const mockTranslate = vi.fn().mockResolvedValue([]);
+    mockPorts.translationService = {
+      translateSegmentsWithConfig: mockTranslate,
+    } as unknown as BatchItemProcessorPorts['translationService'];
+
+    const emittedSegments = [
+      { id: 'seg-1', start: 0, end: 1, text: 'Hello 1', isFinal: true },
+      { id: 'seg-2', start: 1, end: 2, text: 'Hello 2', isFinal: true },
+    ];
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockImplementationOnce(
+      async (_src, _onProgress, onSegment) => {
+        for (const seg of emittedSegments) {
+          onSegment?.(seg);
+        }
+        return emittedSegments;
+      }
+    );
+
+    const item: BatchQueueItem = {
+      id: 'queue-polish-bypass',
+      filename: 'video.mp4',
+      filePath: '/path/video.mp4',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      pipelineSnapshot: {
+        isProjectPipeline: false,
+        enabled: true,
+        autoPolish: true,
+        autoTranslate: true,
+        targetLanguage: 'zh-CN',
+        autoSummary: false,
+        autoExport: false,
+      },
+    };
+
+    const config: AppConfig = {
+      language: 'auto',
+      translationLanguage: 'zh-CN',
+    } as unknown as AppConfig;
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: () => false,
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockTranslate).not.toHaveBeenCalled();
+  });
+
+  it('does not push non-final intermediate segments to streaming translation scheduler until finalized', async () => {
+    const translatedTexts: string[] = [];
+    const mockTranslate = vi
+      .fn()
+      .mockImplementation(async (_cfg, segs: Array<{ id: string; text: string }>) => {
+        for (const s of segs) {
+          translatedTexts.push(s.text);
+        }
+        return segs.map((s) => ({ id: s.id, translation: `Translated: ${s.text}` }));
+      });
+    mockPorts.translationService = {
+      translateSegmentsWithConfig: mockTranslate,
+    } as unknown as BatchItemProcessorPorts['translationService'];
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockImplementationOnce(
+      async (_src, _onProgress, onSegment) => {
+        // Emit non-final draft
+        onSegment?.({
+          id: 'seg-1',
+          start: 0,
+          end: 1,
+          text: 'Hel...',
+          isFinal: false,
+        });
+        // Emit final segment
+        onSegment?.({
+          id: 'seg-1',
+          start: 0,
+          end: 2,
+          text: 'Hello world',
+          isFinal: true,
+        });
+        return [{ id: 'seg-1', start: 0, end: 2, text: 'Hello world', isFinal: true }];
+      }
+    );
+
+    const item: BatchQueueItem = {
+      id: 'queue-nonfinal-1',
+      filename: 'audio.wav',
+      filePath: '/path/audio.wav',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      pipelineSnapshot: {
+        isProjectPipeline: false,
+        enabled: true,
+        autoPolish: false,
+        autoTranslate: true,
+        targetLanguage: 'zh-CN',
+        autoSummary: false,
+        autoExport: false,
+      },
+    };
+
+    const config: AppConfig = {
+      language: 'auto',
+      translationLanguage: 'zh-CN',
+    } as unknown as AppConfig;
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    // Verify draft was not translated; only final text was translated
+    expect(translatedTexts).not.toContain('Hel...');
+    expect(translatedTexts).toContain('Hello world');
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            id: 'seg-1',
+            text: 'Hello world',
+            translation: 'Translated: Hello world',
+          }),
+        ],
+      })
+    );
+  });
+
+  it('retains and drains streaming translation scheduler on graceful URL stream stop', async () => {
+    const mockTranslate = vi
+      .fn()
+      .mockImplementation(async (_cfg, segs: Array<{ id: string; text: string }>) => {
+        return segs.map((s) => ({ id: s.id, translation: `Translated: ${s.text}` }));
+      });
+    mockPorts.translationService = {
+      translateSegmentsWithConfig: mockTranslate,
+    } as unknown as BatchItemProcessorPorts['translationService'];
+
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockImplementationOnce(
+      async (_src, _onProgress, onSegment) => {
+        onSegment?.({
+          id: 'seg-stream-1',
+          start: 0,
+          end: 3,
+          text: 'Stream chunk 1',
+          isFinal: true,
+        });
+        // Graceful stream stop terminates with Task cancelled error
+        throw new Error('Task cancelled.');
+      }
+    );
+
+    const item: BatchQueueItem = {
+      id: 'queue-stream-translate',
+      filename: 'live.m3u8',
+      filePath: 'https://example.com/live.m3u8',
+      sourceType: 'url_stream',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      pipelineSnapshot: {
+        isProjectPipeline: false,
+        enabled: true,
+        autoPolish: false,
+        autoTranslate: true,
+        targetLanguage: 'zh-CN',
+        autoSummary: false,
+        autoExport: false,
+      },
+    };
+
+    const config: AppConfig = {
+      language: 'auto',
+      translationLanguage: 'zh-CN',
+    } as unknown as AppConfig;
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    await expect(
+      processor.processBatchQueueItem({ item, config, callbacks })
+    ).resolves.toBeUndefined();
+
+    expect(mockTranslate).toHaveBeenCalled();
+    expect(mockPorts.pipelineExecutionEngine?.execute).toHaveBeenCalledWith(
+      expect.objectContaining({
+        segments: [
+          expect.objectContaining({
+            id: 'seg-stream-1',
+            translation: 'Translated: Stream chunk 1',
+          }),
+        ],
+      })
+    );
+  });
 });

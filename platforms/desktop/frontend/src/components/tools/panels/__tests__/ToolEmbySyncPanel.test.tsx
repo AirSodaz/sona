@@ -2,9 +2,15 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import type * as ReactI18Next from 'react-i18next';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as embyService from '../../../../services/emby/embyService';
+import { saveEmbyToolOverrides } from '../../../../services/emby/embySettingsService';
 import { useBatchQueueStore } from '../../../../stores/batchQueueStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
-import type { EmbyItemListResult, EmbyLibrary, EmbyServerInfo } from '../../../../types/emby';
+import type {
+  EmbyItemListResult,
+  EmbyLibrary,
+  EmbyServerInfo,
+  EmbyToolOverrides,
+} from '../../../../types/emby';
 import { ToolEmbySyncPanel } from '../ToolEmbySyncPanel';
 
 vi.mock('react-i18next', async (importOriginal) => {
@@ -310,7 +316,8 @@ describe('ToolEmbySyncPanel', () => {
     expect(queue[0].embyContext?.serverId).toBe('server_123');
     expect(queue[0].embyContext?.serverUrl).toBe('http://192.168.1.100:8096');
     expect(queue[0].embyContext?.audioStreamIndex).toBe(1); // Audio track index
-    expect(queue[0].embyContext?.sourceLanguage).toBe('en'); // Normalized from audio stream 'eng'
+    expect(queue[0].embyContext?.sourceLanguage).toBe('auto'); // Default strict auto recognition
+    expect(queue[0].resolvedConfigSnapshot?.language).toBe('auto');
     expect(queue[0].embyContext?.subtitleMode).toBe('bilingual');
     expect(queue[0].embyContext?.targetLanguage).toBe('zh-CN');
 
@@ -448,5 +455,55 @@ describe('ToolEmbySyncPanel', () => {
     const pluginGuideBtn = screen.getByRole('button', { name: /Plugin Guide/i });
     fireEvent.click(pluginGuideBtn);
     expect(screen.getByText('Install Emby.SubtitleManager Plugin')).toBeDefined();
+  });
+  it('opens processing settings modal, saves overrides, and enqueues items with effective snapshot', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+    });
+
+    const customOverrides: EmbyToolOverrides = {
+      asrSelection: {
+        engine: 'online',
+        mode: 'batch',
+        providerId: 'volcengine-doubao',
+        modelId: 'doubao-pro',
+        modelPath: '',
+      },
+      asrLanguage: 'ja',
+      translationModelId: 'deepseek-v3',
+      defaultSubtitleMode: 'pure_translation',
+      overwriteExistingExternal: false,
+    };
+    saveEmbyToolOverrides(customOverrides);
+
+    const processingSettingsBtn = screen.getByRole('button', { name: /Processing Settings/i });
+    fireEvent.click(processingSettingsBtn);
+    expect(screen.getByText('Emby Processing Settings')).toBeDefined();
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    // Select Inception and submit
+    const inceptionCheckbox = screen.getByRole('checkbox', {
+      name: /Select 盗梦空间 Inception/i,
+    });
+    fireEvent.click(inceptionCheckbox);
+
+    const submitBtn = screen.getByRole('button', { name: /Transcribe \(1\)/ });
+    fireEvent.click(submitBtn);
+
+    const queue = useBatchQueueStore.getState().queueItems;
+    expect(queue.length).toBe(1);
+    expect(queue[0].embyContext?.sourceLanguage).toBe('ja');
+    expect(queue[0].embyContext?.subtitleMode).toBe('pure_translation');
+    expect(queue[0].resolvedConfigSnapshot?.language).toBe('ja');
+    expect(queue[0].resolvedConfigSnapshot?.asr.selections.batch).toEqual(
+      customOverrides.asrSelection
+    );
+    expect(queue[0].resolvedConfigSnapshot?.llmSettings?.selections.translationModelId).toBe(
+      'deepseek-v3'
+    );
   });
 });

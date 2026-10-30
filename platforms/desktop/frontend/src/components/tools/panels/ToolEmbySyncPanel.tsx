@@ -1,12 +1,13 @@
-import { AlertTriangle, RefreshCw, Settings, Tv } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Settings, SlidersHorizontal, Tv } from 'lucide-react';
 import type React from 'react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingsTabContainer } from '../../settings/SettingsLayout';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
 import { EmbyLibraryToolbar } from './emby/EmbyLibraryToolbar';
 import { EmbyMediaRow } from './emby/EmbyMediaRow';
 import { EmbyPluginGuideModal } from './emby/EmbyPluginGuideModal';
+import { EmbyProcessingSettingsModal } from './emby/EmbyProcessingSettingsModal';
 import { EmbySeasonGroup } from './emby/EmbySeasonGroup';
 import { EmbyServerConfigModal } from './emby/EmbyServerConfigModal';
 import { EmbySubmitBar } from './emby/EmbySubmitBar';
@@ -63,6 +64,8 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     handleSubmitBatch,
     submittedNotice,
   } = useEmbySync();
+  const [isProcessingSettingsModalOpen, setIsProcessingSettingsModalOpen] = useState(false);
+
   const selectableFilteredItems = useMemo(() => {
     return filteredItems.filter((item) => !queuedItemIds.has(item.id));
   }, [filteredItems, queuedItemIds]);
@@ -125,6 +128,16 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                   <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
                 </button>
               )}
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={() => setIsProcessingSettingsModalOpen(true)}
+              >
+                <SlidersHorizontal size={14} style={{ marginRight: 6 }} />
+                <span>
+                  {t('emby.processing_settings', { defaultValue: 'Processing Settings' })}
+                </span>
+              </button>
               <button
                 type="button"
                 className="btn btn-sm btn-secondary"
@@ -310,6 +323,19 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
         <EmbyPluginGuideModal
           isOpen={isPluginModalOpen}
           onClose={() => setIsPluginModalOpen(false)}
+        />
+
+        <EmbyProcessingSettingsModal
+          isOpen={isProcessingSettingsModalOpen}
+          onClose={() => setIsProcessingSettingsModalOpen(false)}
+          onSaved={(overrides) => {
+            if (overrides.defaultSubtitleMode) {
+              setSubtitleMode(overrides.defaultSubtitleMode);
+            }
+            if (overrides.overwriteExistingExternal !== undefined) {
+              setOverwriteExistingExternal(overrides.overwriteExistingExternal);
+            }
+          }}
         />
       </div>
     </SettingsTabContainer>

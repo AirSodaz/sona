@@ -8,6 +8,7 @@ import {
   saveEmbyConfig,
   testEmbyConnection,
 } from '../../../../services/emby/embyService';
+import { loadEmbyToolOverrides } from '../../../../services/emby/embySettingsService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
 import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
@@ -148,8 +149,12 @@ export function useEmbySync(): UseEmbySyncReturn {
   const [expandedSeasons, setExpandedSeasons] = useState<Set<string>>(new Set());
 
   // Strategy Options
-  const [subtitleMode, setSubtitleMode] = useState<EmbySubtitleMode>('bilingual');
-  const [overwriteExistingExternal, setOverwriteExistingExternal] = useState(false);
+  const [subtitleMode, setSubtitleMode] = useState<EmbySubtitleMode>(
+    () => loadEmbyToolOverrides().defaultSubtitleMode ?? 'bilingual'
+  );
+  const [overwriteExistingExternal, setOverwriteExistingExternal] = useState<boolean>(
+    () => loadEmbyToolOverrides().overwriteExistingExternal ?? true
+  );
   const [submittedNotice, setSubmittedNotice] = useState<string | null>(null);
 
   // Queue deduplication: find items currently pending or processing in batch queue
@@ -545,6 +550,11 @@ export function useEmbySync(): UseEmbySyncReturn {
   const handleSubmitBatch = useCallback(() => {
     if (selectedItemIds.size === 0 || !serverInfo) return;
 
+    const overrides = loadEmbyToolOverrides();
+    const effectiveSubtitleMode = subtitleMode ?? overrides.defaultSubtitleMode ?? 'bilingual';
+    const effectiveOverwrite =
+      overwriteExistingExternal ?? overrides.overwriteExistingExternal ?? true;
+
     const entries: AddEmbyItemEntry[] = [];
     for (const id of selectedItemIds) {
       if (queuedItemIds.has(id)) continue;
@@ -557,14 +567,18 @@ export function useEmbySync(): UseEmbySyncReturn {
         item.mediaStreams.find((s) => s.index === audioStreamIndex) ?? bestAudio;
 
       let sourceLanguage: string | undefined;
-      const rawLang = selectedAudio?.language?.trim().toLowerCase();
-      if (rawLang && rawLang !== 'und') {
-        const norm = normalizeLanguageCode(rawLang);
-        sourceLanguage = norm || undefined;
+      if (overrides.asrLanguage) {
+        sourceLanguage = overrides.asrLanguage;
+      } else {
+        const rawLang = selectedAudio?.language?.trim().toLowerCase();
+        if (rawLang && rawLang !== 'und') {
+          const norm = normalizeLanguageCode(rawLang);
+          sourceLanguage = norm || undefined;
+        }
       }
 
       let existingExternalSubtitleIndex: number | undefined;
-      if (overwriteExistingExternal) {
+      if (effectiveOverwrite) {
         const extSub = item.mediaStreams.find(
           (s) =>
             s.streamType.toLowerCase() === 'subtitle' &&
@@ -589,7 +603,7 @@ export function useEmbySync(): UseEmbySyncReturn {
         itemId: item.id,
         itemName: displayName,
         audioStreamIndex,
-        subtitleMode,
+        subtitleMode: effectiveSubtitleMode,
         targetLanguage,
         sourceLanguage,
         existingExternalSubtitleIndex,

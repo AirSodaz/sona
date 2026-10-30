@@ -223,4 +223,79 @@ projects:
 
     expect(result.segments[0].text).toBe('This has GlobalReplacement and ProjectReplacement.');
   });
+  it('skips translateSegmentsWithConfig when all segments already have translation', async () => {
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: false,
+      enabled: true,
+      autoPolish: false,
+      autoTranslate: true,
+      targetLanguage: 'zh-CN',
+      autoSummary: false,
+      autoExport: false,
+    };
+
+    const inputSegments: TranscriptSegment[] = [
+      { id: 'seg-1', start: 0, end: 5, text: 'Hello', translation: '你好', isFinal: true },
+      { id: 'seg-2', start: 5, end: 10, text: 'World', translation: '世界', isFinal: true },
+    ];
+
+    const result = await engine.execute({
+      historyId: 'hist-skip-translate',
+      segments: inputSegments,
+      pipeline,
+      globalConfig: baseConfig,
+    });
+
+    expect(mockPorts.translationService.translateSegmentsWithConfig).not.toHaveBeenCalled();
+    expect(result.segments[0].translation).toBe('你好');
+    expect(result.segments[1].translation).toBe('世界');
+  });
+
+  it('translates only untranslated segments when partial translations exist', async () => {
+    const pipeline: EffectivePipelineSnapshot = {
+      isProjectPipeline: false,
+      enabled: true,
+      autoPolish: false,
+      autoTranslate: true,
+      targetLanguage: 'zh-CN',
+      autoSummary: false,
+      autoExport: false,
+    };
+
+    const inputSegments: TranscriptSegment[] = [
+      { id: 'seg-1', start: 0, end: 5, text: 'Hello', translation: '你好', isFinal: true },
+      { id: 'seg-2', start: 5, end: 10, text: 'World', isFinal: true },
+    ];
+
+    mockPorts.translationService.translateSegmentsWithConfig = vi
+      .fn()
+      .mockImplementation(async (_cfg, segments, cb) => {
+        await cb(segments.map((s: TranscriptSegment) => ({ id: s.id, translation: '已翻译' })));
+      });
+    mockPorts.translationService.applyTranslationsInMemory = vi
+      .fn()
+      .mockImplementation((segs, chunk) => {
+        const map = new Map(
+          chunk.map((c: { id: string; translation: string }) => [c.id, c.translation])
+        );
+        return segs.map((s: TranscriptSegment) =>
+          map.has(s.id) ? { ...s, translation: map.get(s.id)! } : s
+        );
+      });
+
+    const result = await engine.execute({
+      historyId: 'hist-partial-translate',
+      segments: inputSegments,
+      pipeline,
+      globalConfig: baseConfig,
+    });
+
+    expect(mockPorts.translationService.translateSegmentsWithConfig).toHaveBeenCalledWith(
+      expect.anything(),
+      [expect.objectContaining({ id: 'seg-2' })],
+      expect.any(Function)
+    );
+    expect(result.segments[0].translation).toBe('你好');
+    expect(result.segments[1].translation).toBe('已翻译');
+  });
 });

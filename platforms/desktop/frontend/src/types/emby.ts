@@ -1,3 +1,6 @@
+import type { EmbySubtitleMode } from './batchQueue';
+import type { AsrModelSelection } from './config';
+
 export interface EmbyConnectionConfig {
   serverUrl: string;
   apiKey: string;
@@ -65,4 +68,12 @@ export interface SubtitleUploadPayload {
   format: string;
   isForced: boolean;
   content: string;
+}
+
+export interface EmbyToolOverrides {
+  asrSelection?: AsrModelSelection | null;
+  asrLanguage?: string;
+  translationModelId?: string | null;
+  defaultSubtitleMode?: EmbySubtitleMode;
+  overwriteExistingExternal?: boolean;
 }
