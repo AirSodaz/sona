@@ -72,8 +72,9 @@ export function buildEmbyStreamUrl(params: {
   container?: string;
   audioStreamIndex?: number;
 }): string {
-  const baseServerUrl = params.serverUrl.trim().replace(/\/+$/, '');
-  const container = (params.container || 'mkv').replace(/^\.+/, '');
+  const baseServerUrl = params.serverUrl.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
+  const container = encodeURIComponent((params.container || 'mkv').replace(/^\.+/, ''));
+  const encodedItemId = encodeURIComponent(params.itemId);
   const mediaSourceId = params.mediaSourceId || `mediasource_${params.itemId}`;
   const queryParams = new URLSearchParams();
   if (params.apiKey) {
@@ -85,7 +86,7 @@ export function buildEmbyStreamUrl(params: {
     queryParams.set('AudioStreamIndex', params.audioStreamIndex.toString());
   }
   const query = queryParams.toString();
-  return `${baseServerUrl}/Videos/${params.itemId}/stream.${container}${query ? `?${query}` : ''}`;
+  return `${baseServerUrl}/Videos/${encodedItemId}/stream.${container}${query ? `?${query}` : ''}`;
 }
 
 export interface AddEmbyItemsOptions {
@@ -319,7 +320,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         return {
           ...item,
           status: 'pending' as BatchQueueItemStatus,
-          progress: 0,
+          progress: item.errorStage === 'upload' ? item.progress : 0,
           errorMessage: undefined,
           errorStage: item.errorStage,
         };
@@ -346,7 +347,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           return {
             ...item,
             status: 'pending' as BatchQueueItemStatus,
-            progress: 0,
+            progress: item.errorStage === 'upload' ? item.progress : 0,
             errorMessage: undefined,
             errorStage: item.errorStage,
           };
@@ -502,6 +503,10 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         container: opt.container,
         audioStreamIndex: opt.audioStreamIndex,
       });
+      const itemConfig =
+        opt.sourceLanguage && opt.sourceLanguage !== resolvedConfigSnapshot.language
+          ? { ...resolvedConfigSnapshot, language: opt.sourceLanguage }
+          : resolvedConfigSnapshot;
       return {
         id: uuidv4(),
         filename: opt.itemName,
@@ -515,7 +520,7 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         projectId: activeProjectId,
         pipelineSnapshot: options?.pipelineSnapshot,
         origin: 'manual',
-        resolvedConfigSnapshot,
+        resolvedConfigSnapshot: itemConfig,
         lastKnownStage: 'queued',
         embyContext: {
           serverId: opt.serverId,
@@ -529,7 +534,6 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
           mediaSourceId: opt.mediaSourceId,
           container: opt.container,
-          apiKey: opt.apiKey,
         },
       };
     });

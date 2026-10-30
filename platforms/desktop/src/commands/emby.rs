@@ -159,12 +159,15 @@ pub async fn emby_save_config(
     if config.server_url.is_empty() || config.api_key.is_empty() {
         return Err("Server URL and API key cannot be empty".to_string());
     }
+    config.username = config
+        .username
+        .map(|s| s.trim().to_string())
+        .filter(|s| !s.is_empty());
 
     config.admin_user_id = config
         .admin_user_id
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
-
     if config.admin_user_id.is_none()
         && let Ok(temp_client) = EmbyClient::new(config.clone())
     {
@@ -197,6 +200,8 @@ pub async fn emby_save_config(
                 "embyUsername".to_string(),
                 serde_json::Value::String(user.clone()),
             );
+        } else {
+            obj.remove("embyUsername");
         }
         obj.insert(
             "embyAllowInvalidCerts".to_string(),
@@ -446,7 +451,10 @@ pub async fn emby_upload_subtitle(
             let is_target_zh =
                 crate::integrations::emby::is_chinese_language(Some(&payload.language), None);
             let matching_external = streams.iter().find(|s| {
-                if !s.stream_type.eq_ignore_ascii_case("Subtitle") || !s.is_external {
+                if !s.stream_type.eq_ignore_ascii_case("Subtitle")
+                    || !s.is_external
+                    || s.is_forced != payload.is_forced
+                {
                     return false;
                 }
                 if is_target_zh {

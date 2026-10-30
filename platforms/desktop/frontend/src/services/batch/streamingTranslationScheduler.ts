@@ -122,6 +122,8 @@ export class StreamingTranslationScheduler {
         if (!this.cancelled && !this.circuitBroken && !this.options.isCancelRequested()) {
           if (this.queue.length >= this.batchSize) {
             void this.flush();
+          } else if (forceTrailing && this.queue.length > 0) {
+            void this.flush(forceTrailing);
           } else if (this.queue.length > 0 && !this.flushTimer) {
             this.flushTimer = setTimeout(() => {
               this.flushTimer = null;
@@ -170,7 +172,11 @@ export class StreamingTranslationScheduler {
       await this.options.onBatchTranslated(results);
     } catch (error) {
       this.consecutiveErrors += 1;
-      this.options.onError?.(error);
+      try {
+        this.options.onError?.(error);
+      } catch {
+        // Ignore subscriber handler errors to prevent unhandled rejections
+      }
       if (this.consecutiveErrors >= 3) {
         this.circuitBroken = true;
       }
@@ -178,28 +184,35 @@ export class StreamingTranslationScheduler {
   }
 
   async drain(): Promise<void> {
-    if (this.flushTimer) {
-      clearTimeout(this.flushTimer);
-      this.flushTimer = null;
-    }
-
-    while (
-      this.queue.length > 0 &&
-      !this.circuitBroken &&
-      !this.cancelled &&
-      !this.options.isCancelRequested()
-    ) {
-      if (this.activeConcurrency < this.maxConcurrency) {
-        void this.flush(true);
-      } else if (this.inFlightPromises.size > 0) {
-        await Promise.race(Array.from(this.inFlightPromises));
-      } else {
-        break;
+    try {
+      if (this.flushTimer) {
+        clearTimeout(this.flushTimer);
+        this.flushTimer = null;
       }
-    }
 
-    if (this.inFlightPromises.size > 0) {
-      await Promise.allSettled(Array.from(this.inFlightPromises));
+      while (
+        this.queue.length > 0 &&
+        !this.circuitBroken &&
+        !this.cancelled &&
+        !this.options.isCancelRequested()
+      ) {
+        if (this.activeConcurrency < this.maxConcurrency) {
+          void this.flush(true);
+        } else if (this.inFlightPromises.size > 0) {
+          await Promise.race(Array.from(this.inFlightPromises));
+        } else {
+          break;
+        }
+      }
+
+      if (this.inFlightPromises.size > 0) {
+        await Promise.allSettled(Array.from(this.inFlightPromises));
+      }
+    } finally {
+      if (this.flushTimer) {
+        clearTimeout(this.flushTimer);
+        this.flushTimer = null;
+      }
     }
   }
 

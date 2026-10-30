@@ -4,6 +4,7 @@ import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
 import type { AsrTranscriptionRequest } from '../../asrConfigService';
 import { downloadEmbyAudio, syncEmbySubtitles } from '../../emby/embyService';
+import { remove } from '../../tauri/platform/fs';
 import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
 
 vi.mock('@tauri-apps/api/path', () => ({
@@ -594,6 +595,7 @@ describe('BatchItemProcessor', () => {
     expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
       '/tmp/downloaded-track.mp3'
     );
+    expect(remove).toHaveBeenCalledWith('/tmp/downloaded-track.mp3');
   });
 
   it('correctly maps existingExternalSubtitleIndex to target language in separate_tracks mode', async () => {
@@ -819,6 +821,54 @@ describe('BatchItemProcessor', () => {
     expect(item.errorStage).toBe('transcribe');
   });
 
+  it('removes temp downloaded emby audio and resets item.filePath on transcription error', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-dl-err',
+      filename: 'Emby Movie Err',
+      filePath: '',
+      sourceType: 'file',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-err',
+        itemName: 'Emby Movie Err',
+        audioStreamIndex: 1,
+        subtitleMode: 'bilingual',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const updateFilePath = vi.fn();
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath,
+    };
+
+    vi.mocked(downloadEmbyAudio).mockResolvedValueOnce('/tmp/downloaded-err-track.mp3');
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockRejectedValueOnce(
+      new Error('Transcribe failed')
+    );
+    vi.mocked(remove).mockClear();
+
+    await expect(processor.processBatchQueueItem({ item, config, callbacks })).rejects.toThrow(
+      'Transcribe failed'
+    );
+
+    expect(item.filePath).toBe('');
+    expect(updateFilePath).toHaveBeenCalledWith('');
+    expect(remove).toHaveBeenCalledWith('/tmp/downloaded-err-track.mp3');
+  });
   it('passes local item.filePath and non-stream flag to saveImportedFile when item has embyContext', async () => {
     const item: BatchQueueItem = {
       id: 'batch-emby-save-history',

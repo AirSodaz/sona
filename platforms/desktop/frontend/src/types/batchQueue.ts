@@ -27,7 +27,6 @@ export interface EmbyTaskContext {
   existingExternalSubtitleIndex?: number;
   mediaSourceId?: string;
   container?: string;
-  apiKey?: string;
 }
 
 export type BatchQueueItemOrigin = 'manual' | 'automation';

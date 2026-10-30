@@ -393,4 +393,42 @@ describe('QueueItem', () => {
 
     expect(onRetry).toHaveBeenCalledWith('123');
   });
+
+  it('renders progress percentage for streamed Emby items instead of pulling audio message', () => {
+    const item = createItem({
+      status: 'processing',
+      progress: 42,
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl: 'http://localhost:8096/Videos/item-1/stream.mkv?api_key=secret-token-123',
+      embyContext: {
+        serverId: 'srv-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'item-1',
+        itemName: 'Streamed Movie',
+        audioStreamIndex: 1,
+        subtitleMode: 'pure_translation',
+        targetLanguage: 'zh-CN',
+      },
+    });
+
+    render(
+      <QueueItem
+        item={item}
+        isActive={false}
+        onActivate={vi.fn()}
+        onRemove={vi.fn()}
+        t={defaultT as unknown as TFunction}
+      />
+    );
+
+    expect(screen.getByText('42%')).toBeDefined();
+    expect(screen.queryByText('emby.pulling_audio')).toBeNull();
+
+    const streamBadge = document.querySelector('.queue-item-stream-badge');
+    expect(streamBadge).not.toBeNull();
+    expect(streamBadge?.getAttribute('title')).toBe(
+      'http://localhost:8096/Videos/item-1/stream.mkv?api_key=***'
+    );
+  });
 });

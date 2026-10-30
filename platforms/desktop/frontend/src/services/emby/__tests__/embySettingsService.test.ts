@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { AppConfig } from '../../../types/config';
 import type { EmbyToolOverrides } from '../../../types/emby';
+import { cleanSubtitleText } from '../embyService';
 import {
   buildEmbyEffectiveConfig,
   DEFAULT_EMBY_TOOL_OVERRIDES,
@@ -81,8 +82,24 @@ describe('embySettingsService', () => {
       const loaded = loadEmbyToolOverrides();
       expect(loaded).toEqual(DEFAULT_EMBY_TOOL_OVERRIDES);
     });
+
+    it('guards against null properties in stored JSON', () => {
+      localStorage.setItem(
+        EMBY_TOOL_OVERRIDES_STORAGE_KEY,
+        JSON.stringify({ defaultSubtitleMode: null, overwriteExistingExternal: null })
+      );
+      const loaded = loadEmbyToolOverrides();
+      expect(loaded.defaultSubtitleMode).toBe('bilingual');
+      expect(loaded.overwriteExistingExternal).toBe(true);
+    });
   });
 
+  describe('cleanSubtitleText', () => {
+    it('converts p and div closings to newlines, strips html, and eliminates blank lines', () => {
+      const input = '<div>Line 1</div><p>Line 2</p><br/>\n\nLine 3<font color="red"> Red</font>';
+      expect(cleanSubtitleText(input)).toBe('Line 1\nLine 2\nLine 3 Red');
+    });
+  });
   describe('buildEmbyEffectiveConfig', () => {
     it('overrides batch ASR selection in snapshot', () => {
       const overrides: EmbyToolOverrides = {

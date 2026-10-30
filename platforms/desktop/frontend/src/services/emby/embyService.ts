@@ -22,10 +22,10 @@ export function formatSrtTimestamp(seconds: number): string {
 
 export function cleanSubtitleText(text: string): string {
   if (!text || typeof text !== 'string') return '';
-  return text
+  const converted = text
     .replace(/\r\n|\r/g, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
+    .replace(/<\/(p|div)>/gi, '\n')
     .replace(/<[^>]+>/g, '')
     .replace(/&nbsp;/g, ' ')
     .replace(/&lt;/g, '<')
@@ -34,9 +34,12 @@ export function cleanSubtitleText(text: string): string {
     .replace(/&#39;/g, "'")
     .replace(/&apos;/g, "'")
     .replace(/&#x27;/gi, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
+    .replace(/&amp;/g, '&');
+  return converted
+    .split('\n')
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 /**

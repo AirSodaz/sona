@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useTranscriptStore } from '../../test-utils/transcriptStoreTestUtils';
-import { deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
+import type { AppConfig } from '../../types/config';
+import { buildEmbyStreamUrl, deriveTitleFromUrl, useBatchQueueStore } from '../batchQueueStore';
 import { useTranscriptStore as useRealTranscriptStore } from '../transcriptStore';
 
 const taskLedgerContext = vi.hoisted(() => ({
@@ -929,9 +930,44 @@ describe('batchQueueStore', () => {
       );
       expect(items[0].embyContext?.mediaSourceId).toBe('ms-custom-456');
       expect(items[0].embyContext?.container).toBe('mp4');
-      expect(items[0].embyContext?.apiKey).toBe('token123');
+      expect(items[0].streamUrl).toContain('api_key=token123');
+      expect(items[0].embyContext && 'apiKey' in items[0].embyContext).toBe(false);
     });
 
+    it('addEmbyItems applies sourceLanguage to resolvedConfigSnapshot', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096',
+            itemId: 'video-lang',
+            itemName: 'Episode with Japanese Audio',
+            audioStreamIndex: 1,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+            sourceLanguage: 'ja',
+          },
+        ],
+        resolvedConfigSnapshot: { language: 'auto' } as unknown as AppConfig,
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].resolvedConfigSnapshot?.language).toBe('ja');
+      expect(items[0].embyContext?.sourceLanguage).toBe('ja');
+    });
+
+    it('buildEmbyStreamUrl encodes itemId and container and strips trailing query from serverUrl', () => {
+      const streamUrl = buildEmbyStreamUrl({
+        serverUrl: 'http://localhost:8096/?foo=bar',
+        itemId: 'item with spaces/slash',
+        container: '.mkv',
+      });
+      expect(streamUrl).toBe(
+        'http://localhost:8096/Videos/item%20with%20spaces%2Fslash/stream.mkv?Static=true&MediaSourceId=mediasource_item+with+spaces%2Fslash'
+      );
+    });
     it('setItemError sets errorMessage and errorStage', () => {
       useBatchQueueStore.setState({
         queueItems: [
@@ -976,9 +1012,9 @@ describe('batchQueueStore', () => {
 
       const item = useBatchQueueStore.getState().queueItems[0];
       expect(item.status).toBe('pending');
+      expect(item.progress).toBe(95);
       expect(item.errorMessage).toBeUndefined();
       expect(item.errorStage).toBe('upload');
-      expect(item.segments).toHaveLength(1);
     });
 
     it('retryAllFailed preserves errorStage on all failed items', () => {
@@ -1012,10 +1048,11 @@ describe('batchQueueStore', () => {
       const items = useBatchQueueStore.getState().queueItems;
       expect(items[0].status).toBe('pending');
       expect(items[0].errorStage).toBe('upload');
+      expect(items[0].progress).toBe(95);
       expect(items[1].status).toBe('pending');
       expect(items[1].errorStage).toBe('transcribe');
+      expect(items[1].progress).toBe(0);
     });
-
     it('updateItemFilePath updates state and task ledger', () => {
       useBatchQueueStore.setState({
         queueItems: [

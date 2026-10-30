@@ -122,6 +122,7 @@ export function TranscriptWorkbench({
 
   useEffect(() => {
     void sourceHistoryId;
+    setIsSyncingEmby(false);
     setEmbySyncSuccess(false);
     clearTimeout(syncSuccessTimerRef.current ?? undefined);
     syncSuccessTimerRef.current = null;
@@ -163,10 +164,7 @@ export function TranscriptWorkbench({
         cause: err,
       });
     } finally {
-      if (
-        isMountedRef.current &&
-        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
-      ) {
+      if (isMountedRef.current) {
         setIsSyncingEmby(false);
       }
     }

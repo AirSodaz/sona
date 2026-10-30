@@ -90,11 +90,13 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
 
   const statusTone: ToolHeroStatusTone = isConnecting
     ? 'active'
-    : !isConnected
-      ? 'inactive'
-      : serverInfo && !serverInfo.hasSubtitleManagerPlugin
-        ? 'warning'
-        : 'active';
+    : connectionError
+      ? 'error'
+      : !isConnected
+        ? 'inactive'
+        : serverInfo && !serverInfo.hasSubtitleManagerPlugin
+          ? 'warning'
+          : 'active';
 
   const statusText = isConnecting
     ? t('emby.connecting', { defaultValue: 'Connecting...' })
@@ -122,7 +124,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                   type="button"
                   className="btn btn-sm btn-secondary"
                   onClick={fetchItems}
-                  disabled={isLoadingItems}
+                  disabled={isLoadingItems || isConnecting}
                 >
                   <RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />
                   <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
@@ -245,6 +247,29 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                     <p>
                       {t('emby.loading_items', { defaultValue: 'Loading media library items...' })}
                     </p>
+                  </div>
+                ) : connectionError ? (
+                  <div className="emby-empty-media-card" role="alert">
+                    <AlertTriangle
+                      size={24}
+                      style={{ color: 'var(--color-error, #ef4444)', marginBottom: 8 }}
+                    />
+                    <p style={{ color: 'var(--color-error, #ef4444)', marginBottom: 12 }}>
+                      {connectionError}
+                    </p>
+                    <button
+                      type="button"
+                      className="btn btn-sm btn-secondary"
+                      onClick={fetchItems}
+                      disabled={isLoadingItems || isConnecting}
+                    >
+                      <RefreshCw
+                        size={14}
+                        className={isLoadingItems ? 'spin' : ''}
+                        style={{ marginRight: 6 }}
+                      />
+                      <span>{t('common.retry', { defaultValue: 'Retry' })}</span>
+                    </button>
                   </div>
                 ) : filteredItems.length === 0 ? (
                   <div className="emby-empty-media-card">

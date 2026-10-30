@@ -169,7 +169,7 @@ export const QueueItem = memo(function QueueItem({
             {item.filename}
           </div>
           {item.status === 'processing' &&
-            (item.embyContext && !item.filePath ? (
+            (item.embyContext && !item.streamUrl && !item.filePath ? (
               <span
                 className="queue-item-emby-pulling"
                 style={{
@@ -229,7 +229,11 @@ export const QueueItem = memo(function QueueItem({
           {item.sourceType === 'url_stream' && (
             <span
               className="queue-item-stream-badge"
-              title={item.streamUrl || item.filePath}
+              title={
+                item.streamUrl
+                  ? item.streamUrl.replace(/([?&]api_key=)[^&#]+/i, '$1***')
+                  : item.filePath
+              }
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',

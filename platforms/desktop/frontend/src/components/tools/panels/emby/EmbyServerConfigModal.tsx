@@ -20,7 +20,7 @@ export function EmbyServerConfigModal({
   isOpen,
   onClose,
   config,
-  onChangeConfig,
+  onChangeConfig: _onChangeConfig,
   isConnecting,
   connectionError,
   onConnect,
@@ -45,12 +45,16 @@ export function EmbyServerConfigModal({
 
   const cleanUrl = serverUrl.trim().replace(/\/+$/, '');
   const cleanUser = username.trim();
-  const isSubmitDisabled = isConnecting || !cleanUrl || (!cleanUser && !config.apiKey);
+  const isUrlChanged = cleanUrl !== (config.serverUrl || '').trim().replace(/\/+$/, '');
+  const isSubmitDisabled = isConnecting || !cleanUrl || !cleanUser;
 
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
 
-    if (onLogin && (password || !config.apiKey || cleanUser !== (config.username || ''))) {
+    if (
+      onLogin &&
+      (password || !config.apiKey || isUrlChanged || cleanUser !== (config.username || ''))
+    ) {
       if (!cleanUser) return;
       void onLogin({
         serverUrl: cleanUrl,
@@ -68,7 +72,6 @@ export function EmbyServerConfigModal({
         username: cleanUser || config.username,
         allowInvalidCerts,
       };
-      onChangeConfig(updated);
       void onConnect(updated);
       return;
     }
@@ -124,7 +127,10 @@ export function EmbyServerConfigModal({
                 <RefreshCw size={14} className="spin" style={{ marginRight: 6 }} />
                 {t('common.connecting', { defaultValue: 'Connecting...' })}
               </>
-            ) : !config.apiKey || password || cleanUser !== (config.username || '') ? (
+            ) : !config.apiKey ||
+              password ||
+              cleanUser !== (config.username || '') ||
+              isUrlChanged ? (
               t('emby.login_and_connect', { defaultValue: 'Login & Connect' })
             ) : (
               t('emby.test_connection', { defaultValue: 'Test & Connect' })

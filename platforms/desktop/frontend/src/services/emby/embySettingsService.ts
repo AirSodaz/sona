@@ -24,8 +24,14 @@ export function loadEmbyToolOverrides(): EmbyToolOverrides {
       return { ...DEFAULT_EMBY_TOOL_OVERRIDES };
     }
     return {
-      ...DEFAULT_EMBY_TOOL_OVERRIDES,
-      ...parsed,
+      asrSelection: parsed.asrSelection ?? DEFAULT_EMBY_TOOL_OVERRIDES.asrSelection,
+      asrLanguage: parsed.asrLanguage ?? DEFAULT_EMBY_TOOL_OVERRIDES.asrLanguage,
+      translationModelId:
+        parsed.translationModelId ?? DEFAULT_EMBY_TOOL_OVERRIDES.translationModelId,
+      defaultSubtitleMode:
+        parsed.defaultSubtitleMode ?? DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode,
+      overwriteExistingExternal:
+        parsed.overwriteExistingExternal ?? DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal,
     };
   } catch (error) {
     logger.warn('[EmbySettingsService] Failed to load overrides from localStorage:', error);

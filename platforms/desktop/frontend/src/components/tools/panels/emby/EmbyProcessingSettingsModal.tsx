@@ -75,9 +75,7 @@ export function EmbyProcessingSettingsModal({
         setSelectedAsrValue('__global__');
       } else if (overrides.asrSelection.engine === 'online') {
         const pid = overrides.asrSelection.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
-        setSelectedAsrValue(
-          overrides.asrSelection.modelId ? `${pid}::${overrides.asrSelection.modelId}` : pid
-        );
+        setSelectedAsrValue(pid);
       } else {
         setSelectedAsrValue(overrides.asrSelection.modelId || '__global__');
       }
@@ -98,7 +96,9 @@ export function EmbyProcessingSettingsModal({
     ];
 
     // Local models from catalog
-    const localOptions = catalog?.selectionOptions?.batch ?? [];
+    const localOptions = (catalog?.selectionOptions?.batch ?? []).filter(
+      (opt) => opt.isInstalled || opt.id === selectedAsrValue
+    );
     for (const opt of localOptions) {
       list.push({
         value: opt.id,
@@ -122,7 +122,7 @@ export function EmbyProcessingSettingsModal({
     }
 
     return list;
-  }, [catalog, config.asr, t]);
+  }, [catalog, config.asr, selectedAsrValue, t]);
 
   const translationOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [
@@ -139,10 +139,10 @@ export function EmbyProcessingSettingsModal({
         ? Object.values(rawModels)
         : [];
     for (const m of llmModels) {
-      if (m.enabled) {
+      if (m?.id) {
         list.push({
           value: m.id,
-          label: `${m.name || m.model} (${m.provider})`,
+          label: `${m.metadata?.displayName || m.model} (${m.provider})`,
         });
       }
     }
@@ -177,9 +177,16 @@ export function EmbyProcessingSettingsModal({
         (p) => selectedAsrValue === p.id || selectedAsrValue.startsWith(`${p.id}::`)
       );
       if (isOnline) {
-        const [providerId, modelId] = selectedAsrValue.includes('::')
+        const [providerId, rawModelId] = selectedAsrValue.includes('::')
           ? selectedAsrValue.split('::')
           : [selectedAsrValue, undefined];
+        const existingOverrides = loadEmbyToolOverrides();
+        const modelId =
+          rawModelId ??
+          (existingOverrides.asrSelection?.engine === 'online' &&
+          existingOverrides.asrSelection.providerId === providerId
+            ? existingOverrides.asrSelection.modelId
+            : undefined);
         asrSelection = {
           engine: 'online',
           mode: 'batch',

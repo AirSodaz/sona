@@ -198,61 +198,41 @@ pub fn normalize_server_url(raw: &str) -> String {
     without_trailing.to_string()
 }
 
+/// Extracts the base language tag before any '-' or '_' subtag separator.
+fn extract_base_lang(code: &str) -> &str {
+    code.split(['-', '_']).next().unwrap_or(code)
+}
+
 /// Checks if a language code represents Chinese.
-fn is_chinese_code(clean: &str) -> bool {
-    clean == "zh"
-        || clean == "chi"
-        || clean == "zho"
-        || clean == "cmn"
-        || clean == "chs"
-        || clean == "cht"
-        || clean == "yue"
-        || clean == "chinese"
-        || clean.starts_with("zh-")
-        || clean.starts_with("zh_")
-        || clean.starts_with("yue-")
-        || clean.starts_with("yue_")
+pub fn is_chinese_code(clean: &str) -> bool {
+    let base = extract_base_lang(clean);
+    matches!(
+        base,
+        "zh" | "chi" | "zho" | "cmn" | "chs" | "cht" | "yue" | "chinese"
+    )
+}
+
+/// Extracts the canonical 2-letter language family if known, or returns the base subtag.
+fn language_family(clean: &str) -> &str {
+    let base = extract_base_lang(clean);
+    match base {
+        "ja" | "jpn" | "japanese" => "ja",
+        "en" | "eng" | "english" => "en",
+        "ko" | "kor" | "korean" => "ko",
+        "fr" | "fra" | "fre" | "french" => "fr",
+        "de" | "deu" | "ger" | "german" => "de",
+        "es" | "spa" | "spanish" => "es",
+        "ru" | "rus" | "russian" => "ru",
+        other => other,
+    }
 }
 
 /// Checks if a language code explicitly represents a known non-Chinese language.
 fn is_explicit_non_chinese_code(clean: &str) -> bool {
-    clean == "ja"
-        || clean == "jpn"
-        || clean == "japanese"
-        || clean.starts_with("ja-")
-        || clean.starts_with("ja_")
-        || clean == "en"
-        || clean == "eng"
-        || clean == "english"
-        || clean.starts_with("en-")
-        || clean.starts_with("en_")
-        || clean == "ko"
-        || clean == "kor"
-        || clean == "korean"
-        || clean.starts_with("ko-")
-        || clean.starts_with("ko_")
-        || clean == "fr"
-        || clean == "fra"
-        || clean == "fre"
-        || clean == "french"
-        || clean.starts_with("fr-")
-        || clean.starts_with("fr_")
-        || clean == "de"
-        || clean == "deu"
-        || clean == "ger"
-        || clean == "german"
-        || clean.starts_with("de-")
-        || clean.starts_with("de_")
-        || clean == "es"
-        || clean == "spa"
-        || clean == "spanish"
-        || clean.starts_with("es-")
-        || clean.starts_with("es_")
-        || clean == "ru"
-        || clean == "rus"
-        || clean == "russian"
-        || clean.starts_with("ru-")
-        || clean.starts_with("ru_")
+    matches!(
+        language_family(clean),
+        "ja" | "en" | "ko" | "fr" | "de" | "es" | "ru"
+    )
 }
 
 /// Detects if language code or title corresponds to Chinese.
@@ -287,6 +267,8 @@ pub fn is_chinese_language(lang: Option<&str>, display_title: Option<&str>) -> b
             "汉语",
             "漢語",
             "chinese",
+            "mandarin",
+            "cantonese",
         ];
         if chinese_phrases.iter().any(|phrase| clean.contains(phrase)) {
             return true;
@@ -303,112 +285,19 @@ pub fn language_matches(stream_lang: Option<&str>, preferred: &str) -> bool {
     let s = sl.trim().to_ascii_lowercase();
     let p = preferred.trim().to_ascii_lowercase();
 
+    if s.is_empty() || p.is_empty() {
+        return false;
+    }
+
     if s == p {
         return true;
     }
 
-    if is_chinese_code(&p) {
-        return is_chinese_code(&s);
+    if is_chinese_code(&p) || is_chinese_code(&s) {
+        return is_chinese_code(&p) && is_chinese_code(&s);
     }
 
-    match p.as_str() {
-        "ja" | "jpn" | "japanese" => {
-            s == "ja"
-                || s == "jpn"
-                || s == "japanese"
-                || s.starts_with("ja-")
-                || s.starts_with("ja_")
-        }
-        "en" | "eng" | "english" => {
-            s == "en"
-                || s == "eng"
-                || s == "english"
-                || s.starts_with("en-")
-                || s.starts_with("en_")
-        }
-        "ko" | "kor" | "korean" => {
-            s == "ko" || s == "kor" || s == "korean" || s.starts_with("ko-") || s.starts_with("ko_")
-        }
-        "fr" | "fra" | "fre" | "french" => {
-            s == "fr"
-                || s == "fra"
-                || s == "fre"
-                || s == "french"
-                || s.starts_with("fr-")
-                || s.starts_with("fr_")
-        }
-        "de" | "deu" | "ger" | "german" => {
-            s == "de"
-                || s == "deu"
-                || s == "ger"
-                || s == "german"
-                || s.starts_with("de-")
-                || s.starts_with("de_")
-        }
-        "es" | "spa" | "spanish" => {
-            s == "es"
-                || s == "spa"
-                || s == "spanish"
-                || s.starts_with("es-")
-                || s.starts_with("es_")
-        }
-        "ru" | "rus" | "russian" => {
-            s == "ru"
-                || s == "rus"
-                || s == "russian"
-                || s.starts_with("ru-")
-                || s.starts_with("ru_")
-        }
-        _ => {
-            if p.starts_with("ja-") || p.starts_with("ja_") {
-                s == "ja"
-                    || s == "jpn"
-                    || s == "japanese"
-                    || s.starts_with("ja-")
-                    || s.starts_with("ja_")
-            } else if p.starts_with("en-") || p.starts_with("en_") {
-                s == "en"
-                    || s == "eng"
-                    || s == "english"
-                    || s.starts_with("en-")
-                    || s.starts_with("en_")
-            } else if p.starts_with("ko-") || p.starts_with("ko_") {
-                s == "ko"
-                    || s == "kor"
-                    || s == "korean"
-                    || s.starts_with("ko-")
-                    || s.starts_with("ko_")
-            } else if p.starts_with("fr-") || p.starts_with("fr_") {
-                s == "fr"
-                    || s == "fra"
-                    || s == "fre"
-                    || s == "french"
-                    || s.starts_with("fr-")
-                    || s.starts_with("fr_")
-            } else if p.starts_with("de-") || p.starts_with("de_") {
-                s == "de"
-                    || s == "deu"
-                    || s == "ger"
-                    || s == "german"
-                    || s.starts_with("de-")
-                    || s.starts_with("de_")
-            } else if p.starts_with("es-") || p.starts_with("es_") {
-                s == "es"
-                    || s == "spa"
-                    || s == "spanish"
-                    || s.starts_with("es-")
-                    || s.starts_with("es_")
-            } else if p.starts_with("ru-") || p.starts_with("ru_") {
-                s == "ru"
-                    || s == "rus"
-                    || s == "russian"
-                    || s.starts_with("ru-")
-                    || s.starts_with("ru_")
-            } else {
-                s == p
-            }
-        }
-    }
+    language_family(&s) == language_family(&p)
 }
 
 /// Selects the best audio stream matching the preferred language, falling back to default or first audio stream.
@@ -543,6 +432,18 @@ mod tests {
         assert!(language_matches(Some("yue"), "zh-CN"));
         assert!(language_matches(Some("yue-HK"), "zh"));
         assert!(language_matches(Some("zh-CN"), "yue"));
+        assert!(language_matches(Some("zho-Hans"), "zh-CN"));
+        assert!(language_matches(Some("chi-Hans"), "zh"));
+        assert!(language_matches(Some("jpn-JP"), "ja"));
+        assert!(language_matches(Some("pt-BR"), "pt"));
+        assert!(language_matches(Some("it-IT"), "it"));
+        assert!(is_chinese_code("zho-Hans"));
+        assert!(is_chinese_code("chi-Hans"));
+        assert!(is_chinese_code("cmn-Hans"));
+        assert!(is_chinese_code("chi-TW"));
+        assert!(is_chinese_code("zho-CN"));
+        assert!(is_chinese_language(None, Some("Movie Mandarin Audio")));
+        assert!(is_chinese_language(None, Some("Cantonese Track")));
     }
 
     #[test]

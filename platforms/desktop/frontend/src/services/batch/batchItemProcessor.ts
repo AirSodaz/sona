@@ -410,24 +410,25 @@ export class BatchItemProcessor {
       flushSegmentBuffer();
       this.throwIfCancelRequested(callbacks);
 
+      const cleanedSegments =
+        effectiveReplacementSets.length > 0
+          ? segments.map((seg) => {
+              const cleanText = applyTextReplacements(seg.text, effectiveReplacementSets);
+              return cleanText === seg.text ? seg : { ...seg, text: cleanText };
+            })
+          : segments;
+
       if (scheduler) {
         callbacks.updateStatus('processing', 95, 'translating');
         await scheduler.drain();
         const translationMap = scheduler.getTranslations();
-        const cleanedSegments =
-          effectiveReplacementSets.length > 0
-            ? segments.map((seg) => {
-                const cleanText = applyTextReplacements(seg.text, effectiveReplacementSets);
-                return cleanText === seg.text ? seg : { ...seg, text: cleanText };
-              })
-            : segments;
         const reconciled = cleanedSegments.map((seg) => ({
           ...seg,
           translation: translationMap.get(seg.id) ?? seg.translation,
         }));
         setCurrentSegments(reconciled);
       } else {
-        setCurrentSegments(segments);
+        setCurrentSegments(cleanedSegments);
       }
       await ensureHistorySaved();
       await persistHistorySnapshot();
@@ -498,9 +499,6 @@ export class BatchItemProcessor {
     } catch (error) {
       scheduler?.cancel();
       flushSegmentBuffer();
-      if (downloadedEmbyPath) {
-        await this.removeTempFile(downloadedEmbyPath);
-      }
       const isStream =
         !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
@@ -516,6 +514,10 @@ export class BatchItemProcessor {
       } catch (historyError) {
         logger.error('[BatchQueue] Failed to persist partial result after error:', historyError);
       }
+      if (downloadedEmbyPath) {
+        item.filePath = '';
+        callbacks.updateFilePath?.('');
+      }
       if (currentSegments.length > 0) {
         item.segments = currentSegments;
         callbacks.updateSegments(currentSegments);
@@ -526,6 +528,9 @@ export class BatchItemProcessor {
 
       throw error;
     } finally {
+      if (downloadedEmbyPath) {
+        await this.removeTempFile(downloadedEmbyPath);
+      }
       await this.removeTempFile(tempWavPath);
     }
   };

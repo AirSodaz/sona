@@ -478,8 +478,17 @@ pub struct AppConfig {
     pub emby_server_url: Option<String>,
     #[serde(
         default,
+        rename = "embyUsername",
+        alias = "emby_username",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub emby_username: Option<String>,
+    #[serde(
+        default,
         rename = "embyApiKey",
         alias = "emby_api_key",
+        alias = "embyToken",
+        alias = "emby_token",
         skip_serializing_if = "Option::is_none"
     )]
     pub emby_api_key: Option<String>,

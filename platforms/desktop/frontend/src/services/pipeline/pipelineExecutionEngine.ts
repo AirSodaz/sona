@@ -161,7 +161,9 @@ export class PipelineExecutionEngine {
           '[PipelineExecutionEngine] Translation model is not configured, skipping auto-translate.'
         );
       } else {
-        const untranslatedSegments = currentSegments.filter((seg) => !seg.translation?.trim());
+        const untranslatedSegments = pipeline.autoPolish
+          ? currentSegments.filter((seg) => Boolean(seg.text?.trim()))
+          : currentSegments.filter((seg) => Boolean(seg.text?.trim()) && !seg.translation?.trim());
 
         if (untranslatedSegments.length === 0) {
           logger.info(

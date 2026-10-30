@@ -385,7 +385,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           setConnectionError(extractErrorMessage(err) || String(err));
         }
       } finally {
-        if (!cancelled && seq === fetchSeqRef.current) {
+        if (seq === fetchSeqRef.current || cancelled) {
           setIsLoadingItems(false);
         }
       }
@@ -564,8 +564,7 @@ export function useEmbySync(): UseEmbySyncReturn {
       const bestAudio = findBestAudioStream(item.mediaStreams);
       const audioStreamIndex = audioTrackMap[item.id] ?? bestAudio?.index ?? 0;
       const selectedAudio =
-        item.mediaStreams.find((s) => s.index === audioStreamIndex) ?? bestAudio;
-
+        (item.mediaStreams ?? []).find((s) => s.index === audioStreamIndex) ?? bestAudio;
       let sourceLanguage: string | undefined;
       if (overrides.asrLanguage) {
         sourceLanguage = overrides.asrLanguage;
@@ -579,9 +578,9 @@ export function useEmbySync(): UseEmbySyncReturn {
 
       let existingExternalSubtitleIndex: number | undefined;
       if (effectiveOverwrite) {
-        const extSub = item.mediaStreams.find(
+        const extSub = (item.mediaStreams ?? []).find(
           (s) =>
-            s.streamType.toLowerCase() === 'subtitle' &&
+            s.streamType?.toLowerCase() === 'subtitle' &&
             s.isExternal &&
             matchSubtitleLanguage(s.language, s.displayTitle, targetLanguage)
         );

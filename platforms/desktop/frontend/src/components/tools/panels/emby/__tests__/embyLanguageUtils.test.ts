@@ -103,8 +103,11 @@ describe('embyLanguageUtils', () => {
     it('does not falsely match word substrings like yacht or Nacht as Traditional Chinese', () => {
       expect(matchSubtitleLanguage('und', 'The Yacht Race', 'zh-TW')).toBe(false);
       expect(matchSubtitleLanguage('und', 'Eine kleine Nachtmusik', 'zh-TW')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'Movie.2024.1080p.精簡版.mkv', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'zh-hk', 'zh-TW')).toBe(true);
+      expect(matchSubtitleLanguage('und', 'zh-mo', 'zh-TW')).toBe(true);
+      expect(matchSubtitleLanguage('und', 'zht', 'zh-TW')).toBe(true);
     });
-
     it('prevents Japanese stream with Kanji title from matching as Chinese', () => {
       expect(matchSubtitleLanguage('ja', '日本語（作中用語解説）', 'zh-CN')).toBe(false);
       expect(matchSubtitleLanguage('jpn', '劇中歌', 'zh-CN')).toBe(false);
