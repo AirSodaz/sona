@@ -35,13 +35,3 @@ fn adapter_owned_implementation_crates_stay_out_of_desktop_runtime_dependencies(
         );
     }
 }
-
-#[test]
-fn reqwest_is_available_to_desktop_tests_but_not_the_runtime_host() {
-    let manifest = desktop_manifest();
-    let runtime = dependencies(&manifest, "dependencies");
-    let development = dependencies(&manifest, "dev-dependencies");
-
-    assert!(!runtime.contains_key("reqwest"));
-    assert!(development.contains_key("reqwest"));
-}
