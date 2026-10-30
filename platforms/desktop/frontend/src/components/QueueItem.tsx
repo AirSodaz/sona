@@ -178,6 +178,8 @@ export const QueueItem = memo(function QueueItem({
                   gap: '4px',
                   fontSize: '11px',
                   color: 'var(--color-primary, #3b82f6)',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
                 }}
               >
                 {t('emby.pulling_audio', { defaultValue: 'Fetching audio track...' })}

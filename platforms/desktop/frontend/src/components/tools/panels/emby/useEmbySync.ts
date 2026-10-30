@@ -94,7 +94,7 @@ export interface UseEmbySyncReturn {
   queuedItemIds: Set<string>;
   toggleItemSelection: (id: string) => void;
   selectAllMissingInSeason: (seasonItems: EmbyMediaItem[]) => void;
-  selectAllMissingMovies: (movies: EmbyMediaItem[]) => void;
+  selectAllFiltered: (items: EmbyMediaItem[]) => void;
   clearSelection: () => void;
 
   // Audio Tracks & Options
@@ -404,22 +404,19 @@ export function useEmbySync(): UseEmbySyncReturn {
     [targetLanguage, queuedItemIds]
   );
 
-  const selectAllMissingMovies = useCallback(
-    (movies: EmbyMediaItem[]) => {
+  const selectAllFiltered = useCallback(
+    (itemsToSelect: EmbyMediaItem[]) => {
       setSelectedItemIds((prev) => {
         const next = new Set(prev);
-        for (const item of movies) {
-          if (
-            !hasTargetSubtitle(item.mediaStreams, targetLanguage) &&
-            !queuedItemIds.has(item.id)
-          ) {
+        for (const item of itemsToSelect) {
+          if (!queuedItemIds.has(item.id)) {
             next.add(item.id);
           }
         }
         return next;
       });
     },
-    [targetLanguage, queuedItemIds]
+    [queuedItemIds]
   );
 
   const clearSelection = useCallback(() => {
@@ -564,7 +561,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     queuedItemIds,
     toggleItemSelection,
     selectAllMissingInSeason,
-    selectAllMissingMovies,
+    selectAllFiltered,
     clearSelection,
 
     audioTrackMap,

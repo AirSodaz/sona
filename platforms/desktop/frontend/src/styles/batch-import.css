@@ -455,9 +455,12 @@
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  min-width: 0;
 }
 
 .queue-item-filename {
+  flex: 1;
+  min-width: 0;
   font-size: 0.85rem;
   font-weight: 500;
   color: var(--color-text-primary);
@@ -465,7 +468,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
 .queue-item-progress-pct {
   font-size: 0.75rem;
   font-family: var(--font-mono);

@@ -279,7 +279,7 @@ describe('ToolEmbySyncPanel', () => {
     fireEvent.click(selectAllBtn);
 
     // Only Episode 1 is missing, so submit button should show 1 selected item
-    expect(screen.getByText(/Transcribe and Sync \(1 selected\)/)).toBeDefined();
+    expect(screen.getByText(/Transcribe \(1\)/)).toBeDefined();
   });
 
   it('submits selected items to batchQueueStore with complete embyContext and navigates to batch queue', async () => {
@@ -295,12 +295,11 @@ describe('ToolEmbySyncPanel', () => {
     });
     fireEvent.click(inceptionCheckbox);
 
-    expect(screen.getByText(/Transcribe and Sync \(1 selected\)/)).toBeDefined();
+    expect(screen.getByText(/Transcribe \(1\)/)).toBeDefined();
 
     // Click submit
-    const submitBtn = screen.getByText(/Transcribe and Sync \(1 selected\)/);
+    const submitBtn = screen.getByRole('button', { name: /Transcribe \(1\)/ });
     fireEvent.click(submitBtn);
-
     // Verify batchQueueStore contains the enqueued item
     const queue = useBatchQueueStore.getState().queueItems;
     expect(queue.length).toBe(1);
@@ -362,6 +361,56 @@ describe('ToolEmbySyncPanel', () => {
     fireEvent.click(selectAllBtn);
 
     // No new items selected
-    expect(screen.queryByText(/Transcribe and Sync \(1 selected\)/)).toBeNull();
+    expect(screen.queryByText(/Transcribe \(1\)/)).toBeNull();
+  });
+
+  it('renders refresh button without native title tooltip attribute', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+    });
+
+    const refreshBtn = screen.getByRole('button', { name: /Refresh/i });
+    expect(refreshBtn).toBeDefined();
+    expect(refreshBtn.getAttribute('title')).toBeNull();
+  });
+
+  it('handles master checkbox select-all and toggle behavior in the toolbar', async () => {
+    render(<ToolEmbySyncPanel />);
+
+    await waitFor(() => {
+      expect(screen.getByText('盗梦空间 Inception')).toBeDefined();
+    });
+
+    // Master checkbox in toolbar
+    const masterCheckbox = screen.getByRole('checkbox', {
+      name: /Select All/i,
+    }) as HTMLInputElement;
+    expect(masterCheckbox).toBeDefined();
+    expect(masterCheckbox.checked).toBe(false);
+    expect(masterCheckbox.indeterminate).toBe(false);
+
+    // Select one item individually -> master checkbox should become indeterminate
+    const inceptionCheckbox = screen.getByRole('checkbox', {
+      name: /Select 盗梦空间 Inception/i,
+    });
+    fireEvent.click(inceptionCheckbox);
+    expect(masterCheckbox.indeterminate).toBe(true);
+    expect(screen.getByText(/Transcribe \(1\)/)).toBeDefined();
+
+    // Clicking indeterminate master checkbox selects all selectable filtered items (3 total in mock)
+    fireEvent.click(masterCheckbox);
+    expect(masterCheckbox.checked).toBe(true);
+    expect(masterCheckbox.indeterminate).toBe(false);
+    expect(screen.getByText(/Transcribe \(3\)/)).toBeDefined();
+
+    // Clicking checked master checkbox clears selection
+    fireEvent.click(masterCheckbox);
+    expect(masterCheckbox.checked).toBe(false);
+    expect(masterCheckbox.indeterminate).toBe(false);
+    expect(screen.queryByText(/Transcribe \(3\)/)).toBeNull();
+    const submitBtn = screen.getByRole('button', { name: /Transcribe \(0\)/ });
+    expect(submitBtn.hasAttribute('disabled')).toBe(true);
   });
 });

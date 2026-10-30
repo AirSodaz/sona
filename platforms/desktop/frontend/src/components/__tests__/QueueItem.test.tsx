@@ -321,8 +321,10 @@ describe('QueueItem', () => {
         t={defaultT as unknown as TFunction}
       />
     );
-
-    expect(screen.getByText('emby.pulling_audio')).toBeDefined();
+    const pullingEl = screen.getByText('emby.pulling_audio');
+    expect(pullingEl).toBeDefined();
+    expect(pullingEl.style.whiteSpace).toBe('nowrap');
+    expect(pullingEl.style.flexShrink).toBe('0');
   });
 
   it('renders upload failed error and retry upload tooltip when errorStage is upload', () => {

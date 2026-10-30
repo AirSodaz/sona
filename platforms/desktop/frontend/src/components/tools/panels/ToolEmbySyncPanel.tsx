@@ -1,5 +1,6 @@
 import { AlertTriangle, RefreshCw, Settings, Tv } from 'lucide-react';
 import type React from 'react';
+import { useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingsTabContainer } from '../../settings/SettingsLayout';
 import { ToolHeroHeader, type ToolHeroStatusTone } from '../ToolHeroHeader';
@@ -50,7 +51,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     queuedItemIds,
     toggleItemSelection,
     selectAllMissingInSeason,
-    selectAllMissingMovies,
+    selectAllFiltered,
     clearSelection,
     audioTrackMap,
     handleAudioTrackChange,
@@ -62,6 +63,28 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
     handleSubmitBatch,
     submittedNotice,
   } = useEmbySync();
+  const selectableFilteredItems = useMemo(() => {
+    return filteredItems.filter((item) => !queuedItemIds.has(item.id));
+  }, [filteredItems, queuedItemIds]);
+
+  const totalSelectableCount = selectableFilteredItems.length;
+  const selectedInFilteredCount = useMemo(() => {
+    return selectableFilteredItems.filter((item) => selectedItemIds.has(item.id)).length;
+  }, [selectableFilteredItems, selectedItemIds]);
+
+  const isAllSelected =
+    totalSelectableCount > 0 && selectedInFilteredCount === totalSelectableCount;
+  const isIndeterminate =
+    selectedInFilteredCount > 0 && selectedInFilteredCount < totalSelectableCount;
+
+  const handleToggleSelectAll = useCallback(() => {
+    if (isAllSelected) {
+      clearSelection();
+    } else {
+      selectAllFiltered(filteredItems);
+    }
+  }, [isAllSelected, clearSelection, selectAllFiltered, filteredItems]);
+
   const statusTone: ToolHeroStatusTone = isConnecting
     ? 'active'
     : !isConnected
@@ -97,7 +120,6 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                   className="btn btn-sm btn-secondary"
                   onClick={fetchItems}
                   disabled={isLoadingItems}
-                  title={t('common.refresh', { defaultValue: 'Refresh' })}
                 >
                   <RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />
                   <span>{t('common.refresh', { defaultValue: 'Refresh' })}</span>
@@ -196,8 +218,11 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                 onTargetLanguageChange={setTargetLanguage}
                 onlyMissingTargetSubtitles={onlyMissingTargetSubtitles}
                 onOnlyMissingTargetSubtitlesChange={setOnlyMissingTargetSubtitles}
-                standaloneMovies={groupedEpisodes.standalone}
-                onSelectAllMissingMovies={selectAllMissingMovies}
+                isAllSelected={isAllSelected}
+                isIndeterminate={isIndeterminate}
+                selectedCount={selectedInFilteredCount}
+                totalSelectableCount={totalSelectableCount}
+                onToggleSelectAll={handleToggleSelectAll}
               />
 
               <div className="emby-media-list-container">
@@ -264,7 +289,6 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                 overwriteExistingExternal={overwriteExistingExternal}
                 onOverwriteExistingExternalChange={setOverwriteExistingExternal}
                 onSubmitBatch={handleSubmitBatch}
-                onClearSelection={clearSelection}
                 submittedNotice={submittedNotice}
               />
             </>

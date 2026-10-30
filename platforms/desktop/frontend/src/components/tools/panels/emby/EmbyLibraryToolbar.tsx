@@ -1,9 +1,9 @@
-import { Check, Film, Search, Tv } from 'lucide-react';
+import { Film, Search, Tv } from 'lucide-react';
 import type React from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Dropdown, type DropdownOption } from '../../../../components/Dropdown';
-import type { EmbyLibrary, EmbyMediaItem } from '../../../../types/emby';
-import { hasTargetSubtitle } from './embyLanguageUtils';
+import type { EmbyLibrary } from '../../../../types/emby';
 
 const supportedLanguageOptions: DropdownOption[] = [
   { value: 'zh-CN', label: '简体中文 (zh-CN)' },
@@ -23,8 +23,11 @@ export interface EmbyLibraryToolbarProps {
   onTargetLanguageChange: (lang: string) => void;
   onlyMissingTargetSubtitles: boolean;
   onOnlyMissingTargetSubtitlesChange: (onlyMissing: boolean) => void;
-  standaloneMovies?: EmbyMediaItem[];
-  onSelectAllMissingMovies?: (movies: EmbyMediaItem[]) => void;
+  isAllSelected: boolean;
+  isIndeterminate: boolean;
+  selectedCount: number;
+  totalSelectableCount: number;
+  onToggleSelectAll: () => void;
 }
 
 export function EmbyLibraryToolbar({
@@ -37,15 +40,20 @@ export function EmbyLibraryToolbar({
   onTargetLanguageChange,
   onlyMissingTargetSubtitles,
   onOnlyMissingTargetSubtitlesChange,
-  standaloneMovies = [],
-  onSelectAllMissingMovies,
+  isAllSelected,
+  isIndeterminate,
+  selectedCount,
+  totalSelectableCount,
+  onToggleSelectAll,
 }: EmbyLibraryToolbarProps): React.JSX.Element {
   const { t } = useTranslation();
+  const indeterminateRef = useRef<HTMLInputElement>(null);
 
-  const currentLib = libraries.find((lib) => lib.id === selectedLibraryId);
-  const isMovieLib =
-    currentLib?.collectionType === 'movies' ||
-    (standaloneMovies.length > 0 && currentLib?.collectionType !== 'tvshows');
+  useEffect(() => {
+    if (indeterminateRef.current) {
+      indeterminateRef.current.indeterminate = isIndeterminate;
+    }
+  }, [isIndeterminate]);
 
   return (
     <div className="emby-library-toolbar">
@@ -72,7 +80,7 @@ export function EmbyLibraryToolbar({
         </div>
       )}
 
-      {/* 2. Controls: Search, Target Lang, Filter Missing, Movie Bulk Action */}
+      {/* 2. Controls: Search (left) & Target Language (right) */}
       <div className="emby-library-controls">
         <div className="emby-controls-row">
           <div className="emby-search-box">
@@ -105,35 +113,42 @@ export function EmbyLibraryToolbar({
           </div>
         </div>
 
+        {/* 3. Subrow: Filter Zone (left) & Selection Zone (right) */}
         <div className="emby-controls-subrow">
-          <label className="emby-toolbar-checkbox">
-            <input
-              type="checkbox"
-              checked={onlyMissingTargetSubtitles}
-              onChange={(e) => onOnlyMissingTargetSubtitlesChange(e.target.checked)}
-            />
-            <span>
-              {t('emby.only_missing_target', {
-                defaultValue: 'Only show items missing subtitles',
+          <div className="emby-filter-zone">
+            <label className="emby-toolbar-checkbox">
+              <input
+                type="checkbox"
+                checked={onlyMissingTargetSubtitles}
+                onChange={(e) => onOnlyMissingTargetSubtitlesChange(e.target.checked)}
+              />
+              <span>
+                {t('emby.only_missing_target', {
+                  defaultValue: 'Only show items missing subtitles',
+                })}
+              </span>
+            </label>
+          </div>
+
+          <div className="emby-selection-zone">
+            <label className="emby-toolbar-checkbox">
+              <input
+                type="checkbox"
+                ref={indeterminateRef}
+                checked={isAllSelected}
+                onChange={onToggleSelectAll}
+                disabled={totalSelectableCount === 0}
+              />
+              <span>{t('common.select_all', { defaultValue: 'Select All' })}</span>
+            </label>
+            <span className="emby-selection-counter">
+              {t('emby.selected_counter', {
+                selected: selectedCount,
+                total: totalSelectableCount,
+                defaultValue: `Selected ${selectedCount} / ${totalSelectableCount} items`,
               })}
             </span>
-          </label>
-
-          {isMovieLib &&
-            standaloneMovies.length > 0 &&
-            standaloneMovies.some((m) => !hasTargetSubtitle(m.mediaStreams, targetLanguage)) &&
-            onSelectAllMissingMovies && (
-              <button
-                type="button"
-                className="btn btn-sm btn-secondary emby-bulk-movie-btn"
-                onClick={() => onSelectAllMissingMovies(standaloneMovies)}
-              >
-                <Check size={14} style={{ marginRight: 4 }} />
-                {t('emby.select_all_missing_movies', {
-                  defaultValue: 'Select All Missing Movies in Library',
-                })}
-              </button>
-            )}
+          </div>
         </div>
       </div>
     </div>
