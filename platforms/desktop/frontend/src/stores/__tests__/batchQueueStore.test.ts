@@ -895,9 +895,41 @@ describe('batchQueueStore', () => {
       const items = useBatchQueueStore.getState().queueItems;
       expect(items).toHaveLength(1);
       expect(items[0].sourceType).toBe('url_stream');
-      expect(items[0].streamUrl).toBe('http://192.168.1.10:8096/Videos/video-999/stream');
+      expect(items[0].streamUrl).toBe(
+        'http://192.168.1.10:8096/Videos/video-999/stream.mkv?Static=true&MediaSourceId=mediasource_video-999&AudioStreamIndex=1'
+      );
       expect(items[0].filename).toBe('Episode 1');
       expect(items[0].embyContext?.itemId).toBe('video-999');
+    });
+    it('addEmbyItems sets streamUrl with apiKey, container, and custom mediaSourceId', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://192.168.1.10:8096/emby',
+            apiKey: 'token123',
+            mediaSourceId: 'ms-custom-456',
+            container: 'mp4',
+            itemId: 'video-888',
+            itemName: 'Episode 2',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].sourceType).toBe('url_stream');
+      expect(items[0].streamUrl).toBe(
+        'http://192.168.1.10:8096/emby/Videos/video-888/stream.mp4?api_key=token123&Static=true&MediaSourceId=ms-custom-456&AudioStreamIndex=0'
+      );
+      expect(items[0].embyContext?.mediaSourceId).toBe('ms-custom-456');
+      expect(items[0].embyContext?.container).toBe('mp4');
+      expect(items[0].embyContext?.apiKey).toBe('token123');
     });
 
     it('setItemError sets errorMessage and errorStage', () => {

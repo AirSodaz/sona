@@ -192,6 +192,8 @@ export type AppConfig_Deserialize = {
 	embyApiKey?: string | null,
 } & {
 	embyAllowInvalidCerts?: boolean | null,
+} & {
+	embyAdminUserId?: string | null,
 };
 
 export type AppConfig_Serialize = {
@@ -318,6 +320,7 @@ export type AppConfig_Serialize = {
 	embyServerUrl?: string | null,
 	embyApiKey?: string | null,
 	embyAllowInvalidCerts?: boolean | null,
+	embyAdminUserId?: string | null,
 };
 
 export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";

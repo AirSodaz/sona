@@ -88,6 +88,10 @@ pub struct EmbyMediaItem {
     pub has_embedded_chinese: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub item_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_source_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]

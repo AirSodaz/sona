@@ -498,13 +498,61 @@ describe('BatchItemProcessor', () => {
     expect(item.errorStage).toBeUndefined();
   });
 
-  it('executes downloadEmbyAudio before transcription and uses downloadedPath as inputSource', async () => {
+  it('uses streamUrl directly as inputSource without calling downloadEmbyAudio when streamUrl is present', async () => {
+    const item: BatchQueueItem = {
+      id: 'batch-emby-stream',
+      filename: 'Emby Movie Stream',
+      filePath: '',
+      sourceType: 'url_stream',
+      streamUrl:
+        'http://localhost:8096/Videos/movie-stream/stream.mkv?Static=true&MediaSourceId=mediasource_1',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+      embyContext: {
+        serverId: 'server-1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'movie-stream',
+        itemName: 'Emby Movie Stream',
+        audioStreamIndex: 2,
+        subtitleMode: 'pure_translation',
+        targetLanguage: 'zh-CN',
+      },
+    };
+
+    const config: AppConfig = { language: 'auto' } as unknown as AppConfig;
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+      updateFilePath: vi.fn(),
+    };
+
+    vi.mocked(downloadEmbyAudio).mockClear();
+    vi.mocked(mockPorts.transcriptionService.transcribeFile).mockClear();
+    vi.mocked(syncEmbySubtitles).mockClear();
+    vi.mocked(syncEmbySubtitles).mockResolvedValueOnce();
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(downloadEmbyAudio).not.toHaveBeenCalled();
+    expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
+    expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(
+      'http://localhost:8096/Videos/movie-stream/stream.mkv?Static=true&MediaSourceId=mediasource_1'
+    );
+  });
+
+  it('executes downloadEmbyAudio before transcription and uses downloadedPath when streamUrl is absent', async () => {
     const item: BatchQueueItem = {
       id: 'batch-emby-precedence',
       filename: 'Emby Movie Precedence',
       filePath: '',
-      sourceType: 'url_stream',
-      streamUrl: 'http://localhost:8096/Videos/movie-prec/stream',
+      sourceType: 'file',
       status: 'pending',
       progress: 0,
       segments: [],
@@ -733,8 +781,7 @@ describe('BatchItemProcessor', () => {
       id: 'batch-emby-dl-fail',
       filename: 'Emby Movie Fail',
       filePath: '',
-      sourceType: 'url_stream',
-      streamUrl: 'http://localhost:8096/Videos/movie-fail/stream',
+      sourceType: 'file',
       status: 'pending',
       progress: 0,
       segments: [],
@@ -777,8 +824,7 @@ describe('BatchItemProcessor', () => {
       id: 'batch-emby-save-history',
       filename: 'Emby Movie History',
       filePath: '',
-      sourceType: 'url_stream',
-      streamUrl: 'http://localhost:8096/Videos/movie-hist/stream',
+      sourceType: 'file',
       status: 'pending',
       progress: 0,
       segments: [],

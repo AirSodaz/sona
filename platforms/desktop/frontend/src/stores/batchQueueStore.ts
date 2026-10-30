@@ -55,6 +55,33 @@ export interface AddEmbyItemEntry {
   existingExternalSubtitleIndex?: number;
   serverId: string;
   serverUrl: string;
+  apiKey?: string;
+  mediaSourceId?: string;
+  container?: string;
+}
+
+export function buildEmbyStreamUrl(params: {
+  serverUrl: string;
+  itemId: string;
+  apiKey?: string;
+  mediaSourceId?: string;
+  container?: string;
+  audioStreamIndex?: number;
+}): string {
+  const baseServerUrl = params.serverUrl.trim().replace(/\/+$/, '');
+  const container = (params.container || 'mkv').replace(/^\.+/, '');
+  const mediaSourceId = params.mediaSourceId || `mediasource_${params.itemId}`;
+  const queryParams = new URLSearchParams();
+  if (params.apiKey) {
+    queryParams.set('api_key', params.apiKey);
+  }
+  queryParams.set('Static', 'true');
+  queryParams.set('MediaSourceId', mediaSourceId);
+  if (params.audioStreamIndex !== undefined && params.audioStreamIndex !== null) {
+    queryParams.set('AudioStreamIndex', params.audioStreamIndex.toString());
+  }
+  const query = queryParams.toString();
+  return `${baseServerUrl}/Videos/${params.itemId}/stream.${container}${query ? `?${query}` : ''}`;
 }
 
 export interface AddEmbyItemsOptions {
@@ -459,12 +486,20 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     const resolvedConfigSnapshot = getEffectiveConfigSnapshot();
     const newItems: BatchQueueItem[] = options.items.map((opt) => {
       const baseServerUrl = opt.serverUrl.trim().replace(/\/+$/, '');
+      const streamUrl = buildEmbyStreamUrl({
+        serverUrl: baseServerUrl,
+        itemId: opt.itemId,
+        apiKey: opt.apiKey,
+        mediaSourceId: opt.mediaSourceId,
+        container: opt.container,
+        audioStreamIndex: opt.audioStreamIndex,
+      });
       return {
         id: uuidv4(),
         filename: opt.itemName,
         filePath: '',
         sourceType: 'url_stream',
-        streamUrl: `${baseServerUrl}/Videos/${opt.itemId}/stream`,
+        streamUrl,
         status: 'pending',
         progress: 0,
         segments: [],
@@ -484,6 +519,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
           targetLanguage: opt.targetLanguage,
           sourceLanguage: opt.sourceLanguage,
           existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
+          mediaSourceId: opt.mediaSourceId,
+          container: opt.container,
+          apiKey: opt.apiKey,
         },
       };
     });

@@ -277,7 +277,7 @@ impl EmbyClient {
             ("IncludeItemTypes", "Movie,Episode"),
             (
                 "Fields",
-                "MediaStreams,RunTimeTicks,SeriesName,SeasonName,IndexNumber,ParentIndexNumber",
+                "MediaStreams,RunTimeTicks,SeriesName,SeasonName,IndexNumber,ParentIndexNumber,MediaSources,Container",
             ),
             ("StartIndex", &start_str),
             ("Limit", &limit_str),
@@ -355,7 +355,26 @@ impl EmbyClient {
                     .get("Type")
                     .and_then(|v| v.as_str())
                     .map(|s| s.to_string());
-
+                let media_source_id = raw
+                    .get("MediaSources")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|s| s.get("Id").and_then(|v| v.as_str()))
+                    .map(|s| s.to_string())
+                    .or_else(|| {
+                        if !id.is_empty() {
+                            Some(format!("mediasource_{id}"))
+                        } else {
+                            None
+                        }
+                    });
+                let container = raw
+                    .get("MediaSources")
+                    .and_then(|v| v.as_array())
+                    .and_then(|arr| arr.first())
+                    .and_then(|s| s.get("Container").and_then(|v| v.as_str()))
+                    .or_else(|| raw.get("Container").and_then(|v| v.as_str()))
+                    .map(|s| s.to_string());
                 let mut media_streams = Vec::new();
                 let mut has_chinese_subtitles = false;
                 let mut has_embedded_chinese = false;
@@ -427,6 +446,8 @@ impl EmbyClient {
                     has_chinese_subtitles,
                     has_embedded_chinese,
                     item_type,
+                    media_source_id,
+                    container,
                 });
             }
         }
@@ -1233,5 +1254,22 @@ mod tests {
 
         let empty_list = serde_json::json!([]);
         assert_eq!(parse_admin_user_id(&empty_list), None);
+    }
+
+    #[test]
+    fn test_emby_media_item_media_source_fields() {
+        let json = serde_json::json!({
+            "id": "125717",
+            "name": "Test Movie",
+            "mediaSourceId": "mediasource_125717",
+            "container": "mkv",
+            "hasChineseSubtitles": false,
+            "hasEmbeddedChinese": false,
+            "mediaStreams": []
+        });
+        let item: EmbyMediaItem = serde_json::from_value(json).unwrap();
+        assert_eq!(item.id, "125717");
+        assert_eq!(item.media_source_id, Some("mediasource_125717".to_string()));
+        assert_eq!(item.container, Some("mkv".to_string()));
     }
 }

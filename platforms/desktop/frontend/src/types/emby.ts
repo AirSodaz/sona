@@ -42,6 +42,8 @@ export interface EmbyMediaItem {
   hasChineseSubtitles: boolean;
   hasEmbeddedChinese: boolean;
   itemType?: string;
+  mediaSourceId?: string;
+  container?: string;
 }
 
 export interface EmbyItemListResult {

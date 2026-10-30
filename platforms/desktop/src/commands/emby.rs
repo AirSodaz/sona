@@ -66,10 +66,10 @@ pub async fn emby_save_config(
         .map(|s| s.trim().to_string())
         .filter(|s| !s.is_empty());
 
-    if config.admin_user_id.is_none() {
-        if let Ok(temp_client) = EmbyClient::new(config.clone()) {
-            config.admin_user_id = temp_client.discover_admin_user_id().await;
-        }
+    if config.admin_user_id.is_none()
+        && let Ok(temp_client) = EmbyClient::new(config.clone())
+    {
+        config.admin_user_id = temp_client.discover_admin_user_id().await;
     }
 
     let client = EmbyClient::new(config.clone())

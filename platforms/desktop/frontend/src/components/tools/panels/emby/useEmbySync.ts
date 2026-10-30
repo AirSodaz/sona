@@ -535,6 +535,9 @@ export function useEmbySync(): UseEmbySyncReturn {
         existingExternalSubtitleIndex,
         serverId: serverInfo.id,
         serverUrl: config.serverUrl,
+        apiKey: config.apiKey,
+        mediaSourceId: item.mediaSourceId,
+        container: item.container,
       });
     }
 
@@ -566,6 +569,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     subtitleMode,
     targetLanguage,
     config.serverUrl,
+    config.apiKey,
     t,
   ]);
 

@@ -125,14 +125,14 @@ export class BatchItemProcessor {
 
       const duration = this.calculateDuration(currentSegments);
       const isStream =
-        !item.embyContext &&
+        !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
           /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
           : undefined;
-      const inputSource = item.embyContext ? item.filePath : item.streamUrl || item.filePath;
+      const inputSource = downloadedEmbyPath || item.streamUrl || item.filePath;
       const historyItem =
         typeof this.ports.historyService.saveImportedFileToProject === 'function'
           ? await this.ports.historyService.saveImportedFileToProject(
@@ -241,7 +241,7 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      if (item.embyContext) {
+      if (item.embyContext && !item.streamUrl && !item.filePath) {
         callbacks.updateStatus('processing', 0);
         const downloadedPath = await downloadEmbyAudio(
           item.embyContext.itemId,
@@ -253,7 +253,7 @@ export class BatchItemProcessor {
       }
 
       const isStream =
-        !item.embyContext &&
+        !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
           /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const shouldCreateTempWav =
@@ -263,7 +263,7 @@ export class BatchItemProcessor {
         : undefined;
       this.throwIfCancelRequested(callbacks);
 
-      const inputSource = item.embyContext ? item.filePath : item.streamUrl || item.filePath;
+      const inputSource = downloadedEmbyPath || item.streamUrl || item.filePath;
       let segments: TranscriptSegment[];
       try {
         segments = await this.ports.transcriptionService.transcribeFile(
@@ -291,7 +291,7 @@ export class BatchItemProcessor {
       } catch (transcribeError) {
         flushSegmentBuffer();
         const isStream =
-          !item.embyContext &&
+          !downloadedEmbyPath &&
           (item.sourceType === 'url_stream' ||
             /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
         const isExplicitCancel = callbacks.isCancelRequested();
@@ -390,7 +390,7 @@ export class BatchItemProcessor {
         await this.removeTempFile(downloadedEmbyPath);
       }
       const isStream =
-        !item.embyContext &&
+        !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
           /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
       const isExplicitCancel = callbacks.isCancelRequested();
