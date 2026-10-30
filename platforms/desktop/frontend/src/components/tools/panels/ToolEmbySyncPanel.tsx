@@ -248,13 +248,13 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                       {t('emby.loading_items', { defaultValue: 'Loading media library items...' })}
                     </p>
                   </div>
-                ) : connectionError ? (
+                ) : connectionError && filteredItems.length === 0 ? (
                   <div className="emby-empty-media-card" role="alert">
                     <AlertTriangle
                       size={24}
-                      style={{ color: 'var(--color-error, #ef4444)', marginBottom: 8 }}
+                      style={{ color: 'var(--color-error, #e03e3e)', marginBottom: 8 }}
                     />
-                    <p style={{ color: 'var(--color-error, #ef4444)', marginBottom: 12 }}>
+                    <p style={{ color: 'var(--color-error, #e03e3e)', marginBottom: 12 }}>
                       {connectionError}
                     </p>
                     <button
@@ -263,11 +263,7 @@ export function ToolEmbySyncPanel(): React.JSX.Element {
                       onClick={fetchItems}
                       disabled={isLoadingItems || isConnecting}
                     >
-                      <RefreshCw
-                        size={14}
-                        className={isLoadingItems ? 'spin' : ''}
-                        style={{ marginRight: 6 }}
-                      />
+                      <RefreshCw size={14} className={isLoadingItems ? 'spin' : ''} />
                       <span>{t('common.retry', { defaultValue: 'Retry' })}</span>
                     </button>
                   </div>

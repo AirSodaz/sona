@@ -183,13 +183,19 @@ export class BatchQueueCoordinator {
       return;
     }
 
+    const isUploadRetry =
+      Boolean(item.embyContext) &&
+      item.errorStage === 'upload' &&
+      Boolean(item.segments && item.segments.length > 0);
+
     if (
+      !isUploadRetry &&
       !this.ports.asrConfigService.isAsrRequestConfigured(
         this.ports.asrConfigService.resolveAsrTranscriptionRequest(config, 'batch')
       )
     ) {
       const message = 'Batch ASR is not configured.';
-      lifecyclePorts.setItemError(itemId, message);
+      lifecyclePorts.setItemError(itemId, message, item.errorStage);
       await this.notifyAutomationResult(item, 'error', lifecyclePorts.getQueueItems, message);
       return;
     }

@@ -189,6 +189,8 @@ export type AppConfig_Deserialize = {
 } & {
 	embyServerUrl?: string | null,
 } & {
+	embyUsername?: string | null,
+} & {
 	embyApiKey?: string | null,
 } & {
 	embyAllowInvalidCerts?: boolean | null,
@@ -318,6 +320,7 @@ export type AppConfig_Serialize = {
 	mcpNotifyOnMutation?: boolean | null,
 	mcpAuditLogEnabled?: boolean | null,
 	embyServerUrl?: string | null,
+	embyUsername?: string | null,
 	embyApiKey?: string | null,
 	embyAllowInvalidCerts?: boolean | null,
 	embyAdminUserId?: string | null,

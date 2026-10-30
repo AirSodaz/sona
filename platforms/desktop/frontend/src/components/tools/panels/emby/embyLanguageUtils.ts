@@ -34,7 +34,10 @@ export function normalizeLanguageCode(code?: string): string {
     trimmed.startsWith('zh-hant') ||
     trimmed.startsWith('zh-hk') ||
     trimmed.startsWith('zh-mo') ||
-    trimmed.startsWith('zh-cht')
+    trimmed.startsWith('zh-cht') ||
+    trimmed.startsWith('cmn-hant') ||
+    trimmed.startsWith('cmn-tw') ||
+    trimmed.startsWith('zho-hant')
   ) {
     return 'zh-TW';
   }
@@ -59,15 +62,22 @@ export function normalizeLanguageCode(code?: string): string {
       '国语',
       '普通话',
       '简中',
-      '簡體',
       '簡中',
+      '簡體',
+      '簡體中文',
       '簡',
       '简',
+      'cmn-cn',
+      'cmn-hans',
+      'zho-hans',
     ].includes(trimmed) ||
     trimmed.startsWith('zh-cn') ||
     trimmed.startsWith('zh-sg') ||
     trimmed.startsWith('zh-hans') ||
-    trimmed.startsWith('zh-chs')
+    trimmed.startsWith('zh-chs') ||
+    trimmed.startsWith('cmn-hans') ||
+    trimmed.startsWith('cmn-cn') ||
+    trimmed.startsWith('zho-hans')
   ) {
     return 'zh-CN';
   }
@@ -132,7 +142,7 @@ export function normalizeLanguageCode(code?: string): string {
 
   // Cantonese
   if (
-    ['yue', 'cantonese', '粤语', 'zh-yue'].includes(trimmed) ||
+    ['yue', 'cantonese', '粤语', '粵語', '粤', '粵', 'zh-yue'].includes(trimmed) ||
     trimmed.startsWith('zh-yue') ||
     trimmed.startsWith('yue-')
   ) {
@@ -175,22 +185,41 @@ export function matchSubtitleLanguage(
   // 1. If target is Traditional Chinese (zh-TW)
   if (normTarget === 'zh-TW') {
     const hasTraditionalMarker =
-      titleLower.includes('繁') ||
+      titleLower.includes('繁体') ||
+      titleLower.includes('繁體') ||
+      titleLower.includes('繁中') ||
+      titleLower.includes('繁简') ||
+      titleLower.includes('简繁') ||
+      titleLower.includes('繁簡') ||
+      titleLower.includes('簡繁') ||
       titleLower.includes('zh-hk') ||
       titleLower.includes('zh-mo') ||
-      /(?:^|[^a-z0-9])(cht|zht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
-      titleLower.includes('traditional') ||
       titleLower.includes('zh-tw') ||
-      titleLower.includes('zh-hant');
+      titleLower.includes('zh-hant') ||
+      titleLower.includes('traditional') ||
+      /(?:^|[^a-z0-9])(cht|zht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
+      /(?:^|[^a-z0-9\u4e00-\u9fa5])[[(【（\s._-]?繁[\])】）\s._-]?(?:$|[^a-z0-9\u4e00-\u9fa5])/i.test(
+        titleLower
+      );
 
     const hasSimplifiedMarker =
-      titleLower.includes('简') ||
+      titleLower.includes('简体') ||
       titleLower.includes('簡體') ||
+      titleLower.includes('简中') ||
       titleLower.includes('簡中') ||
-      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
-      titleLower.includes('simplified') ||
+      titleLower.includes('繁简') ||
+      titleLower.includes('简繁') ||
+      titleLower.includes('繁簡') ||
+      titleLower.includes('簡繁') ||
       titleLower.includes('zh-cn') ||
-      titleLower.includes('zh-hans');
+      titleLower.includes('zh-sg') ||
+      titleLower.includes('zh-hans') ||
+      titleLower.includes('zh-chs') ||
+      titleLower.includes('simplified') ||
+      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
+      /(?:^|[^a-z0-9\u4e00-\u9fa5])[[(【（\s._-]?([简簡])[\])】）\s._-]?(?:$|[^a-z0-9\u4e00-\u9fa5])/i.test(
+        titleLower
+      );
     if (hasSimplifiedMarker && !hasTraditionalMarker) {
       return false;
     }
@@ -207,22 +236,41 @@ export function matchSubtitleLanguage(
   // 2. If target is Simplified Chinese (zh-CN)
   if (normTarget === 'zh-CN') {
     const hasTraditionalMarker =
-      titleLower.includes('繁') ||
+      titleLower.includes('繁体') ||
+      titleLower.includes('繁體') ||
+      titleLower.includes('繁中') ||
+      titleLower.includes('繁简') ||
+      titleLower.includes('简繁') ||
+      titleLower.includes('繁簡') ||
+      titleLower.includes('簡繁') ||
       titleLower.includes('zh-hk') ||
       titleLower.includes('zh-mo') ||
-      /(?:^|[^a-z0-9])(cht|zht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
-      titleLower.includes('traditional') ||
       titleLower.includes('zh-tw') ||
-      titleLower.includes('zh-hant');
+      titleLower.includes('zh-hant') ||
+      titleLower.includes('traditional') ||
+      /(?:^|[^a-z0-9])(cht|zht|big5)(?:[^a-z0-9]|$)/i.test(titleLower) ||
+      /(?:^|[^a-z0-9\u4e00-\u9fa5])[[(【（\s._-]?繁[\])】）\s._-]?(?:$|[^a-z0-9\u4e00-\u9fa5])/i.test(
+        titleLower
+      );
 
     const hasSimplifiedMarker =
-      titleLower.includes('简') ||
+      titleLower.includes('简体') ||
       titleLower.includes('簡體') ||
+      titleLower.includes('简中') ||
       titleLower.includes('簡中') ||
-      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
-      titleLower.includes('simplified') ||
+      titleLower.includes('繁简') ||
+      titleLower.includes('简繁') ||
+      titleLower.includes('繁簡') ||
+      titleLower.includes('簡繁') ||
       titleLower.includes('zh-cn') ||
-      titleLower.includes('zh-hans');
+      titleLower.includes('zh-sg') ||
+      titleLower.includes('zh-hans') ||
+      titleLower.includes('zh-chs') ||
+      titleLower.includes('simplified') ||
+      /(?:^|[^a-z0-9])(chs|gb2312|gbk|gb18030)(?:[^a-z0-9]|$)/i.test(titleLower) ||
+      /(?:^|[^a-z0-9\u4e00-\u9fa5])[[(【（\s._-]?([简簡])[\])】）\s._-]?(?:$|[^a-z0-9\u4e00-\u9fa5])/i.test(
+        titleLower
+      );
     // Exclude only if title explicitly specifies Traditional without Simplified markers
     if (hasTraditionalMarker && !hasSimplifiedMarker) {
       return false;

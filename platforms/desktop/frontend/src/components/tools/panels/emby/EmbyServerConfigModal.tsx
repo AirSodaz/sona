@@ -51,10 +51,7 @@ export function EmbyServerConfigModal({
   const handleSubmit = () => {
     if (isSubmitDisabled) return;
 
-    if (
-      onLogin &&
-      (password || !config.apiKey || isUrlChanged || cleanUser !== (config.username || ''))
-    ) {
+    if (onLogin && (password || !config.apiKey || cleanUser !== (config.username || ''))) {
       if (!cleanUser) return;
       void onLogin({
         serverUrl: cleanUrl,

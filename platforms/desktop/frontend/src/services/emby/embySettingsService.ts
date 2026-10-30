@@ -29,9 +29,15 @@ export function loadEmbyToolOverrides(): EmbyToolOverrides {
       translationModelId:
         parsed.translationModelId ?? DEFAULT_EMBY_TOOL_OVERRIDES.translationModelId,
       defaultSubtitleMode:
-        parsed.defaultSubtitleMode ?? DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode,
+        parsed.defaultSubtitleMode === 'pure_translation' ||
+        parsed.defaultSubtitleMode === 'bilingual' ||
+        parsed.defaultSubtitleMode === 'separate_tracks'
+          ? parsed.defaultSubtitleMode
+          : DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode,
       overwriteExistingExternal:
-        parsed.overwriteExistingExternal ?? DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal,
+        typeof parsed.overwriteExistingExternal === 'boolean'
+          ? parsed.overwriteExistingExternal
+          : DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal,
     };
   } catch (error) {
     logger.warn('[EmbySettingsService] Failed to load overrides from localStorage:', error);

@@ -211,6 +211,9 @@ export function useEmbySync(): UseEmbySyncReturn {
     }
 
     const seq = ++connectSeqRef.current;
+    fetchSeqRef.current++;
+    clearTimeout(debounceTimerRef.current ?? undefined);
+    debounceTimerRef.current = null;
     setIsConnecting(true);
     setConnectionError(null);
     try {
@@ -267,6 +270,9 @@ export function useEmbySync(): UseEmbySyncReturn {
     }
 
     const seq = ++connectSeqRef.current;
+    fetchSeqRef.current++;
+    clearTimeout(debounceTimerRef.current ?? undefined);
+    debounceTimerRef.current = null;
     setIsConnecting(true);
     setConnectionError(null);
     try {
@@ -385,7 +391,7 @@ export function useEmbySync(): UseEmbySyncReturn {
           setConnectionError(extractErrorMessage(err) || String(err));
         }
       } finally {
-        if (seq === fetchSeqRef.current || cancelled) {
+        if (seq === fetchSeqRef.current && !cancelled) {
           setIsLoadingItems(false);
         }
       }
@@ -405,6 +411,7 @@ export function useEmbySync(): UseEmbySyncReturn {
     debounceTimerRef.current = null;
     const seq = ++fetchSeqRef.current;
     setIsLoadingItems(true);
+    setConnectionError(null);
     try {
       const res = await getEmbyItems({
         parentId: selectedLibraryId || undefined,
@@ -414,7 +421,7 @@ export function useEmbySync(): UseEmbySyncReturn {
       });
       if (seq !== fetchSeqRef.current) return;
       setItems(res.items);
-
+      setConnectionError(null);
       setAudioTrackMap((prev) => {
         const next = { ...prev };
         for (const item of res.items) {
@@ -594,7 +601,10 @@ export function useEmbySync(): UseEmbySyncReturn {
         (item.seasonIndex !== undefined && item.seasonIndex !== null
           ? `Season ${item.seasonIndex}`
           : '');
-      const episodePart = item.episodeIndex !== undefined ? `E${item.episodeIndex} - ` : '';
+      const episodePart =
+        item.episodeIndex !== undefined && item.episodeIndex !== null
+          ? `E${item.episodeIndex} - `
+          : '';
       const displayName = item.seriesName
         ? `${item.seriesName} ${seasonPart} ${episodePart}${item.name}`.replace(/\s+/g, ' ').trim()
         : item.name;

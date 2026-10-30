@@ -487,8 +487,6 @@ pub struct AppConfig {
         default,
         rename = "embyApiKey",
         alias = "emby_api_key",
-        alias = "embyToken",
-        alias = "emby_token",
         skip_serializing_if = "Option::is_none"
     )]
     pub emby_api_key: Option<String>,

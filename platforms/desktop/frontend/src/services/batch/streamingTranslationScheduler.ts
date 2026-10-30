@@ -54,7 +54,7 @@ export class StreamingTranslationScheduler {
   }
 
   push(segment: TranscriptSegment): void {
-    if (this.cancelled || this.options.isCancelRequested()) {
+    if (this.cancelled || this.circuitBroken || this.options.isCancelRequested()) {
       return;
     }
     if (!segment.id || this.pushedIds.has(segment.id)) {
@@ -122,8 +122,6 @@ export class StreamingTranslationScheduler {
         if (!this.cancelled && !this.circuitBroken && !this.options.isCancelRequested()) {
           if (this.queue.length >= this.batchSize) {
             void this.flush();
-          } else if (forceTrailing && this.queue.length > 0) {
-            void this.flush(forceTrailing);
           } else if (this.queue.length > 0 && !this.flushTimer) {
             this.flushTimer = setTimeout(() => {
               this.flushTimer = null;
@@ -169,8 +167,15 @@ export class StreamingTranslationScheduler {
           this.translationsById.set(item.id, item.translation);
         }
       }
-      await this.options.onBatchTranslated(results);
+      try {
+        await this.options.onBatchTranslated(results);
+      } catch (callbackError) {
+        this.options.onError?.(callbackError);
+      }
     } catch (error) {
+      if (this.cancelled || this.options.isCancelRequested()) {
+        return;
+      }
       this.consecutiveErrors += 1;
       try {
         this.options.onError?.(error);

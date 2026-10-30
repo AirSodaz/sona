@@ -33,6 +33,9 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('簡中')).toBe('zh-CN');
       expect(normalizeLanguageCode('簡')).toBe('zh-CN');
       expect(normalizeLanguageCode('简')).toBe('zh-CN');
+      expect(normalizeLanguageCode('簡體中文')).toBe('zh-CN');
+      expect(normalizeLanguageCode('cmn-Hans')).toBe('zh-CN');
+      expect(normalizeLanguageCode('zho-Hans')).toBe('zh-CN');
     });
 
     it('normalizes Traditional Chinese variants to zh-TW', () => {
@@ -47,6 +50,8 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh-cht')).toBe('zh-TW');
       expect(normalizeLanguageCode('繁中')).toBe('zh-TW');
       expect(normalizeLanguageCode('繁')).toBe('zh-TW');
+      expect(normalizeLanguageCode('zht')).toBe('zh-TW');
+      expect(normalizeLanguageCode('cmn-Hant')).toBe('zh-TW');
     });
 
     it('normalizes other common language codes', () => {
@@ -63,6 +68,8 @@ describe('embyLanguageUtils', () => {
       expect(normalizeLanguageCode('zh-yue')).toBe('yue');
       expect(normalizeLanguageCode('yue-HK')).toBe('yue');
       expect(normalizeLanguageCode('yue-mo')).toBe('yue');
+      expect(normalizeLanguageCode('粵語')).toBe('yue');
+      expect(normalizeLanguageCode('粵')).toBe('yue');
     });
   });
 
@@ -104,6 +111,9 @@ describe('embyLanguageUtils', () => {
       expect(matchSubtitleLanguage('und', 'The Yacht Race', 'zh-TW')).toBe(false);
       expect(matchSubtitleLanguage('und', 'Eine kleine Nachtmusik', 'zh-TW')).toBe(false);
       expect(matchSubtitleLanguage('und', 'Movie.2024.1080p.精簡版.mkv', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('und', 'Movie.2024.1080p.精简版.mkv', 'zh-CN')).toBe(false);
+      expect(matchSubtitleLanguage('chi', '繁花.EP01.chi.srt', 'zh-CN')).toBe(true);
+      expect(matchSubtitleLanguage('und', '繁花.EP01.srt', 'zh-TW')).toBe(false);
       expect(matchSubtitleLanguage('und', 'zh-hk', 'zh-TW')).toBe(true);
       expect(matchSubtitleLanguage('und', 'zh-mo', 'zh-TW')).toBe(true);
       expect(matchSubtitleLanguage('und', 'zht', 'zh-TW')).toBe(true);

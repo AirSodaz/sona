@@ -406,6 +406,9 @@ impl EmbyClient {
                     .and_then(|v| v.as_str())
                     .unwrap_or_default()
                     .to_string();
+                if id.is_empty() {
+                    continue;
+                }
                 let name = raw
                     .get("Name")
                     .and_then(|v| v.as_str())
@@ -620,7 +623,10 @@ impl EmbyClient {
         let endpoint = format!("/Audio/{clean_id}/stream.mp3");
         let url = self.url(&endpoint);
 
-        if let Some(parent) = destination_path.parent() {
+        if let Some(parent) = destination_path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+        {
             tokio::fs::create_dir_all(parent)
                 .await
                 .map_err(|e| EmbyError::Io(e.to_string()))?;
@@ -940,7 +946,8 @@ pub(crate) fn is_subtitle_manager_plugin(plugin: &Value) -> bool {
     const TARGET_PLUGIN_ID: &str = "944151cb-7308-487b-8023-3e5c352bc545";
     const TARGET_CONFIG_FILE: &str = "Emby.SubtitleManager.xml";
 
-    if let Some(id) = plugin.get("Id").and_then(|v| v.as_str())
+    let id_val = plugin.get("Id").or_else(|| plugin.get("id"));
+    if let Some(id) = id_val.and_then(|v| v.as_str())
         && id.eq_ignore_ascii_case(TARGET_PLUGIN_ID)
     {
         return true;
@@ -960,7 +967,10 @@ pub(crate) fn is_subtitle_manager_plugin(plugin: &Value) -> bool {
         }
     }
 
-    if let Some(config_file) = plugin.get("ConfigurationFileName").and_then(|v| v.as_str())
+    let config_val = plugin
+        .get("ConfigurationFileName")
+        .or_else(|| plugin.get("configurationFileName"));
+    if let Some(config_file) = config_val.and_then(|v| v.as_str())
         && config_file.eq_ignore_ascii_case(TARGET_CONFIG_FILE)
     {
         return true;
@@ -978,7 +988,9 @@ pub(crate) fn has_subtitle_manager_plugin_in_list(plugins_json: &Value) -> bool 
 }
 
 pub(crate) fn parse_admin_user_id(users_json: &Value) -> Option<String> {
-    let users = users_json.as_array()?;
+    let users = users_json
+        .as_array()
+        .or_else(|| users_json.get("Items").and_then(|v| v.as_array()))?;
     for user in users {
         let policy = user.get("Policy").or_else(|| user.get("policy"));
         let is_admin = policy

@@ -69,7 +69,7 @@ describe('ToolsView', () => {
     cleanup();
   });
 
-  it('renders sidebar with 4 tools and subtitle panel by default', () => {
+  it('renders sidebar with 5 tools and subtitle panel by default', () => {
     const { container } = render(<ToolsView />);
 
     // Check dual-panel alignment classes
@@ -253,7 +253,6 @@ describe('ToolsView', () => {
     fireEvent.keyDown(tablist, { key: 'ArrowDown' });
     expect(useToolsStore.getState().activeTool).toBe('api_server');
 
-    // End -> mcp (tab 3)
     // End -> emby_sync (tab 4)
     fireEvent.keyDown(tablist, { key: 'End' });
     expect(useToolsStore.getState().activeTool).toBe('emby_sync');

@@ -242,16 +242,21 @@ describe('syncEmbySubtitles workflow', () => {
       { id: '1', start: 0, end: 2, text: 'Only original', isFinal: true },
     ];
 
-    await syncEmbySubtitles(segments, {
-      serverId: 's1',
-      serverUrl: 'http://localhost:8096',
-      itemId: 'item-no-trans',
-      itemName: 'No Trans Movie',
-      audioStreamIndex: 0,
-      subtitleMode: 'separate_tracks',
-      sourceLanguage: 'en',
-      targetLanguage: 'zh-CN',
-    });
+    await syncEmbySubtitles(
+      segments,
+      {
+        serverId: 's1',
+        serverUrl: 'http://localhost:8096',
+        itemId: 'item-no-trans',
+        itemName: 'No Trans Movie',
+        audioStreamIndex: 0,
+        subtitleMode: 'separate_tracks',
+        sourceLanguage: 'en',
+        targetLanguage: 'zh-CN',
+        existingExternalSubtitleIndex: 4,
+      },
+      { deleteExistingIndex: 4 }
+    );
 
     expect(invokeSpy).toHaveBeenCalledTimes(1);
     expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.uploadSubtitle, {
@@ -262,6 +267,7 @@ describe('syncEmbySubtitles workflow', () => {
         isForced: false,
         content: expect.stringContaining('Only original'),
       },
+      deleteExistingExternalIndex: undefined,
     });
 
     invokeSpy.mockRestore();

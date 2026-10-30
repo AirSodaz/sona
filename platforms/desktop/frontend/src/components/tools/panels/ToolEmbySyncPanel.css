@@ -25,7 +25,7 @@
   border: 1px solid color-mix(in srgb, var(--color-warning) 30%, var(--color-border));
   border-radius: var(--radius-md, 8px);
   margin-bottom: 16px;
-  color: var(--color-warning);
+  color: var(--color-text-primary);
   font-size: 13px;
   flex-shrink: 0;
   gap: 12px;
@@ -36,6 +36,10 @@
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+.emby-warning-content svg {
+  color: var(--color-warning);
+  flex-shrink: 0;
 }
 
 /* Main Content Area */
@@ -199,7 +203,8 @@
 
 .emby-search-box input[type="text"].emby-search-input:focus,
 .emby-search-box input.emby-search-input:focus {
-  border-color: var(--color-accent-primary, #2f2f2f);
+  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #2f2f2f));
+  box-shadow: var(--apple-field-focus-shadow, 0 0 0 2px rgba(0, 122, 255, 0.2));
 }
 
 .emby-toolbar-select-group {
@@ -512,9 +517,9 @@
 }
 
 .emby-tag-queued {
-  background: color-mix(in srgb, var(--color-warning) 12%, transparent);
-  color: var(--color-warning);
-  border: 1px solid color-mix(in srgb, var(--color-warning) 25%, transparent);
+  background: color-mix(in srgb, var(--color-warning) 14%, var(--color-bg-elevated));
+  color: var(--color-text-secondary);
+  border: 1px solid color-mix(in srgb, var(--color-warning) 28%, var(--color-border));
 }
 .emby-tag-queued .emby-tag-dot {
   background: var(--color-warning);
@@ -661,7 +666,8 @@
 }
 
 .emby-input:focus {
-  border-color: var(--color-accent-primary, #2f2f2f);
+  border-color: var(--apple-field-focus-border, var(--color-accent-primary, #2f2f2f));
+  box-shadow: var(--apple-field-focus-shadow, 0 0 0 2px rgba(0, 122, 255, 0.2));
 }
 
 .emby-checkbox-field {

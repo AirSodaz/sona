@@ -487,14 +487,32 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     if (!options?.items || options.items.length === 0) {
       return;
     }
+    const state = get();
+    const existingEmbyKeys = new Set(
+      state.queueItems.flatMap((item) =>
+        item.embyContext && (item.status === 'pending' || item.status === 'processing')
+          ? [`${item.embyContext.serverId}::${item.embyContext.itemId}`]
+          : []
+      )
+    );
+    const seenBatchKeys = new Set<string>();
+    const uniqueItems = options.items.filter((opt) => {
+      const key = `${opt.serverId}::${opt.itemId}`;
+      if (existingEmbyKeys.has(key) || seenBatchKeys.has(key)) return false;
+      seenBatchKeys.add(key);
+      return true;
+    });
+    if (uniqueItems.length === 0) {
+      return;
+    }
     const projectStore = useProjectStore.getState();
     const activeProjectId = options?.projectId ?? projectStore.activeProjectId ?? null;
     const overrides = loadEmbyToolOverrides();
     const resolvedConfigSnapshot =
       options?.resolvedConfigSnapshot ??
       buildEmbyEffectiveConfig(getEffectiveConfigSnapshot(), overrides);
-    const newItems: BatchQueueItem[] = options.items.map((opt) => {
-      const baseServerUrl = opt.serverUrl.trim().replace(/\/+$/, '');
+    const newItems: BatchQueueItem[] = uniqueItems.map((opt) => {
+      const baseServerUrl = opt.serverUrl.trim().split('?')[0].split('#')[0].replace(/\/+$/, '');
       const streamUrl = buildEmbyStreamUrl({
         serverUrl: baseServerUrl,
         itemId: opt.itemId,
@@ -550,12 +568,12 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       upsertQueueItemTask(item, 'pending');
     });
 
-    const state = get();
-    if (!state.activeItemId && newItems.length > 0) {
+    const currentState = get();
+    if (!currentState.activeItemId && newItems.length > 0) {
       get().setActiveItem(newItems[0].id);
     }
 
-    if (!state.isQueueProcessing && !state.isQueuePaused) {
+    if (!currentState.isQueueProcessing && !currentState.isQueuePaused) {
       void get().processQueue();
     }
   },

@@ -164,7 +164,10 @@ export function TranscriptWorkbench({
         cause: err,
       });
     } finally {
-      if (isMountedRef.current) {
+      if (
+        isMountedRef.current &&
+        useTranscriptSessionStore.getState().sourceHistoryId === targetHistoryId
+      ) {
         setIsSyncingEmby(false);
       }
     }
@@ -332,7 +335,11 @@ export function TranscriptWorkbench({
                 })}
                 data-tooltip-pos="bottom"
               >
-                {isSyncingEmby ? <Loader2 size={14} className="spin" /> : <EmbyIcon size={14} />}
+                {isSyncingEmby ? (
+                  <Loader2 size={14} className="queue-icon-spin" />
+                ) : (
+                  <EmbyIcon size={14} />
+                )}
                 <span>
                   {isSyncingEmby
                     ? t('emby.syncing', { defaultValue: 'Syncing...' })

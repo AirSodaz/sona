@@ -231,7 +231,7 @@ export const QueueItem = memo(function QueueItem({
               className="queue-item-stream-badge"
               title={
                 item.streamUrl
-                  ? item.streamUrl.replace(/([?&]api_key=)[^&#]+/i, '$1***')
+                  ? item.streamUrl.replace(/([?&]api_key=)[^&#]+/gi, '$1***')
                   : item.filePath
               }
               style={{

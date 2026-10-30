@@ -1,6 +1,6 @@
 import { Bot, Keyboard, Server, Subtitles, Tv } from 'lucide-react';
 import type React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useVoiceTypingReadiness } from '../../hooks/useVoiceTypingReadiness';
 import {
@@ -57,9 +57,10 @@ export function ToolsSidebar(): React.JSX.Element {
   }, [mcpStatus]);
   const embyServerName = useToolsStore((state) => state.embyServerName);
   const setEmbyServerName = useToolsStore((state) => state.setEmbyServerName);
-
+  const hasCheckedRef = useRef(false);
   useEffect(() => {
-    if (embyServerName !== null) return;
+    if (hasCheckedRef.current || useToolsStore.getState().embyServerName !== null) return;
+    hasCheckedRef.current = true;
     let unmounted = false;
     void getEmbyConfig()
       .then((cfg) => {
@@ -70,19 +71,17 @@ export function ToolsSidebar(): React.JSX.Element {
               if (!unmounted) setEmbyServerName(info.serverName);
             })
             .catch(() => {
-              if (!unmounted) setEmbyServerName(null);
+              // Ignore failure on initial background probe
             });
-        } else {
-          if (!unmounted) setEmbyServerName(null);
         }
       })
       .catch(() => {
-        if (!unmounted) setEmbyServerName(null);
+        // Ignore failure on initial background probe
       });
     return () => {
       unmounted = true;
     };
-  }, [embyServerName, setEmbyServerName]);
+  }, [setEmbyServerName]);
   const tools: ToolItemDef[] = [
     {
       id: 'subtitles',

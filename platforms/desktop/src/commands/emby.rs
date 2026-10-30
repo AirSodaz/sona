@@ -17,7 +17,11 @@ fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> St
 
     let mut result = String::with_capacity(msg.len());
     let mut remaining = &msg[..];
-    while let Some(pos) = remaining.to_ascii_lowercase().find("api_key=") {
+    while let Some(pos) = remaining
+        .as_bytes()
+        .windows(8)
+        .position(|w| w.eq_ignore_ascii_case(b"api_key="))
+    {
         result.push_str(&remaining[..pos + 8]);
         let after_key = &remaining[pos + 8..];
         let end_pos = after_key
@@ -34,7 +38,7 @@ fn sanitize_emby_error(err: impl std::fmt::Display, api_key: Option<&str>) -> St
 pub async fn emby_test_connection(
     mut config: EmbyConnectionConfig,
 ) -> Result<EmbyServerInfo, String> {
-    config.server_url = config.server_url.trim().to_string();
+    config.server_url = crate::integrations::emby::normalize_server_url(&config.server_url);
     config.api_key = config.api_key.trim().to_string();
     if config.server_url.is_empty() || config.api_key.is_empty() {
         return Err("Server URL and API key cannot be empty".to_string());
@@ -54,7 +58,7 @@ pub async fn emby_login(
     emby_state: State<'_, EmbyState>,
     payload: EmbyLoginPayload,
 ) -> Result<EmbyServerInfo, String> {
-    let clean_url = payload.server_url.trim().to_string();
+    let clean_url = crate::integrations::emby::normalize_server_url(&payload.server_url);
     let clean_user = payload.username.trim().to_string();
     let password = payload.password.unwrap_or_default();
     if clean_url.is_empty() || clean_user.is_empty() {
@@ -109,13 +113,12 @@ pub async fn emby_login(
             serde_json::Value::String(clean_url),
         );
         obj.insert(
-            "embyToken".to_string(),
-            serde_json::Value::String(login_res.access_token.clone()),
-        );
-        obj.insert(
             "embyApiKey".to_string(),
             serde_json::Value::String(login_res.access_token.clone()),
         );
+        obj.remove("embyToken");
+        obj.remove("emby_token");
+        obj.remove("emby_api_key");
         obj.insert(
             "embyUsername".to_string(),
             serde_json::Value::String(login_res.user_name),
@@ -154,7 +157,7 @@ pub async fn emby_save_config(
     config: EmbyConnectionConfig,
 ) -> Result<(), String> {
     let mut config = config;
-    config.server_url = config.server_url.trim().to_string();
+    config.server_url = crate::integrations::emby::normalize_server_url(&config.server_url);
     config.api_key = config.api_key.trim().to_string();
     if config.server_url.is_empty() || config.api_key.is_empty() {
         return Err("Server URL and API key cannot be empty".to_string());
@@ -188,13 +191,12 @@ pub async fn emby_save_config(
             serde_json::Value::String(config.server_url.clone()),
         );
         obj.insert(
-            "embyToken".to_string(),
-            serde_json::Value::String(config.api_key.clone()),
-        );
-        obj.insert(
             "embyApiKey".to_string(),
             serde_json::Value::String(config.api_key.clone()),
         );
+        obj.remove("embyToken");
+        obj.remove("emby_token");
+        obj.remove("emby_api_key");
         if let Some(user) = &config.username {
             obj.insert(
                 "embyUsername".to_string(),
@@ -202,6 +204,7 @@ pub async fn emby_save_config(
             );
         } else {
             obj.remove("embyUsername");
+            obj.remove("emby_username");
         }
         obj.insert(
             "embyAllowInvalidCerts".to_string(),
@@ -214,6 +217,7 @@ pub async fn emby_save_config(
             );
         } else {
             obj.remove("embyAdminUserId");
+            obj.remove("emby_admin_user_id");
         }
     }
     services

@@ -128,6 +128,39 @@ export class BatchItemProcessor {
         this.ports.useProjectStore?.getState?.().projects ?? [],
         config
       );
+    if (
+      item.embyContext &&
+      item.errorStage === 'upload' &&
+      item.segments &&
+      item.segments.length > 0
+    ) {
+      this.throwIfCancelRequested(callbacks);
+      callbacks.updateStatus('processing', 95);
+      callbacks.updateSegments(item.segments);
+      const { embyContext } = item;
+      try {
+        const targetLanguage =
+          embyContext.targetLanguage ||
+          pipeline.targetLanguage ||
+          config.translationLanguage ||
+          'zh-CN';
+        await syncEmbySubtitles(
+          item.segments,
+          { ...embyContext, targetLanguage },
+          { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+        );
+        item.errorStage = undefined;
+        return;
+      } catch (uploadError) {
+        logger.error(
+          '[BatchQueue] Fast-path retry failed to upload subtitle to Emby:',
+          uploadError
+        );
+        item.errorStage = 'upload';
+        throw uploadError;
+      }
+    }
+
     const hotwordsOverride = this.ports.asrConfigService.buildHotwordsWithPipeline?.(
       config,
       pipeline,
@@ -175,6 +208,7 @@ export class BatchItemProcessor {
         !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
           /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
+      const isEmbyItem = Boolean(item.embyContext || downloadedEmbyPath);
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
@@ -204,7 +238,7 @@ export class BatchItemProcessor {
       }
 
       savedHistoryId = historyItem.id;
-      if (isStream && item.filename && item.filename !== historyItem.title) {
+      if ((isStream || isEmbyItem) && item.filename && item.filename !== historyItem.title) {
         historyItem.title = item.filename;
         if (typeof this.ports.useHistoryStore?.getState?.().updateItemMeta === 'function') {
           try {
@@ -240,46 +274,6 @@ export class BatchItemProcessor {
       segmentBuffer.clear();
       setCurrentSegments([...merged.values()].sort((left, right) => left.start - right.start));
     };
-
-    if (
-      item.embyContext &&
-      item.errorStage === 'upload' &&
-      item.segments &&
-      item.segments.length > 0
-    ) {
-      this.throwIfCancelRequested(callbacks);
-      callbacks.updateStatus('processing', 95);
-      callbacks.updateSegments(item.segments);
-      const { embyContext } = item;
-      try {
-        const pipeline =
-          item.pipelineSnapshot ??
-          resolveItemPipeline(
-            item.projectId,
-            this.ports.useProjectStore?.getState?.().projects ?? [],
-            config
-          );
-        const targetLanguage =
-          embyContext.targetLanguage ||
-          pipeline.targetLanguage ||
-          config.translationLanguage ||
-          'zh-CN';
-        await syncEmbySubtitles(
-          item.segments,
-          { ...embyContext, targetLanguage },
-          { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
-        );
-        item.errorStage = undefined;
-        return;
-      } catch (uploadError) {
-        logger.error(
-          '[BatchQueue] Fast-path retry failed to upload subtitle to Emby:',
-          uploadError
-        );
-        item.errorStage = 'upload';
-        throw uploadError;
-      }
-    }
 
     const resolvedTargetLanguage =
       item.embyContext?.targetLanguage ||
@@ -441,6 +435,8 @@ export class BatchItemProcessor {
         segments: currentSegments,
         pipeline: {
           ...pipeline,
+          replacementSetIds: [],
+          customTerms: [],
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
           autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
           targetLanguage: resolvedTargetLanguage,
@@ -449,7 +445,7 @@ export class BatchItemProcessor {
             (item.exportConfig?.format as ExportFormat | undefined) || pipeline.exportFormat,
           exportFileNamePrefix: item.exportFileNamePrefix || pipeline.exportFileNamePrefix,
         },
-        globalConfig: config,
+        globalConfig: { ...config, dictionaryContent: undefined },
         baseFileName: this.buildAutomationExportBaseName(item),
         onProgress: (stage, progress) => {
           callbacks.updateStatus(

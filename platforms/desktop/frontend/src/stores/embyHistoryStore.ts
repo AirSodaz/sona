@@ -51,25 +51,33 @@ export const useEmbyHistoryStore = create<EmbyHistoryStore>((set, get) => ({
   contexts: loadStoredContexts(),
 
   setContext: (historyId, context) => {
+    let trimmedResult: Record<string, EmbyTaskContext> = {};
     set((state) => {
       const next = { ...state.contexts };
       delete next[historyId];
       next[historyId] = context;
-      const trimmed = trimContexts(next);
-      saveStoredContexts(trimmed);
-      return { contexts: trimmed };
+      trimmedResult = trimContexts(next);
+      return { contexts: trimmedResult };
     });
+    saveStoredContexts(trimmedResult);
   },
 
-  getContext: (historyId) => get().contexts[historyId],
+  getContext: (historyId) =>
+    Object.hasOwn(get().contexts, historyId) ? get().contexts[historyId] : undefined,
 
   removeContext: (historyId) => {
+    let changed = false;
+    let nextContexts: Record<string, EmbyTaskContext> = {};
     set((state) => {
-      if (!(historyId in state.contexts)) return state;
+      if (!Object.hasOwn(state.contexts, historyId)) return state;
+      changed = true;
       const next = { ...state.contexts };
       delete next[historyId];
-      saveStoredContexts(next);
+      nextContexts = next;
       return { contexts: next };
     });
+    if (changed) {
+      saveStoredContexts(nextContexts);
+    }
   },
 }));

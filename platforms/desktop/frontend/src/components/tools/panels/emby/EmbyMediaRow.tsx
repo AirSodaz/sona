@@ -5,8 +5,9 @@ import { Dropdown } from '../../../../components/Dropdown';
 import type { EmbyMediaItem } from '../../../../types/emby';
 import { findBestAudioStream, getAudioTrackLabel, hasTargetSubtitle } from './embyLanguageUtils';
 export function formatDurationTicks(ticks?: number): string {
-  if (!ticks) return '';
+  if (!ticks || ticks <= 0) return '';
   const seconds = Math.floor(ticks / 10_000_000);
+  if (seconds <= 0) return '';
   const hours = Math.floor(seconds / 3600);
   const minutes = Math.floor((seconds % 3600) / 60);
   if (hours > 0) {
@@ -53,11 +54,11 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
             checked={isQueued ? true : isSelected}
             disabled={isQueued}
             onChange={() => onToggleSelect(item.id)}
-            aria-label={`Select ${item.name}`}
+            aria-label={`${t('common.select', { defaultValue: 'Select' })} ${item.episodeIndex != null ? `E${item.episodeIndex} - ` : ''}${item.name}`}
           />
         </label>
 
-        {item.episodeIndex !== undefined ? (
+        {item.episodeIndex != null ? (
           <span className="emby-episode-badge">E{item.episodeIndex}</span>
         ) : (
           <span className="emby-movie-icon-badge" aria-hidden="true">
@@ -66,7 +67,7 @@ export const EmbyMediaRow = React.memo(function EmbyMediaRow({
         )}
         <div className="emby-item-title-meta">
           <span className="emby-item-name" title={item.name}>
-            {item.episodeIndex !== undefined ? `E${item.episodeIndex} - ${item.name}` : item.name}
+            {item.episodeIndex != null ? `E${item.episodeIndex} - ${item.name}` : item.name}
           </span>
           {duration && (
             <span className="emby-item-duration">

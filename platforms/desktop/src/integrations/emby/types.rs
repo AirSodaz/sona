@@ -203,12 +203,11 @@ fn extract_base_lang(code: &str) -> &str {
     code.split(['-', '_']).next().unwrap_or(code)
 }
 
-/// Checks if a language code represents Chinese.
 pub fn is_chinese_code(clean: &str) -> bool {
     let base = extract_base_lang(clean);
     matches!(
         base,
-        "zh" | "chi" | "zho" | "cmn" | "chs" | "cht" | "yue" | "chinese"
+        "zh" | "chi" | "zho" | "cmn" | "chs" | "cht" | "zhs" | "zht" | "yue" | "chinese"
     )
 }
 
@@ -223,6 +222,10 @@ fn language_family(clean: &str) -> &str {
         "de" | "deu" | "ger" | "german" => "de",
         "es" | "spa" | "spanish" => "es",
         "ru" | "rus" | "russian" => "ru",
+        "it" | "ita" | "italian" => "it",
+        "pt" | "por" | "portuguese" => "pt",
+        "nl" | "nld" | "dut" | "dutch" => "nl",
+        "pl" | "pol" | "polish" => "pl",
         other => other,
     }
 }
@@ -231,7 +234,7 @@ fn language_family(clean: &str) -> &str {
 fn is_explicit_non_chinese_code(clean: &str) -> bool {
     matches!(
         language_family(clean),
-        "ja" | "en" | "ko" | "fr" | "de" | "es" | "ru"
+        "ja" | "en" | "ko" | "fr" | "de" | "es" | "ru" | "it" | "pt" | "nl" | "pl"
     )
 }
 
@@ -305,9 +308,7 @@ pub fn select_best_audio_stream<'a>(
     streams: &'a [EmbyStreamInfo],
     preferred_language: Option<&str>,
 ) -> Option<&'a EmbyStreamInfo> {
-    let audio_streams = streams
-        .iter()
-        .filter(|s| s.stream_type.eq_ignore_ascii_case("Audio"));
+    // Look for preferred language match first
 
     if let Some(pref) = preferred_language {
         let pref = pref.trim();
@@ -334,7 +335,10 @@ pub fn select_best_audio_stream<'a>(
 
     // Fallback: default audio stream, or first audio stream
     let mut first_audio = None;
-    for stream in audio_streams {
+    for stream in streams
+        .iter()
+        .filter(|s| s.stream_type.eq_ignore_ascii_case("Audio"))
+    {
         if stream.is_default {
             return Some(stream);
         }

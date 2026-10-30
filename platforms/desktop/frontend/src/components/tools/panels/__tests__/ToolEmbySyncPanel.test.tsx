@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as embyService from '../../../../services/emby/embyService';
 import { saveEmbyToolOverrides } from '../../../../services/emby/embySettingsService';
 import { useBatchQueueStore } from '../../../../stores/batchQueueStore';
+import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
 import type {
   EmbyItemListResult,
@@ -153,9 +154,10 @@ const mockItemsResult: EmbyItemListResult = {
 describe('ToolEmbySyncPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
+    useToolsStore.setState({ embyServerName: null });
     useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
     useTranscriptStore.setState({ mode: 'tools', ingestionFocus: 'batch' });
-
     vi.mocked(embyService.getEmbyConfig).mockResolvedValue({
       serverUrl: 'http://192.168.1.100:8096',
       apiKey: 'test_api_key',
@@ -168,6 +170,8 @@ describe('ToolEmbySyncPanel', () => {
 
   afterEach(() => {
     cleanup();
+    localStorage.clear();
+    useToolsStore.setState({ embyServerName: null });
   });
 
   it('connects to Emby on load and displays server information and plugin warning', async () => {
@@ -361,7 +365,7 @@ describe('ToolEmbySyncPanel', () => {
     // ep_1 row displays "In Queue"
     expect(screen.getByText('In Queue')).toBeDefined();
     // Checkbox for ep_1 is disabled
-    const ep1Checkbox = screen.getByRole('checkbox', { name: /Select 绝命毒师 Pilot/i });
+    const ep1Checkbox = screen.getByRole('checkbox', { name: /Select (?:E1 - )?绝命毒师 Pilot/i });
     expect(ep1Checkbox.hasAttribute('disabled')).toBe(true);
 
     // Clicking "Select Missing Episodes in Season" should not select ep_1 because it is in queue

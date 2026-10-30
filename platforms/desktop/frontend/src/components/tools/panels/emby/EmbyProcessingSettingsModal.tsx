@@ -36,8 +36,7 @@ export function EmbyProcessingSettingsModal({
         value: 'auto',
         label: t('emby.asr_lang_auto', { defaultValue: 'auto (Auto-detect from audio)' }),
       },
-      { value: 'zh-CN', label: 'zh-CN (简体中文)' },
-      { value: 'zh-TW', label: 'zh-TW (繁體中文)' },
+      { value: 'zh', label: 'zh (中文 / Chinese)' },
       { value: 'en', label: 'en (English)' },
       { value: 'ja', label: 'ja (日本語)' },
       { value: 'ko', label: 'ko (한국어)' },
@@ -114,9 +113,10 @@ export function EmbyProcessingSettingsModal({
         'batch'
       );
       if (isConfigured) {
+        const providerName = t(provider.optionLabelKey, { defaultValue: provider.id });
         list.push({
           value: provider.id,
-          label: `${provider.defaultConfig?.providerId || provider.id} (Cloud)`,
+          label: `${providerName} (Cloud)`,
         });
       }
     }
@@ -173,6 +173,7 @@ export function EmbyProcessingSettingsModal({
   const handleSave = () => {
     let asrSelection: AsrModelSelection | null = null;
     if (selectedAsrValue !== '__global__') {
+      const existingOverrides = loadEmbyToolOverrides();
       const isOnline = ONLINE_ASR_PROVIDER_DEFINITIONS.some(
         (p) => selectedAsrValue === p.id || selectedAsrValue.startsWith(`${p.id}::`)
       );
@@ -180,7 +181,6 @@ export function EmbyProcessingSettingsModal({
         const [providerId, rawModelId] = selectedAsrValue.includes('::')
           ? selectedAsrValue.split('::')
           : [selectedAsrValue, undefined];
-        const existingOverrides = loadEmbyToolOverrides();
         const modelId =
           rawModelId ??
           (existingOverrides.asrSelection?.engine === 'online' &&
@@ -195,7 +195,12 @@ export function EmbyProcessingSettingsModal({
           modelPath: '',
         };
       } else {
-        const modelPath = catalog?.modelPathById?.[selectedAsrValue] || '';
+        const modelPath =
+          catalog?.modelPathById?.[selectedAsrValue] ||
+          (existingOverrides.asrSelection?.engine === 'local' &&
+          existingOverrides.asrSelection.modelId === selectedAsrValue
+            ? existingOverrides.asrSelection.modelPath
+            : '');
         asrSelection = {
           engine: 'local',
           mode: 'batch',

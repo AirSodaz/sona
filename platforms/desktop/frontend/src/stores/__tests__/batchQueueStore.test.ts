@@ -958,6 +958,36 @@ describe('batchQueueStore', () => {
       expect(items[0].embyContext?.sourceLanguage).toBe('ja');
     });
 
+    it('addEmbyItems sanitizes serverUrl in embyContext and deduplicates existing items', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+      useBatchQueueStore.getState().addEmbyItems({
+        items: [
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096/?api_key=token#hash',
+            itemId: 'video-dup',
+            itemName: 'Episode Duplicate',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+          {
+            serverId: 'server-1',
+            serverUrl: 'http://localhost:8096/',
+            itemId: 'video-dup',
+            itemName: 'Episode Duplicate 2',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'zh-CN',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(1);
+      expect(items[0].embyContext?.serverUrl).toBe('http://localhost:8096');
+    });
+
     it('buildEmbyStreamUrl encodes itemId and container and strips trailing query from serverUrl', () => {
       const streamUrl = buildEmbyStreamUrl({
         serverUrl: 'http://localhost:8096/?foo=bar',
