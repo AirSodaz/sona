@@ -19,7 +19,7 @@ on:
       sherpa_onnx_version:
         description: "sherpa-onnx version"
         required: false
-        default: "2.0.0"
+        default: "2.0.1"
         type: string
       onnxruntime_version:
         description: "ONNX Runtime GPU version"
@@ -85,7 +85,7 @@ jobs:
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
-      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '2.0.0' }}
+      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '2.0.1' }}
       ORT_VERSION: ${{ inputs.onnxruntime_version || '1.28.2' }}
       LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:
@@ -199,7 +199,7 @@ jobs:
     env:
       ADDON_VERSION: ${{ needs.prepare-version.outputs.addon_version }}
       CUDA_VERSION: ${{ inputs.cuda_version || '12.4.1' }}
-      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '2.0.0' }}
+      SHERPA_ONNX_VERSION: ${{ inputs.sherpa_onnx_version || '2.0.1' }}
       ORT_VERSION: ${{ inputs.onnxruntime_version || '1.28.2' }}
       LLAMA_REF: ${{ inputs.llama_cpp_ref || 'b10405' }}
     steps:

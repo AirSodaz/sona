@@ -199,7 +199,7 @@ function downloadOnnxRuntimeGpu({
 }
 
 function downloadSherpaOnnxCuda({
-  version = '2.0.0',
+  version = '2.0.1',
   ortVersion = '1.28.2',
   cudaVersion = '12.4',
   cacheDir,
@@ -212,7 +212,7 @@ function downloadSherpaOnnxCuda({
   fs.mkdirSync(cacheDir, { recursive: true });
 
   if (cudaVersion.startsWith('11')) {
-    console.warn('[sherpa-onnx CUDA] Warning: sherpa-onnx 2.0.0 does not publish CUDA 11 prebuilt assets.');
+    console.warn(`[sherpa-onnx CUDA] Warning: sherpa-onnx ${version} does not publish CUDA 11 prebuilt assets.`);
     return null;
   }
   const cuMajor = cudaVersion.startsWith('13') ? '13' : '12';
@@ -592,7 +592,7 @@ function runCli() {
 
   const addonVersion = options['addon-version'] || '0.2.0';
   const cudaVersion = options['cuda-version'] || env.cudaVersion || '12.4';
-  const sherpaVersion = options['sherpa-version'] || '2.0.0';
+  const sherpaVersion = options['sherpa-version'] || '2.0.1';
   const ortVersion = options['ort-version'] || '1.28.2';
   const llamaRef = options['llama-ref'] || 'b10405';
   const outputDir = path.resolve(options['output-dir'] || path.join(repoRoot, 'dist', 'cuda-addon'));

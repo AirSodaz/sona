@@ -91,9 +91,12 @@ cargo audit --file Cargo.lock
 
 `cargo audit` currently has no known-vulnerability findings for this repo, but
 it can still report tracked RustSec warnings from transitive desktop/runtime
-dependencies such as GTK3/Wry, `glib`, `unic`, `paste`, and
-`proc-macro-error`. Treat those warning families as known dependency risk unless
-your PR intentionally upgrades the Tauri/Wry/GTK stack.
+dependencies such as GTK3/Wry, `glib` (unsound `VariantStrIter` iterators), and
+the unmaintained `basic-toml`, `proc-macro-error`, `zbus_names`, `zvariant`,
+and `zvariant_derive`. Treat those warning families as known dependency risk
+unless your PR intentionally upgrades the Tauri/Wry/GTK stack. `zip` is kept on
+the 9.x line (via `tauri-plugin-updater` >= 2.14.1); the 4.x line carries
+RUSTSEC-2026-0367/0368/0369.
 
 ## Commit message format
 

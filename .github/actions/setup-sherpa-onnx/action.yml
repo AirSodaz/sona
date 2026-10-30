@@ -4,11 +4,11 @@ inputs:
   version:
     description: 'sherpa-onnx version'
     required: false
-    default: '2.0.0'
+    default: '2.0.1'
   tag:
     description: 'sherpa-onnx release tag'
     required: false
-    default: 'v2.0.0'
+    default: 'v2.0.1'
   target:
     description: 'Target triple or args (e.g. to detect aarch64 on Windows)'
     required: false

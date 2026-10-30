@@ -307,8 +307,8 @@ test('Android sherpa runtime loads and validates its checked-in source lock', as
     'sherpa-onnx-sources.json',
   ));
 
-  assert.equal(source.version, '2.0.0');
-  assert.equal(source.sha256, '578650d0221255566bd7c88bd3a0deeb974b8562a332a6a875b35bd00b7e0f5d');
+  assert.equal(source.version, '2.0.1');
+  assert.equal(source.sha256, '39003753ec293425ed56723ea9b972b98841a490af3311670c3060548d654330');
   assert.deepEqual(source.runtimeLibraries, [
     'libsherpa-onnx-c-api.so',
     'libonnxruntime.so',

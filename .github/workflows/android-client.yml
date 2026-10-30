@@ -55,8 +55,8 @@ jobs:
     runs-on: ubuntu-22.04
     timeout-minutes: 60
     env:
-      SHERPA_ONNX_VERSION: 2.0.0
-      SHERPA_ONNX_TAG: v2.0.0
+      SHERPA_ONNX_VERSION: 2.0.1
+      SHERPA_ONNX_TAG: v2.0.1
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
