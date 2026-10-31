@@ -63,7 +63,10 @@ type SettingsPendingSubTab =
       promptsSubTab?: PromptsSubTab;
     })
   | (SettingsNavRequest & {
-      tab: Exclude<SettingsTab, 'subtitle' | 'capabilities' | 'models' | 'llm_service' | 'vocabulary'>;
+      tab: Exclude<
+        SettingsTab,
+        'subtitle' | 'capabilities' | 'models' | 'llm_service' | 'vocabulary'
+      >;
       subTab?: never;
       promptsSubTab?: never;
     })
@@ -158,9 +161,7 @@ function renderSettingsPane(
         <SettingsCapabilitiesPane
           isOpen={isOpen}
           isActive={isActive}
-          initialFocus={
-            pendingSubTab?.tab === 'capabilities' ? pendingSubTab.subTab : undefined
-          }
+          initialFocus={pendingSubTab?.tab === 'capabilities' ? pendingSubTab.subTab : undefined}
           focusRequestId={
             pendingSubTab?.tab === 'capabilities' ? pendingSubTab.requestId : undefined
           }

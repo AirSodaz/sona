@@ -5,8 +5,8 @@ import { useTranslation } from 'react-i18next';
 import { useModelManagerContext } from '../../../hooks/useModelManager';
 import type { ModelCatalogModel } from '../../../types/modelCatalog';
 import { resolveModelLabels } from '../../../types/modelCatalog';
-import { Modal } from '../../Modal';
 import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../../../utils/modelDownloadSize';
+import { Modal } from '../../Modal';
 
 export interface ModelPickerModalProps {
   isOpen: boolean;
@@ -67,7 +67,8 @@ export function ModelPickerModal({
         const preferred = pickPreferredVariant(group.models);
         const hasRecommended = group.models.some((model) => model.isRecommended);
         const hasInstalled = group.models.some((model) => model.isInstalled);
-        const searchable = `${group.key} ${group.models.map((model) => `${model.name} ${model.id} ${model.versionLabel ?? ''}`).join(' ')}`.toLowerCase();
+        const searchable =
+          `${group.key} ${group.models.map((model) => `${model.name} ${model.id} ${model.versionLabel ?? ''}`).join(' ')}`.toLowerCase();
         const matchesQuery = !normalizedQuery || searchable.includes(normalizedQuery);
         const matchesDefaultView =
           Boolean(normalizedQuery) || hasRecommended || hasInstalled || preferred.isInstalled;

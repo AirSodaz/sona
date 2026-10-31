@@ -27,7 +27,9 @@ export function parseModelSizeToBytes(size: string | undefined): number | null {
   return Math.round(value * (multipliers[unit] ?? 1));
 }
 
-export function resolveModelDownloadBytes(model: Pick<ModelInfo, 'size' | 'artifacts'>): number | null {
+export function resolveModelDownloadBytes(
+  model: Pick<ModelInfo, 'size' | 'artifacts'>
+): number | null {
   const artifactBytes = model.artifacts?.reduce(
     (sum, artifact) => sum + (artifact.sizeBytes ?? 0),
     0

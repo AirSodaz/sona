@@ -918,10 +918,7 @@ describe('SettingsLLMServiceTab', () => {
     await act(async () => {
       await Promise.resolve();
     });
-    expect(tauriApi.invoke).not.toHaveBeenCalledWith(
-      'list_llm_models',
-      expect.anything()
-    );
+    expect(tauriApi.invoke).not.toHaveBeenCalledWith('list_llm_models', expect.anything());
     expect(applyLlmSettings).not.toHaveBeenCalled();
 
     const refreshButton = screen.getByRole('button', { name: 'settings.llm.refresh_models' });

@@ -1,10 +1,7 @@
 import type React from 'react';
 import { ModelManagerContext, useModelManager } from '../../hooks/useModelManager';
 import type { LlmProvider } from '../../types/transcript';
-import {
-  type CapabilitiesFocus,
-  SettingsCapabilitiesTab,
-} from './SettingsCapabilitiesTab';
+import { type CapabilitiesFocus, SettingsCapabilitiesTab } from './SettingsCapabilitiesTab';
 
 interface SettingsCapabilitiesPaneProps {
   isOpen: boolean;

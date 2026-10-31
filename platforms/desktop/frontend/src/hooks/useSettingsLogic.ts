@@ -2,11 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveAppLanguagePreference } from '../constants/appLanguages';
 import { useConfigStore } from '../stores/configStore';
-import {
-  normalizeSettingsTab,
-  type SettingsTab,
-  type SettingsTabInput,
-} from '../types/settings';
+import { normalizeSettingsTab, type SettingsTab, type SettingsTabInput } from '../types/settings';
 
 export type { SettingsTab, SettingsTabInput } from '../types/settings';
 

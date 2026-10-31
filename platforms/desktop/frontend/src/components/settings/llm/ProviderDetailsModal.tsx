@@ -363,8 +363,7 @@ export function ProviderDetailsModal({
       refreshState !== 'error' ? (
         <div className="settings-model-empty provider-empty-state">
           {t('settings.capabilities.provider_models_empty', {
-            defaultValue:
-              'No models listed yet. Click Refresh to probe {{name}} at {{host}}.',
+            defaultValue: 'No models listed yet. Click Refresh to probe {{name}} at {{host}}.',
             name: t(definition.labelKey, { defaultValue: definition.labelDefault }),
             host: setting.apiHost || definition.defaultApiHost || '',
           })}

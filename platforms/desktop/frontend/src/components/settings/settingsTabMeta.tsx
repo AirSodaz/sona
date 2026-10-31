@@ -34,7 +34,11 @@ export const SETTINGS_TAB_META: Record<SettingsTab, SettingsTabMetaItem> = {
     defaultValue: 'Capabilities',
     Icon: ModelIcon,
   },
-  models: { labelKey: 'settings.capabilities.title', defaultValue: 'Capabilities', Icon: ModelIcon },
+  models: {
+    labelKey: 'settings.capabilities.title',
+    defaultValue: 'Capabilities',
+    Icon: ModelIcon,
+  },
   subtitle: {
     labelKey: 'settings.subtitle_voice_typing_title',
     defaultValue: 'Subtitles & Voice Typing',

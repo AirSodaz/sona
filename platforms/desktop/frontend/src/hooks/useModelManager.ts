@@ -28,9 +28,9 @@ import type {
 import { EMPTY_SCENARIO_SELECTED_MODEL_IDS } from '../types/modelCatalog';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../utils/modelDownloadSize';
 import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
-import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../utils/modelDownloadSize';
 import { formatBytes } from './notifications/modelDownloadAdapter';
 
 type DownloadState = {
@@ -453,8 +453,7 @@ export function useModelManager(isOpen: boolean) {
         const sizeLabel = model.size?.trim() || formatBytes(downloadBytes);
         const confirmedLarge = await confirm(
           t('settings.large_download_confirm', {
-            defaultValue:
-              '{{name}} is about {{size}}. Download and use it for recognition?',
+            defaultValue: '{{name}} is about {{size}}. Download and use it for recognition?',
             name: model.name,
             size: sizeLabel,
           }),
