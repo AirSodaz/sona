@@ -58,4 +58,33 @@ describe('EmbyProcessingSettingsModal', () => {
     expect(screen.getByText('DeepSeek V3 (deepseek)')).toBeDefined();
     expect(screen.getByText('gpt-4o (openai)')).toBeDefined();
   });
+
+  it('renders the 3 ASR parameters aligned with create page bottom-left: Model, Subtitle Mode, and Language', () => {
+    render(<EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} />);
+
+    expect(screen.getByRole('heading', { name: 'Media Processing Settings' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Model' })).toBeDefined();
+    expect(screen.getByRole('switch', { name: 'Subtitle Mode' })).toBeDefined();
+    expect(screen.getByRole('button', { name: 'Recognition Language' })).toBeDefined();
+  });
+
+  it('saves enableTimeline when toggled', () => {
+    const onSaved = vi.fn();
+    render(<EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={onSaved} />);
+
+    const timelineSwitch = screen.getByRole('switch', { name: 'Subtitle Mode' });
+    expect(timelineSwitch.getAttribute('aria-checked')).toBe('true');
+
+    fireEvent.click(timelineSwitch);
+    expect(timelineSwitch.getAttribute('aria-checked')).toBe('false');
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        enableTimeline: false,
+      })
+    );
+  });
 });

@@ -35,8 +35,8 @@ const TOOL_META_MAP: Record<
     icon: <Bot width={28} height={28} />,
   },
   emby_sync: {
-    titleKey: 'tools.emby_sync',
-    defaultTitle: 'Emby Subtitle Assistant',
+    titleKey: 'tools.media_server.title',
+    defaultTitle: 'Media Server Subtitle Assistant',
     icon: <Tv width={28} height={28} />,
   },
 };

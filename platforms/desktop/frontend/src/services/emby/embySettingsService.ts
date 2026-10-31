@@ -21,6 +21,10 @@ export function normalizeEmbyToolOverrides(input: unknown): EmbyToolOverrides {
       typeof parsed.asrLanguage === 'string'
         ? parsed.asrLanguage
         : DEFAULT_EMBY_TOOL_OVERRIDES.asrLanguage,
+    enableTimeline:
+      typeof parsed.enableTimeline === 'boolean'
+        ? parsed.enableTimeline
+        : DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline,
     translationModelId:
       typeof parsed.translationModelId === 'string' || parsed.translationModelId === null
         ? parsed.translationModelId
@@ -167,6 +171,10 @@ export function buildEmbyEffectiveConfig(
 
   if (overrides.asrLanguage !== undefined && overrides.asrLanguage !== null) {
     snapshot.language = overrides.asrLanguage;
+  }
+
+  if (overrides.enableTimeline !== undefined && overrides.enableTimeline !== null) {
+    snapshot.enableTimeline = overrides.enableTimeline;
   }
 
   if (overrides.translationModelId !== undefined && overrides.translationModelId !== null) {

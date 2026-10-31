@@ -57,6 +57,7 @@ describe('embySettingsService', () => {
       const overrides = loadEmbyToolOverrides();
       expect(overrides).toEqual(DEFAULT_EMBY_TOOL_OVERRIDES);
       expect(overrides.asrLanguage).toBe('auto');
+      expect(overrides.enableTimeline).toBe(true);
       expect(overrides.defaultSubtitleMode).toBe('bilingual');
       expect(overrides.overwriteExistingExternal).toBe(true);
     });
@@ -71,6 +72,7 @@ describe('embySettingsService', () => {
           modelPath: '',
         },
         asrLanguage: 'ja',
+        enableTimeline: true,
         translationModelId: 'deepseek-v3',
         defaultSubtitleMode: 'pure_translation',
         overwriteExistingExternal: false,
@@ -185,6 +187,15 @@ describe('embySettingsService', () => {
       expect(configAuto.language).toBe('auto');
     });
 
+    it('strictly honors enableTimeline override', () => {
+      const overridesTimeline: EmbyToolOverrides = { enableTimeline: false };
+      const configTimeline = buildEmbyEffectiveConfig(mockBaseConfig, overridesTimeline);
+      expect(configTimeline.enableTimeline).toBe(false);
+
+      const overridesTimelineTrue: EmbyToolOverrides = { enableTimeline: true };
+      const configTimelineTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesTimelineTrue);
+      expect(configTimelineTrue.enableTimeline).toBe(true);
+    });
     it('overrides translationModelId in snapshot', () => {
       const overrides: EmbyToolOverrides = {
         translationModelId: 'deepseek-v3',

@@ -200,6 +200,10 @@ export type AppConfig_Deserialize = {
 	embyAdminUserId?: string | null,
 } & {
 	embyProcessingSettings?: unknown | null,
+} & {
+	mediaServers?: MediaServerProfile_Deserialize[] | null,
+} & {
+	activeMediaServerId?: string | null,
 };
 
 export type AppConfig_Serialize = {
@@ -331,6 +335,8 @@ export type AppConfig_Serialize = {
 	embyAllowInvalidCerts?: boolean | null,
 	embyAdminUserId?: string | null,
 	embyProcessingSettings?: unknown | null,
+	mediaServers?: MediaServerProfile_Serialize[] | null,
+	activeMediaServerId?: string | null,
 };
 
 export type AppFont = "system" | "serif" | "sans" | "mono" | "arial" | "georgia";
@@ -1842,6 +1848,36 @@ export type LocalLlmPreset = {
 	isRecommended: boolean,
 	download: LocalLlmDownload | null,
 };
+
+export type MediaServerProfile = MediaServerProfile_Serialize | MediaServerProfile_Deserialize;
+
+export type MediaServerProfile_Deserialize = {
+	id: string,
+	name: string,
+	serverType: MediaServerType,
+	serverUrl: string,
+	apiKey: string,
+	username?: string | null,
+	adminUserId?: string | null,
+	allowInvalidCerts?: boolean,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type MediaServerProfile_Serialize = {
+	id: string,
+	name: string,
+	serverType: MediaServerType,
+	serverUrl: string,
+	apiKey: string,
+	username?: string | null,
+	adminUserId?: string | null,
+	allowInvalidCerts: boolean,
+	createdAt: number,
+	updatedAt: number,
+};
+
+export type MediaServerType = "emby" | "jellyfin";
 
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
 

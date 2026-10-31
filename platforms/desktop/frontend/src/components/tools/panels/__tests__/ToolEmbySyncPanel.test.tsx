@@ -488,7 +488,7 @@ describe('ToolEmbySyncPanel', () => {
 
     const processingSettingsBtn = screen.getByRole('button', { name: /Processing Settings/i });
     fireEvent.click(processingSettingsBtn);
-    expect(screen.getByText('Emby Processing Settings')).toBeDefined();
+    expect(screen.getByRole('heading', { name: 'Media Processing Settings' })).toBeDefined();
 
     const saveBtn = screen.getByRole('button', { name: 'Save' });
     fireEvent.click(saveBtn);

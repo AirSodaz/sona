@@ -2,6 +2,7 @@ import { SlidersHorizontal } from 'lucide-react';
 import type React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { asrConfigService } from '../../../../services/asrConfigService';
 import {
   DEFAULT_EMBY_TOOL_OVERRIDES,
   loadEmbyToolOverrides,
@@ -12,11 +13,15 @@ import { modelService } from '../../../../services/modelService';
 import { ONLINE_ASR_PROVIDER_DEFINITIONS } from '../../../../services/onlineAsrProviders';
 import { useConfigStore } from '../../../../stores/configStore';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
-import type { AsrModelSelection } from '../../../../types/config';
+import type { AppConfig, AsrModelSelection } from '../../../../types/config';
 import type { EmbyToolOverrides } from '../../../../types/emby';
 import type { ModelCatalogSnapshot } from '../../../../types/modelCatalog';
+import { buildAsrModelDropdownOptions } from '../../../../utils/asrModelOptions';
+import { buildLanguagePickerOptions, coerceLanguage } from '../../../../utils/languages';
 import { Dropdown, type DropdownOption } from '../../../Dropdown';
+import { FormField } from '../../../FormField';
 import { Modal } from '../../../Modal';
+import { Switch } from '../../../Switch';
 
 export interface EmbyProcessingSettingsModalProps {
   isOpen: boolean;
@@ -29,27 +34,12 @@ export function EmbyProcessingSettingsModal({
   onClose,
   onSaved,
 }: EmbyProcessingSettingsModalProps): React.JSX.Element {
-  const { t } = useTranslation();
-
-  const recognitionLanguageOptions: DropdownOption[] = useMemo(
-    () => [
-      {
-        value: 'auto',
-        label: t('emby.asr_lang_auto', { defaultValue: 'auto (Auto-detect from audio)' }),
-      },
-      { value: 'zh', label: 'zh (中文 / Chinese)' },
-      { value: 'en', label: 'en (English)' },
-      { value: 'ja', label: 'ja (日本語)' },
-      { value: 'ko', label: 'ko (한국어)' },
-      { value: 'es', label: 'es (Español)' },
-      { value: 'fr', label: 'fr (Français)' },
-      { value: 'de', label: 'de (Deutsch)' },
-    ],
-    [t]
-  );
+  const { t, i18n } = useTranslation();
+  const appLocale = i18n?.language ?? 'en';
   const config = useConfigStore((state) => state.config);
 
   const [selectedAsrValue, setSelectedAsrValue] = useState<string>('__global__');
+  const [selectedEnableTimeline, setSelectedEnableTimeline] = useState<boolean>(true);
   const [selectedAsrLanguage, setSelectedAsrLanguage] = useState<string>('auto');
   const [selectedTranslationModelId, setSelectedTranslationModelId] =
     useState<string>('__global__');
@@ -67,6 +57,7 @@ export function EmbyProcessingSettingsModal({
         .catch(() => {});
     }
   }, [isOpen, catalog]);
+
   useEffect(() => {
     if (isOpen) {
       let isMounted = true;
@@ -75,11 +66,16 @@ export function EmbyProcessingSettingsModal({
           setSelectedAsrValue('__global__');
         } else if (overrides.asrSelection.engine === 'online') {
           const pid = overrides.asrSelection.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
-          setSelectedAsrValue(pid);
+          setSelectedAsrValue(
+            overrides.asrSelection.modelId ? `${pid}::${overrides.asrSelection.modelId}` : pid
+          );
         } else {
           setSelectedAsrValue(overrides.asrSelection.modelId || '__global__');
         }
 
+        setSelectedEnableTimeline(
+          overrides.enableTimeline ?? DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true
+        );
         setSelectedAsrLanguage(overrides.asrLanguage ?? 'auto');
         setSelectedTranslationModelId(overrides.translationModelId || '__global__');
         setSelectedSubtitleMode(overrides.defaultSubtitleMode ?? 'bilingual');
@@ -108,35 +104,89 @@ export function EmbyProcessingSettingsModal({
       },
     ];
 
-    // Local models from catalog
-    const localOptions = (catalog?.selectionOptions?.batch ?? []).filter(
-      (opt) => opt.isInstalled || opt.id === selectedAsrValue
-    );
-    for (const opt of localOptions) {
-      list.push({
-        value: opt.id,
-        label: `${opt.label} (Local)`,
+    if (catalog) {
+      const modelOpts = buildAsrModelDropdownOptions({
+        slot: 'batch',
+        snapshot: catalog,
+        selectedModelId: selectedAsrValue === '__global__' ? '' : selectedAsrValue,
+        modelConfig: config,
+        t,
       });
-    }
-
-    // Configured online providers
-    for (const provider of ONLINE_ASR_PROVIDER_DEFINITIONS) {
-      const providerConfig = config.asr?.providers?.online?.[provider.id];
-      const isConfigured = provider.isConfigured(
-        (providerConfig ?? provider.defaultConfig) as typeof provider.defaultConfig,
-        'batch'
-      );
-      if (isConfigured) {
-        const providerName = t(provider.optionLabelKey, { defaultValue: provider.id });
-        list.push({
-          value: provider.id,
-          label: `${providerName} (Cloud)`,
-        });
-      }
+      list.push(...modelOpts);
     }
 
     return list;
-  }, [catalog, config.asr, selectedAsrValue, t]);
+  }, [catalog, config, selectedAsrValue, t]);
+
+  const capability = useMemo(() => {
+    if (!isOpen) return null;
+    if (selectedAsrValue === '__global__') {
+      return asrConfigService.resolveActiveLanguageCapability(config, 'batch');
+    }
+    const isOnline = ONLINE_ASR_PROVIDER_DEFINITIONS.some(
+      (p) => selectedAsrValue === p.id || selectedAsrValue.startsWith(`${p.id}::`)
+    );
+    let asrSelection: AsrModelSelection;
+    if (isOnline) {
+      const [providerId, rawModelId] = selectedAsrValue.includes('::')
+        ? selectedAsrValue.split('::')
+        : [selectedAsrValue, undefined];
+      asrSelection = {
+        engine: 'online',
+        mode: 'batch',
+        providerId: providerId as AsrModelSelection['providerId'],
+        modelId: rawModelId,
+        modelPath: '',
+      };
+    } else {
+      const modelPath = catalog?.modelPathById?.[selectedAsrValue] || '';
+      asrSelection = {
+        engine: 'local',
+        mode: 'batch',
+        modelId: selectedAsrValue,
+        modelPath,
+      };
+    }
+    const tempConfig: AppConfig = {
+      ...config,
+      asr: {
+        ...config.asr,
+        selections: {
+          ...config.asr?.selections,
+          batch: asrSelection,
+        },
+      },
+    };
+    return asrConfigService.resolveActiveLanguageCapability(tempConfig, 'batch');
+  }, [isOpen, selectedAsrValue, config, catalog]);
+
+  const languageOptions = useMemo<DropdownOption[]>(() => {
+    return buildLanguagePickerOptions(capability, appLocale).map((option) => ({
+      value: option.value,
+      label: option.label,
+      group:
+        option.group === 'common'
+          ? t('languages.common', { defaultValue: 'Common' })
+          : option.group,
+      ariaLabel: option.value === 'auto' ? undefined : `${option.label} (${option.value})`,
+    }));
+  }, [capability, appLocale, t]);
+
+  const locksLanguage = capability?.languageMode === 'auto' || capability?.languageMode === 'fixed';
+  const languageHintKey =
+    capability?.languageMode === 'fixed'
+      ? 'batch.language_hint_fixed'
+      : 'batch.language_hint_auto_detect';
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (capability && selectedAsrLanguage !== 'auto') {
+      const coerced = coerceLanguage(capability, selectedAsrLanguage);
+      if (coerced !== selectedAsrLanguage) {
+        setSelectedAsrLanguage(coerced);
+      }
+    }
+  }, [isOpen, capability, selectedAsrLanguage]);
 
   const translationOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [
@@ -227,6 +277,7 @@ export function EmbyProcessingSettingsModal({
     const newOverrides: EmbyToolOverrides = {
       asrSelection,
       asrLanguage: selectedAsrLanguage,
+      enableTimeline: selectedEnableTimeline,
       translationModelId:
         selectedTranslationModelId === '__global__' ? null : selectedTranslationModelId,
       defaultSubtitleMode: selectedSubtitleMode,
@@ -240,18 +291,24 @@ export function EmbyProcessingSettingsModal({
 
   const handleResetDefaults = () => {
     setSelectedAsrValue('__global__');
+    setSelectedEnableTimeline(DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true);
     setSelectedAsrLanguage(DEFAULT_EMBY_TOOL_OVERRIDES.asrLanguage ?? 'auto');
     setSelectedTranslationModelId('__global__');
     setSelectedSubtitleMode(DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode ?? 'bilingual');
     setOverwriteExistingExternal(DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal ?? true);
   };
 
+  const dropdownControlStyle = {
+    minWidth: 200,
+    maxWidth: 260,
+  } as React.CSSProperties;
+
   return (
     <Modal
       isOpen={isOpen}
       onClose={onClose}
       title={t('emby.processing_settings_title', {
-        defaultValue: 'Emby Processing Settings',
+        defaultValue: 'Media Processing Settings',
       })}
       size="md"
       footer={
@@ -277,7 +334,7 @@ export function EmbyProcessingSettingsModal({
         className="emby-config-modal-body"
         style={{ display: 'flex', flexDirection: 'column', gap: 20 }}
       >
-        {/* ASR Section */}
+        {/* ASR Section - 3 items matching Create Page bottom-left */}
         <div
           className="emby-settings-section"
           style={{ display: 'flex', flexDirection: 'column', gap: 12 }}
@@ -296,31 +353,67 @@ export function EmbyProcessingSettingsModal({
             {t('emby.section_asr', { defaultValue: 'Speech Recognition (ASR)' })}
           </h4>
 
-          <label className="emby-form-field">
-            <span className="emby-form-label">
-              {t('emby.asr_model_selection', { defaultValue: 'ASR Model Selection' })}
-            </span>
+          {/* 1. Model Selection */}
+          <FormField
+            id="emby-settings-model"
+            label={t('batch.model', { defaultValue: 'Model' })}
+            description={t('batch.model_hint', { defaultValue: 'Select transcription model' })}
+            layout="horizontal"
+          >
             <Dropdown
+              id="emby-settings-model"
               options={asrOptions}
               value={selectedAsrValue}
               onChange={setSelectedAsrValue}
-              aria-label={t('emby.asr_model_selection', { defaultValue: 'ASR Model Selection' })}
+              aria-label={t('batch.model', { defaultValue: 'Model' })}
+              style={dropdownControlStyle}
             />
-          </label>
+          </FormField>
 
-          <label className="emby-form-field">
-            <span className="emby-form-label">
-              {t('emby.asr_recognition_language', { defaultValue: 'Recognition Language' })}
-            </span>
+          {/* 2. Subtitle Mode (Timeline Mode) */}
+          <FormField
+            id="emby-settings-timeline"
+            label={t('batch.timeline_mode', { defaultValue: 'Subtitle Mode' })}
+            description={t('batch.timeline_hint', {
+              defaultValue: 'Split into smaller units',
+            })}
+            layout="horizontal"
+          >
+            <Switch
+              id="emby-settings-timeline"
+              checked={selectedEnableTimeline}
+              onChange={setSelectedEnableTimeline}
+            />
+          </FormField>
+
+          {/* 3. Recognition Language */}
+          <FormField
+            id="emby-settings-language"
+            label={t('emby.asr_recognition_language', { defaultValue: 'Recognition Language' })}
+            description={
+              locksLanguage
+                ? t(languageHintKey)
+                : t('batch.language_hint', {
+                    defaultValue: 'Select audio language',
+                  })
+            }
+            layout="horizontal"
+          >
             <Dropdown
-              options={recognitionLanguageOptions}
+              id="emby-settings-language"
+              options={languageOptions}
               value={selectedAsrLanguage}
               onChange={setSelectedAsrLanguage}
               aria-label={t('emby.asr_recognition_language', {
                 defaultValue: 'Recognition Language',
               })}
+              style={
+                locksLanguage
+                  ? { ...dropdownControlStyle, pointerEvents: 'none', opacity: 0.75 }
+                  : dropdownControlStyle
+              }
             />
-          </label>
+          </FormField>
         </div>
 
         {/* Translation Section */}
@@ -332,19 +425,25 @@ export function EmbyProcessingSettingsModal({
             {t('emby.section_translation', { defaultValue: 'Translation Engine' })}
           </h4>
 
-          <label className="emby-form-field">
-            <span className="emby-form-label">
-              {t('emby.translation_model_selection', { defaultValue: 'Translation Model' })}
-            </span>
+          <FormField
+            id="emby-settings-translation"
+            label={t('emby.translation_model_selection', { defaultValue: 'Translation Model' })}
+            description={t('emby.translation_model_hint', {
+              defaultValue: 'Used for bilingual or translated subtitle generation',
+            })}
+            layout="horizontal"
+          >
             <Dropdown
+              id="emby-settings-translation"
               options={translationOptions}
               value={selectedTranslationModelId}
               onChange={setSelectedTranslationModelId}
               aria-label={t('emby.translation_model_selection', {
                 defaultValue: 'Translation Model',
               })}
+              style={dropdownControlStyle}
             />
-          </label>
+          </FormField>
         </div>
 
         {/* Subtitle Preferences Section */}
@@ -356,30 +455,27 @@ export function EmbyProcessingSettingsModal({
             {t('emby.section_subtitles', { defaultValue: 'Subtitle Preferences' })}
           </h4>
 
-          <label className="emby-form-field">
-            <span className="emby-form-label">
-              {t('emby.default_subtitle_mode', { defaultValue: 'Default Subtitle Mode' })}
-            </span>
+          <FormField
+            id="emby-settings-default-mode"
+            label={t('emby.default_subtitle_mode', { defaultValue: 'Default Subtitle Mode' })}
+            description={t('emby.default_subtitle_mode_hint', {
+              defaultValue: 'Default subtitle format when adding media tasks',
+            })}
+            layout="horizontal"
+          >
             <Dropdown
+              id="emby-settings-default-mode"
               options={subtitleModeOptions}
               value={selectedSubtitleMode}
               onChange={(val) => setSelectedSubtitleMode(val as EmbySubtitleMode)}
               aria-label={t('emby.default_subtitle_mode', {
                 defaultValue: 'Default Subtitle Mode',
               })}
+              style={dropdownControlStyle}
             />
-          </label>
+          </FormField>
 
-          <label
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              cursor: 'pointer',
-              fontSize: 13,
-              marginTop: 4,
-            }}
-          >
+          <label className="emby-checkbox-field" style={{ marginTop: 4 }}>
             <input
               type="checkbox"
               checked={overwriteExistingExternal}

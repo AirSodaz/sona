@@ -233,8 +233,8 @@
     "api_server_desc": "ローカル HTTP 音声文字起こし API",
     "mcp": "MCP エージェント",
     "mcp_desc": "Model Context Protocol エージェントサーバー",
-    "emby_sync": "Emby 字幕アシスタント",
-    "emby_sync_desc": "Embyの字幕欠落を検出しオフライン文字起こしで自動補完",
+    "emby_sync": "メディアサーバー字幕アシスタント",
+    "emby_sync_desc": "Emby および Jellyfin の字幕欠落を検出しオフライン文字起こしで自動補完",
     "media_server": {
       "title": "メディアサーバー字幕アシスタント",
       "desc": "Emby および Jellyfin の字幕欠落を検出しオフライン文字起こしで自動補完"
@@ -3047,11 +3047,11 @@
     }
   },
   "emby": {
-    "title": "Emby 字幕アシスタント",
+    "title": "メディアサーバー字幕アシスタント",
     "not_connected": "未接続",
     "connected": "接続済み",
     "connecting": "接続中...",
-    "subtitle": "Embyメディアライブラリの字幕欠落を検出し、音声をオフライン文字起こしして自動補完",
+    "subtitle": "Emby および Jellyfin メディアライブラリの字幕欠落を検出し、音声をオフライン文字起こしして自動補完",
     "pulling_audio": "音声を抽出中...",
     "server_settings": "サーバー設定",
     "connect_server": "サーバーに接続",
@@ -3114,8 +3114,8 @@
     "resync_no_segments": "Emby に再同期できません: 文字起こしセグメントがありません。",
     "resync_success": "Emby への字幕同期が完了しました。",
     "clear_selection": "選択を解除",
-    "processing_settings": "処理設定",
-    "processing_settings_title": "Emby 処理設定",
+    "processing_settings": "メディア処理設定",
+    "processing_settings_title": "メディア処理設定",
     "global_default": "グローバルデフォルト (設定に従う)",
     "section_asr": "音声認識 (ASR)",
     "asr_model_selection": "ASR モデル選択",
@@ -3123,8 +3123,10 @@
     "asr_lang_auto": "auto (音声から自動検出)",
     "section_translation": "翻訳エンジン",
     "translation_model_selection": "翻訳モデル",
+    "translation_model_hint": "バイリンガルまたは翻訳字幕の生成に使用されます",
     "section_subtitles": "字幕の環境設定",
-    "default_subtitle_mode": "デフォルト字幕モード"
+    "default_subtitle_mode": "デフォルト字幕モード",
+    "default_subtitle_mode_hint": "メディアタスク追加時のデフォルト字幕フォーマット"
   },
   "media_server": {
     "title": "メディアサーバー字幕アシスタント",
@@ -3144,6 +3146,7 @@
     "api_key_or_token": "API キー / アクセストークン",
     "allow_invalid_certs": "無効 / 自己署名 SSL 証明書を許可 (HTTPS)",
     "login_and_fetch_token": "ログインしてトークンを取得",
+    "login_tip": "一度ログインして API アクセストークンを取得・保存します。",
     "logging_in": "ログイン中...",
     "test_connection": "接続テスト",
     "testing": "テスト中...",

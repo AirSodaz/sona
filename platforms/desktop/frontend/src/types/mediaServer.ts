@@ -91,6 +91,7 @@ export interface MediaServerSubtitleUploadPayload {
 export interface MediaServerToolOverrides {
   asrSelection?: AsrModelSelection | null;
   asrLanguage?: string;
+  enableTimeline?: boolean;
   translationModelId?: string | null;
   defaultSubtitleMode?: MediaServerSubtitleMode;
   overwriteExistingExternal?: boolean;
@@ -98,6 +99,7 @@ export interface MediaServerToolOverrides {
 
 export const DEFAULT_MEDIA_SERVER_TOOL_OVERRIDES: MediaServerToolOverrides = {
   asrLanguage: 'auto',
+  enableTimeline: true,
   defaultSubtitleMode: 'bilingual',
   overwriteExistingExternal: true,
 };

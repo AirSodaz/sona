@@ -233,8 +233,8 @@
     "api_server_desc": "Local HTTP audio transcription API",
     "mcp": "MCP Agents",
     "mcp_desc": "Model Context Protocol agent server",
-    "emby_sync": "Emby Subtitle Assistant",
-    "emby_sync_desc": "Detect missing subtitles and auto-complete with local transcription",
+    "emby_sync": "Media Server Subtitle Assistant",
+    "emby_sync_desc": "Detect missing subtitles in Emby and Jellyfin with local transcription",
     "media_server": {
       "title": "Media Server Subtitle Assistant",
       "desc": "Detect missing subtitles in Emby and Jellyfin with local transcription"
@@ -3047,11 +3047,11 @@
     }
   },
   "emby": {
-    "title": "Emby Subtitle Assistant",
+    "title": "Media Server Subtitle Assistant",
     "not_connected": "Not Connected",
     "connected": "Connected",
     "connecting": "Connecting...",
-    "subtitle": "Detect missing subtitles in Emby media libraries, transcribe audio offline, and auto-complete subtitles",
+    "subtitle": "Detect missing subtitles in Emby and Jellyfin media libraries, transcribe audio offline, and auto-complete subtitles",
     "pulling_audio": "Fetching audio track...",
     "server_settings": "Server Settings",
     "connect_server": "Connect Server",
@@ -3114,8 +3114,8 @@
     "resync_no_segments": "Cannot re-sync to Emby: Transcript has no segments.",
     "resync_success": "Successfully synced subtitles to Emby.",
     "clear_selection": "Clear Selection",
-    "processing_settings": "Processing Settings",
-    "processing_settings_title": "Emby Processing Settings",
+    "processing_settings": "Media Processing Settings",
+    "processing_settings_title": "Media Processing Settings",
     "global_default": "Global Default (Follow Settings)",
     "section_asr": "Speech Recognition (ASR)",
     "asr_model_selection": "ASR Model Selection",
@@ -3123,8 +3123,10 @@
     "asr_lang_auto": "auto (Auto-detect from audio)",
     "section_translation": "Translation Engine",
     "translation_model_selection": "Translation Model",
+    "translation_model_hint": "Used for bilingual or translated subtitle generation",
     "section_subtitles": "Subtitle Preferences",
-    "default_subtitle_mode": "Default Subtitle Mode"
+    "default_subtitle_mode": "Default Subtitle Mode",
+    "default_subtitle_mode_hint": "Default subtitle format when adding media tasks"
   },
   "media_server": {
     "title": "Media Server Subtitle Assistant",
@@ -3144,6 +3146,7 @@
     "api_key_or_token": "API Key / Access Token",
     "allow_invalid_certs": "Allow invalid / self-signed SSL certificates (HTTPS)",
     "login_and_fetch_token": "Login & Obtain Token",
+    "login_tip": "Logs in once to obtain and store an API access token.",
     "logging_in": "Logging in...",
     "test_connection": "Test Connection",
     "testing": "Testing...",

@@ -138,10 +138,9 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
         <ToolHeroHeader
           id="emby-hero-header"
           icon={<Tv size={20} />}
-          title={t('emby.title', { defaultValue: 'Emby Subtitle Assistant' })}
-          description={t('emby.subtitle', {
-            defaultValue:
-              'Detect missing subtitles in Emby media libraries, transcribe audio offline, and auto-complete subtitles',
+          title={t('tools.media_server.title', { defaultValue: 'Media Server Subtitle Assistant' })}
+          description={t('tools.media_server.desc', {
+            defaultValue: 'Detect missing subtitles in Emby and Jellyfin with local transcription',
           })}
           statusText={statusText}
           statusTone={statusTone}
@@ -178,7 +177,7 @@ export function ToolMediaServerSyncPanel(): React.JSX.Element {
               >
                 <SlidersHorizontal size={14} style={{ marginRight: 6 }} />
                 <span>
-                  {t('emby.processing_settings', { defaultValue: 'Processing Settings' })}
+                  {t('emby.processing_settings', { defaultValue: 'Media Processing Settings' })}
                 </span>
               </button>
               <button

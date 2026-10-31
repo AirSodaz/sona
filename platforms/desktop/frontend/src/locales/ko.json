@@ -233,8 +233,8 @@
     "api_server_desc": "로컬 HTTP 오디오 전사 API",
     "mcp": "MCP 에이전트",
     "mcp_desc": "Model Context Protocol 에이전트 서버",
-    "emby_sync": "Emby 자막 도우미",
-    "emby_sync_desc": "Emby의 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성",
+    "emby_sync": "미디어 서버 자막 도우미",
+    "emby_sync_desc": "Emby 및 Jellyfin의 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성",
     "media_server": {
       "title": "미디어 서버 자막 도우미",
       "desc": "Emby 및 Jellyfin의 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성"
@@ -3047,11 +3047,11 @@
     }
   },
   "emby": {
-    "title": "Emby 자막 도우미",
+    "title": "미디어 서버 자막 도우미",
     "not_connected": "연결되지 않음",
     "connected": "연결됨",
     "connecting": "연결 중...",
-    "subtitle": "Emby 미디어 라이브러리에서 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성",
+    "subtitle": "Emby 및 Jellyfin 미디어 라이브러리에서 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성",
     "pulling_audio": "오디오 트랙 가져오는 중...",
     "server_settings": "서버 설정",
     "connect_server": "서버 연결",
@@ -3114,8 +3114,8 @@
     "resync_no_segments": "Emby에 다시 동기화할 수 없습니다: 전사 세그먼트가 없습니다.",
     "resync_success": "Emby에 자막을 성공적으로 동기화했습니다.",
     "clear_selection": "선택 해제",
-    "processing_settings": "처리 설정",
-    "processing_settings_title": "Emby 처리 설정",
+    "processing_settings": "미디어 처리 설정",
+    "processing_settings_title": "미디어 처리 설정",
     "global_default": "글로벌 기본값 (설정 따름)",
     "section_asr": "음성 인식 (ASR)",
     "asr_model_selection": "ASR 모델 선택",
@@ -3123,8 +3123,10 @@
     "asr_lang_auto": "auto (오디오에서 자동 감지)",
     "section_translation": "번역 엔진",
     "translation_model_selection": "번역 모델",
+    "translation_model_hint": "이중 언어 또는 번역 자막 생성에 사용됩니다",
     "section_subtitles": "자막 기본 설정",
-    "default_subtitle_mode": "기본 자막 모드"
+    "default_subtitle_mode": "기본 자막 모드",
+    "default_subtitle_mode_hint": "미디어 작업 추가 시 기본 자막 형식"
   },
   "media_server": {
     "title": "미디어 서버 자막 도우미",
@@ -3144,6 +3146,7 @@
     "api_key_or_token": "API 키 / 액세스 토큰",
     "allow_invalid_certs": "유효하지 않거나 자체 서명된 SSL 인증서 허용 (HTTPS)",
     "login_and_fetch_token": "로그인 및 토큰 가져오기",
+    "login_tip": "API 액세스 토큰을 획득하고 저장하기 위해 한 번 로그인합니다.",
     "logging_in": "로그인 중...",
     "test_connection": "연결 테스트",
     "testing": "테스트 중...",
