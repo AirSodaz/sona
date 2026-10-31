@@ -59,8 +59,11 @@ export function LocalModelManagementSection({
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'installed' | 'not-installed' | 'downloading'
   >('all');
-  const [labelFilter, setLabelFilter] = useState<'all' | ModelLabel>('all');
+  const [labelFilter, setLabelFilter] = useState<'all' | ModelLabel | 'recommended'>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [forcedOpenSections, setForcedOpenSections] = useState<
+    Partial<Record<ModelCatalogSectionType, boolean>>
+  >({});
 
   const engineFilterOptions = [
     { value: 'all', label: t('settings.model_filter_engine_all', { defaultValue: 'All Engines' }) },
@@ -70,6 +73,10 @@ export function LocalModelManagementSection({
 
   const labelFilterOptions = [
     { value: 'all', label: t('settings.model_filter_tag_all', { defaultValue: 'All Tags' }) },
+    {
+      value: 'recommended',
+      label: t('common.recommended', { defaultValue: 'Recommended' }),
+    },
     { value: 'accurate', label: t('settings.model_tag_accurate', { defaultValue: 'Accurate' }) },
     { value: 'lite', label: t('settings.model_tag_lite', { defaultValue: 'Lite' }) },
   ];
@@ -98,8 +105,14 @@ export function LocalModelManagementSection({
       const query = searchQuery.trim().toLowerCase();
       return models.filter((model) => {
         if (engineFilter !== 'all' && model.engine !== engineFilter) return false;
-        // Snapshot models lack curated labels; fall back to the preset JSON.
-        if (labelFilter !== 'all' && !(resolveModelLabels(model) ?? []).includes(labelFilter)) {
+        if (labelFilter === 'recommended') {
+          if (!model.isRecommended && !sectionProps.installedModels.has(model.id)) {
+            return false;
+          }
+        } else if (
+          labelFilter !== 'all' &&
+          !(resolveModelLabels(model) ?? []).includes(labelFilter)
+        ) {
           return false;
         }
         const isInstalled = sectionProps.installedModels.has(model.id);
@@ -107,12 +120,12 @@ export function LocalModelManagementSection({
         if (statusFilter === 'installed' && !isInstalled) return false;
         if (statusFilter === 'not-installed' && (isInstalled || isDownloading)) return false;
         if (statusFilter === 'downloading' && !isDownloading) return false;
-        if (
-          query &&
-          !model.name.toLowerCase().includes(query) &&
-          !(model.versionLabel ?? '').toLowerCase().includes(query)
-        ) {
-          return false;
+        if (query) {
+          const haystack =
+            `${model.id} ${model.name} ${model.versionLabel ?? ''} ${model.groupId ?? ''} ${model.type}`.toLowerCase();
+          if (!haystack.includes(query)) {
+            return false;
+          }
         }
         return true;
       });
@@ -145,6 +158,21 @@ export function LocalModelManagementSection({
       ])
     );
   }, [filterModels, getSectionGroups]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (!query) {
+      setForcedOpenSections({});
+      return;
+    }
+    const next: Partial<Record<ModelCatalogSectionType, boolean>> = {};
+    for (const [type, groups] of filteredGroupsByType.entries()) {
+      if (groups.length > 0) {
+        next[type] = true;
+      }
+    }
+    setForcedOpenSections(next);
+  }, [filteredGroupsByType, searchQuery]);
 
   const hasLoadedSections = useMemo(
     () => Array.from(filteredGroupsByType.values()).some((groups) => groups.length > 0),
@@ -194,9 +222,9 @@ export function LocalModelManagementSection({
             id="settings-model-label-filter"
             aria-label={t('settings.model_filter_tag_label', { defaultValue: 'Filter by tag' })}
             value={labelFilter}
-            onChange={(value) => setLabelFilter(value as 'all' | ModelLabel)}
+            onChange={(value) => setLabelFilter(value as 'all' | ModelLabel | 'recommended')}
             options={labelFilterOptions}
-            style={{ width: '120px' }}
+            style={{ width: '140px' }}
           />
           <div className="settings-model-search-wrapper">
             <Search size={16} className="settings-model-search-icon" />
@@ -257,6 +285,7 @@ export function LocalModelManagementSection({
               </span>
             }
             defaultOpen={true}
+            isOpen={forcedOpenSections.asr ? true : undefined}
           >
             {(filteredGroupsByType.get('asr') ?? []).map((group) => (
               <ModelCard
@@ -286,6 +315,7 @@ export function LocalModelManagementSection({
                 {getSectionStatus('punctuation').text}
               </span>
             }
+            isOpen={forcedOpenSections.punctuation ? true : undefined}
           >
             {(filteredGroupsByType.get('punctuation') ?? []).map((group) => (
               <ModelCard
@@ -315,6 +345,7 @@ export function LocalModelManagementSection({
                 {getSectionStatus('vad').text}
               </span>
             }
+            isOpen={forcedOpenSections.vad ? true : undefined}
           >
             {(filteredGroupsByType.get('vad') ?? []).map((group) => (
               <ModelCard

@@ -217,7 +217,7 @@ export function SettingsVocabularyTab({
               id="settings-vocab-llm-status-btn"
               type="button"
               className={`settings-vocab-llm-btn ${isLlmConfigured ? 'configured' : 'unconfigured'}`}
-              onClick={() => navContext?.navigateToTab('llm_service')}
+              onClick={() => navContext?.navigateToTab('capabilities')}
               data-tooltip={llmStatusTooltip}
               data-tooltip-pos="top"
               aria-label={`${llmStatusLabel}. ${t('settings.vocabulary_prompts_llm_jump_aria', { defaultValue: 'Jump to LLM Service settings' })}`}

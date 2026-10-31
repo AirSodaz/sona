@@ -13,10 +13,11 @@ import { normalizeError } from '../../../utils/errorUtils';
 import { ProviderLogo } from '../../icons/ProviderLogos';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 import {
-  getCurrentLlmSettings,
-  getModelPlaceholder,
-  isProviderConfiguredForConfig,
-} from './helpers';
+  fingerprintApiKey,
+  getProviderProbeCacheKey,
+  writeProviderProbeCache,
+} from '../capabilities/capabilityStatus';
+import { getCurrentLlmSettings, isProviderConfiguredForConfig } from './helpers';
 
 interface ProviderAccordionItemProps {
   provider: LlmProvider;
@@ -62,9 +63,16 @@ export function ProviderAccordionItem({
       const entryId = currentLlmState.modelOrder.find(
         (id) => currentLlmState.models[id].provider === provider
       );
-      const testModel = entryId
-        ? currentLlmState.models[entryId].model
-        : getModelPlaceholder(provider);
+      const testModel = entryId ? currentLlmState.models[entryId].model : '';
+      if (!testModel.trim()) {
+        setTestStatus('error');
+        setTestMessage(
+          t('settings.capabilities.ai_select_model', {
+            defaultValue: 'Select a model returned by the provider.',
+          })
+        );
+        return;
+      }
       const testProviderConfig = { ...providerConfig, model: testModel };
 
       await generateLlmText({
@@ -72,6 +80,18 @@ export function ProviderAccordionItem({
         input: 'Hello, this is a connection test.',
         source: 'connection_test',
       } satisfies LlmGenerateCommandRequest);
+      writeProviderProbeCache(
+        getProviderProbeCacheKey(
+          provider,
+          effectiveSetting.apiHost || def.defaultApiHost || '',
+          fingerprintApiKey(effectiveSetting.apiKey || '')
+        ),
+        {
+          status: 'connected',
+          checkedAt: Date.now(),
+          modelIds: [testModel],
+        }
+      );
       setTestStatus('success');
       setTestMessage(testModel);
       setTimeout(() => {
@@ -79,13 +99,46 @@ export function ProviderAccordionItem({
         setTestMessage('');
       }, 3000);
     } catch (error) {
+      const message = normalizeError(error).message;
+      writeProviderProbeCache(
+        getProviderProbeCacheKey(
+          provider,
+          effectiveSetting.apiHost || def.defaultApiHost || '',
+          fingerprintApiKey(effectiveSetting.apiKey || '')
+        ),
+        {
+          status: /api.?key|unauthorized|401|403/i.test(message) ? 'needs_key' : 'not_running',
+          message,
+          checkedAt: Date.now(),
+        }
+      );
       setTestStatus('error');
-      setTestMessage(normalizeError(error).message);
+      setTestMessage(message);
     }
   };
   const status = useMemo(() => {
+    if (testStatus === 'success') {
+      return {
+        type: 'ready',
+        text: t('settings.capabilities.status_connected', {
+          defaultValue: 'Connected',
+        }),
+      };
+    }
+    if (testStatus === 'error') {
+      return {
+        type: 'missing',
+        text: t('settings.capabilities.status_error', { defaultValue: 'Error' }),
+      };
+    }
     if (isConfigured) {
-      return { type: 'ready', text: t('settings.llm.status_ready') };
+      // Configured ≠ probed. Avoid "Ready" until a connection test succeeds.
+      return {
+        type: 'off',
+        text: t('settings.capabilities.status_saved_unverified', {
+          defaultValue: 'Saved',
+        }),
+      };
     }
     if (def.requiresApiKey) {
       return {
@@ -94,7 +147,7 @@ export function ProviderAccordionItem({
       };
     }
     return { type: 'off', text: t('settings.llm.status_off', { defaultValue: 'Not configured' }) };
-  }, [isConfigured, def.requiresApiKey, t]);
+  }, [def.requiresApiKey, isConfigured, t, testStatus]);
 
   const actions =
     onEdit || onDelete ? (

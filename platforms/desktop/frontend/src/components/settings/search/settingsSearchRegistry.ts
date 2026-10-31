@@ -15,16 +15,27 @@ type SearchItemBase = {
   fallbackTargetId?: string;
 };
 
+export type CapabilitiesSearchFocus =
+  | 'speech'
+  | 'ai_writing'
+  | 'translation'
+  | 'advanced_speech'
+  | 'advanced_ai'
+  | ModelScenario;
+
 export type SettingsSearchItem =
   | (SearchItemBase & { tab: 'subtitle'; subTab?: SubtitleSubTab })
-  | (SearchItemBase & { tab: 'models'; subTab?: ModelScenario })
+  | (SearchItemBase & { tab: 'capabilities'; subTab?: CapabilitiesSearchFocus })
   | (SearchItemBase & {
       tab: 'vocabulary';
       subTab?: VocabularySubTab;
       promptsSubTab?: PromptsSubTab;
     })
   | (SearchItemBase & {
-      tab: Exclude<SettingsTab, 'subtitle' | 'models' | 'vocabulary'>;
+      tab: Exclude<
+        SettingsTab,
+        'subtitle' | 'capabilities' | 'models' | 'llm_service' | 'vocabulary'
+      >;
       subTab?: never;
       promptsSubTab?: never;
     });
@@ -444,11 +455,13 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   // ---------------------------------------------------------------------------
   {
     id: 'models-hub',
-    tab: 'models',
-    targetId: 'settings-model-hub',
-    tabKey: 'settings.model_hub',
-    titleKey: 'settings.model_hub',
-    hintKey: 'settings.model_settings_description',
+    tab: 'capabilities',
+    subTab: 'speech',
+    targetId: 'settings-capability-speech',
+    fallbackTargetId: 'settings-capabilities-advanced',
+    tabKey: 'settings.capabilities.title',
+    titleKey: 'settings.capabilities.speech_title',
+    hintKey: 'settings.capabilities.speech_description',
     keywords: [
       'model',
       'models',
@@ -465,11 +478,11 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'models-vad',
-    tab: 'models',
+    tab: 'capabilities',
     subTab: 'live',
     targetId: 'settings-vad-path',
-    fallbackTargetId: 'settings-model-hub',
-    tabKey: 'settings.model_hub',
+    fallbackTargetId: 'settings-capabilities-advanced',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.vad_models',
     hintKey: 'settings.vad_rule_hint',
     keywords: [
@@ -487,31 +500,31 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'models-batch-vad',
-    tab: 'models',
+    tab: 'capabilities',
     subTab: 'batch',
     targetId: 'settings-batch-vad',
-    fallbackTargetId: 'settings-model-hub',
-    tabKey: 'settings.model_hub',
+    fallbackTargetId: 'settings-capabilities-advanced',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.batch_vad_enabled',
     hintKey: 'settings.batch_vad_enabled_hint',
     keywords: ['batch vad', 'segmentation', 'split', '分段', '批量分段', '静音切分', '批量vad'],
   },
   {
     id: 'models-punctuation',
-    tab: 'models',
+    tab: 'capabilities',
     subTab: 'live',
     targetId: 'settings-punctuation-path',
-    fallbackTargetId: 'settings-model-hub',
-    tabKey: 'settings.model_hub',
+    fallbackTargetId: 'settings-capabilities-advanced',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.punctuation_models',
     keywords: ['punct', 'punctuation', 'punc', '标点', '标点模型', '标点符号', 'biaodian'],
   },
   {
     id: 'models-mirror',
-    tab: 'models',
+    tab: 'capabilities',
     targetId: 'settings-download-mirror',
     fallbackTargetId: 'settings-model-hub',
-    tabKey: 'settings.model_hub',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.model_download_mirror',
     hintKey: 'settings.model_download_mirror_hint',
     keywords: [
@@ -527,9 +540,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'models-gpu',
-    tab: 'models',
+    tab: 'capabilities',
     targetId: 'settings-gpu-acceleration',
-    tabKey: 'settings.model_hub',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.gpu_acceleration_label',
     hintKey: 'settings.gpu_acceleration_hint',
     keywords: [
@@ -842,9 +855,11 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   // ---------------------------------------------------------------------------
   {
     id: 'llm-providers',
-    tab: 'llm_service',
+    tab: 'capabilities',
+    subTab: 'advanced_ai',
     targetId: 'settings-llm-provider-list',
-    tabKey: 'settings.llm.title',
+    fallbackTargetId: 'settings-capability-ai-writing',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.llm.credentials_section',
     hintKey: 'settings.llm.credentials_hint',
     keywords: [
@@ -872,9 +887,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'llm-api-keys',
-    tab: 'llm_service',
+    tab: 'capabilities',
     targetId: 'settings-llm-provider-list',
-    tabKey: 'settings.llm.title',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.llm.api_key',
     keywords: [
       'api key',
@@ -891,9 +906,11 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'llm-models-config',
-    tab: 'llm_service',
-    targetId: 'settings-llm-models-config',
-    tabKey: 'settings.llm.title',
+    tab: 'capabilities',
+    subTab: 'ai_writing',
+    targetId: 'settings-capability-ai-writing',
+    fallbackTargetId: 'settings-llm-models-config',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.llm.feature_models',
     hintKey: 'settings.llm.feature_models_runtime_hint',
     keywords: [
@@ -911,9 +928,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   },
   {
     id: 'llm-custom-provider',
-    tab: 'llm_service',
+    tab: 'capabilities',
     targetId: 'settings-llm-custom-provider',
-    tabKey: 'settings.llm.title',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.llm.custom_provider',
     keywords: [
       'custom provider',

@@ -24,7 +24,6 @@ import {
   enrichLlmModelMetadata,
   findLlmModelId,
   getProviderLlmModels,
-  isProviderModelDiscoveryExpired,
   modelSummaryToMetadata,
   removeLlmModel,
   syncProviderDiscoveredModels,
@@ -130,9 +129,27 @@ export function ProviderDetailsModal({
       setRefreshState('idle');
     } catch (error) {
       setRefreshState('error');
-      setRefreshMessage(normalizeError(error).message);
+      const raw = normalizeError(error).message;
+      const host = setting.apiHost || definition.defaultApiHost || '';
+      const looksLikeOffline =
+        /localhost|127\.0\.0\.1|failed to fetch|error sending request|connection refused|failed after/i.test(
+          raw
+        );
+      setRefreshMessage(
+        looksLikeOffline
+          ? t('settings.capabilities.ai_not_detected', {
+              defaultValue: '{{name}} was not detected at {{host}}.',
+              name: t(definition.labelKey, { defaultValue: definition.labelDefault }),
+              host,
+            })
+          : raw
+      );
     }
   }, [
+    definition.defaultApiHost,
+    definition.labelDefault,
+    definition.labelKey,
+    t,
     applyTrackedLlmSettings,
     definition.strategy,
     definition.supportsModelListing,
@@ -141,40 +158,12 @@ export function ProviderDetailsModal({
     setting.apiKey,
   ]);
 
+  // Do not auto-hammer localhost / remote hosts on open. Users refresh on demand.
   useEffect(() => {
-    if (!isOpen || !definition.supportsModelListing || refreshState === 'loading') {
-      return;
-    }
-
-    if (!isProviderModelDiscoveryExpired(currentLlmState, provider)) {
+    if (!isOpen) {
       autoRefreshKeyRef.current = null;
-      return;
     }
-
-    const discoveryStatus = currentLlmState.modelDiscovery?.[provider];
-    const autoRefreshKey = [
-      provider,
-      setting.apiHost,
-      setting.apiKey,
-      discoveryStatus?.fetchedAt ?? 'missing',
-      discoveryStatus?.expiresAt ?? 'missing',
-    ].join('|');
-    if (autoRefreshKeyRef.current === autoRefreshKey) {
-      return;
-    }
-
-    autoRefreshKeyRef.current = autoRefreshKey;
-    void refreshProviderModels();
-  }, [
-    currentLlmState,
-    definition.supportsModelListing,
-    isOpen,
-    provider,
-    refreshProviderModels,
-    refreshState,
-    setting.apiHost,
-    setting.apiKey,
-  ]);
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
@@ -359,9 +348,26 @@ export function ProviderDetailsModal({
         <div className="settings-hint">{t('settings.llm.manual_only_provider_hint')}</div>
       ) : null}
       {refreshState === 'error' && refreshMessage ? (
-        <div className="connection-error-detail">
+        <div className="connection-error-detail" role="alert">
           <X size={12} />
           <span>{refreshMessage}</span>
+          <button type="button" className="btn btn-secondary" onClick={() => void handleRefresh()}>
+            {t('common.retry', { defaultValue: 'Retry' })}
+          </button>
+        </div>
+      ) : null}
+
+      {definition.supportsModelListing &&
+      providerModels.length === 0 &&
+      refreshState !== 'loading' &&
+      refreshState !== 'error' ? (
+        <div className="settings-model-empty provider-empty-state">
+          {t('settings.capabilities.provider_models_empty', {
+            defaultValue:
+              'No models listed yet. Click Refresh to probe {{name}} at {{host}}.',
+            name: t(definition.labelKey, { defaultValue: definition.labelDefault }),
+            host: setting.apiHost || definition.defaultApiHost || '',
+          })}
         </div>
       ) : null}
 

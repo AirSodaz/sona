@@ -410,7 +410,7 @@ describe('SettingsVocabularyTab', () => {
     expect(llmBtn?.getAttribute('data-tooltip-pos')).toBe('top');
 
     fireEvent.click(llmBtn!);
-    expect(navigateToTab).toHaveBeenCalledWith('llm_service');
+    expect(navigateToTab).toHaveBeenCalledWith('capabilities');
   });
 
   it('updates LLM service status and model badge when LLM service is configured and subtabs change', () => {

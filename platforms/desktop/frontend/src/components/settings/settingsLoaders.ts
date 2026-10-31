@@ -11,11 +11,11 @@ export const SETTINGS_TAB_GROUPS: ReadonlyArray<{
   },
   {
     labelKey: 'settings.group.audio',
-    tabs: ['microphone', 'models', 'vocabulary'],
+    tabs: ['microphone', 'capabilities', 'vocabulary'],
   },
   {
     labelKey: 'settings.group.intelligence',
-    tabs: ['llm_service', 'automation'],
+    tabs: ['automation'],
   },
   {
     labelKey: 'settings.group.infrastructure',
@@ -76,6 +76,11 @@ export const loadSettingsModelsPane = memoizeLoader(async () => {
   return resolveModuleComponent(module, 'SettingsModelsPane');
 });
 
+export const loadSettingsCapabilitiesPane = memoizeLoader(async () => {
+  const module = await import('./SettingsCapabilitiesPane');
+  return resolveModuleComponent(module, 'SettingsCapabilitiesPane');
+});
+
 export const loadSettingsVocabularyTab = memoizeLoader(async () => {
   const module = await import('./SettingsVocabularyTab');
   return resolveModuleComponent(module, 'SettingsVocabularyTab');
@@ -119,14 +124,15 @@ const settingsPanePreloaders: Record<SettingsTab, () => Promise<void>> = {
   dashboard: () => loadSettingsDashboardTab().then(() => undefined),
   microphone: () => loadSettingsMicrophoneTab().then(() => undefined),
   subtitle: () => Promise.resolve(),
-  models: () => loadSettingsModelsPane().then(() => undefined),
+  capabilities: () => loadSettingsCapabilitiesPane().then(() => undefined),
+  models: () => loadSettingsCapabilitiesPane().then(() => undefined),
   vocabulary: () => loadSettingsVocabularyTab().then(() => undefined),
   automation: () => loadSettingsAutomationTab().then(() => undefined),
   storage: () => loadSettingsStorageTab().then(() => undefined),
   sync: () => loadSettingsSyncTab().then(() => undefined),
   api_server: () => Promise.resolve(),
   mcp: () => Promise.resolve(),
-  llm_service: () => loadSettingsLLMServiceTab().then(() => undefined),
+  llm_service: () => loadSettingsCapabilitiesPane().then(() => undefined),
   shortcuts: () => loadSettingsShortcutsTab().then(() => undefined),
   about: () => loadSettingsAboutTab().then(() => undefined),
 };

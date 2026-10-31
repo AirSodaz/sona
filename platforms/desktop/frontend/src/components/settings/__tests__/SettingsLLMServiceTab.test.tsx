@@ -885,7 +885,7 @@ describe('SettingsLLMServiceTab', () => {
     expect(tauriApi.invoke).toHaveBeenCalledTimes(1);
   });
 
-  it('auto-refreshes an expired provider model library when details open', async () => {
+  it('does not auto-refresh provider models when details open (manual refresh only)', async () => {
     const applyLlmSettings = vi.fn();
     let llmSettings = currentConfig.llmSettings!;
     llmSettings = syncProviderDiscoveredModels(
@@ -912,6 +912,21 @@ describe('SettingsLLMServiceTab', () => {
           t={(key) => key}
         />
       );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(tauriApi.invoke).not.toHaveBeenCalledWith(
+      'list_llm_models',
+      expect.anything()
+    );
+    expect(applyLlmSettings).not.toHaveBeenCalled();
+
+    const refreshButton = screen.getByRole('button', { name: 'settings.llm.refresh_models' });
+    await act(async () => {
+      fireEvent.click(refreshButton);
       await Promise.resolve();
     });
 
