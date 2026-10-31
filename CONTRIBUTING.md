@@ -36,6 +36,7 @@ registry in `scripts/architecture-policy.mjs`, and the
 | `core/` | core |
 | `application/` | application |
 | `adapters/` | inbound-adapter or outbound-adapter |
+| `providers/` | provider |
 | `platforms/` | host |
 | `tools/` | tool |
 

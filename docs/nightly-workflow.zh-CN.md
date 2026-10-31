@@ -36,7 +36,7 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **目的**: 计算 nightly 版本的标识符。
 * **流程**:
   1. 从 `platforms/desktop/frontend/package.json` 中读取基础版本号（Base Version）。
-  2. 生成 nightly 版本号字符串：`${base_version}-${github.run_number}`。
+  2. 生成 nightly 版本号字符串：`${base_version}-nightly.${github.run_number}`。
   3. 计算 UTC 时间下的构建日期，格式为 `YYYY-MM-DD`。
 
 ### 3. `build-tauri`
@@ -44,8 +44,9 @@ Nightly Release 工作流用于每天自动构建、签名、打包并发布 Son
 * **目的**: 编译 Sona 应用程序、对安装包进行数字签名，并生成签名校验文件。
 * **构建矩阵目标**:
   - **macOS**: `macos-latest`（构建 `aarch64-apple-darwin` 和 `x86_64-apple-darwin` 目标）。
-  - **Linux**: `ubuntu-22.04`（默认目标，打包为 `.deb`、`.rpm`、`.AppImage`）。
-  - **Windows**: `windows-latest`（默认 x64 目标和 `aarch64-pc-windows-msvc` ARM64 目标）。
+  - **Linux**: `ubuntu-22.04`（构建 `.deb` 与 `.AppImage`；预发布版本由 `patch-channel.js` 自动排除 `.rpm` 格式以避免版本号规范冲突）。
+  - **Windows**: `windows-latest`（构建 x64 与 `aarch64-pc-windows-msvc` NSIS 安装包；预发布版本自动排除 `.msi`）。
+  - **Android**: 构建 `app-arm64-v8a` 与 `app-x86_64` 的 debug 与 unsigned release APK。
 * **关键步骤**:
   1. **系统依赖**: 安装目标平台所需的系统级依赖（例如 Linux 下的 GTK/Webkit2gtk）。
   2. **Rust & Node 环境配置**: 配置 Rust 工具链、启用 `corepack`，并通过 `pnpm` 安装依赖。

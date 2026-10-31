@@ -24,6 +24,7 @@ Sona uses seven stable roles. The role is the reviewed dependency contract; work
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
 | `sona-online-asr` | provider |
+| `sona-translation-onnx` | provider |
 | `sona-online-llm` | outbound-adapter |
 | `sona-recovery-fs` | outbound-adapter |
 | `sona-runtime-fs` | outbound-adapter |
@@ -72,6 +73,7 @@ Each workspace package lives under the root for its reviewed role. The `[package
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `providers/asr/online/` | `sona-online-asr` | provider | |
+| `providers/translation/onnx_nmt/` | `sona-translation-onnx` | provider | Lightweight on-device ONNX NMT translation behind Core translation ports |
 | `adapters/online_llm/` | `sona-online-llm` | outbound-adapter | |
 | `adapters/recovery_fs/` | `sona-recovery-fs` | outbound-adapter | |
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
@@ -100,6 +102,15 @@ Desktop frontend imports point from views and hooks toward feature services and 
 
 All static and dynamic `@tauri-apps/*` imports live under `src/services/tauri/platform/`, except the centralized `@tauri-apps/api/core` invocation adapter at `src/services/tauri/invoke.ts`. Tauri command contracts depend only on generated bindings, command names, and DTOs owned by `src/types/`; they never depend on a business service. `scripts/frontend-architecture.test.js` enforces these rules in `test:scripts` and PR CI.
 
+
+The desktop frontend organizes application interaction into three primary modes:
+- `create`: Unified creation workspace combining live microphone/desktop recording and batch media/stream imports with accordion decks and focus synchronization.
+- `projects`: Multi-project workspace management, Notion-style automated pipelines, Inbox, and Trash.
+- `tools`: Unified Tools workbench hosting sub-panels for Live Subtitles, Voice Typing, HTTP API Server, MCP Server, and Emby Subtitle Assistant.
+
+Desktop native integrations under `platforms/desktop/src/integrations/` encapsulate external protocols and host drivers:
+- `emby`: Closed-loop Emby media server client, SubtitleManager plugin detection/upload, and background streaming audio fetch.
+- `asr`: Shared streaming and batch transcription execution state, cancellation guards, and sliding VAD frame dispatch.
 The UniFFI surface is exactly two layers: an `#[uniffi::export]` free function in `lib.rs` delegates straight into the matching `*_bridge` module. The former `SonaCoreFacade` type in `facade.rs` forwarded every call a second time without adding behaviour and has been merged into `lib.rs`. Do not reintroduce an intermediate forwarding type; `scripts/multisurface-contracts.test.js` enforces this, allowing only `release_application_context` to call the composition root directly.
 
 Desktop and UniFFI share the SQLite composition type `SqliteApplicationContext` from `sona-sqlite`, but each host still owns its own wiring, lifecycle, and error mapping. The stateless CLI does not depend on this composition type. There is no separate shared application-composition crate yet.

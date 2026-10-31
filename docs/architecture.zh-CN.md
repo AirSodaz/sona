@@ -24,6 +24,7 @@ Sona 使用七种稳定角色。角色是经过评审的依赖契约；工作区
 | `sona-media-detector` | outbound-adapter |
 | `sona-model-downloads` | outbound-adapter |
 | `sona-online-asr` | provider |
+| `sona-translation-onnx` | provider |
 | `sona-online-llm` | outbound-adapter |
 | `sona-recovery-fs` | outbound-adapter |
 | `sona-runtime-fs` | outbound-adapter |
@@ -72,6 +73,7 @@ Core <- Outbound Adapter <------------- Host
 | `adapters/media_detector/` | `sona-media-detector` | outbound-adapter | |
 | `adapters/model_downloads/` | `sona-model-downloads` | outbound-adapter | |
 | `providers/asr/online/` | `sona-online-asr` | provider | |
+| `providers/translation/onnx_nmt/` | `sona-translation-onnx` | provider | Core 翻译端口之后的轻量端侧 ONNX NMT 翻译引擎 |
 | `adapters/online_llm/` | `sona-online-llm` | outbound-adapter | |
 | `adapters/recovery_fs/` | `sona-recovery-fs` | outbound-adapter | |
 | `adapters/runtime_fs/` | `sona-runtime-fs` | outbound-adapter | |
@@ -99,6 +101,15 @@ Core <- Outbound Adapter <------------- Host
 Desktop 前端的导入方向是：view 与 hook 指向 feature service 和 store，再指向稳定的领域 DTO 与 `services/tauri` 平台网关。`src/types/`、`src/constants/` 不得导入 service、store、hook 或 component；feature service 可以编排 store，但不得导入 hook 或 component；store 不得导入 UI 模块。完整的生产模块依赖图必须保持无环。
 
 所有静态或动态 `@tauri-apps/*` 导入必须位于 `src/services/tauri/platform/`，唯一例外是集中调用命令的 `src/services/tauri/invoke.ts` 可以导入 `@tauri-apps/api/core`。Tauri command contract 只能依赖生成 bindings、command name 和由 `src/types/` 拥有的 DTO，不得反向依赖业务 service。`scripts/frontend-architecture.test.js` 在 `test:scripts` 与 PR CI 中强制执行这些规则。
+
+桌面前端将应用交互划分为三大核心工作区模式：
+- `create`（创作工作区）：整合实时麦克风/桌面音频录制与批量音视频/网络流导入，支持双层手风琴联动与焦点双向同步。
+- `projects`（项目中心）：多项目工作区管理、Notion 风格自动化流水线、收件箱与回收站。
+- `tools`（工具工作台）：统一的工具工作台，集中承载实时字幕、语音输入法、HTTP API 服务、MCP 服务以及 Emby 字幕助手子面板。
+
+桌面原生集成模块位于 `platforms/desktop/src/integrations/`，封装外部协议与系统级驱动：
+- `emby`：纯 Rust 实现的闭环 Emby 媒体服务器客户端，负责 SubtitleManager 插件检测、字幕增删与流式音频拉取。
+- `asr`：共享的流式与批量转录执行状态、取消守卫与滑动 VAD 切分调度。
 
 UniFFI 导出面只有两层：`lib.rs` 中的 `#[uniffi::export]` 自由函数直接委托到对应的 `*_bridge` 模块。原先 `facade.rs` 中的 `SonaCoreFacade` 类型只是把每个调用再转发一次、不附加任何行为，现已合并进 `lib.rs`。不要重新引入中间转发类型； `scripts/multisurface-contracts.test.js` 会强制这一约束，仅允许 `release_application_context` 直接调用组合根。
 

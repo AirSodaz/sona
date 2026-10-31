@@ -136,11 +136,16 @@ Lists available microphone and system audio input devices in Sona desktop.
 
 #### `sona_read_transcript`
 
-Reads full transcript segments, concatenated original text, and optional concatenated translation text for a history record.
+Reads transcript segments, concatenated original text, and optional concatenated translation text for a history record, with support for time filtering, cursor pagination, and task status tracking.
 
 - **Parameters**:
   - `history_id` (*string*, required): Target history record ID.
-- **Returns**: `{ "historyId": string, "text": string, "translationText": string | null, "segments": [...] }`.
+  - `start_seconds` (*number*, optional): Start time in seconds to filter segments.
+  - `end_seconds` (*number*, optional): End time in seconds to filter segments.
+  - `offset` (*integer*, optional): Number of segments to skip.
+  - `limit` (*integer*, optional): Maximum number of segments to return.
+  - `since_segment_id` (*string*, optional): Segment ID cursor; only return segments occurring after this ID.
+- **Returns**: `{ "historyId": string, "taskStatus": string, "errorMessage": string | null, "segments": [...], "text": string, "translationText": string | null, "totalSegmentsInHistory": number, "returnedSegments": number, "hasMore": boolean }`.
 
 #### `sona_edit_transcript`
 
@@ -270,15 +275,16 @@ Restores a previously soft-deleted item from the trash back to active history.
 
 #### `sona_transcribe_file`
 
-Submits a local audio or video file for offline batch transcription and stores results in history. Operates synchronously and returns the completed transcription record.
+Starts background transcription for a local audio/video file or remote network stream URL (HTTP/HTTPS/RTMP/RTSP/m3u8), returning task and history IDs immediately.
 
 - **Parameters**:
-  - `file_path` (*string*, required): Absolute path to audio or video file.
+  - `file_path` (*string*, optional*): Absolute path to local media file or remote stream URL. *Must provide either `file_path` or `input`.
+  - `input` (*string*, optional*): Alias for `file_path`.
   - `project_id` (*string*, optional): Target project ID.
   - `language` (*string*, optional): Spoken language hint (e.g. `'zh'`, `'en'`, `'ja'`).
   - `save_to_path` (*string*, optional): Destination path to save normalized audio copy.
   - `instance_id` (*string*, optional): Custom instance ID for tracking and cancelling this batch task.
-- **Returns**: `{ "historyId": string, "durationSeconds": number, "segmentCount": number, "text": string }`.
+- **Returns**: `{ "historyId": string, "taskId": string, "status": "started", "isStream": boolean, "message": string, "durationSeconds": number, "segmentCount": number, "text": string }`.
 
 #### `sona_cancel_batch_task`
 

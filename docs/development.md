@@ -88,3 +88,16 @@ cargo run -p sona-cli -- --help
 ```
 
 The release binary is written under `target/release` or `target/<triple>/release`. Packaged desktop builds include the matching standalone `sona-cli` resource; the desktop executable itself does not parse CLI subcommands.
+
+## Build The MCP Server
+
+```bash
+pnpm run build:sona-mcp
+cargo run -p sona-mcp -- --help
+```
+
+The release binary is written under `target/release/sona-mcp` or `target/<triple>/release/sona-mcp`.
+
+## Build Channels & Metadata
+
+Sona distinguishes four build channels across Desktop, CLI, and Android: `dev`, `ci`, `nightly`, and `stable`. Compile-time SemVer 2.0 build metadata is resolved from git state via `scripts/get-build-info.mjs`. Development and CI builds guard automatic update checks while displaying channel badges in Desktop Settings > About.

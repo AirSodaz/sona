@@ -36,7 +36,7 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
 * **Purpose**: Compute nightly version identifiers.
 * **Flow**:
   1. Reads the base version from `platforms/desktop/frontend/package.json`.
-  2. Generates the nightly version string: `${base_version}-${github.run_number}`.
+  2. Generates the nightly version string: `${base_version}-nightly.${github.run_number}`.
   3. Computes the build date in `YYYY-MM-DD` format (UTC).
 
 ### 3. `build-tauri`
@@ -44,8 +44,9 @@ The workflow runs under the concurrency group `nightly-release` with `cancel-in-
 * **Purpose**: Compiles the Sona application, signs the bundle, and generates signatures.
 * **Matrix Targets**:
   - **macOS**: `macos-latest` (builds `aarch64-apple-darwin` and `x86_64-apple-darwin` targets).
-  - **Linux**: `ubuntu-22.04` (default target, compiles `.deb`, `.rpm`, `.AppImage`).
-  - **Windows**: `windows-latest` (default x64 target and `aarch64-pc-windows-msvc` ARM64 target).
+  - **Linux**: `ubuntu-22.04` (compiles `.deb` and `.AppImage`; `.rpm` is excluded in pre-release builds due to version constraints).
+  - **Windows**: `windows-latest` (builds x64 and `aarch64-pc-windows-msvc` NSIS installers; `.msi` is excluded in pre-release builds).
+  - **Android**: Compiles `app-arm64-v8a` and `app-x86_64` debug and unsigned release APKs.
 * **Key Steps**:
   1. **Dependencies**: Installs native dependencies (e.g., GTK/Webkit2gtk on Linux).
   2. **Rust & Node Setup**: Configures Rust toolchain, enables `corepack`, and installs dependencies via `pnpm`.

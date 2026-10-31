@@ -88,3 +88,16 @@ cargo run -p sona-cli -- --help
 ```
 
 release 二进制会生成在 `target/release` 或 `target/<triple>/release`。打包后的桌面应用包含同平台的独立 `sona-cli` 资源；桌面可执行文件本身不解析 CLI 子命令。
+
+## 构建 MCP 服务端
+
+```bash
+pnpm run build:sona-mcp
+cargo run -p sona-mcp -- --help
+```
+
+Release 二进制文件会输出在 `target/release/sona-mcp` 或 `target/<triple>/release/sona-mcp`。
+
+## 构建渠道与版本元数据
+
+Sona 在桌面端、CLI 与 Android 端统一区分 4 种构建渠道：`dev`、`ci`、`nightly` 和 `stable`。编译期 SemVer 2.0 版本元数据由 `scripts/get-build-info.mjs` 基于 Git 状态解析。开发与 CI 构建会自动阻断自动更新检查，并在桌面端 `设置 > 关于` 中显示专属渠道徽标。

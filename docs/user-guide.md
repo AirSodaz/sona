@@ -10,19 +10,21 @@ Sona is a privacy-first transcript editor for people who want speech-to-text wor
 
 Sona is a good fit if you want to:
 
-- capture meetings, lectures, interviews, or notes with `Live Record`
-- transcribe existing audio or video files with `Batch Import` (featuring queue summary dashboards, grouped lists, and real-time cancellation in the Message Center)
+- capture meetings, lectures, interviews, or notes with `Live Record` inside the unified `Create` workspace
+- transcribe existing audio or video files or direct network stream URLs (HTTP/HTTPS/RTMP/RTSP/m3u8) with `Batch Import`, featuring queue dashboards, sliding VAD streaming, and real-time cancellation
+- use the `Tools` workbench to access `Live Subtitles` (floating system/mic captions), `Voice Typing` (global dictation into applications), `API Server` (local headless REST), `MCP Server` (AI Agent bridge), and `Emby Subtitle Assistant` (closed-loop stream transcription & subtitle synchronization)
+- enable non-blocking `Real-Time Bilingual Translation` across live recording, live captions, batch processing, and voice typing
+- quickly adjust recognition language, subtitle modes, and hotwords using the compact `Preset Popover Card`
 - organize saved recordings and imports with `Project Center`, `Projects`, and `Inbox`
-- review timestamps, speaker labels, and edit transcripts segment by segment
+- review timestamps, speaker labels, and edit transcripts segment by segment with independent inline translation editing
 - use `Speaker Profiles` and `Speaker Review` to confirm suggested or anonymous speaker groups
 - optionally use `LLM Polish` or `Translate` after configuring your own provider
 - restore selected edits from `Version Snapshots` when a bulk rewrite needs rollback
-- export subtitles or plain text in common formats
+- export subtitles or plain text in common formats with bilingual support
 - use `End-to-End Encrypted Cloud Sync` (WebDAV & S3-compatible object storage E2EE) to synchronize transcripts, vocabularies, and settings across desktop and Android devices
-- optionally use `Voice Typing` to dictate text into other applications
-- configure custom FFmpeg paths and automatic audio retention cleanup in `Storage Management`
+- quickly find configuration options with client-side `Settings Search`, and manage models with the resumable `Download Notification Center` showing real-time speeds
 
-If you mainly came for `Live Caption`, jump to `Live Record`. If you mainly want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you mainly need speaker cleanup or version rollback, jump to `Transcript Editing And Playback`. If you mainly want `Voice Typing`, jump to `Export And Settings`, especially the `Settings > Voice Typing` section.
+If you mainly came for `Live Caption` or `Voice Typing`, jump straight to the `Tools Workbench`. If you want to transcribe media files or live network streams, use `Create > Batch Import`. If you want to organize saved work, jump to `Project Center, Pipelines, And Inbox`. If you need media server subtitle automation, explore `Tools > Emby Subtitle Assistant`.
 
 ## 2. Install And Launch
 
@@ -84,16 +86,15 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 ### Steps
 
-1. Click the `Live Record` tab.
+1. Switch to the `Create` workspace in the top navigation and expand the `Live Record` panel.
 2. Before recording starts, choose an input source from the dropdown:
    `Microphone` or `Desktop Audio`.
 3. Click `Start Recording`.
 4. Watch the waveform and timer while Sona captures audio.
 5. Use `Pause` to temporarily stop the live session without finishing it, or `Stop` to finalize the recording.
-6. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language`.
-7. Turn on `Live Caption` if you want the floating caption window during live use.
-8. Open `Settings > Subtitle Settings` if you want to change caption behavior such as always-on-top, click-through, size, width, font/background color, or startup behavior.
-
+6. Click the `Preset Popover Card` in the top right to adjust `Subtitle Mode`, `Language`, or hotwords.
+7. If a translation model is configured, enable `Real-time Translation` to generate and display bilingual subtitles concurrently.
+8. Turn on `Live Caption` if you want the floating caption window during live use, or configure it in depth under `Tools > Subtitles`.
 ### What `Live Caption` is for
 
 - `Live Caption` is the `System Audio Captions` toggle on the `Live Record` page, and it is useful when you mainly want a floating subtitle window for system audio.
@@ -112,34 +113,38 @@ Use `Live Record` when you want to capture speech in real time and see transcrip
 
 - `Ctrl + Space` starts or stops live recording by default.
 - `Space` pauses or resumes while recording is active.
-- `Parameter Settings` covers transcription behavior like `Subtitle Mode` and `Language`, not the full LLM polish workflow.
+- The `Preset Popover Card` controls transcription behavior like `Subtitle Mode`, `Language`, and hotwords, not the full LLM polish workflow.
 - If Sona says a model is missing, reopen onboarding or configure models in `Settings > Model Settings`.
 
 ## 5. Batch Import
 
-Use `Batch Import` when you already have audio or video files and want Sona to transcribe them in the background.
+Use `Batch Import` when you have audio or video files or remote network stream URLs and want Sona to transcribe them in the background.
 
 ### Preconditions
 
 - You configured a `Batch Import Model` in `Settings > Model Settings`.
-- Your file uses a supported audio or video format.
+- Your file uses a supported media format, or your network stream URL is accessible (HTTP/HTTPS/RTMP/RTSP/m3u8).
 
 ### Steps
 
-1. Click the `Batch Import` tab.
-2. Drop files into the import area, or click `Select File`.
-3. Add one or more files to the queue.
+1. Switch to the `Create` workspace in the top navigation and expand the `Batch Import` panel.
+2. Import input sources:
+   - **Local media files**: Drop files into the import area, or click the primary `Select File` button.
+   - **Remote network stream URLs**: Click the dropdown arrow on the split button, choose `Enter Stream URL`, and submit stream URLs in the modal.
+3. Tasks are queued sequentially; stream tasks display a distinctive Globe badge.
 4. Inspect the summary dashboard at the top of the queue for total, pending, processing, completed, and failed counts.
 5. Expand or collapse grouped queues by state, and use the clear dropdown menu to `Clear Completed` or `Clear All` as needed.
-6. Use `Add More Files` if you want to keep building the queue.
-7. Click `Parameter Settings` if you want to adjust `Subtitle Mode` or `Language` for new work.
-8. When a file finishes, review the transcript in the main editor.
+6. For persistent live broadcasts or unbounded network streams, click `Finish & Save` on the queue item to gracefully terminate the stream and proceed to post-processing.
+7. Click the `Preset Popover Card` to adjust `Subtitle Mode`, `Language`, or hotwords for batch items.
+8. If translation is enabled, the `Streaming Translation Scheduler` concurrently translates segments in a sliding window as ASR completes, without waiting for the full stream to finish.
+9. When a task finishes, review the transcript in the main editor.
 
 ### Result
 
-- Sona processes files in a queue with `Pending`, `Processing`, `Complete`, or `Failed` states.
-- In the header `Message Center`, you can monitor progress in real time and click cancel to abort batch transcription safely.
-- Completed items load into the main transcript editor for editing, translation, and export.
+- Sona manages the queue across `Pending`, `Processing`, `Completed`, and `Failed` states.
+- Remote streams are transcribed in RAM with sliding VAD frame chunking without requiring full disk downloads.
+- You can track live progress in the `Message Center` and click the cancel button to stop batch tasks in real time.
+- Finished transcripts load into the editor for further review, editing, and export.
 
 ### Notes
 
@@ -148,8 +153,42 @@ Use `Batch Import` when you already have audio or video files and want Sona to t
 - Batch VAD segmentation applies to every local engine, including the llama.cpp presets (Qwen3-ASR). The default companion is Silero VAD v5; Silero v4 and TEN VAD are also available in the model catalog.
 - The local model catalog provides authentic brand logos, tag filters, and recommendations (such as FireRedASR2-AED and FunASR Nano).
 
-## 6. Transcript Editing And Playback
+## 6. Tools Workbench
 
+`Tools` is one of the three top-level modes in Sona's main navigation (`Create`, `Projects`, `Tools`), centralizing standalone services and integration panels into a unified master-detail workbench.
+
+The Tools workbench contains 5 dedicated feature panels:
+
+### 1. Live Subtitles (Subtitles)
+- Floating desktop caption overlay for system audio or microphone capture.
+- Customization options include always-on-top, click-through locking, configurable font size, window width, text color, and background opacity.
+- Supports real-time bilingual translation to display translated captions alongside original speech.
+
+### 2. Voice Typing
+- System-wide speech-to-text dictation into external desktop applications (messaging, editors, browser).
+- Configurable global keyboard shortcut with `Push to Talk (Hold)` or `Toggle (Press once)` modes.
+- Real-time environment readiness checker displaying status for microphone, ASR model, VAD companion, and low-latency pre-warming.
+
+### 3. API Server
+- Headless REST HTTP transcription server for scripts and third-party integrations.
+- Bind IP address, TCP port (default `14200`), Bearer token authentication, and IP whitelist controls.
+- Hero metrics card displaying active uptime, memory, processing counters, and a one-click copy endpoint action.
+
+### 4. MCP Server
+- Standard Model Context Protocol bridge connecting external AI Agents (Claude Desktop, Cursor, OpenCode) directly to Sona desktop's transcription engine and history database.
+- Daemon process start/restart controls, live ping probe, and IPC latency indicators.
+- See the dedicated [MCP Guide](mcp.md) for full protocol and tool reference.
+
+### 5. Emby Subtitle Assistant
+- Closed-loop integration connecting Emby media servers directly to Sona's transcription and translation pipeline:
+  1. **Server Connection**: Authenticate with your Emby server URL, admin username, and password.
+  2. **Plugin Verification**: Automatically detects whether the Emby `SubtitleManager` plugin is installed, providing repository links and installation guides.
+  3. **Media Library Browsing**: Browse movies and series seasons with tri-state selection checkboxes, episode accordions, and sync status filters.
+  4. **Processing Overrides**: Customize dedicated ASR models, language hints, audio track priorities, and subtitle modes (replace original, separate tracks, or bilingual).
+  5. **Automated Batch Queue**: Pulls audio streams in the background, executes batch ASR and streaming translation, and automatically uploads the resulting SRT subtitles back to Emby.
+  6. **Re-sync**: Edit transcripts in Sona and push updated subtitles back to Emby with one-click re-sync actions in context menus.
+
+## 7. Transcript Editing And Playback
 After Sona creates transcript segments, the editor becomes the main place to review text, speaker attribution, playback timing, and saved revisions.
 
 ### Preconditions
@@ -189,7 +228,7 @@ After Sona creates transcript segments, the editor becomes the main place to rev
 - `Speaker Profiles` are created in `Settings > Vocabulary`; project settings can choose which profiles are active for that project. Profiles help with candidates and automatic matching, but you can still confirm, reassign, or reset labels manually.
 - `Version Snapshots` only appears for saved project items that are not drafts or the temporary `current` transcript. Snapshots are saved before bulk rewrites such as `LLM Polish`, `Translate`, `Re-transcribe`, and before a restore operation.
 
-## 7. LLM Polish, Translation, And Summary
+## 8. LLM Polish, Translation, And Summary
 
 Sona's LLM features are optional. Local transcription works without them, but `LLM Polish`, `Translate`, and `AI Summary` require setup in `Settings > LLM Service`.
 
@@ -253,7 +292,7 @@ Sona's LLM features are optional. Local transcription works without them, but `L
 - Summary output is editable in the editor. You can revise it directly, let Sona auto-save it, and use the panel's copy button when you need it elsewhere.
 - If a polish, translation, or re-transcription pass changes more than you wanted, use `Version Snapshots` from the transcript header to restore selected changed rows or revert the whole transcript.
 
-## 8. Export Transcript
+## 9. Export Transcript
 
 Export is available when the transcript contains at least one segment.
 
@@ -283,7 +322,7 @@ Export is available when the transcript contains at least one segment.
 - `Original` mode is always available.
 - If speaker labels matter for your exported text or review process, run `Speaker Review` before exporting so suggested and anonymous groups are checked first.
 
-## 9. Project Center, Pipelines, And Inbox
+## 10. Project Center, Pipelines, And Inbox
 
 Use `Project Center` when you want to organize saved recordings and imports without leaving the main editing surface.
 
@@ -341,16 +380,17 @@ Each project owns a dedicated automated processing pipeline:
 - If you assign a global speaker profile from inside a project transcript, Sona can add that profile to the current project's enabled speaker profiles so future work in the same project can use it as a candidate.
 - If you switch away from a project while its settings drawer has unsaved changes, Sona asks whether to discard those edits first.
 
-## 10. Export And Settings
+## 11. Export And Settings
 
 Use `Export` when you are ready to write files out of Sona, and use `Settings` to manage app-wide defaults. If you want to reopen or organize saved work, return to `Projects` instead of looking for a separate saved-items surface.
 
 ### Export Reminder
 
 - Use the `Export` button in the header when the transcript is ready.
-- Section `8. Export Transcript` above lists the formats and modes Sona currently supports.
+- Section `9. Export Transcript` above lists the formats and modes Sona currently supports.
 
 ### Settings Areas To Review
+Sona provides 14 structured settings areas, and features a client-side search bar at the top of the modal for instant cross-tab filtering and navigation:
 
 - `Settings > Dashboard`
   global content overview, speaker coverage, and LLM usage trends
@@ -359,11 +399,11 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Input Device`
   microphone selection, system audio selection, microphone boost, `Keep Microphone Active`, mute during recording
 - `Settings > Subtitle Settings`
-  live caption startup, click-through lock, always-on-top, font size, width, font/background color, background transparency
+  live caption configuration (includes migration banner and deep link to `Tools > Subtitles`)
 - `Settings > Voice Typing`
-  enable `Voice Typing`, assign its global shortcut, choose `Push to Talk (Hold)` or `Toggle (Press once)`, and check readiness
+  global dictation configuration and readiness checker (includes migration banner and deep link to `Tools > Voice Typing`)
 - `Settings > Model Settings`
-  `Live Record Model`, `Batch Import Model`, CTC forced alignment, diarization sensitivity (Permissive/Balanced/Strict), `Batch VAD Segmentation`, `VAD Buffer Size`, `Max Concurrent Transcriptions`, and downloadable recognition, punctuation, speaker, and VAD models
+  `Live Record Model`, `Batch Import Model`, CTC forced alignment, diarization sensitivity, `Batch VAD Segmentation`, model download notification center with resumable downloads and live transfer speeds, and cache cleanup
 - `Settings > Vocabulary`
   organized into three dedicated sub-tabs: `Recognition` (text replacement and hotword sets), `Prompts` (polish context presets and summary templates), and `Speakers` (speaker profile voiceprints and sample enrollment)
 - `Settings > Automation`
@@ -373,13 +413,13 @@ Use `Export` when you are ready to write files out of Sona, and use `Settings` t
 - `Settings > Cloud Sync`
   End-to-End Encrypted (E2EE) cross-device vault supporting WebDAV and S3-compatible object storage (AWS S3, Cloudflare R2, MinIO, etc.), Vault ID pairing, master password, emergency recovery keys, sync scopes, and conflict center
 - `Settings > API Server`
-  local HTTP API server host, port, Bearer token, IP whitelist, and service limits
+  local HTTP API server host, port, Bearer token, IP whitelist (includes migration banner to `Tools > API Server`)
 - `Settings > LLM Service`
   feature model bindings, reasoning options, and provider credentials
 - `Settings > Shortcuts`
   live recording, playback, search, project navigation, and editor shortcuts
 - `Settings > About`
-  source code, logs, and update-related actions
+  version metadata, build channel indicator (`dev`, `ci`, `nightly`, `stable`), licenses, logs, and debug tools
 
 ### `Voice Typing`
 
@@ -437,7 +477,7 @@ The header `Message Center` acts as the operational hub for global background ta
 - In `Settings > Vocabulary`, `Text Replacement` can fix repeated terminology or spelling after transcription.
 - In `Settings > Vocabulary`, `Speaker Profiles` store local reference samples for known speakers. A profile can be `Ready`, `Limited`, or `Not ready` depending on usable sample count and duration; these states guide matching confidence, not whether you can manually assign the profile.
 
-## 11. FAQ And Troubleshooting
+## 12. FAQ And Troubleshooting
 
 ### Sona keeps asking me to finish setup
 

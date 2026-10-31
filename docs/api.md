@@ -125,22 +125,38 @@ Returns an ordered map (chronological by task creation time) of `job_id` to thei
 
 ### 4. Submit Transcription Job
 
-Submit a local audio or video file for high-performance speech-to-text processing. Jobs are queued and executed sequentially by the background transcription worker.
+Submit a local audio or video file, or a remote network stream URL (HTTP/HTTPS/RTMP/RTSP/m3u8), for high-performance speech-to-text processing. Jobs are queued and executed sequentially by the background transcription worker.
 
 - **URL**: `/v1/transcriptions`
 - **Method**: `POST`
-- **Content-Type**: `multipart/form-data`
+- **Content-Type**: `multipart/form-data` OR `application/json`
 
-#### Request Payload (Multipart Form Fields)
+#### Option A: Multipart Form (`multipart/form-data`)
+
+Use this option to upload media files directly or submit stream URLs via form fields.
 
 | Field Name | Type | Required | Description |
 | :--- | :--- | :--- | :--- |
-| `file` | Binary | **Yes** | The audio or video file to be transcribed. |
+| `file` | Binary | Optional* | The audio or video file to be transcribed. *Must provide either `file` or `url`, but not both. |
+| `url` | String | Optional* | Remote network stream URL (HTTP/HTTPS/RTMP/RTSP/m3u8) to transcribe. *Must provide either `file` or `url`, but not both. |
 | `model_id` | String | **Yes** | The identifier of a local ASR model (e.g., `sensevoice`) OR a configured Cloud ASR provider (e.g., `volcengine-doubao`). |
 | `language` | String | No | Target language code (ISO 639-1, e.g. `zh`, `en`, `ja`). Defaults to `"auto"` for automatic detection. Only codes the target model actually supports take effect; unsupported values are coerced back to `"auto"`. Each model's supported list is exposed via `GET /info` (`onlineAsrProviders[].languages` / `languageMode`) and the model catalog. |
 | `hotwords` | String | No | Custom vocabulary/keywords to enhance recognition, separated by newlines. |
 | `webhook_url` | String | No | HTTP URL to receive a POST notification once the transcription is finished or fails. |
 | `webhook_secret` | String | No | Secret key used to sign the webhook payload using HMAC-SHA256. |
+
+#### Option B: JSON Body (`application/json`)
+
+Use this option to transcribe remote network audio or video streams without multipart encoding.
+
+| Field Name | Type | Required | Description |
+| :--- | :--- | :--- | :--- |
+| `url` | String | **Yes** | Remote network stream URL (HTTP/HTTPS/RTMP/RTSP/m3u8). |
+| `model_id` | String | **Yes** | The identifier of a local ASR model or configured Cloud ASR provider. |
+| `language` | String | No | Target language code (defaults to `"auto"`). |
+| `hotwords` | String | No | Custom vocabulary/keywords to enhance recognition. |
+| `webhook_url` | String | No | Webhook URL for task completion notifications. |
+| `webhook_secret` | String | No | Secret key for webhook HMAC-SHA256 signing. |
 
 #### Response (`200 OK`)
 
@@ -152,7 +168,9 @@ Returns a JSON object containing the unique `job_id` allocated for this transcri
 }
 ```
 
-#### Curl Example
+#### Curl Examples
+
+**File Upload (Multipart):**
 ```bash
 curl -X POST http://127.0.0.1:14200/v1/transcriptions \
   -H "Authorization: Bearer your_secure_key" \
@@ -161,7 +179,17 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
   -F "language=zh"
 ```
 
----
+**Stream URL (JSON):**
+```bash
+curl -X POST http://127.0.0.1:14200/v1/transcriptions \
+  -H "Authorization: Bearer your_secure_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/live/stream.m3u8",
+    "model_id": "sensevoice",
+    "language": "zh"
+  }'
+```
 
 ### 5. Query Job Status
 

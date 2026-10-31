@@ -127,22 +127,38 @@ Authorization: Bearer your_secure_key
 
 ### 4. 提交转录任务 (Submit Transcription Job)
 
-提交本地音频或视频文件进行高性能的语音识别。转录工作流会被推入队列并由后台进程排队执行。
+提交本地音频/视频文件或远程网络流 URL（HTTP/HTTPS/RTMP/RTSP/m3u8）进行高性能语音识别。转录工作流会被推入队列并由后台进程排队执行。
 
 - **URL**: `/v1/transcriptions`
 - **Method**: `POST`
-- **Content-Type**: `multipart/form-data`
+- **Content-Type**: `multipart/form-data` 或 `application/json`
 
-#### 请求参数 (Multipart 表单字段)
+#### 方式 A：Multipart 表单 (`multipart/form-data`)
+
+适用于直接上传本地媒体文件，或通过表单字段传递远程网络流 URL。
 
 | 参数名称 | 类型 | 是否必填 | 参数说明 |
 | :--- | :--- | :--- | :--- |
-| `file` | 二进制 | **是** | 要转录的音频或视频文件。 |
+| `file` | 二进制 | 可选* | 要转录的音频或视频文件。*`file` 与 `url` 必须且只能提供其中之一。 |
+| `url` | 字符串 | 可选* | 要转录的远程网络流 URL（HTTP/HTTPS/RTMP/RTSP/m3u8）。*`file` 与 `url` 必须且只能提供其中之一。 |
 | `model_id` | 字符串 | **是** | 本地已安装的 ASR 模型 ID（例如 `sensevoice`） 或已配置的云端 ASR 引擎 ID（例如 `volcengine-doubao`）。 |
 | `language` | 字符串 | 否 | 目标识别语言（ISO 639-1 代码，例如：`zh`、`en`、`ja`），默认 `"auto"` 自动检测。仅目标模型实际支持的语言代码会生效，不支持的取值会被回退为 `"auto"`。各模型支持的语言清单可通过 `GET /info`（`onlineAsrProviders[].languages` / `languageMode`）与模型目录获取。 |
 | `hotwords` | 字符串 | 否 | 自定义热词词汇表，用于提高特定术语识别率。每行一个热词。 |
 | `webhook_url` | 字符串 | 否 | 当转录任务成功结束或失败时，用于接收结果 POST 推送的 URL。 |
 | `webhook_secret` | 字符串 | 否 | 用于对 Webhook 推送报文进行 HMAC-SHA256 签名的密钥。 |
+
+#### 方式 B：JSON 请求体 (`application/json`)
+
+适用于转录远程网络音视频流，无需构建复杂表单。
+
+| 参数名称 | 类型 | 是否必填 | 参数说明 |
+| :--- | :--- | :--- | :--- |
+| `url` | 字符串 | **是** | 远程网络流 URL（HTTP/HTTPS/RTMP/RTSP/m3u8）。 |
+| `model_id` | 字符串 | **是** | 本地 ASR 模型 ID 或已配置的云端 ASR 引擎 ID。 |
+| `language` | 字符串 | 否 | 目标识别语言代码（默认 `"auto"`）。 |
+| `hotwords` | 字符串 | 否 | 自定义热词词汇表。 |
+| `webhook_url` | 字符串 | 否 | 任务完成/失败时接收通知的 Webhook 地址。 |
+| `webhook_secret` | 字符串 | 否 | 用于 Webhook 签名验证的密钥。 |
 
 #### 返回数据 (`200 OK`)
 
@@ -155,6 +171,8 @@ Authorization: Bearer your_secure_key
 ```
 
 #### Curl 请求示例
+
+**文件上传 (Multipart):**
 ```bash
 curl -X POST http://127.0.0.1:14200/v1/transcriptions \
   -H "Authorization: Bearer your_secure_key" \
@@ -163,6 +181,17 @@ curl -X POST http://127.0.0.1:14200/v1/transcriptions \
   -F "language=zh"
 ```
 
+**网络流 URL (JSON):**
+```bash
+curl -X POST http://127.0.0.1:14200/v1/transcriptions \
+  -H "Authorization: Bearer your_secure_key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://example.com/live/stream.m3u8",
+    "model_id": "sensevoice",
+    "language": "zh"
+  }'
+```
 ---
 
 ### 5. 查询任务状态 (Query Job Status)
