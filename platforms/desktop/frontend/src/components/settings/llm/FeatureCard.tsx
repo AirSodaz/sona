@@ -38,6 +38,16 @@ import {
 
 const AUTO_NMT_LABEL = '本地 NMT 自动匹配 (Auto-Match NMT)';
 
+function isTranslationOnlyModel(modelName: string): boolean {
+  const lower = modelName.toLowerCase();
+  return (
+    lower.includes('index-translate') ||
+    lower.includes('hy-mt') ||
+    lower.includes('hunyuan-mt') ||
+    lower.startsWith('opus-mt-')
+  );
+}
+
 interface FeatureCardProps {
   stepNumber: number;
   featureId: LlmFeature;
@@ -490,8 +500,13 @@ export function FeatureCard({
                 (entry): entry is string => typeof entry === 'string' && entry.trim().length > 0
               )
           : [];
-        if (provider === 'local' && featureId === 'translation') {
-          models = [AUTO_NMT_LABEL, ...models];
+        if (provider === 'local') {
+          if (featureId === 'polish' || featureId === 'summary') {
+            models = models.filter((m) => !isTranslationOnlyModel(m));
+          }
+          if (featureId === 'translation') {
+            models = [AUTO_NMT_LABEL, ...models];
+          }
         }
         setModelCandidates(models);
         if (provider !== 'local') {
@@ -503,8 +518,13 @@ export function FeatureCard({
         const latestLlmState = latestLlmStateRef.current;
         const persistedModels = getProviderLlmModels(latestLlmState, provider);
         let models = persistedModels.map((entry) => entry.model);
-        if (provider === 'local' && featureId === 'translation') {
-          models = [AUTO_NMT_LABEL, ...models];
+        if (provider === 'local') {
+          if (featureId === 'polish' || featureId === 'summary') {
+            models = models.filter((m) => !isTranslationOnlyModel(m));
+          }
+          if (featureId === 'translation') {
+            models = [AUTO_NMT_LABEL, ...models];
+          }
         }
         setModelCandidates(models);
       } finally {

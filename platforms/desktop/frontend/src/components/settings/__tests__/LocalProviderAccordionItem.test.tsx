@@ -208,7 +208,7 @@ describe('LocalProviderAccordionItem', () => {
       />
     );
 
-    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model|翻译模型/i });
     fireEvent.click(nmtTab);
 
     await vi.waitFor(() => {
@@ -259,15 +259,154 @@ describe('LocalProviderAccordionItem', () => {
     );
 
     const llmTab = screen.getByRole('tab', {
-      name: /Large Language Model \(LLM\)|大语言模型 \(LLM\)/i,
+      name: /General LLMs|Large Language Model|大语言模型/i,
     });
-    const nmtTab = screen.getByRole('tab', { name: /Translation Model \(NMT\)|翻译模型 \(NMT\)/i });
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model|翻译模型/i });
     expect(llmTab).toBeTruthy();
     expect(nmtTab).toBeTruthy();
 
     fireEvent.click(nmtTab);
     await vi.waitFor(() => {
       expect(screen.getByText('Opus-MT (EN -> ZH)')).toBeTruthy();
+    });
+  });
+
+  it('aggregates GGUF and ONNX translation models into grouped family cards under NMT tab', async () => {
+    const mockIndex2b = {
+      ...mockInstalledCard,
+      id: 'index-translate-2b',
+      name: 'Index-Translate 2B',
+      groupId: 'index-translate',
+      versionLabel: '2B Q4_K_M',
+      backend: 'llama.cpp',
+      capabilities: ['translate'],
+    };
+    const mockIndex9b = {
+      ...mockInstalledCard,
+      id: 'index-translate-9b',
+      name: 'Index-Translate 9B',
+      groupId: 'index-translate',
+      versionLabel: '9B Q4_K_M',
+      backend: 'llama.cpp',
+      capabilities: ['translate'],
+    };
+    const mockOpusEnZh = {
+      ...mockInstalledCard,
+      id: 'opus-mt-en-zh',
+      name: 'Opus-MT (EN -> ZH)',
+      groupId: 'opus-mt',
+      versionLabel: 'EN -> ZH',
+      backend: 'onnx-nmt',
+      capabilities: ['translate'],
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockInstalledCard, mockIndex2b, mockIndex9b],
+    });
+    vi.mocked(listLocalNmtCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockOpusEnZh],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    // Under General LLMs tab, Index-Translate should NOT appear
+    expect(screen.getByText('Qwen3.5 4B')).toBeTruthy();
+    expect(screen.queryByText('Index-Translate')).toBeNull();
+
+    // Switch to Translation Models tab
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model|翻译模型/i });
+    fireEvent.click(nmtTab);
+
+    await vi.waitFor(() => {
+      // Grouped family cards appear
+      expect(screen.getByText('Index-Translate')).toBeTruthy();
+      expect(screen.getByText('2B Q4_K_M')).toBeTruthy();
+      expect(screen.getByText('9B Q4_K_M')).toBeTruthy();
+      expect(screen.getByText('Opus-MT (EN -> ZH)')).toBeTruthy();
+    });
+  });
+
+  it('routes GGUF translation specialist connection test to translation prompt in completeLlm', async () => {
+    const mockInstalledIndex2b = {
+      id: 'index-translate-2b',
+      name: 'Index-Translate 2B',
+      model: 'IndexTeam/Index-Translate-2B',
+      filename: 'Index-Translate-2B.Q4_K_M.gguf',
+      description: 'settings.descriptions.index_translate_2b',
+      backend: 'llama.cpp',
+      contextWindow: 32768,
+      maxOutputTokens: 4096,
+      size: '~1.3 GB',
+      parameters: '2B',
+      quantization: 'Q4_K_M',
+      groupId: 'index-translate',
+      versionLabel: '2B Q4_K_M',
+      modalities: ['text'],
+      languages: ['zh', 'en'],
+      capabilities: ['translate'],
+      isRecommended: true,
+      isInstalled: true,
+      installedPath: '/test/models/Index-Translate-2B.Q4_K_M.gguf',
+      installedSizeBytes: 1312164352,
+      downloadUrl: null,
+      downloadSizeBytes: null,
+    };
+
+    vi.mocked(listLocalLlmCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [mockInstalledIndex2b],
+    });
+    vi.mocked(listLocalNmtCards).mockResolvedValue({
+      modelsDir: '/test/models',
+      cards: [],
+    });
+
+    render(
+      <LocalProviderAccordionItem
+        config={mockConfig}
+        isOpen={true}
+        onToggle={vi.fn()}
+        applyLlmSettings={vi.fn()}
+        t={defaultT}
+      />
+    );
+
+    // Switch to Translation Models tab
+    const nmtTab = screen.getByRole('tab', { name: /Translation Model|翻译模型/i });
+    fireEvent.click(nmtTab);
+
+    await vi.waitFor(() => {
+      expect(screen.getByText('Index-Translate 2B')).toBeTruthy();
+    });
+
+    const testBtn = screen.getByRole('button', {
+      name: /(Test Connection|测试连接) Index-Translate 2B/i,
+    });
+    await act(async () => {
+      fireEvent.click(testBtn);
+    });
+
+    await vi.waitFor(() => {
+      expect(completeLlm).toHaveBeenCalledWith(
+        expect.objectContaining({
+          config: expect.objectContaining({
+            provider: 'local',
+            model: 'IndexTeam/Index-Translate-2B',
+          }),
+          input: 'Translate the following text into Chinese:\nHello, world!',
+          source: 'connection_test',
+        })
+      );
     });
   });
 

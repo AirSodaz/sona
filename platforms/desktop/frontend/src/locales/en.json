@@ -1965,7 +1965,11 @@
       "opus_mt_en_zh": "Helsinki-NLP Opus-MT English-to-Chinese neural machine translation model running locally on ONNX Runtime.",
       "opus_mt_zh_en": "Helsinki-NLP Opus-MT Chinese-to-English neural machine translation model running locally on ONNX Runtime.",
       "opus_mt_ja_zh": "Shiyin Opus-MT Japanese-to-Chinese neural machine translation model running locally on ONNX Runtime.",
-      "opus_mt_zh_ja": "Helsinki-NLP Opus-MT Chinese-to-Japanese neural machine translation model running locally on ONNX Runtime."
+      "opus_mt_zh_ja": "Helsinki-NLP Opus-MT Chinese-to-Japanese neural machine translation model running locally on ONNX Runtime.",
+      "index_translate_2b": "Developed by Bilibili IndexTeam. Lightweight 2B translation model optimized for Chinese, English, Japanese, and Korean, offering fast on-device translation.",
+      "index_translate_9b": "Developed by Bilibili IndexTeam. High-quality 9B translation model specialized in multi-language translation with exceptional fluency and nuance.",
+      "hy_mt_1_8b": "Developed by Tencent Hunyuan team. Lightweight 1.8B HY-MT1.5 model providing efficient multi-language translation on edge devices.",
+      "hy_mt_7b": "Developed by Tencent Hunyuan team. Next-gen 7B Hy-MT2 model delivering state-of-the-art translation accuracy and natural phrasing."
     },
     "recognition_models": "Recognition Models",
     "recognition_path_label": "Select Model",

@@ -29,11 +29,17 @@ pub struct LocalLlmPreset {
     pub filename: String,
     pub description: String,
     pub backend: String,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub context_window: u64,
+    #[cfg_attr(feature = "specta", specta(type = specta_typescript::Number))]
     pub max_output_tokens: u64,
     pub size: String,
     pub parameters: Option<String>,
     pub quantization: Option<String>,
+    #[serde(default)]
+    pub group_id: Option<String>,
+    #[serde(default)]
+    pub version_label: Option<String>,
     #[serde(default)]
     pub modalities: Vec<String>,
     #[serde(default)]
@@ -113,8 +119,11 @@ impl LocalLlmPreset {
             engine: Some(self.backend.clone()),
             rules: None,
             file_config: None,
-            group_id: Some(self.id.clone()),
-            version_label: self.quantization.clone(),
+            group_id: self.group_id.clone().or_else(|| Some(self.id.clone())),
+            version_label: self
+                .version_label
+                .clone()
+                .or_else(|| self.quantization.clone()),
         }
     }
 
@@ -136,6 +145,8 @@ impl LocalLlmPreset {
             size: self.size.clone(),
             parameters: self.parameters.clone(),
             quantization: self.quantization.clone(),
+            group_id: self.group_id.clone(),
+            version_label: self.version_label.clone(),
             modalities: if self.modalities.is_empty() {
                 vec!["text".to_string()]
             } else {
@@ -184,6 +195,10 @@ pub struct LocalLlmModelCard {
     pub size: String,
     pub parameters: Option<String>,
     pub quantization: Option<String>,
+    #[serde(default)]
+    pub group_id: Option<String>,
+    #[serde(default)]
+    pub version_label: Option<String>,
     #[serde(default)]
     pub modalities: Vec<String>,
     pub languages: Vec<String>,
@@ -407,7 +422,9 @@ pub fn discover_local_llm_cards(models_dir: &Path) -> LocalLlmCardsResponse {
                     max_output_tokens: 4096,
                     size: formatted_size,
                     parameters: None,
-                    quantization: quant,
+                    quantization: quant.clone(),
+                    group_id: None,
+                    version_label: quant,
                     modalities: vec!["text".to_string()],
                     languages: vec!["auto".to_string()],
                     capabilities: {
@@ -509,6 +526,8 @@ pub fn discover_local_nmt_cards(models_dir: &Path) -> LocalLlmCardsResponse {
             size: preset.size.clone(),
             parameters: None,
             quantization: None,
+            group_id: preset.group_id.clone(),
+            version_label: preset.version_label.clone(),
             modalities: vec!["text".to_string()],
             languages: preset.languages.clone(),
             capabilities: vec!["translate".to_string()],
@@ -630,7 +649,8 @@ mod tests {
         assert_eq!(preset.filename, Some("Qwen3.5-4B-Q4_K_M.gguf".to_string()));
         assert_eq!(preset.artifacts.len(), 1);
         assert_eq!(preset.artifacts[0].filename, "Qwen3.5-4B-Q4_K_M.gguf");
-        assert_eq!(preset.version_label, Some("Q4_K_M".to_string()));
+        assert_eq!(preset.group_id, Some("qwen3.5".to_string()));
+        assert_eq!(preset.version_label, Some("4B Q4_K_M".to_string()));
     }
 
     #[test]
@@ -733,6 +753,8 @@ mod tests {
         assert!(custom_card.is_some());
         let card = custom_card.unwrap();
         assert_eq!(card.quantization, Some("Q4_K_M".to_string()));
+        assert_eq!(card.group_id, None);
+        assert_eq!(card.version_label, Some("Q4_K_M".to_string()));
         assert!(card.is_installed);
 
         let whisper_card = response
@@ -757,6 +779,12 @@ mod tests {
                 .cards
                 .iter()
                 .all(|c| c.capabilities == vec!["translate".to_string()])
+        );
+        assert!(
+            response
+                .cards
+                .iter()
+                .all(|c| c.group_id.as_deref() == Some("opus-mt"))
         );
 
         // Fake install opus-mt-en-zh

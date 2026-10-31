@@ -511,4 +511,67 @@ describe('LocalModelCard', () => {
     fireEvent.click(discardBtn);
     expect(onDiscardDownload).toHaveBeenCalledWith(interruptedCard);
   });
+
+  it('renders grouped family card with multiple version rows and partial status', () => {
+    const onDownload = vi.fn();
+    const onDelete = vi.fn();
+    const onTest = vi.fn();
+
+    const mockIndex2b: LocalLlmModelCardType = {
+      ...mockCard,
+      id: 'index-translate-2b',
+      name: 'Index-Translate 2B',
+      groupId: 'index-translate',
+      versionLabel: '2B Q4_K_M',
+      size: '~1.3 GB',
+      capabilities: ['translate'],
+      isInstalled: false,
+    };
+
+    const mockIndex9b: LocalLlmModelCardType = {
+      ...mockCard,
+      id: 'index-translate-9b',
+      name: 'Index-Translate 9B',
+      groupId: 'index-translate',
+      versionLabel: '9B Q4_K_M',
+      size: '~5.5 GB',
+      capabilities: ['translate'],
+      isInstalled: true,
+    };
+
+    render(
+      <LocalModelCard
+        cards={[mockIndex2b, mockIndex9b]}
+        onDownload={onDownload}
+        onCancelDownload={vi.fn()}
+        onDelete={onDelete}
+        onTest={onTest}
+        t={defaultT}
+      />
+    );
+
+    // Family header displays Index-Translate and partial install status
+    expect(screen.getByText('Index-Translate')).toBeTruthy();
+    expect(screen.getByText('1/2 Installed')).toBeTruthy();
+
+    // Both version rows are present
+    expect(screen.getByText('2B Q4_K_M')).toBeTruthy();
+    expect(screen.getByText('9B Q4_K_M')).toBeTruthy();
+    expect(screen.getByText('~1.3 GB')).toBeTruthy();
+    expect(screen.getByText('~5.5 GB')).toBeTruthy();
+
+    // 2B has download button
+    const downloadBtn = screen.getByRole('button', { name: /Download Index-Translate 2B/i });
+    fireEvent.click(downloadBtn);
+    expect(onDownload).toHaveBeenCalledWith(mockIndex2b);
+
+    // 9B has delete button and test button
+    const deleteBtn = screen.getByRole('button', { name: /Delete Index-Translate 9B/i });
+    fireEvent.click(deleteBtn);
+    expect(onDelete).toHaveBeenCalledWith(mockIndex9b);
+
+    const testBtn = screen.getByRole('button', { name: /Test Connection Index-Translate 9B/i });
+    fireEvent.click(testBtn);
+    expect(onTest).toHaveBeenCalledWith(mockIndex9b);
+  });
 });

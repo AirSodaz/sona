@@ -748,8 +748,30 @@ export function getFeatureModelEntry(
   return modelId ? (config.llmSettings.models[modelId] ?? null) : null;
 }
 
-export function buildLlmConfigPatch(nextLlmSettings: LlmSettings): Pick<AppConfig, 'llmSettings'> {
-  return {
+export function buildLlmConfigPatch(
+  nextLlmSettings: LlmSettings
+): Pick<AppConfig, 'llmSettings'> &
+  Partial<Pick<AppConfig, 'realtimeTranslationEngine' | 'realtimeTranslationModelId'>> {
+  const patch: Pick<AppConfig, 'llmSettings'> &
+    Partial<Pick<AppConfig, 'realtimeTranslationEngine' | 'realtimeTranslationModelId'>> = {
     llmSettings: nextLlmSettings,
   };
+
+  const translationModelEntry = getFeatureModelEntry(
+    { llmSettings: nextLlmSettings },
+    'translation'
+  );
+  if (translationModelEntry && translationModelEntry.provider === 'local') {
+    const model = translationModelEntry.model ?? '';
+    const lower = model.toLowerCase();
+    if (lower.startsWith('opus-mt-') || lower === 'auto' || lower.includes('nmt')) {
+      patch.realtimeTranslationEngine = 'onnx';
+      patch.realtimeTranslationModelId = lower.startsWith('opus-mt-') ? model : null;
+    } else if (model.trim().length > 0) {
+      patch.realtimeTranslationEngine = 'llama-cpp';
+      patch.realtimeTranslationModelId = model;
+    }
+  }
+
+  return patch;
 }

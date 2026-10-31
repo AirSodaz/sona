@@ -5,6 +5,7 @@ import {
   Cpu,
   FileText,
   Image,
+  Languages,
   Loader2,
   Mic,
   Video,
@@ -15,8 +16,8 @@ import type { LocalLlmModelCard as LocalLlmModelCardType } from '../../../bindin
 import { formatBytes } from '../../../hooks/notifications/modelDownloadAdapter';
 import { DownloadIcon, StopIcon, TrashIcon } from '../../Icons';
 import { ModelBrandLogo } from '../../icons/ModelLogos';
+import { LanguageBadges } from '../../LanguageBadges';
 import './LocalModelCard.css';
-
 export interface LocalDownloadProgressState {
   progress: number;
   statusText?: string;
@@ -31,15 +32,18 @@ export interface LocalModelTestState {
   error?: string;
 }
 
-interface LocalModelCardProps {
-  card: LocalLlmModelCardType;
+export interface LocalModelCardProps {
+  card?: LocalLlmModelCardType;
+  cards?: LocalLlmModelCardType[];
   downloadState?: LocalDownloadProgressState;
+  downloads?: Record<string, LocalDownloadProgressState>;
   activeFeatures?: {
     polish?: boolean;
     translation?: boolean;
     summary?: boolean;
   };
   testState?: LocalModelTestState;
+  modelTestStates?: Record<string, LocalModelTestState>;
   onTest?: (card: LocalLlmModelCardType) => void;
   isAnyTesting?: boolean;
   onDownload: (card: LocalLlmModelCardType) => void;
@@ -52,6 +56,19 @@ interface LocalModelCardProps {
   ) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   disabled?: boolean;
+}
+
+export function resolveFamilyName(card: LocalLlmModelCardType): string {
+  if (card.groupId === 'index-translate') return 'Index-Translate';
+  if (card.groupId === 'hunyuan-mt') return 'Hunyuan-MT';
+  if (card.groupId === 'opus-mt') return 'Opus-MT';
+  if (card.groupId === 'qwen3.5') return 'Qwen3.5';
+  if (card.groupId === 'gemma-4') return 'Gemma 4';
+  if (card.groupId === 'qwen3') return 'Qwen3';
+  if (card.name.includes('(')) {
+    return card.name.split('(')[0].trim();
+  }
+  return card.name;
 }
 
 export type SupportedModality = 'text' | 'image' | 'audio' | 'video';
@@ -132,9 +149,12 @@ export function resolveModelModalities(card: LocalLlmModelCardType): SupportedMo
 }
 
 export function LocalModelCard({
-  card,
-  downloadState,
-  testState,
+  card: cardProp,
+  cards: cardsProp,
+  downloadState: downloadStateProp,
+  downloads,
+  testState: testStateProp,
+  modelTestStates,
   onTest,
   isAnyTesting = false,
   disabled = false,
@@ -143,7 +163,323 @@ export function LocalModelCard({
   onDelete,
   onDiscardDownload,
   t,
-}: LocalModelCardProps): React.JSX.Element {
+}: LocalModelCardProps): React.JSX.Element | null {
+  const models = cardsProp && cardsProp.length > 0 ? cardsProp : cardProp ? [cardProp] : [];
+  if (models.length === 0) return null;
+
+  const isMultiVersion = models.length > 1;
+
+  if (isMultiVersion) {
+    const baseModel = models[0];
+    const familyName = resolveFamilyName(baseModel);
+    const allLanguages = Array.from(new Set(models.flatMap((m) => m.languages ?? [])));
+
+    const downloadingModel = models.find((m) => downloads?.[m.id]);
+    const downloadingState = downloadingModel ? downloads?.[downloadingModel.id] : undefined;
+    const installedCount = models.filter((m) => m.isInstalled).length;
+    const interruptedModel = models.find((m) => !m.isInstalled && m.interruptedDownload);
+
+    const isQwen =
+      baseModel.id.toLowerCase().includes('qwen') || familyName.toLowerCase().includes('qwen');
+    const isGemma =
+      baseModel.id.toLowerCase().includes('gemma') || familyName.toLowerCase().includes('gemma');
+    const isTranslation =
+      baseModel.groupId === 'opus-mt' ||
+      baseModel.groupId === 'index-translate' ||
+      baseModel.groupId === 'hunyuan-mt' ||
+      baseModel.backend === 'onnx-nmt' ||
+      (baseModel.capabilities?.length === 1 && baseModel.capabilities[0] === 'translate');
+
+    return (
+      <div
+        className={`local-model-card model-card${installedCount === models.length ? ' is-installed' : ''}`}
+        data-testid={`local-model-card-${baseModel.groupId || baseModel.id}`}
+      >
+        <div className="model-card-header local-model-card-header">
+          <div className="model-card-identity local-model-card-identity">
+            <div className="model-card-logo-badge">
+              {isQwen ? (
+                <ModelBrandLogo brand="qwen" size={36} />
+              ) : isGemma ? (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                  <path
+                    d="M12 2L14.4 9.6L22 12L14.4 14.4L12 22L9.6 14.4L2 12L9.6 9.6L12 2Z"
+                    fill="url(#gemma-gradient)"
+                  />
+                  <defs>
+                    <linearGradient
+                      id="gemma-gradient"
+                      x1="2"
+                      y1="2"
+                      x2="22"
+                      y2="22"
+                      gradientUnits="userSpaceOnUse"
+                    >
+                      <stop stopColor="#4285F4" />
+                      <stop offset="0.5" stopColor="#9B72CB" />
+                      <stop offset="1" stopColor="#EA4335" />
+                    </linearGradient>
+                  </defs>
+                </svg>
+              ) : isTranslation ? (
+                <Languages size={20} className="text-secondary" />
+              ) : (
+                <Cpu size={20} className="text-secondary" />
+              )}
+            </div>
+            <div className="model-card-title">
+              <span className="model-name local-model-name">{familyName}</span>
+              <LanguageBadges languages={allLanguages} />
+            </div>
+          </div>
+
+          <div className="local-model-status-chip-wrap">
+            {downloadingState ? (
+              <span className="model-status-chip model-status-downloading">
+                <Loader2 className="animate-spin" size={11} />
+                <span>
+                  {t('settings.llm.status_downloading', { defaultValue: 'Downloading' })}{' '}
+                  {Math.round(downloadingState.progress)}%
+                </span>
+              </span>
+            ) : installedCount === models.length ? (
+              <span className="model-status-chip model-status-installed">
+                <Check size={11} />
+                <span>{t('settings.llm.installed_ready', { defaultValue: 'Ready' })}</span>
+              </span>
+            ) : installedCount > 0 ? (
+              <span className="model-status-chip model-status-installed">
+                <Check size={11} />
+                <span>
+                  {t('settings.model_status_partial_installed', {
+                    installed: installedCount,
+                    total: models.length,
+                    defaultValue: `${installedCount}/${models.length} Installed`,
+                  })}
+                </span>
+              </span>
+            ) : interruptedModel?.interruptedDownload ? (
+              <span className="model-status-chip model-status-interrupted">
+                <span>
+                  {interruptedModel.interruptedDownload.percentage != null
+                    ? t('settings.model_status_interrupted', {
+                        progress: Math.round(interruptedModel.interruptedDownload.percentage),
+                        defaultValue: `Paused (${Math.round(interruptedModel.interruptedDownload.percentage)}%)`,
+                      })
+                    : t('settings.model_status_interrupted_no_progress', {
+                        defaultValue: 'Paused',
+                      })}
+                </span>
+              </span>
+            ) : (
+              <span className="model-status-chip model-status-not-installed">
+                {t('settings.not_installed', { defaultValue: 'Not installed' })}
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="model-description local-model-card-desc">
+          {t(baseModel.description, { defaultValue: baseModel.description })}
+        </div>
+
+        <div className="model-versions">
+          {models.map((model) => {
+            const isModelInstalled = model.isInstalled;
+            const modelDl = downloads?.[model.id];
+            const isModelDownloading = Boolean(modelDl);
+            const mTestState = modelTestStates?.[model.id];
+            const isModelTesting = mTestState?.status === 'loading';
+            const mTestTooltip = !isModelInstalled
+              ? t('settings.llm.install_required_to_test', {
+                  defaultValue: 'Download and install model first to test',
+                })
+              : isModelTesting
+                ? t('settings.llm.testing', { defaultValue: 'Generating...' })
+                : mTestState?.status === 'success'
+                  ? `✓ ${t('settings.llm.connection_success', { defaultValue: 'Inference successful' })}${mTestState.speed != null ? ` (${mTestState.speed} t/s)` : ''}`
+                  : mTestState?.status === 'error'
+                    ? `✕ ${mTestState.error || t('settings.llm.connection_failed', { defaultValue: 'Test failed' })}`
+                    : t('settings.llm.test_model', { defaultValue: 'Test Connection' });
+
+            return (
+              <div
+                key={model.id}
+                className="model-version-row"
+                data-testid={`model-version-row-${model.id}`}
+              >
+                <div className="model-version-main">
+                  <div className="model-version-info">
+                    <span className="model-version-label">{model.versionLabel || model.name}</span>
+                    <span className="model-tag model-tag-engine">
+                      {model.backend === 'onnx-nmt' ? 'ONNX' : 'GGUF'}
+                    </span>
+                    {isModelInstalled && <Check className="model-version-check" size={14} />}
+                    {!isModelInstalled && !isModelDownloading && model.interruptedDownload && (
+                      <span className="model-status-chip model-status-interrupted">
+                        {model.interruptedDownload.percentage != null
+                          ? t('settings.model_status_interrupted', {
+                              progress: Math.round(model.interruptedDownload.percentage),
+                              defaultValue: `Paused (${Math.round(model.interruptedDownload.percentage)}%)`,
+                            })
+                          : t('settings.model_status_interrupted_no_progress', {
+                              defaultValue: 'Paused',
+                            })}
+                      </span>
+                    )}
+                  </div>
+                  <div className="model-card-side">
+                    <span className="model-size">{model.size}</span>
+                    {mTestState?.speed != null && (
+                      <span
+                        className="local-model-speed-badge"
+                        data-testid={`local-model-speed-${model.id}`}
+                      >
+                        {mTestState.speed} t/s
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className={`model-action-icon model-action-test${mTestState?.status ? ` ${mTestState.status}` : ''}`}
+                      onClick={() => onTest?.(model)}
+                      disabled={
+                        isModelTesting ||
+                        !isModelInstalled ||
+                        isModelDownloading ||
+                        (isAnyTesting && !isModelTesting)
+                      }
+                      aria-label={`${t('settings.llm.test_model', { defaultValue: 'Test Connection' })} ${model.name}`}
+                      data-tooltip={mTestTooltip}
+                      data-tooltip-pos="top"
+                    >
+                      {isModelTesting ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : mTestState?.status === 'success' ? (
+                        <Check size={15} />
+                      ) : mTestState?.status === 'error' ? (
+                        <AlertCircle size={15} />
+                      ) : (
+                        <Zap size={15} />
+                      )}
+                    </button>
+                    {isModelDownloading ? (
+                      <button
+                        type="button"
+                        className="model-action-icon model-action-cancel"
+                        onClick={() => onCancelDownload(model.id)}
+                        aria-label={t('common.cancel', { defaultValue: 'Cancel' })}
+                        data-tooltip={t('common.cancel', { defaultValue: 'Cancel' })}
+                        data-tooltip-pos="top"
+                      >
+                        <StopIcon />
+                      </button>
+                    ) : isModelInstalled ? (
+                      <button
+                        type="button"
+                        className="model-action-icon model-action-delete"
+                        onClick={() => onDelete(model)}
+                        aria-label={`${t('common.delete', { defaultValue: 'Delete' })} ${model.name}`}
+                        data-tooltip={t('common.delete', { defaultValue: 'Delete' })}
+                        data-tooltip-pos="top"
+                      >
+                        <TrashIcon />
+                      </button>
+                    ) : model.interruptedDownload ? (
+                      <>
+                        <button
+                          type="button"
+                          className="model-action-icon"
+                          onClick={() => onDownload(model)}
+                          disabled={disabled}
+                          aria-label={`${t('settings.resume_download', { defaultValue: 'Resume download' })} ${model.name}`}
+                          data-tooltip={
+                            model.interruptedDownload.percentage != null
+                              ? t('settings.resume_download_tooltip', {
+                                  progress: Math.round(model.interruptedDownload.percentage),
+                                  defaultValue: `Resume download (${Math.round(model.interruptedDownload.percentage)}% completed)`,
+                                })
+                              : t('settings.resume_download', { defaultValue: 'Resume download' })
+                          }
+                          data-tooltip-pos="top"
+                        >
+                          <DownloadIcon />
+                        </button>
+                        {onDiscardDownload && (
+                          <button
+                            type="button"
+                            className="model-action-icon model-action-delete"
+                            onClick={() => onDiscardDownload(model)}
+                            disabled={disabled}
+                            aria-label={`${t('settings.discard_download', { defaultValue: 'Discard incomplete download' })} ${model.name}`}
+                            data-tooltip={t('settings.discard_download_tooltip', {
+                              size:
+                                formatBytes(model.interruptedDownload.downloadedBytes) || '0 MB',
+                              defaultValue: `Discard incomplete download (${formatBytes(model.interruptedDownload.downloadedBytes) || '0 MB'})`,
+                            })}
+                            data-tooltip-pos="top"
+                          >
+                            <TrashIcon />
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        className="model-action-icon"
+                        onClick={() => onDownload(model)}
+                        disabled={disabled}
+                        aria-label={`${t('common.download', { defaultValue: 'Download' })} ${model.name}`}
+                        data-tooltip={t('common.download', { defaultValue: 'Download' })}
+                        data-tooltip-pos="top"
+                      >
+                        <DownloadIcon />
+                      </button>
+                    )}
+                  </div>
+                </div>
+                {isModelDownloading && (
+                  <div className="progress-container-mini local-download-progress-container">
+                    <div className="progress-info-mini" aria-live="polite">
+                      <span className="progress-status-mini">
+                        {modelDl?.statusText ||
+                          `${t('settings.llm.status_downloading', { defaultValue: 'Downloading' })} ${
+                            modelDl?.downloadedBytes && modelDl.totalBytes
+                              ? `(${formatBytes(modelDl.downloadedBytes)} / ${formatBytes(modelDl.totalBytes)})${
+                                  modelDl.speed ? ` (${modelDl.speed})` : ''
+                                }`
+                              : modelDl?.speed
+                                ? `(${modelDl.speed})`
+                                : ''
+                          }`.trim()}
+                      </span>
+                      <span>{Math.round(modelDl?.progress ?? 0)}%</span>
+                    </div>
+                    <div
+                      className="progress-bar-mini"
+                      role="progressbar"
+                      aria-valuenow={Math.round(modelDl?.progress ?? 0)}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-label={`${t('common.download')} ${model.name}`}
+                    >
+                      <div
+                        className="progress-fill"
+                        style={{ width: `${Math.min(100, Math.max(0, modelDl?.progress ?? 0))}%` }}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  const card = models[0];
+  const downloadState = downloadStateProp ?? downloads?.[card.id];
+  const testState = testStateProp ?? modelTestStates?.[card.id];
   const isDownloading = Boolean(downloadState);
   const isInstalled = card.isInstalled;
   const isTesting = testState?.status === 'loading';
@@ -163,6 +499,12 @@ export function LocalModelCard({
   const isQwen = card.id.toLowerCase().includes('qwen') || card.name.toLowerCase().includes('qwen');
   const isGemma =
     card.id.toLowerCase().includes('gemma') || card.name.toLowerCase().includes('gemma');
+  const isTranslation =
+    card.groupId === 'opus-mt' ||
+    card.groupId === 'index-translate' ||
+    card.groupId === 'hunyuan-mt' ||
+    card.backend === 'onnx-nmt' ||
+    (card.capabilities?.length === 1 && card.capabilities[0] === 'translate');
 
   return (
     <div
@@ -195,6 +537,8 @@ export function LocalModelCard({
                   </linearGradient>
                 </defs>
               </svg>
+            ) : isTranslation ? (
+              <Languages size={24} color="var(--color-primary)" />
             ) : (
               <Cpu size={20} className="text-secondary" />
             )}

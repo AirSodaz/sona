@@ -1965,7 +1965,11 @@
       "opus_mt_en_zh": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 英語→中国語ニューラル機械翻訳モデル。",
       "opus_mt_zh_en": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 中国語→英語ニューラル機械翻訳モデル。",
       "opus_mt_ja_zh": "ONNX Runtime 上でローカル動作する拾音 Opus-MT 日本語→中国語ニューラル機械翻訳モデル。",
-      "opus_mt_zh_ja": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 中国語→日本語ニューラル機械翻訳モデル。"
+      "opus_mt_zh_ja": "ONNX Runtime 上でローカル動作する Helsinki-NLP Opus-MT 中国語→日本語ニューラル機械翻訳モデル。",
+      "index_translate_2b": "Bilibili IndexTeamが開発した軽量2B翻訳モデル。中国語、英語、日本語、韓国語に最適化され、高速なオンデバイス翻訳を実現します。",
+      "index_translate_9b": "Bilibili IndexTeamが開発した高精度9B翻訳モデル。多言語翻訳に特化し、自然で高品質な翻訳を提供します。",
+      "hy_mt_1_8b": "Tencent Hunyuanチームが開発したHY-MT1.5 1.8B軽量翻訳モデル。低リソース環境でも高精度な翻訳を実現します。",
+      "hy_mt_7b": "Tencent Hunyuanチームが開発したHy-MT2 7Bフラッグシップ翻訳モデル。最高水準の翻訳精度と流暢さを提供します。"
     },
     "recognition_models": "認識モデル",
     "recognition_path_label": "モデルの選択",

@@ -1965,7 +1965,11 @@
       "opus_mt_en_zh": "ONNX Runtime 기반 로컬 실행 Helsinki-NLP Opus-MT 영어-중국어 신경망 기계 번역 모델.",
       "opus_mt_zh_en": "ONNX Runtime 기반 로컬 실행 Helsinki-NLP Opus-MT 중국어-영어 신경망 기계 번역 모델.",
       "opus_mt_ja_zh": "ONNX Runtime 기반 로컬 실행 Shiyin Opus-MT 일본어-중국어 신경망 기계 번역 모델.",
-      "opus_mt_zh_ja": "ONNX Runtime 기반 로컬 실행 Helsinki-NLP Opus-MT 중국어-일본어 신경망 기계 번역 모델."
+      "opus_mt_zh_ja": "ONNX Runtime 기반 로컬 실행 Helsinki-NLP Opus-MT 중국어-일본어 신경망 기계 번역 모델.",
+      "index_translate_2b": "Bilibili IndexTeam에서 개발한 2B 경량 번역 모델입니다. 한국어, 중국어, 영어, 일본어에 최적화되어 빠른 온디바이스 번역을 제공합니다.",
+      "index_translate_9b": "Bilibili IndexTeam에서 개발한 9B 고품질 번역 모델입니다. 다국어 번역에 특화되어 자연스럽고 우수한 번역 품질을 제공합니다.",
+      "hy_mt_1_8b": "Tencent Hunyuan 팀에서 개발한 HY-MT1.5 1.8B 경량 번역 모델로, 적은 리소스 환경에서도 효율적인 번역을 지원합니다.",
+      "hy_mt_7b": "Tencent Hunyuan 팀에서 개발한 Hy-MT2 7B 플래그십 번역 모델로, 업계 최고 수준의 정확도와 자연스러운 번역을 제공합니다."
     },
     "recognition_models": "Recognition 모델",
     "recognition_path_label": "선택 모델",

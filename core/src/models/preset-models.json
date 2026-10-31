@@ -3087,6 +3087,8 @@
     "name": "Opus-MT (EN -> ZH)",
     "description": "settings.descriptions.opus_mt_en_zh",
     "type": "onnx-nmt",
+    "groupId": "opus-mt",
+    "versionLabel": "EN -> ZH",
     "modes": [],
     "languages": [
       "en",
@@ -3149,6 +3151,8 @@
     "description": "settings.descriptions.opus_mt_zh_en",
     "type": "onnx-nmt",
     "modes": [],
+    "groupId": "opus-mt",
+    "versionLabel": "ZH -> EN",
     "languages": [
       "en",
       "zh"
@@ -3209,6 +3213,8 @@
     "name": "Opus-MT (JA -> ZH)",
     "description": "settings.descriptions.opus_mt_ja_zh",
     "type": "onnx-nmt",
+    "groupId": "opus-mt",
+    "versionLabel": "JA -> ZH",
     "modes": [],
     "languages": [
       "ja",
@@ -3270,6 +3276,8 @@
     "name": "Opus-MT (ZH -> JA)",
     "description": "settings.descriptions.opus_mt_zh_ja",
     "type": "onnx-nmt",
+    "groupId": "opus-mt",
+    "versionLabel": "ZH -> JA",
     "modes": [],
     "languages": [
       "ja",

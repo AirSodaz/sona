@@ -1027,3 +1027,74 @@ async fn test_desktop_llm_adapter_translate_batch_extracts_model_languages() {
 
     assert_eq!(result, texts);
 }
+
+#[tokio::test]
+async fn test_desktop_llm_adapter_translate_batch_local_llm_same_language_identity() {
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+
+    let adapter = DesktopLlmAdapter::new(None, None);
+    let texts = vec!["Hello world".to_string()];
+    let result = adapter
+        .translate_batch(LlmTranslationRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::Local,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "index-translate-2b".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: None,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            texts: texts.clone(),
+            source_language: Some("en-US".to_string()),
+            target_language: "EN".to_string(),
+        })
+        .await
+        .expect("equivalent dialect language pair for local llm should succeed via identity");
+
+    assert_eq!(result, texts);
+}
+
+#[tokio::test]
+async fn test_desktop_llm_adapter_translate_batch_local_llm_routes_to_adapter() {
+    use sona_core::ports::llm::{LlmTranslationPort, LlmTranslationRequest};
+
+    let adapter = DesktopLlmAdapter::new(None, None);
+    let texts = vec!["Hello world".to_string()];
+    let err = adapter
+        .translate_batch(LlmTranslationRequest {
+            config: LlmConfig {
+                provider: sona_core::domain::LlmProvider::Builtin(
+                    sona_core::domain::BuiltinLlmProvider::Local,
+                ),
+                strategy: sona_core::llm::tasks::LlmProviderStrategy::Local,
+                base_url: "".to_string(),
+                api_key: "".to_string(),
+                model: "index-translate-2b".to_string(),
+                api_path: None,
+                api_version: None,
+                temperature: None,
+                reasoning_enabled: None,
+                reasoning_level: None,
+                timeout_seconds: None,
+            },
+            texts,
+            source_language: Some("en".to_string()),
+            target_language: "zh".to_string(),
+        })
+        .await
+        .unwrap_err();
+
+    // Confirms routing reached LlamaCppTranslationAdapter rather than "prompt-based translation" unsupported error
+    assert_ne!(
+        err.message, "Local LLM models use prompt-based translation",
+        "Should route to LlamaCppTranslationAdapter"
+    );
+    assert_eq!(err.kind, LlmPortErrorKind::Unavailable);
+}

@@ -43,6 +43,20 @@ interface LocalProviderAccordionItemProps {
   applyLlmSettings?: (nextSettings: LlmAssistantConfig['llmSettings']) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
 }
+function isTranslationCard(c: LocalLlmModelCardType): boolean {
+  if (c.backend === 'onnx-nmt') return true;
+  if (c.capabilities?.length === 1 && c.capabilities[0] === 'translate') return true;
+  const idLower = c.id.toLowerCase();
+  const nameLower = c.name.toLowerCase();
+  return (
+    idLower.includes('index-translate') ||
+    idLower.includes('hy-mt') ||
+    idLower.includes('hunyuan-mt') ||
+    idLower.startsWith('opus-mt-') ||
+    nameLower.includes('index-translate') ||
+    nameLower.includes('hunyuan-mt')
+  );
+}
 
 export function LocalProviderAccordionItem({
   config: _config,
@@ -351,13 +365,9 @@ export function LocalProviderAccordionItem({
     }
   }, [fetchCards]);
 
-  const currentData = activeSubTab === 'llm' ? llmData : nmtData;
-  const cards = useMemo(() => {
-    if (currentData?.cards && currentData.cards.length > 0) {
-      return currentData.cards;
-    }
-    if (activeSubTab === 'nmt') {
-      return [];
+  const rawLlmCards = useMemo(() => {
+    if (llmData?.cards && llmData.cards.length > 0) {
+      return llmData.cards;
     }
     return [
       {
@@ -372,6 +382,8 @@ export function LocalProviderAccordionItem({
         size: '~2.7 GB',
         parameters: '4B',
         quantization: 'Q4_K_M',
+        groupId: 'qwen3.5',
+        versionLabel: '4B Q4_K_M',
         modalities: ['text', 'image', 'video'],
         languages: ['zh', 'en', 'ja', 'ko'],
         capabilities: ['chat', 'reasoning', 'polish', 'summary', 'translate'],
@@ -383,7 +395,35 @@ export function LocalProviderAccordionItem({
         downloadSizeBytes: null,
       },
     ];
-  }, [activeSubTab, currentData?.cards]);
+  }, [llmData?.cards]);
+
+  const currentTabCards = useMemo(() => {
+    if (activeSubTab === 'llm') {
+      return rawLlmCards.filter((c) => !isTranslationCard(c));
+    }
+    const ggufTranslationCards = (llmData?.cards ?? []).filter((c) => isTranslationCard(c));
+    const onnxTranslationCards = nmtData?.cards ?? [];
+    return [...ggufTranslationCards, ...onnxTranslationCards];
+  }, [activeSubTab, llmData?.cards, nmtData?.cards, rawLlmCards]);
+
+  const groupedCards = useMemo(() => {
+    const groups: LocalLlmModelCardType[][] = [];
+    const groupMap = new Map<string, LocalLlmModelCardType[]>();
+
+    for (const card of currentTabCards) {
+      const key = card.groupId || card.id;
+      const existing = groupMap.get(key);
+      if (existing) {
+        existing.push(card);
+      } else {
+        const newGroup = [card];
+        groupMap.set(key, newGroup);
+        groups.push(newGroup);
+      }
+    }
+
+    return groups;
+  }, [currentTabCards]);
 
   const allCards = useMemo(() => {
     return [...(llmData?.cards ?? []), ...(nmtData?.cards ?? [])];
@@ -454,6 +494,10 @@ export function LocalProviderAccordionItem({
         const chars = translated ? translated.length : 0;
         speed = Math.round((chars / durationSec) * 10) / 10;
       } else {
+        const isTranslationSpecialist = isTranslationCard(card);
+        const input = isTranslationSpecialist
+          ? 'Translate the following text into Chinese:\nHello, world!'
+          : '你好，请用一句话做自我介绍。';
         const res = await completeLlm({
           config: {
             provider: 'local',
@@ -463,7 +507,7 @@ export function LocalProviderAccordionItem({
             apiKey: '',
             temperature: 0.7,
           },
-          input: '你好，请用一句话做自我介绍。',
+          input,
           source: 'connection_test',
         });
 
@@ -535,11 +579,11 @@ export function LocalProviderAccordionItem({
             items={[
               {
                 value: 'llm',
-                label: t('settings.llm.subtab_llm', { defaultValue: 'Large Language Model (LLM)' }),
+                label: t('settings.llm.subtab_llm', { defaultValue: 'General LLMs' }),
               },
               {
                 value: 'nmt',
-                label: t('settings.llm.subtab_nmt', { defaultValue: 'Translation Model (NMT)' }),
+                label: t('settings.llm.subtab_nmt', { defaultValue: 'Translation Models' }),
               },
             ]}
             activeTab={activeSubTab}
@@ -577,22 +621,29 @@ export function LocalProviderAccordionItem({
           </div>
         </div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {cards.map((card) => (
-            <LocalModelCard
-              key={card.id}
-              card={card}
-              downloadState={downloads[card.id]}
-              testState={modelTestStates[card.id]}
-              disabled={inFlightActionIds.has(card.id) || !!downloads[card.id]}
-              onTest={handleTestModel}
-              isAnyTesting={isAnyTesting}
-              onDownload={handleDownload}
-              onCancelDownload={handleCancelDownload}
-              onDelete={handleDelete}
-              onDiscardDownload={handleDiscardDownload}
-              t={t}
-            />
-          ))}
+          {groupedCards.map((group) => {
+            const primaryCard = group[0];
+            const groupKey = primaryCard.groupId || primaryCard.id;
+            return (
+              <LocalModelCard
+                key={groupKey}
+                cards={group}
+                card={primaryCard}
+                downloads={downloads}
+                downloadState={downloads[primaryCard.id]}
+                modelTestStates={modelTestStates}
+                testState={modelTestStates[primaryCard.id]}
+                disabled={group.some((c) => inFlightActionIds.has(c.id) || !!downloads[c.id])}
+                onTest={handleTestModel}
+                isAnyTesting={isAnyTesting}
+                onDownload={handleDownload}
+                onCancelDownload={handleCancelDownload}
+                onDelete={handleDelete}
+                onDiscardDownload={handleDiscardDownload}
+                t={t}
+              />
+            );
+          })}
         </div>
       </div>
     </SettingsAccordion>

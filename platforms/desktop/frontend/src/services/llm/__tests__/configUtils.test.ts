@@ -328,4 +328,43 @@ describe('llm runtime', () => {
       })
     );
   });
+
+  it('syncs realtimeTranslationEngine and modelId for local translation models', () => {
+    let llmSettings = createLlmSettings();
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'opus-mt-en-zh' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'index-translate-2b' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'hy-mt1.5-1.8b' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'Qwen/Qwen3.5-4B' });
+    llmSettings = addLlmModel(llmSettings, { provider: 'local', model: 'auto' });
+
+    // Opus-MT -> onnx with opus model id
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[0]);
+    let patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('onnx');
+    expect(patch.realtimeTranslationModelId).toBe('opus-mt-en-zh');
+
+    // Index-Translate -> llama-cpp
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[1]);
+    patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('llama-cpp');
+    expect(patch.realtimeTranslationModelId).toBe('index-translate-2b');
+
+    // Hunyuan-MT -> llama-cpp
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[2]);
+    patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('llama-cpp');
+    expect(patch.realtimeTranslationModelId).toBe('hy-mt1.5-1.8b');
+
+    // General local LLM -> llama-cpp
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[3]);
+    patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('llama-cpp');
+    expect(patch.realtimeTranslationModelId).toBe('Qwen/Qwen3.5-4B');
+
+    // Auto NMT -> onnx with null model id
+    llmSettings = setFeatureModelSelection(llmSettings, 'translation', llmSettings.modelOrder[4]);
+    patch = buildLlmConfigPatch(llmSettings);
+    expect(patch.realtimeTranslationEngine).toBe('onnx');
+    expect(patch.realtimeTranslationModelId).toBeNull();
+  });
 });

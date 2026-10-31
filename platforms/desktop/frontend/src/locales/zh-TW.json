@@ -1965,7 +1965,11 @@
       "opus_mt_en_zh": "基於 ONNX Runtime 本地運行的 Helsinki-NLP Opus-MT 英語到中文神經機器翻譯模型。",
       "opus_mt_zh_en": "基於 ONNX Runtime 本地運行的 Helsinki-NLP Opus-MT 中文到英語神經機器翻譯模型。",
       "opus_mt_ja_zh": "基於 ONNX Runtime 本地運行的拾音 Opus-MT 日語到中文神經機器翻譯模型。",
-      "opus_mt_zh_ja": "基於 ONNX Runtime 本地運行的 Helsinki-NLP Opus-MT 中文到日語神經機器翻譯模型。"
+      "opus_mt_zh_ja": "基於 ONNX Runtime 本地運行的 Helsinki-NLP Opus-MT 中文到日語神經機器翻譯模型。",
+      "index_translate_2b": "由嗶哩嗶哩 IndexTeam 開發。2B 輕量端側翻譯模型，針對中英日韓等語言最佳化，兼具高推理速度與優秀翻譯品質。",
+      "index_translate_9b": "由嗶哩嗶哩 IndexTeam 開發。9B 高品質翻譯模型，專精於多語言互譯，在複雜語境和長句翻譯上表現卓越。",
+      "hy_mt_1_8b": "由騰訊混元團隊開發的 HY-MT1.5 1.8B 輕量翻譯模型，兼顧端側低資源佔用與高翻譯精度。",
+      "hy_mt_7b": "由騰訊混元團隊開發的 Hy-MT2 7B 旗艦翻譯模型，具備業界領先的跨語種翻譯準確率與流暢度。"
     },
     "recognition_models": "辨識模型",
     "recognition_path_label": "選擇模型",

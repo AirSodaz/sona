@@ -255,10 +255,40 @@ impl LlmTranslationPort for DesktopLlmAdapter {
             }
             Ok(results)
         } else if Self::is_local_config(&request.config) {
-            Err(LlmPortError::new(
-                LlmPortErrorKind::Unsupported,
-                "Local LLM models use prompt-based translation",
-            ))
+            let tgt_lang = request.target_language.trim();
+            let norm_tgt = crate::integrations::translation::normalize_language_code(tgt_lang);
+            let src_lang = request
+                .source_language
+                .as_deref()
+                .map(|s| s.trim())
+                .filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("auto"))
+                .unwrap_or_else(|| detect_source_language(&request.texts));
+            let norm_src = crate::integrations::translation::normalize_language_code(src_lang);
+
+            if norm_src.eq_ignore_ascii_case(norm_tgt) {
+                return Ok(request.texts);
+            }
+
+            use sona_core::ports::translation::TranslationEnginePort;
+            let adapter = sona_llama_cpp::translation::LlamaCppTranslationAdapter::new(
+                std::sync::Arc::new(self.local.clone()),
+                &request.config.model,
+            );
+            let mut results = Vec::with_capacity(request.texts.len());
+            for text in &request.texts {
+                let translated =
+                    adapter
+                        .translate(text, norm_src, norm_tgt)
+                        .await
+                        .map_err(|e| {
+                            LlmPortError::new(
+                                LlmPortErrorKind::Unavailable,
+                                format!("Local LLM translation failed: {e}"),
+                            )
+                        })?;
+                results.push(translated);
+            }
+            Ok(results)
         } else {
             self.online.translate_batch(request).await
         }

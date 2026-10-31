@@ -1754,6 +1754,13 @@ export type LocalLlmCardsResponse_Serialize = {
 	cards: LocalLlmModelCard_Serialize[],
 };
 
+export type LocalLlmDownload = {
+	url: string,
+	mirrorUrl: string | null,
+	sha256: string,
+	sizeBytes: number | null,
+};
+
 export type LocalLlmModelCard = LocalLlmModelCard_Serialize | LocalLlmModelCard_Deserialize;
 
 export type LocalLlmModelCard_Deserialize = {
@@ -1768,6 +1775,8 @@ export type LocalLlmModelCard_Deserialize = {
 	size: string,
 	parameters: string | null,
 	quantization: string | null,
+	groupId?: string | null,
+	versionLabel?: string | null,
 	modalities?: string[],
 	languages: string[],
 	capabilities: string[],
@@ -1792,6 +1801,8 @@ export type LocalLlmModelCard_Serialize = {
 	size: string,
 	parameters: string | null,
 	quantization: string | null,
+	groupId: string | null,
+	versionLabel: string | null,
 	modalities: string[],
 	languages: string[],
 	capabilities: string[],
@@ -1802,6 +1813,27 @@ export type LocalLlmModelCard_Serialize = {
 	downloadUrl: string | null,
 	downloadSizeBytes: number | null,
 	interruptedDownload?: InterruptedDownloadInfo | null,
+};
+
+export type LocalLlmPreset = {
+	id: string,
+	name: string,
+	model: string,
+	filename: string,
+	description: string,
+	backend: string,
+	contextWindow: number,
+	maxOutputTokens: number,
+	size: string,
+	parameters: string | null,
+	quantization: string | null,
+	groupId?: string | null,
+	versionLabel?: string | null,
+	modalities?: string[],
+	languages?: string[],
+	capabilities?: string[],
+	isRecommended: boolean,
+	download: LocalLlmDownload | null,
 };
 
 export type ModelCatalogGroup = ModelCatalogGroup_Serialize | ModelCatalogGroup_Deserialize;
