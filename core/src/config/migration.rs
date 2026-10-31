@@ -225,6 +225,11 @@ fn normalize_current_config(existing: Value) -> Value {
         "mcpAuditLogEnabled",
         json!(mcp_audit_log_enabled),
     );
+    let default_lang = string_at(&config, "language").unwrap_or_else(|| "auto".to_string());
+    let batch_language = string_at(&original, "batchLanguage")
+        .or_else(|| string_at(&original, "language"))
+        .unwrap_or_else(|| default_lang.clone());
+    set(&mut config, "batchLanguage", json!(batch_language));
     sanitize_typed_config_fields(&mut config);
     set(&mut config, "__original", original);
     config
@@ -248,6 +253,11 @@ fn flatten_id_value(value: &Value) -> Option<&str> {
 
 fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
     if existing.get("llmSettings") != normalized.get("llmSettings") {
+        return true;
+    }
+    if existing.get("batchLanguage") != normalized.get("batchLanguage")
+        || existing.get("liveLanguage") != normalized.get("liveLanguage")
+    {
         return true;
     }
     if existing.get("summaryEnabled") != normalized.get("summaryEnabled") {
@@ -496,6 +506,13 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         (
             "enableTimeline",
             json!(bool_at(&parsed, "enableTimeline").unwrap_or(false)),
+        ),
+        (
+            "batchLanguage",
+            json!(
+                first_string(&parsed, &["batchLanguage", "language"])
+                    .unwrap_or_else(|| "auto".to_string())
+            ),
         ),
         (
             "minimizeToTrayOnExit",

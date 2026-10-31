@@ -244,6 +244,10 @@ export interface CaptionConfig {
 export interface TranscriptionConfig {
   /** Selected language for transcription. */
   language: string;
+  /** Selected language for live transcription. Defaults to `language`. */
+  liveLanguage?: string;
+  /** Selected language for batch transcription. Defaults to `language`. */
+  batchLanguage?: string;
   /** Enable Timeline/Subtitle Mode (split by punctuation). */
   enableTimeline?: boolean;
   /** Enable Inverse Text Normalization. */

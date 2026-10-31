@@ -4,6 +4,7 @@ import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
+import { getScenarioLanguage } from '../utils/scenarioModels';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
 import type { AsrTranscriptionRequest } from './asrConfigService';
 import { buildRecognizerOutputEvent, TauriEvent } from './tauri/events';
@@ -417,7 +418,7 @@ export class TranscriptionService {
       filePath,
       saveToPath: _saveToPath || null,
       modelPathOverride: this.modelPath,
-      language: language || this.language || 'auto',
+      language: language || getScenarioLanguage(appConfig, 'batch'),
       enableItn: this.enableITN,
       instanceId,
       projectId,

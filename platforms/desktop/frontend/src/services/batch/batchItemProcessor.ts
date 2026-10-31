@@ -10,6 +10,7 @@ import type { TranscriptSegment } from '../../types/transcript';
 import { extractErrorMessage } from '../../utils/errorUtils';
 import type { ExportFormat } from '../../utils/exportFormats';
 import { logger } from '../../utils/logger';
+import { getScenarioLanguage } from '../../utils/scenarioModels';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
@@ -120,7 +121,7 @@ export class BatchItemProcessor {
       item.projectId = null;
       item.pipelineSnapshot = undefined;
     }
-    const language = config.language;
+    const language = getScenarioLanguage(config, 'batch');
     const pipeline =
       item.pipelineSnapshot ??
       resolveItemPipeline(

@@ -782,6 +782,19 @@ projects:
     }
   });
 
+  it('resolves distinct languages for live and batch slots from config', () => {
+    const config = buildAsrConfig({
+      language: 'zh',
+      batchLanguage: 'en',
+    });
+
+    const liveReq = resolveAsrTranscriptionRequest(config, 'live');
+    const batchReq = resolveAsrTranscriptionRequest(config, 'batch');
+
+    expect(liveReq.language).toBe('zh');
+    expect(batchReq.language).toBe('en');
+  });
+
   describe('buildModelSelectionPatch', () => {
     const dummyCatalog = {
       modelPathById: {

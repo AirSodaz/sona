@@ -8,6 +8,7 @@ import type { AsrSelectionSlot } from '../types/config';
 import type { ModelCatalogSnapshot } from '../types/modelCatalog';
 import { buildAsrModelDropdownOptions, resolveActiveAsrModelId } from '../utils/asrModelOptions';
 import { buildLanguagePickerOptions, type LanguagePickerOption } from '../utils/languages';
+import { buildScenarioLanguagePatch, getScenarioLanguage } from '../utils/scenarioModels';
 import { Dropdown } from './Dropdown';
 import { FormField } from './FormField';
 import { Switch } from './Switch';
@@ -45,7 +46,7 @@ export function ParameterSettingsPopover({
 
   // Derived values
   const enableTimeline = config.enableTimeline ?? false;
-  const language = config.language;
+  const language = getScenarioLanguage(config, surface);
   const slot: AsrSelectionSlot = surface === 'batch' ? 'batch' : 'live';
 
   // Catalog snapshot and loading state
@@ -151,9 +152,9 @@ export function ParameterSettingsPopover({
     }
     const coerced = asrConfigService.coerceConfiguredLanguage(config, slot, language);
     if (coerced !== language) {
-      setConfig({ language: coerced });
+      setConfig(buildScenarioLanguagePatch(surface, coerced));
     }
-  }, [isOpen, disabled, config, slot, language, setConfig]);
+  }, [isOpen, disabled, config, slot, surface, language, setConfig]);
 
   // Click outside and Esc key handling
   useEffect(() => {
@@ -277,7 +278,7 @@ export function ParameterSettingsPopover({
         <Dropdown
           id="parameter-settings-language"
           value={language}
-          onChange={(val) => !disabled && setConfig({ language: val })}
+          onChange={(val) => !disabled && setConfig(buildScenarioLanguagePatch(surface, val))}
           options={options.map((option) => ({
             value: option.value,
             label: option.label,

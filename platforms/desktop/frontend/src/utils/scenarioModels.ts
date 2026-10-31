@@ -101,3 +101,24 @@ export function getScenarioAlignmentModelPath(
 ): string {
   return getScenarioModelPath(config, 'alignmentModelPath', scenario);
 }
+
+/** Reads a scenario-scoped ASR transcription language from the config. */
+export function getScenarioLanguage(
+  config: Partial<Pick<AppConfig, 'language' | 'liveLanguage' | 'batchLanguage'>>,
+  scenario: AsrScenario
+): string {
+  const scenarioVal = scenario === 'batch' ? config.batchLanguage : config.liveLanguage;
+  const baseVal = config.language;
+  return scenarioVal?.trim() || baseVal?.trim() || 'auto';
+}
+
+/** Builds a partial config update patch for setting scenario-scoped language. */
+export function buildScenarioLanguagePatch(
+  scenario: AsrScenario,
+  language: string
+): Partial<AppConfig> {
+  if (scenario === 'batch') {
+    return { batchLanguage: language };
+  }
+  return { liveLanguage: language, language };
+}

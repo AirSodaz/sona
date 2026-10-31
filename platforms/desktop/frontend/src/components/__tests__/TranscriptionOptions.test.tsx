@@ -473,4 +473,96 @@ describe('TranscriptionOptions', () => {
     expect(button.querySelector('.parameter-settings-summary-lang')?.textContent).toBe('Auto');
     expect(button.getAttribute('aria-label')).toContain('Auto');
   });
+
+  it('isolates language modifications between live and batch surfaces', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        language: 'zh',
+        batchLanguage: 'en',
+      },
+    });
+
+    // 1. Render batch surface and select Japanese
+    const { unmount } = render(<TranscriptionOptions surface="batch" />);
+    fireEvent.click(getTriggerButton());
+    const popover = screen.getByRole('region', { name: 'Parameter Settings' });
+    const dropdownTrigger = popover.querySelector('#parameter-settings-language') as HTMLElement;
+    fireEvent.click(dropdownTrigger);
+
+    const japaneseOption = screen.getByRole('option', { name: /Japanese/i });
+    fireEvent.mouseDown(japaneseOption);
+    fireEvent.click(japaneseOption);
+
+    // Batch language changed to 'ja', but live language remains 'zh'
+    expect(useConfigStore.getState().config.batchLanguage).toBe('ja');
+    expect(useConfigStore.getState().config.language).toBe('zh');
+    unmount();
+
+    // 2. Render live surface and select English
+    render(<TranscriptionOptions surface="live" />);
+    fireEvent.click(getTriggerButton());
+    const livePopover = screen.getByRole('region', { name: 'Parameter Settings' });
+    const liveDropdownTrigger = livePopover.querySelector(
+      '#parameter-settings-language'
+    ) as HTMLElement;
+    fireEvent.click(liveDropdownTrigger);
+
+    const englishOption = screen.getByRole('option', { name: /English/i });
+    fireEvent.mouseDown(englishOption);
+    fireEvent.click(englishOption);
+
+    // Live language changed to 'en', but batch language remains 'ja'
+    expect(useConfigStore.getState().config.language).toBe('en');
+    expect(useConfigStore.getState().config.batchLanguage).toBe('ja');
+  });
+
+  it('does not mutate live language when batch surface coerces language due to model capability', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        language: 'zh',
+        batchLanguage: 'ja',
+      },
+    });
+
+    vi.spyOn(asrConfigService, 'coerceConfiguredLanguage').mockImplementation(
+      (_cfg, slot, lang) => {
+        if (slot === 'batch') {
+          // Assume batch model only supports English, so coerces 'ja' to 'en'
+          return 'en';
+        }
+        return lang ?? 'auto';
+      }
+    );
+
+    render(<TranscriptionOptions surface="batch" />);
+    fireEvent.click(getTriggerButton());
+
+    // Batch language coerced to 'en', while live language remains untouched 'zh'
+    expect(useConfigStore.getState().config.batchLanguage).toBe('en');
+    expect(useConfigStore.getState().config.language).toBe('zh');
+  });
+
+  it('renders distinct language summaries for live and batch surfaces simultaneously', () => {
+    vi.spyOn(modelService, 'latestCatalogSnapshot', 'get').mockReturnValue(mockSnapshot);
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        language: 'zh',
+        batchLanguage: 'en',
+      },
+    });
+
+    const { container: liveContainer } = render(<TranscriptionOptions surface="live" />);
+    const { container: batchContainer } = render(<TranscriptionOptions surface="batch" />);
+
+    const liveBtn = liveContainer.querySelector('.btn-parameter-settings');
+    const batchBtn = batchContainer.querySelector('.btn-parameter-settings');
+
+    expect(liveBtn?.querySelector('.parameter-settings-summary-lang')?.textContent).toBe('Chinese');
+    expect(batchBtn?.querySelector('.parameter-settings-summary-lang')?.textContent).toBe(
+      'English'
+    );
+  });
 });

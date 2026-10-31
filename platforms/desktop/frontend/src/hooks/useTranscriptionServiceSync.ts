@@ -11,6 +11,7 @@ import { useConfigStore } from '../stores/configStore';
 import { useProjectStore } from '../stores/projectStore';
 import { useTranscriptRuntimeStore } from '../stores/transcriptRuntimeStore';
 import { logger } from '../utils/logger';
+import { getScenarioLanguage } from '../utils/scenarioModels';
 
 export function useTranscriptionServiceSync() {
   const config = useConfigStore((state) => state.config);
@@ -35,14 +36,15 @@ export function useTranscriptionServiceSync() {
         if (liveAsr.engine === 'local') {
           transcriptionService.setModelPath(liveAsr.modelPath);
         }
-        transcriptionService.setLanguage(config.language);
+        const liveLanguage = getScenarioLanguage(config, 'live');
+        transcriptionService.setLanguage(liveLanguage);
         transcriptionService.setEnableITN(config.enableITN ?? false);
         transcriptionService.setProjectId(activeProjectId);
 
         if (captionAsr.engine === 'local') {
           captionTranscriptionService.setModelPath(captionAsr.modelPath);
         }
-        captionTranscriptionService.setLanguage(config.language);
+        captionTranscriptionService.setLanguage(liveLanguage);
         captionTranscriptionService.setEnableITN(config.enableITN ?? false);
 
         await transcriptionService.prepare();

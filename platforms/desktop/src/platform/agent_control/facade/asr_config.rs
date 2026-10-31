@@ -39,6 +39,8 @@ pub fn resolve_batch_asr_request_from_config(
                 .or_else(|| {
                     batch
                         .get("language")
+                        .or_else(|| config.get("batchLanguage"))
+                        .or_else(|| config.get("batch_language"))
                         .or_else(|| config.get("language"))
                         .and_then(|l| l.as_str())
                         .map(ToString::to_string)
@@ -81,6 +83,8 @@ pub fn resolve_batch_asr_request_from_config(
                 .or_else(|| {
                     batch
                         .get("language")
+                        .or_else(|| config.get("batchLanguage"))
+                        .or_else(|| config.get("batch_language"))
                         .or_else(|| config.get("language"))
                         .and_then(|l| l.as_str())
                         .map(ToString::to_string)
@@ -142,7 +146,9 @@ pub fn resolve_batch_asr_request_from_config(
             .map(ToString::to_string)
             .or_else(|| {
                 config
-                    .get("language")
+                    .get("batchLanguage")
+                    .or_else(|| config.get("batch_language"))
+                    .or_else(|| config.get("language"))
                     .and_then(|l| l.as_str())
                     .map(ToString::to_string)
             })
@@ -190,6 +196,12 @@ pub fn resolve_batch_asr_request_from_config(
             req.mode = AsrMode::Batch;
             if let Some(lang) = language_override {
                 req.language = lang.to_string();
+            } else if let Some(batch_lang) = config
+                .get("batchLanguage")
+                .or_else(|| config.get("batch_language"))
+                .and_then(|l| l.as_str())
+            {
+                req.language = batch_lang.to_string();
             }
             Ok(req)
         }

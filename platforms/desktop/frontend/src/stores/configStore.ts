@@ -135,6 +135,7 @@ export const DEFAULT_CONFIG: AppConfig = {
 
   // Transcription
   language: 'auto',
+  batchLanguage: 'auto',
   enableTimeline: false,
   enableITN: true,
   batchVadEnabled: true,
@@ -309,6 +310,8 @@ const CAPTION_KEYS: (keyof CaptionConfig)[] = [
 
 const TRANSCRIPTION_KEYS: (keyof TranscriptionConfig)[] = [
   'language',
+  'liveLanguage',
+  'batchLanguage',
   'enableTimeline',
   'enableITN',
   'batchVadEnabled',

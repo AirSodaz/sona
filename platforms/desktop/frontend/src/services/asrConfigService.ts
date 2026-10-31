@@ -24,6 +24,7 @@ import { coerceLanguage, type LanguageCapable } from '../utils/languages';
 import { findSelectedModelByMode } from '../utils/modelSelection';
 import {
   getScenarioAlignmentModelPath,
+  getScenarioLanguage,
   getScenarioPunctuationModelPath,
   getScenarioVadBufferSize,
   getScenarioVadModelPath,
@@ -214,9 +215,12 @@ export class AsrConfigService {
   ): AsrTranscriptionRequest => {
     const normalizedAsr = this.normalizeAsrConfig(config);
     const selection = this.getSelection({ ...config, asr: normalizedAsr }, slot);
+    const scenario: AsrScenario = slot === 'batch' ? 'batch' : 'live';
+    const configuredLanguage = getScenarioLanguage(config, scenario);
     const baseRequest: AsrTranscriptionRequestBase = {
       mode: selection.mode,
-      language: overrides.language || this.coerceConfiguredLanguage(config, slot, config.language),
+      language:
+        overrides.language || this.coerceConfiguredLanguage(config, slot, configuredLanguage),
       enableItn: config.enableITN ?? false,
       normalizationOptions: {
         enableTimeline: config.enableTimeline ?? false,
@@ -244,7 +248,6 @@ export class AsrConfigService {
       ? this.ports.modelService.getModelRules(modelInfo.id)
       : { requiresPunctuation: false, requiresVad: false };
 
-    const scenario: AsrScenario = slot === 'batch' ? 'batch' : 'live';
     const isBatchVadForced = scenario === 'batch' && this.isBatchVadForced(selection, modelInfo);
     const batchVadEnabled =
       isBatchVadForced || scenario !== 'batch' || config.batchVadEnabled !== false;

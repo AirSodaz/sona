@@ -4,6 +4,7 @@ import { setTranscriptSegments } from '../stores/transcriptCoordinator';
 import { useTranscriptSessionStore } from '../stores/transcriptSessionStore';
 import { isHistoryItemDraft } from '../types/history';
 import { logger } from '../utils/logger';
+import { getScenarioLanguage } from '../utils/scenarioModels';
 import { isAsrRequestConfigured, resolveAsrTranscriptionRequest } from './asrConfigService';
 import { historyService } from './historyService';
 import { type TranscriptionService, transcriptionService } from './transcriptionService';
@@ -55,7 +56,7 @@ export class RetranscribeService {
       this.ports.transcriptionService.setModelPath(batchAsr.modelPath);
     }
     this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
-    const language = config.language;
+    const language = getScenarioLanguage(config, 'batch');
     const currentSegments = this.ports.getTranscriptSessionStore().segments;
 
     await this.ports.transcriptSnapshotService.createSnapshot(

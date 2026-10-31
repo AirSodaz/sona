@@ -302,6 +302,10 @@ pub struct AppConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub live_language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub batch_language: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub enable_timeline: Option<bool>,
     #[serde(
         default,

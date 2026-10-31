@@ -70,6 +70,7 @@ pub fn default_config() -> Value {
         ("realtimeTranslationEngine", json!("onnx")),
         ("realtimeTranslationModelId", Value::Null),
         ("language", json!("auto")),
+        ("batchLanguage", json!("auto")),
         ("enableTimeline", json!(false)),
         ("enableITN", json!(true)),
         ("batchVadEnabled", json!(true)),

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { useHistoryStore } from '../../stores/historyStore';
+import { type HistoryState, useHistoryStore } from '../../stores/historyStore';
 import {
   resetTranscriptStores,
   useTranscriptStore,
@@ -15,14 +15,16 @@ vi.mock('../../stores/effectiveConfigStore', () => ({
   getEffectiveConfigSnapshot: () => ({
     batchModelPath: 'C:/models/asr.onnx',
     enableITN: true,
-    language: 'auto',
+    language: 'zh',
+    batchLanguage: 'ja',
   }),
   useEffectiveConfigStore: {
     getState: () => ({
       config: {
         batchModelPath: 'C:/models/asr.onnx',
         enableITN: true,
-        language: 'auto',
+        language: 'zh',
+        batchLanguage: 'ja',
       },
       syncConfig: vi.fn(),
     }),
@@ -88,9 +90,7 @@ describe('RetranscribeService', () => {
       sourceHistoryId: 'history-a',
       segments: originalSegments,
     });
-    useHistoryStore.setState({ updateTranscript } as Partial<
-      ReturnType<typeof useHistoryStore.getState>
-    >);
+    useHistoryStore.setState({ updateTranscript } as Partial<HistoryState>);
     vi.mocked(transcriptionService.transcribeFile).mockResolvedValue(nextSegments);
 
     await retranscribeService.retranscribeCurrentRecord();
@@ -106,6 +106,26 @@ describe('RetranscribeService', () => {
     expect(updateTranscript).toHaveBeenCalledWith('history-a', nextSegments);
     expect(useTranscriptStore.getState().segments).toEqual(
       normalizeTranscriptSegments(nextSegments)
+    );
+  });
+
+  it('uses batchLanguage when retranscribing', async () => {
+    vi.mocked(transcriptionService.transcribeFile).mockResolvedValue([]);
+    useTranscriptStore.setState({
+      sourceHistoryId: 'history-a',
+      segments: [],
+    });
+    useHistoryStore.setState({
+      updateTranscript: vi.fn().mockResolvedValue(undefined),
+    } as Partial<HistoryState>);
+
+    await retranscribeService.retranscribeCurrentRecord();
+
+    expect(transcriptionService.transcribeFile).toHaveBeenCalledWith(
+      'C:/audio/history-a.wav',
+      undefined,
+      undefined,
+      'ja'
     );
   });
 });

@@ -16,7 +16,7 @@ export function addHistoryTranscriptUpdateListener(
   return useHistoryStore.getState().addTranscriptUpdateListener(listener);
 }
 
-interface HistoryState {
+export interface HistoryState {
   items: HistoryItem[];
   isLoading: boolean;
   error: string | null;

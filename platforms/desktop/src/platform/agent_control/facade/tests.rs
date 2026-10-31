@@ -170,6 +170,22 @@ async fn test_resolve_batch_asr_config() {
     let req_fallback = resolve_batch_asr_request_from_config(&live_cfg, None).unwrap();
     assert_eq!(req_fallback.language, "en");
     assert_eq!(req_fallback.mode, AsrMode::Batch);
+
+    // Top-level batchLanguage takes precedence over top-level language
+    let dual_cfg = serde_json::json!({
+        "asr": {
+            "selections": {
+                "batch": {
+                    "engine": "local",
+                    "modelPath": "C:/models/sense-voice.onnx"
+                }
+            }
+        },
+        "language": "zh",
+        "batchLanguage": "ja"
+    });
+    let req_dual = resolve_batch_asr_request_from_config(&dual_cfg, None).unwrap();
+    assert_eq!(req_dual.language, "ja");
 }
 
 #[tokio::test]

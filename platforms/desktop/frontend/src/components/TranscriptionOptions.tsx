@@ -9,6 +9,7 @@ import type { AsrSelectionSlot } from '../types/config';
 import type { ModelCatalogSnapshot } from '../types/modelCatalog';
 import { buildAsrModelDropdownOptions, resolveActiveAsrModelId } from '../utils/asrModelOptions';
 import { languageDisplayName } from '../utils/languages';
+import { getScenarioLanguage } from '../utils/scenarioModels';
 import { ChevronUpIcon } from './Icons';
 import { ParameterSettingsPopover } from './ParameterSettingsPopover';
 
@@ -105,9 +106,10 @@ export function TranscriptionOptions({
     return activeModelId;
   }, [catalog, slot, activeModelId, config, t]);
 
+  const configuredLanguage = getScenarioLanguage(config, surface);
   const effectiveLanguage = useMemo(() => {
-    return asrConfigService.coerceConfiguredLanguage(config, slot, config.language);
-  }, [config, slot]);
+    return asrConfigService.coerceConfiguredLanguage(config, slot, configuredLanguage);
+  }, [config, slot, configuredLanguage]);
 
   const activeLanguageLabel = useMemo(() => {
     if (!effectiveLanguage || effectiveLanguage === 'auto') {

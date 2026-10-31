@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_CONFIG } from '../../../stores/configStore';
 import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
@@ -144,6 +145,48 @@ describe('BatchItemProcessor', () => {
           autoPolish: true,
         }),
       })
+    );
+  });
+
+  it('uses batchLanguage when transcribing batch file', async () => {
+    const item: BatchQueueItem = {
+      id: 'queue-batch-lang',
+      filename: 'audio.mp3',
+      filePath: '/path/audio.mp3',
+      status: 'pending',
+      progress: 0,
+      segments: [],
+      projectId: null,
+    };
+
+    const config = {
+      ...DEFAULT_CONFIG,
+      language: 'zh',
+      batchLanguage: 'ja',
+    };
+
+    const callbacks = {
+      updateStatus: vi.fn(),
+      updateProgress: vi.fn(),
+      updateSegments: vi.fn(),
+      onHistorySaved: vi.fn(),
+      onExportComplete: vi.fn(),
+      isActiveItem: vi.fn().mockReturnValue(true),
+      isCancelRequested: vi.fn().mockReturnValue(false),
+      onInstanceIdAssigned: vi.fn(),
+    };
+
+    await processor.processBatchQueueItem({ item, config, callbacks });
+
+    expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalledWith(
+      '/path/audio.mp3',
+      expect.any(Function),
+      expect.any(Function),
+      'ja',
+      undefined,
+      config,
+      expect.any(Function),
+      null
     );
   });
 
