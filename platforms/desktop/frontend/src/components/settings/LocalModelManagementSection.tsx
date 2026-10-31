@@ -36,6 +36,16 @@ const CATALOG_SECTION_ORDER: ModelCatalogSectionType[] = [
   'alignment',
 ];
 
+/** Stable DOM ids for Advanced catalog groups (also scanned by search-registry integrity). */
+export const SETTINGS_CATALOG_SECTION_IDS: Record<ModelCatalogSectionType, string> = {
+  asr: 'settings-catalog-asr',
+  punctuation: 'settings-catalog-punctuation',
+  vad: 'settings-catalog-vad',
+  'speaker-segmentation': 'settings-catalog-speaker-segmentation',
+  'speaker-embedding': 'settings-catalog-speaker-embedding',
+  alignment: 'settings-catalog-alignment',
+};
+
 export interface LocalModelManagementSectionProps {
   catalogLoadState: ModelManagerContextType['catalogLoadState'];
   catalogLoadError: ModelManagerContextType['catalogLoadError'];
@@ -287,7 +297,7 @@ export function LocalModelManagementSection({
           : undefined;
 
     return (
-      <div key={type} id={`settings-catalog-${type}`}>
+      <div key={type} id={SETTINGS_CATALOG_SECTION_IDS[type]}>
         <SettingsAccordion
           title={sectionTitle(type)}
           status={

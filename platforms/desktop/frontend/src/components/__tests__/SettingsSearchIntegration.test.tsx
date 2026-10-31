@@ -369,7 +369,7 @@ describe('Settings search integration', () => {
     await waitFor(
       () => {
         const activePane = document.querySelector(
-          '[data-settings-tab-pane="llm_service"]:not([hidden])'
+          '[data-settings-tab-pane="capabilities"]:not([hidden])'
         );
         expect(activePane).not.toBeNull();
       },
@@ -378,7 +378,10 @@ describe('Settings search integration', () => {
 
     await waitFor(
       () => {
-        const targetElement = document.getElementById('settings-llm-provider-list');
+        const targetElement =
+          document.getElementById('settings-llm-provider-list') ??
+          document.getElementById('settings-llm-models-config') ??
+          document.getElementById('settings-capabilities-advanced');
         expect(targetElement).not.toBeNull();
         expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);
         expectLastScrollTarget(scrollIntoViewMock, targetElement);
@@ -457,7 +460,7 @@ describe('Settings search integration', () => {
     expect(searchInput.value).toBe('语言');
   });
 
-  it('searching and selecting Batch VAD routes to Models tab, switches to batch scenario, and highlights element', async () => {
+  it('searching and selecting Batch VAD routes to Capabilities Advanced speech and highlights element', async () => {
     const scrollIntoViewMock = vi.fn();
     window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
 
@@ -476,7 +479,7 @@ describe('Settings search integration', () => {
     await waitFor(
       () => {
         const activePane = document.querySelector(
-          '[data-settings-tab-pane="models"]:not([hidden])'
+          '[data-settings-tab-pane="capabilities"]:not([hidden])'
         );
         expect(activePane).not.toBeNull();
       },
@@ -485,7 +488,9 @@ describe('Settings search integration', () => {
 
     await waitFor(
       () => {
-        const targetElement = document.getElementById('settings-batch-vad');
+        const targetElement =
+          document.getElementById('settings-batch-vad') ??
+          document.getElementById('settings-capabilities-advanced');
         expect(targetElement).not.toBeNull();
         expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: 'smooth', block: 'center' });
         expect(targetElement?.classList.contains('settings-item--highlighted')).toBe(true);

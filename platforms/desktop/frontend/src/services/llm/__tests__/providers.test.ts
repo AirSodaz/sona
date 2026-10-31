@@ -115,7 +115,7 @@ describe('llm providers', () => {
         labelDefault: 'Private Gateway',
         defaultApiHost: '',
         defaultApiPath: '/v1/chat/completions',
-        requiresApiKey: true,
+        requiresApiKey: false,
         supportsModelListing: true,
         strategy: 'openai_compatible',
       })

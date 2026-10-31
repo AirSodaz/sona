@@ -87,14 +87,22 @@ function makeModel(
   return {
     engine: 'sherpa-onnx',
     isInstalled: false,
-    isRecommended: partial.type === 'asr',
+    isRecommended: partial.type === 'sensevoice' || partial.type === 'vad',
     size: '10 MB',
+    description: '',
+    languages: ['en'],
+    languageMode: 'multilingual',
     ...partial,
   } as ModelCatalogModel;
 }
 
 describe('LocalModelManagementSection catalog search', () => {
-  const asr = makeModel({ id: 'sensevoice', name: 'SenseVoice', type: 'asr', isRecommended: true });
+  const asr = makeModel({
+    id: 'sensevoice',
+    name: 'SenseVoice',
+    type: 'sensevoice',
+    isRecommended: true,
+  });
   const silero = makeModel({
     id: 'silero-vad',
     name: 'Silero VAD',

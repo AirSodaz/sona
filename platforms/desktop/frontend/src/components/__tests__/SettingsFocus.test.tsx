@@ -67,6 +67,12 @@ vi.mock('../settings/SettingsMicrophoneTab', () => ({
 vi.mock('../settings/SettingsModelsTab', () => ({
   SettingsModelsTab: () => <div>Models Tab</div>,
 }));
+vi.mock('../settings/SettingsCapabilitiesPane', () => ({
+  SettingsCapabilitiesPane: (props: any) => {
+    modelPanePropsMock(props);
+    return <div>Capabilities Tab</div>;
+  },
+}));
 vi.mock('../settings/SettingsModelsPane', () => ({
   SettingsModelsPane: (props: any) => {
     modelPanePropsMock(props);
@@ -210,9 +216,8 @@ describe('Settings Focus Trap & Navigation', () => {
       'shortcuts.title',
       'settings.about',
       'settings.input_device',
-      'settings.model_hub',
+      'settings.capabilities.title',
       'settings.vocabulary',
-      'settings.llm.title',
       'settings.automation',
       'settings.storage.title',
       'settings.sync.title',

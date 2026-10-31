@@ -43,7 +43,10 @@ import { Dropdown } from '../Dropdown';
 import { ModelIcon, RestoreIcon } from '../Icons';
 import { Switch } from '../Switch';
 import { CloudAsrProviderGrid } from './CloudAsrProviderGrid';
-import { LocalModelManagementSection } from './LocalModelManagementSection';
+import {
+  LocalModelManagementSection,
+  SETTINGS_CATALOG_SECTION_IDS,
+} from './LocalModelManagementSection';
 import {
   ScenarioCardTabs,
   SegmentedSubTabs,
@@ -297,7 +300,7 @@ export function SettingsModelsTab({
     setIsAdvancedOpen(true);
     requestAnimationFrame(() => {
       const target =
-        document.getElementById(`settings-catalog-${section}`) ??
+        document.getElementById(SETTINGS_CATALOG_SECTION_IDS[section]) ??
         document.getElementById('settings-download-mirror');
       target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     });

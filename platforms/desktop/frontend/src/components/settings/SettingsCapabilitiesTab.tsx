@@ -82,7 +82,11 @@ export function SettingsCapabilitiesTab({
   const fullConfig = useConfigStore((state) => state.config);
   const showError = useDialogStore((state) => state.showError);
   const nav = useOptionalSettingsNavigation();
-  const { selectedModelIds, downloads, modelCatalog } = useModelManagerContext();
+  const {
+    selectedModelIds,
+    downloads,
+    modelCatalog = { models: [], modelPathById: {} },
+  } = useModelManagerContext();
 
   const [installingRecommended, setInstallingRecommended] = useState(false);
   const [installProgress, setInstallProgress] = useState<string | null>(null);

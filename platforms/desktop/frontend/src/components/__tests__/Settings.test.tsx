@@ -194,6 +194,8 @@ function createModelCatalogSnapshot(installedIds: string[] = []) {
     installPath: `/path/to/${model.id}`,
     downloadPath: `/path/to/${model.id}.tar.bz2`,
     isInstalled: installedIds.includes(model.id),
+    // Advanced catalog defaults to Recommended + Installed.
+    isRecommended: true,
   }));
   const asrModels = models.filter((model) => model.type === 'sensevoice');
   const punctuationModels = models.filter((model) => model.type === 'punctuation');
@@ -336,11 +338,28 @@ describe('Settings', () => {
 
   async function openModelsTab() {
     await screen.findByText('settings.general_title');
-    fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
+    fireEvent.click(screen.getByRole('tab', { name: /settings.capabilities.title/ }));
+    await waitFor(() => expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled(), {
+      timeout: MODEL_TAB_LOAD_TIMEOUT_MS,
+    });
+    // Expand Advanced → Speech advanced so Local Model Management mounts.
+    const advancedToggle = await screen.findByRole('button', {
+      name: /settings.capabilities.advanced_title/,
+    });
+    if (advancedToggle.getAttribute('aria-expanded') !== 'true') {
+      fireEvent.click(advancedToggle);
+    }
+    fireEvent.click(
+      await screen.findByRole('button', { name: /settings.capabilities.advanced_speech/ })
+    );
     await screen.findByText('settings.model_selection', undefined, {
       timeout: MODEL_TAB_LOAD_TIMEOUT_MS,
     });
-    await waitFor(() => expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled(), {
+    // Deferred local catalog mount (requestAnimationFrame) + default-open Recognition group.
+    await screen.findByText('settings.vad_models', undefined, {
+      timeout: MODEL_TAB_LOAD_TIMEOUT_MS,
+    });
+    await screen.findByText('settings.recognition_models', undefined, {
       timeout: MODEL_TAB_LOAD_TIMEOUT_MS,
     });
   }
@@ -392,8 +411,7 @@ describe('Settings', () => {
 
     expect(container.querySelector('[data-settings-tab-pane="dashboard"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-tab-pane="microphone"]')).not.toBeNull();
-    expect(container.querySelector('[data-settings-tab-pane="models"]')).not.toBeNull();
-    expect(container.querySelector('[data-settings-tab-pane="llm_service"]')).not.toBeNull();
+    expect(container.querySelector('[data-settings-tab-pane="capabilities"]')).not.toBeNull();
 
     expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
     expect(modelService.getModelPath).not.toHaveBeenCalled();
