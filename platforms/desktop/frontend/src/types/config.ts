@@ -11,10 +11,13 @@ import type {
   AppLanguagePreference as GeneratedAppLanguagePreference,
   AppLogLevel as GeneratedAppLogLevel,
 } from '../bindings';
+import type { AsrModelSelection } from './asrSelection';
 import type { EmbyToolOverrides } from './emby';
 import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
 import type { MediaServerProfile } from './mediaServer';
 import type { SpeakerProfile } from './speaker';
+
+export type { AsrEngine, AsrMode, AsrModelSelection } from './asrSelection';
 
 // ---------------------------------------------------------------------------
 // UI preferences
@@ -100,19 +103,8 @@ export interface AudioConfig {
 // Local model paths and management
 // ---------------------------------------------------------------------------
 
-export type AsrEngine = 'local' | 'online';
-export type AsrMode = 'streaming' | 'batch';
 export type AsrSelectionSlot = 'live' | 'caption' | 'voiceTyping' | 'batch';
 export type OnlineAsrProviderId = string;
-
-export interface AsrModelSelection {
-  engine: AsrEngine;
-  mode: AsrMode;
-  modelId?: string | null;
-  modelPath: string;
-  providerId?: string | null;
-  profileId?: string | null;
-}
 
 export type OnlineAsrProviderConfig = Record<string, unknown>;
 

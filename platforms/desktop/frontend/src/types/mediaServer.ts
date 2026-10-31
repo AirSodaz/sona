@@ -1,4 +1,4 @@
-import type { AsrModelSelection } from './config';
+import type { AsrModelSelection } from './asrSelection';
 
 export type MediaServerType = 'emby' | 'jellyfin';
 
