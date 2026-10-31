@@ -1,22 +1,15 @@
-import {
-  ChevronRight,
-  Globe,
-  Loader2,
-  Mic,
-  Settings2,
-  Sparkles,
-} from 'lucide-react';
+import { ChevronRight, Globe, Loader2, Mic, Settings2, Sparkles } from 'lucide-react';
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useModelManagerContext } from '../../hooks/useModelManager';
+import { getProviderDefinition } from '../../services/llm/providers';
+import { getFeatureModelEntry } from '../../services/llm/state';
 import {
   downloadRecommendedOnboardingModels,
   getRecommendedOnboardingConfig,
   RECOMMENDED_RECOGNITION_MODEL_ID,
 } from '../../services/onboardingService';
-import { getFeatureModelEntry } from '../../services/llm/state';
-import { getProviderDefinition } from '../../services/llm/providers';
 import {
   useConfigStore,
   useLlmAssistantConfig,
@@ -28,24 +21,25 @@ import type { LlmProvider } from '../../types/transcript';
 import { ModelIcon, RobotIcon } from '../Icons';
 import { AiWritingConnectModal } from './capabilities/AiWritingConnectModal';
 import {
+  type CapabilityStatusKind,
   fingerprintApiKey,
   getProviderProbeCacheKey,
   isAiWritingConfigured,
   isSpeechRecognitionReady,
   isTranslationConfigured,
   readProviderProbeCache,
-  type CapabilityStatusKind,
+  resolveSpeechModelDisplayName,
 } from './capabilities/capabilityStatus';
 import { ModelPickerModal } from './capabilities/ModelPickerModal';
-import { SettingsLLMServiceTab } from './SettingsLLMServiceTab';
+import { getCurrentLlmSettings } from './llm/helpers';
 import {
   SettingsAccordion,
   SettingsPageHeader,
   SettingsSection,
   SettingsTabContainer,
 } from './SettingsLayout';
+import { SettingsLLMServiceTab } from './SettingsLLMServiceTab';
 import { SettingsModelsTab } from './SettingsModelsTab';
-import { getCurrentLlmSettings } from './llm/helpers';
 import { useOptionalSettingsNavigation } from './SettingsNavigationContext';
 import './SettingsCapabilitiesTab.css';
 
@@ -88,7 +82,7 @@ export function SettingsCapabilitiesTab({
   const fullConfig = useConfigStore((state) => state.config);
   const showError = useDialogStore((state) => state.showError);
   const nav = useOptionalSettingsNavigation();
-  const { selectedModelIds, downloads } = useModelManagerContext();
+  const { selectedModelIds, downloads, modelCatalog } = useModelManagerContext();
 
   const [installingRecommended, setInstallingRecommended] = useState(false);
   const [installProgress, setInstallProgress] = useState<string | null>(null);
@@ -130,18 +124,23 @@ export function SettingsCapabilitiesTab({
   }, [focusRequestId, initialFocus]);
 
   const speechReady = isSpeechRecognitionReady(modelConfig);
-  const speechModelLabel = useMemo(() => {
-    const streamingId = selectedModelIds.streaming;
-    if (streamingId) {
-      return streamingId;
-    }
-    const livePath = modelConfig.streamingModelPath || modelConfig.asr?.selections?.live?.modelPath;
-    if (!livePath) {
-      return null;
-    }
-    const parts = livePath.split(/[/\\]/);
-    return parts[parts.length - 1] || livePath;
-  }, [modelConfig.asr?.selections?.live?.modelPath, modelConfig.streamingModelPath, selectedModelIds.streaming]);
+  const speechModelLabel = useMemo(
+    () =>
+      resolveSpeechModelDisplayName({
+        streamingModelId: selectedModelIds.streaming,
+        streamingModelPath: modelConfig.streamingModelPath,
+        liveModelPath: modelConfig.asr?.selections?.live?.modelPath,
+        catalogModels: modelCatalog.models,
+        modelPathById: modelCatalog.modelPathById,
+      }),
+    [
+      modelCatalog.modelPathById,
+      modelCatalog.models,
+      modelConfig.asr?.selections?.live?.modelPath,
+      modelConfig.streamingModelPath,
+      selectedModelIds.streaming,
+    ]
+  );
 
   const recommendedDownloading = Boolean(
     downloads[RECOMMENDED_RECOGNITION_MODEL_ID] || installingRecommended
@@ -172,9 +171,7 @@ export function SettingsCapabilitiesTab({
   const polishEntry = getFeatureModelEntry(llmConfig, 'polish');
   const llmSettings = getCurrentLlmSettings(llmConfig);
   const polishProvider = polishEntry?.provider;
-  const polishProviderSetting = polishProvider
-    ? llmSettings.providers[polishProvider]
-    : undefined;
+  const polishProviderSetting = polishProvider ? llmSettings.providers[polishProvider] : undefined;
   const probeKey =
     polishProvider && polishProviderSetting
       ? getProviderProbeCacheKey(
@@ -356,11 +353,7 @@ export function SettingsCapabilitiesTab({
       >
         <div className="capability-card-body">
           <div className="capability-actions">
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setConnectOpen(true)}
-            >
+            <button type="button" className="btn btn-primary" onClick={() => setConnectOpen(true)}>
               {aiConfigured
                 ? t('settings.capabilities.manage_connection', {
                     defaultValue: 'Manage connection',
@@ -387,8 +380,9 @@ export function SettingsCapabilitiesTab({
         title={t('settings.capabilities.translation_title', {
           defaultValue: 'Translation',
         })}
-        description={t('settings.capabilities.translation_description', {
-          defaultValue: 'Ready out of the box with Google Translate (Free).',
+        description={t('settings.capabilities.translation_description_named', {
+          defaultValue: 'Currently using {{name}}. Change the engine in Advanced if needed.',
+          name: translationLabel,
         })}
         icon={<Globe size={20} />}
         actions={
@@ -408,6 +402,12 @@ export function SettingsCapabilitiesTab({
         }
       >
         <div className="capability-card-body">
+          <p className="settings-hint" style={{ marginTop: 0 }}>
+            {t('settings.capabilities.translation_engine_label', {
+              defaultValue: 'Engine: {{name}}',
+              name: translationLabel,
+            })}
+          </p>
           <div className="capability-actions">
             <button
               type="button"
@@ -415,6 +415,11 @@ export function SettingsCapabilitiesTab({
               onClick={() => {
                 setAdvancedOpen(true);
                 setAdvancedAiOpen(true);
+                requestAnimationFrame(() => {
+                  document
+                    .getElementById('settings-llm-models-config')
+                    ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
               }}
             >
               {t('settings.capabilities.change_translation', {
@@ -427,69 +432,73 @@ export function SettingsCapabilitiesTab({
       </SettingsSection>
 
       <div id="settings-capabilities-advanced">
-      <SettingsAccordion
-        isOpen={advancedOpen}
-        onToggle={() => setAdvancedOpen((prev) => !prev)}
-        title={t('settings.capabilities.advanced_title', {
-          defaultValue: 'Advanced',
-        })}
-        status={
-          <span className="settings-hint" style={{ margin: 0 }}>
-            {t('settings.capabilities.advanced_hint', {
-              defaultValue: 'Live≠Batch, speakers, companions, providers, temperatures',
-            })}
-          </span>
-        }
-      >
-        <div className="capability-advanced">
-          <button
-            type="button"
-            className={`capability-advanced-toggle ${advancedSpeechOpen ? 'open' : ''}`}
-            onClick={() => setAdvancedSpeechOpen((prev) => !prev)}
-          >
-            <Settings2 size={16} />
-            {t('settings.capabilities.advanced_speech', {
-              defaultValue: 'Speech advanced',
-            })}
-            <ChevronRight size={16} className="capability-advanced-chevron" />
-          </button>
-          {advancedSpeechOpen && (
-            <div className="capability-advanced-panel" id="settings-model-hub">
-              <SettingsModelsTab
-                isActive={isActive && advancedSpeechOpen}
-                embedded
-                initialScenario={
-                  initialFocus === 'batch' ? 'batch' : initialFocus === 'live' ? 'live' : undefined
-                }
-                subTabRequestId={
-                  initialFocus === 'live' || initialFocus === 'batch' ? focusRequestId : undefined
-                }
-              />
-            </div>
-          )}
+        <SettingsAccordion
+          isOpen={advancedOpen}
+          onToggle={() => setAdvancedOpen((prev) => !prev)}
+          title={t('settings.capabilities.advanced_title', {
+            defaultValue: 'Advanced',
+          })}
+          status={
+            <span className="settings-hint" style={{ margin: 0 }}>
+              {t('settings.capabilities.advanced_hint', {
+                defaultValue: 'Live≠Batch, speakers, companions, providers, temperatures',
+              })}
+            </span>
+          }
+        >
+          <div className="capability-advanced">
+            <button
+              type="button"
+              className={`capability-advanced-toggle ${advancedSpeechOpen ? 'open' : ''}`}
+              onClick={() => setAdvancedSpeechOpen((prev) => !prev)}
+            >
+              <Settings2 size={16} />
+              {t('settings.capabilities.advanced_speech', {
+                defaultValue: 'Speech advanced',
+              })}
+              <ChevronRight size={16} className="capability-advanced-chevron" />
+            </button>
+            {advancedSpeechOpen && (
+              <div className="capability-advanced-panel" id="settings-model-hub">
+                <SettingsModelsTab
+                  isActive={isActive && advancedSpeechOpen}
+                  embedded
+                  initialScenario={
+                    initialFocus === 'batch'
+                      ? 'batch'
+                      : initialFocus === 'live'
+                        ? 'live'
+                        : undefined
+                  }
+                  subTabRequestId={
+                    initialFocus === 'live' || initialFocus === 'batch' ? focusRequestId : undefined
+                  }
+                />
+              </div>
+            )}
 
-          <button
-            type="button"
-            className={`capability-advanced-toggle ${advancedAiOpen ? 'open' : ''}`}
-            onClick={() => setAdvancedAiOpen((prev) => !prev)}
-          >
-            <RobotIcon width={16} height={16} />
-            {t('settings.capabilities.advanced_ai', {
-              defaultValue: 'AI advanced',
-            })}
-            <ChevronRight size={16} className="capability-advanced-chevron" />
-          </button>
-          {advancedAiOpen && (
-            <div className="capability-advanced-panel" id="settings-llm-models-config">
-              <SettingsLLMServiceTab
-                isActive={isActive && advancedAiOpen}
-                embedded
-                onOpenProviderDetails={onOpenLlmProviderDetails}
-              />
-            </div>
-          )}
-        </div>
-      </SettingsAccordion>
+            <button
+              type="button"
+              className={`capability-advanced-toggle ${advancedAiOpen ? 'open' : ''}`}
+              onClick={() => setAdvancedAiOpen((prev) => !prev)}
+            >
+              <RobotIcon width={16} height={16} />
+              {t('settings.capabilities.advanced_ai', {
+                defaultValue: 'AI advanced',
+              })}
+              <ChevronRight size={16} className="capability-advanced-chevron" />
+            </button>
+            {advancedAiOpen && (
+              <div className="capability-advanced-panel" id="settings-llm-models-config">
+                <SettingsLLMServiceTab
+                  isActive={isActive && advancedAiOpen}
+                  embedded
+                  onOpenProviderDetails={onOpenLlmProviderDetails}
+                />
+              </div>
+            )}
+          </div>
+        </SettingsAccordion>
       </div>
 
       <ModelPickerModal isOpen={pickerOpen} onClose={() => setPickerOpen(false)} />

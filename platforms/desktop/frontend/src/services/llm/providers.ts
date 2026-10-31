@@ -185,7 +185,8 @@ function customProviderDefaults(
         defaultApiHost: '',
         defaultApiPath: '/v1/chat/completions',
         supportsModelListing: true,
-        requiresApiKey: true,
+        // Many local/proxy OpenAI-compatible endpoints omit keys.
+        requiresApiKey: false,
       };
   }
 }

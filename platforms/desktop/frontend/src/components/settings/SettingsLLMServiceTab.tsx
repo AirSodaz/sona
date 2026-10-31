@@ -685,21 +685,26 @@ export function SettingsLLMServiceTab({
                     />
                   </div>
                 ) : null}
-                {selectedProviderDefinition?.requiresApiKey && (
-                  <div className="shared-form-field layout-vertical">
-                    <label className="shared-form-field-label" htmlFor="setup-provider-key">
-                      {t('settings.llm.api_key')}
-                    </label>
-                    <input
-                      id="setup-provider-key"
-                      className="settings-input"
-                      type="password"
-                      value={setupApiKey}
-                      onChange={(event) => setSetupApiKey(event.target.value)}
-                      autoFocus={selectedProviderDefinition?.editableApiHost === false}
-                    />
-                  </div>
-                )}
+                <div className="shared-form-field layout-vertical">
+                  <label className="shared-form-field-label" htmlFor="setup-provider-key">
+                    {t('settings.llm.api_key')}
+                  </label>
+                  <input
+                    id="setup-provider-key"
+                    className="settings-input"
+                    type="password"
+                    value={setupApiKey}
+                    onChange={(event) => setSetupApiKey(event.target.value)}
+                    placeholder={
+                      selectedProviderDefinition?.requiresApiKey
+                        ? 'sk-...'
+                        : t('settings.llm.optional_api_key', {
+                            defaultValue: 'Optional',
+                          })
+                    }
+                    autoFocus={selectedProviderDefinition?.editableApiHost === false}
+                  />
+                </div>
               </>
             );
           })()

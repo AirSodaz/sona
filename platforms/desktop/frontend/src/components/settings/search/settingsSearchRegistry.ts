@@ -479,9 +479,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'capabilities',
-    subTab: 'live',
+    subTab: 'advanced_speech',
     targetId: 'settings-vad-path',
-    fallbackTargetId: 'settings-capabilities-advanced',
+    fallbackTargetId: 'settings-catalog-vad',
     tabKey: 'settings.capabilities.title',
     titleKey: 'settings.vad_models',
     hintKey: 'settings.vad_rule_hint',
@@ -512,9 +512,9 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-punctuation',
     tab: 'capabilities',
-    subTab: 'live',
+    subTab: 'advanced_speech',
     targetId: 'settings-punctuation-path',
-    fallbackTargetId: 'settings-capabilities-advanced',
+    fallbackTargetId: 'settings-catalog-punctuation',
     tabKey: 'settings.capabilities.title',
     titleKey: 'settings.punctuation_models',
     keywords: ['punct', 'punctuation', 'punc', '标点', '标点模型', '标点符号', 'biaodian'],

@@ -486,7 +486,10 @@ describe('SettingsModelsTab speaker model selections', () => {
     ).toContain('3DSpeaker CAMPPlus');
 
     fireEvent.click(screen.getByRole('button', { name: 'Speaker Segmentation Model' }));
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Off']);
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Off',
+      'No model yet — Download…',
+    ]);
   });
 
   it('keeps the page usable while local model catalog status is loading', async () => {

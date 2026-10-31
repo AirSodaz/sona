@@ -12,6 +12,7 @@ import { resolveModelLabels } from '../../types/modelCatalog';
 import { markSettingsPerf } from '../../utils/settingsPerf';
 import { Dropdown } from '../Dropdown';
 import { RestoreIcon } from '../Icons';
+import { isPrimarilySectionAliasQuery, resolveCatalogSectionAliases } from './catalogSearch';
 import { MirrorDownloadPicker } from './MirrorDownloadPicker';
 import { ModelCard } from './ModelCard';
 import { SettingsAccordion, SettingsSection } from './SettingsLayout';
@@ -25,6 +26,15 @@ function scheduleAfterFrame(callback: () => void): () => void {
   const timeoutId = window.setTimeout(callback, 0);
   return () => window.clearTimeout(timeoutId);
 }
+
+const CATALOG_SECTION_ORDER: ModelCatalogSectionType[] = [
+  'asr',
+  'punctuation',
+  'vad',
+  'speaker-segmentation',
+  'speaker-embedding',
+  'alignment',
+];
 
 export interface LocalModelManagementSectionProps {
   catalogLoadState: ModelManagerContextType['catalogLoadState'];
@@ -59,7 +69,8 @@ export function LocalModelManagementSection({
   const [statusFilter, setStatusFilter] = useState<
     'all' | 'installed' | 'not-installed' | 'downloading'
   >('all');
-  const [labelFilter, setLabelFilter] = useState<'all' | ModelLabel | 'recommended'>('all');
+  // Default toward Recommended + Installed; users can switch to All Tags for power browsing.
+  const [labelFilter, setLabelFilter] = useState<'all' | ModelLabel | 'recommended'>('recommended');
   const [searchQuery, setSearchQuery] = useState('');
   const [forcedOpenSections, setForcedOpenSections] = useState<
     Partial<Record<ModelCatalogSectionType, boolean>>
@@ -100,20 +111,36 @@ export function LocalModelManagementSection({
     },
   ];
 
+  const aliasMatchedSections = useMemo(
+    () => resolveCatalogSectionAliases(searchQuery),
+    [searchQuery]
+  );
+  const aliasOnlyQuery = useMemo(() => isPrimarilySectionAliasQuery(searchQuery), [searchQuery]);
+  const isSearching = searchQuery.trim().length > 0;
+
   const filterModels = useCallback(
-    (models: ModelCatalogModel[]) => {
+    (
+      models: ModelCatalogModel[],
+      sectionType: ModelCatalogSectionType,
+      options?: { applyRecommended?: boolean }
+    ) => {
       const query = searchQuery.trim().toLowerCase();
+      const sectionAliasHit = aliasMatchedSections.includes(sectionType);
+      const applyRecommended = options?.applyRecommended !== false;
       return models.filter((model) => {
         if (engineFilter !== 'all' && model.engine !== engineFilter) return false;
-        if (labelFilter === 'recommended') {
-          if (!model.isRecommended && !sectionProps.installedModels.has(model.id)) {
+        // Active search bypasses the Recommended default so aliases like "silero" still hit.
+        if (!query && applyRecommended) {
+          if (labelFilter === 'recommended') {
+            if (!model.isRecommended && !sectionProps.installedModels.has(model.id)) {
+              return false;
+            }
+          } else if (
+            labelFilter !== 'all' &&
+            !(resolveModelLabels(model) ?? []).includes(labelFilter)
+          ) {
             return false;
           }
-        } else if (
-          labelFilter !== 'all' &&
-          !(resolveModelLabels(model) ?? []).includes(labelFilter)
-        ) {
-          return false;
         }
         const isInstalled = sectionProps.installedModels.has(model.id);
         const isDownloading = !!sectionProps.downloads[model.id];
@@ -121,16 +148,29 @@ export function LocalModelManagementSection({
         if (statusFilter === 'not-installed' && (isInstalled || isDownloading)) return false;
         if (statusFilter === 'downloading' && !isDownloading) return false;
         if (query) {
+          // Pure section-alias queries (e.g. "vad") show every model in that section.
+          if (aliasOnlyQuery && sectionAliasHit) {
+            return true;
+          }
           const haystack =
-            `${model.id} ${model.name} ${model.versionLabel ?? ''} ${model.groupId ?? ''} ${model.type}`.toLowerCase();
-          if (!haystack.includes(query)) {
+            `${model.id} ${model.name} ${model.versionLabel ?? ''} ${model.groupId ?? ''} ${model.type} ${sectionType}`.toLowerCase();
+          if (!haystack.includes(query) && !sectionAliasHit) {
             return false;
+          }
+          // Alias hit without id/name match: still include so the group expands.
+          if (!haystack.includes(query) && sectionAliasHit && !aliasOnlyQuery) {
+            // For mixed queries like "silero vad", rely on haystack; alias alone is insufficient.
+            if (!query.split(/\s+/).some((token) => haystack.includes(token))) {
+              return false;
+            }
           }
         }
         return true;
       });
     },
     [
+      aliasMatchedSections,
+      aliasOnlyQuery,
       engineFilter,
       labelFilter,
       searchQuery,
@@ -141,38 +181,52 @@ export function LocalModelManagementSection({
   );
 
   const filteredGroupsByType = useMemo(() => {
-    const types: ModelCatalogSectionType[] = [
-      'asr',
-      'punctuation',
-      'vad',
-      'speaker-segmentation',
-      'speaker-embedding',
-      'alignment',
-    ];
     return new Map(
-      types.map((type) => [
-        type,
-        getSectionGroups(type)
-          .map((group) => ({ ...group, models: filterModels(group.models as ModelCatalogModel[]) }))
-          .filter((group) => group.models.length > 0),
-      ])
+      CATALOG_SECTION_ORDER.map((type) => {
+        const sourceGroups = getSectionGroups(type);
+        let groups = sourceGroups
+          .map((group) => ({
+            ...group,
+            models: filterModels(group.models as ModelCatalogModel[], type),
+          }))
+          .filter((group) => group.models.length > 0);
+
+        // Recommended default must not blank companion sections that have no
+        // recommended flags yet — fall back to browsing all models there.
+        if (
+          !searchQuery.trim() &&
+          labelFilter === 'recommended' &&
+          groups.length === 0 &&
+          type !== 'asr'
+        ) {
+          groups = sourceGroups
+            .map((group) => ({
+              ...group,
+              models: filterModels(group.models as ModelCatalogModel[], type, {
+                applyRecommended: false,
+              }),
+            }))
+            .filter((group) => group.models.length > 0);
+        }
+
+        return [type, groups] as const;
+      })
     );
-  }, [filterModels, getSectionGroups]);
+  }, [filterModels, getSectionGroups, labelFilter, searchQuery]);
 
   useEffect(() => {
-    const query = searchQuery.trim();
-    if (!query) {
+    if (!isSearching) {
       setForcedOpenSections({});
       return;
     }
     const next: Partial<Record<ModelCatalogSectionType, boolean>> = {};
     for (const [type, groups] of filteredGroupsByType.entries()) {
-      if (groups.length > 0) {
+      if (groups.length > 0 || aliasMatchedSections.includes(type)) {
         next[type] = true;
       }
     }
     setForcedOpenSections(next);
-  }, [filteredGroupsByType, searchQuery]);
+  }, [aliasMatchedSections, filteredGroupsByType, isSearching]);
 
   const hasLoadedSections = useMemo(
     () => Array.from(filteredGroupsByType.values()).some((groups) => groups.length > 0),
@@ -189,6 +243,84 @@ export function LocalModelManagementSection({
     });
     return cancelFrame;
   }, []);
+
+  const sectionTitle = (type: ModelCatalogSectionType): string => {
+    switch (type) {
+      case 'asr':
+        return t('settings.recognition_models');
+      case 'punctuation':
+        return t('settings.punctuation_models');
+      case 'vad':
+        return t('settings.vad_models');
+      case 'speaker-segmentation':
+        return t('settings.speaker_segmentation_models', {
+          defaultValue: 'Speaker Segmentation Models',
+        });
+      case 'speaker-embedding':
+        return t('settings.speaker_embedding_models', {
+          defaultValue: 'Speaker Embedding Models',
+        });
+      case 'alignment':
+        return t('settings.alignment_models', {
+          defaultValue: 'CTC Alignment Models',
+        });
+      default:
+        return type;
+    }
+  };
+
+  const renderSection = (type: ModelCatalogSectionType) => {
+    const groups = filteredGroupsByType.get(type) ?? [];
+    const hasMatches = groups.length > 0;
+    // While searching, hide empty Recognition (and peers) instead of "No matching models"
+    // sitting open above a collapsed VAD hit.
+    if (isSearching && !hasMatches) {
+      return null;
+    }
+
+    const openProp = isSearching
+      ? Boolean(forcedOpenSections[type] || hasMatches)
+      : type === 'asr'
+        ? undefined
+        : forcedOpenSections[type]
+          ? true
+          : undefined;
+
+    return (
+      <div key={type} id={`settings-catalog-${type}`}>
+        <SettingsAccordion
+          title={sectionTitle(type)}
+          status={
+            <span className={`status-badge ${getSectionStatus(type).type}`}>
+              {getSectionStatus(type).text}
+            </span>
+          }
+          defaultOpen={type === 'asr'}
+          isOpen={openProp}
+        >
+          {groups.map((group) => (
+            <ModelCard
+              key={group.key}
+              models={group.models}
+              isAsr={type === 'asr'}
+              installedModels={sectionProps.installedModels}
+              downloads={sectionProps.downloads}
+              onDelete={sectionProps.handleDelete}
+              onDownload={sectionProps.handleDownload}
+              onCancelDownload={sectionProps.handleCancelDownload}
+              onDiscardDownload={sectionProps.handleDiscardDownload}
+              actionsDisabled={localModelActionsDisabled}
+            />
+          ))}
+          {!hasMatches && (
+            <div className="settings-model-empty">
+              {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
+            </div>
+          )}
+        </SettingsAccordion>
+      </div>
+    );
+  };
 
   return (
     <SettingsSection
@@ -277,189 +409,15 @@ export function LocalModelManagementSection({
       )}
       {(isCatalogReady || hasLoadedSections) && (
         <>
-          <SettingsAccordion
-            title={t('settings.recognition_models')}
-            status={
-              <span className={`status-badge ${getSectionStatus('asr').type}`}>
-                {getSectionStatus('asr').text}
-              </span>
-            }
-            defaultOpen={true}
-            isOpen={forcedOpenSections.asr ? true : undefined}
-          >
-            {(filteredGroupsByType.get('asr') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={true}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('asr')?.length ?? 0) === 0 && (
+          {CATALOG_SECTION_ORDER.map((type) => renderSection(type))}
+          {isSearching &&
+            CATALOG_SECTION_ORDER.every(
+              (type) => (filteredGroupsByType.get(type)?.length ?? 0) === 0
+            ) && (
               <div className="settings-model-empty">
                 {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
               </div>
             )}
-          </SettingsAccordion>
-
-          <SettingsAccordion
-            title={t('settings.punctuation_models')}
-            status={
-              <span className={`status-badge ${getSectionStatus('punctuation').type}`}>
-                {getSectionStatus('punctuation').text}
-              </span>
-            }
-            isOpen={forcedOpenSections.punctuation ? true : undefined}
-          >
-            {(filteredGroupsByType.get('punctuation') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={false}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('punctuation')?.length ?? 0) === 0 && (
-              <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
-              </div>
-            )}
-          </SettingsAccordion>
-
-          <SettingsAccordion
-            title={t('settings.vad_models')}
-            status={
-              <span className={`status-badge ${getSectionStatus('vad').type}`}>
-                {getSectionStatus('vad').text}
-              </span>
-            }
-            isOpen={forcedOpenSections.vad ? true : undefined}
-          >
-            {(filteredGroupsByType.get('vad') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={false}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('vad')?.length ?? 0) === 0 && (
-              <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
-              </div>
-            )}
-          </SettingsAccordion>
-
-          <SettingsAccordion
-            title={t('settings.speaker_segmentation_models', {
-              defaultValue: 'Speaker Segmentation Models',
-            })}
-            status={
-              <span className={`status-badge ${getSectionStatus('speaker-segmentation').type}`}>
-                {getSectionStatus('speaker-segmentation').text}
-              </span>
-            }
-          >
-            {(filteredGroupsByType.get('speaker-segmentation') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={false}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('speaker-segmentation')?.length ?? 0) === 0 && (
-              <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
-              </div>
-            )}
-          </SettingsAccordion>
-
-          <SettingsAccordion
-            title={t('settings.speaker_embedding_models', {
-              defaultValue: 'Speaker Embedding Models',
-            })}
-            status={
-              <span className={`status-badge ${getSectionStatus('speaker-embedding').type}`}>
-                {getSectionStatus('speaker-embedding').text}
-              </span>
-            }
-          >
-            {(filteredGroupsByType.get('speaker-embedding') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={false}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('speaker-embedding')?.length ?? 0) === 0 && (
-              <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
-              </div>
-            )}
-          </SettingsAccordion>
-
-          <SettingsAccordion
-            title={t('settings.alignment_models', {
-              defaultValue: 'CTC Alignment Models',
-            })}
-            status={
-              <span className={`status-badge ${getSectionStatus('alignment').type}`}>
-                {getSectionStatus('alignment').text}
-              </span>
-            }
-          >
-            {(filteredGroupsByType.get('alignment') ?? []).map((group) => (
-              <ModelCard
-                key={group.key}
-                models={group.models}
-                isAsr={false}
-                installedModels={sectionProps.installedModels}
-                downloads={sectionProps.downloads}
-                onDelete={sectionProps.handleDelete}
-                onDownload={sectionProps.handleDownload}
-                onCancelDownload={sectionProps.handleCancelDownload}
-                onDiscardDownload={sectionProps.handleDiscardDownload}
-                actionsDisabled={localModelActionsDisabled}
-              />
-            ))}
-            {(filteredGroupsByType.get('alignment')?.length ?? 0) === 0 && (
-              <div className="settings-model-empty">
-                {t('settings.model_filter_no_match', { defaultValue: 'No matching models' })}
-              </div>
-            )}
-          </SettingsAccordion>
         </>
       )}
     </SettingsSection>

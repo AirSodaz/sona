@@ -2480,7 +2480,7 @@
       "model_library": "Model Library",
       "add_model": "Add Model",
       "no_models_added": "No models added yet.",
-      "no_local_models_available": "No local models downloaded (please download below)",
+      "no_local_models_available": "No local models yet",
       "feature_models": "Feature Bindings",
       "feature_models_hint": "Assign models for polish, translation, and summary before using those features.",
       "feature_models_runtime_hint": "Polish, translation, and summary run with the model and temperature configured here.",
@@ -2684,6 +2684,8 @@
       "ai_writing_description": "One connection powers Polish and Summary.",
       "translation_title": "Translation",
       "translation_description": "Ready out of the box with Google Translate (Free).",
+      "translation_description_named": "Currently using {{name}}. Change the engine in Advanced if needed.",
+      "translation_engine_label": "Engine: {{name}}",
       "advanced_title": "Advanced",
       "advanced_hint": "Live≠Batch, speakers, companions, providers, temperatures",
       "advanced_speech": "Speech advanced",
@@ -2725,7 +2727,12 @@
       "installing_recommended": "Installing recommended speech pack…",
       "install_progress": "{{model}}: {{percentage}}%",
       "provider_models_empty": "No models listed yet. Click Refresh to probe {{name}} at {{host}}.",
-      "download_from_catalog": "No model yet — open Advanced catalog…"
+      "download_from_catalog": "No model yet — open Advanced catalog…",
+      "no_model_yet_download": "No model yet — Download…",
+      "openai_compatible": "OpenAI-compatible",
+      "openai_compatible_short": "Compatible",
+      "openai_compatible_hint": "Any OpenAI-compatible chat completions endpoint (local proxy, gateway, or cloud).",
+      "api_key_optional": "API Key (optional)"
     },
     "large_download_confirm": "{{name}} is about {{size}}. Download and use it for recognition?",
     "large_download_title": "Large model download"

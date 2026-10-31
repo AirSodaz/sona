@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  LARGE_DOWNLOAD_BYTES,
+  parseModelSizeToBytes,
+  resolveModelDownloadBytes,
+} from '../../../../utils/modelDownloadSize';
+import {
   clearProviderProbeCache,
   fingerprintApiKey,
   getProviderProbeCacheKey,
@@ -7,13 +12,9 @@ import {
   isSpeechRecognitionReady,
   isTranslationConfigured,
   readProviderProbeCache,
+  resolveSpeechModelDisplayName,
   writeProviderProbeCache,
 } from '../capabilityStatus';
-import {
-  LARGE_DOWNLOAD_BYTES,
-  parseModelSizeToBytes,
-  resolveModelDownloadBytes,
-} from '../../../../utils/modelDownloadSize';
 
 describe('capabilityStatus helpers', () => {
   it('detects speech readiness from streaming path or asr selection', () => {
@@ -61,11 +62,30 @@ describe('capabilityStatus helpers', () => {
 
   it('stores probe cache keyed by provider host and key fingerprint', () => {
     clearProviderProbeCache();
-    const key = getProviderProbeCacheKey('open_ai', 'https://api.openai.com/v1', fingerprintApiKey('sk-test'));
+    const key = getProviderProbeCacheKey(
+      'open_ai',
+      'https://api.openai.com/v1',
+      fingerprintApiKey('sk-test')
+    );
     writeProviderProbeCache(key, { status: 'connected', checkedAt: 1, modelIds: ['gpt-4o-mini'] });
     expect(readProviderProbeCache(key)?.status).toBe('connected');
     clearProviderProbeCache(key);
     expect(readProviderProbeCache(key)).toBeUndefined();
+  });
+
+  it('resolves speech Ready labels to catalog names instead of raw paths', () => {
+    expect(
+      resolveSpeechModelDisplayName({
+        streamingModelId: 'sensevoice-small',
+        catalogModels: [{ id: 'sensevoice-small', name: 'SenseVoice Small' }],
+      })
+    ).toBe('SenseVoice Small');
+
+    expect(
+      resolveSpeechModelDisplayName({
+        streamingModelPath: '/data/models/silero_vad.onnx',
+      })
+    ).toBe('silero_vad');
   });
 });
 

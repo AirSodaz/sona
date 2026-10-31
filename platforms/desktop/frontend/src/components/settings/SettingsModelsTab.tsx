@@ -292,7 +292,22 @@ export function SettingsModelsTab({
     },
     [activeOnlineProviderId, modelConfig, updateConfig]
   );
+  const scrollToCatalogSection = useCallback((section: ModelCatalogSectionType | 'asr') => {
+    setShowLocalModelContent(true);
+    setIsAdvancedOpen(true);
+    requestAnimationFrame(() => {
+      const target =
+        document.getElementById(`settings-catalog-${section}`) ??
+        document.getElementById('settings-download-mirror');
+      target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, []);
+
   const handleModelChange = async (type: ModelScenario | 'streaming', modelId: string) => {
+    if (modelId === '__download__') {
+      scrollToCatalogSection('asr');
+      return;
+    }
     const slot: AsrSelectionSlot = type === 'batch' ? 'batch' : 'live';
     const patch = buildModelSelectionPatch(modelConfig, slot, modelId, modelCatalog);
     if (Object.keys(patch).length > 0) {
@@ -302,12 +317,19 @@ export function SettingsModelsTab({
 
   const handleCompanionModelChange = (kind: ScenarioModelKind, modelId: string) => {
     if (modelId === '__download__') {
-      setShowLocalModelContent(true);
-      requestAnimationFrame(() => {
-        document
-          .getElementById('settings-download-mirror')
-          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      });
+      const section: ModelCatalogSectionType =
+        kind === 'vadModelPath'
+          ? 'vad'
+          : kind === 'punctuationModelPath'
+            ? 'punctuation'
+            : kind === 'speakerSegmentationModelPath'
+              ? 'speaker-segmentation'
+              : kind === 'speakerEmbeddingModelPath'
+                ? 'speaker-embedding'
+                : kind === 'alignmentModelPath'
+                  ? 'alignment'
+                  : 'asr';
+      scrollToCatalogSection(section);
       return;
     }
     const configKey = scenarioModelFieldKey(kind, activeScenario);
@@ -335,7 +357,7 @@ export function SettingsModelsTab({
     handleDiscardDownload,
   };
 
-  const speakerDisabledOption = useMemo(
+  const companionOffOption = useMemo(
     () => ({
       value: '',
       label: t('settings.value_off', { defaultValue: 'Off' }),
@@ -343,29 +365,43 @@ export function SettingsModelsTab({
     [t]
   );
 
-  const liveOptions = useMemo(
-    () =>
-      buildAsrModelDropdownOptions({
-        slot: 'live',
-        snapshot: modelCatalog,
-        selectedModelId: selectedLiveModelId,
-        modelConfig,
-        t,
+  const downloadCatalogOption = useMemo(
+    () => ({
+      value: '__download__',
+      label: t('settings.capabilities.no_model_yet_download', {
+        defaultValue: 'No model yet — Download…',
       }),
-    [modelCatalog, selectedLiveModelId, modelConfig, t]
+    }),
+    [t]
   );
 
-  const batchOptions = useMemo(
-    () =>
-      buildAsrModelDropdownOptions({
-        slot: 'batch',
-        snapshot: modelCatalog,
-        selectedModelId: selectedBatchModelId,
-        modelConfig,
-        t,
-      }),
-    [modelCatalog, selectedBatchModelId, modelConfig, t]
-  );
+  const liveOptions = useMemo(() => {
+    const options = buildAsrModelDropdownOptions({
+      slot: 'live',
+      snapshot: modelCatalog,
+      selectedModelId: selectedLiveModelId,
+      modelConfig,
+      t,
+    });
+    if (options.length === 0) {
+      return [downloadCatalogOption];
+    }
+    return options;
+  }, [downloadCatalogOption, modelCatalog, selectedLiveModelId, modelConfig, t]);
+
+  const batchOptions = useMemo(() => {
+    const options = buildAsrModelDropdownOptions({
+      slot: 'batch',
+      snapshot: modelCatalog,
+      selectedModelId: selectedBatchModelId,
+      modelConfig,
+      t,
+    });
+    if (options.length === 0) {
+      return [downloadCatalogOption];
+    }
+    return options;
+  }, [downloadCatalogOption, modelCatalog, selectedBatchModelId, modelConfig, t]);
 
   const isVolcengineSelected = Object.values(modelConfig.asr?.selections ?? {}).some(
     (selection) =>
@@ -413,13 +449,17 @@ export function SettingsModelsTab({
         ? selectedModelIds.batchSpeakerSegmentation
         : selectedModelIds.liveSpeakerSegmentation) ?? '';
     const installedOptions = toDropdownOptions(selectionOptions.speakerSegmentation, selectedId);
-    return [speakerDisabledOption, ...installedOptions];
+    if (installedOptions.length === 0) {
+      return [companionOffOption, downloadCatalogOption];
+    }
+    return [companionOffOption, ...installedOptions];
   }, [
+    companionOffOption,
+    downloadCatalogOption,
     isBatchScenario,
     selectedModelIds.batchSpeakerSegmentation,
     selectedModelIds.liveSpeakerSegmentation,
     selectionOptions.speakerSegmentation,
-    speakerDisabledOption,
   ]);
 
   const speakerEmbeddingOptions = useMemo(() => {
@@ -428,35 +468,35 @@ export function SettingsModelsTab({
         ? selectedModelIds.batchSpeakerEmbedding
         : selectedModelIds.liveSpeakerEmbedding) ?? '';
     const installedOptions = toDropdownOptions(selectionOptions.speakerEmbedding, selectedId);
-    return [speakerDisabledOption, ...installedOptions];
+    if (installedOptions.length === 0) {
+      return [companionOffOption, downloadCatalogOption];
+    }
+    return [companionOffOption, ...installedOptions];
   }, [
+    companionOffOption,
+    downloadCatalogOption,
     isBatchScenario,
     selectedModelIds.batchSpeakerEmbedding,
     selectedModelIds.liveSpeakerEmbedding,
     selectionOptions.speakerEmbedding,
-    speakerDisabledOption,
   ]);
 
   const alignmentOptions = useMemo(() => {
     const selectedId =
       (isBatchScenario ? selectedModelIds.batchAlignment : selectedModelIds.liveAlignment) ?? '';
     const installedOptions = toDropdownOptions(selectionOptions.alignment ?? [], selectedId);
-    return [speakerDisabledOption, ...installedOptions];
+    if (installedOptions.length === 0) {
+      return [companionOffOption, downloadCatalogOption];
+    }
+    return [companionOffOption, ...installedOptions];
   }, [
+    companionOffOption,
+    downloadCatalogOption,
     isBatchScenario,
     selectedModelIds.batchAlignment,
     selectedModelIds.liveAlignment,
     selectionOptions.alignment,
-    speakerDisabledOption,
   ]);
-
-  const companionOffOption = useMemo(
-    () => ({
-      value: '',
-      label: t('settings.model_off', { defaultValue: 'Off' }),
-    }),
-    [t]
-  );
 
   const sectionModelDropdownOptions = useCallback(
     (
@@ -467,30 +507,42 @@ export function SettingsModelsTab({
       const installed = models
         .filter((model) => model.isInstalled || model.id === selectedId)
         .map((model) => ({ value: model.id, label: model.name }));
+      // Always keep Off after install; empty catalogs also expose a Download jump.
       if (installed.length === 0) {
-        return [
-          companionOffOption,
-          {
-            value: '__download__',
-            label: t('settings.capabilities.download_from_catalog', {
-              defaultValue: 'No model yet — open Advanced catalog…',
-            }),
-          },
-        ];
+        return [companionOffOption, downloadCatalogOption];
       }
       return [companionOffOption, ...installed];
     },
-    [companionOffOption, getSectionGroups, t]
+    [companionOffOption, downloadCatalogOption, getSectionGroups]
   );
 
   const punctuationOptions = useMemo(
-    () => sectionModelDropdownOptions('punctuation', selectedModelIds.livePunctuation ?? ''),
-    [sectionModelDropdownOptions, selectedModelIds.livePunctuation]
+    () =>
+      sectionModelDropdownOptions(
+        'punctuation',
+        (isBatchScenario ? selectedModelIds.batchPunctuation : selectedModelIds.livePunctuation) ??
+          ''
+      ),
+    [
+      isBatchScenario,
+      sectionModelDropdownOptions,
+      selectedModelIds.batchPunctuation,
+      selectedModelIds.livePunctuation,
+    ]
   );
 
   const vadOptions = useMemo(
-    () => sectionModelDropdownOptions('vad', selectedModelIds.liveVad ?? ''),
-    [sectionModelDropdownOptions, selectedModelIds.liveVad]
+    () =>
+      sectionModelDropdownOptions(
+        'vad',
+        (isBatchScenario ? selectedModelIds.batchVad : selectedModelIds.liveVad) ?? ''
+      ),
+    [
+      isBatchScenario,
+      sectionModelDropdownOptions,
+      selectedModelIds.batchVad,
+      selectedModelIds.liveVad,
+    ]
   );
 
   const activeAsrRulesBadge = useMemo(() => {

@@ -11,12 +11,13 @@ import type { LlmGenerateCommandRequest } from '../../../types/dashboard';
 import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript';
 import { normalizeError } from '../../../utils/errorUtils';
 import { ProviderLogo } from '../../icons/ProviderLogos';
-import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 import {
   fingerprintApiKey,
   getProviderProbeCacheKey,
+  readProviderProbeCache,
   writeProviderProbeCache,
 } from '../capabilities/capabilityStatus';
+import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
 import { getCurrentLlmSettings, isProviderConfiguredForConfig } from './helpers';
 
 interface ProviderAccordionItemProps {
@@ -116,6 +117,13 @@ export function ProviderAccordionItem({
       setTestMessage(message);
     }
   };
+  const probeCacheKey = getProviderProbeCacheKey(
+    provider,
+    setting?.apiHost || def.defaultApiHost || '',
+    fingerprintApiKey(setting?.apiKey || '')
+  );
+  const probe = readProviderProbeCache(probeCacheKey);
+
   const status = useMemo(() => {
     if (testStatus === 'success') {
       return {
@@ -129,6 +137,41 @@ export function ProviderAccordionItem({
       return {
         type: 'missing',
         text: t('settings.capabilities.status_error', { defaultValue: 'Error' }),
+      };
+    }
+    if (probe?.status === 'connected') {
+      return {
+        type: 'ready',
+        text: t('settings.capabilities.status_connected', {
+          defaultValue: 'Connected',
+        }),
+      };
+    }
+    if (probe?.status === 'not_running') {
+      return {
+        type: 'off',
+        text: t('settings.capabilities.status_not_running', {
+          defaultValue: 'Not running',
+        }),
+      };
+    }
+    if (probe?.status === 'needs_key') {
+      return {
+        type: 'missing',
+        text: t('settings.capabilities.status_needs_key', { defaultValue: 'Needs key' }),
+      };
+    }
+    if (probe?.status === 'error') {
+      return {
+        type: 'missing',
+        text: t('settings.capabilities.status_error', { defaultValue: 'Error' }),
+      };
+    }
+    // Free Google Translate needs no probe — it is ready when selected/configured.
+    if (def.id === 'google_translate_free' && isConfigured) {
+      return {
+        type: 'ready',
+        text: t('settings.capabilities.status_ready_plain', { defaultValue: 'Ready' }),
       };
     }
     if (isConfigured) {
@@ -147,7 +190,7 @@ export function ProviderAccordionItem({
       };
     }
     return { type: 'off', text: t('settings.llm.status_off', { defaultValue: 'Not configured' }) };
-  }, [def.requiresApiKey, isConfigured, t, testStatus]);
+  }, [def.id, def.requiresApiKey, isConfigured, probe?.status, t, testStatus]);
 
   const actions =
     onEdit || onDelete ? (

@@ -850,7 +850,7 @@ export function FeatureCard({
                     modelCandidates.length === 0 &&
                     !isLoadingCandidates
                       ? t('settings.llm.no_local_models_available', {
-                          defaultValue: 'No local models downloaded (download below first)',
+                          defaultValue: 'No local models yet',
                         })
                       : getModelPlaceholder(localProvider)
                   }

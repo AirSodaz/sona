@@ -68,6 +68,46 @@ export function isSpeechRecognitionReady(config: {
   return Boolean(config.streamingModelPath?.trim());
 }
 
+/** Prefer a human catalog name over a raw path/filename for Speech Ready labels. */
+export function resolveSpeechModelDisplayName(args: {
+  streamingModelId?: string | null;
+  streamingModelPath?: string | null;
+  liveModelPath?: string | null;
+  catalogModels?: Array<{ id: string; name: string; installPath?: string | null }>;
+  modelPathById?: Record<string, string>;
+}): string | null {
+  const {
+    streamingModelId,
+    streamingModelPath,
+    liveModelPath,
+    catalogModels = [],
+    modelPathById = {},
+  } = args;
+
+  if (streamingModelId) {
+    const fromCatalog = catalogModels.find((model) => model.id === streamingModelId);
+    if (fromCatalog?.name) {
+      return fromCatalog.name;
+    }
+  }
+
+  const livePath = streamingModelPath || liveModelPath || null;
+  if (!livePath) {
+    return null;
+  }
+
+  const byPath = catalogModels.find(
+    (model) => model.installPath === livePath || modelPathById[model.id] === livePath
+  );
+  if (byPath?.name) {
+    return byPath.name;
+  }
+
+  const parts = livePath.split(/[/\\]/);
+  const fileName = parts[parts.length - 1] || livePath;
+  return fileName.replace(/\.(onnx|bin|gguf|tar|gz|zip)$/i, '') || fileName;
+}
+
 export function isAiWritingConfigured(config: LlmAssistantConfig): boolean {
   return isFeatureLlmConfigComplete(config, 'polish');
 }
