@@ -259,16 +259,25 @@ export function TranscriptWorkbench({
                   fontWeight: 500,
                   padding: '2px 8px',
                   borderRadius: '9999px',
-                  background: 'rgba(82, 196, 26, 0.12)',
-                  color: 'var(--color-success, #52c41a)',
-                  border: '1px solid rgba(82, 196, 26, 0.25)',
+                  background:
+                    embyContext.serverType === 'jellyfin'
+                      ? 'rgba(168, 85, 247, 0.12)'
+                      : 'rgba(82, 196, 26, 0.12)',
+                  color:
+                    embyContext.serverType === 'jellyfin'
+                      ? '#a855f7'
+                      : 'var(--color-success, #52c41a)',
+                  border:
+                    embyContext.serverType === 'jellyfin'
+                      ? '1px solid rgba(168, 85, 247, 0.25)'
+                      : '1px solid rgba(82, 196, 26, 0.25)',
                   whiteSpace: 'nowrap',
                   marginLeft: '4px',
                 }}
-                title={`Emby: ${embyContext.itemName}`}
+                title={`${embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}: ${embyContext.itemName}`}
               >
                 <EmbyIcon size={12} />
-                <span>Emby</span>
+                <span>{embyContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
               </span>
             )}
             <button

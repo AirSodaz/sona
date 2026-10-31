@@ -172,6 +172,41 @@ pub struct AppAsrConfig {
     pub extra: BTreeMap<String, Value>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+#[cfg_attr(feature = "specta", derive(Type))]
+pub enum MediaServerType {
+    Emby,
+    Jellyfin,
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "specta", derive(Type))]
+pub struct MediaServerProfile {
+    pub id: String,
+    pub name: String,
+    pub server_type: MediaServerType,
+    pub server_url: String,
+    pub api_key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub admin_user_id: Option<String>,
+    #[serde(default)]
+    pub allow_invalid_certs: bool,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = specta_typescript::Number)
+    )]
+    pub created_at: i64,
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = specta_typescript::Number)
+    )]
+    pub updated_at: i64,
+}
+
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[cfg_attr(feature = "specta", derive(Type))]
 #[serde(rename_all = "camelCase")]
@@ -521,6 +556,20 @@ pub struct AppConfig {
         specta(type = Option<specta_typescript::Unknown>)
     )]
     pub emby_processing_settings: Option<Value>,
+    #[serde(
+        default,
+        rename = "mediaServers",
+        alias = "media_servers",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub media_servers: Option<Vec<MediaServerProfile>>,
+    #[serde(
+        default,
+        rename = "activeMediaServerId",
+        alias = "active_media_server_id",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub active_media_server_id: Option<String>,
     #[serde(flatten)]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub extra: BTreeMap<String, Value>,

@@ -251,6 +251,20 @@ export const TauriCommand = {
     downloadAudio: 'emby_download_audio',
     uploadSubtitle: 'emby_upload_subtitle',
   },
+  mediaServer: {
+    testConnection: 'media_server_test_connection',
+    login: 'media_server_login',
+    listProfiles: 'media_server_list_profiles',
+    saveProfile: 'media_server_save_profile',
+    deleteProfile: 'media_server_delete_profile',
+    setActiveProfile: 'media_server_set_active_profile',
+    getLibraries: 'media_server_get_libraries',
+    getItems: 'media_server_get_items',
+    downloadAudio: 'media_server_download_audio',
+    uploadSubtitle: 'media_server_upload_subtitle',
+    getProcessingSettings: 'media_server_get_processing_settings',
+    saveProcessingSettings: 'media_server_save_processing_settings',
+  },
 } as const;
 
 export type TauriCommandName = DeepValueOf<typeof TauriCommand>;

@@ -109,6 +109,86 @@ pub fn init(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
     if mcp_config.mcp_enabled.unwrap_or(true) {
         mcp_controller.start(Some(app.handle().clone()), agent_facade);
     }
+    let media_server_registry = crate::integrations::media_server::MediaServerRegistry::new();
+    if let Some(config_val) = initial_config.as_ref() {
+        let profiles: Vec<crate::integrations::media_server::MediaServerProfile> = config_val
+            .get("mediaServers")
+            .or_else(|| config_val.get("media_servers"))
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+
+        let active_id = config_val
+            .get("activeMediaServerId")
+            .or_else(|| config_val.get("active_media_server_id"))
+            .and_then(|v| v.as_str());
+
+        if !profiles.is_empty() {
+            for profile in profiles {
+                if let Err(e) = media_server_registry.register(profile) {
+                    log::warn!("[MediaServer] Failed to register profile on startup: {e}");
+                }
+            }
+            if let Some(id) = active_id {
+                let _ = media_server_registry.set_active(id);
+            }
+        } else {
+            let server_url = config_val
+                .get("embyServerUrl")
+                .or_else(|| config_val.get("emby_server_url"))
+                .and_then(|v| v.as_str());
+            let api_key = config_val
+                .get("embyToken")
+                .or_else(|| config_val.get("emby_token"))
+                .or_else(|| config_val.get("embyApiKey"))
+                .or_else(|| config_val.get("emby_api_key"))
+                .and_then(|v| v.as_str());
+            let username = config_val
+                .get("embyUsername")
+                .or_else(|| config_val.get("emby_username"))
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+            let allow_invalid_certs = config_val
+                .get("embyAllowInvalidCerts")
+                .or_else(|| config_val.get("emby_allow_invalid_certs"))
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            let admin_user_id = config_val
+                .get("embyAdminUserId")
+                .or_else(|| config_val.get("emby_admin_user_id"))
+                .and_then(|v| v.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string());
+
+            if let (Some(url), Some(key)) = (server_url, api_key)
+                && !url.trim().is_empty()
+                && !key.trim().is_empty()
+            {
+                let profile = crate::integrations::media_server::MediaServerProfile {
+                    id: "default-emby".to_string(),
+                    name: "Emby Server".to_string(),
+                    server_type: crate::integrations::media_server::MediaServerType::Emby,
+                    server_url: url.trim().to_string(),
+                    api_key: key.trim().to_string(),
+                    username,
+                    admin_user_id,
+                    allow_invalid_certs,
+                    created_at: chrono::Utc::now().timestamp_millis(),
+                    updated_at: chrono::Utc::now().timestamp_millis(),
+                };
+                if let Err(e) = media_server_registry.register(profile) {
+                    log::warn!(
+                        "[MediaServer] Failed to register legacy default-emby on startup: {e}"
+                    );
+                } else {
+                    let _ = media_server_registry.set_active("default-emby");
+                }
+            }
+        }
+    }
+    app.manage(media_server_registry);
     let emby_client = if let Some(config_val) = initial_config.as_ref() {
         let server_url = config_val
             .get("embyServerUrl")

@@ -998,6 +998,46 @@ describe('batchQueueStore', () => {
         'http://localhost:8096/Videos/item%20with%20spaces%2Fslash/stream.mkv?Static=true&MediaSourceId=mediasource_item+with+spaces%2Fslash'
       );
     });
+    it('addMediaServerItems enqueues items preserving distinct serverId and serverType', () => {
+      useBatchQueueStore.setState({ queueItems: [], activeItemId: null });
+      useBatchQueueStore.getState().addMediaServerItems({
+        items: [
+          {
+            serverId: 'server-emby',
+            serverType: 'emby',
+            serverUrl: 'http://192.168.1.10:8096',
+            apiKey: 'emby-token',
+            itemId: 'item-emby-1',
+            itemName: 'Inception (Emby)',
+            audioStreamIndex: 1,
+            subtitleMode: 'bilingual',
+            targetLanguage: 'zh-CN',
+          },
+          {
+            serverId: 'server-jf',
+            serverType: 'jellyfin',
+            serverUrl: 'http://192.168.1.20:8096',
+            apiKey: 'jf-token',
+            itemId: 'item-jf-2',
+            itemName: 'Interstellar (Jellyfin)',
+            audioStreamIndex: 0,
+            subtitleMode: 'pure_translation',
+            targetLanguage: 'en',
+          },
+        ],
+      });
+
+      const items = useBatchQueueStore.getState().queueItems;
+      expect(items).toHaveLength(2);
+
+      expect(items[0].mediaServerContext?.serverId).toBe('server-emby');
+      expect(items[0].mediaServerContext?.serverType).toBe('emby');
+      expect(items[0].streamUrl).toContain('api_key=emby-token');
+
+      expect(items[1].mediaServerContext?.serverId).toBe('server-jf');
+      expect(items[1].mediaServerContext?.serverType).toBe('jellyfin');
+      expect(items[1].streamUrl).toContain('api_key=jf-token');
+    });
     it('setItemError sets errorMessage and errorStage', () => {
       useBatchQueueStore.setState({
         queueItems: [

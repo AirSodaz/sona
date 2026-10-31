@@ -113,7 +113,7 @@ describe('ToolsView', () => {
     expect(sidebarTabs[3].getAttribute('id')).toBe('tools-tab-mcp');
     expect(sidebarTabs[3].getAttribute('aria-controls')).toBe('tools-panel-mcp');
     expect(sidebarTabs[3].getAttribute('tabindex')).toBe('-1');
-    expect(sidebarTabs[4].textContent).toContain('Emby Subtitle Assistant');
+    expect(sidebarTabs[4].textContent).toContain('Media Server Subtitle Assistant');
     expect(sidebarTabs[4].getAttribute('id')).toBe('tools-tab-emby_sync');
     expect(sidebarTabs[4].getAttribute('aria-controls')).toBe('tools-panel-emby_sync');
     expect(sidebarTabs[4].getAttribute('tabindex')).toBe('-1');

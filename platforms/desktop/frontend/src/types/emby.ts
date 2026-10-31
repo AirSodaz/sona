@@ -1,5 +1,23 @@
-import type { EmbySubtitleMode } from './batchQueue';
-import type { AsrModelSelection } from './config';
+import type {
+  MediaServerInfo,
+  MediaServerItemListResult,
+  MediaServerLibrary,
+  MediaServerMediaItem,
+  MediaServerStreamInfo,
+  MediaServerSubtitleMode,
+  MediaServerSubtitleUploadPayload,
+  MediaServerToolOverrides,
+} from './mediaServer';
+
+export type EmbySubtitleMode = MediaServerSubtitleMode;
+export type EmbyServerInfo = MediaServerInfo;
+export type EmbyLibrary = MediaServerLibrary;
+export type EmbyStreamInfo = MediaServerStreamInfo;
+export type EmbyMediaItem = MediaServerMediaItem;
+export type EmbyItemListResult = MediaServerItemListResult;
+export type SubtitleUploadPayload = MediaServerSubtitleUploadPayload;
+export type EmbyToolOverrides = MediaServerToolOverrides;
+export { DEFAULT_MEDIA_SERVER_TOOL_OVERRIDES as DEFAULT_EMBY_TOOL_OVERRIDES } from './mediaServer';
 
 export interface EmbyConnectionConfig {
   serverUrl: string;
@@ -15,71 +33,3 @@ export interface EmbyLoginPayload {
   password?: string;
   allowInvalidCerts: boolean;
 }
-
-export interface EmbyServerInfo {
-  id: string;
-  serverName: string;
-  version: string;
-  hasSubtitleManagerPlugin: boolean;
-  adminUserId?: string;
-  username?: string;
-}
-export interface EmbyLibrary {
-  id: string;
-  name: string;
-  collectionType?: string;
-}
-
-export interface EmbyStreamInfo {
-  index: number;
-  streamType: string;
-  language?: string;
-  displayTitle?: string;
-  codec?: string;
-  isExternal: boolean;
-  isForced: boolean;
-  isDefault: boolean;
-}
-
-export interface EmbyMediaItem {
-  id: string;
-  name: string;
-  seriesName?: string;
-  seasonName?: string;
-  seasonIndex?: number;
-  episodeIndex?: number;
-  runtimeTicks?: number;
-  mediaStreams: EmbyStreamInfo[];
-  hasChineseSubtitles: boolean;
-  hasEmbeddedChinese: boolean;
-  itemType?: string;
-  mediaSourceId?: string;
-  container?: string;
-}
-
-export interface EmbyItemListResult {
-  items: EmbyMediaItem[];
-  totalRecordCount: number;
-}
-
-export interface SubtitleUploadPayload {
-  itemId: string;
-  language: string;
-  format: string;
-  isForced: boolean;
-  content: string;
-}
-
-export interface EmbyToolOverrides {
-  asrSelection?: AsrModelSelection | null;
-  asrLanguage?: string;
-  translationModelId?: string | null;
-  defaultSubtitleMode?: EmbySubtitleMode;
-  overwriteExistingExternal?: boolean;
-}
-
-export const DEFAULT_EMBY_TOOL_OVERRIDES: EmbyToolOverrides = {
-  asrLanguage: 'auto',
-  defaultSubtitleMode: 'bilingual',
-  overwriteExistingExternal: true,
-};

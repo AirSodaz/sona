@@ -9,6 +9,10 @@ import {
 } from '../../services/asrConfigService';
 import { getEmbyConfig, testEmbyConnection } from '../../services/emby/embyService';
 import {
+  listMediaServerProfiles,
+  testMediaServerConnection,
+} from '../../services/mediaServer/mediaServerService';
+import {
   useApiServerConfig,
   useConfigStore,
   useMcpConfig,
@@ -62,22 +66,51 @@ export function ToolsSidebar(): React.JSX.Element {
     if (hasCheckedRef.current || useToolsStore.getState().embyServerName !== null) return;
     hasCheckedRef.current = true;
     let unmounted = false;
-    void getEmbyConfig()
-      .then((cfg) => {
+
+    void listMediaServerProfiles()
+      .then((profiles) => {
         if (unmounted) return;
-        if (cfg?.serverUrl && cfg.apiKey) {
-          void testEmbyConnection(cfg)
+        if (profiles.length > 0) {
+          const activeId = useConfigStore.getState().config?.activeMediaServerId;
+          const active = (activeId && profiles.find((p) => p.id === activeId)) || profiles[0];
+          const tag = active.serverType === 'jellyfin' ? '[Jellyfin]' : '[Emby]';
+          setEmbyServerName(`${tag} ${active.name}`);
+          void testMediaServerConnection(active)
             .then((info) => {
-              if (!unmounted) setEmbyServerName(info.serverName);
+              if (!unmounted) setEmbyServerName(`${tag} ${info.serverName}`);
             })
-            .catch(() => {
-              // Ignore failure on initial background probe
-            });
+            .catch(() => {});
+          return;
         }
+
+        void getEmbyConfig()
+          .then((cfg) => {
+            if (unmounted) return;
+            if (cfg?.serverUrl && cfg.apiKey) {
+              void testEmbyConnection(cfg)
+                .then((info) => {
+                  if (!unmounted) setEmbyServerName(`[Emby] ${info.serverName}`);
+                })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
       })
       .catch(() => {
-        // Ignore failure on initial background probe
+        void getEmbyConfig()
+          .then((cfg) => {
+            if (unmounted) return;
+            if (cfg?.serverUrl && cfg.apiKey) {
+              void testEmbyConnection(cfg)
+                .then((info) => {
+                  if (!unmounted) setEmbyServerName(`[Emby] ${info.serverName}`);
+                })
+                .catch(() => {});
+            }
+          })
+          .catch(() => {});
       });
+
     return () => {
       unmounted = true;
     };
@@ -155,10 +188,10 @@ export function ToolsSidebar(): React.JSX.Element {
     },
     {
       id: 'emby_sync',
-      nameKey: 'tools.emby_sync',
-      defaultName: 'Emby Subtitle Assistant',
-      descKey: 'tools.emby_sync_desc',
-      defaultDesc: 'Detect missing subtitles and auto-complete with local transcription',
+      nameKey: 'tools.media_server.title',
+      defaultName: 'Media Server Subtitle Assistant',
+      descKey: 'tools.media_server.desc',
+      defaultDesc: 'Detect missing subtitles in Emby and Jellyfin with local transcription',
       Icon: Tv,
       statusText: embyServerName
         ? embyServerName

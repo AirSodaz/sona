@@ -51,6 +51,16 @@ import type {
   McpStatus,
   McpToolCatalogItem,
 } from '../../types/mcp';
+import type {
+  MediaServerInfo,
+  MediaServerItemListResult,
+  MediaServerLibrary,
+  MediaServerLoginPayload,
+  MediaServerLoginResult,
+  MediaServerProfile,
+  MediaServerSubtitleUploadPayload,
+  MediaServerToolOverrides,
+} from '../../types/mediaServer';
 import type { ProjectRecord } from '../../types/project';
 import type {
   AsrRuntimeMetricsSnapshot,
@@ -863,6 +873,64 @@ type ManualTauriCommandContractMap = {
   };
   [TauriCommand.emby.uploadSubtitle]: {
     args: { payload: SubtitleUploadPayload; deleteExistingExternalIndex?: number };
+    result: undefined;
+  };
+  [TauriCommand.mediaServer.testConnection]: {
+    args: { profile: MediaServerProfile };
+    result: MediaServerInfo;
+  };
+  [TauriCommand.mediaServer.login]: {
+    args: { payload: MediaServerLoginPayload };
+    result: MediaServerLoginResult;
+  };
+  [TauriCommand.mediaServer.listProfiles]: {
+    args: undefined;
+    result: MediaServerProfile[];
+  };
+  [TauriCommand.mediaServer.saveProfile]: {
+    args: { profile: MediaServerProfile };
+    result: undefined;
+  };
+  [TauriCommand.mediaServer.deleteProfile]: {
+    args: { profileId: string };
+    result: undefined;
+  };
+  [TauriCommand.mediaServer.setActiveProfile]: {
+    args: { profileId: string };
+    result: undefined;
+  };
+  [TauriCommand.mediaServer.getLibraries]: {
+    args: { serverId?: string };
+    result: MediaServerLibrary[];
+  };
+  [TauriCommand.mediaServer.getItems]: {
+    args: {
+      serverId?: string;
+      parentId?: string;
+      searchTerm?: string;
+      limit?: number;
+      startIndex?: number;
+    };
+    result: MediaServerItemListResult;
+  };
+  [TauriCommand.mediaServer.downloadAudio]: {
+    args: { serverId?: string; itemId: string; streamIndex?: number; filename?: string };
+    result: string;
+  };
+  [TauriCommand.mediaServer.uploadSubtitle]: {
+    args: {
+      serverId?: string;
+      payload: MediaServerSubtitleUploadPayload;
+      deleteExistingExternalIndex?: number;
+    };
+    result: undefined;
+  };
+  [TauriCommand.mediaServer.getProcessingSettings]: {
+    args: undefined;
+    result: MediaServerToolOverrides | null;
+  };
+  [TauriCommand.mediaServer.saveProcessingSettings]: {
+    args: { settings: MediaServerToolOverrides };
     result: undefined;
   };
 };

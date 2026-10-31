@@ -34,7 +34,7 @@ export function QueueGroupedList({
   const embyIds = useBatchQueueStore(
     useShallow((state) =>
       state.queueItems
-        .filter((i) => Boolean(i.embyContext))
+        .filter((i) => Boolean(i.mediaServerContext ?? i.embyContext))
         .sort((a, b) => {
           const priorityA = STATUS_PRIORITY[a.status] ?? 99;
           const priorityB = STATUS_PRIORITY[b.status] ?? 99;
@@ -45,23 +45,34 @@ export function QueueGroupedList({
   );
   const processingIds = useBatchQueueStore(
     useShallow((state) =>
-      state.queueItems.filter((i) => !i.embyContext && i.status === 'processing').map((i) => i.id)
+      state.queueItems
+        .filter((i) => !i.mediaServerContext && !i.embyContext && i.status === 'processing')
+        .map((i) => i.id)
     )
   );
   const pendingIds = useBatchQueueStore(
     useShallow((state) =>
-      state.queueItems.filter((i) => !i.embyContext && i.status === 'pending').map((i) => i.id)
+      state.queueItems
+        .filter((i) => !i.mediaServerContext && !i.embyContext && i.status === 'pending')
+        .map((i) => i.id)
     )
   );
   const completeIds = useBatchQueueStore(
     useShallow((state) =>
-      state.queueItems.filter((i) => !i.embyContext && i.status === 'complete').map((i) => i.id)
+      state.queueItems
+        .filter((i) => !i.mediaServerContext && !i.embyContext && i.status === 'complete')
+        .map((i) => i.id)
     )
   );
   const failedIds = useBatchQueueStore(
     useShallow((state) =>
       state.queueItems
-        .filter((i) => !i.embyContext && (i.status === 'error' || i.status === 'cancelled'))
+        .filter(
+          (i) =>
+            !i.mediaServerContext &&
+            !i.embyContext &&
+            (i.status === 'error' || i.status === 'cancelled')
+        )
         .map((i) => i.id)
     )
   );
@@ -80,7 +91,7 @@ export function QueueGroupedList({
       {/* 0. Dedicated Emby Subtitle Tasks group */}
       {embyIds.length > 0 && (
         <QueueGroup
-          title={t('batch.group_emby_tasks', { defaultValue: 'Emby Subtitle Tasks' })}
+          title={t('batch.group_media_server_tasks', { defaultValue: 'Media Server Tasks' })}
           count={embyIds.length}
           statusVariant="emby"
           icon={<Tv size={14} />}

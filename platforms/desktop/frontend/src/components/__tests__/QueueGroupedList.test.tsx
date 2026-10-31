@@ -237,7 +237,7 @@ describe('QueueGroupedList', () => {
     render(<QueueGroupedList />);
 
     // Emby group header is rendered
-    expect(screen.getByText('batch.group_emby_tasks')).toBeDefined();
+    expect(screen.getByText('batch.group_media_server_tasks')).toBeDefined();
     // Standard pending group is rendered for standard item
     expect(screen.getByText('batch.group_pending')).toBeDefined();
 
@@ -248,7 +248,7 @@ describe('QueueGroupedList', () => {
     expect(screen.getByText('Emby Ep 4 Complete')).toBeDefined();
 
     // Verify order in DOM within the Emby group
-    const embyGroup = screen.getByRole('group', { name: /batch\.group_emby_tasks/ });
+    const embyGroup = screen.getByRole('group', { name: /batch\.group_media_server_tasks/ });
     const itemElements = embyGroup.querySelectorAll('.queue-item-filename');
     const names = Array.from(itemElements).map((el) => el.textContent?.trim());
     expect(names).toEqual([

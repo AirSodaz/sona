@@ -95,18 +95,21 @@ export const QueueItem = memo(function QueueItem({
   t,
 }: QueueItemProps): React.JSX.Element {
   const [isFinishing, setIsFinishing] = useState(false);
-  const isEmbyUploadError =
-    item.status === 'error' && Boolean(item.embyContext && item.errorStage === 'upload');
+  const mediaContext = item.mediaServerContext ?? item.embyContext;
+  const isMediaServerUploadError =
+    item.status === 'error' && Boolean(mediaContext && item.errorStage === 'upload');
   const isTranscodeError = item.status === 'error' && isTranscodeOrFormatFailure(item);
   const rawErrorMessage = item.errorMessage || t('batch.file_failed');
-  const displayErrorMessage = isEmbyUploadError
-    ? t('batch.emby_upload_failed', { defaultValue: 'Subtitle upload to Emby failed' })
+  const displayErrorMessage = isMediaServerUploadError
+    ? t('batch.media_server_upload_failed', {
+        defaultValue: 'Subtitle upload to media server failed',
+      })
     : isTranscodeError &&
         (rawErrorMessage.startsWith('Failed to decode audio file') ||
           rawErrorMessage.startsWith('Failed to extract audio slice'))
       ? t('batch.transcode_failed', { defaultValue: 'Transcode failed' })
       : rawErrorMessage;
-  const retryLabel = isEmbyUploadError
+  const retryLabel = isMediaServerUploadError
     ? t('batch.retry_upload_only', { defaultValue: 'Retry Subtitle Upload' })
     : t('batch.retry', {
         defaultValue: t('common.retry', { defaultValue: 'Retry' }),
@@ -169,7 +172,7 @@ export const QueueItem = memo(function QueueItem({
             {item.filename}
           </div>
           {item.status === 'processing' &&
-            (item.embyContext && !item.streamUrl && !item.filePath ? (
+            (mediaContext && !item.streamUrl && !item.filePath ? (
               <span
                 className="queue-item-emby-pulling"
                 style={{
@@ -205,10 +208,10 @@ export const QueueItem = memo(function QueueItem({
         )}
 
         <div className="queue-item-meta">
-          {item.embyContext && (
+          {mediaContext && (
             <span
-              className="queue-item-emby-badge"
-              title={item.embyContext.itemName}
+              className="queue-item-media-server-badge"
+              title={mediaContext.itemName}
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -216,14 +219,20 @@ export const QueueItem = memo(function QueueItem({
                 fontSize: '11px',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
-                color: 'var(--color-success, #22c55e)',
-                backgroundColor: 'rgba(34, 197, 94, 0.1)',
+                color:
+                  mediaContext.serverType === 'jellyfin'
+                    ? '#a855f7'
+                    : 'var(--color-success, #22c55e)',
+                backgroundColor:
+                  mediaContext.serverType === 'jellyfin'
+                    ? 'rgba(168, 85, 247, 0.1)'
+                    : 'rgba(34, 197, 94, 0.1)',
                 padding: '1px 6px',
                 borderRadius: '4px',
               }}
             >
               <Tv size={11} strokeWidth={2} />
-              <span>Emby</span>
+              <span>{mediaContext.serverType === 'jellyfin' ? 'Jellyfin' : 'Emby'}</span>
             </span>
           )}
           {item.sourceType === 'url_stream' && (
@@ -294,7 +303,7 @@ export const QueueItem = memo(function QueueItem({
       </div>
 
       <div className="queue-item-actions">
-        {item.sourceType === 'url_stream' && !item.embyContext && item.status === 'processing' && (
+        {item.sourceType === 'url_stream' && !mediaContext && item.status === 'processing' && (
           <button
             type="button"
             className="btn btn-icon queue-item-finish-save"

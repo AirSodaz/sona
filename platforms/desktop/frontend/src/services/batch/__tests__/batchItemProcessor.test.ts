@@ -4,7 +4,14 @@ import { useEmbyHistoryStore } from '../../../stores/embyHistoryStore';
 import type { BatchQueueItem } from '../../../types/batchQueue';
 import type { AppConfig } from '../../../types/config';
 import type { AsrTranscriptionRequest } from '../../asrConfigService';
-import { downloadEmbyAudio, syncEmbySubtitles } from '../../emby/embyService';
+import {
+  downloadMediaServerAudio,
+  syncMediaServerSubtitles,
+} from '../../mediaServer/mediaServerService';
+
+const downloadEmbyAudio = downloadMediaServerAudio;
+const syncEmbySubtitles = syncMediaServerSubtitles;
+
 import { remove } from '../../tauri/platform/fs';
 import { BatchItemProcessor, type BatchItemProcessorPorts } from '../batchItemProcessor';
 
@@ -20,9 +27,9 @@ vi.mock('../../tauri/platform/fs', async (importOriginal) => {
     remove: vi.fn(() => Promise.resolve()),
   };
 });
-vi.mock('../../emby/embyService', () => ({
-  downloadEmbyAudio: vi.fn().mockResolvedValue('/tmp/downloaded_emby.mp3'),
-  syncEmbySubtitles: vi.fn().mockResolvedValue(undefined),
+vi.mock('../../mediaServer/mediaServerService', () => ({
+  downloadMediaServerAudio: vi.fn().mockResolvedValue('/tmp/downloaded_emby.mp3'),
+  syncMediaServerSubtitles: vi.fn().mockResolvedValue(undefined),
 }));
 
 describe('BatchItemProcessor', () => {
@@ -429,7 +436,7 @@ describe('BatchItemProcessor', () => {
 
     await processor.processBatchQueueItem({ item, config, callbacks });
 
-    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-1', 1);
+    expect(downloadMediaServerAudio).toHaveBeenCalledWith('movie-1', 1, 'server-1');
     expect(syncEmbySubtitles).toHaveBeenCalledWith(
       expect.anything(),
       expect.objectContaining({
@@ -632,7 +639,7 @@ describe('BatchItemProcessor', () => {
 
     await processor.processBatchQueueItem({ item, config, callbacks });
 
-    expect(downloadEmbyAudio).toHaveBeenCalledWith('movie-prec', 2);
+    expect(downloadMediaServerAudio).toHaveBeenCalledWith('movie-prec', 2, 'server-1');
     expect(item.filePath).toBe('/tmp/downloaded-track.mp3');
     expect(mockPorts.transcriptionService.transcribeFile).toHaveBeenCalled();
     expect(vi.mocked(mockPorts.transcriptionService.transcribeFile).mock.calls[0][0]).toBe(

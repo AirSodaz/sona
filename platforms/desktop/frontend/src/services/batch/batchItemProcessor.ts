@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from 'uuid';
-import { useEmbyHistoryStore } from '../../stores/embyHistoryStore';
 import { useHistoryStore } from '../../stores/historyStore';
+import { useMediaServerHistoryStore } from '../../stores/mediaServerHistoryStore';
 import { useProjectStore } from '../../stores/projectStore';
 import type { BatchQueueItem, BatchQueueItemStatus } from '../../types/batchQueue';
 import type { AppConfig, TextReplacementRuleSet } from '../../types/config';
@@ -14,9 +14,12 @@ import { getScenarioLanguage } from '../../utils/scenarioModels';
 import { applyTextReplacements, extractReplacementsFromTerms } from '../../utils/textProcessing';
 import { getTermsForProject, parseYamlDictionary } from '../../utils/yamlDictionaryParser';
 import { asrConfigService, isLlamaCppBatchRequest } from '../asrConfigService';
-import { downloadEmbyAudio, syncEmbySubtitles } from '../emby/embyService';
 import { exportService } from '../exportService';
 import { historyService } from '../historyService';
+import {
+  downloadMediaServerAudio,
+  syncMediaServerSubtitles,
+} from '../mediaServer/mediaServerService';
 import { pipelineExecutionEngine } from '../pipeline/pipelineExecutionEngine';
 import { polishService } from '../polishService';
 import { resolveItemPipeline } from '../projectPipeline';
@@ -129,32 +132,27 @@ export class BatchItemProcessor {
         this.ports.useProjectStore?.getState?.().projects ?? [],
         config
       );
-    if (
-      item.embyContext &&
-      item.errorStage === 'upload' &&
-      item.segments &&
-      item.segments.length > 0
-    ) {
+    const mediaContext = item.mediaServerContext ?? item.embyContext;
+    if (mediaContext && item.errorStage === 'upload' && item.segments && item.segments.length > 0) {
       this.throwIfCancelRequested(callbacks);
       callbacks.updateStatus('processing', 95);
       callbacks.updateSegments(item.segments);
-      const { embyContext } = item;
       try {
         const targetLanguage =
-          embyContext.targetLanguage ||
+          mediaContext.targetLanguage ||
           pipeline.targetLanguage ||
           config.translationLanguage ||
           'zh-CN';
-        await syncEmbySubtitles(
+        await syncMediaServerSubtitles(
           item.segments,
-          { ...embyContext, targetLanguage },
-          { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+          { ...mediaContext, targetLanguage },
+          { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
         );
         item.errorStage = undefined;
         return;
       } catch (uploadError) {
         logger.error(
-          '[BatchQueue] Fast-path retry failed to upload subtitle to Emby:',
+          '[BatchQueue] Fast-path retry failed to upload subtitle to media server:',
           uploadError
         );
         item.errorStage = 'upload';
@@ -187,8 +185,8 @@ export class BatchItemProcessor {
     let downloadedEmbyPath: string | undefined;
     let savedHistoryId: string | null = item.historyId || null;
 
-    if (item.embyContext && item.historyId) {
-      useEmbyHistoryStore.getState().setContext(item.historyId, item.embyContext);
+    if (mediaContext && item.historyId) {
+      useMediaServerHistoryStore.getState().setContext(item.historyId, mediaContext);
     }
 
     const persistHistorySnapshot = async (): Promise<void> => {
@@ -209,7 +207,7 @@ export class BatchItemProcessor {
         !downloadedEmbyPath &&
         (item.sourceType === 'url_stream' ||
           /^(https?|rtmp|rtsp):\/\//i.test(item.streamUrl || item.filePath));
-      const isEmbyItem = Boolean(item.embyContext || downloadedEmbyPath);
+      const isEmbyItem = Boolean(mediaContext || downloadedEmbyPath);
       const convertedPath =
         batchAsr.engine === 'local' && !isLlamaCpp && (!isStream || item.retainAudio)
           ? tempWavPath
@@ -252,8 +250,8 @@ export class BatchItemProcessor {
         }
       }
 
-      if (item.embyContext && savedHistoryId) {
-        useEmbyHistoryStore.getState().setContext(savedHistoryId, item.embyContext);
+      if (mediaContext && savedHistoryId) {
+        useMediaServerHistoryStore.getState().setContext(savedHistoryId, mediaContext);
       }
 
       this.ports.useHistoryStore.getState().addItem(historyItem);
@@ -277,12 +275,12 @@ export class BatchItemProcessor {
     };
 
     const resolvedTargetLanguage =
-      item.embyContext?.targetLanguage ||
+      mediaContext?.targetLanguage ||
       pipeline.targetLanguage ||
       config.translationLanguage ||
       'zh-CN';
     const shouldStreamTranslate =
-      (pipeline.autoTranslate || Boolean(item.embyContext)) && !pipeline.autoPolish;
+      (pipeline.autoTranslate || Boolean(mediaContext)) && !pipeline.autoPolish;
 
     const effectiveReplacementSets = resolveEffectiveReplacementSets(
       config,
@@ -327,11 +325,12 @@ export class BatchItemProcessor {
       }
       this.ports.transcriptionService.setEnableITN(config.enableITN ?? false);
 
-      if (item.embyContext && !item.streamUrl && !item.filePath) {
+      if (mediaContext && !item.streamUrl && !item.filePath) {
         callbacks.updateStatus('processing', 0);
-        const downloadedPath = await downloadEmbyAudio(
-          item.embyContext.itemId,
-          item.embyContext.audioStreamIndex
+        const downloadedPath = await downloadMediaServerAudio(
+          mediaContext.itemId,
+          mediaContext.audioStreamIndex,
+          mediaContext.serverId
         );
         downloadedEmbyPath = downloadedPath;
         item.filePath = downloadedPath;
@@ -439,7 +438,7 @@ export class BatchItemProcessor {
           replacementSetIds: [],
           customTerms: [],
           autoExport: pipeline.autoExport || Boolean(item.exportConfig),
-          autoTranslate: Boolean(item.embyContext) || pipeline.autoTranslate,
+          autoTranslate: Boolean(mediaContext) || pipeline.autoTranslate,
           targetLanguage: resolvedTargetLanguage,
           exportDirectory: item.exportConfig?.directory || pipeline.exportDirectory,
           exportFormat:
@@ -472,21 +471,20 @@ export class BatchItemProcessor {
         await this.ports.summaryService.persistSummary(savedHistoryId);
       }
       this.throwIfCancelRequested(callbacks);
-      if (item.embyContext && currentSegments.length > 0) {
-        const { embyContext } = item;
+      if (mediaContext && currentSegments.length > 0) {
         try {
           const targetLanguage =
-            embyContext.targetLanguage ||
+            mediaContext.targetLanguage ||
             pipeline.targetLanguage ||
             config.translationLanguage ||
             'zh-CN';
-          await syncEmbySubtitles(
+          await syncMediaServerSubtitles(
             currentSegments,
-            { ...embyContext, targetLanguage },
-            { deleteExistingIndex: embyContext.existingExternalSubtitleIndex }
+            { ...mediaContext, targetLanguage },
+            { deleteExistingIndex: mediaContext.existingExternalSubtitleIndex }
           );
         } catch (uploadError) {
-          logger.error('[BatchQueue] Failed to upload subtitle to Emby:', uploadError);
+          logger.error('[BatchQueue] Failed to upload subtitle to media server:', uploadError);
           item.errorStage = 'upload';
           item.segments = currentSegments;
           callbacks.updateSegments(currentSegments);

@@ -9,6 +9,7 @@ pub mod export;
 pub mod history;
 pub mod llm;
 pub mod mcp;
+pub mod media_server;
 pub mod project;
 pub mod recovery;
 pub mod server;
@@ -223,6 +224,18 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::emby::emby_get_libraries,
         crate::commands::emby::emby_get_items,
         crate::commands::emby::emby_download_audio,
-        crate::commands::emby::emby_upload_subtitle
+        crate::commands::emby::emby_upload_subtitle,
+        crate::commands::media_server::media_server_test_connection,
+        crate::commands::media_server::media_server_login,
+        crate::commands::media_server::media_server_list_profiles,
+        crate::commands::media_server::media_server_save_profile,
+        crate::commands::media_server::media_server_delete_profile,
+        crate::commands::media_server::media_server_set_active_profile,
+        crate::commands::media_server::media_server_get_libraries,
+        crate::commands::media_server::media_server_get_items,
+        crate::commands::media_server::media_server_download_audio,
+        crate::commands::media_server::media_server_upload_subtitle,
+        crate::commands::media_server::media_server_get_processing_settings,
+        crate::commands::media_server::media_server_save_processing_settings,
     ]
 }

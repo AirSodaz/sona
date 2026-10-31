@@ -4,6 +4,7 @@ import type {
   AutomationStageConfig,
 } from './automation';
 import type { AppConfig } from './config';
+import type { MediaServerSubtitleMode, MediaServerType } from './mediaServer';
 import type { EffectivePipelineSnapshot } from './project';
 import type { RecoveryItemStage } from './recovery';
 import type { TranscriptSegment } from './transcript';
@@ -13,21 +14,24 @@ import type { TranscriptSegment } from './transcript';
  */
 export type BatchQueueItemStatus = 'pending' | 'processing' | 'complete' | 'error' | 'cancelled';
 
-export type EmbySubtitleMode = 'pure_translation' | 'bilingual' | 'separate_tracks';
+export type EmbySubtitleMode = MediaServerSubtitleMode;
 
-export interface EmbyTaskContext {
-  serverId: string;
+export interface MediaServerTaskContext {
+  serverId: string; // MediaServerProfile.id
+  serverType?: MediaServerType;
   serverUrl: string;
   itemId: string;
   itemName: string;
   audioStreamIndex: number;
-  subtitleMode: EmbySubtitleMode;
+  subtitleMode: MediaServerSubtitleMode;
   targetLanguage: string;
   sourceLanguage?: string;
   existingExternalSubtitleIndex?: number;
   mediaSourceId?: string;
   container?: string;
 }
+
+export type EmbyTaskContext = MediaServerTaskContext;
 
 export type BatchQueueItemOrigin = 'manual' | 'automation';
 
@@ -104,6 +108,8 @@ export interface BatchQueueItem {
    * to send a real-time cancellation signal to the Rust backend.
    */
   activeInstanceId?: string | null;
-  /** Emby streaming transcription and closed-loop sync context. */
-  embyContext?: EmbyTaskContext;
+  /** Media server streaming transcription and closed-loop sync context. */
+  mediaServerContext?: MediaServerTaskContext;
+  /** @deprecated Emby streaming transcription context compatibility alias. */
+  embyContext?: MediaServerTaskContext;
 }

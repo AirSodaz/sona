@@ -12,6 +12,10 @@ import {
   loadEmbyToolOverrides,
   loadEmbyToolOverridesAsync,
 } from '../../../../services/emby/embySettingsService';
+import {
+  listMediaServerProfiles,
+  setActiveMediaServerProfile,
+} from '../../../../services/mediaServer/mediaServerService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
 import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
@@ -23,6 +27,7 @@ import type {
   EmbyMediaItem,
   EmbyServerInfo,
 } from '../../../../types/emby';
+import type { MediaServerProfile } from '../../../../types/mediaServer';
 import { extractErrorMessage } from '../../../../utils/errorUtils';
 import {
   findBestAudioStream,
@@ -57,6 +62,15 @@ function resolveInitialTargetLanguage(lang?: string): string {
 
 export interface UseEmbySyncReturn {
   // Connection
+  // Multi-profile Management
+  profiles: MediaServerProfile[];
+  activeProfileId: string | null;
+  activeProfile: MediaServerProfile | null;
+  selectProfile: (profileId: string) => Promise<void>;
+  reloadProfiles: () => Promise<void>;
+  isManageModalOpen: boolean;
+  setIsManageModalOpen: (open: boolean) => void;
+
   config: EmbyConnectionConfig;
   setConfig: React.Dispatch<React.SetStateAction<EmbyConnectionConfig>>;
   serverInfo: EmbyServerInfo | null;
@@ -132,6 +146,11 @@ export function useEmbySync(): UseEmbySyncReturn {
   const [connectionError, setConnectionError] = useState<string | null>(null);
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [isPluginModalOpen, setIsPluginModalOpen] = useState(false);
+  // Multi-profile state
+  const [profiles, setProfiles] = useState<MediaServerProfile[]>([]);
+  const [activeProfileId, setActiveProfileId] = useState<string | null>(null);
+  const [activeProfile, setActiveProfile] = useState<MediaServerProfile | null>(null);
+  const [isManageModalOpen, setIsManageModalOpen] = useState(false);
 
   // Library & Browse State
   const [libraries, setLibraries] = useState<EmbyLibrary[]>([]);
@@ -332,16 +351,39 @@ export function useEmbySync(): UseEmbySyncReturn {
 
     async function loadConfig() {
       try {
-        const saved = await getEmbyConfig();
-        if (saved?.serverUrl && saved.apiKey) {
-          setConfig(saved);
-          handleConnect(saved);
+        let loadedProfiles: MediaServerProfile[] = [];
+        try {
+          loadedProfiles = await listMediaServerProfiles();
+        } catch {
+          // ignore if mediaServerService not available in older test environment
+        }
+
+        if (loadedProfiles.length > 0) {
+          setProfiles(loadedProfiles);
+          const active = loadedProfiles.find((p) => p.id === activeProfileId) || loadedProfiles[0];
+          setActiveProfileId(active.id);
+          setActiveProfile(active);
+          const embyCfg: EmbyConnectionConfig = {
+            serverUrl: active.serverUrl,
+            apiKey: active.apiKey,
+            username: active.username,
+            allowInvalidCerts: active.allowInvalidCerts,
+            adminUserId: active.adminUserId,
+          };
+          setConfig(embyCfg);
+          void handleConnect(embyCfg);
+        } else {
+          const saved = await getEmbyConfig();
+          if (saved?.serverUrl && saved.apiKey) {
+            setConfig(saved);
+            void handleConnect(saved);
+          }
         }
       } catch (err) {
         console.error('Failed to load Emby config:', err);
       }
     }
-    loadConfig();
+    void loadConfig();
     async function loadOverrides() {
       try {
         const overrides = await loadEmbyToolOverridesAsync();
@@ -356,7 +398,7 @@ export function useEmbySync(): UseEmbySyncReturn {
       }
     }
     loadOverrides();
-  }, [handleConnect]);
+  }, [handleConnect, activeProfileId]);
 
   // Fetch items for selected library and search term with debounce and race cancellation
   useEffect(() => {
@@ -633,9 +675,10 @@ export function useEmbySync(): UseEmbySyncReturn {
         targetLanguage,
         sourceLanguage,
         existingExternalSubtitleIndex,
-        serverId: serverInfo.id,
-        serverUrl: config.serverUrl,
-        apiKey: config.apiKey,
+        serverId: activeProfile?.id || serverInfo.id,
+        serverUrl: activeProfile?.serverUrl || config.serverUrl,
+        serverType: activeProfile?.serverType ?? serverInfo.serverType ?? 'emby',
+        apiKey: activeProfile?.apiKey || config.apiKey,
         mediaSourceId: item.mediaSourceId,
         container: item.container,
       });
@@ -670,10 +713,66 @@ export function useEmbySync(): UseEmbySyncReturn {
     targetLanguage,
     config.serverUrl,
     config.apiKey,
+    activeProfile,
     t,
   ]);
 
+  const selectProfile = useCallback(
+    async (profileId: string) => {
+      try {
+        await setActiveMediaServerProfile(profileId);
+        setActiveProfileId(profileId);
+        let target = profiles.find((p) => p.id === profileId);
+        if (!target) {
+          const freshProfiles = await listMediaServerProfiles();
+          setProfiles(freshProfiles);
+          target = freshProfiles.find((p) => p.id === profileId);
+        }
+        if (target) {
+          setActiveProfile(target);
+          const embyCfg: EmbyConnectionConfig = {
+            serverUrl: target.serverUrl,
+            apiKey: target.apiKey,
+            username: target.username,
+            allowInvalidCerts: target.allowInvalidCerts,
+            adminUserId: target.adminUserId,
+          };
+          setConfig(embyCfg);
+          await handleConnect(embyCfg);
+        }
+      } catch (err) {
+        console.error('Failed to select media server profile:', err);
+      }
+    },
+    [profiles, handleConnect]
+  );
+
+  const reloadProfiles = useCallback(async () => {
+    try {
+      const list = await listMediaServerProfiles();
+      setProfiles(list);
+      if (list.length > 0) {
+        const stillActive = list.find((p) => p.id === activeProfileId) || list[0];
+        setActiveProfileId(stillActive.id);
+        setActiveProfile(stillActive);
+      } else {
+        setActiveProfileId(null);
+        setActiveProfile(null);
+        setServerInfo(null);
+      }
+    } catch (err) {
+      console.error('Failed to reload profiles:', err);
+    }
+  }, [activeProfileId]);
+
   return {
+    profiles,
+    activeProfileId,
+    activeProfile,
+    selectProfile,
+    reloadProfiles,
+    isManageModalOpen,
+    setIsManageModalOpen,
     config,
     setConfig,
     serverInfo,

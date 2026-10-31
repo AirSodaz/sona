@@ -33,8 +33,10 @@ import type {
   BatchQueueItemOrigin,
   BatchQueueItemStatus,
   EmbySubtitleMode,
+  MediaServerTaskContext,
 } from '../types/batchQueue';
 import type { AppConfig } from '../types/config';
+import type { MediaServerType } from '../types/mediaServer';
 import type { RecoveredQueueItem } from '../types/recovery';
 import type { TranscriptSegment } from '../types/transcript';
 import { useConfigStore } from './configStore';
@@ -59,10 +61,13 @@ export interface AddEmbyItemEntry {
   existingExternalSubtitleIndex?: number;
   serverId: string;
   serverUrl: string;
+  serverType?: MediaServerType;
   apiKey?: string;
   mediaSourceId?: string;
   container?: string;
 }
+
+export type AddMediaServerItemEntry = AddEmbyItemEntry;
 
 export function buildEmbyStreamUrl(params: {
   serverUrl: string;
@@ -95,6 +100,8 @@ export interface AddEmbyItemsOptions {
   pipelineSnapshot?: EffectivePipelineSnapshot;
   resolvedConfigSnapshot?: AppConfig;
 }
+export type AddMediaServerItemsOptions = AddEmbyItemsOptions;
+export const buildMediaServerStreamUrl = buildEmbyStreamUrl;
 
 export function deriveTitleFromUrl(url: string): string {
   try {
@@ -191,6 +198,7 @@ interface BatchQueueState {
    * Adds Emby streaming video items to the batch transcription queue.
    */
   addEmbyItems: (options: AddEmbyItemsOptions) => void;
+  addMediaServerItems: (options: AddMediaServerItemsOptions) => void;
   /**
    * Re-enqueues items restored by the recovery center.
    *
@@ -488,17 +496,18 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
       return;
     }
     const state = get();
-    const existingEmbyKeys = new Set(
-      state.queueItems.flatMap((item) =>
-        item.embyContext && (item.status === 'pending' || item.status === 'processing')
-          ? [`${item.embyContext.serverId}::${item.embyContext.itemId}`]
-          : []
-      )
+    const existingMediaKeys = new Set(
+      state.queueItems.flatMap((item) => {
+        const ctx = item.mediaServerContext ?? item.embyContext;
+        return ctx && (item.status === 'pending' || item.status === 'processing')
+          ? [`${ctx.serverId}::${ctx.itemId}`]
+          : [];
+      })
     );
     const seenBatchKeys = new Set<string>();
     const uniqueItems = options.items.filter((opt) => {
       const key = `${opt.serverId}::${opt.itemId}`;
-      if (existingEmbyKeys.has(key) || seenBatchKeys.has(key)) return false;
+      if (existingMediaKeys.has(key) || seenBatchKeys.has(key)) return false;
       seenBatchKeys.add(key);
       return true;
     });
@@ -525,6 +534,20 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         opt.sourceLanguage && opt.sourceLanguage !== resolvedConfigSnapshot.language
           ? { ...resolvedConfigSnapshot, language: opt.sourceLanguage }
           : resolvedConfigSnapshot;
+      const mediaContext: MediaServerTaskContext = {
+        serverId: opt.serverId,
+        serverType: opt.serverType ?? 'emby',
+        serverUrl: baseServerUrl,
+        itemId: opt.itemId,
+        itemName: opt.itemName,
+        audioStreamIndex: opt.audioStreamIndex,
+        subtitleMode: opt.subtitleMode,
+        targetLanguage: opt.targetLanguage,
+        sourceLanguage: opt.sourceLanguage,
+        existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
+        mediaSourceId: opt.mediaSourceId,
+        container: opt.container,
+      };
       return {
         id: uuidv4(),
         filename: opt.itemName,
@@ -540,19 +563,8 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
         origin: 'manual',
         resolvedConfigSnapshot: itemConfig,
         lastKnownStage: 'queued',
-        embyContext: {
-          serverId: opt.serverId,
-          serverUrl: baseServerUrl,
-          itemId: opt.itemId,
-          itemName: opt.itemName,
-          audioStreamIndex: opt.audioStreamIndex,
-          subtitleMode: opt.subtitleMode,
-          targetLanguage: opt.targetLanguage,
-          sourceLanguage: opt.sourceLanguage,
-          existingExternalSubtitleIndex: opt.existingExternalSubtitleIndex,
-          mediaSourceId: opt.mediaSourceId,
-          container: opt.container,
-        },
+        mediaServerContext: mediaContext,
+        embyContext: mediaContext,
       };
     });
 
@@ -576,6 +588,9 @@ export const useBatchQueueStore = create<BatchQueueState>((set, get) => ({
     if (!currentState.isQueueProcessing && !currentState.isQueuePaused) {
       void get().processQueue();
     }
+  },
+  addMediaServerItems: (options) => {
+    get().addEmbyItems(options);
   },
 
   enqueueRecoveredItems: (items) => {

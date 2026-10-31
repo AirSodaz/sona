@@ -13,6 +13,7 @@ import type {
 } from '../bindings';
 import type { EmbyToolOverrides } from './emby';
 import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
+import type { MediaServerProfile } from './mediaServer';
 import type { SpeakerProfile } from './speaker';
 
 // ---------------------------------------------------------------------------
@@ -538,6 +539,17 @@ export interface EmbyProcessingConfig {
   /** Emby processing overrides for ASR and translation models, subtitle mode, and external subtitle overwrite. */
   embyProcessingSettings?: EmbyToolOverrides;
 }
+
+// ---------------------------------------------------------------------------
+// Media Server Settings
+// ---------------------------------------------------------------------------
+
+export interface MediaServerConfig {
+  /** List of configured media server profiles. */
+  mediaServers?: MediaServerProfile[];
+  /** Active media server profile ID. */
+  activeMediaServerId?: string;
+}
 // ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
@@ -562,4 +574,5 @@ export type AppConfig = GeneratedAppConfig &
   LlmAssistantConfig &
   HistoryStorageConfig &
   McpConfig &
-  EmbyProcessingConfig;
+  EmbyProcessingConfig &
+  MediaServerConfig;

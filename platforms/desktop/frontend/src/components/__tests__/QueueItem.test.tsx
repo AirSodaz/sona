@@ -354,7 +354,7 @@ describe('QueueItem', () => {
       />
     );
 
-    expect(screen.getByText('batch.emby_upload_failed')).toBeDefined();
+    expect(screen.getByText('batch.media_server_upload_failed')).toBeDefined();
     const retryBtn = screen.getByRole('button', { name: 'batch.retry_upload_only' });
     expect(retryBtn.getAttribute('data-tooltip')).toBe('batch.retry_upload_only');
   });

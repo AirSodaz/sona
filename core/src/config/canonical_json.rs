@@ -149,4 +149,35 @@ mod tests {
             "app-123"
         );
     }
+
+    #[test]
+    fn strips_media_server_api_keys() {
+        let mut config = json!({
+            "mediaServers": [
+                {
+                    "id": "srv-1",
+                    "name": "Jellyfin Server",
+                    "serverType": "jellyfin",
+                    "serverUrl": "https://jellyfin.example.com",
+                    "apiKey": "jf-secret-token",
+                    "createdAt": 1000,
+                    "updatedAt": 2000
+                },
+                {
+                    "id": "srv-2",
+                    "name": "Emby Server",
+                    "serverType": "emby",
+                    "serverUrl": "https://emby.example.com",
+                    "apiKey": "emby-secret-token",
+                    "createdAt": 1000,
+                    "updatedAt": 2000
+                }
+            ]
+        });
+        strip_config_credentials(&mut config);
+        assert_eq!(config["mediaServers"][0]["apiKey"], "");
+        assert_eq!(config["mediaServers"][1]["apiKey"], "");
+        assert_eq!(config["mediaServers"][0]["name"], "Jellyfin Server");
+        assert_eq!(config["mediaServers"][1]["name"], "Emby Server");
+    }
 }
