@@ -1,8 +1,5 @@
 import type { ModelInfo } from '../types/modelCatalog';
 
-/** Confirm downloads at or above this size (~300 MB). */
-export const LARGE_DOWNLOAD_BYTES = 300 * 1024 * 1024;
-
 /** Parse human size strings like "1.2 GB" / "350 MB" into bytes. */
 export function parseModelSizeToBytes(size: string | undefined): number | null {
   if (!size?.trim()) {

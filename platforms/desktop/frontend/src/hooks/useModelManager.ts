@@ -28,7 +28,6 @@ import type {
 import { EMPTY_SCENARIO_SELECTED_MODEL_IDS } from '../types/modelCatalog';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
-import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../utils/modelDownloadSize';
 import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
 import { formatBytes } from './notifications/modelDownloadAdapter';
@@ -448,26 +447,8 @@ export function useModelManager(isOpen: boolean) {
         }
       }
 
-      const downloadBytes = resolveModelDownloadBytes(model);
-      if (downloadBytes !== null && downloadBytes >= LARGE_DOWNLOAD_BYTES) {
-        const sizeLabel = model.size?.trim() || formatBytes(downloadBytes);
-        const confirmedLarge = await confirm(
-          t('settings.large_download_confirm', {
-            defaultValue: '{{name}} is about {{size}}. Download and use it for recognition?',
-            name: model.name,
-            size: sizeLabel,
-          }),
-          {
-            title: t('settings.large_download_title', {
-              defaultValue: 'Large model download',
-            }),
-            variant: 'warning',
-          }
-        );
-        if (!confirmedLarge) {
-          return;
-        }
-      }
+      // TODO(capabilities): if we add reliable metered/cellular detection, confirm
+      // large ASR downloads only on metered networks — not by raw size alone.
 
       if (model.modes && model.modes.length > 0) {
         const dependencyUpdates: Partial<typeof config> = {};

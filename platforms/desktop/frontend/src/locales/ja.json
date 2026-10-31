@@ -2712,7 +2712,6 @@
       "picker_search_placeholder": "モデルを検索…",
       "picker_hint": "モデルを選択すると必要に応じてダウンロードし、ライブとバッチの両方に設定します。",
       "picker_empty": "一致するモデルがありません。フィルタや検索をクリアしてみてください。",
-      "large_download": "大きなダウンロード",
       "hide_sizes": "他のサイズを隠す",
       "show_sizes": "他のサイズ（{{count}}）",
       "use_for_ai_writing": "校正と要約に使用",
@@ -2733,9 +2732,7 @@
       "openai_compatible_short": "互換",
       "openai_compatible_hint": "任意の OpenAI 互換 Chat Completions エンドポイント（ローカルプロキシ、ゲートウェイ、クラウド）。",
       "api_key_optional": "API キー（任意）"
-    },
-    "large_download_confirm": "{{name}} は約 {{size}} です。ダウンロードして認識に使用しますか？",
-    "large_download_title": "大きなモデルのダウンロード"
+    }
   },
   "shortcuts": {
     "title": "ショートカット",

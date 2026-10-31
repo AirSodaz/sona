@@ -2712,7 +2712,6 @@
       "picker_search_placeholder": "搜索模型…",
       "picker_hint": "选择模型会在需要时下载，并同时绑定实时与批量识别。",
       "picker_empty": "没有匹配的模型。试试清空筛选或搜索。",
-      "large_download": "大体积下载",
       "hide_sizes": "收起其他体积",
       "show_sizes": "更多体积（{{count}}）",
       "use_for_ai_writing": "用于润色与摘要",
@@ -2733,9 +2732,7 @@
       "openai_compatible_short": "兼容接口",
       "openai_compatible_hint": "任意 OpenAI 兼容的 Chat Completions 端点（本地代理、网关或云端）。",
       "api_key_optional": "API Key（可选）"
-    },
-    "large_download_confirm": "{{name}} 大约 {{size}}。下载并用于识别？",
-    "large_download_title": "大模型下载"
+    }
   },
   "shortcuts": {
     "title": "快捷键",

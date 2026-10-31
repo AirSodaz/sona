@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  LARGE_DOWNLOAD_BYTES,
   parseModelSizeToBytes,
   resolveModelDownloadBytes,
 } from '../../../../utils/modelDownloadSize';
@@ -90,14 +89,15 @@ describe('capabilityStatus helpers', () => {
 });
 
 describe('modelDownloadSize', () => {
-  it('parses human sizes and respects the large-download threshold', () => {
+  it('parses human sizes and prefers artifact byte totals', () => {
     expect(parseModelSizeToBytes('350 MB')).toBe(350 * 1024 * 1024);
     expect(parseModelSizeToBytes('1.2 GB')).toBe(Math.round(1.2 * 1024 ** 3));
-    expect(resolveModelDownloadBytes({ size: '100 MB', artifacts: [] })).toBeLessThan(
-      LARGE_DOWNLOAD_BYTES
-    );
-    expect(resolveModelDownloadBytes({ size: '500 MB', artifacts: [] })).toBeGreaterThanOrEqual(
-      LARGE_DOWNLOAD_BYTES
-    );
+    expect(resolveModelDownloadBytes({ size: '100 MB', artifacts: [] })).toBe(100 * 1024 * 1024);
+    expect(
+      resolveModelDownloadBytes({
+        size: '100 MB',
+        artifacts: [{ url: 'https://example.com/a.bin', filename: 'a.bin', sizeBytes: 42 }],
+      })
+    ).toBe(42);
   });
 });

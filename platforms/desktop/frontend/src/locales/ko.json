@@ -2712,7 +2712,6 @@
       "picker_search_placeholder": "모델 검색…",
       "picker_hint": "모델을 선택하면 필요 시 다운로드하고 실시간/배치 인식에 동시에 적용합니다.",
       "picker_empty": "일치하는 모델이 없습니다. 필터나 검색을 지워 보세요.",
-      "large_download": "대용량 다운로드",
       "hide_sizes": "다른 크기 숨기기",
       "show_sizes": "더 많은 크기({{count}})",
       "use_for_ai_writing": "윤문 및 요약에 사용",
@@ -2733,9 +2732,7 @@
       "openai_compatible_short": "호환",
       "openai_compatible_hint": "OpenAI 호환 채팅 완성 엔드포인트(로컬 프록시, 게이트웨이 또는 클라우드).",
       "api_key_optional": "API 키(선택)"
-    },
-    "large_download_confirm": "{{name}}은(는) 약 {{size}}입니다. 다운로드하여 인식에 사용할까요?",
-    "large_download_title": "대용량 모델 다운로드"
+    }
   },
   "shortcuts": {
     "title": "단축키",

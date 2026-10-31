@@ -2712,7 +2712,6 @@
       "picker_search_placeholder": "Search models…",
       "picker_hint": "Selecting a model downloads it if needed and sets it for Live and Batch recognition.",
       "picker_empty": "No matching models. Try clearing filters or search.",
-      "large_download": "Large download",
       "hide_sizes": "Hide other sizes",
       "show_sizes": "More sizes ({{count}})",
       "use_for_ai_writing": "Use for Polish & Summary",
@@ -2733,9 +2732,7 @@
       "openai_compatible_short": "Compatible",
       "openai_compatible_hint": "Any OpenAI-compatible chat completions endpoint (local proxy, gateway, or cloud).",
       "api_key_optional": "API Key (optional)"
-    },
-    "large_download_confirm": "{{name}} is about {{size}}. Download and use it for recognition?",
-    "large_download_title": "Large model download"
+    }
   },
   "shortcuts": {
     "title": "Shortcuts",

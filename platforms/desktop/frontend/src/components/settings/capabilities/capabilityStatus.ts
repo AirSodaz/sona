@@ -116,8 +116,4 @@ export function isTranslationConfigured(config: LlmAssistantConfig): boolean {
   return isFeatureLlmConfigComplete(config, 'translation');
 }
 
-export {
-  LARGE_DOWNLOAD_BYTES,
-  parseModelSizeToBytes,
-  resolveModelDownloadBytes,
-} from '../../../utils/modelDownloadSize';
+export { parseModelSizeToBytes, resolveModelDownloadBytes } from '../../../utils/modelDownloadSize';

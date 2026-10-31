@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useModelManagerContext } from '../../../hooks/useModelManager';
 import type { ModelCatalogModel } from '../../../types/modelCatalog';
 import { resolveModelLabels } from '../../../types/modelCatalog';
-import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../../../utils/modelDownloadSize';
+import { resolveModelDownloadBytes } from '../../../utils/modelDownloadSize';
 import { Modal } from '../../Modal';
 
 export interface ModelPickerModalProps {
@@ -177,8 +177,6 @@ export function ModelPickerModal({
                 {modelsToShow.map((model) => {
                   const downloading = Boolean(downloads[model.id]);
                   const busy = busyId === model.id || downloading;
-                  const bytes = getModelBytes(model);
-                  const large = bytes !== null && bytes >= LARGE_DOWNLOAD_BYTES;
                   const labels = resolveModelLabels(model) ?? [];
                   return (
                     <button
@@ -204,9 +202,6 @@ export function ModelPickerModal({
                             : ''}
                           {model.isInstalled
                             ? ` · ${t('settings.model_filter_status_installed', { defaultValue: 'Installed' })}`
-                            : ''}
-                          {large && !model.isInstalled
-                            ? ` · ${t('settings.capabilities.large_download', { defaultValue: 'Large download' })}`
                             : ''}
                           {labels.length > 0 ? ` · ${labels.join(', ')}` : ''}
                         </span>
