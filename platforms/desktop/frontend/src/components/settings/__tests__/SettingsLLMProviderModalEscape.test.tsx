@@ -19,11 +19,50 @@ vi.mock('../../../services/modelService', () => ({
   modelService: {
     isModelInstalled: vi.fn().mockResolvedValue(false),
     checkHardware: vi.fn().mockResolvedValue({ compatible: true }),
-    getModelCatalogSnapshot: vi.fn().mockResolvedValue({ models: {}, totalCount: 0 }),
+    getModelCatalogSnapshot: vi.fn().mockResolvedValue({
+      modelsDir: '/models',
+      models: [],
+      sections: [],
+      selectionOptions: {
+        streaming: [],
+        batch: [],
+        speakerSegmentation: [],
+        speakerEmbedding: [],
+      },
+      modelPathById: {},
+      modelIdByNormalizedPath: {},
+      pathMatchTokens: [],
+      dependencyRequestsByModelId: {},
+      restoreDefaults: {
+        punctuationModelPath: '',
+        speakerSegmentationModelPath: '',
+        speakerEmbeddingModelPath: '',
+        enableITN: true,
+        batchVadEnabled: true,
+        vadBufferSize: 5,
+        maxConcurrent: 2,
+      },
+    }),
+    resolveAsrSelectedModelIdsFromSnapshot: vi.fn().mockReturnValue({
+      streaming: null,
+      batch: null,
+    }),
+    resolveScenarioSelectedModelIdsFromSnapshot: vi.fn().mockReturnValue({}),
     deleteModel: vi.fn().mockResolvedValue(true),
     getModelPath: vi.fn().mockResolvedValue('/path/to/model'),
   },
 }));
+
+async function openAiAdvancedCatalog() {
+  const advanced = await screen.findByRole('button', { name: /Advanced/i });
+  await act(async () => {
+    fireEvent.click(advanced);
+  });
+  const aiAdvanced = await screen.findByRole('button', { name: /AI advanced/i });
+  await act(async () => {
+    fireEvent.click(aiAdvanced);
+  });
+}
 
 describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', () => {
   beforeEach(() => {
@@ -38,8 +77,10 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
       await Promise.resolve();
     });
 
-    // Settings modal is open
+    // Settings modal is open (legacy llm_service redirects to Capabilities)
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
+    await openAiAdvancedCatalog();
+
     // Click "Add model provider" button
     const addBtn = await screen.findByRole(
       'button',
@@ -77,6 +118,8 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
       render(<Settings isOpen={true} onClose={onSettingsClose} initialTab="llm_service" />);
       await Promise.resolve();
     });
+    await openAiAdvancedCatalog();
+
     // Click "Add model provider" button
     const addBtn = await screen.findByRole(
       'button',

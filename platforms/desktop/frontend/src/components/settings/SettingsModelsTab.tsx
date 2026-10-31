@@ -67,6 +67,8 @@ export interface SettingsModelsTabProps {
   /** Mount-only; pair with subTabRequestId to retarget an already-mounted tab. */
   initialScenario?: ModelScenario;
   subTabRequestId?: number;
+  /** Render without page chrome when nested under Capabilities → Advanced. */
+  embedded?: boolean;
 }
 
 function scheduleAfterFrame(callback: () => void): () => void {
@@ -83,6 +85,7 @@ export function SettingsModelsTab({
   isActive: _isActive = true,
   initialScenario,
   subTabRequestId,
+  embedded = false,
 }: SettingsModelsTabProps = {}): React.JSX.Element {
   const { t } = useTranslation();
   const modelConfig = useModelConfig();
@@ -298,6 +301,15 @@ export function SettingsModelsTab({
   };
 
   const handleCompanionModelChange = (kind: ScenarioModelKind, modelId: string) => {
+    if (modelId === '__download__') {
+      setShowLocalModelContent(true);
+      requestAnimationFrame(() => {
+        document
+          .getElementById('settings-download-mirror')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+      return;
+    }
     const configKey = scenarioModelFieldKey(kind, activeScenario);
     if (!modelId) {
       updateConfig({ [configKey]: '' });
@@ -438,17 +450,37 @@ export function SettingsModelsTab({
     speakerDisabledOption,
   ]);
 
+  const companionOffOption = useMemo(
+    () => ({
+      value: '',
+      label: t('settings.model_off', { defaultValue: 'Off' }),
+    }),
+    [t]
+  );
+
   const sectionModelDropdownOptions = useCallback(
     (
       type: ModelCatalogSectionType,
       selectedId: string
     ): Array<{ value: string; label: string }> => {
       const models = getSectionGroups(type).flatMap((group) => group.models as ModelCatalogModel[]);
-      return models
+      const installed = models
         .filter((model) => model.isInstalled || model.id === selectedId)
         .map((model) => ({ value: model.id, label: model.name }));
+      if (installed.length === 0) {
+        return [
+          companionOffOption,
+          {
+            value: '__download__',
+            label: t('settings.capabilities.download_from_catalog', {
+              defaultValue: 'No model yet — open Advanced catalog…',
+            }),
+          },
+        ];
+      }
+      return [companionOffOption, ...installed];
     },
-    [getSectionGroups]
+    [companionOffOption, getSectionGroups, t]
   );
 
   const punctuationOptions = useMemo(
@@ -490,15 +522,17 @@ export function SettingsModelsTab({
     return parts.join(' · ');
   }, [isBatchScenario, modelConfig.asr?.selections.batch, modelConfig.asr?.selections.live, t]);
 
-  return (
-    <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
-      <SettingsPageHeader
-        icon={<ModelIcon width={28} height={28} />}
-        title={t('settings.model_hub')}
-        description={t('settings.model_settings_description')}
-      />
+  const content = (
+    <>
+      {!embedded && (
+        <SettingsPageHeader
+          icon={<ModelIcon width={28} height={28} />}
+          title={t('settings.model_hub')}
+          description={t('settings.model_settings_description')}
+        />
+      )}
       <SettingsSection
-        id="settings-model-hub"
+        id={embedded ? undefined : 'settings-model-hub'}
         title={t('settings.model_selection')}
         description={t('settings.model_selection_desc')}
         icon={<Settings2 size={20} />}
@@ -1336,6 +1370,16 @@ export function SettingsModelsTab({
           {t('settings.restore_defaults')}
         </button>
       </div>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="settings-embedded-models">{content}</div>;
+  }
+
+  return (
+    <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
+      {content}
     </SettingsTabContainer>
   );
 }

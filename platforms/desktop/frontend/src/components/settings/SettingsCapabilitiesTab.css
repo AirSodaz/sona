@@ -1,0 +1,310 @@
+.capability-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.capability-status--needs_setup,
+.capability-status--needs_key,
+.capability-status--unverified {
+  background: color-mix(in srgb, var(--color-warning, #c9842c) 16%, transparent);
+  color: var(--color-warning, #c9842c);
+}
+
+.capability-status--downloading,
+.capability-status--not_running {
+  background: color-mix(in srgb, var(--color-text-muted) 14%, transparent);
+  color: var(--color-text-muted);
+}
+
+.capability-status--ready,
+.capability-status--connected {
+  background: color-mix(in srgb, var(--color-success, #2f8f5b) 16%, transparent);
+  color: var(--color-success, #2f8f5b);
+}
+
+.capability-status--error {
+  background: color-mix(in srgb, var(--color-danger, #c44) 16%, transparent);
+  color: var(--color-danger, #c44);
+}
+
+.capability-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.capability-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.capability-actions .btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.capability-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.capability-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.capability-advanced-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--color-surface-elevated, transparent);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  text-align: left;
+}
+
+.capability-advanced-toggle .capability-advanced-chevron {
+  margin-left: auto;
+  transition: transform 0.15s ease;
+}
+
+.capability-advanced-toggle.open .capability-advanced-chevron {
+  transform: rotate(90deg);
+}
+
+.capability-advanced-panel {
+  padding: 8px 0 16px;
+  border-left: 2px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  margin-left: 8px;
+  padding-left: 12px;
+}
+
+.settings-embedded-models .settings-tab-container,
+.settings-embedded-llm .settings-tab-container {
+  padding-bottom: 0;
+  max-width: none;
+}
+
+.capability-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 240px;
+  max-height: min(60vh, 560px);
+}
+
+.capability-picker-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+}
+
+.capability-picker-search input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+}
+
+.capability-picker-clear {
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: inline-flex;
+  padding: 2px;
+}
+
+.capability-picker-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.capability-picker-family {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.capability-picker-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.08));
+  border-radius: 10px;
+  background: var(--color-surface, #fff);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.capability-picker-row:hover:not(:disabled) {
+  border-color: var(--color-primary);
+}
+
+.capability-picker-row:disabled {
+  opacity: 0.7;
+  cursor: wait;
+}
+
+.capability-picker-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.capability-picker-row-title {
+  font-weight: 600;
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.capability-picker-row-version {
+  font-weight: 500;
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.capability-picker-row-meta {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.capability-picker-row-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.capability-picker-more {
+  align-self: flex-start;
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+  padding: 2px 4px;
+}
+
+.capability-picker-empty {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--color-text-muted);
+  padding: 24px 8px;
+}
+
+.capability-connect {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.capability-connect-modes {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.capability-connect-mode {
+  border: 1px solid var(--color-border, rgba(0, 0, 0, 0.1));
+  border-radius: 10px;
+  padding: 10px 8px;
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  color: inherit;
+}
+
+.capability-connect-mode.active {
+  border-color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary) 10%, transparent);
+}
+
+.capability-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.capability-field .settings-input,
+.capability-field .dropdown {
+  font-weight: 400;
+}
+
+.capability-connect-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.capability-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.capability-error {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--color-danger, #c44) 12%, transparent);
+  color: var(--color-danger, #c44);
+  font-size: 0.85rem;
+}
+
+.spin {
+  animation: capability-spin 0.8s linear infinite;
+}
+
+@keyframes capability-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

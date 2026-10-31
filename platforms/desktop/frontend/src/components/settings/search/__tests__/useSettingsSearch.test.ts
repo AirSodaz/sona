@@ -424,7 +424,7 @@ describe('useSettingsSearch hook', () => {
     expect(result.current.hits.length).toBeGreaterThan(0);
     const llmHit = result.current.hits.find((h) => h.id === 'llm-providers');
     expect(llmHit).toBeDefined();
-    expect(llmHit!.tab).toBe('llm_service');
+    expect(llmHit!.tab).toBe('capabilities');
   });
 
   it('sorts hits descending by score', () => {

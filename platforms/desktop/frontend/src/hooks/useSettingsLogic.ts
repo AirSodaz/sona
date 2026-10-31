@@ -2,7 +2,11 @@ import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { resolveAppLanguagePreference } from '../constants/appLanguages';
 import { useConfigStore } from '../stores/configStore';
-import type { SettingsTab, SettingsTabInput } from '../types/settings';
+import {
+  normalizeSettingsTab,
+  type SettingsTab,
+  type SettingsTabInput,
+} from '../types/settings';
 
 export type { SettingsTab, SettingsTabInput } from '../types/settings';
 
@@ -13,19 +17,7 @@ interface SettingsTabState {
 }
 
 function normalizeInitialSettingsTab(initialTab?: SettingsTabInput): SettingsTab {
-  if (!initialTab) {
-    return 'general';
-  }
-
-  if (initialTab === 'context') {
-    return 'vocabulary';
-  }
-
-  if (initialTab === 'voice_typing') {
-    return 'subtitle';
-  }
-
-  return initialTab;
+  return normalizeSettingsTab(initialTab);
 }
 
 /**

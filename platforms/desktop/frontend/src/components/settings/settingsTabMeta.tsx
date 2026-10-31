@@ -29,14 +29,23 @@ export const SETTINGS_TAB_META: Record<SettingsTab, SettingsTabMetaItem> = {
   shortcuts: { labelKey: 'shortcuts.title', defaultValue: 'Shortcuts', Icon: KeyboardIcon },
   about: { labelKey: 'settings.about', defaultValue: 'About', Icon: InfoIcon },
   microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
-  models: { labelKey: 'settings.model_hub', defaultValue: 'Model Settings', Icon: ModelIcon },
+  capabilities: {
+    labelKey: 'settings.capabilities.title',
+    defaultValue: 'Capabilities',
+    Icon: ModelIcon,
+  },
+  models: { labelKey: 'settings.capabilities.title', defaultValue: 'Capabilities', Icon: ModelIcon },
   subtitle: {
     labelKey: 'settings.subtitle_voice_typing_title',
     defaultValue: 'Subtitles & Voice Typing',
     Icon: SubtitleIcon,
   },
   vocabulary: { labelKey: 'settings.vocabulary', defaultValue: 'Vocabulary', Icon: BookIcon },
-  llm_service: { labelKey: 'settings.llm.title', defaultValue: 'LLM Service', Icon: RobotIcon },
+  llm_service: {
+    labelKey: 'settings.capabilities.title',
+    defaultValue: 'Capabilities',
+    Icon: RobotIcon,
+  },
   automation: { labelKey: 'settings.automation', defaultValue: 'Automation', Icon: AutomationIcon },
   storage: {
     labelKey: 'settings.storage.title',

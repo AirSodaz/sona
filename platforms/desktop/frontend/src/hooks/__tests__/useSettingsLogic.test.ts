@@ -82,7 +82,13 @@ describe('useSettingsLogic', () => {
   it('sets initial tab when opened', () => {
     const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'models'));
 
-    expect(result.current.activeTab).toBe('models');
+    expect(result.current.activeTab).toBe('capabilities');
+  });
+
+  it('redirects legacy llm_service tab to capabilities', () => {
+    const { result } = renderHook(() => useSettingsLogic(true, vi.fn(), 'llm_service'));
+
+    expect(result.current.activeTab).toBe('capabilities');
   });
 
   it('maps the legacy context tab to vocabulary when opened', () => {
@@ -150,6 +156,6 @@ describe('useSettingsLogic', () => {
       await Promise.resolve();
     });
 
-    expect(result.current.activeTab).toBe('models');
+    expect(result.current.activeTab).toBe('capabilities');
   });
 });

@@ -84,11 +84,14 @@ const CUSTOM_PROVIDER_MODES: Array<{
 interface SettingsLLMServiceTabProps {
   isActive?: boolean;
   onOpenProviderDetails?: (provider: LlmProvider) => void;
+  /** Render without page chrome when nested under Capabilities → Advanced. */
+  embedded?: boolean;
 }
 
 export function SettingsLLMServiceTab({
   isActive = true,
   onOpenProviderDetails,
+  embedded = false,
 }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -272,19 +275,21 @@ export function SettingsLLMServiceTab({
     setCustomProviderStrategy('openai_compatible');
   };
 
-  return (
-    <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
-      <SettingsPageHeader
-        icon={<RobotIcon width={28} height={28} />}
-        title={t('settings.llm.title')}
-        description={t('settings.llm.description', {
-          defaultValue:
-            'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
-        })}
-      />
+  const content = (
+    <>
+      {!embedded && (
+        <SettingsPageHeader
+          icon={<RobotIcon width={28} height={28} />}
+          title={t('settings.llm.title')}
+          description={t('settings.llm.description', {
+            defaultValue:
+              'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
+          })}
+        />
+      )}
 
       <SettingsSection
-        id="settings-llm-models-config"
+        id={embedded ? 'settings-llm-feature-models' : 'settings-llm-models-config'}
         title={t('settings.llm.feature_models')}
         description={t('settings.llm.feature_models_runtime_hint')}
         icon={<Settings2 size={20} />}
@@ -778,6 +783,16 @@ export function SettingsLLMServiceTab({
           </div>
         </div>
       </Modal>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="settings-embedded-llm">{content}</div>;
+  }
+
+  return (
+    <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
+      {content}
     </SettingsTabContainer>
   );
 }

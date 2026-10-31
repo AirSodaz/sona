@@ -30,9 +30,9 @@ const mockHits: SettingsSearchHit[] = [
   },
   {
     id: 'llm-providers',
-    tab: 'llm_service',
+    tab: 'capabilities',
     targetId: 'settings-llm-provider-list',
-    tabKey: 'settings.llm.title',
+    tabKey: 'settings.capabilities.title',
     titleKey: 'settings.llm.credentials_section',
     score: 50,
     resolvedTitle: '模型服务商',

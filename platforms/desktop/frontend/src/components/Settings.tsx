@@ -4,18 +4,17 @@ import { useTranslation } from 'react-i18next';
 import { useFocusTrap } from '../hooks/useFocusTrap';
 import { useSettingsLogic } from '../hooks/useSettingsLogic';
 import { isAnyDialogOpen } from '../stores/dialogStore';
-import type { SettingsTab, SettingsTabInput } from '../types/settings';
+import { normalizeSettingsTab, type SettingsTab, type SettingsTabInput } from '../types/settings';
 import { markSettingsPerf } from '../utils/settingsPerf';
 import { SettingsNavigationProvider } from './settings/SettingsNavigationContext';
 import { SettingsSidebarGroupHeader, SettingsTabButton } from './settings/SettingsTabButton';
 import {
   loadSettingsAboutTab,
   loadSettingsAutomationTab,
+  loadSettingsCapabilitiesPane,
   loadSettingsDashboardTab,
   loadSettingsGeneralTab,
-  loadSettingsLLMServiceTab,
   loadSettingsMicrophoneTab,
-  loadSettingsModelsPane,
   loadSettingsShortcutsTab,
   loadSettingsStorageTab,
   loadSettingsSyncTab,
@@ -43,16 +42,28 @@ type SettingsNavRequest = {
   targetId?: string;
 };
 
+type CapabilitiesFocus =
+  | 'speech'
+  | 'ai_writing'
+  | 'translation'
+  | 'advanced_speech'
+  | 'advanced_ai'
+  | ModelScenario;
+
 type SettingsPendingSubTab =
   | (SettingsNavRequest & { tab: 'subtitle'; subTab?: SubtitleSubTab; promptsSubTab?: never })
-  | (SettingsNavRequest & { tab: 'models'; subTab?: ModelScenario; promptsSubTab?: never })
+  | (SettingsNavRequest & {
+      tab: 'capabilities';
+      subTab?: CapabilitiesFocus;
+      promptsSubTab?: never;
+    })
   | (SettingsNavRequest & {
       tab: 'vocabulary';
       subTab?: VocabularySubTab;
       promptsSubTab?: PromptsSubTab;
     })
   | (SettingsNavRequest & {
-      tab: Exclude<SettingsTab, 'subtitle' | 'models' | 'vocabulary'>;
+      tab: Exclude<SettingsTab, 'subtitle' | 'capabilities' | 'models' | 'llm_service' | 'vocabulary'>;
       subTab?: never;
       promptsSubTab?: never;
     })
@@ -66,8 +77,12 @@ function createPendingSubTab(
   switch (hit.tab) {
     case 'subtitle':
       return { ...base, tab: 'subtitle', subTab: hit.subTab };
-    case 'models':
-      return { ...base, tab: 'models', subTab: hit.subTab };
+    case 'capabilities':
+      return {
+        ...base,
+        tab: 'capabilities',
+        subTab: hit.subTab,
+      };
     case 'vocabulary':
       return {
         ...base,
@@ -92,12 +107,11 @@ interface SettingsProps {
 const SettingsGeneralTab = lazy(loadSettingsGeneralTab);
 const SettingsDashboardTab = lazy(loadSettingsDashboardTab);
 const SettingsMicrophoneTab = lazy(loadSettingsMicrophoneTab);
-const SettingsModelsPane = lazy(loadSettingsModelsPane);
+const SettingsCapabilitiesPane = lazy(loadSettingsCapabilitiesPane);
 const SettingsVocabularyTab = lazy(loadSettingsVocabularyTab);
 const SettingsAutomationTab = lazy(loadSettingsAutomationTab);
 const SettingsStorageTab = lazy(loadSettingsStorageTab);
 const SettingsSyncTab = lazy(loadSettingsSyncTab);
-const SettingsLLMServiceTab = lazy(loadSettingsLLMServiceTab);
 const SettingsShortcutsTab = lazy(loadSettingsShortcutsTab);
 const SettingsAboutTab = lazy(loadSettingsAboutTab);
 
@@ -137,13 +151,20 @@ function renderSettingsPane(
           onClose={onClose}
         />
       );
+    case 'capabilities':
     case 'models':
+    case 'llm_service':
       return (
-        <SettingsModelsPane
+        <SettingsCapabilitiesPane
           isOpen={isOpen}
           isActive={isActive}
-          initialScenario={pendingSubTab?.tab === 'models' ? pendingSubTab.subTab : undefined}
-          subTabRequestId={pendingSubTab?.tab === 'models' ? pendingSubTab.requestId : undefined}
+          initialFocus={
+            pendingSubTab?.tab === 'capabilities' ? pendingSubTab.subTab : undefined
+          }
+          focusRequestId={
+            pendingSubTab?.tab === 'capabilities' ? pendingSubTab.requestId : undefined
+          }
+          onOpenLlmProviderDetails={onOpenLlmProviderDetails}
         />
       );
     case 'vocabulary':
@@ -180,13 +201,6 @@ function renderSettingsPane(
       return <SettingsMigratedBanner tool="api_server" onClose={onClose} />;
     case 'mcp':
       return <SettingsMigratedBanner tool="mcp" onClose={onClose} />;
-    case 'llm_service':
-      return (
-        <SettingsLLMServiceTab
-          isActive={isActive}
-          onOpenProviderDetails={onOpenLlmProviderDetails}
-        />
-      );
     case 'shortcuts':
       return <SettingsShortcutsTab />;
     case 'about':
@@ -394,9 +408,10 @@ export function Settings({
   }, []);
 
   const navigateToTab = useCallback(
-    (nextTab: (typeof SETTINGS_TABS)[number]) => {
-      markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
-      setActiveTab(nextTab);
+    (nextTab: SettingsTab) => {
+      const resolvedTab = normalizeSettingsTab(nextTab);
+      markSettingsPerf('settings.tab.click', { tab: resolvedTab, previousTab: renderedTab });
+      setActiveTab(resolvedTab);
       setPendingSubTab(null);
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
@@ -404,7 +419,7 @@ export function Settings({
       }
       clearHighlight();
       requestAnimationFrame(() => {
-        const btn = document.getElementById(`settings-tab-${nextTab}`);
+        const btn = document.getElementById(`settings-tab-${resolvedTab}`);
         btn?.focus();
       });
     },
@@ -447,7 +462,8 @@ export function Settings({
       if (hit.tab === 'subtitle') {
         setMigratedSubtitleTool((hit.subTab as ToolId) || 'subtitles');
       }
-      navigateToTab(hit.tab);
+      const resolvedTab = normalizeSettingsTab(hit.tab);
+      navigateToTab(resolvedTab);
       navRequestIdRef.current += 1;
       setPendingSubTab(createPendingSubTab(hit, navRequestIdRef.current));
 

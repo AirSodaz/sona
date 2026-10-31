@@ -30,6 +30,7 @@ import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { scenarioModelFieldKey } from '../utils/scenarioModels';
 import { getSettingsPerfErrorDetail, markSettingsPerf } from '../utils/settingsPerf';
+import { LARGE_DOWNLOAD_BYTES, resolveModelDownloadBytes } from '../utils/modelDownloadSize';
 import { formatBytes } from './notifications/modelDownloadAdapter';
 
 type DownloadState = {
@@ -443,6 +444,28 @@ export function useModelManager(isOpen: boolean) {
           variant: 'warning',
         });
         if (!confirmed) {
+          return;
+        }
+      }
+
+      const downloadBytes = resolveModelDownloadBytes(model);
+      if (downloadBytes !== null && downloadBytes >= LARGE_DOWNLOAD_BYTES) {
+        const sizeLabel = model.size?.trim() || formatBytes(downloadBytes);
+        const confirmedLarge = await confirm(
+          t('settings.large_download_confirm', {
+            defaultValue:
+              '{{name}} is about {{size}}. Download and use it for recognition?',
+            name: model.name,
+            size: sizeLabel,
+          }),
+          {
+            title: t('settings.large_download_title', {
+              defaultValue: 'Large model download',
+            }),
+            variant: 'warning',
+          }
+        );
+        if (!confirmedLarge) {
           return;
         }
       }
