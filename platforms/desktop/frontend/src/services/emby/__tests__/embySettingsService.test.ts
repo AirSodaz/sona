@@ -1,12 +1,16 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_CONFIG, useConfigStore } from '../../../stores/configStore';
 import type { AppConfig } from '../../../types/config';
 import type { EmbyToolOverrides } from '../../../types/emby';
+import * as embyService from '../embyService';
 import { cleanSubtitleText } from '../embyService';
 import {
   buildEmbyEffectiveConfig,
   DEFAULT_EMBY_TOOL_OVERRIDES,
   EMBY_TOOL_OVERRIDES_STORAGE_KEY,
   loadEmbyToolOverrides,
+  loadEmbyToolOverridesAsync,
+  normalizeEmbyToolOverrides,
   saveEmbyToolOverrides,
 } from '../embySettingsService';
 
@@ -44,6 +48,8 @@ const mockBaseConfig: AppConfig = {
 describe('embySettingsService', () => {
   beforeEach(() => {
     localStorage.clear();
+    useConfigStore.setState({ config: { ...DEFAULT_CONFIG } });
+    vi.restoreAllMocks();
   });
 
   describe('loadEmbyToolOverrides and saveEmbyToolOverrides', () => {
@@ -91,6 +97,54 @@ describe('embySettingsService', () => {
       const loaded = loadEmbyToolOverrides();
       expect(loaded.defaultSubtitleMode).toBe('bilingual');
       expect(loaded.overwriteExistingExternal).toBe(true);
+    });
+
+    it('loads from configStore when localStorage has no entry', () => {
+      useConfigStore.setState({
+        config: {
+          ...DEFAULT_CONFIG,
+          embyProcessingSettings: {
+            asrLanguage: 'ko',
+            defaultSubtitleMode: 'separate_tracks',
+            overwriteExistingExternal: false,
+          },
+        },
+      });
+      const loaded = loadEmbyToolOverrides();
+      expect(loaded.asrLanguage).toBe('ko');
+      expect(loaded.defaultSubtitleMode).toBe('separate_tracks');
+      expect(loaded.overwriteExistingExternal).toBe(false);
+    });
+
+    it('updates configStore and invokes saveEmbyProcessingSettings on save', async () => {
+      const saveSpy = vi
+        .spyOn(embyService, 'saveEmbyProcessingSettings')
+        .mockResolvedValue(undefined);
+      const custom: EmbyToolOverrides = {
+        asrLanguage: 'de',
+        defaultSubtitleMode: 'bilingual',
+        overwriteExistingExternal: true,
+      };
+
+      saveEmbyToolOverrides(custom);
+
+      expect(useConfigStore.getState().config.embyProcessingSettings?.asrLanguage).toBe('de');
+      expect(saveSpy).toHaveBeenCalledWith(normalizeEmbyToolOverrides(custom));
+    });
+
+    it('loads overrides asynchronously from backend and syncs configStore and localStorage', async () => {
+      const backendOverrides: EmbyToolOverrides = {
+        asrLanguage: 'fr',
+        defaultSubtitleMode: 'pure_translation',
+        overwriteExistingExternal: false,
+      };
+      vi.spyOn(embyService, 'getEmbyProcessingSettings').mockResolvedValue(backendOverrides);
+
+      const loaded = await loadEmbyToolOverridesAsync();
+
+      expect(loaded.asrLanguage).toBe('fr');
+      expect(useConfigStore.getState().config.embyProcessingSettings?.asrLanguage).toBe('fr');
+      expect(localStorage.getItem(EMBY_TOOL_OVERRIDES_STORAGE_KEY)).toContain('pure_translation');
     });
   });
 

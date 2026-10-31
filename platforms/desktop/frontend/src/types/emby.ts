@@ -77,3 +77,9 @@ export interface EmbyToolOverrides {
   defaultSubtitleMode?: EmbySubtitleMode;
   overwriteExistingExternal?: boolean;
 }
+
+export const DEFAULT_EMBY_TOOL_OVERRIDES: EmbyToolOverrides = {
+  asrLanguage: 'auto',
+  defaultSubtitleMode: 'bilingual',
+  overwriteExistingExternal: true,
+};

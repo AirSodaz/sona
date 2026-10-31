@@ -504,6 +504,19 @@ pub struct AppConfig {
         skip_serializing_if = "Option::is_none"
     )]
     pub emby_admin_user_id: Option<String>,
+    #[serde(
+        default,
+        rename = "embyProcessingSettings",
+        alias = "emby_processing_settings",
+        alias = "embyToolOverrides",
+        alias = "emby_tool_overrides",
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[cfg_attr(
+        feature = "specta",
+        specta(type = Option<specta_typescript::Unknown>)
+    )]
+    pub emby_processing_settings: Option<Value>,
     #[serde(flatten)]
     #[cfg_attr(feature = "specta", specta(skip))]
     pub extra: BTreeMap<String, Value>,

@@ -36,6 +36,7 @@ import type {
   EmbyLibrary,
   EmbyLoginPayload,
   EmbyServerInfo,
+  EmbyToolOverrides,
   SubtitleUploadPayload,
 } from '../../types/emby';
 import type {
@@ -839,6 +840,14 @@ type ManualTauriCommandContractMap = {
   [TauriCommand.emby.getConfig]: {
     args: undefined;
     result: EmbyConnectionConfig | null;
+  };
+  [TauriCommand.emby.getProcessingSettings]: {
+    args: undefined;
+    result: EmbyToolOverrides | null;
+  };
+  [TauriCommand.emby.saveProcessingSettings]: {
+    args: { settings: EmbyToolOverrides };
+    result: undefined;
   };
   [TauriCommand.emby.getLibraries]: {
     args: undefined;

@@ -11,7 +11,9 @@ import {
   getEmbyConfig,
   getEmbyItems,
   getEmbyLibraries,
+  getEmbyProcessingSettings,
   saveEmbyConfig,
+  saveEmbyProcessingSettings,
   syncEmbySubtitles,
   testEmbyConnection,
   uploadEmbySubtitle,
@@ -314,6 +316,29 @@ describe('embyService IPC wrappers', () => {
     const res = await getEmbyConfig();
     expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.getConfig);
     expect(res?.serverUrl).toBe('http://localhost:8096');
+  });
+
+  it('calls saveEmbyProcessingSettings with expected command and payload', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue(undefined);
+    const settings = {
+      asrLanguage: 'zh',
+      defaultSubtitleMode: 'bilingual' as const,
+      overwriteExistingExternal: true,
+    };
+    await saveEmbyProcessingSettings(settings);
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.saveProcessingSettings, { settings });
+  });
+
+  it('calls getEmbyProcessingSettings with expected command', async () => {
+    const invokeSpy = vi.spyOn(tauriInvoke, 'invokeTauri').mockResolvedValue({
+      asrLanguage: 'ja',
+      defaultSubtitleMode: 'pure_translation',
+      overwriteExistingExternal: false,
+    });
+    const res = await getEmbyProcessingSettings();
+    expect(invokeSpy).toHaveBeenCalledWith(TauriCommand.emby.getProcessingSettings);
+    expect(res?.asrLanguage).toBe('ja');
+    expect(res?.defaultSubtitleMode).toBe('pure_translation');
   });
 
   it('calls getEmbyLibraries with expected command', async () => {

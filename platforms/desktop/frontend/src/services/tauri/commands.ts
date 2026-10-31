@@ -244,6 +244,8 @@ export const TauriCommand = {
     testConnection: 'emby_test_connection',
     saveConfig: 'emby_save_config',
     getConfig: 'emby_get_config',
+    getProcessingSettings: 'emby_get_processing_settings',
+    saveProcessingSettings: 'emby_save_processing_settings',
     getLibraries: 'emby_get_libraries',
     getItems: 'emby_get_items',
     downloadAudio: 'emby_download_audio',

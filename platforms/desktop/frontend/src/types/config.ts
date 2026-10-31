@@ -11,6 +11,7 @@ import type {
   AppLanguagePreference as GeneratedAppLanguagePreference,
   AppLogLevel as GeneratedAppLogLevel,
 } from '../bindings';
+import type { EmbyToolOverrides } from './emby';
 import type { LlmSettings, SummaryCustomTemplate, SummaryTemplateId } from './llm';
 import type { SpeakerProfile } from './speaker';
 
@@ -524,6 +525,15 @@ export interface McpConfig {
   /** Whether local MCP activity audit logging is enabled. Default: true. */
   mcpAuditLogEnabled?: boolean;
 }
+
+// ---------------------------------------------------------------------------
+// Emby Processing Settings
+// ---------------------------------------------------------------------------
+
+export interface EmbyProcessingConfig {
+  /** Emby processing overrides for ASR and translation models, subtitle mode, and external subtitle overwrite. */
+  embyProcessingSettings?: EmbyToolOverrides;
+}
 // ---------------------------------------------------------------------------
 // Composite AppConfig
 // ---------------------------------------------------------------------------
@@ -547,4 +557,5 @@ export type AppConfig = GeneratedAppConfig &
   ApiServerConfig &
   LlmAssistantConfig &
   HistoryStorageConfig &
-  McpConfig;
+  McpConfig &
+  EmbyProcessingConfig;

@@ -295,6 +295,46 @@ pub fn emby_get_config(
 
     Ok(None)
 }
+#[tauri::command(rename_all = "camelCase")]
+pub fn emby_get_processing_settings(
+    services: State<'_, DesktopServices>,
+) -> Result<Option<serde_json::Value>, String> {
+    let config = services.config.load()?;
+    let Some(config_val) = config else {
+        return Ok(None);
+    };
+
+    Ok(config_val
+        .get("embyProcessingSettings")
+        .or_else(|| config_val.get("emby_processing_settings"))
+        .or_else(|| config_val.get("embyToolOverrides"))
+        .or_else(|| config_val.get("emby_tool_overrides"))
+        .cloned())
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn emby_save_processing_settings(
+    services: State<'_, DesktopServices>,
+    settings: serde_json::Value,
+) -> Result<(), String> {
+    let mut current_config = services
+        .config
+        .load()?
+        .filter(|v| v.is_object())
+        .unwrap_or_else(|| serde_json::json!({}));
+    if let Some(obj) = current_config.as_object_mut() {
+        obj.insert("embyProcessingSettings".to_string(), settings.clone());
+    }
+    services.config.save(&current_config)?;
+    let _ = services.emitter.emit(
+        "app-setting-updated",
+        serde_json::json!({
+            "key": "sona-config",
+            "value": &current_config,
+        }),
+    );
+    Ok(())
+}
 
 #[tauri::command(rename_all = "camelCase")]
 pub async fn emby_get_libraries(
@@ -524,5 +564,55 @@ mod tests {
         let sanitized_no_key = sanitize_emby_error(err_no_key_provided, None);
         assert!(!sanitized_no_key.contains("supersecret"));
         assert!(sanitized_no_key.contains("Api_Key=[REDACTED]"));
+    }
+
+    #[test]
+    fn test_emby_processing_settings_save_and_get() {
+        let temp_dir = tempfile::tempdir().unwrap();
+        let ctx = std::sync::Arc::new(
+            sona_sqlite::SqliteApplicationContext::open(temp_dir.path()).unwrap(),
+        );
+        let sqlite = crate::platform::database::DesktopSqliteState::new(ctx);
+        let emitter = std::sync::Arc::new(crate::platform::event::MockEventEmitter::new());
+        let services = DesktopServices::builder()
+            .sqlite(sqlite)
+            .event_emitter(emitter)
+            .build()
+            .unwrap();
+
+        // 1. Initial state should be None
+        let initial = services.config.load().unwrap();
+        let get_initial = initial
+            .as_ref()
+            .and_then(|c| c.get("embyProcessingSettings"))
+            .cloned();
+        assert_eq!(get_initial, None);
+
+        // 2. Save processing settings
+        let settings_json = serde_json::json!({
+            "asrLanguage": "ja",
+            "defaultSubtitleMode": "pure_translation",
+            "overwriteExistingExternal": false
+        });
+
+        let mut current_config = services
+            .config
+            .load()
+            .unwrap()
+            .filter(|v| v.is_object())
+            .unwrap_or_else(|| serde_json::json!({}));
+        current_config
+            .as_object_mut()
+            .unwrap()
+            .insert("embyProcessingSettings".to_string(), settings_json.clone());
+        services.config.save(&current_config).unwrap();
+
+        // 3. Load and verify
+        let loaded = services.config.load().unwrap().unwrap();
+        let loaded_settings = loaded.get("embyProcessingSettings").unwrap();
+        assert_eq!(loaded_settings, &settings_json);
+        assert_eq!(loaded_settings["asrLanguage"], "ja");
+        assert_eq!(loaded_settings["defaultSubtitleMode"], "pure_translation");
+        assert_eq!(loaded_settings["overwriteExistingExternal"], false);
     }
 }

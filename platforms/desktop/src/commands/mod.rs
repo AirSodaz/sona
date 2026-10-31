@@ -218,6 +218,8 @@ pub fn get_handlers() -> impl Fn(tauri::ipc::Invoke) -> bool {
         crate::commands::emby::emby_test_connection,
         crate::commands::emby::emby_save_config,
         crate::commands::emby::emby_get_config,
+        crate::commands::emby::emby_get_processing_settings,
+        crate::commands::emby::emby_save_processing_settings,
         crate::commands::emby::emby_get_libraries,
         crate::commands::emby::emby_get_items,
         crate::commands::emby::emby_download_audio,

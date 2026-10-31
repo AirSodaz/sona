@@ -34,6 +34,8 @@ vi.mock('../../../../services/emby/embyService', () => ({
   getEmbyItems: vi.fn(),
   downloadEmbyAudio: vi.fn(),
   uploadEmbySubtitle: vi.fn(),
+  getEmbyProcessingSettings: vi.fn(),
+  saveEmbyProcessingSettings: vi.fn(),
 }));
 
 vi.mock('../../../../services/recoveryService', () => ({
@@ -166,6 +168,8 @@ describe('ToolEmbySyncPanel', () => {
     vi.mocked(embyService.testEmbyConnection).mockResolvedValue(mockServerInfo);
     vi.mocked(embyService.getEmbyLibraries).mockResolvedValue(mockLibraries);
     vi.mocked(embyService.getEmbyItems).mockResolvedValue(mockItemsResult);
+    vi.mocked(embyService.getEmbyProcessingSettings).mockResolvedValue(null);
+    vi.mocked(embyService.saveEmbyProcessingSettings).mockResolvedValue(undefined);
   });
 
   afterEach(() => {

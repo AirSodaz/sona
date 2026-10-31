@@ -11,6 +11,7 @@ import type {
   AppConfig,
   AudioConfig,
   CaptionConfig,
+  EmbyProcessingConfig,
   HistoryStorageConfig,
   LlmAssistantConfig,
   McpConfig,
@@ -21,6 +22,7 @@ import type {
   VocabularyConfig,
   VoiceTypingConfig,
 } from '../types/config';
+import { DEFAULT_EMBY_TOOL_OVERRIDES } from '../types/emby';
 
 // ---------------------------------------------------------------------------
 // Default values
@@ -205,6 +207,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   mcpAllowModelManagement: true,
   mcpNotifyOnMutation: true,
   mcpAuditLogEnabled: true,
+  embyProcessingSettings: DEFAULT_EMBY_TOOL_OVERRIDES,
 };
 
 // ---------------------------------------------------------------------------
@@ -383,6 +386,7 @@ const MCP_KEYS: (keyof McpConfig)[] = [
   'mcpNotifyOnMutation',
   'mcpAuditLogEnabled',
 ];
+const EMBY_PROCESSING_KEYS: (keyof EmbyProcessingConfig)[] = ['embyProcessingSettings'];
 /** Pick a subset of keys from the config. */
 function pickConfig<K extends keyof AppConfig>(config: AppConfig, keys: K[]): Pick<AppConfig, K> {
   const result = {} as Pick<AppConfig, K>;
@@ -450,6 +454,11 @@ export function useHistoryStorageConfig(): HistoryStorageConfig {
 /** MCP Agent Control settings. */
 export function useMcpConfig(): McpConfig {
   return useConfigStore(useShallow((s) => pickConfig(s.config, MCP_KEYS)));
+}
+
+/** Emby processing settings overrides. */
+export function useEmbyProcessingConfig(): EmbyProcessingConfig {
+  return useConfigStore(useShallow((s) => pickConfig(s.config, EMBY_PROCESSING_KEYS)));
 }
 
 // ---------------------------------------------------------------------------

@@ -5,6 +5,7 @@ import type {
   EmbyLibrary,
   EmbyLoginPayload,
   EmbyServerInfo,
+  EmbyToolOverrides,
   SubtitleUploadPayload,
 } from '../../types/emby';
 import type { TranscriptSegment } from '../../types/transcript';
@@ -108,6 +109,14 @@ export async function saveEmbyConfig(config: EmbyConnectionConfig): Promise<void
 
 export async function getEmbyConfig(): Promise<EmbyConnectionConfig | null> {
   return invokeTauri(TauriCommand.emby.getConfig);
+}
+
+export async function saveEmbyProcessingSettings(settings: EmbyToolOverrides): Promise<void> {
+  return invokeTauri(TauriCommand.emby.saveProcessingSettings, { settings });
+}
+
+export async function getEmbyProcessingSettings(): Promise<EmbyToolOverrides | null> {
+  return invokeTauri(TauriCommand.emby.getProcessingSettings);
 }
 
 export async function getEmbyLibraries(): Promise<EmbyLibrary[]> {

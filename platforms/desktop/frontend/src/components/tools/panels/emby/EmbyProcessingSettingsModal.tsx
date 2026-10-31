@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
   DEFAULT_EMBY_TOOL_OVERRIDES,
   loadEmbyToolOverrides,
+  loadEmbyToolOverridesAsync,
   saveEmbyToolOverrides,
 } from '../../../../services/emby/embySettingsService';
 import { modelService } from '../../../../services/modelService';
@@ -68,21 +69,34 @@ export function EmbyProcessingSettingsModal({
   }, [isOpen, catalog]);
   useEffect(() => {
     if (isOpen) {
-      const overrides = loadEmbyToolOverrides();
+      let isMounted = true;
+      const applyOverrides = (overrides: EmbyToolOverrides) => {
+        if (!overrides.asrSelection) {
+          setSelectedAsrValue('__global__');
+        } else if (overrides.asrSelection.engine === 'online') {
+          const pid = overrides.asrSelection.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
+          setSelectedAsrValue(pid);
+        } else {
+          setSelectedAsrValue(overrides.asrSelection.modelId || '__global__');
+        }
 
-      if (!overrides.asrSelection) {
-        setSelectedAsrValue('__global__');
-      } else if (overrides.asrSelection.engine === 'online') {
-        const pid = overrides.asrSelection.providerId || ONLINE_ASR_PROVIDER_DEFINITIONS[0].id;
-        setSelectedAsrValue(pid);
-      } else {
-        setSelectedAsrValue(overrides.asrSelection.modelId || '__global__');
-      }
+        setSelectedAsrLanguage(overrides.asrLanguage ?? 'auto');
+        setSelectedTranslationModelId(overrides.translationModelId || '__global__');
+        setSelectedSubtitleMode(overrides.defaultSubtitleMode ?? 'bilingual');
+        setOverwriteExistingExternal(overrides.overwriteExistingExternal ?? true);
+      };
 
-      setSelectedAsrLanguage(overrides.asrLanguage ?? 'auto');
-      setSelectedTranslationModelId(overrides.translationModelId || '__global__');
-      setSelectedSubtitleMode(overrides.defaultSubtitleMode ?? 'bilingual');
-      setOverwriteExistingExternal(overrides.overwriteExistingExternal ?? true);
+      applyOverrides(loadEmbyToolOverrides());
+
+      void loadEmbyToolOverridesAsync().then((fresh) => {
+        if (isMounted && fresh) {
+          applyOverrides(fresh);
+        }
+      });
+
+      return () => {
+        isMounted = false;
+      };
     }
   }, [isOpen]);
 

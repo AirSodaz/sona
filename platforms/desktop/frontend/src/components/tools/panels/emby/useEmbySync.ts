@@ -8,7 +8,10 @@ import {
   saveEmbyConfig,
   testEmbyConnection,
 } from '../../../../services/emby/embyService';
-import { loadEmbyToolOverrides } from '../../../../services/emby/embySettingsService';
+import {
+  loadEmbyToolOverrides,
+  loadEmbyToolOverridesAsync,
+} from '../../../../services/emby/embySettingsService';
 import { type AddEmbyItemEntry, useBatchQueueStore } from '../../../../stores/batchQueueStore';
 import { useToolsStore } from '../../../../stores/toolsStore';
 import { useTranscriptStore } from '../../../../stores/transcriptStore';
@@ -339,6 +342,20 @@ export function useEmbySync(): UseEmbySyncReturn {
       }
     }
     loadConfig();
+    async function loadOverrides() {
+      try {
+        const overrides = await loadEmbyToolOverridesAsync();
+        if (overrides.defaultSubtitleMode) {
+          setSubtitleMode(overrides.defaultSubtitleMode);
+        }
+        if (overrides.overwriteExistingExternal !== undefined) {
+          setOverwriteExistingExternal(overrides.overwriteExistingExternal);
+        }
+      } catch (err) {
+        console.error('Failed to load Emby processing settings:', err);
+      }
+    }
+    loadOverrides();
   }, [handleConnect]);
 
   // Fetch items for selected library and search term with debounce and race cancellation
