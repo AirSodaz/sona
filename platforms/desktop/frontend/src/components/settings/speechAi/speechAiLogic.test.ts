@@ -3,18 +3,13 @@ import type { AppConfig } from '../../../types/config';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import {
   curatedGroupOrder,
-  friendlyVersion,
   modesAreLinked,
   pathIsInstalled,
   recommendedVariantId,
   SENSEVOICE_STANDARD_ID,
   speakerHelpersReady,
-  versionRowLabels,
   WHISPER_TURBO_ID,
 } from './speechAiLogic';
-
-const t = (key: string, options?: Record<string, unknown>) =>
-  typeof options?.defaultValue === 'string' ? options.defaultValue : key;
 
 function config(patch: Partial<AppConfig> = {}): AppConfig {
   return {
@@ -64,40 +59,6 @@ describe('speech model picker naming', () => {
     expect(recommendedVariantId('en')).toBe(WHISPER_TURBO_ID);
     expect(curatedGroupOrder('en')[0]).toBe('whisper');
     expect(curatedGroupOrder('zh')[0]).toBe('sensevoice');
-  });
-
-  it('maps quantization labels onto friendly version names', () => {
-    expect(friendlyVersion({ versionLabel: 'Int8', engine: 'sherpa-onnx' }).titleDefault).toBe(
-      'Standard'
-    );
-    expect(friendlyVersion({ versionLabel: 'Q5_0', engine: 'llama-cpp' }).titleDefault).toBe(
-      'Smaller'
-    );
-    expect(friendlyVersion({ versionLabel: 'Fp32', engine: 'sherpa-onnx' }).tier).toBe('full');
-    expect(friendlyVersion({ versionLabel: 'Int8', engine: 'sherpa-onnx' }).hint).toBe('Int8 ONNX');
-  });
-
-  it('uses the translator stub so copy tests stay local', () => {
-    expect(t('settings.speech_ai.ready', { defaultValue: 'Ready' })).toBe('Ready');
-  });
-
-  it('keeps size and latency in the primary label when several rows share a tier', () => {
-    const models = [
-      model('a', '0.6B Q8_0', 'llama-cpp'),
-      model('b', '1.7B Q8_0', 'llama-cpp'),
-      model('c', '0.6B Int8', 'sherpa-onnx'),
-      model('d', '300M v2 Fp32', 'sherpa-onnx'),
-      model('e', '160ms Int8', 'sherpa-onnx'),
-    ];
-    const labels = Object.fromEntries(
-      versionRowLabels(models, t).map((row) => [row.id, row.title])
-    );
-    expect(labels.a).toBe('Standard · 0.6B · Q8_0');
-    expect(labels.b).toBe('Standard · 1.7B');
-    expect(labels.c).toBe('Standard · 0.6B · Int8');
-    expect(labels.d).toBe('Full precision · 300M v2');
-    expect(labels.e).toBe('Standard · 160ms');
-    expect(new Set(Object.values(labels)).size).toBe(models.length);
   });
 });
 

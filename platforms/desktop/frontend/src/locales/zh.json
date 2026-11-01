@@ -2626,7 +2626,9 @@
       "reasoning_level_max": "最大",
       "reasoning_budget": "思考 Token 预算",
       "reasoning_budget_hint": "单次思考允许消耗的最大 Token 数量",
-      "builtin_reasoning": "内置深度思考（无需配置档位）"
+      "builtin_reasoning": "内置深度思考（无需配置档位）",
+      "temperature_reset_tooltip": "重置为 1.0",
+      "temperature_reset_aria": "将温度重置为 1.0"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",
@@ -2713,6 +2715,7 @@
       "writing_connected": "{{provider}} · {{model}} · {{when}}检查过",
       "recommended_line": "推荐：{{model}} · 中文、英文及其他 · {{size}}",
       "download_continues": "可以关掉设置，下载会继续。准备好后 Sona 会告诉你。",
+      "bytes_of": "{{done}} / {{total}}",
       "detail_mirrored": "{{model}} · 录音与文件共用",
       "detail_split": "录音与文件使用不同设置",
       "sub_recording": "录音：{{model}}{{speakers}}",
@@ -2739,11 +2742,6 @@
       "filter_many": "多种语言",
       "show_all": "显示全部模型",
       "show_less": "只显示推荐模型",
-      "in_use": "使用中",
-      "use": "使用",
-      "ver_standard": "标准",
-      "ver_smaller": "精简",
-      "ver_full": "完整精度",
       "back_button": "返回",
       "keep_same": "录音和文件使用相同设置",
       "keep_same_on": "关闭后可以分别设置",
@@ -2808,12 +2806,17 @@
         "paraformer": "Paraformer",
         "parakeet": "Parakeet TDT"
       },
-      "blurb": {
-        "sensevoice": "日常中文和英文又快又准。录音和文件都能用。",
-        "whisper": "适合多语言和带口音的语音。旧电脑上会慢一些。",
-        "paraformer": "中文非常快。适合笔记本上的长会议。",
-        "parakeet": "欧洲语言识别很快，自带标点。"
-      }
+      "checked_just_now": "刚刚",
+      "checked_one_minute": "1 分钟前",
+      "checked_minutes": "{{count}} 分钟前",
+      "checked_one_hour": "1 小时前",
+      "checked_hours": "{{count}} 小时前",
+      "hint_api_key": "API 密钥",
+      "hint_local": "在这台电脑上",
+      "openai_compatible": "兼容 OpenAI",
+      "custom_service_name": "自定义",
+      "helper_seg_fallback": "Pyannote 3.0 · 6 MB · 主要用于文件",
+      "helper_emb_fallback": "3D-Speaker CAMPPlus · 28 MB · 把说话人匹配到声纹库"
     }
   },
   "shortcuts": {

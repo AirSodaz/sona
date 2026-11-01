@@ -2626,7 +2626,9 @@
       "reasoning_level_max": "Maximum",
       "reasoning_budget": "Thinking Token Budget",
       "reasoning_budget_hint": "Maximum thinking tokens allowed per inference",
-      "builtin_reasoning": "Built-in deep thinking (no configuration required)"
+      "builtin_reasoning": "Built-in deep thinking (no configuration required)",
+      "temperature_reset_tooltip": "Reset to 1.0",
+      "temperature_reset_aria": "Reset temperature to 1.0"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",
@@ -2713,6 +2715,7 @@
       "writing_connected": "{{provider}} · {{model}} · checked {{when}}",
       "recommended_line": "Recommended: {{model}} · Chinese, English and 3 more · {{size}}",
       "download_continues": "You can close Settings — the download continues and Sona will tell you when it's ready.",
+      "bytes_of": "{{done}} of {{total}}",
       "detail_mirrored": "{{model}} · used while recording and for files",
       "detail_split": "Different for recording and files",
       "sub_recording": "Recording: {{model}}{{speakers}}",
@@ -2739,11 +2742,6 @@
       "filter_many": "Many languages",
       "show_all": "Show all models",
       "show_less": "Show recommended models",
-      "in_use": "In use",
-      "use": "Use",
-      "ver_standard": "Standard",
-      "ver_smaller": "Smaller",
-      "ver_full": "Full precision",
       "back_button": "Back",
       "keep_same": "Keep recording and files the same",
       "keep_same_on": "Turn off to set them separately",
@@ -2808,12 +2806,17 @@
         "paraformer": "Paraformer",
         "parakeet": "Parakeet TDT"
       },
-      "blurb": {
-        "sensevoice": "Fast and accurate for everyday Chinese and English. Works live and with files.",
-        "whisper": "Best for many languages and accented speech. Slower on older computers.",
-        "paraformer": "Very fast Chinese. Good for long meetings on laptops.",
-        "parakeet": "Fast European-language recognition with punctuation built in."
-      }
+      "checked_just_now": "just now",
+      "checked_one_minute": "1 min ago",
+      "checked_minutes": "{{count}} min ago",
+      "checked_one_hour": "1 hour ago",
+      "checked_hours": "{{count}} hours ago",
+      "hint_api_key": "API key",
+      "hint_local": "On this computer",
+      "openai_compatible": "OpenAI-compatible",
+      "custom_service_name": "Custom",
+      "helper_seg_fallback": "Pyannote 3.0 · 6 MB · used mainly for files",
+      "helper_emb_fallback": "3D-Speaker CAMPPlus · 28 MB · matches speakers to your voice library"
     }
   },
   "shortcuts": {

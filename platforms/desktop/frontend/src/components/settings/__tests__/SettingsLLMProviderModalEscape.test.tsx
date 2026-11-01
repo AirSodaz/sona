@@ -68,7 +68,7 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
       fireEvent.keyDown(window, { key: 'Escape' });
     });
     expect(onSettingsClose).not.toHaveBeenCalled();
-    expect(screen.getByText('Speech recognition')).toBeTruthy();
+    expect(screen.getByText('settings.speech_ai.speech_title')).toBeTruthy();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Escape' });

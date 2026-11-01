@@ -94,7 +94,7 @@ export function ProviderAccordionItem({
       }
       return {
         type: 'off',
-        text: t('settings.speech_ai.not_checked', { defaultValue: 'Not checked' }),
+        text: t('settings.speech_ai.not_checked'),
       };
     }
     if (isConfigured) {

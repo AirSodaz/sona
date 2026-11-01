@@ -283,28 +283,6 @@
   align-self: flex-start;
 }
 
-.model-card.is-recommended {
-  background: color-mix(in srgb, var(--color-accent-primary) 7%, var(--color-bg-elevated));
-  border-color: color-mix(in srgb, var(--color-accent-primary) 30%, var(--color-border));
-}
-
-.model-version-copy {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.model-version-hint {
-  font-size: 12px;
-  color: var(--color-text-tertiary, var(--color-text-muted));
-}
-
-.speech-ai-version-btn {
-  min-height: 32px;
-  padding-inline: 12px;
-}
-
 .speech-ai-mode-card {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
@@ -446,7 +424,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .speech-ai-progress > span,
-  .model-card.is-recommended,
   .speech-ai-link,
   .speech-ai-filter {
     transition: none;

@@ -69,7 +69,7 @@ export function RecognitionPanel({
         ?.id) ||
     '';
   const punctuationOptions = [
-    { value: '', label: t('settings.speech_ai.automatic', { defaultValue: 'Automatic' }) },
+    { value: '', label: t('settings.speech_ai.automatic') },
     ...modelCatalog.models
       .filter((model) => model.type === 'punctuation')
       .map((model) => ({ value: model.id, label: model.name })),
@@ -92,48 +92,31 @@ export function RecognitionPanel({
     <div className="speech-ai" id="settings-speech-recognition">
       <p className="speech-ai-detail">
         {linked
-          ? t('settings.speech_ai.recognition_same_intro', {
-              defaultValue:
-                'Sona uses the same model for recording and files unless you change one below.',
-            })
-          : t('settings.speech_ai.recognition_split_intro', {
-              defaultValue: 'Recording and files use different setups.',
-            })}
+          ? t('settings.speech_ai.recognition_same_intro')
+          : t('settings.speech_ai.recognition_split_intro')}
       </p>
       <div className="settings-item-container layout-horizontal" id="settings-speech-link-toggle">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.keep_same', {
-              defaultValue: 'Keep recording and files the same',
-            })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.keep_same')}</div>
           <div className="settings-item-hint">
             {linked
-              ? t('settings.speech_ai.keep_same_on', {
-                  defaultValue: 'Turn off to set them separately',
-                })
-              : t('settings.speech_ai.currently_different', {
-                  defaultValue: 'Currently different',
-                })}
+              ? t('settings.speech_ai.keep_same_on')
+              : t('settings.speech_ai.currently_different')}
           </div>
         </div>
         <div className="settings-item-action">
           <Switch
             checked={linked}
             onChange={setLinked}
-            aria-label={t('settings.speech_ai.keep_same', {
-              defaultValue: 'Keep recording and files the same',
-            })}
+            aria-label={t('settings.speech_ai.keep_same')}
           />
         </div>
       </div>
 
       <ModeCard
         icon={<Mic size={16} />}
-        title={t('settings.speech_ai.while_recording', { defaultValue: 'While recording' })}
-        hint={t('settings.speech_ai.while_recording_hint', {
-          defaultValue: 'Dictate from your microphone',
-        })}
+        title={t('settings.speech_ai.while_recording')}
+        hint={t('settings.speech_ai.while_recording_hint')}
         modelId={modelIdForSelection(selectionForScope(config, 'live')) ?? ''}
         modelLabel={resolveModelTitle(config, 'live', modelCatalog.models, t)}
         options={installedAsr('streaming')}
@@ -142,9 +125,8 @@ export function RecognitionPanel({
           speakersEnabled(config, 'live')
             ? t('settings.speech_ai.speakers_on', {
                 number: count,
-                defaultValue: `Speakers on · ${count}`,
               })
-            : t('settings.speech_ai.off', { defaultValue: 'Off' })
+            : t('settings.speech_ai.off')
         }
         onModel={(modelId) => applyInstalled('live', modelId)}
         onChangeModel={() => onChangeModel('live')}
@@ -154,27 +136,24 @@ export function RecognitionPanel({
 
       <ModeCard
         icon={<FileText size={16} />}
-        title={t('settings.speech_ai.when_file', { defaultValue: 'When opening a file' })}
-        hint={t('settings.speech_ai.when_file_hint', {
-          defaultValue: 'Import audio or video for transcription',
-        })}
+        title={t('settings.speech_ai.when_file')}
+        hint={t('settings.speech_ai.when_file_hint')}
         modelId={linked ? '' : (modelIdForSelection(selectionForScope(config, 'batch')) ?? '')}
         modelLabel={
           linked
-            ? t('settings.speech_ai.same_as_recording', { defaultValue: 'Same as recording' })
+            ? t('settings.speech_ai.same_as_recording')
             : resolveModelTitle(config, 'batch', modelCatalog.models, t)
         }
         options={installedAsr('batch')}
         disabled={!catalogReady || linked}
         speakers={
           linked
-            ? t('settings.speech_ai.same_as_recording', { defaultValue: 'Same as recording' })
+            ? t('settings.speech_ai.same_as_recording')
             : speakersEnabled(config, 'batch')
               ? t('settings.speech_ai.speakers_on', {
                   number: count,
-                  defaultValue: `Speakers on · ${count}`,
                 })
-              : t('settings.speech_ai.off', { defaultValue: 'Off' })
+              : t('settings.speech_ai.off')
         }
         onModel={(modelId) => applyInstalled('batch', modelId)}
         onChangeModel={() => onChangeModel('batch')}
@@ -182,27 +161,17 @@ export function RecognitionPanel({
         readOnly={linked}
       />
 
-      <div className="speech-ai-section-label">
-        {t('settings.speech_ai.shared_helpers', { defaultValue: 'Shared helpers' })}
-      </div>
+      <div className="speech-ai-section-label">{t('settings.speech_ai.shared_helpers')}</div>
       <div className="speech-ai-card">
         <div className="settings-item-container layout-horizontal" id="settings-punctuation-path">
           <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.add_punctuation', { defaultValue: 'Add punctuation' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.speech_ai.add_punctuation_hint', {
-                defaultValue: "Adds commas and full stops when the model doesn't.",
-              })}
-            </div>
+            <div className="settings-item-title">{t('settings.speech_ai.add_punctuation')}</div>
+            <div className="settings-item-hint">{t('settings.speech_ai.add_punctuation_hint')}</div>
           </div>
           <div className="settings-item-action" style={{ width: 180 }}>
             <Dropdown
               id="settings-punctuation-dropdown"
-              aria-label={t('settings.speech_ai.add_punctuation', {
-                defaultValue: 'Add punctuation',
-              })}
+              aria-label={t('settings.speech_ai.add_punctuation')}
               value={punctuationValue}
               onChange={setPunctuation}
               options={punctuationOptions}
@@ -211,47 +180,35 @@ export function RecognitionPanel({
         </div>
         <div className="settings-item-container layout-horizontal" id="settings-vad-path">
           <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.detect_pauses', { defaultValue: 'Detect pauses' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.speech_ai.detect_pauses_hint', {
-                defaultValue: 'Splits speech into sentences at pauses.',
-              })}
-            </div>
+            <div className="settings-item-title">{t('settings.speech_ai.detect_pauses')}</div>
+            <div className="settings-item-hint">{t('settings.speech_ai.detect_pauses_hint')}</div>
           </div>
           <div className="settings-item-action" style={{ width: 180 }} id="settings-batch-vad">
             <Dropdown
               id="settings-pause-dropdown"
-              aria-label={t('settings.speech_ai.detect_pauses', { defaultValue: 'Detect pauses' })}
+              aria-label={t('settings.speech_ai.detect_pauses')}
               value={transcription.batchVadEnabled === false ? 'off' : 'automatic'}
               onChange={(value) => updateConfig({ batchVadEnabled: value !== 'off' })}
               options={[
                 {
                   value: 'automatic',
-                  label: t('settings.speech_ai.automatic', { defaultValue: 'Automatic' }),
+                  label: t('settings.speech_ai.automatic'),
                 },
-                { value: 'off', label: t('settings.speech_ai.off', { defaultValue: 'Off' }) },
+                { value: 'off', label: t('settings.speech_ai.off') },
               ]}
             />
           </div>
         </div>
         <div className="settings-item-container layout-horizontal">
           <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.low_power', { defaultValue: 'Save battery' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.speech_ai.low_power_hint', {
-                defaultValue: 'Wait for a pause, then transcribe the whole sentence.',
-              })}
-            </div>
+            <div className="settings-item-title">{t('settings.speech_ai.low_power')}</div>
+            <div className="settings-item-hint">{t('settings.speech_ai.low_power_hint')}</div>
           </div>
           <div className="settings-item-action">
             <Switch
               checked={Boolean(transcription.liveSentenceOnly)}
               onChange={(checked) => updateConfig({ liveSentenceOnly: checked })}
-              aria-label={t('settings.speech_ai.low_power', { defaultValue: 'Save battery' })}
+              aria-label={t('settings.speech_ai.low_power')}
             />
           </div>
         </div>
@@ -300,15 +257,9 @@ function ModeCard({
       </div>
       <div className="settings-item-container layout-horizontal">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.speech_model', { defaultValue: 'Speech model' })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.speech_model')}</div>
           <div className="settings-item-hint">
-            {readOnly
-              ? modelLabel
-              : t('settings.speech_ai.used_for_activity', {
-                  defaultValue: 'Used for this activity',
-                })}
+            {readOnly ? modelLabel : t('settings.speech_ai.used_for_activity')}
           </div>
         </div>
         <div
@@ -321,20 +272,16 @@ function ModeCard({
             <>
               <div style={{ width: 190 }}>
                 <Dropdown
-                  aria-label={t('settings.speech_ai.speech_model', {
-                    defaultValue: 'Speech model',
-                  })}
+                  aria-label={t('settings.speech_ai.speech_model')}
                   value={current}
                   disabled={disabled || options.length === 0}
-                  placeholder={
-                    modelLabel || t('settings.speech_ai.not_set_up', { defaultValue: 'Not set up' })
-                  }
+                  placeholder={modelLabel || t('settings.speech_ai.not_set_up')}
                   onChange={onModel}
                   options={options.map((option) => ({ value: option.id, label: option.label }))}
                 />
               </div>
               <button type="button" className="btn btn-text" onClick={onChangeModel}>
-                {t('settings.speech_ai.change', { defaultValue: 'Change' })}
+                {t('settings.speech_ai.change')}
               </button>
             </>
           )}
@@ -342,14 +289,12 @@ function ModeCard({
       </div>
       <div className="settings-item-container layout-horizontal">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.speakers', { defaultValue: 'Speakers' })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.speakers')}</div>
           <div className="settings-item-hint">{speakers}</div>
         </div>
         <div className="settings-item-action">
           <button type="button" className="btn btn-text" onClick={onSpeakers} disabled={readOnly}>
-            {readOnly ? speakers : t('settings.speech_ai.configure', { defaultValue: 'Configure' })}
+            {readOnly ? speakers : t('settings.speech_ai.configure')}
             {!readOnly ? ' ›' : ''}
           </button>
         </div>

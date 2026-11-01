@@ -37,11 +37,14 @@ export function probeIsFresh(record: LlmProbeRecord | null, now = Date.now()): b
   return now - record.at < PROBE_STALE_MS;
 }
 
-export function formatCheckedAgo(at: number, now = Date.now()): string {
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
+export function formatCheckedAgo(at: number, t: Translate, now = Date.now()): string {
   const minutes = Math.max(0, Math.round((now - at) / 60000));
-  if (minutes < 1) return 'just now';
-  if (minutes === 1) return '1 min ago';
-  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 1) return t('settings.speech_ai.checked_just_now');
+  if (minutes === 1) return t('settings.speech_ai.checked_one_minute');
+  if (minutes < 60) return t('settings.speech_ai.checked_minutes', { count: minutes });
   const hours = Math.round(minutes / 60);
-  return hours === 1 ? '1 hour ago' : `${hours} hours ago`;
+  if (hours === 1) return t('settings.speech_ai.checked_one_hour');
+  return t('settings.speech_ai.checked_hours', { count: hours });
 }

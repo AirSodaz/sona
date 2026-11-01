@@ -2518,7 +2518,7 @@
       "model_library": "モデルライブラリ",
       "add_model": "モデルの追加",
       "no_models_added": "まだモデルは追加されていません。",
-      "no_local_models_available": "ローカルモデルがダウンロードされていません（下部でダウンロードしてください）",
+      "no_local_models_available": "ローカルモデルはまだありません",
       "feature_models": "機能バインド",
       "feature_models_hint": "これらの機能を使う前に、Polish、翻訳、要約用のモデルを割り当てます。",
       "feature_models_runtime_hint": "ここで設定したモデルと温度を使って、Polish、翻訳、Summary を実行します。",
@@ -2664,7 +2664,9 @@
       "reasoning_level_max": "最大",
       "reasoning_budget": "思考トークン予算",
       "reasoning_budget_hint": "1回の推論で許可される最大思考トークン数",
-      "builtin_reasoning": "組み込みの深い思考（設定不要）"
+      "builtin_reasoning": "組み込みの深い思考（設定不要）",
+      "temperature_reset_tooltip": "1.0 に戻す",
+      "temperature_reset_aria": "温度を 1.0 に戻す"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",
@@ -2713,6 +2715,7 @@
       "writing_connected": "{{provider}} · {{model}} · {{when}}に確認",
       "recommended_line": "おすすめ: {{model}} · 中国語、英語ほか · {{size}}",
       "download_continues": "設定を閉じてもダウンロードは続きます。準備できたら Sona が知らせます。",
+      "bytes_of": "{{done}} / {{total}}",
       "detail_mirrored": "{{model}} · 録音とファイルで共用",
       "detail_split": "録音とファイルで設定が異なります",
       "sub_recording": "録音: {{model}}{{speakers}}",
@@ -2739,11 +2742,6 @@
       "filter_many": "多言語",
       "show_all": "すべてのモデルを表示",
       "show_less": "おすすめだけ表示",
-      "in_use": "使用中",
-      "use": "使う",
-      "ver_standard": "標準",
-      "ver_smaller": "軽量",
-      "ver_full": "全精度",
       "back_button": "戻る",
       "keep_same": "録音とファイルを同じにする",
       "keep_same_on": "オフにすると別々に設定できます",
@@ -2808,12 +2806,17 @@
         "paraformer": "Paraformer",
         "parakeet": "Parakeet TDT"
       },
-      "blurb": {
-        "sensevoice": "日常の中国語と英語に速く正確です。録音とファイルの両方で使えます。",
-        "whisper": "多言語やなまりのある音声に向いています。古いパソコンでは遅くなります。",
-        "paraformer": "中国語がとても速いです。ノート PC の長い会議に向いています。",
-        "parakeet": "ヨーロッパ言語の認識が速く、句読点も付きます。"
-      }
+      "checked_just_now": "たった今",
+      "checked_one_minute": "1 分前",
+      "checked_minutes": "{{count}} 分前",
+      "checked_one_hour": "1 時間前",
+      "checked_hours": "{{count}} 時間前",
+      "hint_api_key": "API キー",
+      "hint_local": "このパソコン",
+      "openai_compatible": "OpenAI 互換",
+      "custom_service_name": "カスタム",
+      "helper_seg_fallback": "Pyannote 3.0 · 6 MB · 主にファイル用",
+      "helper_emb_fallback": "3D-Speaker CAMPPlus · 28 MB · 話者を声のライブラリと照合"
     }
   },
   "shortcuts": {

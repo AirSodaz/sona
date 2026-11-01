@@ -26,13 +26,11 @@ import {
   buildSpeechRow,
   familyTitle,
   groupAsrModels,
-  modelIdForSelection,
   modesAreLinked,
   pickSpeechDownload,
   presetModelById,
   recommendedVariantId,
   type SpeechScope,
-  selectionForScope,
 } from './speechAiLogic';
 
 type Frame =
@@ -75,6 +73,8 @@ export function SettingsSpeechAiTab({
     downloads,
     handleDownload,
     handleCancelDownload,
+    handleDelete,
+    handleDiscardDownload,
     catalogLoadState,
   } = useModelManagerContext();
   const downloadItems = useModelDownloadStore((state) => state.downloads);
@@ -261,26 +261,23 @@ export function SettingsSpeechAiTab({
     ) {
       return {
         status: 'idle' as const,
-        label: t('settings.speech_ai.not_connected', { defaultValue: 'Not connected' }),
-        detail: t('settings.speech_ai.writing_blurb', {
-          defaultValue: 'Polishes transcripts and writes summaries. Optional.',
-        }),
+        label: t('settings.speech_ai.not_connected'),
+        detail: t('settings.speech_ai.writing_blurb'),
         action: 'connect' as const,
       };
     }
     const definition = getProviderDefinition(polish.provider);
-    const name = t(definition.labelKey, { defaultValue: definition.labelDefault });
+    const name = t(definition.labelKey);
     const matched =
       record?.provider === polish.provider && record.model === polish.model ? record : null;
     if (matched?.ok) {
       return {
         status: 'ok' as const,
-        label: t('settings.speech_ai.connected', { defaultValue: 'Connected' }),
+        label: t('settings.speech_ai.connected'),
         detail: t('settings.speech_ai.writing_connected', {
           provider: name,
           model: polish.model,
-          when: formatCheckedAgo(matched.at),
-          defaultValue: `${name} · ${polish.model} · checked ${formatCheckedAgo(matched.at)}`,
+          when: formatCheckedAgo(matched.at, t),
         }),
         action: 'manage' as const,
       };
@@ -294,22 +291,15 @@ export function SettingsSpeechAiTab({
         status: 'warn' as const,
         label: t('settings.speech_ai.cant_reach', {
           name,
-          defaultValue: `Can't reach ${name}`,
         }),
-        detail:
-          matched.error ||
-          t('settings.speech_ai.local_empty_ollama', {
-            defaultValue: 'Is Ollama running? Sona checks localhost:11434.',
-          }),
+        detail: matched.error || t('settings.speech_ai.local_empty_ollama'),
         action: 'retry' as const,
       };
     }
     return {
       status: 'idle' as const,
-      label: t('settings.speech_ai.not_connected', { defaultValue: 'Not connected' }),
-      detail: t('settings.speech_ai.writing_blurb', {
-        defaultValue: 'Polishes transcripts and writes summaries. Optional.',
-      }),
+      label: t('settings.speech_ai.not_connected'),
+      detail: t('settings.speech_ai.writing_blurb'),
       action: 'connect' as const,
     };
   }, [polish, probeRevision, t]);
@@ -322,53 +312,45 @@ export function SettingsSpeechAiTab({
     if (offline && !translationUsesAi) {
       return {
         status: 'warn' as const,
-        label: t('settings.speech_ai.unavailable_offline', { defaultValue: 'Unavailable offline' }),
-        detail: t('settings.speech_ai.translation_offline', {
-          defaultValue:
-            'Google Translate needs internet. Switch to AI writing with a local model to translate offline.',
-        }),
+        label: t('settings.speech_ai.unavailable_offline'),
+        detail: t('settings.speech_ai.translation_offline'),
       };
     }
     if (translationUsesAi) {
       const definition = getProviderDefinition(translation.provider);
-      const name = t(definition.labelKey, { defaultValue: definition.labelDefault });
+      const name = t(definition.labelKey);
       if (probeMatches) {
         return {
           status: 'ok' as const,
-          label: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
+          label: t('settings.speech_ai.ready'),
           detail: t('settings.speech_ai.translation_using_ai', {
             provider: name,
             model: translation.model,
-            defaultValue: `Using AI writing (${name} · ${translation.model})`,
           }),
         };
       }
       if (probing) {
         return {
           status: 'busy' as const,
-          label: t('settings.speech_ai.checking', { defaultValue: 'Checking…' }),
+          label: t('settings.speech_ai.checking'),
           detail: t('settings.speech_ai.translation_checking', {
             provider: name,
-            defaultValue: `Checking ${name} before translation can use it.`,
           }),
         };
       }
       return {
         status: 'idle' as const,
-        label: t('settings.speech_ai.not_connected', { defaultValue: 'Not connected' }),
+        label: t('settings.speech_ai.not_connected'),
         detail: t('settings.speech_ai.translation_not_connected', {
           provider: name,
           model: translation.model,
-          defaultValue: `${name} · ${translation.model} is selected for translation, but it is not connected.`,
         }),
       };
     }
     return {
       status: 'ok' as const,
-      label: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
-      detail: t('settings.speech_ai.translation_google_detail', {
-        defaultValue: 'Google Translate (free). Sends text to Google when you translate.',
-      }),
+      label: t('settings.speech_ai.ready'),
+      detail: t('settings.speech_ai.translation_google_detail'),
     };
   })();
 
@@ -398,25 +380,61 @@ export function SettingsSpeechAiTab({
     void handleDownload(model);
   };
 
-  const activePickerId = (() => {
-    if (frame.name !== 'picker') return null;
-    const scope = frame.scope === 'batch' ? 'batch' : 'live';
-    return modelIdForSelection(selectionForScope(config, scope));
-  })();
+  const downloadForPicker = (model: ModelInfo) => {
+    const scope = frame.name === 'picker' ? frame.scope : 'both';
+    const snapshot = {
+      streamingModelPath: config.streamingModelPath,
+      batchModelPath: config.batchModelPath,
+      asr: config.asr,
+    };
+    void handleDownload(model).then(() => {
+      const current = useConfigStore.getState().config;
+      if (scope === 'both') {
+        updateConfig({ speechModesLinked: true });
+        return;
+      }
+      if (!current.asr || !snapshot.asr) return;
+      if (scope === 'live') {
+        updateConfig({
+          batchModelPath: snapshot.batchModelPath,
+          asr: {
+            ...current.asr,
+            selections: {
+              ...current.asr.selections,
+              batch: snapshot.asr.selections.batch,
+            },
+          },
+        });
+        return;
+      }
+      updateConfig({
+        streamingModelPath: snapshot.streamingModelPath,
+        asr: {
+          ...current.asr,
+          selections: {
+            ...current.asr.selections,
+            live: snapshot.asr.selections.live,
+            caption: snapshot.asr.selections.caption,
+            voiceTyping: snapshot.asr.selections.voiceTyping,
+          },
+        },
+      });
+    });
+  };
 
   const groups = useMemo(() => groupAsrModels(catalogModels), [catalogModels]);
   const linked = modesAreLinked(config);
   const drillTitle =
     frame.name === 'picker'
-      ? t('settings.speech_ai.picker_title', { defaultValue: 'Choose a speech model' })
+      ? t('settings.speech_ai.picker_title')
       : frame.name === 'recognition'
-        ? t('settings.speech_ai.recognition', { defaultValue: 'Recognition' })
+        ? t('settings.speech_ai.recognition')
         : frame.name === 'speakers'
-          ? t('settings.speech_ai.speakers', { defaultValue: 'Speakers' })
+          ? t('settings.speech_ai.speakers')
           : frame.name === 'ai'
-            ? t('settings.speech_ai.ai_services', { defaultValue: 'AI services' })
+            ? t('settings.speech_ai.ai_services')
             : frame.name === 'downloads'
-              ? t('settings.speech_ai.downloads', { defaultValue: 'Downloads & storage' })
+              ? t('settings.speech_ai.downloads')
               : '';
 
   return (
@@ -426,20 +444,16 @@ export function SettingsSpeechAiTab({
           <div className="speech-ai-sticky">
             <button type="button" className="speech-ai-back" onClick={pop}>
               <ChevronLeft size={16} />
-              {t('settings.speech_ai.title', { defaultValue: 'Speech & AI' })}
+              {t('settings.speech_ai.title')}
             </button>
             <h2 className="settings-page-title">{drillTitle}</h2>
           </div>
         ) : (
           <header>
             <h2 className="settings-page-title" id="settings-speech-ai-title">
-              {t('settings.speech_ai.title', { defaultValue: 'Speech & AI' })}
+              {t('settings.speech_ai.title')}
             </h2>
-            <p className="settings-page-description">
-              {t('settings.speech_ai.description', {
-                defaultValue: 'What Sona uses to transcribe, rewrite and translate.',
-              })}
-            </p>
+            <p className="settings-page-description">{t('settings.speech_ai.description')}</p>
           </header>
         )}
 
@@ -448,18 +462,13 @@ export function SettingsSpeechAiTab({
             {offline ? (
               <div className="speech-ai-banner" role="status">
                 <WifiOff size={16} />
-                <span>
-                  {t('settings.speech_ai.offline_banner', {
-                    defaultValue:
-                      "You're offline. Downloads and online services will resume when you reconnect. Installed models keep working.",
-                  })}
-                </span>
+                <span>{t('settings.speech_ai.offline_banner')}</span>
               </div>
             ) : null}
             <div className="speech-ai-card">
               <CapabilityRow
                 icon={<Mic size={18} />}
-                title={t('settings.speech_ai.speech_title', { defaultValue: 'Speech recognition' })}
+                title={t('settings.speech_ai.speech_title')}
                 status={speech.status}
                 statusLabel={speech.statusLabel}
                 detail={speech.detail}
@@ -472,7 +481,7 @@ export function SettingsSpeechAiTab({
                       className="speech-ai-inline-btn"
                       onClick={() => push({ name: 'picker', scope: 'both' })}
                     >
-                      {t('settings.speech_ai.choose_another', { defaultValue: 'Choose another' })}
+                      {t('settings.speech_ai.choose_another')}
                     </button>
                   ) : null,
                 ].filter(Boolean)}
@@ -490,7 +499,7 @@ export function SettingsSpeechAiTab({
               />
               <CapabilityRow
                 icon={<PenLine size={18} />}
-                title={t('settings.speech_ai.writing_title', { defaultValue: 'AI writing' })}
+                title={t('settings.speech_ai.writing_title')}
                 status={writing.status}
                 statusLabel={writing.label}
                 detail={writing.detail}
@@ -501,7 +510,7 @@ export function SettingsSpeechAiTab({
                       className="btn btn-text"
                       onClick={() => push({ name: 'ai' })}
                     >
-                      {t('settings.speech_ai.manage', { defaultValue: 'Manage' })}
+                      {t('settings.speech_ai.manage')}
                     </button>
                   ) : writing.action === 'retry' ? (
                     <button
@@ -509,7 +518,7 @@ export function SettingsSpeechAiTab({
                       className="btn btn-secondary"
                       onClick={() => setProbeRequest((value) => value + 1)}
                     >
-                      {t('settings.speech_ai.check_again', { defaultValue: 'Check again' })}
+                      {t('settings.speech_ai.check_again')}
                     </button>
                   ) : (
                     <button
@@ -517,14 +526,14 @@ export function SettingsSpeechAiTab({
                       className="btn btn-secondary"
                       onClick={() => setConnectOpen(true)}
                     >
-                      {t('settings.speech_ai.connect', { defaultValue: 'Connect…' })}
+                      {t('settings.speech_ai.connect')}
                     </button>
                   )
                 }
               />
               <CapabilityRow
                 icon={<Globe size={18} />}
-                title={t('settings.speech_ai.translation_title', { defaultValue: 'Translation' })}
+                title={t('settings.speech_ai.translation_title')}
                 status={translationRow.status}
                 statusLabel={translationRow.label}
                 detail={translationRow.detail}
@@ -534,49 +543,39 @@ export function SettingsSpeechAiTab({
                     className="btn btn-text"
                     onClick={() => push({ name: 'ai' })}
                   >
-                    {t('settings.speech_ai.change', { defaultValue: 'Change' })}
+                    {t('settings.speech_ai.change')}
                   </button>
                 }
               />
             </div>
-            <div className="speech-ai-section-label">
-              {t('settings.speech_ai.more_options', { defaultValue: 'More options' })}
-            </div>
+            <div className="speech-ai-section-label">{t('settings.speech_ai.more_options')}</div>
             <div className="speech-ai-card">
               <MoreOptionButton
                 id="settings-speech-recognition-link"
                 icon={<Mic size={16} />}
-                title={t('settings.speech_ai.recognition', { defaultValue: 'Recognition' })}
-                hint={t('settings.speech_ai.recognition_hint', {
-                  defaultValue: 'While recording vs files, punctuation, pause detection',
-                })}
+                title={t('settings.speech_ai.recognition')}
+                hint={t('settings.speech_ai.recognition_hint')}
                 onClick={() => push({ name: 'recognition' })}
               />
               <MoreOptionButton
                 id="settings-speech-speakers"
                 icon={<Users size={16} />}
-                title={t('settings.speech_ai.speakers', { defaultValue: 'Speakers' })}
-                hint={t('settings.speech_ai.speakers_hint', {
-                  defaultValue: 'Tell speakers apart, number of speakers, helper models',
-                })}
+                title={t('settings.speech_ai.speakers')}
+                hint={t('settings.speech_ai.speakers_hint')}
                 onClick={() => push({ name: 'speakers', scope: 'both' })}
               />
               <MoreOptionButton
                 id="settings-speech-ai-services"
                 icon={<Plug size={16} />}
-                title={t('settings.speech_ai.ai_services', { defaultValue: 'AI services' })}
-                hint={t('settings.speech_ai.ai_services_hint', {
-                  defaultValue: 'Saved services and the model for polish, summary, and translation',
-                })}
+                title={t('settings.speech_ai.ai_services')}
+                hint={t('settings.speech_ai.ai_services_hint')}
                 onClick={() => push({ name: 'ai' })}
               />
               <MoreOptionButton
                 id="settings-speech-downloads"
                 icon={<HardDrive size={16} />}
-                title={t('settings.speech_ai.downloads', { defaultValue: 'Downloads & storage' })}
-                hint={t('settings.speech_ai.downloads_hint', {
-                  defaultValue: 'Download source, installed models, and cloud speech',
-                })}
+                title={t('settings.speech_ai.downloads')}
+                hint={t('settings.speech_ai.downloads_hint')}
                 onClick={() => push({ name: 'downloads' })}
               />
             </div>
@@ -590,11 +589,11 @@ export function SettingsSpeechAiTab({
             language={i18n.resolvedLanguage || i18n.language}
             installedModels={installedModels}
             downloads={downloads}
-            activeModelId={activePickerId}
             actionsDisabled={catalogLoadState !== 'ready'}
-            onDownload={(model) => void handleDownload(model)}
+            onDownload={downloadForPicker}
+            onDelete={handleDelete}
             onCancelDownload={handleCancelDownload}
-            onUse={(model) => applyModel(model, frame.scope)}
+            onDiscardDownload={handleDiscardDownload}
           />
         ) : null}
         {frame.name === 'recognition' ? (
@@ -631,10 +630,10 @@ function SpeechActionButton({
   if (action === 'download' || action === 'use' || action === 'retry') {
     const label =
       action === 'retry'
-        ? t('settings.speech_ai.try_again', { defaultValue: 'Try again' })
+        ? t('settings.speech_ai.try_again')
         : action === 'use'
-          ? t('settings.speech_ai.use_recommended', { defaultValue: 'Use recommended' })
-          : t('settings.speech_ai.download_recommended', { defaultValue: 'Download recommended' });
+          ? t('settings.speech_ai.use_recommended')
+          : t('settings.speech_ai.download_recommended');
     return (
       <button type="button" className="btn btn-primary" onClick={onDownload}>
         {label}
@@ -651,13 +650,13 @@ function SpeechActionButton({
   if (action === 'manage') {
     return (
       <button type="button" className="btn btn-text" onClick={onManage}>
-        {t('settings.speech_ai.manage', { defaultValue: 'Manage' })}
+        {t('settings.speech_ai.manage')}
       </button>
     );
   }
   return (
     <button type="button" className="btn btn-text" onClick={onChange}>
-      {t('settings.speech_ai.change', { defaultValue: 'Change' })}
+      {t('settings.speech_ai.change')}
     </button>
   );
 }

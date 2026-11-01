@@ -849,17 +849,8 @@ export function FeatureCard({
                     localProvider === 'local' &&
                     modelCandidates.length === 0 &&
                     !isLoadingCandidates
-                      ? t('settings.llm.no_local_models_available', {
-                          defaultValue: 'No local models downloaded',
-                        })
+                      ? t('settings.llm.no_local_models_available')
                       : getModelPlaceholder(localProvider)
-                  }
-                  title={
-                    localProvider === 'local' && modelCandidates.length === 0
-                      ? t('settings.llm.no_local_models_available', {
-                          defaultValue: 'No local models downloaded',
-                        })
-                      : undefined
                   }
                   disabled={
                     localProvider === 'local' &&
@@ -1082,9 +1073,9 @@ export function FeatureCard({
                     type="button"
                     className="feature-temperature-reset-btn"
                     onClick={() => handleTempChange(1.0)}
-                    data-tooltip="重置为默认 1.0"
+                    data-tooltip={t('settings.llm.temperature_reset_tooltip')}
                     data-tooltip-pos="top"
-                    aria-label="Reset temperature to 1.0"
+                    aria-label={t('settings.llm.temperature_reset_aria')}
                   >
                     <RotateCcw size={12} />
                     <span>1.0</span>

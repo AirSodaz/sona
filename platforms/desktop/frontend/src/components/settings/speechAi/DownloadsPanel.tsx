@@ -49,7 +49,6 @@ export function DownloadsPanel(): React.JSX.Element {
           type: 'pending',
           text: t('settings.downloading_progress', {
             progress: Math.round(downloads[downloadingModel.id].progress),
-            defaultValue: 'Downloading',
           }),
         };
       }
@@ -57,7 +56,7 @@ export function DownloadsPanel(): React.JSX.Element {
       if (installedCount > 0) {
         return { type: 'ready', text: t('settings.installed_count', { count: installedCount }) };
       }
-      return { type: 'off', text: t('settings.not_installed', { defaultValue: 'Not installed' }) };
+      return { type: 'off', text: t('settings.not_installed') };
     },
     [downloads, installedModels, sectionGroupsByType, t]
   );
@@ -71,7 +70,7 @@ export function DownloadsPanel(): React.JSX.Element {
           .getState()
           .confirm(t('settings.cuda_addon_download_confirm'), {
             title: t('settings.cuda_addon_download_title'),
-            confirmLabel: t('common.download', { defaultValue: 'Download' }),
+            confirmLabel: t('common.download'),
           });
         if (!confirmed) return;
         setCudaDownloading(true);
@@ -114,9 +113,7 @@ export function DownloadsPanel(): React.JSX.Element {
         getSectionStatus={getSectionStatus}
         t={t}
       />
-      <div className="speech-ai-section-label">
-        {t('settings.online_model_management', { defaultValue: 'Online Model Management' })}
-      </div>
+      <div className="speech-ai-section-label">{t('settings.online_model_management')}</div>
       <div className="speech-ai-card" style={{ padding: 12 }}>
         <CloudAsrProviderGrid />
       </div>
@@ -158,30 +155,22 @@ export function DownloadsPanel(): React.JSX.Element {
         </div>
         <div className="settings-item-container layout-horizontal" id="settings-gpu-acceleration">
           <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.gpu_acceleration_label', { defaultValue: 'GPU Acceleration' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.gpu_acceleration_hint', {
-                defaultValue: 'Hardware acceleration for local models.',
-              })}
-            </div>
+            <div className="settings-item-title">{t('settings.gpu_acceleration_label')}</div>
+            <div className="settings-item-hint">{t('settings.gpu_acceleration_hint')}</div>
           </div>
           <div className="settings-item-action" style={{ width: 160 }}>
             <Dropdown
               id="settings-gpu-acceleration-dropdown"
-              aria-label={t('settings.gpu_acceleration_label', {
-                defaultValue: 'GPU Acceleration',
-              })}
+              aria-label={t('settings.gpu_acceleration_label')}
               value={transcription.gpuAcceleration ?? 'auto'}
               disabled={cudaDownloading}
               onChange={(value) => void onGpu(value)}
               options={[
                 {
                   value: 'auto',
-                  label: t('settings.gpu_acceleration_auto', { defaultValue: 'Auto' }),
+                  label: t('settings.gpu_acceleration_auto'),
                 },
-                { value: 'cpu', label: t('settings.value_off', { defaultValue: 'Off' }) },
+                { value: 'cpu', label: t('settings.value_off') },
                 { value: 'vulkan', label: 'Vulkan' },
                 { value: 'metal', label: 'Metal' },
                 { value: 'cuda', label: 'CUDA' },
@@ -191,7 +180,6 @@ export function DownloadsPanel(): React.JSX.Element {
               <div className="speech-ai-note">
                 {t('settings.cuda_addon_downloading', {
                   percent: cudaProgress,
-                  defaultValue: `Downloading (${cudaProgress}%)...`,
                 })}
               </div>
             ) : null}

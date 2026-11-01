@@ -103,7 +103,7 @@ export function SpeakersPanel({
   };
 
   const countOptions = [
-    { value: 'detect', label: t('settings.speech_ai.detect', { defaultValue: 'Detect' }) },
+    { value: 'detect', label: t('settings.speech_ai.detect') },
     ...Array.from({ length: 9 }, (_, index) => {
       const value = String(index + 2);
       return { value, label: value };
@@ -112,12 +112,7 @@ export function SpeakersPanel({
 
   return (
     <div className="speech-ai" id="settings-speech-speakers-panel">
-      <p className="speech-ai-detail">
-        {t('settings.speech_ai.speakers_intro', {
-          defaultValue:
-            'Label who said what. Helper models download automatically the first time you turn this on.',
-        })}
-      </p>
+      <p className="speech-ai-detail">{t('settings.speech_ai.speakers_intro')}</p>
       {linked ? (
         <SpeakerControls
           target="both"
@@ -138,9 +133,7 @@ export function SpeakersPanel({
         />
       ) : (
         <>
-          <p className="speech-ai-section-label">
-            {t('settings.speech_ai.while_recording', { defaultValue: 'While recording' })}
-          </p>
+          <p className="speech-ai-section-label">{t('settings.speech_ai.while_recording')}</p>
           <SpeakerControls
             target="live"
             busy={busy || segDownloading || embDownloading}
@@ -158,9 +151,7 @@ export function SpeakersPanel({
             sensitivity={sensitivity}
             onSensitivity={(value) => updateConfig({ speakerDiarizationSensitivity: value })}
           />
-          <p className="speech-ai-section-label">
-            {t('settings.speech_ai.when_file', { defaultValue: 'When opening a file' })}
-          </p>
+          <p className="speech-ai-section-label">{t('settings.speech_ai.when_file')}</p>
           <SpeakerControls
             target="batch"
             busy={busy || segDownloading || embDownloading}
@@ -181,39 +172,33 @@ export function SpeakersPanel({
         </>
       )}
 
-      <div className="speech-ai-section-label">
-        {t('settings.speech_ai.helper_models', { defaultValue: 'Helper models' })}
-      </div>
+      <div className="speech-ai-section-label">{t('settings.speech_ai.helper_models')}</div>
       <div className="speech-ai-card">
         <HelperRow
-          title={t('settings.speech_ai.find_changes', { defaultValue: 'Find speaker changes' })}
-          detail={helperDetail(
-            segModel ?? helperModel(RECOMMENDED_SEGMENTATION_ID),
-            'Pyannote 3.0 · 6 MB · used mainly for files'
-          )}
+          title={t('settings.speech_ai.find_changes')}
+          detail={
+            (segModel ?? helperModel(RECOMMENDED_SEGMENTATION_ID))
+              ? helperDetail((segModel ?? helperModel(RECOMMENDED_SEGMENTATION_ID)) as ModelInfo)
+              : t('settings.speech_ai.helper_seg_fallback')
+          }
           installed={installedModels.has(RECOMMENDED_SEGMENTATION_ID)}
           onChange={() => onChangeHelper('segmentation')}
         />
         <HelperRow
-          title={t('settings.speech_ai.match_voices', { defaultValue: 'Match voices' })}
-          detail={helperDetail(
-            embModel ?? helperModel(RECOMMENDED_EMBEDDING_ID),
-            '3D-Speaker CAMPPlus · 28 MB · matches speakers to your voice library'
-          )}
+          title={t('settings.speech_ai.match_voices')}
+          detail={
+            (embModel ?? helperModel(RECOMMENDED_EMBEDDING_ID))
+              ? helperDetail((embModel ?? helperModel(RECOMMENDED_EMBEDDING_ID)) as ModelInfo)
+              : t('settings.speech_ai.helper_emb_fallback')
+          }
           installed={installedModels.has(RECOMMENDED_EMBEDDING_ID)}
           onChange={() => onChangeHelper('embedding')}
         />
       </div>
       <p className="speech-ai-note">
         {linked
-          ? t('settings.speech_ai.speakers_note', {
-              defaultValue:
-                'Recording and files currently share these speaker settings. To set them separately, open Recognition and turn off “Keep recording and files the same.”',
-            })
-          : t('settings.speech_ai.speakers_note_split', {
-              defaultValue:
-                'Recording and files use different speaker switches. Number of speakers and strictness still apply to both.',
-            })}
+          ? t('settings.speech_ai.speakers_note')
+          : t('settings.speech_ai.speakers_note_split')}
       </p>
     </div>
   );
@@ -248,17 +233,11 @@ function SpeakerControls({
     >
       <div className="settings-item-container layout-horizontal">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.tell_speakers', { defaultValue: 'Tell speakers apart' })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.tell_speakers')}</div>
           <div className="settings-item-hint">
             {busy
-              ? t('settings.speech_ai.helpers_downloading', {
-                  defaultValue: 'Downloading two small helpers (~34 MB)…',
-                })
-              : t('settings.speech_ai.tell_speakers_hint', {
-                  defaultValue: 'Downloads two small helpers the first time (~34 MB).',
-                })}
+              ? t('settings.speech_ai.helpers_downloading')
+              : t('settings.speech_ai.tell_speakers_hint')}
           </div>
         </div>
         <div className="settings-item-action">
@@ -266,28 +245,18 @@ function SpeakerControls({
             checked={enabled || busy}
             disabled={busy}
             onChange={onToggle}
-            aria-label={t('settings.speech_ai.tell_speakers', {
-              defaultValue: 'Tell speakers apart',
-            })}
+            aria-label={t('settings.speech_ai.tell_speakers')}
           />
         </div>
       </div>
       <div className="settings-item-container layout-horizontal">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.number_of_speakers', { defaultValue: 'Number of speakers' })}
-          </div>
-          <div className="settings-item-hint">
-            {t('settings.speech_ai.number_hint', {
-              defaultValue: "Leave on Detect if you're not sure.",
-            })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.number_of_speakers')}</div>
+          <div className="settings-item-hint">{t('settings.speech_ai.number_hint')}</div>
         </div>
         <div className="settings-item-action" style={{ width: 160 }}>
           <Dropdown
-            aria-label={t('settings.speech_ai.number_of_speakers', {
-              defaultValue: 'Number of speakers',
-            })}
+            aria-label={t('settings.speech_ai.number_of_speakers')}
             value={countValue}
             disabled={!enabled}
             onChange={onCount}
@@ -297,35 +266,29 @@ function SpeakerControls({
       </div>
       <div className="settings-item-container layout-horizontal">
         <div className="settings-item-info">
-          <div className="settings-item-title">
-            {t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
-          </div>
-          <div className="settings-item-hint">
-            {t('settings.speech_ai.how_strict_hint', {
-              defaultValue: 'Permissive merges similar voices; Strict keeps them apart.',
-            })}
-          </div>
+          <div className="settings-item-title">{t('settings.speech_ai.how_strict')}</div>
+          <div className="settings-item-hint">{t('settings.speech_ai.how_strict_hint')}</div>
         </div>
         <div className="settings-item-action">
           <SegmentedSubTabs<'permissive' | 'balanced' | 'strict'>
             role="radiogroup"
             size="sm"
-            ariaLabel={t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
+            ariaLabel={t('settings.speech_ai.how_strict')}
             activeTab={sensitivity}
             disabled={!enabled}
             onChange={onSensitivity}
             items={[
               {
                 value: 'permissive',
-                label: t('settings.speech_ai.permissive', { defaultValue: 'Permissive' }),
+                label: t('settings.speech_ai.permissive'),
               },
               {
                 value: 'balanced',
-                label: t('settings.speech_ai.balanced', { defaultValue: 'Balanced' }),
+                label: t('settings.speech_ai.balanced'),
               },
               {
                 value: 'strict',
-                label: t('settings.speech_ai.strict', { defaultValue: 'Strict' }),
+                label: t('settings.speech_ai.strict'),
               },
             ]}
           />
@@ -335,8 +298,7 @@ function SpeakerControls({
   );
 }
 
-function helperDetail(model: ModelInfo | undefined, fallback: string): string {
-  if (!model) return fallback;
+function helperDetail(model: ModelInfo): string {
   const size = (model.size ?? '').replace(/^~\s*/, '');
   return `${model.name}${size ? ` · ${size}` : ''}`;
 }
@@ -364,12 +326,10 @@ function HelperRow({
         style={{ display: 'flex', gap: 8, alignItems: 'center' }}
       >
         <span className={`speech-ai-status ${installed ? 'is-ok' : 'is-idle'}`}>
-          {installed
-            ? t('settings.speech_ai.installed', { defaultValue: 'Installed' })
-            : t('settings.speech_ai.not_installed', { defaultValue: 'Not installed' })}
+          {installed ? t('settings.speech_ai.installed') : t('settings.speech_ai.not_installed')}
         </span>
         <button type="button" className="btn btn-text" onClick={onChange}>
-          {t('settings.speech_ai.change', { defaultValue: 'Change' })}
+          {t('settings.speech_ai.change')}
         </button>
       </div>
     </div>

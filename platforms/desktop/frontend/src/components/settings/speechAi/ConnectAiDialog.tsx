@@ -16,15 +16,15 @@ import { ProviderLogo } from '../../icons/ProviderLogos';
 import { getCurrentLlmSettings, getModelPlaceholder } from '../llm/helpers';
 import { writeLlmProbe } from './llmProbe';
 
-const GRID: Array<{ id: LlmProvider; name: string; hint: string }> = [
-  { id: 'open_ai', name: 'OpenAI', hint: 'API key' },
-  { id: 'anthropic', name: 'Claude', hint: 'API key' },
-  { id: 'gemini', name: 'Gemini', hint: 'API key' },
-  { id: 'deep_seek', name: 'DeepSeek', hint: 'API key' },
-  { id: 'qwen', name: 'Qwen', hint: 'API key' },
-  { id: 'silicon_flow', name: 'SiliconFlow', hint: 'API key' },
-  { id: 'ollama', name: 'Ollama', hint: 'On this computer' },
-  { id: 'lm_studio', name: 'LM Studio', hint: 'On this computer' },
+const GRID: Array<{ id: LlmProvider; local?: boolean }> = [
+  { id: 'open_ai' },
+  { id: 'anthropic' },
+  { id: 'gemini' },
+  { id: 'deep_seek' },
+  { id: 'qwen' },
+  { id: 'silicon_flow' },
+  { id: 'ollama', local: true },
+  { id: 'lm_studio', local: true },
 ];
 
 const PRESETS: Partial<Record<string, string[]>> = {
@@ -77,12 +77,8 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         if (names.length === 0) {
           setLocalNote(
             provider === 'ollama'
-              ? t('settings.speech_ai.local_empty_ollama', {
-                  defaultValue: 'Is Ollama running? Sona checks localhost:11434.',
-                })
-              : t('settings.speech_ai.local_empty_lmstudio', {
-                  defaultValue: 'Is LM Studio running? Sona checks localhost:1234.',
-                })
+              ? t('settings.speech_ai.local_empty_ollama')
+              : t('settings.speech_ai.local_empty_lmstudio')
           );
         }
       })
@@ -91,12 +87,8 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         setLocalModels([]);
         setLocalNote(
           provider === 'ollama'
-            ? t('settings.speech_ai.local_empty_ollama', {
-                defaultValue: 'Is Ollama running? Sona checks localhost:11434.',
-              })
-            : t('settings.speech_ai.local_empty_lmstudio', {
-                defaultValue: 'Is LM Studio running? Sona checks localhost:1234.',
-              })
+            ? t('settings.speech_ai.local_empty_ollama')
+            : t('settings.speech_ai.local_empty_lmstudio')
         );
       });
     return () => {
@@ -132,7 +124,6 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         t('settings.speech_ai.probe_ok', {
           model: model.trim(),
           seconds: (latencyMs / 1000).toFixed(1),
-          defaultValue: `${model.trim()} replied in ${(latencyMs / 1000).toFixed(1)} s.`,
         })
       );
       writeLlmProbe({
@@ -162,7 +153,10 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
     let next = current;
     let savedProvider: LlmProvider = provider === 'custom' ? 'open_ai' : provider;
     if (provider === 'custom') {
-      next = addCustomProvider(next, { name: 'Custom', strategy: 'openai_compatible' });
+      next = addCustomProvider(next, {
+        name: t('settings.speech_ai.custom_service_name'),
+        strategy: 'openai_compatible',
+      });
       savedProvider = next.activeProvider?.startsWith('custom-')
         ? next.activeProvider
         : savedProvider;
@@ -204,23 +198,20 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
           <div>
             <h2 id="speech-ai-connect-title">
               {step === 'choose'
-                ? t('settings.speech_ai.connect_title', { defaultValue: 'Connect AI writing' })
+                ? t('settings.speech_ai.connect_title')
                 : t('settings.speech_ai.connect_provider', {
                     name:
                       provider === 'custom'
-                        ? 'OpenAI-compatible'
-                        : (definition?.labelDefault ?? ''),
-                    defaultValue: `Connect ${provider === 'custom' ? 'OpenAI-compatible' : (definition?.labelDefault ?? '')}`,
+                        ? t('settings.speech_ai.openai_compatible')
+                        : definition
+                          ? t(definition.labelKey)
+                          : '',
                   })}
             </h2>
             <p className="speech-ai-detail">
               {step === 'choose'
-                ? t('settings.speech_ai.connect_hint', {
-                    defaultValue: 'Pick the service you already use. You can add more later.',
-                  })
-                : t('settings.speech_ai.connect_key_hint', {
-                    defaultValue: 'Paste an API key. It is stored in your system keychain.',
-                  })}
+                ? t('settings.speech_ai.connect_hint')
+                : t('settings.speech_ai.connect_key_hint')}
             </p>
           </div>
           <button
@@ -249,8 +240,14 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
                   }}
                 >
                   <ProviderLogo provider={item.id} size={28} />
-                  <strong>{item.name}</strong>
-                  <small>{item.hint}</small>
+                  <strong>{t(getProviderDefinition(item.id).labelKey)}</strong>
+                  <small>
+                    {t(
+                      item.local
+                        ? 'settings.speech_ai.hint_local'
+                        : 'settings.speech_ai.hint_api_key'
+                    )}
+                  </small>
                 </button>
               ))}
             </div>
@@ -264,16 +261,14 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
                 setStep('details');
               }}
             >
-              {t('settings.speech_ai.other_service', {
-                defaultValue: 'Other service compatible with OpenAI…',
-              })}
+              {t('settings.speech_ai.other_service')}
             </button>
           </>
         ) : (
           <>
             {definition?.requiresApiKey ? (
               <label className="speech-ai-field">
-                {t('settings.speech_ai.api_key', { defaultValue: 'API key' })}
+                {t('settings.speech_ai.api_key')}
                 <input
                   type="password"
                   value={apiKey}
@@ -287,7 +282,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               </label>
             ) : null}
             <label className="speech-ai-field">
-              {t('settings.speech_ai.model', { defaultValue: 'Model' })}
+              {t('settings.speech_ai.model')}
               {modelChoices.length > 0 ? (
                 <select
                   value={model}
@@ -300,9 +295,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
                   {modelChoices.map((choice) => (
                     <option key={choice} value={choice}>
                       {choice}
-                      {choice === modelChoices[0]
-                        ? ` ${t('common.recommended', { defaultValue: 'Recommended' })}`
-                        : ''}
+                      {choice === modelChoices[0] ? ` ${t('common.recommended')}` : ''}
                     </option>
                   ))}
                 </select>
@@ -317,7 +310,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
             {localNote ? <p className="speech-ai-note">{localNote}</p> : null}
             {probe === 'ok' ? (
               <div className="speech-ai-probe" role="status">
-                <strong>{t('settings.speech_ai.connected', { defaultValue: 'Connected' })}</strong>
+                <strong>{t('settings.speech_ai.connected')}</strong>
                 <div>{probeMessage}</div>
               </div>
             ) : null}
@@ -327,24 +320,18 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               </div>
             ) : null}
             {probe === 'busy' ? (
-              <p className="speech-ai-note">
-                {t('settings.speech_ai.checking', { defaultValue: 'Checking…' })}
-              </p>
+              <p className="speech-ai-note">{t('settings.speech_ai.checking')}</p>
             ) : null}
             <div className="speech-ai-detail">
               {includeTranslation
-                ? t('settings.speech_ai.use_for_all', {
-                    defaultValue: 'Use for Polish, Summary and Translation',
-                  })
-                : t('settings.speech_ai.use_for_writing', {
-                    defaultValue: 'Use for Polish and Summary',
-                  })}{' '}
+                ? t('settings.speech_ai.use_for_all')
+                : t('settings.speech_ai.use_for_writing')}{' '}
               <button
                 type="button"
                 className="speech-ai-inline-btn"
                 onClick={() => setEditingUse((value) => !value)}
               >
-                {t('settings.speech_ai.edit', { defaultValue: 'Edit' })}
+                {t('settings.speech_ai.edit')}
               </button>
               {editingUse ? (
                 <label className="speech-ai-note" style={{ display: 'flex', gap: 8, marginTop: 6 }}>
@@ -353,9 +340,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
                     checked={includeTranslation}
                     onChange={(event) => setIncludeTranslation(event.target.checked)}
                   />
-                  {t('settings.speech_ai.also_translate', {
-                    defaultValue: 'Also use this service for translation',
-                  })}
+                  {t('settings.speech_ai.also_translate')}
                 </label>
               ) : null}
             </div>
@@ -365,7 +350,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         <div className="speech-ai-dialog-actions">
           {step === 'details' ? (
             <button type="button" className="btn btn-text" onClick={() => setStep('choose')}>
-              {t('settings.speech_ai.back_button', { defaultValue: 'Back' })}
+              {t('settings.speech_ai.back_button')}
             </button>
           ) : (
             <button type="button" className="btn btn-text" onClick={onClose}>
@@ -379,7 +364,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               disabled={!provider || provider === 'custom'}
               onClick={() => setStep('details')}
             >
-              {t('settings.speech_ai.continue', { defaultValue: 'Continue' })}
+              {t('settings.speech_ai.continue')}
             </button>
           ) : (
             <button
@@ -388,7 +373,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               disabled={probe !== 'ok'}
               onClick={save}
             >
-              {t('settings.speech_ai.done', { defaultValue: 'Done' })}
+              {t('settings.speech_ai.done')}
             </button>
           )}
         </div>

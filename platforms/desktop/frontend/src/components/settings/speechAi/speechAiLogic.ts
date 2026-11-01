@@ -32,14 +32,10 @@ export type SpeechAiScreen = 'home' | 'picker' | 'recognition' | 'speakers' | 'a
 export type CapabilityStatus = 'idle' | 'ok' | 'busy' | 'warn' | 'err';
 export type SpeechAction = 'download' | 'use' | 'cancel' | 'retry' | 'change' | 'manage';
 export type LanguageFilter = 'any' | 'zh' | 'en' | 'many';
-export type FriendlyTier = 'standard' | 'smaller' | 'full';
 
 export interface CuratedFamily {
   groupId: string;
   titleKey: string;
-  titleDefault: string;
-  blurbKey: string;
-  blurbDefault: string;
   defaultVariantId: string;
 }
 
@@ -47,130 +43,24 @@ export const CURATED_FAMILIES: Record<string, CuratedFamily> = {
   sensevoice: {
     groupId: 'sensevoice',
     titleKey: 'settings.speech_ai.family.sensevoice',
-    titleDefault: 'SenseVoice Small',
-    blurbKey: 'settings.speech_ai.blurb.sensevoice',
-    blurbDefault: 'Fast and accurate for everyday Chinese and English. Works live and with files.',
     defaultVariantId: SENSEVOICE_STANDARD_ID,
   },
   whisper: {
     groupId: 'whisper',
     titleKey: 'settings.speech_ai.family.whisper',
-    titleDefault: 'Whisper Large v3 Turbo',
-    blurbKey: 'settings.speech_ai.blurb.whisper',
-    blurbDefault: 'Best for many languages and accented speech. Slower on older computers.',
     defaultVariantId: WHISPER_TURBO_ID,
   },
   paraformer: {
     groupId: 'paraformer',
     titleKey: 'settings.speech_ai.family.paraformer',
-    titleDefault: 'Paraformer',
-    blurbKey: 'settings.speech_ai.blurb.paraformer',
-    blurbDefault: 'Very fast Chinese. Good for long meetings on laptops.',
     defaultVariantId: 'sherpa-onnx-streaming-paraformer-trilingual-zh-cantonese-en-int8',
   },
   'parakeet-tdt': {
     groupId: 'parakeet-tdt',
     titleKey: 'settings.speech_ai.family.parakeet',
-    titleDefault: 'Parakeet TDT',
-    blurbKey: 'settings.speech_ai.blurb.parakeet',
-    blurbDefault: 'Fast European-language recognition with punctuation built in.',
     defaultVariantId: 'sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8',
   },
 };
-
-export interface VersionPresentation {
-  tier: FriendlyTier;
-  titleKey: string;
-  titleDefault: string;
-  hint: string;
-}
-
-const ENGINE_TOKEN: Record<ModelInfo['engine'], string> = {
-  'sherpa-onnx': 'ONNX',
-  'llama-cpp': 'GGUF',
-  'onnx-nmt': 'NMT',
-};
-
-const QUANT_TOKEN = /\b(?:int8|fp32|fp16|f16|q\d+(?:_\d+)?|quantized)\b/gi;
-
-export function friendlyVersion(
-  model: Pick<ModelInfo, 'versionLabel' | 'engine'>
-): VersionPresentation {
-  const raw = (model.versionLabel ?? '').trim();
-  const lower = raw.toLowerCase();
-  const token = ENGINE_TOKEN[model.engine] ?? '';
-  let tier: FriendlyTier = 'standard';
-  if (/fp32|fp16|f16|full/.test(lower)) {
-    tier = 'full';
-  } else if (/q5|q4|q6|q3|q2|small|medium|lite|tiny/.test(lower)) {
-    tier = 'smaller';
-  }
-  const title =
-    tier === 'full'
-      ? { titleKey: 'settings.speech_ai.ver_full', titleDefault: 'Full precision' }
-      : tier === 'smaller'
-        ? { titleKey: 'settings.speech_ai.ver_smaller', titleDefault: 'Smaller' }
-        : { titleKey: 'settings.speech_ai.ver_standard', titleDefault: 'Standard' };
-  const hint = [raw, token].filter(Boolean).join(' ');
-  return { tier, hint, ...title };
-}
-
-/** Size, latency, or product name left after the codec token is removed. */
-export function versionIdentity(versionLabel: string | undefined): string {
-  return (versionLabel ?? '')
-    .replace(QUANT_TOKEN, ' ')
-    .replace(/\s+/g, ' ')
-    .replace(/\(\s+/g, '(')
-    .replace(/\s+\)/g, ')')
-    .replace(/\(\s*\)/g, '')
-    .trim();
-}
-
-function isSizeOrLatency(identity: string): boolean {
-  return /(\d+(?:\.\d+)?\s*[bm]\b)|\b\d+\s*ms\b|\bflash\b/i.test(identity);
-}
-
-export interface VersionRowLabel {
-  id: string;
-  title: string;
-  hint: string;
-}
-
-/**
- * Friendly row titles that stay unique inside one model family.
- * Codec tokens stay in the secondary hint unless two rows would otherwise match.
- */
-export function versionRowLabels(models: ModelInfo[], t: Translate): VersionRowLabel[] {
-  const drafts = models.map((model) => {
-    const tier = friendlyVersion(model);
-    const tierLabel = t(tier.titleKey, { defaultValue: tier.titleDefault });
-    const identity = versionIdentity(model.versionLabel);
-    const title = !identity
-      ? tierLabel
-      : isSizeOrLatency(identity)
-        ? `${tierLabel} · ${identity}`
-        : identity;
-    const codec = (model.versionLabel ?? '').match(
-      /\b(?:int8|fp32|fp16|f16|q\d+(?:_\d+)?)\b/i
-    )?.[0];
-    return {
-      id: model.id,
-      title,
-      hint: tier.hint,
-      codec: codec ?? '',
-    };
-  });
-  const counts = new Map<string, number>();
-  for (const row of drafts) {
-    counts.set(row.title, (counts.get(row.title) ?? 0) + 1);
-  }
-  return drafts.map((row) => ({
-    id: row.id,
-    title:
-      (counts.get(row.title) ?? 0) > 1 && row.codec ? `${row.title} · ${row.codec}` : row.title,
-    hint: row.hint,
-  }));
-}
 
 export function isEnglishUi(language: string | undefined): boolean {
   const value = (language ?? '').toLowerCase();
@@ -222,14 +112,11 @@ export function groupAsrModels(models: ModelInfo[]): PickerGroup[] {
 
 function sortVersions(groupId: string, models: ModelInfo[]): ModelInfo[] {
   const preferred = CURATED_FAMILIES[groupId]?.defaultVariantId;
-  const rank = (model: ModelInfo) => {
-    if (model.id === preferred) return 0;
-    const tier = friendlyVersion(model).tier;
-    if (tier === 'standard') return 1;
-    if (tier === 'smaller') return 2;
-    return 3;
-  };
-  return [...models].sort((a, b) => rank(a) - rank(b));
+  return [...models].sort((a, b) => {
+    if (a.id === preferred) return -1;
+    if (b.id === preferred) return 1;
+    return 0;
+  });
 }
 
 export function matchesLanguageFilter(model: ModelInfo, filter: LanguageFilter): boolean {
@@ -396,7 +283,7 @@ export function modesAreLinked(
 
 export function speakerCountLabel(count: number | null | undefined, t: Translate): string {
   if (count == null || count < 2) {
-    return t('settings.speech_ai.detect', { defaultValue: 'Detect' });
+    return t('settings.speech_ai.detect');
   }
   return String(count);
 }
@@ -404,7 +291,7 @@ export function speakerCountLabel(count: number | null | undefined, t: Translate
 export function familyTitle(model: ModelInfo | undefined, t: Translate): string {
   if (!model) return '';
   const curated = CURATED_FAMILIES[groupKeyForModel(model)];
-  if (curated) return t(curated.titleKey, { defaultValue: curated.titleDefault });
+  if (curated) return t(curated.titleKey);
   return model.name;
 }
 
@@ -419,7 +306,7 @@ export function resolveModelTitle(
     return '';
   }
   if (selection.engine === 'online') {
-    return selection.providerId || t('settings.speech_ai.cloud_model', { defaultValue: 'Cloud' });
+    return selection.providerId || t('settings.speech_ai.cloud_model');
   }
   const id = selection.modelId;
   const fromCatalog = id
@@ -468,9 +355,8 @@ export function buildSpeechRow(options: {
     on
       ? t('settings.speech_ai.speakers_on', {
           number: count,
-          defaultValue: `Speakers on · ${count}`,
         })
-      : t('settings.speech_ai.speakers_off', { defaultValue: 'Speakers off' });
+      : t('settings.speech_ai.speakers_off');
 
   const recommended = presetModelById(recommendedId);
   const recommendedName = familyTitle(recommended, t);
@@ -480,19 +366,13 @@ export function buildSpeechRow(options: {
   if (download?.status === 'downloading') {
     const done = formatByteLabel(download.downloadedBytes);
     const total = formatByteLabel(download.totalBytes) || recommendedSize;
-    const progressLabel = [done && total ? `${done} of ${total}` : '', download.speed ?? '']
-      .filter(Boolean)
-      .join(' · ');
+    const amount = done && total ? t('settings.speech_ai.bytes_of', { done, total }) : '';
+    const progressLabel = [amount, download.speed ?? ''].filter(Boolean).join(' · ');
     return {
       status: 'busy',
-      statusLabel: t('settings.speech_ai.downloading', { defaultValue: 'Downloading' }),
+      statusLabel: t('settings.speech_ai.downloading'),
       detail: [activeName, progressLabel].filter(Boolean).join(' · '),
-      lines: [
-        t('settings.speech_ai.download_continues', {
-          defaultValue:
-            "You can close Settings — the download continues and Sona will tell you when it's ready.",
-        }),
-      ],
+      lines: [t('settings.speech_ai.download_continues')],
       action: 'cancel',
       progress: download.progress ?? 0,
       progressLabel,
@@ -502,10 +382,9 @@ export function buildSpeechRow(options: {
   if (download?.status === 'failed') {
     return {
       status: 'err',
-      statusLabel: t('settings.speech_ai.download_failed', { defaultValue: 'Download failed' }),
+      statusLabel: t('settings.speech_ai.download_failed'),
       detail: t('settings.speech_ai.download_failed_detail', {
         model: activeName,
-        defaultValue: `${activeName} stopped. Check your connection or try another download source.`,
       }),
       lines: [],
       action: 'retry',
@@ -535,11 +414,8 @@ export function buildSpeechRow(options: {
   ) {
     return {
       status: 'warn',
-      statusLabel: t('settings.speech_ai.helpers_missing', { defaultValue: 'Helpers missing' }),
-      detail: t('settings.speech_ai.helpers_missing_detail', {
-        defaultValue:
-          'Speaker helpers are not installed yet. Download them from Speakers, or turn speakers off.',
-      }),
+      statusLabel: t('settings.speech_ai.helpers_missing'),
+      detail: t('settings.speech_ai.helpers_missing_detail'),
       lines: [],
       action: 'manage',
       progress: null,
@@ -551,16 +427,12 @@ export function buildSpeechRow(options: {
     const installedRecommended = installedIds.has(recommendedId);
     return {
       status: 'idle',
-      statusLabel: t('settings.speech_ai.not_set_up', { defaultValue: 'Not set up' }),
-      detail: t('settings.speech_ai.speech_blurb', {
-        defaultValue:
-          'Turns your voice and recordings into text. Runs on this computer — nothing is uploaded.',
-      }),
+      statusLabel: t('settings.speech_ai.not_set_up'),
+      detail: t('settings.speech_ai.speech_blurb'),
       lines: [
         t('settings.speech_ai.recommended_line', {
           model: recommendedName,
           size: recommendedSize,
-          defaultValue: `Recommended: ${recommendedName} · Chinese, English and 3 more · ${recommendedSize}`,
         }),
       ],
       action: installedRecommended ? 'use' : 'download',
@@ -572,20 +444,16 @@ export function buildSpeechRow(options: {
   if (!linked) {
     return {
       status: 'ok',
-      statusLabel: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
-      detail: t('settings.speech_ai.detail_split', {
-        defaultValue: 'Different for recording and files',
-      }),
+      statusLabel: t('settings.speech_ai.ready'),
+      detail: t('settings.speech_ai.detail_split'),
       lines: [
         t('settings.speech_ai.sub_recording', {
           model: liveTitle,
           speakers: liveOn ? ` · ${speakersBit(true)}` : '',
-          defaultValue: `Recording: ${liveTitle}${liveOn ? ` · ${speakersBit(true)}` : ''}`,
         }),
         t('settings.speech_ai.sub_files', {
           model: batchTitle,
           speakers: ` · ${speakersBit(batchOn)}`,
-          defaultValue: `Files: ${batchTitle} · ${speakersBit(batchOn)}`,
         }),
       ],
       action: 'manage',
@@ -598,16 +466,14 @@ export function buildSpeechRow(options: {
     ? [
         t('settings.speech_ai.speakers_on', {
           number: count,
-          defaultValue: `Speakers on · ${count}`,
         }),
       ]
     : [];
   return {
     status: offline ? 'ok' : 'ok',
-    statusLabel: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
+    statusLabel: t('settings.speech_ai.ready'),
     detail: t('settings.speech_ai.detail_mirrored', {
       model: liveTitle,
-      defaultValue: `${liveTitle} · used while recording and for files`,
     }),
     lines,
     action: 'change',

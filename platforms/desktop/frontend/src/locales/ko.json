@@ -2518,7 +2518,7 @@
       "model_library": "모델 라이브러리",
       "add_model": "모델 추가",
       "no_models_added": "아직 추가한 모델이 없습니다.",
-      "no_local_models_available": "다운로드된 로컬 모델이 없습니다 (아래에서 먼저 다운로드하세요)",
+      "no_local_models_available": "로컬 모델이 아직 없습니다",
       "feature_models": "기능 바인딩",
       "feature_models_hint": "이 기능을 사용하기 전에 정리, 번역, 요약에 사용할 모델을 지정하세요.",
       "feature_models_runtime_hint": "정리, 번역, 요약은 여기에서 설정한 모델과 temperature로 실행됩니다.",
@@ -2664,7 +2664,9 @@
       "reasoning_level_max": "최대",
       "reasoning_budget": "추론 토큰 예산",
       "reasoning_budget_hint": "단일 추론에 허용되는 최대 사고 토큰 수",
-      "builtin_reasoning": "기본 내장 추론 (별도 설정 불필요)"
+      "builtin_reasoning": "기본 내장 추론 (별도 설정 불필요)",
+      "temperature_reset_tooltip": "1.0으로 재설정",
+      "temperature_reset_aria": "온도를 1.0으로 재설정"
     },
     "language_zh_tw": "繁體中文",
     "language_ja": "日本語",
@@ -2713,6 +2715,7 @@
       "writing_connected": "{{provider}} · {{model}} · {{when}} 확인",
       "recommended_line": "추천: {{model}} · 중국어, 영어 외 · {{size}}",
       "download_continues": "설정을 닫아도 다운로드는 계속됩니다. 준비되면 Sona가 알려 줍니다.",
+      "bytes_of": "{{done}} / {{total}}",
       "detail_mirrored": "{{model}} · 녹음과 파일에 함께 사용",
       "detail_split": "녹음과 파일의 설정이 다릅니다",
       "sub_recording": "녹음: {{model}}{{speakers}}",
@@ -2739,11 +2742,6 @@
       "filter_many": "여러 언어",
       "show_all": "모든 모델 보기",
       "show_less": "추천만 보기",
-      "in_use": "사용 중",
-      "use": "사용",
-      "ver_standard": "표준",
-      "ver_smaller": "경량",
-      "ver_full": "전체 정밀도",
       "back_button": "뒤로",
       "keep_same": "녹음과 파일을 같게 유지",
       "keep_same_on": "끄면 따로 설정할 수 있습니다",
@@ -2808,12 +2806,17 @@
         "paraformer": "Paraformer",
         "parakeet": "Parakeet TDT"
       },
-      "blurb": {
-        "sensevoice": "일상 중국어와 영어에 빠르고 정확합니다. 녹음과 파일 모두에 쓸 수 있습니다.",
-        "whisper": "여러 언어와 억양 있는 말에 잘 맞습니다. 오래된 컴퓨터에서는 느립니다.",
-        "paraformer": "중국어가 매우 빠릅니다. 노트북의 긴 회의에 좋습니다.",
-        "parakeet": "유럽 언어 인식이 빠르고 문장 부호도 붙습니다."
-      }
+      "checked_just_now": "방금",
+      "checked_one_minute": "1분 전",
+      "checked_minutes": "{{count}}분 전",
+      "checked_one_hour": "1시간 전",
+      "checked_hours": "{{count}}시간 전",
+      "hint_api_key": "API 키",
+      "hint_local": "이 컴퓨터",
+      "openai_compatible": "OpenAI 호환",
+      "custom_service_name": "사용자 지정",
+      "helper_seg_fallback": "Pyannote 3.0 · 6 MB · 주로 파일용",
+      "helper_emb_fallback": "3D-Speaker CAMPPlus · 28 MB · 화자를 음성 라이브러리와 맞춤"
     }
   },
   "shortcuts": {
