@@ -58,6 +58,24 @@ type SettingsPendingSubTab =
     })
   | null;
 
+function speechViewForHit(hit: SettingsSearchHit): string {
+  if (hit.tab === 'llm_service') return 'ai';
+  if (hit.tab !== 'models') return 'home';
+  if (hit.speechView) return hit.speechView;
+  if (hit.subTab) return 'recognition';
+  if (hit.targetId === 'settings-download-mirror' || hit.targetId === 'settings-gpu-acceleration') {
+    return 'downloads';
+  }
+  if (
+    hit.targetId === 'settings-vad-path' ||
+    hit.targetId === 'settings-punctuation-path' ||
+    hit.targetId === 'settings-batch-vad'
+  ) {
+    return 'recognition';
+  }
+  return 'home';
+}
+
 function createPendingSubTab(
   hit: SettingsSearchHit,
   requestId: number
@@ -111,7 +129,8 @@ function renderSettingsPane(
   initialTab?: SettingsTabInput,
   pendingSubTab?: SettingsPendingSubTab,
   migratedSubtitleTool: ToolId = initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles',
-  onClose?: () => void
+  onClose?: () => void,
+  speechEntry?: { view: string; requestId: number } | null
 ): React.JSX.Element | null {
   switch (activeTab) {
     case 'general':
@@ -144,6 +163,7 @@ function renderSettingsPane(
           isActive={isActive}
           initialScenario={pendingSubTab?.tab === 'models' ? pendingSubTab.subTab : undefined}
           subTabRequestId={pendingSubTab?.tab === 'models' ? pendingSubTab.requestId : undefined}
+          speechEntry={speechEntry}
         />
       );
     case 'vocabulary':
@@ -272,6 +292,7 @@ function SettingsPaneContent({
   pendingSubTab,
   migratedSubtitleTool,
   onClose,
+  speechEntry,
 }: {
   tab: SettingsTab;
   isOpen: boolean;
@@ -283,6 +304,7 @@ function SettingsPaneContent({
   pendingSubTab?: SettingsPendingSubTab;
   migratedSubtitleTool?: ToolId;
   onClose?: () => void;
+  speechEntry?: { view: string; requestId: number } | null;
 }): React.JSX.Element {
   return (
     <Suspense fallback={null}>
@@ -296,7 +318,8 @@ function SettingsPaneContent({
         initialTab,
         pendingSubTab,
         migratedSubtitleTool,
-        onClose
+        onClose,
+        speechEntry
       )}
     </Suspense>
   );
@@ -350,6 +373,10 @@ export function Settings({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchSectionRef = useRef<SettingsSearchSectionHandle>(null);
   const navRequestIdRef = useRef(0);
+  const speechRequestRef = useRef(initialTab === 'llm_service' ? 1 : 0);
+  const [speechEntry, setSpeechEntry] = useState<{ view: string; requestId: number } | null>(() =>
+    initialTab === 'llm_service' ? { view: 'ai', requestId: 1 } : null
+  );
   const [pendingSubTab, setPendingSubTab] = useState<SettingsPendingSubTab>(null);
   const isMac =
     typeof navigator !== 'undefined' &&
@@ -394,9 +421,13 @@ export function Settings({
   }, []);
 
   const navigateToTab = useCallback(
-    (nextTab: (typeof SETTINGS_TABS)[number]) => {
-      markSettingsPerf('settings.tab.click', { tab: nextTab, previousTab: renderedTab });
-      setActiveTab(nextTab);
+    (nextTab: SettingsTab) => {
+      const resolved = nextTab === 'llm_service' ? 'models' : nextTab;
+      const view = nextTab === 'llm_service' ? 'ai' : 'home';
+      speechRequestRef.current += 1;
+      setSpeechEntry({ view, requestId: speechRequestRef.current });
+      markSettingsPerf('settings.tab.click', { tab: resolved, previousTab: renderedTab });
+      setActiveTab(resolved);
       setPendingSubTab(null);
       if (scrollRafRef.current !== null) {
         cancelAnimationFrame(scrollRafRef.current);
@@ -404,7 +435,7 @@ export function Settings({
       }
       clearHighlight();
       requestAnimationFrame(() => {
-        const btn = document.getElementById(`settings-tab-${nextTab}`);
+        const btn = document.getElementById(`settings-tab-${resolved}`);
         btn?.focus();
       });
     },
@@ -448,6 +479,8 @@ export function Settings({
         setMigratedSubtitleTool((hit.subTab as ToolId) || 'subtitles');
       }
       navigateToTab(hit.tab);
+      speechRequestRef.current += 1;
+      setSpeechEntry({ view: speechViewForHit(hit), requestId: speechRequestRef.current });
       navRequestIdRef.current += 1;
       setPendingSubTab(createPendingSubTab(hit, navRequestIdRef.current));
 
@@ -781,6 +814,7 @@ export function Settings({
                       pendingSubTab={pendingSubTab}
                       migratedSubtitleTool={migratedSubtitleTool}
                       onClose={onClose}
+                      speechEntry={speechEntry}
                     />
                   </SettingsPaneFrame>
                 );

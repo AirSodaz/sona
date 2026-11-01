@@ -1823,7 +1823,7 @@
     "theme": "テーマ",
     "theme_light": "ライト",
     "theme_dark": "暗い",
-    "model_hub": "モデル設定",
+    "model_hub": "音声と AI",
     "local_model_management": "ローカルモデル管理",
     "online_model_management": "クラウドモデル管理",
     "installed_count": "{{count}} がインストールされました",

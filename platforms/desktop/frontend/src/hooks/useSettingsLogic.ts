@@ -25,6 +25,10 @@ function normalizeInitialSettingsTab(initialTab?: SettingsTabInput): SettingsTab
     return 'subtitle';
   }
 
+  if (initialTab === 'llm_service') {
+    return 'models';
+  }
+
   return initialTab;
 }
 

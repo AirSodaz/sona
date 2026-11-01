@@ -1,4 +1,4 @@
-import { BarChart3, Bot, Cloud, HardDrive, Server } from 'lucide-react';
+import { BarChart3, Bot, Box, Cloud, HardDrive, Server } from 'lucide-react';
 import type React from 'react';
 import type { SettingsTab } from '../../types/settings';
 import {
@@ -8,7 +8,6 @@ import {
   InfoIcon,
   KeyboardIcon,
   MicIcon,
-  ModelIcon,
   RobotIcon,
   SubtitleIcon,
 } from '../Icons';
@@ -29,7 +28,11 @@ export const SETTINGS_TAB_META: Record<SettingsTab, SettingsTabMetaItem> = {
   shortcuts: { labelKey: 'shortcuts.title', defaultValue: 'Shortcuts', Icon: KeyboardIcon },
   about: { labelKey: 'settings.about', defaultValue: 'About', Icon: InfoIcon },
   microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
-  models: { labelKey: 'settings.model_hub', defaultValue: 'Model Settings', Icon: ModelIcon },
+  models: {
+    labelKey: 'settings.model_hub',
+    defaultValue: 'Speech & AI',
+    Icon: () => <Box size={18} />,
+  },
   subtitle: {
     labelKey: 'settings.subtitle_voice_typing_title',
     defaultValue: 'Subtitles & Voice Typing',

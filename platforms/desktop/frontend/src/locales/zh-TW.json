@@ -1823,7 +1823,7 @@
     "theme": "主題",
     "theme_light": "淺色",
     "theme_dark": "深色",
-    "model_hub": "模型設定",
+    "model_hub": "語音與 AI",
     "batch_model_management": "本機模型管理",
     "online_model_management": "雲端模型管理",
     "installed_count": "已安裝 {{count}} 個",

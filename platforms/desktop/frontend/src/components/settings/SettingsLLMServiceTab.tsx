@@ -84,11 +84,14 @@ const CUSTOM_PROVIDER_MODES: Array<{
 interface SettingsLLMServiceTabProps {
   isActive?: boolean;
   onOpenProviderDetails?: (provider: LlmProvider) => void;
+  /** Hide the page title when this tab is shown inside Speech & AI. */
+  embedded?: boolean;
 }
 
 export function SettingsLLMServiceTab({
   isActive = true,
   onOpenProviderDetails,
+  embedded = false,
 }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -274,14 +277,16 @@ export function SettingsLLMServiceTab({
 
   return (
     <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
-      <SettingsPageHeader
-        icon={<RobotIcon width={28} height={28} />}
-        title={t('settings.llm.title')}
-        description={t('settings.llm.description', {
-          defaultValue:
-            'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
-        })}
-      />
+      {embedded ? null : (
+        <SettingsPageHeader
+          icon={<RobotIcon width={28} height={28} />}
+          title={t('settings.llm.title')}
+          description={t('settings.llm.description', {
+            defaultValue:
+              'Configure LLM providers and models used for polishing, translating, and summarizing transcripts.',
+          })}
+        />
+      )}
 
       <SettingsSection
         id="settings-llm-models-config"

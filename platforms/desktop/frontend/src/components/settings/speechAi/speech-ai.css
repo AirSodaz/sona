@@ -1,0 +1,430 @@
+.speech-ai {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding-bottom: 24px;
+}
+
+.speech-ai-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.speech-ai-back:hover {
+  color: var(--color-text-primary);
+}
+
+.speech-ai-back:focus-visible {
+  outline: none;
+  box-shadow: var(--apple-control-focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.speech-ai-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  overflow: hidden;
+}
+
+.speech-ai-row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 14px 16px;
+}
+
+.speech-ai-row + .speech-ai-row,
+.speech-ai-link + .speech-ai-link {
+  border-top: 1px solid var(--color-border);
+}
+
+.speech-ai-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-row-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.speech-ai-title-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.speech-ai-title {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.speech-ai-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-status.is-ok {
+  color: var(--color-success, #1f8a4c);
+}
+
+.speech-ai-status.is-busy {
+  color: var(--color-accent-primary);
+}
+
+.speech-ai-status.is-warn {
+  color: var(--color-warning, #a16207);
+}
+
+.speech-ai-status.is-err {
+  color: var(--color-danger, #c24141);
+}
+
+.speech-ai-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
+}
+
+.speech-ai-status.is-idle .speech-ai-dot {
+  background: transparent;
+  border: 1.5px solid currentColor;
+}
+
+.speech-ai-detail,
+.speech-ai-lines {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.speech-ai-inline-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.speech-ai-actions {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+}
+
+.speech-ai-actions .btn {
+  min-height: 32px;
+  white-space: nowrap;
+}
+
+.speech-ai-progress {
+  margin-top: 8px;
+  height: 4px;
+  border-radius: 99px;
+  background: var(--color-border);
+  overflow: hidden;
+}
+
+.speech-ai-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--color-accent-primary);
+}
+
+.speech-ai-section-label {
+  margin: 4px 2px 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-link {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 16px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+  cursor: pointer;
+  min-height: 56px;
+}
+
+.speech-ai-link:hover {
+  background: var(--color-bg-secondary);
+}
+
+.speech-ai-link-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text-primary);
+}
+
+.speech-ai-link-hint {
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-banner {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--color-warning, #a16207) 12%, var(--color-bg-elevated));
+  color: var(--color-text-primary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.speech-ai-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.speech-ai-filter {
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.speech-ai-filter.is-active {
+  background: var(--color-bg-elevated);
+  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  box-shadow: var(--apple-control-shadow-flat);
+}
+
+.speech-ai-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.speech-ai-show-all {
+  align-self: flex-start;
+}
+
+.model-card.is-recommended {
+  background: color-mix(in srgb, var(--color-accent-primary) 7%, var(--color-bg-elevated));
+  border-color: color-mix(in srgb, var(--color-accent-primary) 30%, var(--color-border));
+}
+
+.model-version-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.model-version-hint {
+  font-size: 12px;
+  color: var(--color-text-tertiary, var(--color-text-muted));
+}
+
+.speech-ai-version-btn {
+  min-height: 32px;
+  padding-inline: 12px;
+}
+
+.speech-ai-mode-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-secondary);
+  padding: 4px 4px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.speech-ai-mode-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px 4px;
+}
+
+.speech-ai-mode-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.speech-ai-mode-head p {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-note {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.speech-ai-dialog-backdrop {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--color-text-primary) 28%, transparent);
+}
+
+.speech-ai-dialog {
+  width: min(560px, 100%);
+  border-radius: var(--radius-lg);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-xl);
+  padding: 18px 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.speech-ai-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.speech-ai-dialog-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.speech-ai-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.speech-ai-provider {
+  min-height: 84px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-elevated);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  cursor: pointer;
+  color: var(--color-text-primary);
+  font: inherit;
+}
+
+.speech-ai-provider.is-selected {
+  border-color: var(--color-text-primary);
+  box-shadow: var(--apple-control-focus-ring);
+}
+
+.speech-ai-provider small {
+  color: var(--color-text-secondary);
+  font-size: 11px;
+}
+
+.speech-ai-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.speech-ai-probe {
+  border-radius: var(--radius-md);
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--color-success, #1f8a4c) 12%, var(--color-bg-elevated));
+  color: var(--color-text-primary);
+  font-size: 13px;
+}
+
+.speech-ai-probe.is-err {
+  background: color-mix(in srgb, var(--color-danger, #c24141) 10%, var(--color-bg-elevated));
+}
+
+.speech-ai-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.speech-ai-field input,
+.speech-ai-field select {
+  min-height: 36px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-border);
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  font: inherit;
+  font-weight: 400;
+  padding: 0 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .speech-ai-progress > span,
+  .model-card.is-recommended,
+  .speech-ai-link,
+  .speech-ai-filter {
+    transition: none;
+  }
+}

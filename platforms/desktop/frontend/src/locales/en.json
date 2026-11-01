@@ -1823,7 +1823,7 @@
     "theme": "Theme",
     "theme_light": "Light",
     "theme_dark": "Dark",
-    "model_hub": "Model Settings",
+    "model_hub": "Speech & AI",
     "local_model_management": "Local Model Management",
     "online_model_management": "Online Model Management",
     "installed_count": "{{count}} installed",

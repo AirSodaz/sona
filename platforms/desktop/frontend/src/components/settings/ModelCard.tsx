@@ -29,6 +29,20 @@ interface ModelCardProps {
   onDiscardDownload?: (model: ModelInfo) => void;
   actionsDisabled?: boolean;
   isAsr?: boolean;
+  /** Overrides the family title. Picker uses friendly names; the catalog keeps `model.name`. */
+  displayName?: string;
+  /** Overrides the translated catalog description. */
+  description?: string;
+  /** Soft brand tint and Recommended chip for the curated default. */
+  recommended?: boolean;
+  /** Friendly version title plus technical hint. Falls back to versionLabel. */
+  versionMeta?: (model: ModelInfo) => { title: string; hint?: string };
+  /** When set, installed rows offer Use / In use instead of only a delete icon. */
+  onUse?: (model: ModelInfo) => void;
+  activeModelId?: string | null;
+  /** Filled Download button for this version. Other downloads stay outlined. */
+  primaryModelId?: string | null;
+  actionVariant?: 'icon' | 'labeled';
 }
 
 interface ModelCardActionsProps {
@@ -154,11 +168,21 @@ export function resolveUniqueModeTags(modes?: ModelInfo['modes']): string[] {
 }
 
 /** Semantic tag cluster: scenario modes, engine, curated labels, recommendation. */
-function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolean }) {
+function ModelTags({
+  model,
+  showEngine,
+  recommended,
+}: {
+  model: ModelInfo;
+  showEngine: boolean;
+  recommended?: boolean;
+}) {
   const { t } = useTranslation();
   const labels = resolveModelLabels(model) ?? [];
   const hasModes = (model.modes?.length ?? 0) > 0;
-  if (!hasModes && !showEngine && labels.length === 0 && !model.isRecommended) return null;
+  if (!hasModes && !showEngine && labels.length === 0 && !(recommended ?? model.isRecommended)) {
+    return null;
+  }
   return (
     <div className="model-tags">
       {resolveUniqueModeTags(model.modes).map((tag) => (
@@ -174,7 +198,7 @@ function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolea
           {t(`settings.model_tag_${label}`, { defaultValue: label })}
         </span>
       ))}
-      {model.isRecommended && (
+      {(recommended ?? model.isRecommended) && (
         <span className="model-tag model-tag-recommended">{t('common.recommended')}</span>
       )}
     </div>
@@ -225,8 +249,65 @@ function ModelCardActions({
   onCancelDownload,
   onDiscardDownload,
   disabled = false,
-}: ModelCardActionsProps): React.JSX.Element {
+  labeled = false,
+  onUse,
+  isActive = false,
+  primary = false,
+}: ModelCardActionsProps & {
+  labeled?: boolean;
+  onUse?: (model: ModelInfo) => void;
+  isActive?: boolean;
+  primary?: boolean;
+}): React.JSX.Element {
   const { t } = useTranslation();
+
+  if (labeled && isInstalled && onUse) {
+    if (isActive) {
+      return (
+        <button type="button" className="btn btn-secondary speech-ai-version-btn" disabled>
+          <CheckIcon />
+          {t('settings.speech_ai.in_use', { defaultValue: 'In use' })}
+        </button>
+      );
+    }
+    return (
+      <button
+        type="button"
+        className="btn btn-secondary speech-ai-version-btn"
+        onClick={() => onUse(model)}
+        disabled={disabled}
+      >
+        {t('settings.speech_ai.use', { defaultValue: 'Use' })}
+      </button>
+    );
+  }
+
+  if (labeled && isDownloading) {
+    return (
+      <button
+        type="button"
+        className="btn btn-secondary speech-ai-version-btn"
+        onClick={onCancelDownload}
+      >
+        {t('common.cancel')}
+      </button>
+    );
+  }
+
+  if (labeled && !isInstalled) {
+    return (
+      <button
+        type="button"
+        className={`btn speech-ai-version-btn ${primary ? 'btn-primary' : 'btn-secondary'}`}
+        onClick={() => onDownload(model)}
+        disabled={disabled}
+        aria-label={`${t('common.download')} ${model.name}`}
+      >
+        <DownloadIcon />
+        {t('common.download')}
+      </button>
+    );
+  }
 
   if (isInstalled) {
     return (
@@ -325,6 +406,14 @@ export function ModelCard({
   onDiscardDownload,
   actionsDisabled = false,
   isAsr: isAsrProp,
+  displayName,
+  description,
+  recommended = false,
+  versionMeta,
+  onUse,
+  activeModelId = null,
+  primaryModelId = null,
+  actionVariant = 'icon',
 }: ModelCardProps): React.JSX.Element | null {
   const { t } = useTranslation();
 
@@ -369,8 +458,11 @@ export function ModelCard({
     return { kind: 'not-installed' };
   })();
 
+  const labeled = actionVariant === 'labeled';
+  const headerName = displayName || baseModel.name;
+
   return (
-    <div className="model-card">
+    <div className={`model-card${recommended ? ' is-recommended' : ''}`}>
       <div className="model-card-header">
         <div className="model-card-identity">
           {brand && (
@@ -380,21 +472,23 @@ export function ModelCard({
           )}
           <div className="model-card-title">
             <span className="model-name">
-              {baseModel.name}
-              {!isMultiVersion && baseModel.versionLabel ? ` · ${baseModel.versionLabel}` : ''}
+              {headerName}
+              {!isMultiVersion && !displayName && baseModel.versionLabel
+                ? ` · ${baseModel.versionLabel}`
+                : ''}
             </span>
             <LanguageBadges languages={baseModel.languages} />
           </div>
         </div>
         <ModelStatusChip status={headerStatus} />
       </div>
-      <div className="model-description">{t(baseModel.description)}</div>
+      <div className="model-description">{description ?? t(baseModel.description)}</div>
 
       {isMultiVersion && (
         /* One family-level rating set, right-aligned on the group tag row —
            version rows stay rating-free so the family shows it only once. */
         <div className="model-card-tags-row">
-          <ModelTags model={baseModel} showEngine={false} />
+          <ModelTags model={baseModel} showEngine={false} recommended={recommended} />
           <RatingMeters model={baseModel} />
         </div>
       )}
@@ -410,7 +504,7 @@ export function ModelCard({
           )}
           <div className="model-card-footer">
             <div className="model-card-meta">
-              <ModelTags model={baseModel} showEngine />
+              <ModelTags model={baseModel} showEngine recommended={recommended} />
               <RatingMeters model={baseModel} />
             </div>
             <div className="model-card-side">
@@ -424,6 +518,10 @@ export function ModelCard({
                 onCancelDownload={() => onCancelDownload(baseModel.id)}
                 onDiscardDownload={onDiscardDownload}
                 disabled={actionsDisabled}
+                labeled={labeled}
+                onUse={onUse}
+                isActive={activeModelId === baseModel.id}
+                primary={primaryModelId === baseModel.id}
               />
             </div>
           </div>
@@ -436,13 +534,24 @@ export function ModelCard({
             const isInstalled = installedModels.has(model.id);
             const downloadState = downloads[model.id];
             const isDownloading = !!downloadState;
+            const meta = versionMeta?.(model);
+            const versionTitle = meta?.title || model.versionLabel || model.name;
+            const versionHint = meta?.hint;
 
             return (
               <div key={model.id} className="model-version-row">
                 <div className="model-version-main">
                   <div className="model-version-info">
-                    <span className="model-version-label">{model.versionLabel || model.name}</span>
-                    <span className="model-tag model-tag-engine">{ENGINE_LABEL[model.engine]}</span>
+                    <span className="model-version-copy">
+                      <span className="model-version-label">{versionTitle}</span>
+                      {versionHint ? (
+                        <span className="model-version-hint">{versionHint}</span>
+                      ) : (
+                        <span className="model-tag model-tag-engine">
+                          {ENGINE_LABEL[model.engine]}
+                        </span>
+                      )}
+                    </span>
                     {isInstalled && <CheckIcon className="model-version-check" />}
                     {!isInstalled && !isDownloading && model.interruptedDownload && (
                       <span className="model-status-chip model-status-interrupted">
@@ -468,6 +577,10 @@ export function ModelCard({
                       onCancelDownload={() => onCancelDownload(model.id)}
                       onDiscardDownload={onDiscardDownload}
                       disabled={actionsDisabled}
+                      labeled={labeled}
+                      onUse={onUse}
+                      isActive={activeModelId === model.id}
+                      primary={primaryModelId === model.id}
                     />
                   </div>
                 </div>

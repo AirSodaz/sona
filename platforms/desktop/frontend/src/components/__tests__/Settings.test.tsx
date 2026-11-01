@@ -337,7 +337,7 @@ describe('Settings', () => {
   async function openModelsTab() {
     await screen.findByText('settings.general_title');
     fireEvent.click(screen.getByRole('tab', { name: /settings.model_hub/ }));
-    await screen.findByText('settings.model_selection', undefined, {
+    await screen.findByText('settings.speech_ai.title', undefined, {
       timeout: MODEL_TAB_LOAD_TIMEOUT_MS,
     });
     await waitFor(() => expect(modelService.getModelCatalogSnapshot).toHaveBeenCalled(), {
@@ -393,7 +393,7 @@ describe('Settings', () => {
     expect(container.querySelector('[data-settings-tab-pane="dashboard"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-tab-pane="microphone"]')).not.toBeNull();
     expect(container.querySelector('[data-settings-tab-pane="models"]')).not.toBeNull();
-    expect(container.querySelector('[data-settings-tab-pane="llm_service"]')).not.toBeNull();
+    expect(container.querySelector('[data-settings-tab-pane="automation"]')).not.toBeNull();
 
     expect(modelService.getModelCatalogSnapshot).not.toHaveBeenCalled();
     expect(modelService.getModelPath).not.toHaveBeenCalled();
@@ -427,6 +427,7 @@ describe('Settings', () => {
     async () => {
       render(<Settings isOpen={true} onClose={onClose} />);
       await openModelsTab();
+      fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
 
       // Find download button for 'Test Model'
       // Since we mock translation, label is "common.download Test Model"
@@ -480,13 +481,16 @@ describe('Settings', () => {
     async () => {
       render(<Settings isOpen={true} onClose={onClose} />);
       await openModelsTab();
+      expect(screen.getByText('settings.speech_ai.speech_title')).toBeDefined();
+      expect(screen.getByText('settings.speech_ai.writing_title')).toBeDefined();
+      expect(screen.getByText('settings.speech_ai.translation_title')).toBeDefined();
 
-      const streamingModel = await screen.findByText('settings.asr_model_label');
-      const vadModels = screen.getByText('settings.vad_models');
+      fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
+      const vadModels = await screen.findByText('settings.vad_models');
       const transcriptionSettings = screen.getByText('settings.transcription_settings');
       const restoreDefaults = screen.getByText('settings.restore_defaults');
 
-      expect(streamingModel).toBeDefined();
+      expect(vadModels).toBeDefined();
       screen.getByText('settings.enable_itn');
       screen.getByText('settings.max_concurrent_label');
       screen.getByLabelText('settings.restore_defaults');
@@ -516,6 +520,7 @@ describe('Settings', () => {
 
     render(<Settings isOpen={true} onClose={onClose} />);
     await openModelsTab();
+    fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
     const initialCalls = vi.mocked(modelService.getModelCatalogSnapshot).mock.calls.length;
 
     // Find delete button
@@ -546,9 +551,6 @@ describe('Settings', () => {
 
     render(<Settings isOpen={true} onClose={onClose} />);
     await openModelsTab();
-
-    const dropdownLabel = await screen.findByText('settings.asr_model_label');
-    expect(dropdownLabel).toBeDefined();
 
     // Let's use getByText or fallback to direct invocation if UI is tricky
     try {

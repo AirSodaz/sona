@@ -1823,7 +1823,7 @@
     "theme": "테마",
     "theme_light": "밝게",
     "theme_dark": "어둡게",
-    "model_hub": "모델 설정",
+    "model_hub": "음성 및 AI",
     "local_model_management": "로컬 모델 Management",
     "online_model_management": "Cloud 모델 Management",
     "installed_count": "{{count}} installed",

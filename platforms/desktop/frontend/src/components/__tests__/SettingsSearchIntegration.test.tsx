@@ -369,7 +369,7 @@ describe('Settings search integration', () => {
     await waitFor(
       () => {
         const activePane = document.querySelector(
-          '[data-settings-tab-pane="llm_service"]:not([hidden])'
+          '[data-settings-tab-pane="models"]:not([hidden])'
         );
         expect(activePane).not.toBeNull();
       },

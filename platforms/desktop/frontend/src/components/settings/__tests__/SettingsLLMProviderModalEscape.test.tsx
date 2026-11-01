@@ -63,7 +63,13 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
     expect(onSettingsClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
 
-    // Pressing Escape again now should close Settings
+    // Escape leaves AI services for the Speech & AI page, then closes Settings.
+    await act(async () => {
+      fireEvent.keyDown(window, { key: 'Escape' });
+    });
+    expect(onSettingsClose).not.toHaveBeenCalled();
+    expect(screen.getByText('Speech recognition')).toBeTruthy();
+
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });

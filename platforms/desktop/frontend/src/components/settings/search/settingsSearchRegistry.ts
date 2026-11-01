@@ -17,7 +17,11 @@ type SearchItemBase = {
 
 export type SettingsSearchItem =
   | (SearchItemBase & { tab: 'subtitle'; subTab?: SubtitleSubTab })
-  | (SearchItemBase & { tab: 'models'; subTab?: ModelScenario })
+  | (SearchItemBase & {
+      tab: 'models';
+      subTab?: ModelScenario;
+      speechView?: 'home' | 'recognition' | 'speakers' | 'ai' | 'downloads' | 'picker';
+    })
   | (SearchItemBase & {
       tab: 'vocabulary';
       subTab?: VocabularySubTab;
@@ -30,6 +34,7 @@ export type SettingsSearchItem =
     });
 
 export function groupKeyForTab(tab: SettingsTab): string {
+  if (tab === 'llm_service') return 'settings.group.audio';
   return (
     SETTINGS_TAB_GROUPS.find((group) => group.tabs.includes(tab))?.labelKey ??
     'settings.group.general'
@@ -466,6 +471,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'models',
+    speechView: 'recognition',
     subTab: 'live',
     targetId: 'settings-vad-path',
     fallbackTargetId: 'settings-model-hub',
@@ -488,6 +494,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-batch-vad',
     tab: 'models',
+    speechView: 'recognition',
     subTab: 'batch',
     targetId: 'settings-batch-vad',
     fallbackTargetId: 'settings-model-hub',
@@ -499,6 +506,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-punctuation',
     tab: 'models',
+    speechView: 'recognition',
     subTab: 'live',
     targetId: 'settings-punctuation-path',
     fallbackTargetId: 'settings-model-hub',
@@ -509,6 +517,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-mirror',
     tab: 'models',
+    speechView: 'downloads',
     targetId: 'settings-download-mirror',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
@@ -526,8 +535,29 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     ],
   },
   {
+    id: 'models-speakers',
+    tab: 'models',
+    speechView: 'speakers',
+    targetId: 'settings-speech-speakers',
+    fallbackTargetId: 'settings-model-hub',
+    tabKey: 'settings.model_hub',
+    titleKey: 'settings.speaker_diarization_title',
+    hintKey: 'settings.speaker_diarization_description',
+    keywords: [
+      'speaker',
+      'speakers',
+      'diarization',
+      'voice',
+      'who said',
+      '说话人',
+      '区分说话人',
+      '声纹',
+    ],
+  },
+  {
     id: 'models-gpu',
     tab: 'models',
+    speechView: 'downloads',
     targetId: 'settings-gpu-acceleration',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.gpu_acceleration_label',
