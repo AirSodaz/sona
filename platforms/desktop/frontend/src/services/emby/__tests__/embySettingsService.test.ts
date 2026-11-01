@@ -196,6 +196,48 @@ describe('embySettingsService', () => {
       const configTimelineTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesTimelineTrue);
       expect(configTimelineTrue.enableTimeline).toBe(true);
     });
+    it('strictly honors speakerDiarization override', () => {
+      const overridesDiarizationFalse: EmbyToolOverrides = { speakerDiarization: false };
+      const configFalse = buildEmbyEffectiveConfig(mockBaseConfig, overridesDiarizationFalse);
+      expect(configFalse.batchSpeakerDiarizationEnabled).toBe(false);
+
+      const overridesDiarizationTrue: EmbyToolOverrides = { speakerDiarization: true };
+      const configTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesDiarizationTrue);
+      expect(configTrue.batchSpeakerDiarizationEnabled).toBe(true);
+    });
+    it('synchronizes speakerDiarization override onto online ASR provider config', () => {
+      const overridesOnline: EmbyToolOverrides = {
+        asrSelection: {
+          engine: 'online',
+          mode: 'batch',
+          providerId: 'volcengine-doubao',
+          modelId: 'doubao-pro',
+          modelPath: '',
+        },
+        speakerDiarization: false,
+      };
+      const effectiveConfig = buildEmbyEffectiveConfig(mockBaseConfig, overridesOnline);
+      expect(effectiveConfig.batchSpeakerDiarizationEnabled).toBe(false);
+      expect(
+        effectiveConfig.asr?.providers?.online?.['volcengine-doubao']?.speakerDiarization
+      ).toBe(false);
+
+      const overridesOnlineTrue: EmbyToolOverrides = {
+        asrSelection: {
+          engine: 'online',
+          mode: 'batch',
+          providerId: 'volcengine-doubao',
+          modelId: 'doubao-pro',
+          modelPath: '',
+        },
+        speakerDiarization: true,
+      };
+      const effectiveConfigTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesOnlineTrue);
+      expect(effectiveConfigTrue.batchSpeakerDiarizationEnabled).toBe(true);
+      expect(
+        effectiveConfigTrue.asr?.providers?.online?.['volcengine-doubao']?.speakerDiarization
+      ).toBe(true);
+    });
     it('overrides translationModelId in snapshot', () => {
       const overrides: EmbyToolOverrides = {
         translationModelId: 'deepseek-v3',

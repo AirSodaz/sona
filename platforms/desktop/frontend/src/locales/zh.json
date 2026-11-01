@@ -23,6 +23,8 @@
     "not_installed": "未安装",
     "back": "返回",
     "close": "关闭",
+    "go_to_settings": "前往设置",
+    "dismiss": "忽略",
     "confirm": "确认",
     "import": "导入",
     "connected": "已连接",
@@ -321,6 +323,10 @@
     "timeline_mode": "字幕模式",
     "timeline_hint": "切分为更小的单元",
     "timeline_mode_tooltip": "切换字幕模式",
+    "speaker_diarization": "说话人识别",
+    "speaker_diarization_hint": "区分说话人并标注声纹",
+    "speaker_unconfigured_hint": "未配置模型，此功能未生效",
+    "cloud_speaker_unsupported": "当前云端模型不支持说话人识别",
     "auto_polish": "自动润色",
     "auto_polish_hint": "使用 LLM 自动优化文本",
     "auto_polish_frequency": "自动润色频率 (分段)",
@@ -3044,7 +3050,9 @@
       "failed_title": "{{name}} 下载失败",
       "failed_body": "未能完成模型下载。",
       "cancelled_title": "{{name}} 下载已取消"
-    }
+    },
+    "speaker_degraded_title": "已跳过说话人分离",
+    "speaker_degraded_body": "检测到已开启说话人功能，但未配置有效模型。转录已正常完成，如需说话人标签请前往配置。"
   },
   "emby": {
     "title": "媒体服务器字幕助手",

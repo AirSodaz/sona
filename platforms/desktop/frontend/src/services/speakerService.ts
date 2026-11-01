@@ -13,8 +13,23 @@ import {
   type ScenarioModelPathConfig,
 } from '../utils/scenarioModels';
 
-type SpeakerConfigInput = Pick<AppConfig, 'speakerProfiles' | 'speakerDiarizationSensitivity'> &
+export type SpeakerConfigInput = Pick<
+  AppConfig,
+  'speakerProfiles' | 'speakerDiarizationSensitivity'
+> &
+  Partial<Pick<AppConfig, 'liveSpeakerDiarizationEnabled' | 'batchSpeakerDiarizationEnabled'>> &
   Partial<ScenarioModelPathConfig>;
+
+export function isScenarioSpeakerDiarizationEnabled(
+  config: Partial<
+    Pick<AppConfig, 'liveSpeakerDiarizationEnabled' | 'batchSpeakerDiarizationEnabled'>
+  >,
+  scenario: AsrScenario
+): boolean {
+  return scenario === 'batch'
+    ? Boolean(config.batchSpeakerDiarizationEnabled)
+    : Boolean(config.liveSpeakerDiarizationEnabled);
+}
 
 export interface SpeakerServicePorts {
   annotateSpeakerSegmentsFromFile: (
@@ -74,8 +89,11 @@ export class SpeakerService {
     config: SpeakerConfigInput,
     scenario: AsrScenario,
     projectId?: string | null,
-    options?: { requireSegmentation?: boolean }
+    options?: { requireSegmentation?: boolean; bypassEnabledCheck?: boolean }
   ): SpeakerProcessingConfig | null {
+    if (!options?.bypassEnabledCheck && !isScenarioSpeakerDiarizationEnabled(config, scenario)) {
+      return null;
+    }
     const embeddingModelPath = getScenarioSpeakerEmbeddingModelPath(config, scenario);
     if (!embeddingModelPath) {
       return null;
@@ -91,6 +109,16 @@ export class SpeakerService {
       speakerProfiles: this.resolveEffectiveProfiles(config.speakerProfiles, projectId),
       sensitivity: config.speakerDiarizationSensitivity ?? 'balanced',
     };
+  }
+  isDiarizationDegraded(
+    config: SpeakerConfigInput,
+    scenario: AsrScenario,
+    options?: { requireSegmentation?: boolean }
+  ): boolean {
+    if (!isScenarioSpeakerDiarizationEnabled(config, scenario)) {
+      return false;
+    }
+    return !this.isConfigured(config, scenario, options);
   }
 
   async annotateSegmentsForFile(
@@ -183,3 +211,11 @@ export function createSpeakerService(input?: SpeakerServiceInput): SpeakerServic
 }
 
 export const speakerService = createSpeakerService();
+
+export function isDiarizationDegraded(
+  config: SpeakerConfigInput,
+  scenario: AsrScenario,
+  options?: { requireSegmentation?: boolean }
+): boolean {
+  return speakerService.isDiarizationDegraded(config, scenario, options);
+}

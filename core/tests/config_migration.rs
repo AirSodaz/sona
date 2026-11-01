@@ -35,6 +35,8 @@ fn default_config_conforms_to_the_typed_app_config_contract() {
         typed.caption_translation_font_color.as_deref(),
         Some("#6ee7b7")
     );
+    assert_eq!(typed.live_speaker_diarization_enabled, Some(false));
+    assert_eq!(typed.batch_speaker_diarization_enabled, Some(false));
 }
 
 #[test]
@@ -328,4 +330,95 @@ fn current_config_migration_repairs_invalid_caption_and_language_scalars() {
     assert_eq!(result.config["captionDisplayPriority"], "translation_main");
     assert_eq!(result.config["captionStrokeWidth"], 2.0);
     assert_eq!(result.config["captionTextAlign"], "center");
+}
+#[test]
+fn speaker_diarization_enabled_migrates_from_model_paths_when_absent() {
+    // Both batch models present -> batch diarization true
+    let mut config_both = default_config();
+    config_both["batchSpeakerEmbeddingModelPath"] = json!("/path/to/embed.onnx");
+    config_both["batchSpeakerSegmentationModelPath"] = json!("/path/to/seg.onnx");
+    config_both["liveSpeakerEmbeddingModelPath"] = json!("/path/to/live_embed.onnx");
+    let obj = config_both.as_object_mut().unwrap();
+    obj.remove("batchSpeakerDiarizationEnabled");
+    obj.remove("liveSpeakerDiarizationEnabled");
+
+    let result = migrate_app_config(Some(config_both), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert!(result.migrated);
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], true);
+    assert_eq!(result.config["liveSpeakerDiarizationEnabled"], true);
+
+    // Idempotency: second migration should not mark as migrated
+    let second = migrate_app_config(Some(result.config.clone()), "Default Rules".to_string());
+    assert!(!second.migrated);
+    assert_eq!(second.config, result.config);
+
+    // Live embedding present, batch models empty -> live true, batch false
+    let mut config_live_only = default_config();
+    config_live_only["liveSpeakerEmbeddingModelPath"] = json!("/path/to/live_embed.onnx");
+    config_live_only["batchSpeakerEmbeddingModelPath"] = json!("");
+    config_live_only["batchSpeakerSegmentationModelPath"] = json!("");
+    let obj = config_live_only.as_object_mut().unwrap();
+    obj.remove("batchSpeakerDiarizationEnabled");
+    obj.remove("liveSpeakerDiarizationEnabled");
+
+    let result = migrate_app_config(Some(config_live_only), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert_eq!(result.config["liveSpeakerDiarizationEnabled"], true);
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], false);
+
+    // Only embedding model present -> batch diarization false
+    let mut config_embed_only = default_config();
+    config_embed_only["batchSpeakerEmbeddingModelPath"] = json!("/path/to/embed.onnx");
+    config_embed_only["batchSpeakerSegmentationModelPath"] = json!("");
+    config_embed_only["liveSpeakerEmbeddingModelPath"] = json!("");
+    let obj = config_embed_only.as_object_mut().unwrap();
+    obj.remove("batchSpeakerDiarizationEnabled");
+    obj.remove("liveSpeakerDiarizationEnabled");
+
+    let result = migrate_app_config(Some(config_embed_only), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], false);
+    assert_eq!(result.config["liveSpeakerDiarizationEnabled"], false);
+
+    // Only segmentation model present -> batch diarization false
+    let mut config_seg_only = default_config();
+    config_seg_only["batchSpeakerEmbeddingModelPath"] = json!("");
+    config_seg_only["batchSpeakerSegmentationModelPath"] = json!("/path/to/seg.onnx");
+    let obj = config_seg_only.as_object_mut().unwrap();
+    obj.remove("batchSpeakerDiarizationEnabled");
+
+    let result = migrate_app_config(Some(config_seg_only), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], false);
+
+    // Explicitly set to false is preserved even if models present
+    let mut config_explicit = default_config();
+    config_explicit["batchSpeakerEmbeddingModelPath"] = json!("/path/to/embed.onnx");
+    config_explicit["batchSpeakerSegmentationModelPath"] = json!("/path/to/seg.onnx");
+    config_explicit["batchSpeakerDiarizationEnabled"] = json!(false);
+    config_explicit["liveSpeakerEmbeddingModelPath"] = json!("/path/to/live_embed.onnx");
+    config_explicit["liveSpeakerDiarizationEnabled"] = json!(false);
+
+    let result = migrate_app_config(Some(config_explicit), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], false);
+    assert_eq!(result.config["liveSpeakerDiarizationEnabled"], false);
+}
+
+#[test]
+fn speaker_diarization_enabled_upgrades_legacy_config_versions() {
+    let mut legacy = default_config();
+    legacy["configVersion"] = json!(7);
+    legacy["batchSpeakerEmbeddingModelPath"] = json!("/path/to/embed.onnx");
+    legacy["batchSpeakerSegmentationModelPath"] = json!("/path/to/seg.onnx");
+    legacy["liveSpeakerEmbeddingModelPath"] = json!("/path/to/live_embed.onnx");
+    let obj = legacy.as_object_mut().unwrap();
+    obj.remove("batchSpeakerDiarizationEnabled");
+    obj.remove("liveSpeakerDiarizationEnabled");
+
+    let result = migrate_app_config(Some(legacy), "Default Rules".to_string());
+    validate_app_config(&result.config).expect("valid config");
+    assert_eq!(result.config["batchSpeakerDiarizationEnabled"], true);
+    assert_eq!(result.config["liveSpeakerDiarizationEnabled"], true);
 }

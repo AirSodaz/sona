@@ -1,12 +1,14 @@
 import { v4 as uuidv4 } from 'uuid';
 import { getEffectiveConfigSnapshot } from '../stores/effectiveConfigStore';
+import { useSpeakerNotificationStore } from '../stores/speakerNotificationStore';
 import type { AppConfig } from '../types/config';
 import type { TranscriptSegment, TranscriptUpdate } from '../types/transcript';
 import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getScenarioLanguage } from '../utils/scenarioModels';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
-import type { AsrTranscriptionRequest } from './asrConfigService';
+import { type AsrTranscriptionRequest, isLlamaCppBatchRequest } from './asrConfigService';
+import { speakerService } from './speakerService';
 import { buildRecognizerOutputEvent, TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
 import {
@@ -184,8 +186,22 @@ export class TranscriptionService {
     });
   }
 
+  private _checkLiveDiarizationDegraded(wasLocal: boolean): void {
+    if (this.instanceId !== 'record' || !wasLocal) {
+      return;
+    }
+    const liveConfig = this.ports.getEffectiveConfigSnapshot();
+    if (speakerService.isDiarizationDegraded(liveConfig, 'live')) {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    }
+  }
+
   async stop(): Promise<void> {
     this.preparedNativeConfig = null;
+    const wasLocal = this.runningConfig
+      ? this.runningConfig.engine === 'local'
+      : (this.ports.getEffectiveConfigSnapshot().asr?.selections?.live?.engine ?? 'local') ===
+        'local';
     if (this.transport === 'external') {
       try {
         await this.lifecycle.stopExternal();
@@ -198,6 +214,7 @@ export class TranscriptionService {
         this.runningConfig = null;
         this.transport = 'idle';
       }
+      this._checkLiveDiarizationDegraded(wasLocal);
       return;
     }
     if (this.transport === 'native' && this.nativeSourceKind) {
@@ -214,6 +231,7 @@ export class TranscriptionService {
         this.transport = 'idle';
         this.nativeSourceKind = null;
       }
+      this._checkLiveDiarizationDegraded(wasLocal);
       return;
     }
     this.runningConfig = null;
@@ -225,11 +243,16 @@ export class TranscriptionService {
     if (this.transport !== 'native' || !this.nativeSourceKind) {
       return '';
     }
+    const wasLocal = this.runningConfig
+      ? this.runningConfig.engine === 'local'
+      : (this.ports.getEffectiveConfigSnapshot().asr?.selections?.live?.engine ?? 'local') ===
+        'local';
     const path = await stopNativeLiveTranscription(this.instanceId, this.nativeSourceKind);
     this.lifecycle.markStopped();
     this.runningConfig = null;
     this.transport = 'idle';
     this.nativeSourceKind = null;
+    this._checkLiveDiarizationDegraded(wasLocal);
     return path;
   }
 
@@ -460,6 +483,13 @@ export class TranscriptionService {
 
       const processedSegments = normalizeTranscriptSegments(segments);
 
+      if (
+        asrRequest.engine === 'local' &&
+        !isLlamaCppBatchRequest(asrRequest) &&
+        speakerService.isDiarizationDegraded(appConfig, 'batch')
+      ) {
+        useSpeakerNotificationStore.getState().triggerDegraded();
+      }
       if (onProgress) onProgress(100);
       return processedSegments;
     } finally {

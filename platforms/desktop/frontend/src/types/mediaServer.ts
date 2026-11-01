@@ -1,8 +1,15 @@
-import type { AsrModelSelection } from './config';
-
 export type MediaServerType = 'emby' | 'jellyfin';
 
 export type MediaServerSubtitleMode = 'pure_translation' | 'bilingual' | 'separate_tracks';
+
+export interface MediaServerAsrSelection {
+  engine: 'local' | 'online';
+  mode: 'streaming' | 'batch';
+  modelId?: string | null;
+  modelPath: string;
+  providerId?: string | null;
+  profileId?: string | null;
+}
 
 export interface MediaServerProfile {
   id: string;
@@ -89,12 +96,13 @@ export interface MediaServerSubtitleUploadPayload {
 }
 
 export interface MediaServerToolOverrides {
-  asrSelection?: AsrModelSelection | null;
+  asrSelection?: MediaServerAsrSelection | null;
   asrLanguage?: string;
   enableTimeline?: boolean;
   translationModelId?: string | null;
   defaultSubtitleMode?: MediaServerSubtitleMode;
   overwriteExistingExternal?: boolean;
+  speakerDiarization?: boolean;
 }
 
 export const DEFAULT_MEDIA_SERVER_TOOL_OVERRIDES: MediaServerToolOverrides = {

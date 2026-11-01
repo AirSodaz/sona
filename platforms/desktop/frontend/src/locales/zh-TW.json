@@ -23,6 +23,8 @@
     "not_installed": "未安裝",
     "back": "返回",
     "close": "關閉",
+    "go_to_settings": "前往設定",
+    "dismiss": "忽略",
     "confirm": "確認",
     "ok": "確定",
     "open": "開啟",
@@ -321,6 +323,10 @@
     "timeline_mode": "字幕模式",
     "timeline_hint": "切分為更小的單元",
     "timeline_mode_tooltip": "切換字幕模式",
+    "speaker_diarization": "說話者分離",
+    "speaker_diarization_hint": "區分說話者並標註聲紋",
+    "speaker_unconfigured_hint": "未設定模型，此功能未生效",
+    "cloud_speaker_unsupported": "目前雲端模型不支援說話者分離",
     "auto_polish": "自動潤飾",
     "auto_polish_hint": "使用 LLM 自動最佳化文字",
     "auto_polish_frequency": "自動潤飾頻率 (分段)",
@@ -3044,7 +3050,9 @@
       "failed_title": "{{name}} 下載失敗",
       "failed_body": "未能完成模型下載。",
       "cancelled_title": "{{name}} 下載已取消"
-    }
+    },
+    "speaker_degraded_title": "已跳過說話者分離",
+    "speaker_degraded_body": "偵測到已開啟說話者功能，但未設定有效模型。轉錄已正常完成，如需說話者標籤請前往設定。"
   },
   "emby": {
     "title": "媒體伺服器字幕助手",
