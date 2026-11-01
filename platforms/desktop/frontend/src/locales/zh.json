@@ -325,7 +325,7 @@
     "timeline_mode_tooltip": "切换字幕模式",
     "speaker_diarization": "说话人识别",
     "speaker_diarization_hint": "区分说话人并标注声纹",
-    "speaker_unconfigured_hint": "未配置模型，将自动降级为普通转录",
+    "speaker_unconfigured_hint": "未配置模型，此功能未生效",
     "cloud_speaker_unsupported": "当前云端模型不支持说话人识别",
     "auto_polish": "自动润色",
     "auto_polish_hint": "使用 LLM 自动优化文本",

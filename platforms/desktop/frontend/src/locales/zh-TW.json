@@ -325,7 +325,7 @@
     "timeline_mode_tooltip": "切換字幕模式",
     "speaker_diarization": "說話者分離",
     "speaker_diarization_hint": "區分說話者並標註聲紋",
-    "speaker_unconfigured_hint": "未設定模型，將自動降級為一般轉錄",
+    "speaker_unconfigured_hint": "未設定模型，此功能未生效",
     "cloud_speaker_unsupported": "目前雲端模型不支援說話者分離",
     "auto_polish": "自動潤飾",
     "auto_polish_hint": "使用 LLM 自動最佳化文字",

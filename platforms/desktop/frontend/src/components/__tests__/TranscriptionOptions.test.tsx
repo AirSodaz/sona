@@ -600,9 +600,7 @@ describe('TranscriptionOptions', () => {
 
     const warningSpan = document.querySelector('.parameter-settings-warning-text');
     expect(warningSpan).toBeTruthy();
-    expect(warningSpan?.textContent).toBe(
-      'No speaker model configured; will fall back to normal transcription'
-    );
+    expect(warningSpan?.textContent).toBe('No model configured; feature not active');
   });
 
   it('disables speaker switch when cloud provider does not support speaker diarization', () => {

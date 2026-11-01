@@ -325,7 +325,7 @@
     "timeline_mode_tooltip": "字幕モードの切り替え",
     "speaker_diarization": "話者認識",
     "speaker_diarization_hint": "話者を区別して音声タグを付与",
-    "speaker_unconfigured_hint": "モデル未設定のため、通常の文字起こしに自動フォールバックします",
+    "speaker_unconfigured_hint": "モデル未設定のため、機能は無効です",
     "cloud_speaker_unsupported": "現在のクラウドモデルは話者認識をサポートしていません",
     "auto_polish": "Auto-Polish",
     "auto_polish_hint": "LLM を使ってテキストを自動で Polish します",

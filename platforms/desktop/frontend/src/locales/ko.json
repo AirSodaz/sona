@@ -325,7 +325,7 @@
     "timeline_mode_tooltip": "자막 모드 전환",
     "speaker_diarization": "화자 분리",
     "speaker_diarization_hint": "화자를 구분하고 음성 태그 부여",
-    "speaker_unconfigured_hint": "모델이 설정되지 않아 일반 전사로 자동 전환됩니다",
+    "speaker_unconfigured_hint": "모델이 설정되지 않아 적용되지 않습니다",
     "cloud_speaker_unsupported": "현재 클라우드 모델은 화자 분리를 지원하지 않습니다",
     "auto_polish": "자동 정리",
     "auto_polish_hint": "LLM으로 텍스트를 자동 정리합니다",

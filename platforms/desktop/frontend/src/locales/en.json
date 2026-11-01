@@ -325,7 +325,7 @@
     "timeline_mode_tooltip": "Toggle Subtitle Mode",
     "speaker_diarization": "Speaker Diarization",
     "speaker_diarization_hint": "Distinguish speakers and identify voices",
-    "speaker_unconfigured_hint": "No speaker models configured; will fall back to normal transcription",
+    "speaker_unconfigured_hint": "No model configured; feature not active",
     "cloud_speaker_unsupported": "Current cloud model does not support speaker diarization",
     "auto_polish": "Auto-Polish",
     "auto_polish_hint": "Automatically polish text with LLM",

@@ -239,7 +239,7 @@ export function ParameterSettingsPopover({
     isSpeakerChecked = isLocalSpeakerEnabled;
     if (isLocalSpeakerEnabled && !hasLocalModels) {
       speakerHint = t('batch.speaker_unconfigured_hint', {
-        defaultValue: 'No speaker model configured; will fall back to normal transcription',
+        defaultValue: 'No model configured; feature not active',
       });
     } else {
       speakerHint = t('batch.speaker_diarization_hint', {
