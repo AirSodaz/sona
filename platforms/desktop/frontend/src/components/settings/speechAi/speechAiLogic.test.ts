@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { AppConfig } from '../../../types/config';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import {
+  buildSpeechRow,
   curatedGroupOrder,
+  matchesLanguageFilter,
   modesAreLinked,
   pathIsInstalled,
   recommendedVariantId,
@@ -80,6 +82,94 @@ describe('speaker helper readiness', () => {
     expect(pathIsInstalled('/models/campplus', models, new Set(['emb']))).toBe(true);
     expect(speakerHelpersReady(withSpeakers, models, new Set(['emb']))).toBe(false);
     expect(speakerHelpersReady(withSpeakers, models, new Set(['emb', 'seg']))).toBe(true);
+  });
+});
+
+describe('matchesLanguageFilter', () => {
+  it('includes multilingual models supporting English under the English filter', () => {
+    const whisperTurbo: ModelInfo = {
+      ...model('whisper-turbo', 'v3', 'sherpa-onnx'),
+      languages: ['en', 'zh', 'ja', 'ko', 'es', 'fr', 'de'],
+    };
+    expect(matchesLanguageFilter(whisperTurbo, 'en')).toBe(true);
+    expect(matchesLanguageFilter(whisperTurbo, 'zh')).toBe(true);
+    expect(matchesLanguageFilter(whisperTurbo, 'any')).toBe(true);
+  });
+
+  it('filters out non-English models under English filter', () => {
+    const zhOnly: ModelInfo = {
+      ...model('zh-only', 'v1', 'sherpa-onnx'),
+      languages: ['zh', 'yue'],
+    };
+    expect(matchesLanguageFilter(zhOnly, 'en')).toBe(false);
+    expect(matchesLanguageFilter(zhOnly, 'zh')).toBe(true);
+  });
+});
+
+describe('buildSpeechRow offline handling', () => {
+  const dummyT = (key: string, opts?: Record<string, unknown>) => {
+    if (opts && 'model' in opts) return `${key}:${opts.model}`;
+    return key;
+  };
+
+  it('returns warn status when offline and online ASR is active', () => {
+    const onlineCfg = config({
+      asr: {
+        selections: {
+          live: {
+            engine: 'online',
+            mode: 'streaming',
+            providerId: 'volcengine',
+            modelId: 'bigmodel',
+            modelPath: '',
+          },
+          caption: {
+            engine: 'online',
+            mode: 'streaming',
+            providerId: 'volcengine',
+            modelId: 'bigmodel',
+            modelPath: '',
+          },
+          voiceTyping: {
+            engine: 'online',
+            mode: 'streaming',
+            providerId: 'volcengine',
+            modelId: 'bigmodel',
+            modelPath: '',
+          },
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            providerId: 'volcengine',
+            modelId: 'bigmodel',
+            modelPath: '',
+          },
+        },
+      },
+    });
+    const row = buildSpeechRow({
+      config: onlineCfg,
+      catalogModels: [],
+      installedIds: new Set(),
+      recommendedId: WHISPER_TURBO_ID,
+      offline: true,
+      t: dummyT,
+    });
+    expect(row.status).toBe('warn');
+    expect(row.statusLabel).toBe('settings.speech_ai.unavailable_offline');
+  });
+
+  it('stays ok when offline and local model is active', () => {
+    const row = buildSpeechRow({
+      config: config(),
+      catalogModels: [model('a', 'v1', 'sherpa-onnx')],
+      installedIds: new Set(['a']),
+      recommendedId: WHISPER_TURBO_ID,
+      offline: true,
+      t: dummyT,
+    });
+    expect(row.status).toBe('ok');
+    expect(row.statusLabel).toBe('settings.speech_ai.ready');
   });
 });
 

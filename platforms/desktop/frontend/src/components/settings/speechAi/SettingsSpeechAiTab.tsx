@@ -194,7 +194,8 @@ export function SettingsSpeechAiTab({
 
   const polish = getFeatureModelEntry(llmConfig, 'polish');
   const translation = getFeatureModelEntry(llmConfig, 'translation');
-  const probeRecord = readLlmProbe();
+  const currentLlm = useMemo(() => getCurrentLlmSettings(config), [config]);
+  const probeRecord = readLlmProbe(polish?.provider);
   const probeMatches =
     Boolean(polish) &&
     probeRecord?.ok &&
@@ -263,7 +264,7 @@ export function SettingsSpeechAiTab({
 
   const writing = useMemo(() => {
     void probeRevision;
-    const record = readLlmProbe();
+    const record = readLlmProbe(polish?.provider);
     if (
       !polish ||
       polish.provider === 'google_translate' ||
@@ -277,8 +278,10 @@ export function SettingsSpeechAiTab({
         value: '',
       };
     }
-    const definition = getProviderDefinition(polish.provider);
-    const name = t(definition.labelKey);
+    const definition = getProviderDefinition(polish.provider, currentLlm.customProviders);
+    const name =
+      currentLlm.customProviders?.[polish.provider as `custom-${string}`]?.name ||
+      t(definition.labelKey);
     const matched =
       record?.provider === polish.provider && record.model === polish.model ? record : null;
     if (matched?.ok) {
@@ -316,7 +319,7 @@ export function SettingsSpeechAiTab({
       action: 'connect' as const,
       value: '',
     };
-  }, [polish, probeRevision, t]);
+  }, [currentLlm, polish, probeRevision, t]);
 
   const translationUsesAi =
     translation &&
@@ -332,9 +335,19 @@ export function SettingsSpeechAiTab({
       };
     }
     if (translationUsesAi) {
-      const definition = getProviderDefinition(translation.provider);
-      const name = t(definition.labelKey);
-      if (probeMatches) {
+      const definition = getProviderDefinition(translation.provider, currentLlm.customProviders);
+      const name =
+        currentLlm.customProviders?.[translation.provider as `custom-${string}`]?.name ||
+        t(definition.labelKey);
+      const translationRecord = readLlmProbe(translation.provider);
+      const isMatched =
+        (translationRecord?.provider === translation.provider &&
+          translationRecord.model === translation.model &&
+          translationRecord.ok) ||
+        (probeMatches &&
+          translation.provider === polish?.provider &&
+          translation.model === polish?.model);
+      if (isMatched) {
         return {
           status: 'ok' as const,
           label: t('settings.speech_ai.ready'),
@@ -407,12 +420,16 @@ export function SettingsSpeechAiTab({
       asr: config.asr,
     };
     void handleDownload(model).then(() => {
+      const isInstalled =
+        useModelDownloadStore.getState().downloads[model.id]?.status === 'completed' ||
+        Boolean(useConfigStore.getState().config.streamingModelPath?.includes(model.id)) ||
+        Boolean(useConfigStore.getState().config.batchModelPath?.includes(model.id));
+      if (!isInstalled) return;
       const current = useConfigStore.getState().config;
       if (scope === 'both') {
         updateConfig({ speechModesLinked: true });
         return;
       }
-      if (!current.asr || !snapshot.asr) return;
       if (scope === 'live') {
         updateConfig({
           batchModelPath: snapshot.batchModelPath,
@@ -609,6 +626,12 @@ export function SettingsSpeechAiTab({
             installedModels={installedModels}
             downloads={downloads}
             actionsDisabled={catalogLoadState !== 'ready'}
+            selectedModelId={
+              frame.scope === 'batch'
+                ? (config.asr?.selections.batch?.modelId ?? undefined)
+                : (config.asr?.selections.live?.modelId ?? undefined)
+            }
+            onSelect={(model) => applyModel(model, frame.scope)}
             onDownload={downloadForPicker}
             onDelete={handleDelete}
             onCancelDownload={handleCancelDownload}

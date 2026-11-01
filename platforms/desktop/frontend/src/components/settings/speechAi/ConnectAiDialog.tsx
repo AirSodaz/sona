@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { buildLlmConfig, getProviderDefinition } from '../../../services/llm/providers';
 import {
@@ -43,6 +43,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
   const [provider, setProvider] = useState<LlmProvider | 'custom' | null>('open_ai');
   const [step, setStep] = useState<'choose' | 'details'>('choose');
   const [apiKey, setApiKey] = useState('');
+  const [apiHost, setApiHost] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
   const [localModels, setLocalModels] = useState<string[]>([]);
   const [localNote, setLocalNote] = useState('');
@@ -50,6 +51,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
   const [editingUse, setEditingUse] = useState(false);
   const [probe, setProbe] = useState<'idle' | 'busy' | 'ok' | 'err'>('idle');
   const [probeMessage, setProbeMessage] = useState('');
+  const runProbeRef = useRef<(overrideModel?: string) => Promise<void>>(() => Promise.resolve());
 
   const definition = provider && provider !== 'custom' ? getProviderDefinition(provider) : null;
   const local = provider === 'ollama' || provider === 'lm_studio';
@@ -58,6 +60,17 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
     if (!provider || provider === 'custom') return model ? [model] : [];
     return PRESETS[provider] ?? [getModelPlaceholder(provider)];
   }, [local, localModels, model, provider]);
+
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
 
   useEffect(() => {
     if (step !== 'details' || !local || !definition) return;
@@ -73,7 +86,10 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         if (cancelled) return;
         const names = models.map((entry) => entry.model).filter(Boolean);
         setLocalModels(names);
-        if (names[0]) setModel(names[0]);
+        if (names[0]) {
+          setModel(names[0]);
+          void runProbeRef.current(names[0]);
+        }
         if (names.length === 0) {
           setLocalNote(
             provider === 'ollama'
@@ -96,25 +112,42 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
     };
   }, [definition, local, provider, step, t]);
 
-  const runProbe = async () => {
-    if (!provider || provider === 'custom' || !model.trim()) return;
+  const runProbe = async (overrideModel?: string) => {
+    const probeModel = (overrideModel ?? model).trim();
+    if (!provider || !probeModel) return;
+    if (provider === 'custom' && !apiHost.trim()) return;
     if (definition?.requiresApiKey && !apiKey.trim()) return;
     setProbe('busy');
     setProbeMessage('');
     const started = performance.now();
     try {
       const current = getCurrentLlmSettings(config);
-      const setting = {
-        ...(current.providers[provider] ?? {
-          apiHost: definition?.defaultApiHost ?? '',
-          apiKey: '',
-        }),
-        apiKey: apiKey.trim(),
-        apiHost: definition?.defaultApiHost || current.providers[provider]?.apiHost || '',
-      };
-      const providerConfig = buildLlmConfig(provider, setting, current.customProviders);
+      const providerConfig =
+        provider === 'custom'
+          ? {
+              provider: 'open_ai' as LlmProvider,
+              apiKey: apiKey.trim(),
+              baseUrl: apiHost.trim(),
+              strategy: 'openai_compatible' as const,
+              model: probeModel,
+            }
+          : {
+              ...buildLlmConfig(
+                provider,
+                {
+                  ...(current.providers[provider] ?? {
+                    apiHost: definition?.defaultApiHost ?? '',
+                    apiKey: '',
+                  }),
+                  apiKey: apiKey.trim(),
+                  apiHost: current.providers[provider]?.apiHost || definition?.defaultApiHost || '',
+                },
+                current.customProviders
+              ),
+              model: probeModel,
+            };
       await generateLlmText({
-        config: { ...providerConfig, model: model.trim() },
+        config: providerConfig,
         input: 'Hi',
         source: 'connection_test',
       });
@@ -122,13 +155,13 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
       setProbe('ok');
       setProbeMessage(
         t('settings.speech_ai.probe_ok', {
-          model: model.trim(),
+          model: probeModel,
           seconds: (latencyMs / 1000).toFixed(1),
         })
       );
       writeLlmProbe({
-        provider,
-        model: model.trim(),
+        provider: provider === 'custom' ? 'open_ai' : provider,
+        model: probeModel,
         ok: true,
         at: Date.now(),
         latencyMs,
@@ -138,14 +171,15 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
       const message = error instanceof Error ? error.message : String(error);
       setProbeMessage(message);
       writeLlmProbe({
-        provider,
-        model: model.trim(),
+        provider: provider === 'custom' ? 'open_ai' : provider,
+        model: probeModel,
         ok: false,
         at: Date.now(),
         error: message,
       });
     }
   };
+  runProbeRef.current = runProbe;
 
   const save = () => {
     if (!provider || probe !== 'ok') return;
@@ -160,12 +194,18 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
       savedProvider = next.activeProvider?.startsWith('custom-')
         ? next.activeProvider
         : savedProvider;
+      next = updateProviderSetting(next, savedProvider, {
+        apiKey: apiKey.trim(),
+        apiHost: apiHost.trim(),
+      });
+    } else {
+      const def = getProviderDefinition(savedProvider, next.customProviders);
+      const existingHost = next.providers[savedProvider]?.apiHost;
+      next = updateProviderSetting(next, savedProvider, {
+        apiKey: apiKey.trim(),
+        apiHost: existingHost || def.defaultApiHost || '',
+      });
     }
-    const def = getProviderDefinition(savedProvider, next.customProviders);
-    next = updateProviderSetting(next, savedProvider, {
-      apiKey: apiKey.trim(),
-      apiHost: def.defaultApiHost || next.providers[savedProvider]?.apiHost || '',
-    });
     next = setActiveProvider(next, savedProvider);
     next = addLlmModel(next, { provider: savedProvider, model: model.trim() });
     const modelId = [...next.modelOrder]
@@ -236,7 +276,10 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
                     setProvider(item.id);
                     const preset = PRESETS[item.id]?.[0] ?? getModelPlaceholder(item.id);
                     setModel(preset);
+                    setApiKey('');
+                    setApiHost('');
                     setProbe('idle');
+                    setProbeMessage('');
                   }}
                 >
                   <ProviderLogo provider={item.id} size={28} />
@@ -258,6 +301,10 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               onClick={() => {
                 setProvider('custom');
                 setModel('gpt-4o-mini');
+                setApiKey('');
+                setApiHost('');
+                setProbe('idle');
+                setProbeMessage('');
                 setStep('details');
               }}
             >
@@ -266,7 +313,23 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
           </>
         ) : (
           <>
-            {definition?.requiresApiKey ? (
+            {provider === 'custom' ? (
+              <label className="speech-ai-field">
+                {t('settings.llm.base_url')}
+                <input
+                  type="text"
+                  placeholder="https://api.example.com/v1"
+                  value={apiHost}
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setApiHost(event.target.value);
+                    setProbe('idle');
+                  }}
+                  onBlur={() => void runProbe()}
+                />
+              </label>
+            ) : null}
+            {definition?.requiresApiKey || provider === 'custom' ? (
               <label className="speech-ai-field">
                 {t('settings.speech_ai.api_key')}
                 <input
@@ -283,7 +346,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
             ) : null}
             <label className="speech-ai-field">
               {t('settings.speech_ai.model')}
-              {modelChoices.length > 0 ? (
+              {modelChoices.length > 0 && provider !== 'custom' ? (
                 <select
                   value={model}
                   onChange={(event) => {
@@ -302,7 +365,11 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
               ) : (
                 <input
                   value={model}
-                  onChange={(event) => setModel(event.target.value)}
+                  placeholder="gpt-4o-mini"
+                  onChange={(event) => {
+                    setModel(event.target.value);
+                    setProbe('idle');
+                  }}
                   onBlur={() => void runProbe()}
                 />
               )}

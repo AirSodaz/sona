@@ -28,6 +28,8 @@ export function SpeechModelPicker({
   onDelete,
   onCancelDownload,
   onDiscardDownload,
+  onSelect,
+  selectedModelId,
 }: {
   groups: PickerGroup[];
   scope: SpeechScope;
@@ -39,6 +41,8 @@ export function SpeechModelPicker({
   onDelete: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
   onDiscardDownload?: (model: ModelInfo) => void;
+  onSelect?: (model: ModelInfo) => void;
+  selectedModelId?: string;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const [filter, setFilter] = useState<LanguageFilter>('any');
@@ -52,7 +56,6 @@ export function SpeechModelPicker({
         isRecommended: group.key === recommendedKey && index === 0,
       })),
     }));
-    if (ordered[0]?.key === recommendedKey) return ordered;
     return ordered;
   }, [filter, groups, language, recommendedKey, showAll]);
   const hiddenCount = useMemo(
@@ -79,7 +82,7 @@ export function SpeechModelPicker({
       <div
         className="speech-ai-filters"
         role="tablist"
-        aria-label={t('settings.speech_ai.filter_any')}
+        aria-label={t('settings.speech_ai.filter_group_aria')}
       >
         {FILTERS.map((item) => (
           <button
@@ -104,6 +107,8 @@ export function SpeechModelPicker({
           onDownload={onDownload}
           onCancelDownload={onCancelDownload}
           onDiscardDownload={onDiscardDownload}
+          onSelect={onSelect}
+          selectedModelId={selectedModelId}
           actionsDisabled={actionsDisabled}
         />
       ))}

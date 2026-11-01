@@ -27,6 +27,8 @@ interface ModelCardProps {
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: (modelId: string) => void;
   onDiscardDownload?: (model: ModelInfo) => void;
+  onSelect?: (model: ModelInfo) => void;
+  selectedModelId?: string;
   actionsDisabled?: boolean;
   isAsr?: boolean;
 }
@@ -39,6 +41,8 @@ interface ModelCardActionsProps {
   onDownload: (model: ModelInfo) => void;
   onCancelDownload: () => void;
   onDiscardDownload?: (model: ModelInfo) => void;
+  onSelect?: (model: ModelInfo) => void;
+  isSelected?: boolean;
   disabled?: boolean;
 }
 
@@ -164,9 +168,9 @@ function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolea
       {resolveUniqueModeTags(model.modes).map((tag) => (
         <span key={tag} className="model-tag model-tag-mode">
           {tag === 'Live'
-            ? t('settings.model_mode_live')
+            ? t('settings.model_mode_live', { defaultValue: 'Live' })
             : tag === 'Batch'
-              ? t('settings.model_mode_batch')
+              ? t('settings.model_mode_batch', { defaultValue: 'Files' })
               : tag}
         </span>
       ))}
@@ -228,22 +232,47 @@ function ModelCardActions({
   onDownload,
   onCancelDownload,
   onDiscardDownload,
+  onSelect,
+  isSelected = false,
   disabled = false,
 }: ModelCardActionsProps): React.JSX.Element {
   const { t } = useTranslation();
 
   if (isInstalled) {
     return (
-      <button
-        type="button"
-        className="model-action-icon model-action-delete"
-        onClick={() => onDelete(model)}
-        disabled={disabled}
-        aria-label={`${t('common.delete')} ${model.name}`}
-        data-tooltip={t('common.delete')}
+      <div
+        className="model-actions-installed"
+        style={{ display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        <TrashIcon />
-      </button>
+        {onSelect &&
+          (isSelected ? (
+            <span
+              className="model-status-chip model-status-installed"
+              style={{ padding: '2px 8px', fontSize: '11px' }}
+            >
+              {t('settings.speech_ai.in_use', { defaultValue: 'In use' })}
+            </span>
+          ) : (
+            <button
+              type="button"
+              className="btn btn-sm btn-primary speech-ai-select-btn"
+              onClick={() => onSelect(model)}
+              disabled={disabled}
+            >
+              {t('settings.speech_ai.select', { defaultValue: 'Select' })}
+            </button>
+          ))}
+        <button
+          type="button"
+          className="model-action-icon model-action-delete"
+          onClick={() => onDelete(model)}
+          disabled={disabled}
+          aria-label={`${t('common.delete')} ${model.name}`}
+          data-tooltip={t('common.delete')}
+        >
+          <TrashIcon />
+        </button>
+      </div>
     );
   }
 
@@ -327,6 +356,8 @@ export function ModelCard({
   onDownload,
   onCancelDownload,
   onDiscardDownload,
+  onSelect,
+  selectedModelId,
   actionsDisabled = false,
   isAsr: isAsrProp,
 }: ModelCardProps): React.JSX.Element | null {
@@ -427,6 +458,8 @@ export function ModelCard({
                 onDownload={onDownload}
                 onCancelDownload={() => onCancelDownload(baseModel.id)}
                 onDiscardDownload={onDiscardDownload}
+                onSelect={onSelect}
+                isSelected={selectedModelId === baseModel.id}
                 disabled={actionsDisabled}
               />
             </div>
@@ -471,6 +504,8 @@ export function ModelCard({
                       onDownload={onDownload}
                       onCancelDownload={() => onCancelDownload(model.id)}
                       onDiscardDownload={onDiscardDownload}
+                      onSelect={onSelect}
+                      isSelected={selectedModelId === model.id}
                       disabled={actionsDisabled}
                     />
                   </div>

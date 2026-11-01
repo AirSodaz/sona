@@ -2739,6 +2739,7 @@
       "picker_description": "所有模型都在这台电脑上运行。选中后会同时用于录音和文件。",
       "picker_description_scoped": "所有模型都在这台电脑上运行。这次选择只用于{{mode}}。",
       "picker_applying": "应用于：{{mode}}",
+      "filter_group_aria": "按语言筛选模型",
       "filter_any": "全部语言",
       "filter_chinese": "中文",
       "filter_english": "英文",

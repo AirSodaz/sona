@@ -132,7 +132,7 @@ describe('ModelCard mode tags', () => {
       />
     );
 
-    expect(screen.getByText('settings.model_mode_live')).toBeTruthy();
+    expect(screen.getByText('Live')).toBeTruthy();
     expect(screen.queryByText('Streaming')).toBeNull();
   });
 
@@ -153,8 +153,8 @@ describe('ModelCard mode tags', () => {
       />
     );
 
-    expect(screen.getByText('settings.model_mode_live')).toBeTruthy();
-    expect(screen.getByText('settings.model_mode_batch')).toBeTruthy();
+    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.getByText('Files')).toBeTruthy();
     expect(screen.queryByText('Streaming')).toBeNull();
   });
 
@@ -163,6 +163,44 @@ describe('ModelCard mode tags', () => {
     expect(formatModelModeTag('live')).toBe('Live');
     expect(formatModelModeTag('batch')).toBe('Batch');
     expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
+  });
+
+  it('renders select action when onSelect is provided for installed model', () => {
+    const onSelect = vi.fn();
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set([mockModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onSelect={onSelect}
+      />
+    );
+
+    const selectBtn = screen.getByRole('button', { name: 'Select' });
+    expect(selectBtn).toBeTruthy();
+    fireEvent.click(selectBtn);
+    expect(onSelect).toHaveBeenCalledWith(mockModel);
+  });
+
+  it('renders in-use badge when model is selected', () => {
+    render(
+      <ModelCard
+        models={[mockModel]}
+        installedModels={new Set([mockModel.id])}
+        downloads={{}}
+        onDelete={vi.fn()}
+        onDownload={vi.fn()}
+        onCancelDownload={vi.fn()}
+        onSelect={vi.fn()}
+        selectedModelId={mockModel.id}
+      />
+    );
+
+    expect(screen.getByText('In use')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
   });
 });
 

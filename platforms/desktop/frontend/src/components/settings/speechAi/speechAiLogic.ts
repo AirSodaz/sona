@@ -123,7 +123,7 @@ export function matchesLanguageFilter(model: ModelInfo, filter: LanguageFilter):
   if (filter === 'any') return true;
   const languages = model.languages ?? [];
   if (filter === 'zh') return languages.includes('zh') || languages.includes('yue');
-  if (filter === 'en') return languages.includes('en') && !languages.includes('zh');
+  if (filter === 'en') return languages.includes('en');
   return languages.length >= 8;
 }
 
@@ -441,15 +441,22 @@ export function buildSpeechRow(options: {
     };
   }
 
+  const onlineEngineActive =
+    config.asr?.selections.live?.engine === 'online' ||
+    (!linked && config.asr?.selections.batch?.engine === 'online');
+  const isOfflineWarn = offline && onlineEngineActive;
+
   if (!linked) {
     return {
-      status: 'ok',
-      statusLabel: t('settings.speech_ai.ready'),
+      status: isOfflineWarn ? 'warn' : 'ok',
+      statusLabel: isOfflineWarn
+        ? t('settings.speech_ai.unavailable_offline')
+        : t('settings.speech_ai.ready'),
       detail: t('settings.speech_ai.detail_split'),
       lines: [
         t('settings.speech_ai.sub_recording', {
           model: liveTitle,
-          speakers: liveOn ? ` · ${speakersBit(true)}` : '',
+          speakers: ` · ${speakersBit(liveOn)}`,
         }),
         t('settings.speech_ai.sub_files', {
           model: batchTitle,
@@ -470,8 +477,10 @@ export function buildSpeechRow(options: {
       ]
     : [];
   return {
-    status: offline ? 'ok' : 'ok',
-    statusLabel: t('settings.speech_ai.ready'),
+    status: isOfflineWarn ? 'warn' : 'ok',
+    statusLabel: isOfflineWarn
+      ? t('settings.speech_ai.unavailable_offline')
+      : t('settings.speech_ai.ready'),
     detail: t('settings.speech_ai.detail_mirrored', {
       model: liveTitle,
     }),

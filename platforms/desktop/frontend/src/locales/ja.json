@@ -2739,6 +2739,7 @@
       "picker_description": "すべてのモデルはこのパソコンで動きます。選ぶと録音とファイルの両方に設定されます。",
       "picker_description_scoped": "すべてのモデルはこのパソコンで動きます。この選択は{{mode}}だけに適用されます。",
       "picker_applying": "適用先: {{mode}}",
+      "filter_group_aria": "言語でモデルを絞り込み",
       "filter_any": "すべての言語",
       "filter_chinese": "中国語",
       "filter_english": "英語",

@@ -30,6 +30,7 @@ export const SETTINGS_TAB_META: Record<SettingsTab, SettingsTabMetaItem> = {
   microphone: { labelKey: 'settings.input_device', defaultValue: 'Input Device', Icon: MicIcon },
   models: {
     labelKey: 'settings.model_hub',
+    defaultValue: 'Speech & AI',
     Icon: () => <Box size={18} />,
   },
   subtitle: {

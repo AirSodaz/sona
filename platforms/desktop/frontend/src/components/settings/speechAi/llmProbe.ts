@@ -12,13 +12,20 @@ export interface LlmProbeRecord {
   error?: string;
 }
 
-export function readLlmProbe(): LlmProbeRecord | null {
+export function readLlmProbe(provider?: LlmProvider): LlmProbeRecord | null {
   if (typeof localStorage === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const key = provider ? `${STORAGE_KEY}.${provider}` : STORAGE_KEY;
+    let raw = localStorage.getItem(key);
+    if (!raw && provider) {
+      raw = localStorage.getItem(STORAGE_KEY);
+    }
     if (!raw) return null;
     const parsed = JSON.parse(raw) as LlmProbeRecord;
     if (!parsed || typeof parsed.at !== 'number' || typeof parsed.provider !== 'string') {
+      return null;
+    }
+    if (provider && parsed.provider !== provider) {
       return null;
     }
     return parsed;
@@ -29,7 +36,15 @@ export function readLlmProbe(): LlmProbeRecord | null {
 
 export function writeLlmProbe(record: LlmProbeRecord): void {
   if (typeof localStorage === 'undefined') return;
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+  try {
+    const json = JSON.stringify(record);
+    localStorage.setItem(STORAGE_KEY, json);
+    if (record.provider) {
+      localStorage.setItem(`${STORAGE_KEY}.${record.provider}`, json);
+    }
+  } catch {
+    // Ignore storage quota or security errors
+  }
 }
 
 export function probeIsFresh(record: LlmProbeRecord | null, now = Date.now()): boolean {

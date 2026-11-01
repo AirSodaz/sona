@@ -65,7 +65,8 @@ export function DownloadsPanel(): React.JSX.Element {
     if (value === 'cuda') {
       const status = cudaStatus ?? (await cudaAddonService.getStatus().catch(() => null));
       setCudaStatus(status);
-      if (status && !status.isInstalled) {
+      if (!status?.isInstalled) {
+        if (!status) return;
         const confirmed = await useDialogStore
           .getState()
           .confirm(t('settings.cuda_addon_download_confirm'), {
@@ -131,6 +132,7 @@ export function DownloadsPanel(): React.JSX.Element {
             <Switch
               checked={transcription.enableITN ?? true}
               onChange={(checked) => updateConfig({ enableITN: checked })}
+              aria-label={t('settings.enable_itn')}
             />
           </div>
         </div>
@@ -149,7 +151,7 @@ export function DownloadsPanel(): React.JSX.Element {
               value={transcription.maxConcurrent || 2}
               onChange={(event) => {
                 const value = Number(event.target.value);
-                if (value > 0) updateConfig({ maxConcurrent: value });
+                if (value >= 1 && value <= 4) updateConfig({ maxConcurrent: value });
               }}
             />
           </div>

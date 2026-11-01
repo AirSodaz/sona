@@ -9,6 +9,7 @@ import { SettingDrill } from './CapabilityRow';
 import {
   modesAreLinked,
   resolveModelTitle,
+  type SpeechScope,
   speakerCountLabel,
   speakersEnabled,
 } from './speechAiLogic';
@@ -17,14 +18,14 @@ export function RecognitionPanel({
   onChangeModel,
   onConfigureSpeakers,
 }: {
-  onChangeModel: (scope: 'live' | 'batch') => void;
-  onConfigureSpeakers: (scope: 'live' | 'batch' | 'both') => void;
+  onChangeModel: (scope: SpeechScope) => void;
+  onConfigureSpeakers: (scope: SpeechScope) => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
   const config = useConfigStore((state) => state.config);
   const updateConfig = useSetConfig();
   const transcription = useTranscriptionConfig();
-  const { modelCatalog } = useModelManagerContext();
+  const { modelCatalog, installedModels } = useModelManagerContext();
   const linked = modesAreLinked(config);
   const count = speakerCountLabel(config.speakerExpectedCount, t);
 
@@ -33,11 +34,14 @@ export function RecognitionPanel({
       updateConfig({ speechModesLinked: false });
       return;
     }
-    const liveId = config.asr?.selections.live?.modelId;
-    const livePatch =
-      liveId && config.asr?.selections.live?.engine !== 'online'
-        ? buildModelSelectionPatch(config, 'batch', liveId, modelCatalog)
-        : {};
+    const liveSelection = config.asr?.selections.live;
+    const liveId =
+      liveSelection?.engine === 'online'
+        ? liveSelection.modelId
+          ? `${liveSelection.providerId}::${liveSelection.modelId}`
+          : (liveSelection.providerId ?? '')
+        : liveSelection?.modelId;
+    const livePatch = liveId ? buildModelSelectionPatch(config, 'batch', liveId, modelCatalog) : {};
     updateConfig({
       ...livePatch,
       speechModesLinked: true,
@@ -54,7 +58,11 @@ export function RecognitionPanel({
   const punctuationOptions = [
     { value: '', label: t('settings.speech_ai.automatic') },
     ...modelCatalog.models
-      .filter((model) => model.type === 'punctuation')
+      .filter(
+        (model) =>
+          model.type === 'punctuation' &&
+          (installedModels.has(model.id) || model.id === punctuationValue)
+      )
       .map((model) => ({ value: model.id, label: model.name })),
   ];
 
@@ -105,7 +113,7 @@ export function RecognitionPanel({
               })
             : t('settings.speech_ai.off')
         }
-        onChangeModel={() => onChangeModel('live')}
+        onChangeModel={() => onChangeModel(linked ? 'both' : 'live')}
         onSpeakers={() => onConfigureSpeakers(linked ? 'both' : 'live')}
       />
 

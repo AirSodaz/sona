@@ -79,6 +79,7 @@ describe('Speech & AI locale coverage', () => {
     expect(zh.settings.speech_ai.speakers_note).toContain('「识别」');
     expect(zh.settings.speech_ai.speakers_note).toContain('「录音和文件使用相同设置」');
     expect(zhTW.settings.speech_ai.speakers_note).toContain('「識別」');
+    expect(zhTW.settings.speech_ai.speakers_note).toContain('「錄音和檔案使用相同設定」');
   });
 
   it('does not use native title tooltips in the Speech & AI source', () => {

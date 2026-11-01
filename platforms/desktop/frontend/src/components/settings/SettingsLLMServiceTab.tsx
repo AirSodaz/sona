@@ -281,7 +281,7 @@ export function SettingsLLMServiceTab({
   return (
     <SettingsTabContainer
       id="settings-panel-llm_service"
-      ariaLabelledby="settings-tab-llm_service"
+      ariaLabelledby={embedded ? undefined : 'settings-tab-llm_service'}
       className={embedded ? 'speech-ai-embedded-pane' : ''}
     >
       {embedded ? null : (

@@ -356,12 +356,22 @@ export function Settings({
   const [migratedSubtitleTool, setMigratedSubtitleTool] = useState<ToolId>(() =>
     initialTab === 'voice_typing' ? 'voice_typing' : 'subtitles'
   );
+  const speechRequestRef = useRef(initialTab === 'llm_service' ? 1 : 0);
+  const [speechEntry, setSpeechEntry] = useState<{ view: string; requestId: number } | null>(() =>
+    initialTab === 'llm_service' ? { view: 'ai', requestId: 1 } : null
+  );
   if (prevInitialTab !== initialTab) {
     setPrevInitialTab(initialTab);
     if (initialTab === 'voice_typing') {
       setMigratedSubtitleTool('voice_typing');
     } else if (initialTab === 'subtitle') {
       setMigratedSubtitleTool('subtitles');
+    } else if (initialTab === 'llm_service') {
+      speechRequestRef.current += 1;
+      setSpeechEntry({ view: 'ai', requestId: speechRequestRef.current });
+    } else if (initialTab === 'models') {
+      speechRequestRef.current += 1;
+      setSpeechEntry({ view: 'home', requestId: speechRequestRef.current });
     }
   }
   const [mountedTabs, setMountedTabs] = useState<SettingsTab[]>(['general']);
@@ -373,10 +383,6 @@ export function Settings({
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchSectionRef = useRef<SettingsSearchSectionHandle>(null);
   const navRequestIdRef = useRef(0);
-  const speechRequestRef = useRef(initialTab === 'llm_service' ? 1 : 0);
-  const [speechEntry, setSpeechEntry] = useState<{ view: string; requestId: number } | null>(() =>
-    initialTab === 'llm_service' ? { view: 'ai', requestId: 1 } : null
-  );
   const [pendingSubTab, setPendingSubTab] = useState<SettingsPendingSubTab>(null);
   const isMac =
     typeof navigator !== 'undefined' &&

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useContext, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useModelManagerContext } from '../../../hooks/useModelManager';
 import { useConfigStore, useSetConfig } from '../../../stores/configStore';
@@ -6,6 +6,7 @@ import type { ModelInfo } from '../../../types/modelCatalog';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
 import { SegmentedSubTabs } from '../SettingsLayout';
+import { SettingsNavigationContext } from '../SettingsNavigationContext';
 import { SettingDrill } from './CapabilityRow';
 import {
   helperModel,
@@ -24,6 +25,7 @@ export function SpeakersPanel({
   onChangeHelper: (kind: 'segmentation' | 'embedding') => void;
 }): React.JSX.Element {
   const { t } = useTranslation();
+  const navContext = useContext(SettingsNavigationContext);
   const config = useConfigStore((state) => state.config);
   const updateConfig = useSetConfig();
   const { installedModels, handleDownload, modelCatalog, downloads } = useModelManagerContext();
@@ -71,12 +73,6 @@ export function SpeakersPanel({
       writePaths(segPath, embPath, target);
       return;
     }
-    const previous = {
-      liveSpeakerSegmentationModelPath: config.liveSpeakerSegmentationModelPath ?? '',
-      liveSpeakerEmbeddingModelPath: config.liveSpeakerEmbeddingModelPath ?? '',
-      batchSpeakerSegmentationModelPath: config.batchSpeakerSegmentationModelPath ?? '',
-      batchSpeakerEmbeddingModelPath: config.batchSpeakerEmbeddingModelPath ?? '',
-    };
     setBusy(true);
     try {
       const segPreset = helperModel(RECOMMENDED_SEGMENTATION_ID);
@@ -87,17 +83,11 @@ export function SpeakersPanel({
       if (!installedModels.has(RECOMMENDED_EMBEDDING_ID) && embPreset) {
         await handleDownload(embPreset);
       }
-      if (target === 'live') {
-        updateConfig({
-          batchSpeakerSegmentationModelPath: previous.batchSpeakerSegmentationModelPath,
-          batchSpeakerEmbeddingModelPath: previous.batchSpeakerEmbeddingModelPath,
-        });
-      } else if (target === 'batch') {
-        updateConfig({
-          liveSpeakerSegmentationModelPath: previous.liveSpeakerSegmentationModelPath,
-          liveSpeakerEmbeddingModelPath: previous.liveSpeakerEmbeddingModelPath,
-        });
-      }
+      const seg =
+        modelCatalog.modelPathById[RECOMMENDED_SEGMENTATION_ID] || segModel?.installPath || '';
+      const emb =
+        modelCatalog.modelPathById[RECOMMENDED_EMBEDDING_ID] || embModel?.installPath || '';
+      writePaths(seg, emb, target);
     } finally {
       setBusy(false);
     }
@@ -201,6 +191,17 @@ export function SpeakersPanel({
           ? t('settings.speech_ai.speakers_note')
           : t('settings.speech_ai.speakers_note_split')}
       </p>
+      {navContext ? (
+        <div style={{ marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn btn-text"
+            onClick={() => navContext.navigateToTab('vocabulary')}
+          >
+            {t('settings.speaker_manage_profiles')} →
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

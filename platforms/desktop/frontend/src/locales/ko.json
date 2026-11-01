@@ -2680,7 +2680,7 @@
     "keep_microphone_active": "마이크 항상 활성화",
     "keep_microphone_active_hint": "켜면 음성 입력 지연을 줄이기 위해 마이크를 미리 준비해 둡니다. 꺼 둔 상태에서는 녹음, 받아쓰기, 입력 미리보기를 하지 않을 때 마이크를 해제합니다.",
     "speech_ai": {
-      "title": "음성과 AI",
+      "title": "음성 및 AI",
       "description": "Sona가 받아쓰기, 다듬기, 번역에 쓰는 기능입니다.",
       "speech_title": "음성 인식",
       "writing_title": "AI 글쓰기",
@@ -2739,6 +2739,7 @@
       "picker_description": "모든 모델은 이 컴퓨터에서 실행됩니다. 선택하면 녹음과 파일에 모두 적용됩니다.",
       "picker_description_scoped": "모든 모델은 이 컴퓨터에서 실행됩니다. 이번 선택은 {{mode}}에만 적용됩니다.",
       "picker_applying": "적용 대상: {{mode}}",
+      "filter_group_aria": "언어별 모델 필터링",
       "filter_any": "모든 언어",
       "filter_chinese": "중국어",
       "filter_english": "영어",

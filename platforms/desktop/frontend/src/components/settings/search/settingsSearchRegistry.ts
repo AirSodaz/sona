@@ -925,8 +925,8 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
     tab: 'llm_service',
     targetId: 'settings-llm-models-config',
     tabKey: 'settings.model_hub',
-    titleKey: 'settings.speech_ai.ai_services',
-    hintKey: 'settings.speech_ai.ai_services_hint',
+    titleKey: 'settings.llm.feature_models',
+    hintKey: 'settings.llm.feature_models_runtime_hint',
     keywords: [
       'polish model',
       'translation model',

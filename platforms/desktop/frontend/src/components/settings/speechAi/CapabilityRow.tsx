@@ -75,7 +75,22 @@ function RowCopy({
           </span>
         </span>
         {detail ? <span className="speech-ai-detail">{detail}</span> : null}
-        {lines ? <span className="speech-ai-lines">{lines}</span> : null}
+        {Array.isArray(lines) ? (
+          lines.length > 0 ? (
+            <span className="speech-ai-lines">
+              {lines.map((line, idx) => (
+                <span
+                  key={typeof line === 'string' ? line : `line-${idx}`}
+                  className="speech-ai-line"
+                >
+                  {line}
+                </span>
+              ))}
+            </span>
+          ) : null
+        ) : lines ? (
+          <span className="speech-ai-lines">{lines}</span>
+        ) : null}
         {progress != null ? (
           <span
             className="speech-ai-progress"
