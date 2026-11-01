@@ -48,7 +48,7 @@ type Frame =
   | { name: 'picker'; scope: SpeechScope }
   | { name: 'recognition' }
   | { name: 'speakers'; scope: SpeechScope }
-  | { name: 'ai' }
+  | { name: 'ai'; feature?: 'polish' | 'translation' | 'summary' }
   | { name: 'downloads' };
 
 function frameFromEntry(view: string | undefined): Frame {
@@ -564,7 +564,7 @@ export function SettingsSpeechAiTab({
                 statusLabel={translationRow.label}
                 detail={translationRow.detail}
                 value={translationRow.value}
-                onActivate={() => push({ name: 'ai' })}
+                onActivate={() => push({ name: 'ai', feature: 'translation' })}
               />
             </div>
             <div className="speech-ai-section-label">{t('settings.speech_ai.more_options')}</div>
@@ -624,7 +624,13 @@ export function SettingsSpeechAiTab({
         {frame.name === 'speakers' ? (
           <SpeakersPanel scope={frame.scope} onChangeHelper={() => push({ name: 'downloads' })} />
         ) : null}
-        {frame.name === 'ai' ? <SettingsLLMServiceTab embedded /> : null}
+        {frame.name === 'ai' ? (
+          <SettingsLLMServiceTab
+            key={frame.feature ?? 'polish'}
+            embedded
+            initialFeature={frame.feature ?? 'polish'}
+          />
+        ) : null}
         {frame.name === 'downloads' ? <DownloadsPanel /> : null}
       </div>
       {connectOpen ? <ConnectAiDialog onClose={() => setConnectOpen(false)} /> : null}

@@ -86,12 +86,15 @@ interface SettingsLLMServiceTabProps {
   onOpenProviderDetails?: (provider: LlmProvider) => void;
   /** Hide the page title when this tab is shown inside Speech & AI. */
   embedded?: boolean;
+  /** Feature binding selected when this tab opens. */
+  initialFeature?: LlmFeature;
 }
 
 export function SettingsLLMServiceTab({
   isActive = true,
   onOpenProviderDetails,
   embedded = false,
+  initialFeature = 'polish',
 }: SettingsLLMServiceTabProps): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
@@ -99,7 +102,7 @@ export function SettingsLLMServiceTab({
   const [expandedProvider, setExpandedProvider] = useState<LlmProvider | null>(null);
   const [isAddProviderOpen, setIsAddProviderOpen] = useState(false);
   const [providerToAdd, setProviderToAdd] = useState<LlmProvider | null>(null);
-  const [activeFeature, setActiveFeature] = useState<LlmFeature>('polish');
+  const [activeFeature, setActiveFeature] = useState<LlmFeature>(initialFeature);
   const [editingProvider, setEditingProvider] = useState<LlmProvider | null>(null);
   const [editProviderName, setEditProviderName] = useState('');
   const [editProviderStrategy, setEditProviderStrategy] =

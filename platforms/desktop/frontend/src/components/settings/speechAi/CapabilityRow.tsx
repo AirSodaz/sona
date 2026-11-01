@@ -25,7 +25,10 @@ export function SettingDrill({
     <button
       type="button"
       className="speech-ai-drill"
-      onClick={onClick}
+      onClick={(event) => {
+        event.currentTarget.blur();
+        onClick();
+      }}
       aria-label={`${title}, ${value}`}
     >
       <span className="settings-item-info">
