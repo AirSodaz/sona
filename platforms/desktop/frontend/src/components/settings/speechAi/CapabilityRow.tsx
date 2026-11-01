@@ -76,7 +76,7 @@ export function MoreOptionButton({
       <span className="speech-ai-icon" aria-hidden="true" style={{ width: 28, height: 28 }}>
         {icon}
       </span>
-      <span>
+      <span className="speech-ai-link-copy">
         <span className="speech-ai-link-title">{title}</span>
         <span className="speech-ai-link-hint">{hint}</span>
       </span>

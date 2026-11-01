@@ -5,6 +5,18 @@
   padding-bottom: 24px;
 }
 
+.speech-ai-sticky {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0 -4px;
+  padding: 0 4px 10px;
+  background: var(--color-bg-primary);
+}
+
 .speech-ai-back {
   display: inline-flex;
   align-items: center;
@@ -195,14 +207,26 @@
   background: var(--color-bg-secondary);
 }
 
+.speech-ai-link-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+}
+
 .speech-ai-link-title {
+  display: block;
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.3;
   color: var(--color-text-primary);
 }
 
 .speech-ai-link-hint {
+  display: block;
   font-size: 13px;
+  line-height: 1.35;
   color: var(--color-text-secondary);
 }
 

@@ -24,9 +24,11 @@ import { SpeechModelPicker } from './SpeechModelPicker';
 import './speech-ai.css';
 import {
   buildSpeechRow,
+  familyTitle,
   groupAsrModels,
   modelIdForSelection,
   modesAreLinked,
+  pickSpeechDownload,
   presetModelById,
   recommendedVariantId,
   type SpeechScope,
@@ -83,6 +85,7 @@ export function SettingsSpeechAiTab({
   );
   const [probeRequest, setProbeRequest] = useState(0);
   const [probeRevision, setProbeRevision] = useState(0);
+  const [probing, setProbing] = useState(false);
   const seenEntry = useRef(speechEntry?.requestId);
 
   if (speechEntry && speechEntry.requestId !== seenEntry.current) {
@@ -136,30 +139,47 @@ export function SettingsSpeechAiTab({
   }, [connectOpen, frame.name]);
 
   const recommendedId = recommendedVariantId(i18n.resolvedLanguage || i18n.language);
-  const recommendedDownload = downloadItems[recommendedId];
   const catalogModels = modelCatalog.models.length > 0 ? modelCatalog.models : PRESET_MODELS;
+  const speechDownload = pickSpeechDownload(
+    config,
+    Object.fromEntries(
+      Object.entries(downloadItems).map(([modelId, item]) => [
+        modelId,
+        {
+          modelId: item.modelId || modelId,
+          status: item.status,
+          progress: item.progress,
+          downloadedBytes: item.downloadedBytes,
+          totalBytes: item.totalBytes,
+          speed: item.speed,
+          error: item.error,
+        },
+      ])
+    ),
+    recommendedId
+  );
+  const managerDownload = speechDownload ? undefined : downloads[recommendedId];
+  const activeDownload = speechDownload
+    ? speechDownload
+    : managerDownload
+      ? {
+          modelId: recommendedId,
+          status: 'downloading',
+          progress: managerDownload.progress,
+        }
+      : undefined;
+  const activeDownloadModel =
+    presetModelById(activeDownload?.modelId ?? '') ??
+    catalogModels.find((model) => model.id === activeDownload?.modelId);
   const speech = buildSpeechRow({
     config,
     catalogModels,
     installedIds: installedModels,
     recommendedId,
+    downloadName: activeDownloadModel ? familyTitle(activeDownloadModel, t) : undefined,
     offline,
     t,
-    download: recommendedDownload
-      ? {
-          status: recommendedDownload.status,
-          progress: recommendedDownload.progress,
-          downloadedBytes: recommendedDownload.downloadedBytes,
-          totalBytes: recommendedDownload.totalBytes,
-          speed: recommendedDownload.speed,
-          error: recommendedDownload.error,
-        }
-      : downloads[recommendedId]
-        ? {
-            status: 'downloading',
-            progress: downloads[recommendedId].progress,
-          }
-        : undefined,
+    download: activeDownload,
   });
 
   const polish = getFeatureModelEntry(llmConfig, 'polish');
@@ -193,6 +213,7 @@ export function SettingsSpeechAiTab({
     const definition = getProviderDefinition(polish.provider, current.customProviders);
     if (definition.requiresApiKey && !setting.apiKey) return;
     let cancelled = false;
+    setProbing(true);
     const started = Date.now();
     const providerConfig = buildLlmConfig(polish.provider, setting, current.customProviders);
     generateLlmText({
@@ -221,6 +242,9 @@ export function SettingsSpeechAiTab({
           error: error instanceof Error ? error.message : String(error),
         });
         setProbeRevision((value) => value + 1);
+      })
+      .finally(() => {
+        if (!cancelled) setProbing(false);
       });
     return () => {
       cancelled = true;
@@ -305,16 +329,37 @@ export function SettingsSpeechAiTab({
         }),
       };
     }
-    if (translationUsesAi && probeMatches) {
+    if (translationUsesAi) {
       const definition = getProviderDefinition(translation.provider);
       const name = t(definition.labelKey, { defaultValue: definition.labelDefault });
+      if (probeMatches) {
+        return {
+          status: 'ok' as const,
+          label: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
+          detail: t('settings.speech_ai.translation_using_ai', {
+            provider: name,
+            model: translation.model,
+            defaultValue: `Using AI writing (${name} · ${translation.model})`,
+          }),
+        };
+      }
+      if (probing) {
+        return {
+          status: 'busy' as const,
+          label: t('settings.speech_ai.checking', { defaultValue: 'Checking…' }),
+          detail: t('settings.speech_ai.translation_checking', {
+            provider: name,
+            defaultValue: `Checking ${name} before translation can use it.`,
+          }),
+        };
+      }
       return {
-        status: 'ok' as const,
-        label: t('settings.speech_ai.ready', { defaultValue: 'Ready' }),
-        detail: t('settings.speech_ai.translation_using_ai', {
+        status: 'idle' as const,
+        label: t('settings.speech_ai.not_connected', { defaultValue: 'Not connected' }),
+        detail: t('settings.speech_ai.translation_not_connected', {
           provider: name,
           model: translation.model,
-          defaultValue: `Using AI writing (${name} · ${translation.model})`,
+          defaultValue: `${name} · ${translation.model} is selected for translation, but it is not connected.`,
         }),
       };
     }
@@ -361,15 +406,30 @@ export function SettingsSpeechAiTab({
 
   const groups = useMemo(() => groupAsrModels(catalogModels), [catalogModels]);
   const linked = modesAreLinked(config);
+  const drillTitle =
+    frame.name === 'picker'
+      ? t('settings.speech_ai.picker_title', { defaultValue: 'Choose a speech model' })
+      : frame.name === 'recognition'
+        ? t('settings.speech_ai.recognition', { defaultValue: 'Recognition' })
+        : frame.name === 'speakers'
+          ? t('settings.speech_ai.speakers', { defaultValue: 'Speakers' })
+          : frame.name === 'ai'
+            ? t('settings.speech_ai.ai_services', { defaultValue: 'AI services' })
+            : frame.name === 'downloads'
+              ? t('settings.speech_ai.downloads', { defaultValue: 'Downloads & storage' })
+              : '';
 
   return (
     <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
       <div className="speech-ai" id="settings-model-hub">
         {frame.name !== 'home' ? (
-          <button type="button" className="speech-ai-back" onClick={pop}>
-            <ChevronLeft size={16} />
-            {t('settings.speech_ai.title', { defaultValue: 'Speech & AI' })}
-          </button>
+          <div className="speech-ai-sticky">
+            <button type="button" className="speech-ai-back" onClick={pop}>
+              <ChevronLeft size={16} />
+              {t('settings.speech_ai.title', { defaultValue: 'Speech & AI' })}
+            </button>
+            <h2 className="settings-page-title">{drillTitle}</h2>
+          </div>
         ) : (
           <header>
             <h2 className="settings-page-title" id="settings-speech-ai-title">
@@ -422,7 +482,7 @@ export function SettingsSpeechAiTab({
                   <SpeechActionButton
                     action={speech.action}
                     onDownload={startRecommended}
-                    onCancel={() => handleCancelDownload(recommendedId)}
+                    onCancel={() => handleCancelDownload(activeDownload?.modelId || recommendedId)}
                     onChange={() => push({ name: 'picker', scope: linked ? 'both' : 'live' })}
                     onManage={() => push({ name: 'recognition' })}
                   />
@@ -506,7 +566,7 @@ export function SettingsSpeechAiTab({
                 icon={<Plug size={16} />}
                 title={t('settings.speech_ai.ai_services', { defaultValue: 'AI services' })}
                 hint={t('settings.speech_ai.ai_services_hint', {
-                  defaultValue: 'Saved services, models per task, response style',
+                  defaultValue: 'Saved services and the model for polish, summary, and translation',
                 })}
                 onClick={() => push({ name: 'ai' })}
               />
@@ -515,7 +575,7 @@ export function SettingsSpeechAiTab({
                 icon={<HardDrive size={16} />}
                 title={t('settings.speech_ai.downloads', { defaultValue: 'Downloads & storage' })}
                 hint={t('settings.speech_ai.downloads_hint', {
-                  defaultValue: 'Download source, installed models, disk space',
+                  defaultValue: 'Download source, installed models, and cloud speech',
                 })}
                 onClick={() => push({ name: 'downloads' })}
               />

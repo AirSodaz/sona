@@ -16,7 +16,7 @@ import {
 } from './speechAiLogic';
 
 export function SpeakersPanel({
-  scope,
+  scope: _scope,
   onChangeHelper,
 }: {
   scope: SpeechScope;
@@ -26,11 +26,13 @@ export function SpeakersPanel({
   const config = useConfigStore((state) => state.config);
   const updateConfig = useSetConfig();
   const { installedModels, handleDownload, modelCatalog, downloads } = useModelManagerContext();
-  const linked = modesAreLinked(config) || scope === 'both';
-  const activeScope: 'live' | 'batch' = scope === 'batch' ? 'batch' : 'live';
-  const enabled = linked
-    ? speakersEnabled(config, 'live') || speakersEnabled(config, 'batch')
-    : speakersEnabled(config, activeScope);
+  const linked = modesAreLinked(config);
+  const enabledFor = (target: SpeechScope) =>
+    target === 'batch'
+      ? speakersEnabled(config, 'batch')
+      : target === 'live'
+        ? speakersEnabled(config, 'live')
+        : speakersEnabled(config, 'live') || speakersEnabled(config, 'batch');
   const [busy, setBusy] = useState(false);
   const sensitivity = config.speakerDiarizationSensitivity ?? 'balanced';
   const segDownloading = Boolean(downloads[RECOMMENDED_SEGMENTATION_ID]);
@@ -51,8 +53,7 @@ export function SpeakersPanel({
     updateConfig(patch);
   };
 
-  const enable = async (next: boolean) => {
-    const target: SpeechScope = linked ? 'both' : activeScope;
+  const enable = async (next: boolean, target: SpeechScope) => {
     if (!next) {
       writePaths('', '', target);
       return;
@@ -117,99 +118,68 @@ export function SpeakersPanel({
             'Label who said what. Helper models download automatically the first time you turn this on.',
         })}
       </p>
-      <div className="speech-ai-card">
-        <div className="settings-item-container layout-horizontal" id="settings-speech-speakers">
-          <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.tell_speakers', { defaultValue: 'Tell speakers apart' })}
-            </div>
-            <div className="settings-item-hint">
-              {busy || segDownloading || embDownloading
-                ? t('settings.speech_ai.helpers_downloading', {
-                    defaultValue: 'Downloading two small helpers (~34 MB)…',
-                  })
-                : t('settings.speech_ai.tell_speakers_hint', {
-                    defaultValue: 'Downloads two small helpers the first time (~34 MB).',
-                  })}
-            </div>
-          </div>
-          <div className="settings-item-action">
-            <Switch
-              checked={enabled || busy}
-              disabled={busy}
-              onChange={(checked) => void enable(checked)}
-              aria-label={t('settings.speech_ai.tell_speakers', {
-                defaultValue: 'Tell speakers apart',
-              })}
-            />
-          </div>
-        </div>
-        <div className="settings-item-container layout-horizontal">
-          <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.number_of_speakers', { defaultValue: 'Number of speakers' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.speech_ai.number_hint', {
-                defaultValue: "Leave on Detect if you're not sure.",
-              })}
-            </div>
-          </div>
-          <div className="settings-item-action" style={{ width: 160 }}>
-            <Dropdown
-              aria-label={t('settings.speech_ai.number_of_speakers', {
-                defaultValue: 'Number of speakers',
-              })}
-              value={
-                config.speakerExpectedCount && config.speakerExpectedCount >= 2
-                  ? String(config.speakerExpectedCount)
-                  : 'detect'
-              }
-              disabled={!enabled}
-              onChange={(value) =>
-                updateConfig({ speakerExpectedCount: value === 'detect' ? null : Number(value) })
-              }
-              options={countOptions}
-            />
-          </div>
-        </div>
-        <div className="settings-item-container layout-horizontal">
-          <div className="settings-item-info">
-            <div className="settings-item-title">
-              {t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
-            </div>
-            <div className="settings-item-hint">
-              {t('settings.speech_ai.how_strict_hint', {
-                defaultValue: 'Permissive merges similar voices; Strict keeps them apart.',
-              })}
-            </div>
-          </div>
-          <div className="settings-item-action">
-            <SegmentedSubTabs<'permissive' | 'balanced' | 'strict'>
-              role="radiogroup"
-              size="sm"
-              ariaLabel={t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
-              activeTab={sensitivity}
-              disabled={!enabled}
-              onChange={(value) => updateConfig({ speakerDiarizationSensitivity: value })}
-              items={[
-                {
-                  value: 'permissive',
-                  label: t('settings.speech_ai.permissive', { defaultValue: 'Permissive' }),
-                },
-                {
-                  value: 'balanced',
-                  label: t('settings.speech_ai.balanced', { defaultValue: 'Balanced' }),
-                },
-                {
-                  value: 'strict',
-                  label: t('settings.speech_ai.strict', { defaultValue: 'Strict' }),
-                },
-              ]}
-            />
-          </div>
-        </div>
-      </div>
+      {linked ? (
+        <SpeakerControls
+          target="both"
+          busy={busy || segDownloading || embDownloading}
+          enabled={enabledFor('both')}
+          onToggle={(checked) => void enable(checked, 'both')}
+          countValue={
+            config.speakerExpectedCount && config.speakerExpectedCount >= 2
+              ? String(config.speakerExpectedCount)
+              : 'detect'
+          }
+          countOptions={countOptions}
+          onCount={(value) =>
+            updateConfig({ speakerExpectedCount: value === 'detect' ? null : Number(value) })
+          }
+          sensitivity={sensitivity}
+          onSensitivity={(value) => updateConfig({ speakerDiarizationSensitivity: value })}
+        />
+      ) : (
+        <>
+          <p className="speech-ai-section-label">
+            {t('settings.speech_ai.while_recording', { defaultValue: 'While recording' })}
+          </p>
+          <SpeakerControls
+            target="live"
+            busy={busy || segDownloading || embDownloading}
+            enabled={enabledFor('live')}
+            onToggle={(checked) => void enable(checked, 'live')}
+            countValue={
+              config.speakerExpectedCount && config.speakerExpectedCount >= 2
+                ? String(config.speakerExpectedCount)
+                : 'detect'
+            }
+            countOptions={countOptions}
+            onCount={(value) =>
+              updateConfig({ speakerExpectedCount: value === 'detect' ? null : Number(value) })
+            }
+            sensitivity={sensitivity}
+            onSensitivity={(value) => updateConfig({ speakerDiarizationSensitivity: value })}
+          />
+          <p className="speech-ai-section-label">
+            {t('settings.speech_ai.when_file', { defaultValue: 'When opening a file' })}
+          </p>
+          <SpeakerControls
+            target="batch"
+            busy={busy || segDownloading || embDownloading}
+            enabled={enabledFor('batch')}
+            onToggle={(checked) => void enable(checked, 'batch')}
+            countValue={
+              config.speakerExpectedCount && config.speakerExpectedCount >= 2
+                ? String(config.speakerExpectedCount)
+                : 'detect'
+            }
+            countOptions={countOptions}
+            onCount={(value) =>
+              updateConfig({ speakerExpectedCount: value === 'detect' ? null : Number(value) })
+            }
+            sensitivity={sensitivity}
+            onSensitivity={(value) => updateConfig({ speakerDiarizationSensitivity: value })}
+          />
+        </>
+      )}
 
       <div className="speech-ai-section-label">
         {t('settings.speech_ai.helper_models', { defaultValue: 'Helper models' })}
@@ -235,11 +205,132 @@ export function SpeakersPanel({
         />
       </div>
       <p className="speech-ai-note">
-        {t('settings.speech_ai.speakers_note', {
-          defaultValue:
-            'Recording and files currently share these speaker settings. To set them separately, open Recognition and turn off “Keep recording and files the same.”',
-        })}
+        {linked
+          ? t('settings.speech_ai.speakers_note', {
+              defaultValue:
+                'Recording and files currently share these speaker settings. To set them separately, open Recognition and turn off “Keep recording and files the same.”',
+            })
+          : t('settings.speech_ai.speakers_note_split', {
+              defaultValue:
+                'Recording and files use different speaker switches. Number of speakers and strictness still apply to both.',
+            })}
       </p>
+    </div>
+  );
+}
+
+function SpeakerControls({
+  target,
+  busy,
+  enabled,
+  onToggle,
+  countValue,
+  countOptions,
+  onCount,
+  sensitivity,
+  onSensitivity,
+}: {
+  target: SpeechScope;
+  busy: boolean;
+  enabled: boolean;
+  onToggle: (checked: boolean) => void;
+  countValue: string;
+  countOptions: Array<{ value: string; label: string }>;
+  onCount: (value: string) => void;
+  sensitivity: 'permissive' | 'balanced' | 'strict';
+  onSensitivity: (value: 'permissive' | 'balanced' | 'strict') => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div
+      className="speech-ai-card"
+      id={target === 'batch' ? undefined : 'settings-speech-speakers'}
+    >
+      <div className="settings-item-container layout-horizontal">
+        <div className="settings-item-info">
+          <div className="settings-item-title">
+            {t('settings.speech_ai.tell_speakers', { defaultValue: 'Tell speakers apart' })}
+          </div>
+          <div className="settings-item-hint">
+            {busy
+              ? t('settings.speech_ai.helpers_downloading', {
+                  defaultValue: 'Downloading two small helpers (~34 MB)…',
+                })
+              : t('settings.speech_ai.tell_speakers_hint', {
+                  defaultValue: 'Downloads two small helpers the first time (~34 MB).',
+                })}
+          </div>
+        </div>
+        <div className="settings-item-action">
+          <Switch
+            checked={enabled || busy}
+            disabled={busy}
+            onChange={onToggle}
+            aria-label={t('settings.speech_ai.tell_speakers', {
+              defaultValue: 'Tell speakers apart',
+            })}
+          />
+        </div>
+      </div>
+      <div className="settings-item-container layout-horizontal">
+        <div className="settings-item-info">
+          <div className="settings-item-title">
+            {t('settings.speech_ai.number_of_speakers', { defaultValue: 'Number of speakers' })}
+          </div>
+          <div className="settings-item-hint">
+            {t('settings.speech_ai.number_hint', {
+              defaultValue: "Leave on Detect if you're not sure.",
+            })}
+          </div>
+        </div>
+        <div className="settings-item-action" style={{ width: 160 }}>
+          <Dropdown
+            aria-label={t('settings.speech_ai.number_of_speakers', {
+              defaultValue: 'Number of speakers',
+            })}
+            value={countValue}
+            disabled={!enabled}
+            onChange={onCount}
+            options={countOptions}
+          />
+        </div>
+      </div>
+      <div className="settings-item-container layout-horizontal">
+        <div className="settings-item-info">
+          <div className="settings-item-title">
+            {t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
+          </div>
+          <div className="settings-item-hint">
+            {t('settings.speech_ai.how_strict_hint', {
+              defaultValue: 'Permissive merges similar voices; Strict keeps them apart.',
+            })}
+          </div>
+        </div>
+        <div className="settings-item-action">
+          <SegmentedSubTabs<'permissive' | 'balanced' | 'strict'>
+            role="radiogroup"
+            size="sm"
+            ariaLabel={t('settings.speech_ai.how_strict', { defaultValue: 'How strict' })}
+            activeTab={sensitivity}
+            disabled={!enabled}
+            onChange={onSensitivity}
+            items={[
+              {
+                value: 'permissive',
+                label: t('settings.speech_ai.permissive', { defaultValue: 'Permissive' }),
+              },
+              {
+                value: 'balanced',
+                label: t('settings.speech_ai.balanced', { defaultValue: 'Balanced' }),
+              },
+              {
+                value: 'strict',
+                label: t('settings.speech_ai.strict', { defaultValue: 'Strict' }),
+              },
+            ]}
+          />
+        </div>
+      </div>
     </div>
   );
 }

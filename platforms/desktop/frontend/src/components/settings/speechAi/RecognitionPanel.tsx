@@ -6,8 +6,10 @@ import { useConfigStore, useSetConfig, useTranscriptionConfig } from '../../../s
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
 import {
+  modelIdForSelection,
   modesAreLinked,
   resolveModelTitle,
+  selectionForScope,
   speakerCountLabel,
   speakersEnabled,
 } from './speechAiLogic';
@@ -132,6 +134,7 @@ export function RecognitionPanel({
         hint={t('settings.speech_ai.while_recording_hint', {
           defaultValue: 'Dictate from your microphone',
         })}
+        modelId={modelIdForSelection(selectionForScope(config, 'live')) ?? ''}
         modelLabel={resolveModelTitle(config, 'live', modelCatalog.models, t)}
         options={installedAsr('streaming')}
         disabled={!catalogReady}
@@ -155,6 +158,7 @@ export function RecognitionPanel({
         hint={t('settings.speech_ai.when_file_hint', {
           defaultValue: 'Import audio or video for transcription',
         })}
+        modelId={linked ? '' : (modelIdForSelection(selectionForScope(config, 'batch')) ?? '')}
         modelLabel={
           linked
             ? t('settings.speech_ai.same_as_recording', { defaultValue: 'Same as recording' })
@@ -260,6 +264,7 @@ function ModeCard({
   icon,
   title,
   hint,
+  modelId,
   modelLabel,
   options,
   disabled,
@@ -272,6 +277,7 @@ function ModeCard({
   icon: React.ReactNode;
   title: string;
   hint: string;
+  modelId: string;
   modelLabel: string;
   options: Array<{ id: string; label: string }>;
   disabled: boolean;
@@ -282,7 +288,7 @@ function ModeCard({
   readOnly: boolean;
 }) {
   const { t } = useTranslation();
-  const current = options.find((option) => option.label === modelLabel)?.id ?? '';
+  const current = options.some((option) => option.id === modelId) ? modelId : '';
   return (
     <section className="speech-ai-mode-card">
       <div className="speech-ai-mode-head">

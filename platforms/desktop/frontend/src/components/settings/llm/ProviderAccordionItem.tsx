@@ -12,6 +12,7 @@ import type { LlmProvider, LlmProviderSetting } from '../../../types/transcript'
 import { normalizeError } from '../../../utils/errorUtils';
 import { ProviderLogo } from '../../icons/ProviderLogos';
 import { SettingsAccordion, SettingsItem } from '../SettingsLayout';
+import { probeIsFresh, readLlmProbe } from '../speechAi/llmProbe';
 import {
   getCurrentLlmSettings,
   getModelPlaceholder,
@@ -84,6 +85,18 @@ export function ProviderAccordionItem({
     }
   };
   const status = useMemo(() => {
+    const localEndpoint =
+      provider === 'ollama' || provider === 'lm_studio' || provider === 'llamafile';
+    if (isConfigured && localEndpoint) {
+      const probe = readLlmProbe();
+      if (probe?.ok && probe.provider === provider && probeIsFresh(probe)) {
+        return { type: 'ready', text: t('settings.llm.status_ready') };
+      }
+      return {
+        type: 'off',
+        text: t('settings.speech_ai.not_checked', { defaultValue: 'Not checked' }),
+      };
+    }
     if (isConfigured) {
       return { type: 'ready', text: t('settings.llm.status_ready') };
     }
@@ -94,7 +107,7 @@ export function ProviderAccordionItem({
       };
     }
     return { type: 'off', text: t('settings.llm.status_off', { defaultValue: 'Not configured' }) };
-  }, [isConfigured, def.requiresApiKey, t]);
+  }, [isConfigured, def.requiresApiKey, provider, t]);
 
   const actions =
     onEdit || onDelete ? (

@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { AppConfig } from '../../../types/config';
+import type { ModelInfo } from '../../../types/modelCatalog';
 import {
   curatedGroupOrder,
   friendlyVersion,
   modesAreLinked,
+  pathIsInstalled,
   recommendedVariantId,
   SENSEVOICE_STANDARD_ID,
+  speakerHelpersReady,
+  versionRowLabels,
   WHISPER_TURBO_ID,
 } from './speechAiLogic';
 
@@ -76,4 +80,58 @@ describe('speech model picker naming', () => {
   it('uses the translator stub so copy tests stay local', () => {
     expect(t('settings.speech_ai.ready', { defaultValue: 'Ready' })).toBe('Ready');
   });
+
+  it('keeps size and latency in the primary label when several rows share a tier', () => {
+    const models = [
+      model('a', '0.6B Q8_0', 'llama-cpp'),
+      model('b', '1.7B Q8_0', 'llama-cpp'),
+      model('c', '0.6B Int8', 'sherpa-onnx'),
+      model('d', '300M v2 Fp32', 'sherpa-onnx'),
+      model('e', '160ms Int8', 'sherpa-onnx'),
+    ];
+    const labels = Object.fromEntries(
+      versionRowLabels(models, t).map((row) => [row.id, row.title])
+    );
+    expect(labels.a).toBe('Standard · 0.6B · Q8_0');
+    expect(labels.b).toBe('Standard · 1.7B');
+    expect(labels.c).toBe('Standard · 0.6B · Int8');
+    expect(labels.d).toBe('Full precision · 300M v2');
+    expect(labels.e).toBe('Standard · 160ms');
+    expect(new Set(Object.values(labels)).size).toBe(models.length);
+  });
 });
+
+describe('speaker helper readiness', () => {
+  it('stays ready when speakers are off', () => {
+    expect(speakerHelpersReady(config(), [], new Set())).toBe(true);
+  });
+
+  it('is not ready when speakers are on but the helper file is not installed', () => {
+    const withSpeakers = config({
+      liveSpeakerEmbeddingModelPath: '/models/campplus',
+      batchSpeakerEmbeddingModelPath: '/models/campplus',
+      batchSpeakerSegmentationModelPath: '/models/pyannote',
+    });
+    const models = [
+      { ...model('emb', 'emb', 'sherpa-onnx'), installPath: '/models/campplus' },
+      { ...model('seg', 'seg', 'sherpa-onnx'), installPath: '/models/pyannote' },
+    ];
+    expect(pathIsInstalled('/models/campplus', models, new Set(['emb']))).toBe(true);
+    expect(speakerHelpersReady(withSpeakers, models, new Set(['emb']))).toBe(false);
+    expect(speakerHelpersReady(withSpeakers, models, new Set(['emb', 'seg']))).toBe(true);
+  });
+});
+
+function model(id: string, versionLabel: string, engine: ModelInfo['engine']): ModelInfo {
+  return {
+    id,
+    name: id,
+    description: '',
+    type: 'whisper',
+    languages: ['en'],
+    languageMode: 'auto',
+    size: '1 MB',
+    engine,
+    versionLabel,
+  };
+}

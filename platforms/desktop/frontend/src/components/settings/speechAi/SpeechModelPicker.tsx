@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import { ModelCard } from '../ModelCard';
 import {
-  friendlyVersion,
   type LanguageFilter,
   orderPickerGroups,
   type PickerGroup,
   recommendedGroupId,
   type SpeechScope,
+  versionRowLabels,
 } from './speechAiLogic';
 
 const FILTERS: Array<{ id: LanguageFilter; key: string; fallback: string }> = [
@@ -62,17 +62,17 @@ export function SpeechModelPicker({
 
   return (
     <div className="speech-ai" id="settings-speech-picker">
-      <div>
-        <h2 className="settings-page-title">
-          {t('settings.speech_ai.picker_title', { defaultValue: 'Choose a speech model' })}
-        </h2>
-        <p className="settings-page-description">
-          {t('settings.speech_ai.picker_description', {
-            defaultValue:
-              'All models run on this computer. Selecting one sets it for recording and files.',
-          })}
-        </p>
-      </div>
+      <p className="settings-page-description">
+        {scope === 'both'
+          ? t('settings.speech_ai.picker_description', {
+              defaultValue:
+                'All models run on this computer. Selecting one sets it for recording and files.',
+            })
+          : t('settings.speech_ai.picker_description_scoped', {
+              mode: scopeLabel,
+              defaultValue: `All models run on this computer. This choice applies only to ${scopeLabel}.`,
+            })}
+      </p>
       {scope !== 'both' ? (
         <span className="speech-ai-pill">
           {t('settings.speech_ai.picker_applying', {
@@ -104,6 +104,7 @@ export function SpeechModelPicker({
         const curated = group.curated;
         const isRecommended = group.key === recommendedKey;
         const primaryId = isRecommended ? (curated?.defaultVariantId ?? base.id) : null;
+        const rowLabels = new Map(versionRowLabels(group.models, t).map((row) => [row.id, row]));
         return (
           <ModelCard
             key={group.key}
@@ -126,10 +127,10 @@ export function SpeechModelPicker({
             activeModelId={activeModelId}
             primaryModelId={primaryId}
             versionMeta={(model) => {
-              const meta = friendlyVersion(model);
+              const row = rowLabels.get(model.id);
               return {
-                title: t(meta.titleKey, { defaultValue: meta.titleDefault }),
-                hint: meta.hint,
+                title: row?.title ?? model.versionLabel ?? model.name,
+                hint: row?.hint,
               };
             }}
           />
