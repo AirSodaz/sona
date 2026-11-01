@@ -132,7 +132,7 @@ describe('ModelCard mode tags', () => {
       />
     );
 
-    expect(screen.getByText('Live')).toBeTruthy();
+    expect(screen.getByText('settings.model_mode_live')).toBeTruthy();
     expect(screen.queryByText('Streaming')).toBeNull();
   });
 
@@ -153,8 +153,8 @@ describe('ModelCard mode tags', () => {
       />
     );
 
-    expect(screen.getByText('Live')).toBeTruthy();
-    expect(screen.getByText('Batch')).toBeTruthy();
+    expect(screen.getByText('settings.model_mode_live')).toBeTruthy();
+    expect(screen.getByText('settings.model_mode_batch')).toBeTruthy();
     expect(screen.queryByText('Streaming')).toBeNull();
   });
 

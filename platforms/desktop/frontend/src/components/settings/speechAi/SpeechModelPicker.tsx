@@ -45,7 +45,13 @@ export function SpeechModelPicker({
   const [showAll, setShowAll] = useState(false);
   const recommendedKey = recommendedGroupId(language);
   const visible = useMemo(() => {
-    const ordered = orderPickerGroups(groups, language, filter, showAll);
+    const ordered = orderPickerGroups(groups, language, filter, showAll).map((group) => ({
+      ...group,
+      models: group.models.map((model, index) => ({
+        ...model,
+        isRecommended: group.key === recommendedKey && index === 0,
+      })),
+    }));
     if (ordered[0]?.key === recommendedKey) return ordered;
     return ordered;
   }, [filter, groups, language, recommendedKey, showAll]);

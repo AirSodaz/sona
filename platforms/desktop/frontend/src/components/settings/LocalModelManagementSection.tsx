@@ -44,6 +44,8 @@ export interface LocalModelManagementSectionProps {
   ) => ModelManagerContextType['modelCatalog']['sections'][number]['groups'];
   getSectionStatus: (type: ModelCatalogSectionType) => { type: string; text: string };
   t: (key: string, options?: Record<string, unknown>) => string;
+  /** Page title already names this screen, so skip the repeated section heading. */
+  omitHeading?: boolean;
 }
 
 export function LocalModelManagementSection({
@@ -54,6 +56,7 @@ export function LocalModelManagementSection({
   getSectionGroups,
   getSectionStatus,
   t,
+  omitHeading = false,
 }: LocalModelManagementSectionProps): React.JSX.Element {
   const [engineFilter, setEngineFilter] = useState<'all' | LocalAsrEngine>('all');
   const [statusFilter, setStatusFilter] = useState<
@@ -164,8 +167,13 @@ export function LocalModelManagementSection({
 
   return (
     <SettingsSection
-      title={t('settings.batch_model_management', { defaultValue: 'Local Model Management' })}
-      icon={<RestoreIcon />}
+      className={omitHeading ? 'speech-ai-downloads-section' : ''}
+      title={
+        omitHeading
+          ? undefined
+          : t('settings.batch_model_management', { defaultValue: 'Local Model Management' })
+      }
+      icon={omitHeading ? undefined : <RestoreIcon />}
       actions={<MirrorDownloadPicker />}
     >
       {isCatalogReady && (
@@ -188,7 +196,7 @@ export function LocalModelManagementSection({
             value={statusFilter}
             onChange={(value) => setStatusFilter(value as typeof statusFilter)}
             options={statusFilterOptions}
-            style={{ width: '130px' }}
+            style={{ width: '180px' }}
           />
           <Dropdown
             id="settings-model-label-filter"

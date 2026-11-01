@@ -163,7 +163,11 @@ function ModelTags({ model, showEngine }: { model: ModelInfo; showEngine: boolea
     <div className="model-tags">
       {resolveUniqueModeTags(model.modes).map((tag) => (
         <span key={tag} className="model-tag model-tag-mode">
-          {tag}
+          {tag === 'Live'
+            ? t('settings.model_mode_live')
+            : tag === 'Batch'
+              ? t('settings.model_mode_batch')
+              : tag}
         </span>
       ))}
       {showEngine && (

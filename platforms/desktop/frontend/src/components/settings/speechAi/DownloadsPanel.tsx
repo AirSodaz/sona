@@ -96,8 +96,9 @@ export function DownloadsPanel(): React.JSX.Element {
   };
 
   return (
-    <div className="speech-ai" id="settings-speech-downloads">
+    <div className="speech-ai speech-ai-downloads" id="settings-speech-downloads">
       <LocalModelManagementSection
+        omitHeading
         catalogLoadState={catalogLoadState}
         catalogLoadError={catalogLoadError}
         sectionProps={{

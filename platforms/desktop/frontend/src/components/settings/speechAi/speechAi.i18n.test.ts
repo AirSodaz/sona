@@ -30,6 +30,10 @@ const EXTRA_KEYS = [
   'settings.llm.temperature_reset_tooltip',
   'settings.llm.temperature_reset_aria',
   'settings.model_hub',
+  'settings.model_mode_live',
+  'settings.model_mode_batch',
+  'settings.log_level_info',
+  'settings.language_zh',
 ];
 
 describe('Speech & AI locale coverage', () => {

@@ -6,10 +6,8 @@ import { useConfigStore, useSetConfig, useTranscriptionConfig } from '../../../s
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
 import {
-  modelIdForSelection,
   modesAreLinked,
   resolveModelTitle,
-  selectionForScope,
   speakerCountLabel,
   speakersEnabled,
 } from './speechAiLogic';
@@ -25,25 +23,9 @@ export function RecognitionPanel({
   const config = useConfigStore((state) => state.config);
   const updateConfig = useSetConfig();
   const transcription = useTranscriptionConfig();
-  const { modelCatalog, catalogLoadState } = useModelManagerContext();
+  const { modelCatalog } = useModelManagerContext();
   const linked = modesAreLinked(config);
-  const catalogReady = catalogLoadState === 'ready';
   const count = speakerCountLabel(config.speakerExpectedCount, t);
-
-  const applyInstalled = (scope: 'live' | 'batch', modelId: string) => {
-    const patch = buildModelSelectionPatch(config, scope, modelId, modelCatalog);
-    if (linked && scope === 'live') {
-      const batchPatch = buildModelSelectionPatch(
-        { ...config, ...patch },
-        'batch',
-        modelId,
-        modelCatalog
-      );
-      updateConfig({ ...patch, ...batchPatch, speechModesLinked: true });
-      return;
-    }
-    updateConfig(patch);
-  };
 
   const setLinked = (next: boolean) => {
     if (!next) {
@@ -85,9 +67,6 @@ export function RecognitionPanel({
     updateConfig({ livePunctuationModelPath: path, batchPunctuationModelPath: path });
   };
 
-  const installedAsr = (slot: 'streaming' | 'batch') =>
-    (modelCatalog.selectionOptions[slot] ?? []).filter((option) => option.isInstalled);
-
   return (
     <div className="speech-ai" id="settings-speech-recognition">
       <p className="speech-ai-detail">
@@ -117,10 +96,7 @@ export function RecognitionPanel({
         icon={<Mic size={16} />}
         title={t('settings.speech_ai.while_recording')}
         hint={t('settings.speech_ai.while_recording_hint')}
-        modelId={modelIdForSelection(selectionForScope(config, 'live')) ?? ''}
         modelLabel={resolveModelTitle(config, 'live', modelCatalog.models, t)}
-        options={installedAsr('streaming')}
-        disabled={!catalogReady}
         speakers={
           speakersEnabled(config, 'live')
             ? t('settings.speech_ai.speakers_on', {
@@ -128,38 +104,29 @@ export function RecognitionPanel({
               })
             : t('settings.speech_ai.off')
         }
-        onModel={(modelId) => applyInstalled('live', modelId)}
         onChangeModel={() => onChangeModel('live')}
         onSpeakers={() => onConfigureSpeakers(linked ? 'both' : 'live')}
-        readOnly={false}
       />
 
-      <ModeCard
-        icon={<FileText size={16} />}
-        title={t('settings.speech_ai.when_file')}
-        hint={t('settings.speech_ai.when_file_hint')}
-        modelId={linked ? '' : (modelIdForSelection(selectionForScope(config, 'batch')) ?? '')}
-        modelLabel={
-          linked
-            ? t('settings.speech_ai.same_as_recording')
-            : resolveModelTitle(config, 'batch', modelCatalog.models, t)
-        }
-        options={installedAsr('batch')}
-        disabled={!catalogReady || linked}
-        speakers={
-          linked
-            ? t('settings.speech_ai.same_as_recording')
-            : speakersEnabled(config, 'batch')
+      {linked ? (
+        <p className="speech-ai-note">{t('settings.speech_ai.files_same_line')}</p>
+      ) : (
+        <ModeCard
+          icon={<FileText size={16} />}
+          title={t('settings.speech_ai.when_file')}
+          hint={t('settings.speech_ai.when_file_hint')}
+          modelLabel={resolveModelTitle(config, 'batch', modelCatalog.models, t)}
+          speakers={
+            speakersEnabled(config, 'batch')
               ? t('settings.speech_ai.speakers_on', {
                   number: count,
                 })
               : t('settings.speech_ai.off')
-        }
-        onModel={(modelId) => applyInstalled('batch', modelId)}
-        onChangeModel={() => onChangeModel('batch')}
-        onSpeakers={() => onConfigureSpeakers(linked ? 'both' : 'batch')}
-        readOnly={linked}
-      />
+          }
+          onChangeModel={() => onChangeModel('batch')}
+          onSpeakers={() => onConfigureSpeakers('batch')}
+        />
+      )}
 
       <div className="speech-ai-section-label">{t('settings.speech_ai.shared_helpers')}</div>
       <div className="speech-ai-card">
@@ -221,31 +188,20 @@ function ModeCard({
   icon,
   title,
   hint,
-  modelId,
   modelLabel,
-  options,
-  disabled,
   speakers,
-  onModel,
   onChangeModel,
   onSpeakers,
-  readOnly,
 }: {
   icon: React.ReactNode;
   title: string;
   hint: string;
-  modelId: string;
   modelLabel: string;
-  options: Array<{ id: string; label: string }>;
-  disabled: boolean;
   speakers: string;
-  onModel: (modelId: string) => void;
   onChangeModel: () => void;
   onSpeakers: () => void;
-  readOnly: boolean;
 }) {
   const { t } = useTranslation();
-  const current = options.some((option) => option.id === modelId) ? modelId : '';
   return (
     <section className="speech-ai-mode-card">
       <div className="speech-ai-mode-head">
@@ -259,32 +215,13 @@ function ModeCard({
         <div className="settings-item-info">
           <div className="settings-item-title">{t('settings.speech_ai.speech_model')}</div>
           <div className="settings-item-hint">
-            {readOnly ? modelLabel : t('settings.speech_ai.used_for_activity')}
+            {modelLabel || t('settings.speech_ai.not_set_up')}
           </div>
         </div>
-        <div
-          className="settings-item-action"
-          style={{ display: 'flex', gap: 8, alignItems: 'center' }}
-        >
-          {readOnly ? (
-            <span className="speech-ai-detail">{modelLabel}</span>
-          ) : (
-            <>
-              <div style={{ width: 190 }}>
-                <Dropdown
-                  aria-label={t('settings.speech_ai.speech_model')}
-                  value={current}
-                  disabled={disabled || options.length === 0}
-                  placeholder={modelLabel || t('settings.speech_ai.not_set_up')}
-                  onChange={onModel}
-                  options={options.map((option) => ({ value: option.id, label: option.label }))}
-                />
-              </div>
-              <button type="button" className="btn btn-text" onClick={onChangeModel}>
-                {t('settings.speech_ai.change')}
-              </button>
-            </>
-          )}
+        <div className="settings-item-action">
+          <button type="button" className="btn btn-text" onClick={onChangeModel}>
+            {t('settings.speech_ai.change')}
+          </button>
         </div>
       </div>
       <div className="settings-item-container layout-horizontal">
@@ -293,9 +230,9 @@ function ModeCard({
           <div className="settings-item-hint">{speakers}</div>
         </div>
         <div className="settings-item-action">
-          <button type="button" className="btn btn-text" onClick={onSpeakers} disabled={readOnly}>
-            {readOnly ? speakers : t('settings.speech_ai.configure')}
-            {!readOnly ? ' ›' : ''}
+          <button type="button" className="btn btn-text" onClick={onSpeakers}>
+            {t('settings.speech_ai.configure')}
+            {' ›'}
           </button>
         </div>
       </div>

@@ -8,13 +8,15 @@
 .speech-ai-sticky {
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 5;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  margin: 0 -4px;
-  padding: 0 4px 10px;
+  /* Cover the flex gap and the pane edges so scrolled rows cannot show through. */
+  margin: 0 calc(-1 * var(--spacing-xl)) -18px;
+  padding: 2px var(--spacing-xl) 16px;
   background: var(--color-bg-primary);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .speech-ai-back {
@@ -291,6 +293,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
+  overflow: hidden;
 }
 
 .speech-ai-mode-head {
@@ -420,6 +423,119 @@
   font: inherit;
   font-weight: 400;
   padding: 0 10px;
+}
+
+.speech-ai .btn-secondary {
+  background: transparent;
+  box-shadow: none;
+}
+
+.speech-ai .btn-secondary:hover:not(:disabled) {
+  background: var(--color-bg-hover);
+}
+
+:root[data-theme="dark"] .speech-ai .btn-primary {
+  background: var(--color-text-primary);
+  color: var(--color-bg-primary);
+  border-color: transparent;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+:root[data-theme="dark"] .speech-ai .btn-primary:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-text-primary) 86%, white);
+  color: var(--color-bg-primary);
+}
+
+:root[data-theme="dark"] #settings-panel-models > .settings-page-header .settings-page-description,
+:root[data-theme="dark"] .speech-ai .speech-ai-detail,
+:root[data-theme="dark"] .speech-ai .speech-ai-lines,
+:root[data-theme="dark"] .speech-ai .speech-ai-link-hint,
+:root[data-theme="dark"] .speech-ai .speech-ai-note,
+:root[data-theme="dark"] .speech-ai .speech-ai-section-label,
+:root[data-theme="dark"] .speech-ai .settings-item-hint,
+:root[data-theme="dark"] .speech-ai .settings-page-description,
+:root[data-theme="dark"] .speech-ai .speech-ai-status.is-idle {
+  color: var(--color-text-primary);
+}
+
+.speech-ai .model-card {
+  position: relative;
+  overflow: visible;
+}
+
+.speech-ai .model-card:hover,
+.speech-ai .model-card:focus-within {
+  z-index: 6;
+}
+
+/* Keep icon and language tooltips in-row so they do not cover the card above. */
+.speech-ai .model-card-side [data-tooltip]::after,
+.speech-ai .model-version-row [data-tooltip]::after {
+  top: 50%;
+  bottom: auto;
+  left: auto;
+  right: calc(100% + 6px);
+  z-index: 8;
+  transform: translateY(-50%);
+}
+
+.speech-ai .model-card-side [data-tooltip]:hover::after,
+.speech-ai .model-card-side [data-tooltip]:focus-visible::after,
+.speech-ai .model-version-row [data-tooltip]:hover::after,
+.speech-ai .model-version-row [data-tooltip]:focus-visible::after {
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.speech-ai .language-badges[data-tooltip]::after {
+  top: calc(100% + 6px);
+  bottom: auto;
+  left: 0;
+  z-index: 8;
+  transform: none;
+}
+
+.speech-ai .language-badges[data-tooltip]:hover::after,
+.speech-ai .language-badges[data-tooltip]:focus-visible::after {
+  transform: none;
+}
+
+.speech-ai-embedded-pane {
+  padding: 0;
+  gap: 18px;
+  max-width: none;
+  animation: none;
+}
+
+.speech-ai-embedded-pane .settings-section-title-wrapper {
+  font-size: 0.95rem;
+}
+
+.speech-ai-downloads .settings-section-content,
+.speech-ai-downloads .accordion-content-panel {
+  background: transparent;
+  border: none;
+  padding: 0;
+  gap: 12px;
+}
+
+.speech-ai-downloads .settings-section-content .model-card,
+.speech-ai-downloads .accordion-content-panel .model-card {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-bg-elevated);
+  padding: var(--spacing-md);
+  box-shadow: none;
+}
+
+.speech-ai-downloads .settings-model-toolbar {
+  padding: 0;
+  background: transparent;
+}
+
+.speech-ai-downloads-section .settings-section-header {
+  justify-content: flex-end;
+  margin-bottom: 0;
 }
 
 @media (prefers-reduced-motion: reduce) {

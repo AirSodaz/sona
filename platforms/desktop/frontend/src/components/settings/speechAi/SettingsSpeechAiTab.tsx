@@ -1,4 +1,14 @@
-import { ChevronLeft, Globe, HardDrive, Mic, PenLine, Plug, Users, WifiOff } from 'lucide-react';
+import {
+  Box,
+  ChevronLeft,
+  Globe,
+  HardDrive,
+  Mic,
+  PenLine,
+  Plug,
+  Users,
+  WifiOff,
+} from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useModelManagerContext } from '../../../hooks/useModelManager';
@@ -12,7 +22,7 @@ import type { ModelInfo } from '../../../types/modelCatalog';
 import { PRESET_MODELS } from '../../../types/modelCatalog';
 import { MODAL_OVERLAY_SELECTOR } from '../../../utils/focusUtils';
 import { getCurrentLlmSettings } from '../llm/helpers';
-import { SettingsTabContainer } from '../SettingsLayout';
+import { SettingsPageHeader, SettingsTabContainer } from '../SettingsLayout';
 import { SettingsLLMServiceTab } from '../SettingsLLMServiceTab';
 import { CapabilityRow, MoreOptionButton } from './CapabilityRow';
 import { ConnectAiDialog } from './ConnectAiDialog';
@@ -439,6 +449,14 @@ export function SettingsSpeechAiTab({
 
   return (
     <SettingsTabContainer id="settings-panel-models" ariaLabelledby="settings-tab-models">
+      {frame.name === 'home' ? (
+        <SettingsPageHeader
+          id="settings-speech-ai-title"
+          icon={<Box size={28} />}
+          title={t('settings.speech_ai.title')}
+          description={t('settings.speech_ai.description')}
+        />
+      ) : null}
       <div className="speech-ai" id="settings-model-hub">
         {frame.name !== 'home' ? (
           <div className="speech-ai-sticky">
@@ -448,14 +466,7 @@ export function SettingsSpeechAiTab({
             </button>
             <h2 className="settings-page-title">{drillTitle}</h2>
           </div>
-        ) : (
-          <header>
-            <h2 className="settings-page-title" id="settings-speech-ai-title">
-              {t('settings.speech_ai.title')}
-            </h2>
-            <p className="settings-page-description">{t('settings.speech_ai.description')}</p>
-          </header>
-        )}
+        ) : null}
 
         {frame.name === 'home' ? (
           <>

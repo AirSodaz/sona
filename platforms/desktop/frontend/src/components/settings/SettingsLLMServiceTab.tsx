@@ -276,7 +276,11 @@ export function SettingsLLMServiceTab({
   };
 
   return (
-    <SettingsTabContainer id="settings-panel-llm_service" ariaLabelledby="settings-tab-llm_service">
+    <SettingsTabContainer
+      id="settings-panel-llm_service"
+      ariaLabelledby="settings-tab-llm_service"
+      className={embedded ? 'speech-ai-embedded-pane' : ''}
+    >
       {embedded ? null : (
         <SettingsPageHeader
           icon={<RobotIcon width={28} height={28} />}
