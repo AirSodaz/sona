@@ -23,6 +23,8 @@
     "not_installed": "설치되지 않음",
     "back": "뒤로",
     "close": "닫기",
+    "go_to_settings": "설정으로 이동",
+    "dismiss": "닫기",
     "confirm": "확인",
     "ok": "확인",
     "open": "열기",
@@ -321,6 +323,10 @@
     "timeline_mode": "자막 모드",
     "timeline_hint": "더 작은 세그먼트로 나눕니다",
     "timeline_mode_tooltip": "자막 모드 전환",
+    "speaker_diarization": "화자 분리",
+    "speaker_diarization_hint": "화자를 구분하고 음성 태그 부여",
+    "speaker_unconfigured_hint": "모델이 설정되지 않아 일반 전사로 자동 전환됩니다",
+    "cloud_speaker_unsupported": "현재 클라우드 모델은 화자 분리를 지원하지 않습니다",
     "auto_polish": "자동 정리",
     "auto_polish_hint": "LLM으로 텍스트를 자동 정리합니다",
     "auto_polish_frequency": "자동 정리 빈도(세그먼트)",
@@ -3044,7 +3050,9 @@
       "failed_title": "{{name}} 다운로드 실패",
       "failed_body": "모델 다운로드를 완료하지 못했습니다.",
       "cancelled_title": "{{name}} 다운로드 취소됨"
-    }
+    },
+    "speaker_degraded_title": "화자 분리 건너뜀",
+    "speaker_degraded_body": "화자 기능이 활성화되었으나 유효한 모델이 설정되지 않았습니다. 전사는 정상적으로 완료되었으며, 화자 태그가 필요한 경우 설정에서 구성해 주세요."
   },
   "emby": {
     "title": "미디어 서버 자막 도우미",
@@ -3052,6 +3060,7 @@
     "connected": "연결됨",
     "connecting": "연결 중...",
     "subtitle": "Emby 및 Jellyfin 미디어 라이브러리에서 누락된 자막을 감지하고 오프라인 음성 인식으로 자동 완성",
+    "speaker_unconfigured_hint": "모델이 설정되지 않아 일반 전사로 자동 전환됩니다",
     "pulling_audio": "오디오 트랙 가져오는 중...",
     "server_settings": "서버 설정",
     "connect_server": "서버 연결",

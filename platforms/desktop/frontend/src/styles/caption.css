@@ -195,6 +195,10 @@
   animation: parameter-settings-popover-in var(--transition-fast) ease-out;
 }
 
+.parameter-settings-warning-text {
+  color: var(--color-warning);
+}
+
 @keyframes parameter-settings-popover-in {
   from {
     opacity: 0;

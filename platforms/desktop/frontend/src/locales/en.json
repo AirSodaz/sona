@@ -23,6 +23,8 @@
     "not_installed": "Not Installed",
     "back": "Back",
     "close": "Close",
+    "go_to_settings": "Go to Settings",
+    "dismiss": "Dismiss",
     "confirm": "Confirm",
     "import": "Import",
     "connected": "Connected",
@@ -321,6 +323,10 @@
     "timeline_mode": "Subtitle Mode",
     "timeline_hint": "Split into smaller units",
     "timeline_mode_tooltip": "Toggle Subtitle Mode",
+    "speaker_diarization": "Speaker Diarization",
+    "speaker_diarization_hint": "Distinguish speakers and identify voices",
+    "speaker_unconfigured_hint": "No speaker models configured; will fall back to normal transcription",
+    "cloud_speaker_unsupported": "Current cloud model does not support speaker diarization",
     "auto_polish": "Auto-Polish",
     "auto_polish_hint": "Automatically polish text with LLM",
     "auto_polish_frequency": "Auto-Polish Frequency (segments)",
@@ -3044,7 +3050,9 @@
       "failed_title": "{{name}} download failed",
       "failed_body": "Failed to complete model download.",
       "cancelled_title": "{{name}} download cancelled"
-    }
+    },
+    "speaker_degraded_title": "Speaker Diarization Skipped",
+    "speaker_degraded_body": "Speaker diarization was requested but required models are not configured. Transcription completed normally. Configure models in Settings to enable speaker labels."
   },
   "emby": {
     "title": "Media Server Subtitle Assistant",
@@ -3052,6 +3060,7 @@
     "connected": "Connected",
     "connecting": "Connecting...",
     "subtitle": "Detect missing subtitles in Emby and Jellyfin media libraries, transcribe audio offline, and auto-complete subtitles",
+    "speaker_unconfigured_hint": "No speaker models configured; will fall back to normal transcription",
     "pulling_audio": "Fetching audio track...",
     "server_settings": "Server Settings",
     "connect_server": "Connect Server",

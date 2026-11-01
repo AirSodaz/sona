@@ -1,6 +1,7 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
+import { isScenarioSpeakerDiarizationEnabled, speakerService } from '../services/speakerService';
 import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
@@ -8,11 +9,14 @@ import { useDialogStore } from '../stores/dialogStore';
 import { useModelDownloadStore } from '../stores/modelDownloadStore';
 import { useOnboardingStore } from '../stores/onboardingStore';
 import { useRecoveryStore } from '../stores/recoveryStore';
+import { useSpeakerNotificationStore } from '../stores/speakerNotificationStore';
 import { useTaskLedgerStore } from '../stores/taskLedgerStore';
 import type { NotificationEntry, NotificationGroup } from '../types/notification';
+import type { SettingsTab } from '../types/settings';
 import { getResumeOnboardingStep, shouldShowOnboardingReminder } from '../utils/onboarding';
 import { adaptModelDownloadsEntries } from './notifications/modelDownloadAdapter';
 import { adaptModelDownloadEntry, adaptOnboardingEntry } from './notifications/onboardingAdapter';
+import { adaptSpeakerDegradedEntry } from './notifications/speakerDiarizationAdapter';
 import { adaptTaskLedgerEntries } from './notifications/taskLedgerAdapter';
 import { adaptUpdateEntry } from './notifications/updateAdapter';
 import { useAppUpdater } from './useAppUpdater';
@@ -21,6 +25,8 @@ import { useTaskLedgerActions } from './useTaskLedgerActions';
 export interface UseNotificationEntriesInput {
   onOpenRecoveryCenter: () => void;
   onOpenAutomationSettings: () => void;
+  onOpenSettingsTab?: (tab: SettingsTab) => void;
+  onOpenModelSettings?: () => void;
   closePanel: () => void;
 }
 
@@ -46,6 +52,8 @@ function getBadgeLabel(count: number): string {
 export function useNotificationEntries({
   onOpenRecoveryCenter,
   onOpenAutomationSettings,
+  onOpenSettingsTab,
+  onOpenModelSettings,
   closePanel,
 }: UseNotificationEntriesInput): UseNotificationEntriesResult {
   const { t } = useTranslation();
@@ -58,6 +66,20 @@ export function useNotificationEntries({
   const config = useConfigStore((state) => state.config);
   const confirm = useDialogStore((state) => state.confirm);
   const modelDownloads = useModelDownloadStore((state) => state.downloads);
+  const hasDegradedNotice = useSpeakerNotificationStore((state) => state.hasDegradedNotice);
+  const degradedCount = useSpeakerNotificationStore((state) => state.degradedCount);
+  const dismissSpeakerNotice = useSpeakerNotificationStore((state) => state.dismissNotice);
+
+  useEffect(() => {
+    if (hasDegradedNotice && config) {
+      if (
+        speakerService.isConfigured(config, 'batch') ||
+        !isScenarioSpeakerDiarizationEnabled(config, 'batch')
+      ) {
+        dismissSpeakerNotice();
+      }
+    }
+  }, [hasDegradedNotice, config, dismissSpeakerNotice]);
 
   const {
     isOpen: isOnboardingOpen,
@@ -156,6 +178,7 @@ export function useNotificationEntries({
       if (typeof useModelDownloadStore.getState === 'function') {
         useModelDownloadStore.getState().clearAllNonActive();
       }
+      dismissSpeakerNotice();
       const activeStatuses: Record<string, true> = {
         pending: true,
         running: true,
@@ -252,6 +275,25 @@ export function useNotificationEntries({
     });
     result.push(...modelDownloadEntries);
 
+    // 6. Speaker diarization degraded notification
+    const speakerDegradedEntry = adaptSpeakerDegradedEntry(
+      hasDegradedNotice,
+      degradedCount,
+      t,
+      () => {
+        closePanel();
+        if (onOpenSettingsTab) {
+          onOpenSettingsTab('models');
+        } else if (onOpenModelSettings) {
+          onOpenModelSettings();
+        }
+      },
+      dismissSpeakerNotice
+    );
+    if (speakerDegradedEntry) {
+      result.push(speakerDegradedEntry);
+    }
+
     // Sort by timestamp descending (newest first)
     result.sort((a, b) => b.timestamp - a.timestamp);
 
@@ -274,6 +316,12 @@ export function useNotificationEntries({
     updateInfo,
     updateProgress,
     updateStatus,
+    closePanel,
+    degradedCount,
+    dismissSpeakerNotice,
+    hasDegradedNotice,
+    onOpenModelSettings,
+    onOpenSettingsTab,
   ]);
 
   // --- Grouped entries ---

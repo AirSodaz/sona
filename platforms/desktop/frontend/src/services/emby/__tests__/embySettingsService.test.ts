@@ -196,6 +196,15 @@ describe('embySettingsService', () => {
       const configTimelineTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesTimelineTrue);
       expect(configTimelineTrue.enableTimeline).toBe(true);
     });
+    it('strictly honors speakerDiarization override', () => {
+      const overridesDiarizationFalse: EmbyToolOverrides = { speakerDiarization: false };
+      const configFalse = buildEmbyEffectiveConfig(mockBaseConfig, overridesDiarizationFalse);
+      expect(configFalse.batchSpeakerDiarizationEnabled).toBe(false);
+
+      const overridesDiarizationTrue: EmbyToolOverrides = { speakerDiarization: true };
+      const configTrue = buildEmbyEffectiveConfig(mockBaseConfig, overridesDiarizationTrue);
+      expect(configTrue.batchSpeakerDiarizationEnabled).toBe(true);
+    });
     it('overrides translationModelId in snapshot', () => {
       const overrides: EmbyToolOverrides = {
         translationModelId: 'deepseek-v3',

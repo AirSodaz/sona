@@ -49,6 +49,7 @@ describe('speakerService', () => {
     expect(
       speakerService.buildProcessingConfig(
         {
+          liveSpeakerDiarizationEnabled: true,
           liveSpeakerSegmentationModelPath: '/models/seg',
           liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
           speakerProfiles: [
@@ -99,9 +100,9 @@ describe('speakerService', () => {
         {
           liveSpeakerSegmentationModelPath: '',
           liveSpeakerEmbeddingModelPath: '',
+          batchSpeakerDiarizationEnabled: true,
           batchSpeakerSegmentationModelPath: '/models/batch-seg',
           batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
-          speakerProfiles: [],
         },
         'batch'
       )
@@ -111,6 +112,87 @@ describe('speakerService', () => {
       speakerProfiles: [],
       sensitivity: 'balanced',
     });
+  });
+  it('returns null when scenario toggle is disabled, even if models are present', () => {
+    expect(
+      speakerService.buildProcessingConfig(
+        {
+          batchSpeakerDiarizationEnabled: false,
+          batchSpeakerSegmentationModelPath: '/models/batch-seg',
+          batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
+          speakerProfiles: [],
+        },
+        'batch'
+      )
+    ).toBeNull();
+
+    // Bypassing check allows config building (e.g. for cloud profile matching)
+    expect(
+      speakerService.buildProcessingConfig(
+        {
+          batchSpeakerDiarizationEnabled: false,
+          batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
+          speakerProfiles: [],
+        },
+        'batch',
+        undefined,
+        { requireSegmentation: false, bypassEnabledCheck: true }
+      )
+    ).not.toBeNull();
+  });
+
+  it('detects degradation only when enabled and models are unconfigured', () => {
+    // Not enabled -> not degraded
+    expect(
+      speakerService.isDiarizationDegraded(
+        {
+          batchSpeakerDiarizationEnabled: false,
+          batchSpeakerSegmentationModelPath: '',
+          batchSpeakerEmbeddingModelPath: '',
+          speakerProfiles: [],
+        },
+        'batch'
+      )
+    ).toBe(false);
+
+    // Enabled but missing models -> degraded!
+    expect(
+      speakerService.isDiarizationDegraded(
+        {
+          batchSpeakerDiarizationEnabled: true,
+          batchSpeakerSegmentationModelPath: '',
+          batchSpeakerEmbeddingModelPath: '',
+          speakerProfiles: [],
+        },
+        'batch'
+      )
+    ).toBe(true);
+
+    // Enabled and missing one of the models -> degraded!
+    expect(
+      speakerService.isDiarizationDegraded(
+        {
+          batchSpeakerDiarizationEnabled: true,
+          batchSpeakerSegmentationModelPath: '/models/seg',
+          batchSpeakerEmbeddingModelPath: '',
+          speakerProfiles: [],
+        },
+        'batch'
+      )
+    ).toBe(true);
+
+    // Enabled with both models -> not degraded
+    expect(
+      speakerService.isDiarizationDegraded(
+        {
+          batchSpeakerDiarizationEnabled: true,
+          batchSpeakerSegmentationModelPath: '/models/seg',
+          batchSpeakerEmbeddingModelPath: '/models/embed',
+          speakerProfiles: [],
+        },
+        'batch'
+      )
+    ).toBe(false);
   });
 
   it('skips file annotation when segmentation model is missing', async () => {

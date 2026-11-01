@@ -336,6 +336,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
   it('sends speakerProcessing for batch transcription when both speaker models are configured', async () => {
     mocks.config = {
       ...mocks.config,
+      batchSpeakerDiarizationEnabled: true,
       batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
       speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],

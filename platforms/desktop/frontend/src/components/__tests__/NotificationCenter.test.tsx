@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type * as RecognizerModule from '../../services/tauri/recognizer';
 import { useAppUpdaterStore } from '../../stores/appUpdaterStore';
 import { useNotificationPanelStore } from '../../stores/notificationPanelStore';
+import { useSpeakerNotificationStore } from '../../stores/speakerNotificationStore';
 import type { TaskLedgerRecord } from '../../types/taskLedger';
 import { shouldShowOnboardingReminder } from '../../utils/onboarding';
 import { NotificationCenter } from '../NotificationCenter';
@@ -256,6 +257,8 @@ describe('NotificationCenter task center', () => {
     vi.mocked(shouldShowOnboardingReminder).mockReturnValue(false);
     retryAutomationTaskFromLedgerMock.mockResolvedValue(undefined);
     resetUpdaterStore();
+    useSpeakerNotificationStore.getState().dismissNotice();
+    configState.config = {};
     useNotificationPanelStore.getState().close();
     runGuardedQuitMock.mockImplementation(async (onExit: () => Promise<void>) => {
       await onExit();
@@ -839,5 +842,55 @@ describe('NotificationCenter task center', () => {
 
     expect(batchQueueState.removeItem).toHaveBeenCalledWith('item-42');
     expect(taskLedgerState.removeTask).toHaveBeenCalledWith('batch-item-42');
+  });
+  it('renders a singleton notification card when speaker diarization is degraded multiple times', () => {
+    const onOpenSettingsTab = vi.fn();
+    configState.config = {
+      batchSpeakerDiarizationEnabled: true,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+      useSpeakerNotificationStore.getState().triggerDegraded();
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+        onOpenSettingsTab={onOpenSettingsTab}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+
+    // Assert only one card exists
+    const titles = screen.getAllByText('Speaker Diarization Skipped');
+    expect(titles).toHaveLength(1);
+
+    // Assert Go to Settings action
+    const settingsBtn = screen.getByRole('button', { name: 'Go to Settings' });
+    fireEvent.click(settingsBtn);
+    expect(onOpenSettingsTab).toHaveBeenCalledWith('models');
+  });
+
+  it('dismisses speaker degradation notice via dismiss button', () => {
+    configState.config = {
+      batchSpeakerDiarizationEnabled: true,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(screen.queryByText('Speaker Diarization Skipped')).not.toBeNull();
+
+    const dismissBtn = screen.getByRole('button', { name: 'Dismiss' });
+    fireEvent.click(dismissBtn);
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
   });
 });

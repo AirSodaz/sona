@@ -551,7 +551,7 @@ export class AsrConfigService {
     return mode === 'streaming' ? config.streamingModelPath || '' : config.batchModelPath || '';
   };
 
-  private normalizeAsrConfig = (config: ModelConfig): AsrConfig => {
+  normalizeAsrConfig = (config: ModelConfig): AsrConfig => {
     const currentSelections = config.asr?.selections;
     return {
       selections: {
@@ -612,7 +612,7 @@ export class AsrConfigService {
     };
   };
 
-  private getSelection = (config: AppConfig, slot: AsrSelectionSlot): AsrModelSelection => {
+  getSelection = (config: AppConfig, slot: AsrSelectionSlot): AsrModelSelection => {
     const mode = SLOT_MODE[slot];
     const selection = this.normalizeAsrConfig(config).selections[slot];
     if (selection.engine === 'online') {
@@ -769,4 +769,6 @@ export const {
   syncLiveOnlineAsrSelectionFields,
   buildModelSelectionPatch,
   isBatchVadForced,
+  getSelection,
+  normalizeAsrConfig,
 } = asrConfigService;

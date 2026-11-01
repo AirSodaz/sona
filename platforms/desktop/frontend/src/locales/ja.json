@@ -23,6 +23,8 @@
     "not_installed": "インストールされていません",
     "back": "戻る",
     "close": "閉じる",
+    "go_to_settings": "設定へ移動",
+    "dismiss": "閉じる",
     "confirm": "確認する",
     "ok": "OK",
     "open": "開く",
@@ -321,6 +323,10 @@
     "timeline_mode": "字幕モード",
     "timeline_hint": "より小さなユニットに分割する",
     "timeline_mode_tooltip": "字幕モードの切り替え",
+    "speaker_diarization": "話者認識",
+    "speaker_diarization_hint": "話者を区別して音声タグを付与",
+    "speaker_unconfigured_hint": "モデル未設定のため、通常の文字起こしに自動フォールバックします",
+    "cloud_speaker_unsupported": "現在のクラウドモデルは話者認識をサポートしていません",
     "auto_polish": "Auto-Polish",
     "auto_polish_hint": "LLM を使ってテキストを自動で Polish します",
     "auto_polish_frequency": "Auto-Polish の頻度（セグメント）",
@@ -3044,7 +3050,9 @@
       "failed_title": "{{name}} のダウンロードに失敗しました",
       "failed_body": "モデルのダウンロードを完了できませんでした。",
       "cancelled_title": "{{name}} のダウンロードをキャンセルしました"
-    }
+    },
+    "speaker_degraded_title": "話者分離をスキップしました",
+    "speaker_degraded_body": "話者機能が有効になっていますが、有効なモデルが設定されていません。文字起こしは正常に完了しました。話者タグが必要な場合は設定から構成してください。"
   },
   "emby": {
     "title": "メディアサーバー字幕アシスタント",
@@ -3052,6 +3060,7 @@
     "connected": "接続済み",
     "connecting": "接続中...",
     "subtitle": "Emby および Jellyfin メディアライブラリの字幕欠落を検出し、音声をオフライン文字起こしして自動補完",
+    "speaker_unconfigured_hint": "モデル未設定のため、通常の文字起こしに自動フォールバックします",
     "pulling_audio": "音声を抽出中...",
     "server_settings": "サーバー設定",
     "connect_server": "サーバーに接続",

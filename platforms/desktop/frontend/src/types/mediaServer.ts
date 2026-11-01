@@ -95,6 +95,7 @@ export interface MediaServerToolOverrides {
   translationModelId?: string | null;
   defaultSubtitleMode?: MediaServerSubtitleMode;
   overwriteExistingExternal?: boolean;
+  speakerDiarization?: boolean;
 }
 
 export const DEFAULT_MEDIA_SERVER_TOOL_OVERRIDES: MediaServerToolOverrides = {

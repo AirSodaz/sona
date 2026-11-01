@@ -120,6 +120,7 @@ export function buildBatchTranscriptionRequest({
       ? isCloudSpeakerEnabled
         ? speakerService.buildProcessingConfig(appConfig, 'batch', projectId, {
             requireSegmentation: false,
+            bypassEnabledCheck: true,
           })
         : null
       : speakerService.buildProcessingConfig(appConfig, 'batch', projectId);

@@ -183,6 +183,29 @@ fn normalize_current_config(existing: Value) -> Value {
     );
     set(&mut config, "ffmpegEnabled", json!(ffmpeg_enabled));
     set(&mut config, "ffmpegPath", json!(ffmpeg_path));
+    let live_speaker_embedding_path =
+        string_or_default(&config, "liveSpeakerEmbeddingModelPath", "");
+    let live_speaker_diarization_enabled = bool_at(&original, "liveSpeakerDiarizationEnabled")
+        .unwrap_or_else(|| !live_speaker_embedding_path.trim().is_empty());
+    let batch_speaker_embedding_path =
+        string_or_default(&config, "batchSpeakerEmbeddingModelPath", "");
+    let batch_speaker_segmentation_path =
+        string_or_default(&config, "batchSpeakerSegmentationModelPath", "");
+    let batch_speaker_diarization_enabled = bool_at(&original, "batchSpeakerDiarizationEnabled")
+        .unwrap_or_else(|| {
+            !batch_speaker_embedding_path.trim().is_empty()
+                && !batch_speaker_segmentation_path.trim().is_empty()
+        });
+    set(
+        &mut config,
+        "liveSpeakerDiarizationEnabled",
+        json!(live_speaker_diarization_enabled),
+    );
+    set(
+        &mut config,
+        "batchSpeakerDiarizationEnabled",
+        json!(batch_speaker_diarization_enabled),
+    );
     let mcp_enabled = bool_at(&config, "mcpEnabled").unwrap_or(true);
     let mcp_permission_mode = string_or_default(&config, "mcpPermissionMode", "full");
     let mcp_allow_recording = bool_at(&config, "mcpAllowRecording").unwrap_or(true);
@@ -306,6 +329,13 @@ fn current_config_needs_persist(existing: &Value, normalized: &Value) -> bool {
         return true;
     }
     if existing.get("ffmpegPath") != normalized.get("ffmpegPath") {
+        return true;
+    }
+    if existing.get("liveSpeakerDiarizationEnabled")
+        != normalized.get("liveSpeakerDiarizationEnabled")
+        || existing.get("batchSpeakerDiarizationEnabled")
+            != normalized.get("batchSpeakerDiarizationEnabled")
+    {
         return true;
     }
     if existing.get("gpuAcceleration").is_some()
@@ -464,6 +494,19 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         &normalized_polish_custom_presets,
         Some("Imported Preset"),
     );
+    let live_speaker_embedding_path =
+        string_or_default(&parsed, "liveSpeakerEmbeddingModelPath", "");
+    let live_speaker_diarization_enabled = bool_at(&parsed, "liveSpeakerDiarizationEnabled")
+        .unwrap_or_else(|| !live_speaker_embedding_path.trim().is_empty());
+    let batch_speaker_embedding_path =
+        string_or_default(&parsed, "batchSpeakerEmbeddingModelPath", "");
+    let batch_speaker_segmentation_path =
+        string_or_default(&parsed, "batchSpeakerSegmentationModelPath", "");
+    let batch_speaker_diarization_enabled = bool_at(&parsed, "batchSpeakerDiarizationEnabled")
+        .unwrap_or_else(|| {
+            !batch_speaker_embedding_path.trim().is_empty()
+                && !batch_speaker_segmentation_path.trim().is_empty()
+        });
 
     for (key, value) in [
         ("configVersion", json!(CURRENT_CONFIG_VERSION)),
@@ -479,6 +522,14 @@ fn upgrade_config(parsed: Value, default_rule_set_name: &str) -> Value {
         ),
         ("liveVadModelPath", json!(live_vad_model_path)),
         ("batchVadModelPath", json!(batch_vad_model_path)),
+        (
+            "liveSpeakerDiarizationEnabled",
+            json!(live_speaker_diarization_enabled),
+        ),
+        (
+            "batchSpeakerDiarizationEnabled",
+            json!(batch_speaker_diarization_enabled),
+        ),
         (
             "enableITN",
             json!(bool_at(&parsed, "enableITN").unwrap_or(true)),
@@ -1056,6 +1107,8 @@ fn sanitize_typed_config_fields(config: &mut Value) {
         "voiceTypingRealtimePreview",
         "captionTextStroke",
         "captionTextShadow",
+        "liveSpeakerDiarizationEnabled",
+        "batchSpeakerDiarizationEnabled",
     ] {
         repair_field_type(config, &defaults, key, Value::is_boolean);
     }

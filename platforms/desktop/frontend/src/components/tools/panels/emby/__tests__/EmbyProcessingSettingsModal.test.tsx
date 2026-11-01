@@ -87,4 +87,34 @@ describe('EmbyProcessingSettingsModal', () => {
       })
     );
   });
+  it('saves speakerDiarization when toggled and falls back to global config default', () => {
+    const onSaved = vi.fn();
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: false,
+        asr: { providers: { online: {} } },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    const { unmount } = render(
+      <EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(speakerSwitch);
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speakerDiarization: true,
+      })
+    );
+    unmount();
+  });
 });

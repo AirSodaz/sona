@@ -10,7 +10,11 @@ import {
   saveEmbyToolOverrides,
 } from '../../../../services/emby/embySettingsService';
 import { modelService } from '../../../../services/modelService';
-import { ONLINE_ASR_PROVIDER_DEFINITIONS } from '../../../../services/onlineAsrProviders';
+import {
+  ONLINE_ASR_PROVIDER_DEFINITIONS,
+  providerSupportsSpeakerDiarization,
+} from '../../../../services/onlineAsrProviders';
+import { speakerService } from '../../../../services/speakerService';
 import { useConfigStore } from '../../../../stores/configStore';
 import type { EmbySubtitleMode } from '../../../../types/batchQueue';
 import type { AppConfig, AsrModelSelection } from '../../../../types/config';
@@ -40,6 +44,7 @@ export function EmbyProcessingSettingsModal({
 
   const [selectedAsrValue, setSelectedAsrValue] = useState<string>('__global__');
   const [selectedEnableTimeline, setSelectedEnableTimeline] = useState<boolean>(true);
+  const [selectedSpeakerDiarization, setSelectedSpeakerDiarization] = useState<boolean>(false);
   const [selectedAsrLanguage, setSelectedAsrLanguage] = useState<string>('auto');
   const [selectedTranslationModelId, setSelectedTranslationModelId] =
     useState<string>('__global__');
@@ -76,6 +81,9 @@ export function EmbyProcessingSettingsModal({
         setSelectedEnableTimeline(
           overrides.enableTimeline ?? DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true
         );
+        setSelectedSpeakerDiarization(
+          overrides.speakerDiarization ?? config.batchSpeakerDiarizationEnabled ?? false
+        );
         setSelectedAsrLanguage(overrides.asrLanguage ?? 'auto');
         setSelectedTranslationModelId(overrides.translationModelId || '__global__');
         setSelectedSubtitleMode(overrides.defaultSubtitleMode ?? 'bilingual');
@@ -94,7 +102,7 @@ export function EmbyProcessingSettingsModal({
         isMounted = false;
       };
     }
-  }, [isOpen]);
+  }, [isOpen, config.batchSpeakerDiarizationEnabled]);
 
   const asrOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [
@@ -159,6 +167,71 @@ export function EmbyProcessingSettingsModal({
     };
     return asrConfigService.resolveActiveLanguageCapability(tempConfig, 'batch');
   }, [isOpen, selectedAsrValue, config, catalog]);
+  const activeBatchSelection = useMemo(() => {
+    if (selectedAsrValue === '__global__') {
+      return asrConfigService.getSelection(
+        { ...config, asr: asrConfigService.normalizeAsrConfig(config) },
+        'batch'
+      );
+    }
+    const isOnline = ONLINE_ASR_PROVIDER_DEFINITIONS.some(
+      (p) => selectedAsrValue === p.id || selectedAsrValue.startsWith(`${p.id}::`)
+    );
+    if (isOnline) {
+      const [providerId, rawModelId] = selectedAsrValue.includes('::')
+        ? selectedAsrValue.split('::')
+        : [selectedAsrValue, undefined];
+      return {
+        engine: 'online' as const,
+        mode: 'batch' as const,
+        providerId: providerId as AsrModelSelection['providerId'],
+        modelId: rawModelId,
+        modelPath: '',
+      };
+    }
+    const modelPath = catalog?.modelPathById?.[selectedAsrValue] || '';
+    return {
+      engine: 'local' as const,
+      mode: 'batch' as const,
+      modelId: selectedAsrValue,
+      modelPath,
+    };
+  }, [selectedAsrValue, config, catalog]);
+
+  const isOnlineAsr = activeBatchSelection?.engine === 'online';
+  const onlineProviderId = activeBatchSelection?.providerId;
+  const isCloudSpeakerSupported = Boolean(
+    onlineProviderId && providerSupportsSpeakerDiarization(onlineProviderId)
+  );
+  const hasLocalModels = speakerService.isConfigured(config, 'batch');
+
+  let isSpeakerDisabled = false;
+  let speakerHint = t('batch.speaker_diarization_hint', {
+    defaultValue: 'Distinguish speakers and identify voices',
+  });
+
+  if (isOnlineAsr) {
+    if (!isCloudSpeakerSupported) {
+      isSpeakerDisabled = true;
+      speakerHint = t('batch.cloud_speaker_unsupported', {
+        defaultValue: 'Current cloud model does not support speaker diarization',
+      });
+    } else {
+      speakerHint = t('batch.speaker_diarization_hint', {
+        defaultValue: 'Distinguish speakers and identify voices',
+      });
+    }
+  } else {
+    if (selectedSpeakerDiarization && !hasLocalModels) {
+      speakerHint = t('batch.speaker_unconfigured_hint', {
+        defaultValue: 'No speaker model configured; will fall back to normal transcription',
+      });
+    } else {
+      speakerHint = t('batch.speaker_diarization_hint', {
+        defaultValue: 'Distinguish speakers and identify voices',
+      });
+    }
+  }
 
   const languageOptions = useMemo<DropdownOption[]>(() => {
     return buildLanguagePickerOptions(capability, appLocale).map((option) => ({
@@ -278,6 +351,7 @@ export function EmbyProcessingSettingsModal({
       asrSelection,
       asrLanguage: selectedAsrLanguage,
       enableTimeline: selectedEnableTimeline,
+      speakerDiarization: selectedSpeakerDiarization,
       translationModelId:
         selectedTranslationModelId === '__global__' ? null : selectedTranslationModelId,
       defaultSubtitleMode: selectedSubtitleMode,
@@ -293,6 +367,7 @@ export function EmbyProcessingSettingsModal({
     setSelectedAsrValue('__global__');
     setSelectedEnableTimeline(DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true);
     setSelectedAsrLanguage(DEFAULT_EMBY_TOOL_OVERRIDES.asrLanguage ?? 'auto');
+    setSelectedSpeakerDiarization(config.batchSpeakerDiarizationEnabled ?? false);
     setSelectedTranslationModelId('__global__');
     setSelectedSubtitleMode(DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode ?? 'bilingual');
     setOverwriteExistingExternal(DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal ?? true);
@@ -383,6 +458,30 @@ export function EmbyProcessingSettingsModal({
               id="emby-settings-timeline"
               checked={selectedEnableTimeline}
               onChange={setSelectedEnableTimeline}
+            />
+          </FormField>
+          {/* Speaker Diarization */}
+          <FormField
+            id="emby-settings-speaker"
+            label={t('batch.speaker_diarization', { defaultValue: 'Speaker Diarization' })}
+            description={
+              <span
+                className={
+                  !isOnlineAsr && selectedSpeakerDiarization && !hasLocalModels
+                    ? 'parameter-settings-warning-text'
+                    : undefined
+                }
+              >
+                {speakerHint}
+              </span>
+            }
+            layout="horizontal"
+          >
+            <Switch
+              id="emby-settings-speaker"
+              checked={isOnlineAsr && !isCloudSpeakerSupported ? false : selectedSpeakerDiarization}
+              onChange={setSelectedSpeakerDiarization}
+              disabled={isSpeakerDisabled}
             />
           </FormField>
 

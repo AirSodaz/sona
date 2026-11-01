@@ -1,8 +1,14 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { asrConfigService } from '../services/asrConfigService';
+import { asrConfigService, syncOnlineAsrProviderConfig } from '../services/asrConfigService';
 import { modelService } from '../services/modelService';
+import {
+  getOnlineAsrProviderDefinition,
+  getOnlineProviderConfig,
+  providerSupportsSpeakerDiarization,
+} from '../services/onlineAsrProviders';
+import { speakerService } from '../services/speakerService';
 import { useConfigStore } from '../stores/configStore';
 import type { AsrSelectionSlot } from '../types/config';
 import type { ModelCatalogSnapshot } from '../types/modelCatalog';
@@ -155,6 +161,92 @@ export function ParameterSettingsPopover({
       setConfig(buildScenarioLanguagePatch(surface, coerced));
     }
   }, [isOpen, disabled, config, slot, surface, language, setConfig]);
+  const activeSelection = useMemo(
+    () =>
+      isOpen
+        ? asrConfigService.getSelection(
+            { ...config, asr: asrConfigService.normalizeAsrConfig(config) },
+            slot
+          )
+        : null,
+    [isOpen, config, slot]
+  );
+  const isOnline = activeSelection?.engine === 'online';
+  const onlineProviderId = activeSelection?.providerId;
+  const isCloudSpeakerSupported = Boolean(
+    onlineProviderId && providerSupportsSpeakerDiarization(onlineProviderId)
+  );
+
+  const isCloudSpeakerEnabled = useMemo(() => {
+    if (!onlineProviderId) return false;
+    const providerConfig = getOnlineProviderConfig(config.asr?.providers, onlineProviderId);
+    const def = getOnlineAsrProviderDefinition(onlineProviderId);
+    return (
+      (providerConfig?.speakerDiarization as boolean | undefined) ??
+      def?.defaultConfig?.speakerDiarization !== false
+    );
+  }, [onlineProviderId, config.asr?.providers]);
+
+  const handleCloudSpeakerToggle = useCallback(
+    (enabled: boolean) => {
+      if (!onlineProviderId || disabled) return;
+      setConfig(
+        syncOnlineAsrProviderConfig(config, onlineProviderId, {
+          speakerDiarization: enabled,
+        })
+      );
+    },
+    [onlineProviderId, disabled, config, setConfig]
+  );
+
+  const isLocalSpeakerEnabled =
+    surface === 'batch'
+      ? Boolean(config.batchSpeakerDiarizationEnabled)
+      : Boolean(config.liveSpeakerDiarizationEnabled);
+  const hasLocalModels = speakerService.isConfigured(config, slot);
+
+  let isSpeakerDisabled = disabled;
+  let isSpeakerChecked = false;
+  let speakerHint = t('batch.speaker_diarization_hint', {
+    defaultValue: 'Distinguish speakers and identify voices',
+  });
+  let onSpeakerToggle: (checked: boolean) => void = (checked: boolean) => {
+    if (disabled) return;
+    setConfig(
+      surface === 'batch'
+        ? { batchSpeakerDiarizationEnabled: checked }
+        : { liveSpeakerDiarizationEnabled: checked }
+    );
+  };
+
+  if (isOnline) {
+    if (!isCloudSpeakerSupported) {
+      isSpeakerDisabled = true;
+      isSpeakerChecked = false;
+      speakerHint = t('batch.cloud_speaker_unsupported', {
+        defaultValue: 'Current cloud model does not support speaker diarization',
+      });
+    } else {
+      isSpeakerDisabled = disabled;
+      isSpeakerChecked = isCloudSpeakerEnabled;
+      speakerHint = t('batch.speaker_diarization_hint', {
+        defaultValue: 'Distinguish speakers and identify voices',
+      });
+      onSpeakerToggle = handleCloudSpeakerToggle;
+    }
+  } else {
+    isSpeakerDisabled = disabled;
+    isSpeakerChecked = isLocalSpeakerEnabled;
+    if (isLocalSpeakerEnabled && !hasLocalModels) {
+      speakerHint = t('batch.speaker_unconfigured_hint', {
+        defaultValue: 'No speaker model configured; will fall back to normal transcription',
+      });
+    } else {
+      speakerHint = t('batch.speaker_diarization_hint', {
+        defaultValue: 'Distinguish speakers and identify voices',
+      });
+    }
+  }
 
   // Click outside and Esc key handling
   useEffect(() => {
@@ -266,6 +358,29 @@ export function ParameterSettingsPopover({
           checked={enableTimeline}
           onChange={(val) => !disabled && setConfig({ enableTimeline: val })}
           disabled={disabled}
+        />
+      </FormField>
+      <FormField
+        id="parameter-settings-speaker"
+        label={t('batch.speaker_diarization', { defaultValue: 'Speaker Diarization' })}
+        description={
+          <span
+            className={
+              !isOnline && isLocalSpeakerEnabled && !hasLocalModels
+                ? 'parameter-settings-warning-text'
+                : undefined
+            }
+          >
+            {speakerHint}
+          </span>
+        }
+        layout="horizontal"
+      >
+        <Switch
+          id="parameter-settings-speaker"
+          checked={isSpeakerChecked}
+          onChange={onSpeakerToggle}
+          disabled={isSpeakerDisabled}
         />
       </FormField>
 
