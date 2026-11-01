@@ -2727,6 +2727,7 @@
       "offline_banner": "You're offline. Downloads and online services will resume when you reconnect. Installed models keep working.",
       "cant_reach": "Can't reach {{name}}",
       "translation_google_detail": "Google Translate (free). Sends text to Google when you translate.",
+      "translation_value_google": "Google Translate",
       "translation_using_ai": "Using AI writing ({{provider}} · {{model}})",
       "translation_offline": "Google Translate needs internet. Switch to AI writing with a local model to translate offline.",
       "translation_not_connected": "{{provider}} · {{model}} is selected for translation, but it is not connected.",

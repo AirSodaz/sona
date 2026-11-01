@@ -36,10 +36,10 @@ import {
   buildSpeechRow,
   familyTitle,
   groupAsrModels,
-  modesAreLinked,
   pickSpeechDownload,
   presetModelById,
   recommendedVariantId,
+  resolveModelTitle,
   type SpeechScope,
 } from './speechAiLogic';
 
@@ -274,6 +274,7 @@ export function SettingsSpeechAiTab({
         label: t('settings.speech_ai.not_connected'),
         detail: t('settings.speech_ai.writing_blurb'),
         action: 'connect' as const,
+        value: '',
       };
     }
     const definition = getProviderDefinition(polish.provider);
@@ -290,6 +291,7 @@ export function SettingsSpeechAiTab({
           when: formatCheckedAgo(matched.at, t),
         }),
         action: 'manage' as const,
+        value: name,
       };
     }
     if (
@@ -304,6 +306,7 @@ export function SettingsSpeechAiTab({
         }),
         detail: matched.error || t('settings.speech_ai.local_empty_ollama'),
         action: 'retry' as const,
+        value: '',
       };
     }
     return {
@@ -311,6 +314,7 @@ export function SettingsSpeechAiTab({
       label: t('settings.speech_ai.not_connected'),
       detail: t('settings.speech_ai.writing_blurb'),
       action: 'connect' as const,
+      value: '',
     };
   }, [polish, probeRevision, t]);
 
@@ -324,6 +328,7 @@ export function SettingsSpeechAiTab({
         status: 'warn' as const,
         label: t('settings.speech_ai.unavailable_offline'),
         detail: t('settings.speech_ai.translation_offline'),
+        value: t('settings.speech_ai.translation_value_google'),
       };
     }
     if (translationUsesAi) {
@@ -337,6 +342,7 @@ export function SettingsSpeechAiTab({
             provider: name,
             model: translation.model,
           }),
+          value: name,
         };
       }
       if (probing) {
@@ -346,6 +352,7 @@ export function SettingsSpeechAiTab({
           detail: t('settings.speech_ai.translation_checking', {
             provider: name,
           }),
+          value: name,
         };
       }
       return {
@@ -355,12 +362,14 @@ export function SettingsSpeechAiTab({
           provider: name,
           model: translation.model,
         }),
+        value: name,
       };
     }
     return {
       status: 'ok' as const,
       label: t('settings.speech_ai.ready'),
       detail: t('settings.speech_ai.translation_google_detail'),
+      value: t('settings.speech_ai.translation_value_google'),
     };
   })();
 
@@ -433,7 +442,6 @@ export function SettingsSpeechAiTab({
   };
 
   const groups = useMemo(() => groupAsrModels(catalogModels), [catalogModels]);
-  const linked = modesAreLinked(config);
   const drillTitle =
     frame.name === 'picker'
       ? t('settings.speech_ai.picker_title')
@@ -483,29 +491,42 @@ export function SettingsSpeechAiTab({
                 status={speech.status}
                 statusLabel={speech.statusLabel}
                 detail={speech.detail}
-                lines={[
-                  ...speech.lines,
-                  speech.action === 'download' || speech.action === 'use' ? (
-                    <button
-                      key="choose"
-                      type="button"
-                      className="speech-ai-inline-btn"
-                      onClick={() => push({ name: 'picker', scope: 'both' })}
-                    >
-                      {t('settings.speech_ai.choose_another')}
-                    </button>
-                  ) : null,
-                ].filter(Boolean)}
+                lines={speech.lines}
                 progress={speech.progress}
                 progressLabel={speech.progressLabel}
+                value={
+                  speech.action === 'change'
+                    ? resolveModelTitle(config, 'live', catalogModels, t) ||
+                      t('settings.speech_ai.not_set_up')
+                    : speech.action === 'manage'
+                      ? t('settings.speech_ai.currently_different')
+                      : undefined
+                }
+                onActivate={() =>
+                  speech.action === 'manage'
+                    ? push({ name: 'recognition' })
+                    : push({ name: 'picker', scope: 'both' })
+                }
                 action={
-                  <SpeechActionButton
-                    action={speech.action}
-                    onDownload={startRecommended}
-                    onCancel={() => handleCancelDownload(activeDownload?.modelId || recommendedId)}
-                    onChange={() => push({ name: 'picker', scope: linked ? 'both' : 'live' })}
-                    onManage={() => push({ name: 'recognition' })}
-                  />
+                  speech.action === 'download' ||
+                  speech.action === 'use' ||
+                  speech.action === 'retry' ? (
+                    <button type="button" className="btn btn-primary" onClick={startRecommended}>
+                      {speech.action === 'retry'
+                        ? t('settings.speech_ai.try_again')
+                        : speech.action === 'use'
+                          ? t('settings.speech_ai.use_recommended')
+                          : t('settings.speech_ai.download_recommended')}
+                    </button>
+                  ) : speech.action === 'cancel' ? (
+                    <button
+                      type="button"
+                      className="btn btn-text"
+                      onClick={() => handleCancelDownload(activeDownload?.modelId || recommendedId)}
+                    >
+                      {t('common.cancel')}
+                    </button>
+                  ) : undefined
                 }
               />
               <CapabilityRow
@@ -514,16 +535,10 @@ export function SettingsSpeechAiTab({
                 status={writing.status}
                 statusLabel={writing.label}
                 detail={writing.detail}
+                value={writing.action === 'manage' ? writing.value : undefined}
+                onActivate={writing.action === 'manage' ? () => push({ name: 'ai' }) : undefined}
                 action={
-                  writing.action === 'manage' ? (
-                    <button
-                      type="button"
-                      className="btn btn-text"
-                      onClick={() => push({ name: 'ai' })}
-                    >
-                      {t('settings.speech_ai.manage')}
-                    </button>
-                  ) : writing.action === 'retry' ? (
+                  writing.action === 'retry' ? (
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -531,7 +546,7 @@ export function SettingsSpeechAiTab({
                     >
                       {t('settings.speech_ai.check_again')}
                     </button>
-                  ) : (
+                  ) : writing.action === 'connect' ? (
                     <button
                       type="button"
                       className="btn btn-secondary"
@@ -539,7 +554,7 @@ export function SettingsSpeechAiTab({
                     >
                       {t('settings.speech_ai.connect')}
                     </button>
-                  )
+                  ) : undefined
                 }
               />
               <CapabilityRow
@@ -548,15 +563,8 @@ export function SettingsSpeechAiTab({
                 status={translationRow.status}
                 statusLabel={translationRow.label}
                 detail={translationRow.detail}
-                action={
-                  <button
-                    type="button"
-                    className="btn btn-text"
-                    onClick={() => push({ name: 'ai' })}
-                  >
-                    {t('settings.speech_ai.change')}
-                  </button>
-                }
+                value={translationRow.value}
+                onActivate={() => push({ name: 'ai' })}
               />
             </div>
             <div className="speech-ai-section-label">{t('settings.speech_ai.more_options')}</div>
@@ -621,53 +629,5 @@ export function SettingsSpeechAiTab({
       </div>
       {connectOpen ? <ConnectAiDialog onClose={() => setConnectOpen(false)} /> : null}
     </SettingsTabContainer>
-  );
-}
-
-function SpeechActionButton({
-  action,
-  onDownload,
-  onCancel,
-  onChange,
-  onManage,
-}: {
-  action: string;
-  onDownload: () => void;
-  onCancel: () => void;
-  onChange: () => void;
-  onManage: () => void;
-}) {
-  const { t } = useTranslation();
-  if (action === 'download' || action === 'use' || action === 'retry') {
-    const label =
-      action === 'retry'
-        ? t('settings.speech_ai.try_again')
-        : action === 'use'
-          ? t('settings.speech_ai.use_recommended')
-          : t('settings.speech_ai.download_recommended');
-    return (
-      <button type="button" className="btn btn-primary" onClick={onDownload}>
-        {label}
-      </button>
-    );
-  }
-  if (action === 'cancel') {
-    return (
-      <button type="button" className="btn btn-text" onClick={onCancel}>
-        {t('common.cancel')}
-      </button>
-    );
-  }
-  if (action === 'manage') {
-    return (
-      <button type="button" className="btn btn-text" onClick={onManage}>
-        {t('settings.speech_ai.manage')}
-      </button>
-    );
-  }
-  return (
-    <button type="button" className="btn btn-text" onClick={onChange}>
-      {t('settings.speech_ai.change')}
-    </button>
   );
 }

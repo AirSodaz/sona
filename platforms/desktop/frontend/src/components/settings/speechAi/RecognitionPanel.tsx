@@ -5,6 +5,7 @@ import { buildModelSelectionPatch } from '../../../services/asrConfigService';
 import { useConfigStore, useSetConfig, useTranscriptionConfig } from '../../../stores/configStore';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
+import { SettingDrill } from './CapabilityRow';
 import {
   modesAreLinked,
   resolveModelTitle,
@@ -211,31 +212,16 @@ function ModeCard({
           <p>{hint}</p>
         </div>
       </div>
-      <div className="settings-item-container layout-horizontal">
-        <div className="settings-item-info">
-          <div className="settings-item-title">{t('settings.speech_ai.speech_model')}</div>
-          <div className="settings-item-hint">
-            {modelLabel || t('settings.speech_ai.not_set_up')}
-          </div>
-        </div>
-        <div className="settings-item-action">
-          <button type="button" className="btn btn-text" onClick={onChangeModel}>
-            {t('settings.speech_ai.change')}
-          </button>
-        </div>
-      </div>
-      <div className="settings-item-container layout-horizontal">
-        <div className="settings-item-info">
-          <div className="settings-item-title">{t('settings.speech_ai.speakers')}</div>
-          <div className="settings-item-hint">{speakers}</div>
-        </div>
-        <div className="settings-item-action">
-          <button type="button" className="btn btn-text" onClick={onSpeakers}>
-            {t('settings.speech_ai.configure')}
-            {' ›'}
-          </button>
-        </div>
-      </div>
+      <SettingDrill
+        title={t('settings.speech_ai.speech_model')}
+        value={modelLabel || t('settings.speech_ai.not_set_up')}
+        onClick={onChangeModel}
+      />
+      <SettingDrill
+        title={t('settings.speech_ai.speakers')}
+        value={speakers}
+        onClick={onSpeakers}
+      />
     </section>
   );
 }

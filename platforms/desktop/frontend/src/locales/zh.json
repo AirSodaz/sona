@@ -2727,6 +2727,7 @@
       "offline_banner": "你已离线。重新联网后会继续下载和在线服务。已安装的模型仍可使用。",
       "cant_reach": "无法连接 {{name}}",
       "translation_google_detail": "Google 翻译（免费）。翻译时会把文字发给 Google。",
+      "translation_value_google": "Google 翻译",
       "translation_using_ai": "使用 AI 写作（{{provider}} · {{model}}）",
       "translation_offline": "Google 翻译需要网络。要离线翻译，请改用带本地模型的 AI 写作。",
       "translation_not_connected": "翻译已选用 {{provider}} · {{model}}，但尚未连接。",

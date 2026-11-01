@@ -6,6 +6,7 @@ import type { ModelInfo } from '../../../types/modelCatalog';
 import { Dropdown } from '../../Dropdown';
 import { Switch } from '../../Switch';
 import { SegmentedSubTabs } from '../SettingsLayout';
+import { SettingDrill } from './CapabilityRow';
 import {
   helperModel,
   modesAreLinked,
@@ -316,22 +317,11 @@ function HelperRow({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="settings-item-container layout-horizontal">
-      <div className="settings-item-info">
-        <div className="settings-item-title">{title}</div>
-        <div className="settings-item-hint">{detail}</div>
-      </div>
-      <div
-        className="settings-item-action"
-        style={{ display: 'flex', gap: 8, alignItems: 'center' }}
-      >
-        <span className={`speech-ai-status ${installed ? 'is-ok' : 'is-idle'}`}>
-          {installed ? t('settings.speech_ai.installed') : t('settings.speech_ai.not_installed')}
-        </span>
-        <button type="button" className="btn btn-text" onClick={onChange}>
-          {t('settings.speech_ai.change')}
-        </button>
-      </div>
-    </div>
+    <SettingDrill
+      title={title}
+      hint={detail}
+      value={installed ? t('settings.speech_ai.installed') : t('settings.speech_ai.not_installed')}
+      onClick={onChange}
+    />
   );
 }

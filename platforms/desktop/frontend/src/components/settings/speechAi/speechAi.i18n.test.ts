@@ -66,6 +66,21 @@ describe('Speech & AI locale coverage', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('uses corner quotes in Chinese Speech & AI copy', () => {
+    const straightOrCurly = /["“”]/;
+    const offenders = (['zh', 'zh-TW'] as const).flatMap((name) =>
+      leafPaths(locales[name].settings.speech_ai)
+        .filter((path) =>
+          straightOrCurly.test(String(readPath(locales[name], `settings.speech_ai.${path}`)))
+        )
+        .map((path) => `${name}: ${path}`)
+    );
+    expect(offenders).toEqual([]);
+    expect(zh.settings.speech_ai.speakers_note).toContain('「识别」');
+    expect(zh.settings.speech_ai.speakers_note).toContain('「录音和文件使用相同设置」');
+    expect(zhTW.settings.speech_ai.speakers_note).toContain('「識別」');
+  });
+
   it('does not use native title tooltips in the Speech & AI source', () => {
     const dir = dirname(fileURLToPath(import.meta.url));
     const files = readdirSync(dir).filter((name) => name.endsWith('.tsx'));

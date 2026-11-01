@@ -2727,6 +2727,7 @@
       "offline_banner": "오프라인입니다. 다시 연결되면 다운로드와 온라인 서비스가 이어집니다. 설치된 모델은 계속 동작합니다.",
       "cant_reach": "{{name}}에 연결할 수 없음",
       "translation_google_detail": "Google 번역(무료). 번역할 때 텍스트를 Google로 보냅니다.",
+      "translation_value_google": "Google 번역",
       "translation_using_ai": "AI 글쓰기 사용 ({{provider}} · {{model}})",
       "translation_offline": "Google 번역은 인터넷이 필요합니다. 오프라인으로 번역하려면 로컬 모델이 있는 AI 글쓰기로 바꾸세요.",
       "translation_not_connected": "번역에 {{provider}} · {{model}}을 골랐지만 아직 연결되지 않았습니다.",

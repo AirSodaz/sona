@@ -2727,6 +2727,7 @@
       "offline_banner": "オフラインです。再接続するとダウンロードとオンライン機能が再開します。インストール済みモデルはそのまま使えます。",
       "cant_reach": "{{name}} に接続できません",
       "translation_google_detail": "Google 翻訳（無料）。翻訳するときテキストを Google に送ります。",
+      "translation_value_google": "Google 翻訳",
       "translation_using_ai": "AI 作文を使用（{{provider}} · {{model}}）",
       "translation_offline": "Google 翻訳にはインターネットが必要です。オフラインで翻訳するには、ローカルモデルの AI 作文に切り替えてください。",
       "translation_not_connected": "翻訳は {{provider}} · {{model}} ですが、まだ接続されていません。",
