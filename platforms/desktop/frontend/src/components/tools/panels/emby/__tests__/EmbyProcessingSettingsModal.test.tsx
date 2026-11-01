@@ -195,4 +195,35 @@ describe('EmbyProcessingSettingsModal', () => {
     );
     unmount();
   });
+  it('resolves fallback diarization to false when active online provider does not support it and no overrides exist', () => {
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: true,
+        asr: {
+          selections: {
+            batch: {
+              engine: 'online',
+              mode: 'batch',
+              providerId: 'groq-whisper',
+            },
+          },
+          providers: {
+            online: {},
+          },
+        },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    localStorage.removeItem('sona:emby:tool_overrides');
+
+    const { unmount } = render(
+      <EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(speakerSwitch.getAttribute('aria-disabled')).toBe('true');
+    unmount();
+  });
 });

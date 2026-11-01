@@ -740,6 +740,28 @@ describe('SettingsModelsTab speaker model selections', () => {
       );
     });
   });
+  it('toggles collapse/expand via master switch in batch scenario', async () => {
+    setTestConfig({
+      batchSpeakerDiarizationEnabled: false,
+      batchSpeakerSegmentationModelPath: '/models/batch-seg.onnx',
+      batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
+    });
+
+    renderTab(new Set());
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
+
+    expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Speaker Embedding Model' })).toBeNull();
+
+    const switchEl = screen.getByRole('switch', { name: 'Speaker Diarization & Recognition' });
+    fireEvent.click(switchEl);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchSpeakerDiarizationEnabled).toBe(true);
+      expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' })).toBeDefined();
+    });
+  });
 
   it('allows selecting and clearing CTC alignment model in live scenario', async () => {
     setTestConfig({

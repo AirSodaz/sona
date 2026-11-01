@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { speakerService } from '../services/speakerService';
@@ -67,11 +67,15 @@ export function useNotificationEntries({
   const confirm = useDialogStore((state) => state.confirm);
   const modelDownloads = useModelDownloadStore((state) => state.downloads);
   const hasDegradedNotice = useSpeakerNotificationStore((state) => state.hasDegradedNotice);
-  const degradedCount = useSpeakerNotificationStore((state) => state.degradedCount);
   const dismissSpeakerNotice = useSpeakerNotificationStore((state) => state.dismissNotice);
 
+  const prevConfigRef = useRef(config);
+
   useEffect(() => {
-    if (hasDegradedNotice && config) {
+    const prevConfig = prevConfigRef.current;
+    prevConfigRef.current = config;
+
+    if (hasDegradedNotice && config && prevConfig !== config) {
       if (
         !speakerService.isDiarizationDegraded(config, 'batch') &&
         !speakerService.isDiarizationDegraded(config, 'live')
@@ -277,7 +281,6 @@ export function useNotificationEntries({
     // 6. Speaker diarization degraded notification
     const speakerDegradedEntry = adaptSpeakerDegradedEntry(
       hasDegradedNotice,
-      degradedCount,
       t,
       () => {
         closePanel();
@@ -316,7 +319,6 @@ export function useNotificationEntries({
     updateProgress,
     updateStatus,
     closePanel,
-    degradedCount,
     dismissSpeakerNotice,
     hasDegradedNotice,
     onOpenModelSettings,

@@ -4,7 +4,6 @@ import type { TFunction } from './adapterUtils';
 
 export function adaptSpeakerDegradedEntry(
   hasNotice: boolean,
-  _degradedCount: number,
   t: TFunction,
   onGoToSettings: () => void,
   onDismiss: () => void
@@ -24,7 +23,7 @@ export function adaptSpeakerDegradedEntry(
     }),
     body: t('notifications.speaker_degraded_body', {
       defaultValue:
-        'Speaker diarization was requested but required models are not configured. Transcription completed normally.',
+        'Speaker diarization was requested but required models are not configured. Transcription completed normally. Configure models in Settings to enable speaker labels.',
     }),
     timestamp: Number.MAX_SAFE_INTEGER,
     actions: [

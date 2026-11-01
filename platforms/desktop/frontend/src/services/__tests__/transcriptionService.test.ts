@@ -484,6 +484,63 @@ describe('TranscriptionService voice typing diagnostics', () => {
     await recordService.stop();
     expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
   });
+  it('does not trigger degradation notification on stop for record instance when using online live ASR', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      liveSpeakerDiarizationEnabled: true,
+      liveSpeakerEmbeddingModelPath: '',
+      asr: {
+        ...mocks.config.asr,
+        selections: {
+          ...mocks.config.asr?.selections,
+          live: {
+            engine: 'online',
+            providerId: 'volcengine-doubao',
+          },
+        },
+      },
+    };
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+
+    const recordService = new TranscriptionService('record');
+    const recordInternal = recordService as unknown as {
+      transport: string;
+      nativeSourceKind: string;
+      runningConfig: { engine: string };
+    };
+    recordInternal.transport = 'native';
+    recordInternal.nativeSourceKind = 'microphone';
+    recordInternal.runningConfig = { engine: 'online' };
+    await recordService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+  });
+
+  it('triggers degradation notification on stop for record instance when using external transport with local engine', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      liveSpeakerDiarizationEnabled: true,
+      liveSpeakerEmbeddingModelPath: '',
+    };
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+
+    const recordService = new TranscriptionService('record');
+    const recordInternal = recordService as unknown as {
+      transport: string;
+      runningConfig: { engine: string };
+    };
+    recordInternal.transport = 'external';
+    recordInternal.runningConfig = { engine: 'local' };
+    await recordService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+  });
 
   it('passes postprocess options to batch and returns backend segments without local filtering', async () => {
     mocks.config = {

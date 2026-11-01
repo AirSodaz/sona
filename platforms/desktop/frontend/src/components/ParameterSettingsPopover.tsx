@@ -178,14 +178,15 @@ export function ParameterSettingsPopover({
   );
 
   const isCloudSpeakerEnabled = useMemo(() => {
-    if (!onlineProviderId) return false;
-    const providerConfig = getOnlineProviderConfig(config.asr?.providers, onlineProviderId);
+    if (!onlineProviderId || !isCloudSpeakerSupported) return false;
     const def = getOnlineAsrProviderDefinition(onlineProviderId);
+    if (!def) return false;
+    const providerConfig = getOnlineProviderConfig(config.asr?.providers, onlineProviderId);
     return (
       (providerConfig?.speakerDiarization as boolean | undefined) ??
-      def?.defaultConfig?.speakerDiarization !== false
+      def.defaultConfig?.speakerDiarization !== false
     );
-  }, [onlineProviderId, config.asr?.providers]);
+  }, [onlineProviderId, isCloudSpeakerSupported, config.asr?.providers]);
 
   const handleCloudSpeakerToggle = useCallback(
     (enabled: boolean) => {

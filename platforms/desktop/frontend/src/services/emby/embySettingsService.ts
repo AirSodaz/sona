@@ -182,30 +182,20 @@ export function buildEmbyEffectiveConfig(
   }
   if (overrides.speakerDiarization !== undefined && overrides.speakerDiarization !== null) {
     snapshot.batchSpeakerDiarizationEnabled = overrides.speakerDiarization;
-    const batchSelection = snapshot.asr?.selections?.batch;
-    if (batchSelection?.engine === 'online' && batchSelection.providerId) {
+    const asr = snapshot.asr;
+    const batchSelection = asr?.selections?.batch;
+    if (asr && batchSelection?.engine === 'online' && batchSelection.providerId) {
       const pid = batchSelection.providerId;
-      if (!snapshot.asr) {
-        snapshot.asr = {
-          selections: {
-            live: batchSelection,
-            caption: batchSelection,
-            voiceTyping: batchSelection,
-            batch: batchSelection,
-          },
-        };
+      if (!asr.providers) {
+        asr.providers = {};
       }
-      if (!snapshot.asr.providers) {
-        snapshot.asr.providers = {};
+      const providers = asr.providers;
+      if (!providers.online) {
+        providers.online = {};
       }
-      if (!snapshot.asr.providers.online) {
-        snapshot.asr.providers.online = {};
-      }
-      const existingProviderConfig = (snapshot.asr.providers.online[pid] ?? {}) as Record<
-        string,
-        unknown
-      >;
-      snapshot.asr.providers.online[pid] = {
+      const online = providers.online;
+      const existingProviderConfig = (online[pid] ?? {}) as Record<string, unknown>;
+      online[pid] = {
         ...existingProviderConfig,
         speakerDiarization: overrides.speakerDiarization,
       };

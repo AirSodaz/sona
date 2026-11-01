@@ -940,6 +940,52 @@ describe('NotificationCenter task center', () => {
 
     expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
   });
+  it('does not prematurely auto-dismiss degradation notification when global diarization is disabled', () => {
+    configState.config = {
+      liveSpeakerDiarizationEnabled: false,
+      batchSpeakerDiarizationEnabled: false,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(screen.queryByText('Speaker Diarization Skipped')).not.toBeNull();
+  });
+
+  it('auto-dismisses degradation notification when diarization is disabled via config update', () => {
+    configState.config = {
+      liveSpeakerDiarizationEnabled: true,
+      batchSpeakerDiarizationEnabled: false,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    const { rerender } = render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+
+    act(() => {
+      configState.config = {
+        liveSpeakerDiarizationEnabled: false,
+        batchSpeakerDiarizationEnabled: false,
+      };
+    });
+
+    rerender(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+  });
 
   it('falls back to onOpenModelSettings when onOpenSettingsTab is not provided', () => {
     const onOpenModelSettings = vi.fn();

@@ -584,6 +584,24 @@ describe('TranscriptionOptions', () => {
     expect(useConfigStore.getState().config.batchSpeakerDiarizationEnabled).toBe(true);
     expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
   });
+  it('renders speaker diarization switch and toggles live diarization on live surface', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        liveSpeakerDiarizationEnabled: false,
+      },
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+    fireEvent.click(getTriggerButton());
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(speakerSwitch);
+    expect(useConfigStore.getState().config.liveSpeakerDiarizationEnabled).toBe(true);
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+  });
 
   it('shows inline warning hint when local diarization is enabled but models are unconfigured', () => {
     useConfigStore.setState({

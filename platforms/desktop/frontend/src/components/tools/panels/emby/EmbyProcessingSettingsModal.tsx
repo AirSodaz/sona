@@ -46,11 +46,17 @@ function resolveFallbackDiarization(
     );
   if (effective?.engine === 'online' && effective.providerId) {
     const pid = effective.providerId;
-    const providerConfig = getOnlineProviderConfig(currentConfig.asr?.providers, pid);
+    if (!providerSupportsSpeakerDiarization(pid)) {
+      return false;
+    }
     const def = getOnlineAsrProviderDefinition(pid);
+    if (!def) {
+      return false;
+    }
+    const providerConfig = getOnlineProviderConfig(currentConfig.asr?.providers, pid);
     return (
       (providerConfig?.speakerDiarization as boolean | undefined) ??
-      def?.defaultConfig?.speakerDiarization !== false
+      def.defaultConfig?.speakerDiarization !== false
     );
   }
   return currentConfig.batchSpeakerDiarizationEnabled ?? false;
