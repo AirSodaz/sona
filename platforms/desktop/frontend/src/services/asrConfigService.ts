@@ -538,6 +538,7 @@ export class AsrConfigService {
   ): AsrProviderConfig => {
     return {
       online: {
+        ...(providers?.online ?? {}),
         [VOLCENGINE_DOUBAO_PROVIDER_ID]: getOnlineProviderConfig(
           providers,
           VOLCENGINE_DOUBAO_PROVIDER_ID

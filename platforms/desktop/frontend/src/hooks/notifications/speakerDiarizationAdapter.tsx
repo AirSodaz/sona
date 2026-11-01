@@ -26,7 +26,7 @@ export function adaptSpeakerDegradedEntry(
       defaultValue:
         'Speaker diarization was requested but required models are not configured. Transcription completed normally.',
     }),
-    timestamp: Date.now(),
+    timestamp: Number.MAX_SAFE_INTEGER,
     actions: [
       {
         id: 'go-to-settings',

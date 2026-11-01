@@ -7,7 +7,7 @@ import { extractErrorMessage } from '../utils/errorUtils';
 import { logger } from '../utils/logger';
 import { getScenarioLanguage } from '../utils/scenarioModels';
 import { normalizeTranscriptSegments } from '../utils/transcriptTiming';
-import type { AsrTranscriptionRequest } from './asrConfigService';
+import { type AsrTranscriptionRequest, isLlamaCppBatchRequest } from './asrConfigService';
 import { speakerService } from './speakerService';
 import { buildRecognizerOutputEvent, TauriEvent } from './tauri/events';
 import { listen, type UnlistenFn } from './tauri/platform/events';
@@ -217,7 +217,10 @@ export class TranscriptionService {
         this.nativeSourceKind = null;
       }
       const liveConfig = this.ports.getEffectiveConfigSnapshot();
-      if (speakerService.isDiarizationDegraded(liveConfig, 'live')) {
+      if (
+        this.instanceId === 'record' &&
+        speakerService.isDiarizationDegraded(liveConfig, 'live')
+      ) {
         useSpeakerNotificationStore.getState().triggerDegraded();
       }
       return;
@@ -237,7 +240,7 @@ export class TranscriptionService {
     this.transport = 'idle';
     this.nativeSourceKind = null;
     const liveConfig = this.ports.getEffectiveConfigSnapshot();
-    if (speakerService.isDiarizationDegraded(liveConfig, 'live')) {
+    if (this.instanceId === 'record' && speakerService.isDiarizationDegraded(liveConfig, 'live')) {
       useSpeakerNotificationStore.getState().triggerDegraded();
     }
     return path;
@@ -470,7 +473,11 @@ export class TranscriptionService {
 
       const processedSegments = normalizeTranscriptSegments(segments);
 
-      if (speakerService.isDiarizationDegraded(appConfig, 'batch')) {
+      if (
+        asrRequest.engine === 'local' &&
+        !isLlamaCppBatchRequest(asrRequest) &&
+        speakerService.isDiarizationDegraded(appConfig, 'batch')
+      ) {
         useSpeakerNotificationStore.getState().triggerDegraded();
       }
       if (onProgress) onProgress(100);

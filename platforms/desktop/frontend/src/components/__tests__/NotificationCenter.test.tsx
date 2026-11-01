@@ -893,4 +893,74 @@ describe('NotificationCenter task center', () => {
 
     expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
   });
+
+  it('renders degradation notification for live diarization when batch diarization is disabled', () => {
+    configState.config = {
+      liveSpeakerDiarizationEnabled: true,
+      batchSpeakerDiarizationEnabled: false,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    expect(screen.queryByText('Speaker Diarization Skipped')).not.toBeNull();
+  });
+
+  it('auto-dismisses degradation notification when models are configured or diarization is disabled', () => {
+    configState.config = {
+      liveSpeakerDiarizationEnabled: true,
+      batchSpeakerDiarizationEnabled: false,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    const { rerender } = render(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+
+    act(() => {
+      configState.config = {
+        liveSpeakerDiarizationEnabled: true,
+        liveSpeakerEmbeddingModelPath: '/models/live-embedding.onnx',
+        batchSpeakerDiarizationEnabled: false,
+      };
+    });
+
+    rerender(
+      <NotificationCenter onOpenRecoveryCenter={vi.fn()} onOpenAutomationSettings={vi.fn()} />
+    );
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+  });
+
+  it('falls back to onOpenModelSettings when onOpenSettingsTab is not provided', () => {
+    const onOpenModelSettings = vi.fn();
+    configState.config = {
+      batchSpeakerDiarizationEnabled: true,
+    };
+    act(() => {
+      useSpeakerNotificationStore.getState().triggerDegraded();
+    });
+
+    render(
+      <NotificationCenter
+        onOpenRecoveryCenter={vi.fn()}
+        onOpenAutomationSettings={vi.fn()}
+        onOpenModelSettings={onOpenModelSettings}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }));
+    const settingsBtn = screen.getByRole('button', { name: 'Go to Settings' });
+    fireEvent.click(settingsBtn);
+    expect(onOpenModelSettings).toHaveBeenCalled();
+  });
 });

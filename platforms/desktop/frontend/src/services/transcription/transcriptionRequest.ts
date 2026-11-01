@@ -5,6 +5,7 @@ import {
   isLlamaCppBatchRequest,
   resolveAsrTranscriptionRequest,
 } from '../asrConfigService';
+import { providerSupportsSpeakerDiarization } from '../onlineAsrProviders';
 import { speakerService } from '../speakerService';
 import type { ProcessBatchFileRequest } from '../tauri/recognizer';
 
@@ -112,7 +113,9 @@ export function buildBatchTranscriptionRequest({
   const isOnline = asrRequest.engine === 'online';
   const isLlamaCpp = isLlamaCppBatchRequest(asrRequest);
   const isCloudSpeakerEnabled =
-    isOnline && asrRequest.onlineProvider.config?.speakerDiarization !== false;
+    isOnline &&
+    providerSupportsSpeakerDiarization(asrRequest.onlineProvider?.providerId) &&
+    asrRequest.onlineProvider.config?.speakerDiarization !== false;
 
   const speakerProcessing = isLlamaCpp
     ? null

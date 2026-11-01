@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
-import { isScenarioSpeakerDiarizationEnabled, speakerService } from '../services/speakerService';
+import { speakerService } from '../services/speakerService';
 import { useAutomationStore } from '../stores/automationStore';
 import { useBatchQueueStore } from '../stores/batchQueueStore';
 import { useConfigStore } from '../stores/configStore';
@@ -73,8 +73,8 @@ export function useNotificationEntries({
   useEffect(() => {
     if (hasDegradedNotice && config) {
       if (
-        speakerService.isConfigured(config, 'batch') ||
-        !isScenarioSpeakerDiarizationEnabled(config, 'batch')
+        !speakerService.isDiarizationDegraded(config, 'batch') &&
+        !speakerService.isDiarizationDegraded(config, 'live')
       ) {
         dismissSpeakerNotice();
       }
@@ -178,7 +178,6 @@ export function useNotificationEntries({
       if (typeof useModelDownloadStore.getState === 'function') {
         useModelDownloadStore.getState().clearAllNonActive();
       }
-      dismissSpeakerNotice();
       const activeStatuses: Record<string, true> = {
         pending: true,
         running: true,

@@ -11,6 +11,8 @@ import {
 } from '../../../../services/emby/embySettingsService';
 import { modelService } from '../../../../services/modelService';
 import {
+  getOnlineAsrProviderDefinition,
+  getOnlineProviderConfig,
   ONLINE_ASR_PROVIDER_DEFINITIONS,
   providerSupportsSpeakerDiarization,
 } from '../../../../services/onlineAsrProviders';
@@ -31,6 +33,27 @@ export interface EmbyProcessingSettingsModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSaved?: (overrides: EmbyToolOverrides) => void;
+}
+function resolveFallbackDiarization(
+  selection: EmbyToolOverrides['asrSelection'] | null | undefined,
+  currentConfig: AppConfig
+): boolean {
+  const effective =
+    selection ??
+    asrConfigService.getSelection(
+      { ...currentConfig, asr: asrConfigService.normalizeAsrConfig(currentConfig) },
+      'batch'
+    );
+  if (effective?.engine === 'online' && effective.providerId) {
+    const pid = effective.providerId;
+    const providerConfig = getOnlineProviderConfig(currentConfig.asr?.providers, pid);
+    const def = getOnlineAsrProviderDefinition(pid);
+    return (
+      (providerConfig?.speakerDiarization as boolean | undefined) ??
+      def?.defaultConfig?.speakerDiarization !== false
+    );
+  }
+  return currentConfig.batchSpeakerDiarizationEnabled ?? false;
 }
 
 export function EmbyProcessingSettingsModal({
@@ -81,8 +104,10 @@ export function EmbyProcessingSettingsModal({
         setSelectedEnableTimeline(
           overrides.enableTimeline ?? DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true
         );
+        const currentConfig = useConfigStore.getState().config;
         setSelectedSpeakerDiarization(
-          overrides.speakerDiarization ?? config.batchSpeakerDiarizationEnabled ?? false
+          overrides.speakerDiarization ??
+            resolveFallbackDiarization(overrides.asrSelection, currentConfig)
         );
         setSelectedAsrLanguage(overrides.asrLanguage ?? 'auto');
         setSelectedTranslationModelId(overrides.translationModelId || '__global__');
@@ -102,7 +127,7 @@ export function EmbyProcessingSettingsModal({
         isMounted = false;
       };
     }
-  }, [isOpen, config.batchSpeakerDiarizationEnabled]);
+  }, [isOpen]);
 
   const asrOptions: DropdownOption[] = useMemo(() => {
     const list: DropdownOption[] = [
@@ -351,7 +376,8 @@ export function EmbyProcessingSettingsModal({
       asrSelection,
       asrLanguage: selectedAsrLanguage,
       enableTimeline: selectedEnableTimeline,
-      speakerDiarization: selectedSpeakerDiarization,
+      speakerDiarization:
+        isOnlineAsr && !isCloudSpeakerSupported ? false : selectedSpeakerDiarization,
       translationModelId:
         selectedTranslationModelId === '__global__' ? null : selectedTranslationModelId,
       defaultSubtitleMode: selectedSubtitleMode,
@@ -367,7 +393,8 @@ export function EmbyProcessingSettingsModal({
     setSelectedAsrValue('__global__');
     setSelectedEnableTimeline(DEFAULT_EMBY_TOOL_OVERRIDES.enableTimeline ?? true);
     setSelectedAsrLanguage(DEFAULT_EMBY_TOOL_OVERRIDES.asrLanguage ?? 'auto');
-    setSelectedSpeakerDiarization(config.batchSpeakerDiarizationEnabled ?? false);
+    const currentConfig = useConfigStore.getState().config;
+    setSelectedSpeakerDiarization(resolveFallbackDiarization(null, currentConfig));
     setSelectedTranslationModelId('__global__');
     setSelectedSubtitleMode(DEFAULT_EMBY_TOOL_OVERRIDES.defaultSubtitleMode ?? 'bilingual');
     setOverwriteExistingExternal(DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal ?? true);

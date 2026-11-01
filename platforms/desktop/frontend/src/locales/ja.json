@@ -3060,7 +3060,6 @@
     "connected": "接続済み",
     "connecting": "接続中...",
     "subtitle": "Emby および Jellyfin メディアライブラリの字幕欠落を検出し、音声をオフライン文字起こしして自動補完",
-    "speaker_unconfigured_hint": "モデル未設定のため、通常の文字起こしに自動フォールバックします",
     "pulling_audio": "音声を抽出中...",
     "server_settings": "サーバー設定",
     "connect_server": "サーバーに接続",

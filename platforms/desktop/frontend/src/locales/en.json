@@ -3060,7 +3060,6 @@
     "connected": "Connected",
     "connecting": "Connecting...",
     "subtitle": "Detect missing subtitles in Emby and Jellyfin media libraries, transcribe audio offline, and auto-complete subtitles",
-    "speaker_unconfigured_hint": "No speaker models configured; will fall back to normal transcription",
     "pulling_audio": "Fetching audio track...",
     "server_settings": "Server Settings",
     "connect_server": "Connect Server",

@@ -3060,7 +3060,6 @@
     "connected": "已連線",
     "connecting": "連線中...",
     "subtitle": "檢測 Emby 和 Jellyfin 媒體庫缺少的字幕，離線轉錄音訊並自動補全字幕",
-    "speaker_unconfigured_hint": "未設定模型，將自動降級為一般轉錄",
     "pulling_audio": "正在拉取音訊軌...",
     "server_settings": "伺服器設定",
     "connect_server": "連線伺服器",

@@ -174,7 +174,7 @@ export function ParameterSettingsPopover({
   const isOnline = activeSelection?.engine === 'online';
   const onlineProviderId = activeSelection?.providerId;
   const isCloudSpeakerSupported = Boolean(
-    onlineProviderId && providerSupportsSpeakerDiarization(onlineProviderId)
+    surface === 'batch' && onlineProviderId && providerSupportsSpeakerDiarization(onlineProviderId)
   );
 
   const isCloudSpeakerEnabled = useMemo(() => {
