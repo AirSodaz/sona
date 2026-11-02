@@ -1,8 +1,16 @@
-import type { AsrModelSelection } from './config';
-
 export type MediaServerType = 'emby' | 'jellyfin';
 
 export type MediaServerSubtitleMode = 'pure_translation' | 'bilingual' | 'separate_tracks';
+
+/** Media-server copy of an ASR selection. Kept local so this module stays a leaf. */
+export interface MediaServerAsrSelection {
+  engine: 'local' | 'online';
+  mode: 'streaming' | 'batch';
+  modelId?: string | null;
+  modelPath: string;
+  providerId?: string | null;
+  profileId?: string | null;
+}
 
 export interface MediaServerProfile {
   id: string;
@@ -89,7 +97,7 @@ export interface MediaServerSubtitleUploadPayload {
 }
 
 export interface MediaServerToolOverrides {
-  asrSelection?: AsrModelSelection | null;
+  asrSelection?: MediaServerAsrSelection | null;
   asrLanguage?: string;
   enableTimeline?: boolean;
   translationModelId?: string | null;
