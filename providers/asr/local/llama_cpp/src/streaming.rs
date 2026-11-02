@@ -450,7 +450,9 @@ impl StreamingAsrFactoryPort for LlamaCppStreamingFactory {
                 postprocess_options: validated.postprocess_options,
                 initial_refresh_rate_ms: validated.initial_refresh_rate_ms,
                 enable_partial_decoding: validated.enable_partial_decoding,
-                vad_min_silence_duration_ms: Some(500),
+                vad_min_silence_duration_ms: Some(
+                    (vad_options.min_silence_duration * 1000.0).round() as u32,
+                ),
             })?;
 
             Ok(Arc::new(session) as Arc<dyn AsrStreamingSession>)

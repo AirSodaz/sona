@@ -205,7 +205,7 @@ pub fn pad_and_clamp_spans(
         .collect();
     let mut ends: Vec<usize> = spans
         .iter()
-        .map(|s| (s.end_sample + pad_samples).min(total_samples))
+        .map(|s| s.end_sample.saturating_add(pad_samples).min(total_samples))
         .collect();
 
     for i in 0..spans.len().saturating_sub(1) {

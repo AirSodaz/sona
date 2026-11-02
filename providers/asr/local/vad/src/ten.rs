@@ -111,6 +111,7 @@ mod tests {
         assert_eq!(config.ten_vad.min_silence_duration, 1.2);
         assert_eq!(config.ten_vad.min_speech_duration, 0.25);
         assert_eq!(config.ten_vad.max_speech_duration, 30.0);
+        assert_eq!(config.ten_vad.window_size, WINDOW_SIZE);
         assert_eq!(WINDOW_SIZE, 256);
         assert_eq!(config.sample_rate, 16_000);
     }

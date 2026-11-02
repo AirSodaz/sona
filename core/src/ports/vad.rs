@@ -17,6 +17,10 @@ pub struct VadDetectionOptions {
     /// Model directory or file backing this detection pass.
     pub model_path: PathBuf,
     pub threshold: f32,
+    /// Negative threshold for speech offset detection hysteresis.
+    ///
+    /// NOTE: Currently ignored by underlying provider implementations (Silero and TEN),
+    /// as upstream sherpa-onnx model configs do not support negative threshold tuning.
     pub neg_threshold: Option<f32>,
     pub min_silence_duration: f32,
     pub min_speech_duration: f32,

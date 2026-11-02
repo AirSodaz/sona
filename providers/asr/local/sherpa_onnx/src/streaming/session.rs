@@ -34,6 +34,10 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 const PARTIAL_METRIC_INTERVAL_SAMPLES: usize = 16_000;
+const SAMPLE_RATE: f64 = 16_000.0;
+const VAD_RELEASE_SECONDS: f64 = 0.10;
+const VAD_EXPECTED_SILENCE_SECONDS: f64 = 0.50;
+const MIN_VALID_SPEECH_SECONDS: f64 = 0.10;
 type PendingInferenceTask = tokio::task::JoinHandle<Result<(), AsrPortError>>;
 
 pub struct LocalSherpaSession {
@@ -840,14 +844,15 @@ async fn feed_audio_samples_inner(
                 }
                 instance.offline_state.finish_speech();
 
-                let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+                let global_start = instance.offline_state.utterance_start_seconds(SAMPLE_RATE);
 
                 let mut offline_copy = instance.offline_state.speech_chunks().to_vec();
                 let total_buffered_samples = buffered_sample_count(&offline_copy);
-                let release_samples = (16000.0 * 0.10) as usize;
-                let expected_silence_samples = (16000.0 * 0.50) as usize;
+                let release_samples = (SAMPLE_RATE * VAD_RELEASE_SECONDS) as usize;
+                let expected_silence_samples =
+                    (SAMPLE_RATE * VAD_EXPECTED_SILENCE_SECONDS) as usize;
                 let trim_samples = expected_silence_samples.saturating_sub(release_samples);
-                let min_valid_samples = (16000.0 * 0.10) as usize;
+                let min_valid_samples = (SAMPLE_RATE * MIN_VALID_SPEECH_SECONDS) as usize;
                 let max_trimmable = total_buffered_samples.saturating_sub(min_valid_samples);
                 let actual_trim = trim_samples.min(max_trimmable);
 

@@ -438,7 +438,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
             if buffer.is_speech_active() {
                 // Speech offset: finalize utterance
                 buffer.finish_speech();
-                let audio_samples = buffer.flatten_speech_buffer();
+                let mut audio_samples = buffer.flatten_speech_buffer();
 
                 let release_samples = (SAMPLE_RATE * 0.10) as usize;
                 let expected_silence_samples =
@@ -447,8 +447,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 let min_valid_samples = (SAMPLE_RATE * 0.10) as usize;
                 let max_trimmable = audio_samples.len().saturating_sub(min_valid_samples);
                 let actual_trim = trim_samples.min(max_trimmable);
-                let final_audio_samples =
-                    audio_samples[..audio_samples.len() - actual_trim].to_vec();
+                audio_samples.truncate(audio_samples.len() - actual_trim);
 
                 let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
                 let decoder = self.decoder.clone();
@@ -464,7 +463,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 let task = move || {
                     execute_inference_pass(
                         &decoder,
-                        &final_audio_samples,
+                        &audio_samples,
                         DecodeStage::Final,
                         punctuation.as_ref(),
                         &seg_id_copy,
