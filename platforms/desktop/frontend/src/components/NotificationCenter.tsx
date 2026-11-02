@@ -4,17 +4,22 @@ import { useTranslation } from 'react-i18next';
 import { useEscapeKey } from '../hooks/useEscapeKey';
 import { getBadgeLabel, useNotificationEntries } from '../hooks/useNotificationEntries';
 import { useNotificationPanelStore } from '../stores/notificationPanelStore';
+import type { SettingsTab } from '../types/settings';
 import { BellIcon } from './Icons';
 import { NotificationPanel } from './NotificationPanel';
 
 interface NotificationCenterProps {
   onOpenRecoveryCenter: () => void;
   onOpenAutomationSettings: () => void;
+  onOpenSettingsTab?: (tab: SettingsTab) => void;
+  onOpenModelSettings?: () => void;
 }
 
 export function NotificationCenter({
   onOpenRecoveryCenter,
   onOpenAutomationSettings,
+  onOpenSettingsTab,
+  onOpenModelSettings,
 }: NotificationCenterProps): React.JSX.Element {
   const { t } = useTranslation();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -28,6 +33,8 @@ export function NotificationCenter({
     useNotificationEntries({
       onOpenRecoveryCenter,
       onOpenAutomationSettings,
+      onOpenSettingsTab,
+      onOpenModelSettings,
       closePanel: close,
     });
 

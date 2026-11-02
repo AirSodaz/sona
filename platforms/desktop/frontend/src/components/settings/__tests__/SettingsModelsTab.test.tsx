@@ -458,9 +458,11 @@ describe('SettingsModelsTab speaker model selections', () => {
     });
   });
 
-  it('shows Off for both speaker dropdowns even when no speaker models are installed', async () => {
+  it('shows Off for both speaker dropdowns even when no speaker models are installed and switch is on', async () => {
+    setTestConfig({
+      liveSpeakerDiarizationEnabled: true,
+    });
     renderTab(new Set());
-
     await waitFor(() => {
       expect(
         screen.getByRole('button', { name: 'Speaker Segmentation Model' }).textContent
@@ -576,6 +578,7 @@ describe('SettingsModelsTab speaker model selections', () => {
 
   it('clears selected speaker model paths when Off is chosen', async () => {
     setTestConfig({
+      liveSpeakerDiarizationEnabled: true,
       liveSpeakerSegmentationModelPath: '/models/sherpa-onnx-pyannote-segmentation-3-0',
       liveSpeakerEmbeddingModelPath:
         '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
@@ -617,6 +620,7 @@ describe('SettingsModelsTab speaker model selections', () => {
 
   it('renders speaker diarization panel and updates separation sensitivity when active', async () => {
     setTestConfig({
+      liveSpeakerDiarizationEnabled: true,
       liveSpeakerEmbeddingModelPath:
         '/models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx',
       speakerDiarizationSensitivity: 'balanced',
@@ -665,13 +669,13 @@ describe('SettingsModelsTab speaker model selections', () => {
 
   it('disables sensitivity controls when speaker embedding model is Off', async () => {
     setTestConfig({
+      liveSpeakerDiarizationEnabled: true,
       liveSpeakerEmbeddingModelPath: '',
     });
-
     renderTab(new Set());
 
     await waitFor(() => {
-      expect(screen.getByText('Disabled')).toBeDefined();
+      expect(screen.getByText('Enabled')).toBeDefined();
     });
 
     const radioGroup = screen.getByRole('radiogroup');
@@ -695,6 +699,68 @@ describe('SettingsModelsTab speaker model selections', () => {
     expect(permissiveBtn.getAttribute('data-tooltip')).toBeNull();
     expect(balancedBtn.getAttribute('data-tooltip')).toBeNull();
     expect(strictBtn.getAttribute('data-tooltip')).toBeNull();
+  });
+  it('toggles collapse/expand via master switch without clearing model paths in configStore', async () => {
+    setTestConfig({
+      liveSpeakerDiarizationEnabled: false,
+      liveSpeakerSegmentationModelPath: '/models/seg.onnx',
+      liveSpeakerEmbeddingModelPath: '/models/embed.onnx',
+    });
+
+    renderTab(new Set());
+
+    // When switch is off, dropdowns are not rendered
+    expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Speaker Embedding Model' })).toBeNull();
+
+    // Toggle switch on
+    const switchEl = screen.getByRole('switch', { name: 'Speaker Diarization & Recognition' });
+    expect(switchEl.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(switchEl);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.liveSpeakerDiarizationEnabled).toBe(true);
+      expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' })).toBeDefined();
+    });
+
+    // Toggle switch back off
+    fireEvent.click(switchEl);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.liveSpeakerDiarizationEnabled).toBe(false);
+      expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Speaker Embedding Model' })).toBeNull();
+      // Model paths preserved in config
+      expect(useConfigStore.getState().config.liveSpeakerSegmentationModelPath).toBe(
+        '/models/seg.onnx'
+      );
+      expect(useConfigStore.getState().config.liveSpeakerEmbeddingModelPath).toBe(
+        '/models/embed.onnx'
+      );
+    });
+  });
+  it('toggles collapse/expand via master switch in batch scenario', async () => {
+    setTestConfig({
+      batchSpeakerDiarizationEnabled: false,
+      batchSpeakerSegmentationModelPath: '/models/batch-seg.onnx',
+      batchSpeakerEmbeddingModelPath: '/models/batch-embed.onnx',
+    });
+
+    renderTab(new Set());
+    fireEvent.click(screen.getByRole('tab', { name: 'Batch Import' }));
+
+    expect(screen.queryByRole('button', { name: 'Speaker Segmentation Model' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Speaker Embedding Model' })).toBeNull();
+
+    const switchEl = screen.getByRole('switch', { name: 'Speaker Diarization & Recognition' });
+    fireEvent.click(switchEl);
+
+    await waitFor(() => {
+      expect(useConfigStore.getState().config.batchSpeakerDiarizationEnabled).toBe(true);
+      expect(screen.getByRole('button', { name: 'Speaker Segmentation Model' })).toBeDefined();
+      expect(screen.getByRole('button', { name: 'Speaker Embedding Model' })).toBeDefined();
+    });
   });
 
   it('allows selecting and clearing CTC alignment model in live scenario', async () => {

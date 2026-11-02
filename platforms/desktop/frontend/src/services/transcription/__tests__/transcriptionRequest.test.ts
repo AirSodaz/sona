@@ -107,6 +107,7 @@ describe('transcriptionRequest helpers', () => {
       batchModelPath: '/models/batch',
       batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+      batchSpeakerDiarizationEnabled: true,
       speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
       textReplacementSets: [
         {
@@ -161,6 +162,23 @@ describe('transcriptionRequest helpers', () => {
       },
       asrRequest,
     });
+  });
+  it('omits speakerProcessing in batch request when batchSpeakerDiarizationEnabled is false', () => {
+    const config = buildTestConfig({
+      batchModelPath: '/models/batch',
+      batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
+      batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
+      batchSpeakerDiarizationEnabled: false,
+    });
+
+    const { request } = buildBatchTranscriptionRequest({
+      appConfig: config,
+      filePath: 'C:/audio/demo.wav',
+      language: 'zh',
+      enableItn: false,
+    });
+
+    expect(request.speakerProcessing).toBeNull();
   });
 
   it('builds batch process requests in whole-file mode when batch VAD is disabled for exempt models', () => {

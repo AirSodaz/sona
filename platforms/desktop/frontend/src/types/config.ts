@@ -155,6 +155,8 @@ export interface ModelConfig {
   liveSpeakerEmbeddingModelPath?: string;
   /** Path to the CTC alignment model used by live recording. */
   liveAlignmentModelPath?: string;
+  /** Whether live speaker diarization is enabled. */
+  liveSpeakerDiarizationEnabled?: boolean;
   /** Path to punctuation model used by batch import. */
   batchPunctuationModelPath?: string;
   /** Path to VAD model used by batch import. */
@@ -165,6 +167,8 @@ export interface ModelConfig {
   batchSpeakerEmbeddingModelPath?: string;
   /** Path to the CTC alignment model used by batch import. */
   batchAlignmentModelPath?: string;
+  /** Whether batch speaker diarization is enabled. */
+  batchSpeakerDiarizationEnabled?: boolean;
   /** Speaker diarization and recognition sensitivity: 'permissive' | 'balanced' | 'strict'. */
   speakerDiarizationSensitivity?: 'permissive' | 'balanced' | 'strict';
   /**

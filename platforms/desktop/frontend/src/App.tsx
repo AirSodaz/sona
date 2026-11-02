@@ -268,6 +268,7 @@ function App(): React.JSX.Element | null {
           <NotificationCenter
             onOpenRecoveryCenter={openRecoveryCenter}
             onOpenAutomationSettings={openAutomationSettings}
+            onOpenSettingsTab={openSettingsTab}
           />
           <button
             className="btn btn-icon"

@@ -306,6 +306,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
   it('sends null speakerProcessing for batch transcription when either speaker model is off', async () => {
     mocks.config = {
       ...mocks.config,
+      batchSpeakerDiarizationEnabled: true,
       batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       speakerEmbeddingModelPath: '',
       speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
@@ -336,6 +337,7 @@ describe('TranscriptionService voice typing diagnostics', () => {
   it('sends speakerProcessing for batch transcription when both speaker models are configured', async () => {
     mocks.config = {
       ...mocks.config,
+      batchSpeakerDiarizationEnabled: true,
       batchSpeakerSegmentationModelPath: '/models/speaker-segmentation',
       batchSpeakerEmbeddingModelPath: '/models/speaker-embedding.onnx',
       speakerProfiles: [{ id: 'profile-1', name: 'Alice', enabled: true, samples: [] }],
@@ -375,6 +377,169 @@ describe('TranscriptionService voice typing diagnostics', () => {
         },
       })
     );
+  });
+  it('triggers degradation notification when batch diarization is enabled without models for local engine', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+
+    mocks.config = {
+      ...mocks.config,
+      batchSpeakerDiarizationEnabled: true,
+      batchSpeakerSegmentationModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      speakerProfiles: [],
+    };
+    mocks.invoke.mockImplementation((async (...args: any[]) => {
+      const [command] = args;
+      if (command === 'process_batch_file') {
+        return [];
+      }
+      return undefined;
+    }) as any);
+
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+    const service = new TranscriptionService('record');
+    service.setModelPath('/models/batch');
+
+    await service.transcribeFile('C:/audio/demo.wav');
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+  });
+
+  it('does not trigger degradation notification for online batch transcription when local models are missing', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      batchSpeakerDiarizationEnabled: true,
+      batchSpeakerSegmentationModelPath: '',
+      batchSpeakerEmbeddingModelPath: '',
+      speakerProfiles: [],
+      asr: {
+        selections: {
+          batch: {
+            engine: 'online',
+            mode: 'batch',
+            providerId: 'deepgram',
+          },
+        },
+        providers: {
+          online: {
+            deepgram: {
+              apiKey: 'test-key',
+              speakerDiarization: true,
+            },
+          },
+        },
+      },
+    };
+    mocks.invoke.mockImplementation(async (command: string) => {
+      if (command === 'process_batch_file') {
+        return [];
+      }
+      return undefined;
+    });
+
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+    const service = new TranscriptionService('record');
+
+    await service.transcribeFile('C:/audio/demo.wav');
+
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+  });
+
+  it('triggers degradation notification on stop only for record instance, not caption or voiceTyping', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      liveSpeakerDiarizationEnabled: true,
+      liveSpeakerEmbeddingModelPath: '',
+    };
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+
+    const captionService = new TranscriptionService('caption');
+    const captionInternal = captionService as unknown as {
+      transport: string;
+      nativeSourceKind: string;
+    };
+    captionInternal.transport = 'native';
+    captionInternal.nativeSourceKind = 'microphone';
+    await captionService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+
+    const recordService = new TranscriptionService('record');
+    const recordInternal = recordService as unknown as {
+      transport: string;
+      nativeSourceKind: string;
+    };
+    recordInternal.transport = 'native';
+    recordInternal.nativeSourceKind = 'microphone';
+    await recordService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
+  });
+  it('does not trigger degradation notification on stop for record instance when using online live ASR', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      liveSpeakerDiarizationEnabled: true,
+      liveSpeakerEmbeddingModelPath: '',
+      asr: {
+        ...mocks.config.asr,
+        selections: {
+          ...mocks.config.asr?.selections,
+          live: {
+            engine: 'online',
+            providerId: 'volcengine-doubao',
+          },
+        },
+      },
+    };
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+
+    const recordService = new TranscriptionService('record');
+    const recordInternal = recordService as unknown as {
+      transport: string;
+      nativeSourceKind: string;
+      runningConfig: { engine: string };
+    };
+    recordInternal.transport = 'native';
+    recordInternal.nativeSourceKind = 'microphone';
+    recordInternal.runningConfig = { engine: 'online' };
+    await recordService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(false);
+  });
+
+  it('triggers degradation notification on stop for record instance when using external transport with local engine', async () => {
+    const { useSpeakerNotificationStore } = await import('../../stores/speakerNotificationStore');
+    useSpeakerNotificationStore.getState().dismissNotice();
+
+    mocks.config = {
+      ...mocks.config,
+      liveSpeakerDiarizationEnabled: true,
+      liveSpeakerEmbeddingModelPath: '',
+    };
+    const TranscriptionService = await loadTranscriptionService();
+    await syncTranscriptConfig();
+
+    const recordService = new TranscriptionService('record');
+    const recordInternal = recordService as unknown as {
+      transport: string;
+      runningConfig: { engine: string };
+    };
+    recordInternal.transport = 'external';
+    recordInternal.runningConfig = { engine: 'local' };
+    await recordService.stop();
+    expect(useSpeakerNotificationStore.getState().hasDegradedNotice).toBe(true);
   });
 
   it('passes postprocess options to batch and returns backend segments without local filtering', async () => {

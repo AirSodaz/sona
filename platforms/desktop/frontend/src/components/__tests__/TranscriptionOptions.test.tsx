@@ -565,4 +565,90 @@ describe('TranscriptionOptions', () => {
       'English'
     );
   });
+  it('renders speaker diarization switch and toggles local batch diarization', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        batchSpeakerDiarizationEnabled: false,
+      },
+    });
+
+    render(<TranscriptionOptions surface="batch" />);
+    fireEvent.click(getTriggerButton());
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(speakerSwitch.getAttribute('aria-disabled')).toBe('false');
+
+    fireEvent.click(speakerSwitch);
+    expect(useConfigStore.getState().config.batchSpeakerDiarizationEnabled).toBe(true);
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+  });
+  it('renders speaker diarization switch and toggles live diarization on live surface', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        liveSpeakerDiarizationEnabled: false,
+      },
+    });
+
+    render(<TranscriptionOptions surface="live" />);
+    fireEvent.click(getTriggerButton());
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(speakerSwitch);
+    expect(useConfigStore.getState().config.liveSpeakerDiarizationEnabled).toBe(true);
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+  });
+
+  it('shows inline warning hint when local diarization is enabled but models are unconfigured', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        batchSpeakerDiarizationEnabled: true,
+        batchSpeakerEmbeddingModelPath: '',
+        batchSpeakerSegmentationModelPath: '',
+      },
+    });
+
+    render(<TranscriptionOptions surface="batch" />);
+    fireEvent.click(getTriggerButton());
+
+    const warningSpan = document.querySelector('.parameter-settings-warning-text');
+    expect(warningSpan).toBeTruthy();
+    expect(warningSpan?.textContent).toBe('No model configured; feature not active');
+  });
+
+  it('disables speaker switch when cloud provider does not support speaker diarization', () => {
+    useConfigStore.setState({
+      config: {
+        ...DEFAULT_CONFIG,
+        asr: {
+          selections: {
+            ...DEFAULT_CONFIG.asr.selections,
+            batch: {
+              engine: 'online',
+              providerId: 'groq-whisper',
+              modelId: 'whisper-large-v3',
+              modelPath: '',
+              mode: 'batch',
+            },
+          },
+          providers: { online: {} },
+        },
+      },
+    });
+
+    render(<TranscriptionOptions surface="batch" />);
+    fireEvent.click(getTriggerButton());
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-disabled')).toBe('true');
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(
+      screen.getByText('Current cloud model does not support speaker diarization')
+    ).toBeTruthy();
+  });
 });

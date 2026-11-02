@@ -39,6 +39,10 @@ export function normalizeEmbyToolOverrides(input: unknown): EmbyToolOverrides {
       typeof parsed.overwriteExistingExternal === 'boolean'
         ? parsed.overwriteExistingExternal
         : DEFAULT_EMBY_TOOL_OVERRIDES.overwriteExistingExternal,
+    speakerDiarization:
+      typeof parsed.speakerDiarization === 'boolean'
+        ? parsed.speakerDiarization
+        : DEFAULT_EMBY_TOOL_OVERRIDES.speakerDiarization,
   };
 }
 
@@ -175,6 +179,27 @@ export function buildEmbyEffectiveConfig(
 
   if (overrides.enableTimeline !== undefined && overrides.enableTimeline !== null) {
     snapshot.enableTimeline = overrides.enableTimeline;
+  }
+  if (overrides.speakerDiarization !== undefined && overrides.speakerDiarization !== null) {
+    snapshot.batchSpeakerDiarizationEnabled = overrides.speakerDiarization;
+    const asr = snapshot.asr;
+    const batchSelection = asr?.selections?.batch;
+    if (asr && batchSelection?.engine === 'online' && batchSelection.providerId) {
+      const pid = batchSelection.providerId;
+      if (!asr.providers) {
+        asr.providers = {};
+      }
+      const providers = asr.providers;
+      if (!providers.online) {
+        providers.online = {};
+      }
+      const online = providers.online;
+      const existingProviderConfig = (online[pid] ?? {}) as Record<string, unknown>;
+      online[pid] = {
+        ...existingProviderConfig,
+        speakerDiarization: overrides.speakerDiarization,
+      };
+    }
   }
 
   if (overrides.translationModelId !== undefined && overrides.translationModelId !== null) {

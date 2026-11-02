@@ -87,4 +87,143 @@ describe('EmbyProcessingSettingsModal', () => {
       })
     );
   });
+  it('saves speakerDiarization when toggled and falls back to global config default', () => {
+    const onSaved = vi.fn();
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: false,
+        asr: { providers: { online: {} } },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    const { unmount } = render(
+      <EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(speakerSwitch);
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speakerDiarization: true,
+      })
+    );
+    unmount();
+  });
+
+  it('falls back to online provider default when online ASR is active', () => {
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: false,
+        asr: {
+          selections: {
+            batch: {
+              engine: 'online',
+              mode: 'batch',
+              providerId: 'volcengine-doubao',
+            },
+          },
+          providers: {
+            online: {
+              'volcengine-doubao': {
+                speakerDiarization: true,
+              },
+            },
+          },
+        },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    const { unmount } = render(<EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} />);
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('true');
+    unmount();
+  });
+
+  it('clamps speakerDiarization to false when active online provider does not support it', () => {
+    const onSaved = vi.fn();
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: false,
+        asr: {
+          selections: {
+            batch: {
+              engine: 'online',
+              mode: 'batch',
+              providerId: 'groq-whisper',
+            },
+          },
+          providers: {
+            online: {},
+          },
+        },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    localStorage.setItem(
+      'sona:emby:tool_overrides',
+      JSON.stringify({
+        speakerDiarization: true,
+      })
+    );
+
+    const { unmount } = render(
+      <EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={onSaved} />
+    );
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(speakerSwitch.getAttribute('aria-disabled')).toBe('true');
+
+    const saveBtn = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(saveBtn);
+
+    expect(onSaved).toHaveBeenCalledWith(
+      expect.objectContaining({
+        speakerDiarization: false,
+      })
+    );
+    unmount();
+  });
+  it('resolves fallback diarization to false when active online provider does not support it and no overrides exist', () => {
+    useConfigStore.setState({
+      config: {
+        batchSpeakerDiarizationEnabled: true,
+        asr: {
+          selections: {
+            batch: {
+              engine: 'online',
+              mode: 'batch',
+              providerId: 'groq-whisper',
+            },
+          },
+          providers: {
+            online: {},
+          },
+        },
+        llmSettings: { models: [] },
+      } as unknown as AppConfig,
+    });
+
+    localStorage.removeItem('sona:emby:tool_overrides');
+
+    const { unmount } = render(
+      <EmbyProcessingSettingsModal isOpen={true} onClose={vi.fn()} onSaved={vi.fn()} />
+    );
+
+    const speakerSwitch = screen.getByRole('switch', { name: 'Speaker Diarization' });
+    expect(speakerSwitch.getAttribute('aria-checked')).toBe('false');
+    expect(speakerSwitch.getAttribute('aria-disabled')).toBe('true');
+    unmount();
+  });
 });
