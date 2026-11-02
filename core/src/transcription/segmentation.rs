@@ -228,13 +228,7 @@ pub fn pad_and_clamp_spans(
             if end == start {
                 return None;
             }
-            let seg_slice = if end <= total_samples {
-                &samples[start..end]
-            } else if start < total_samples {
-                &samples[start..total_samples]
-            } else {
-                &[]
-            };
+            let seg_slice = &samples[start..end];
             let duration = (end - start) as f32 / sample_rate as f32;
             let start_time = start as f32 / sample_rate as f32;
             Some(AudioSegment {

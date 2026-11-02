@@ -27,8 +27,13 @@ pub struct VadDetectionOptions {
     /// Detector buffer capacity in seconds; non-positive values fall back to
     /// the engine default.
     pub buffer_seconds: f32,
+    /// Duration in seconds to pad symmetrically around detected speech spans.
     pub speech_pad_seconds: f32,
+    /// Maximum allowed speech duration in seconds for an individual segment (hard ceiling).
     pub max_speech_duration: f32,
+    /// Duration in seconds after which detector escalates speech threshold to 0.9
+    /// to encourage natural voice dip termination before the hard limit.
+    pub threshold_escalation_duration: f32,
 }
 
 impl VadDetectionOptions {
@@ -44,6 +49,7 @@ impl VadDetectionOptions {
             buffer_seconds: 5.0,
             speech_pad_seconds: 0.25,
             max_speech_duration: 30.0,
+            threshold_escalation_duration: 25.0,
         }
     }
 
@@ -59,6 +65,7 @@ impl VadDetectionOptions {
             buffer_seconds: 5.0,
             speech_pad_seconds: 0.20,
             max_speech_duration: 30.0,
+            threshold_escalation_duration: 25.0,
         }
     }
 }
@@ -249,7 +256,7 @@ mod tests {
     }
 
     #[test]
-    fn batch_defaults_match_historical_batch_tuning() {
+    fn batch_defaults_match_calibrated_batch_tuning() {
         let options = VadDetectionOptions::batch_defaults("models/silero-vad");
 
         assert_eq!(options.model_path, PathBuf::from("models/silero-vad"));
@@ -260,6 +267,7 @@ mod tests {
         assert_eq!(options.buffer_seconds, 5.0);
         assert_eq!(options.speech_pad_seconds, 0.25);
         assert_eq!(options.max_speech_duration, 30.0);
+        assert_eq!(options.threshold_escalation_duration, 25.0);
     }
 
     #[test]
@@ -274,6 +282,7 @@ mod tests {
         assert_eq!(options.buffer_seconds, 5.0);
         assert_eq!(options.speech_pad_seconds, 0.20);
         assert_eq!(options.max_speech_duration, 30.0);
+        assert_eq!(options.threshold_escalation_duration, 25.0);
     }
 
     #[test]

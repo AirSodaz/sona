@@ -228,12 +228,12 @@ impl StreamTranscriptionJob {
                     threshold: vad_batch.threshold,
                     min_silence_duration: vad_batch.min_silence_duration,
                     min_speech_duration: vad_batch.min_speech_duration,
-                    max_speech_duration: vad_batch.max_speech_duration,
+                    max_speech_duration: vad_batch.threshold_escalation_duration,
                     window_size: 512,
                     sample_rate: 16000,
                     num_threads: 1,
                 };
-                let buffer_size = (options.max_speech_duration
+                let buffer_size = (vad_batch.max_speech_duration
                     + if self.vad_buffer > 0.0 {
                         self.vad_buffer
                     } else {

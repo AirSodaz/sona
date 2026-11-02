@@ -33,7 +33,7 @@ impl Default for VadDetectorOptions {
             min_silence_duration: 0.5,
             min_speech_duration: 0.15,
             window_size: 512,
-            max_speech_duration: 30.0,
+            max_speech_duration: 25.0,
             sample_rate: 16000,
             num_threads: 1,
         }
@@ -567,10 +567,10 @@ mod tests {
     }
 
     #[test]
-    fn vad_detector_options_defaults_max_speech_duration_to_thirty_seconds() {
+    fn vad_detector_options_defaults_max_speech_duration_to_twenty_five_seconds() {
         use super::VadDetectorOptions;
         let options = VadDetectorOptions::default();
-        assert_eq!(options.max_speech_duration, 30.0);
+        assert_eq!(options.max_speech_duration, 25.0);
         assert_eq!(options.threshold, 0.50);
         assert_eq!(options.min_silence_duration, 0.5);
         assert_eq!(options.min_speech_duration, 0.15);

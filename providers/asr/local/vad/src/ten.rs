@@ -51,7 +51,7 @@ fn ten_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {
             min_silence_duration: options.min_silence_duration,
             min_speech_duration: options.min_speech_duration,
             window_size: WINDOW_SIZE,
-            max_speech_duration: options.max_speech_duration,
+            max_speech_duration: options.threshold_escalation_duration,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,
@@ -110,7 +110,7 @@ mod tests {
         assert_eq!(config.ten_vad.threshold, 0.50);
         assert_eq!(config.ten_vad.min_silence_duration, 1.2);
         assert_eq!(config.ten_vad.min_speech_duration, 0.25);
-        assert_eq!(config.ten_vad.max_speech_duration, 30.0);
+        assert_eq!(config.ten_vad.max_speech_duration, 25.0);
         assert_eq!(config.ten_vad.window_size, WINDOW_SIZE);
         assert_eq!(WINDOW_SIZE, 256);
         assert_eq!(config.sample_rate, 16_000);

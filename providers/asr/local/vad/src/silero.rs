@@ -53,7 +53,7 @@ fn silero_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {
             min_silence_duration: options.min_silence_duration,
             min_speech_duration: options.min_speech_duration,
             window_size: 512,
-            max_speech_duration: options.max_speech_duration,
+            max_speech_duration: options.threshold_escalation_duration,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,
@@ -208,7 +208,7 @@ mod tests {
         assert_eq!(config.silero_vad.threshold, 0.50);
         assert_eq!(config.silero_vad.min_silence_duration, 1.2);
         assert_eq!(config.silero_vad.min_speech_duration, 0.25);
-        assert_eq!(config.silero_vad.max_speech_duration, 30.0);
+        assert_eq!(config.silero_vad.max_speech_duration, 25.0);
         assert_eq!(config.silero_vad.window_size, 512);
         assert_eq!(config.sample_rate, 16_000);
     }

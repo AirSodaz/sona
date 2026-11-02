@@ -38,6 +38,9 @@ const SAMPLE_RATE: f64 = 16_000.0;
 const VAD_RELEASE_SECONDS: f64 = 0.10;
 const VAD_EXPECTED_SILENCE_SECONDS: f64 = 0.50;
 const MIN_VALID_SPEECH_SECONDS: f64 = 0.10;
+const MAX_SPEECH_DURATION_SECONDS: f64 = 30.0;
+const PRE_ROLL_DURATION_SECONDS: f64 = 0.4;
+const PRE_ROLL_SAMPLES: usize = (SAMPLE_RATE * PRE_ROLL_DURATION_SECONDS) as usize;
 type PendingInferenceTask = tokio::task::JoinHandle<Result<(), AsrPortError>>;
 
 pub struct LocalSherpaSession {
@@ -716,13 +719,17 @@ async fn feed_audio_samples_inner(
                 info!("[Sherpa] Instance {} detected speech start.", instance_id);
             }
 
-            let samples_to_keep = (16000.0 * 0.3) as usize;
+            let samples_to_keep = PRE_ROLL_SAMPLES;
             instance
                 .offline_state
                 .begin_speech(instance.total_samples, samples_to_keep);
         }
+        let max_speech_samples = (SAMPLE_RATE * MAX_SPEECH_DURATION_SECONDS) as usize;
+        let is_over_max_duration = instance.offline_state.is_speech_active()
+            && instance.offline_state.buffered_speech_sample_count() + samples.len()
+                >= max_speech_samples;
 
-        if currently_speaking {
+        if currently_speaking && !is_over_max_duration {
             instance.offline_state.push_speech_chunk(samples.to_vec());
 
             if instance.enable_partial_decoding {
@@ -822,7 +829,7 @@ async fn feed_audio_samples_inner(
             }
         }
 
-        if !currently_speaking {
+        if !currently_speaking || is_over_max_duration {
             let previous_decode_ms = instance.last_partial_decode_ms.swap(0, Ordering::AcqRel);
             if previous_decode_ms > 0 {
                 instance
@@ -831,6 +838,9 @@ async fn feed_audio_samples_inner(
             }
 
             if instance.offline_state.is_speech_active() {
+                if is_over_max_duration {
+                    instance.offline_state.push_speech_chunk(samples.to_vec());
+                }
                 if let Some(label) = diagnostics_instance_label(instance_id) {
                     info!(
                         "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
@@ -848,24 +858,26 @@ async fn feed_audio_samples_inner(
 
                 let mut offline_copy = instance.offline_state.speech_chunks().to_vec();
                 let total_buffered_samples = buffered_sample_count(&offline_copy);
-                let release_samples = (SAMPLE_RATE * VAD_RELEASE_SECONDS) as usize;
-                let expected_silence_samples =
-                    (SAMPLE_RATE * VAD_EXPECTED_SILENCE_SECONDS) as usize;
-                let trim_samples = expected_silence_samples.saturating_sub(release_samples);
-                let min_valid_samples = (SAMPLE_RATE * MIN_VALID_SPEECH_SECONDS) as usize;
-                let max_trimmable = total_buffered_samples.saturating_sub(min_valid_samples);
-                let actual_trim = trim_samples.min(max_trimmable);
+                if !is_over_max_duration {
+                    let release_samples = (SAMPLE_RATE * VAD_RELEASE_SECONDS) as usize;
+                    let expected_silence_samples =
+                        (SAMPLE_RATE * VAD_EXPECTED_SILENCE_SECONDS) as usize;
+                    let trim_samples = expected_silence_samples.saturating_sub(release_samples);
+                    let min_valid_samples = (SAMPLE_RATE * MIN_VALID_SPEECH_SECONDS) as usize;
+                    let max_trimmable = total_buffered_samples.saturating_sub(min_valid_samples);
+                    let actual_trim = trim_samples.min(max_trimmable);
 
-                let mut remaining_to_trim = actual_trim;
-                while remaining_to_trim > 0 && !offline_copy.is_empty() {
-                    let last_chunk = offline_copy.last_mut().unwrap();
-                    if last_chunk.len() <= remaining_to_trim {
-                        remaining_to_trim -= last_chunk.len();
-                        offline_copy.pop();
-                    } else {
-                        let new_len = last_chunk.len() - remaining_to_trim;
-                        last_chunk.truncate(new_len);
-                        remaining_to_trim = 0;
+                    let mut remaining_to_trim = actual_trim;
+                    while remaining_to_trim > 0 && !offline_copy.is_empty() {
+                        let last_chunk = offline_copy.last_mut().unwrap();
+                        if last_chunk.len() <= remaining_to_trim {
+                            remaining_to_trim -= last_chunk.len();
+                            offline_copy.pop();
+                        } else {
+                            let new_len = last_chunk.len() - remaining_to_trim;
+                            last_chunk.truncate(new_len);
+                            remaining_to_trim = 0;
+                        }
                     }
                 }
                 let observer_copy = observer.clone();
@@ -929,7 +941,7 @@ async fn feed_audio_samples_inner(
                 instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
             }
 
-            let max_ring_samples = (16000.0 * 0.3) as usize;
+            let max_ring_samples = PRE_ROLL_SAMPLES;
             instance.offline_state.push_ring_chunk_with_sample_limit(
                 samples.to_vec(),
                 max_ring_samples,

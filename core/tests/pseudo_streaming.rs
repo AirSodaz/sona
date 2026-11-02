@@ -90,6 +90,7 @@ async fn pseudo_streaming_session_end_to_end_flow() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
         vad_min_silence_duration_ms: None,
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -174,6 +175,7 @@ async fn pseudo_streaming_session_sentence_only_flow() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: Some(false),
         vad_min_silence_duration_ms: None,
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -283,6 +285,7 @@ async fn pseudo_streaming_empty_durations_falls_back_to_synthesize() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
         vad_min_silence_duration_ms: None,
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -340,6 +343,7 @@ async fn pseudo_streaming_explicit_durations_are_preserved() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
         vad_min_silence_duration_ms: None,
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -409,6 +413,7 @@ async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
         vad_min_silence_duration_ms: None,
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -465,6 +470,7 @@ async fn natural_speech_offset_trims_confirmation_silence() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: Some(false),
         vad_min_silence_duration_ms: Some(500),
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -536,6 +542,7 @@ async fn flush_preserves_audio_without_tail_trimming() {
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: Some(false),
         vad_min_silence_duration_ms: Some(500),
+        vad_max_speech_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -562,6 +569,61 @@ async fn flush_preserves_audio_without_tail_trimming() {
             .expect("should have emitted final update on flush");
         assert_eq!(last.stage, "final");
         // All 3200 samples preserved verbatim without trimming
+        assert_eq!(last.update.upsert_segments[0].text, "hello final (3200)");
+    }
+
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn continuous_speech_exceeding_max_duration_forces_utterance_finalization() {
+    let speech_flag = Arc::new(AtomicBool::new(false));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    // Set max speech duration to 200ms (3200 samples at 16kHz) for testing
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-max-duration".to_string(),
+        decoder: Arc::new(TestDecoder),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: Some(false),
+        vad_min_silence_duration_ms: Some(500),
+        vad_max_speech_duration_ms: Some(200),
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    // Speech starts and stays true continuously (e.g. loud continuous noise or monologue)
+    speech_flag.store(true, Ordering::Release);
+    // Frame 1: 1600 samples (100ms)
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    // Frame 2: 1600 samples (100ms) -> total reaches 3200 samples (200ms max speech limit)
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        let last = updates
+            .last()
+            .expect("should have emitted forced final update at max speech duration");
+        assert_eq!(last.stage, "final");
+        // Forced cutoff preserves all samples (no silence trimming)
         assert_eq!(last.update.upsert_segments[0].text, "hello final (3200)");
     }
 

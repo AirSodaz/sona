@@ -453,6 +453,9 @@ impl StreamingAsrFactoryPort for LlamaCppStreamingFactory {
                 vad_min_silence_duration_ms: Some(
                     (vad_options.min_silence_duration * 1000.0).round() as u32,
                 ),
+                vad_max_speech_duration_ms: Some(
+                    (vad_options.max_speech_duration * 1000.0).round() as u32,
+                ),
             })?;
 
             Ok(Arc::new(session) as Arc<dyn AsrStreamingSession>)
