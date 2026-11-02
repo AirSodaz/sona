@@ -31,10 +31,15 @@ impl NativeStreamingVad {
 }
 impl StreamingVadPort for NativeStreamingVad {
     fn accept_samples(&mut self, samples: &[f32]) {
+        if self.window_size == 0 {
+            return;
+        }
         self.buffer.extend_from_slice(samples);
 
-        while self.buffer.len() >= self.window_size {
-            let chunk = &self.buffer[..self.window_size];
+        let full_windows = self.buffer.len() / self.window_size;
+        for i in 0..full_windows {
+            let start = i * self.window_size;
+            let chunk = &self.buffer[start..start + self.window_size];
             match self.runner.step(chunk) {
                 Ok(prob) => {
                     self.state_machine.accept_prob(prob, self.window_size);
@@ -43,7 +48,9 @@ impl StreamingVadPort for NativeStreamingVad {
                     log::warn!("VAD streaming step inference failed: {err}");
                 }
             }
-            self.buffer.drain(..self.window_size);
+        }
+        if full_windows > 0 {
+            self.buffer.drain(..full_windows * self.window_size);
         }
     }
 

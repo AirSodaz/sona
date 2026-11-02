@@ -111,13 +111,25 @@ pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
         return true;
     }
 
+    if let Some(parent) = model_path.parent()
+        && (parent
+            .file_name()
+            .and_then(|f| f.to_str())
+            .is_some_and(check_str)
+            || parent.join("am.mvn").is_file()
+            || parent.join("vad.mvn").is_file())
+    {
+        return true;
+    }
+
     if model_path.is_dir()
         && let Ok(entries) = std::fs::read_dir(model_path)
     {
         for entry in entries.flatten() {
             if let Some(name) = entry.file_name().to_str()
-                && check_str(name)
-                && name.ends_with(".onnx")
+                && ((check_str(name) && name.ends_with(".onnx"))
+                    || name == "am.mvn"
+                    || name == "vad.mvn")
             {
                 return true;
             }
@@ -141,8 +153,9 @@ mod tests {
 
         assert!(fsmn.can_handle(Path::new("models/fsmn_vad.onnx")));
         assert!(fsmn.can_handle(Path::new("models/speech_fsmn_vad_zh-cn-16k-common.onnx")));
+        assert!(fsmn.can_handle(Path::new("speech_fsmn_vad_zh-cn-16k-common/model.onnx")));
         assert!(!fsmn.can_handle(Path::new("models/silero_vad.onnx")));
-
+        assert!(!fsmn.can_handle(Path::new("models/silero/model.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad_v5.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad_v6.onnx")));

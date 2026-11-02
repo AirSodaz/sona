@@ -63,6 +63,10 @@ fn silero_onnx_real_model_smoke_test() {
     let spans = engine
         .detect(&audio, 16_000, &opts)
         .expect("detects on audio");
+    assert!(
+        !spans.is_empty(),
+        "Expected speech spans on synthetic audio"
+    );
     println!("Silero detected spans: {spans:?}");
 
     // 3. Streaming test
@@ -74,6 +78,13 @@ fn silero_onnx_real_model_smoke_test() {
     // Feed silence
     stream.accept_samples(&vec![0.0; 16_000]);
     assert!(!stream.is_speech_detected());
+
+    // Feed speech to verify positive activation
+    stream.accept_samples(&audio[16_000..48_000]);
+    assert!(
+        stream.is_speech_detected(),
+        "Streaming should detect active speech"
+    );
 
     stream.reset();
     assert!(!stream.is_speech_detected());
@@ -113,6 +124,10 @@ fn fsmn_onnx_real_model_smoke_test() {
     let spans = engine
         .detect(&audio, 16_000, &opts)
         .expect("detects on audio");
+    assert!(
+        !spans.is_empty(),
+        "Expected speech spans on synthetic audio"
+    );
     println!("FSMN detected spans: {spans:?}");
 
     // 3. Streaming test
@@ -124,6 +139,13 @@ fn fsmn_onnx_real_model_smoke_test() {
     // Feed silence
     stream.accept_samples(&vec![0.0; 16_000]);
     assert!(!stream.is_speech_detected());
+
+    // Feed speech to verify positive activation
+    stream.accept_samples(&audio[16_000..48_000]);
+    assert!(
+        stream.is_speech_detected(),
+        "Streaming should detect active speech"
+    );
 
     stream.reset();
     assert!(!stream.is_speech_detected());
@@ -145,6 +167,14 @@ fn real_speech_audio_file_detection_test() {
 
     // 1. Silero VAD on real speech
     let silero_path = workspace_model_path("target/test-models/silero_vad.onnx");
+    let fsmn_path = workspace_model_path("target/test-models/fsmn_vad.onnx");
+    if !silero_path.is_file() && !fsmn_path.is_file() {
+        eprintln!(
+            "Skipping real_speech_audio_file_detection_test: neither Silero nor FSMN model found"
+        );
+        return;
+    }
+
     if silero_path.is_file() {
         let engine = engine_set.resolve(Some(&silero_path)).unwrap();
         let opts = VadDetectionOptions::batch_defaults(&silero_path);

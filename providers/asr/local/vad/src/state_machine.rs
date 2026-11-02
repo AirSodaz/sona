@@ -36,7 +36,7 @@ impl UniversalVadStateMachine {
         let neg_threshold = options
             .neg_threshold
             .unwrap_or_else(|| (threshold - 0.15).max(0.01))
-            .min(threshold);
+            .clamp(0.01, threshold);
 
         let min_silence_samples = (options.min_silence_duration.max(0.0) * rate).round() as usize;
         let min_speech_samples = (options.min_speech_duration.max(0.0) * rate).round() as usize;
@@ -106,10 +106,11 @@ impl UniversalVadStateMachine {
 
         // 1. Speech continuation / Onset
         if prob >= active_threshold {
-            if let Some(temp_end) = self.temp_end_sample {
+            if let Some(_temp_end) = self.temp_end_sample.take() {
                 // Speech resumed after short dip; cancel pending silence
-                self.temp_end_sample = None;
-                if self.next_start_sample < temp_end {
+                if let Some(prev_end) = self.prev_end_sample
+                    && self.next_start_sample < prev_end
+                {
                     self.next_start_sample = frame_start;
                 }
             }
@@ -123,10 +124,8 @@ impl UniversalVadStateMachine {
                 }
             }
         } else if !self.triggered {
-            // In silence: if probability drops below neg_threshold, abort candidate onset
-            if prob < self.neg_threshold {
-                self.candidate_start_sample = None;
-            }
+            // In silence: abort candidate onset if probability does not sustain threshold
+            self.candidate_start_sample = None;
         }
 
         // 2. Maximum speech duration enforcement (hard limit)
@@ -146,8 +145,11 @@ impl UniversalVadStateMachine {
             };
 
             // Reset state for subsequent segment
-            if self.next_start_sample > end_sample && prob >= self.threshold {
+            if self.next_start_sample > end_sample {
                 self.speech_start_sample = self.next_start_sample;
+                self.triggered = true;
+            } else if prob >= active_neg_threshold {
+                self.speech_start_sample = end_sample;
                 self.triggered = true;
             } else {
                 self.triggered = false;
@@ -344,6 +346,8 @@ mod tests {
             .expect("cuts at max duration");
         assert_eq!(span.start_sample, 0);
         assert_eq!(span.end_sample, 5 * 512);
+        // Speech should remain triggered for subsequent audio because prob was high
+        assert!(sm.is_speech_active());
     }
 
     #[test]
@@ -370,5 +374,32 @@ mod tests {
             .expect("emits span on escalated dip");
         assert_eq!(span.start_sample, 0);
         assert_eq!(span.end_sample, 5 * 1600);
+    }
+    #[test]
+    fn ambient_noise_does_not_latch_candidate_onset() {
+        let frame_samples = 512;
+        // min_speech = 64ms (2 frames)
+        let opts = test_options(0.50, 0.35, 0.5, 0.064, 30.0);
+        let mut sm = UniversalVadStateMachine::new(&opts, 16_000);
+
+        // Frame 1: isolated spike 0.60 (candidate onset)
+        assert_eq!(sm.accept_prob(0.60, frame_samples), None);
+        assert!(!sm.is_speech_active());
+
+        // Frame 2..5: ambient noise hovering at 0.40 (between neg_threshold 0.35 and threshold 0.50)
+        // Must abort candidate onset rather than latching it
+        for _ in 0..4 {
+            assert_eq!(sm.accept_prob(0.40, frame_samples), None);
+            assert!(!sm.is_speech_active());
+        }
+
+        // Frame 6: single high prob frame 0.70. Since candidate was cleared, this is frame 1 of new candidate
+        assert_eq!(sm.accept_prob(0.70, frame_samples), None);
+        assert!(!sm.is_speech_active());
+
+        // Frame 7: second high prob frame -> NOW triggers speech, starting at frame 6 (index 5)
+        assert_eq!(sm.accept_prob(0.70, frame_samples), None);
+        assert!(sm.is_speech_active());
+        assert_eq!(sm.speech_start_sample, 5 * 512);
     }
 }

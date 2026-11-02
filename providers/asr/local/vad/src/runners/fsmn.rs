@@ -24,8 +24,8 @@ pub struct FsmnVadRunner {
     cache3: Vec<f32>,
     // Streaming sample buffer
     sample_buffer: Vec<f32>,
-    // Streaming recent 80-dim fbank frame history (up to 4 past frames for LFR context)
-    fbank_history: VecDeque<[f32; 80]>,
+    // Streaming recent 80-dim fbank frame history with silence flags (up to 5 frames for symmetric LFR)
+    fbank_history: VecDeque<([f32; 80], bool)>,
     window_size: usize,
 }
 
@@ -69,7 +69,7 @@ impl FsmnVadRunner {
             cache2: vec![0.0f32; CACHE_LEN],
             cache3: vec![0.0f32; CACHE_LEN],
             sample_buffer: Vec::with_capacity(1600),
-            fbank_history: VecDeque::with_capacity(5),
+            fbank_history: VecDeque::with_capacity(6),
             window_size: FRAME_SHIFT_SAMPLES, // 160 samples (10ms) hop
         })
     }
@@ -91,14 +91,8 @@ impl FsmnVadRunner {
                 (e1 / (e0 + e1)).clamp(0.0, 1.0)
             }
         } else if !slice.is_empty() {
-            let noise_score = slice[0];
-            let speech_score = 1.0 - noise_score;
-            let margin = speech_score - noise_score;
-            if margin <= 0.0 {
-                0.0
-            } else {
-                (margin / 1.2).clamp(0.0, 1.0)
-            }
+            let noise_score = slice[0].clamp(0.0, 1.0);
+            (1.0 - noise_score).clamp(0.0, 1.0)
         } else {
             0.0
         }
@@ -120,6 +114,16 @@ impl VadModelRunner for FsmnVadRunner {
     }
 
     fn step(&mut self, chunk: &[f32]) -> Result<f32, AsrPortError> {
+        if chunk.len() != self.window_size {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Unsupported,
+                format!(
+                    "FsmnVadRunner expected chunk of {} samples (got {})",
+                    self.window_size,
+                    chunk.len()
+                ),
+            ));
+        }
         self.sample_buffer.extend_from_slice(chunk);
 
         if self.sample_buffer.len() < FRAME_LENGTH_SAMPLES {
@@ -134,30 +138,29 @@ impl VadModelRunner for FsmnVadRunner {
         // Shift buffer by 160 samples (10ms)
         self.sample_buffer.drain(..FRAME_SHIFT_SAMPLES);
 
-        // 2. Build 400-dim LFR stacked feature using historical frames
-        let mut stacked_400 = [0.0f32; 400];
-        // lfr_m = 5, left_pad = 2
-        // If history is less than 2, pad with current frame
-        for m in 0..5 {
-            let frame_ref = match m {
-                0 => self.fbank_history.front().unwrap_or(&frame_80),
-                1 => self.fbank_history.get(1).unwrap_or(&frame_80),
-                2 => self.fbank_history.get(2).unwrap_or(&frame_80),
-                3 => self.fbank_history.get(3).unwrap_or(&frame_80),
-                _ => &frame_80,
-            };
+        // 2. Symmetric LFR: lfr_m = 5, left_pad = 2.
+        // Pad left context with the first frame on stream start
+        if self.fbank_history.is_empty() {
+            self.fbank_history.push_back((frame_80, is_silence));
+            self.fbank_history.push_back((frame_80, is_silence));
+        }
+        self.fbank_history.push_back((frame_80, is_silence));
 
+        // Require 5 frames before evaluating the center frame (slot 2)
+        if self.fbank_history.len() < 5 {
+            return Ok(0.0);
+        }
+
+        let center_is_silence = self.fbank_history[2].1;
+        let mut stacked_400 = [0.0f32; 400];
+        for m in 0..5 {
+            let frame_ref = &self.fbank_history[m].0;
             let dst = m * 80;
             for b in 0..80 {
                 stacked_400[dst + b] = (frame_ref[b] + self.cmvn.shifts[b]) * self.cmvn.rescales[b];
             }
         }
-
-        if self.fbank_history.len() >= 4 {
-            self.fbank_history.pop_front();
-        }
-        self.fbank_history.push_back(frame_80);
-
+        self.fbank_history.pop_front();
         // 3. Bind ONNX inputs: speech [1, 1, 400] and in_cache0..3 [1, 128, 19, 1]
         let speech_arr = ArrayD::from_shape_vec(IxDyn(&[1, 1, 400]), stacked_400.to_vec())
             .map_err(|e| {
@@ -227,32 +230,43 @@ impl VadModelRunner for FsmnVadRunner {
             )
         })?;
 
-        let prob = Self::extract_prob_from_slice(logits_data, is_silence);
+        let prob = Self::extract_prob_from_slice(logits_data, center_is_silence);
 
-        // Update caches
-        if let Some(t) = outputs.get("out_cache0")
-            && let Ok((_, data)) = t.try_extract_raw_tensor::<f32>()
-            && data.len() == CACHE_LEN
-        {
-            self.cache0.copy_from_slice(data);
-        }
-        if let Some(t) = outputs.get("out_cache1")
-            && let Ok((_, data)) = t.try_extract_raw_tensor::<f32>()
-            && data.len() == CACHE_LEN
-        {
-            self.cache1.copy_from_slice(data);
-        }
-        if let Some(t) = outputs.get("out_cache2")
-            && let Ok((_, data)) = t.try_extract_raw_tensor::<f32>()
-            && data.len() == CACHE_LEN
-        {
-            self.cache2.copy_from_slice(data);
-        }
-        if let Some(t) = outputs.get("out_cache3")
-            && let Ok((_, data)) = t.try_extract_raw_tensor::<f32>()
-            && data.len() == CACHE_LEN
-        {
-            self.cache3.copy_from_slice(data);
+        // Update caches and fail if missing or malformed
+        for i in 0..4 {
+            let name = match i {
+                0 => "out_cache0",
+                1 => "out_cache1",
+                2 => "out_cache2",
+                _ => "out_cache3",
+            };
+            let cache_tensor = outputs.get(name).ok_or_else(|| {
+                AsrPortError::new(
+                    AsrPortErrorKind::Runtime,
+                    format!("Missing {name} in FSMN output"),
+                )
+            })?;
+            let (_, data) = cache_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                AsrPortError::new(
+                    AsrPortErrorKind::Runtime,
+                    format!("Failed to extract {name}: {e}"),
+                )
+            })?;
+            if data.len() != CACHE_LEN {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Runtime,
+                    format!(
+                        "Expected {CACHE_LEN} elements for {name}, got {}",
+                        data.len()
+                    ),
+                ));
+            }
+            match i {
+                0 => self.cache0.copy_from_slice(data),
+                1 => self.cache1.copy_from_slice(data),
+                2 => self.cache2.copy_from_slice(data),
+                _ => self.cache3.copy_from_slice(data),
+            }
         }
 
         Ok(prob)
@@ -350,6 +364,17 @@ impl VadModelRunner for FsmnVadRunner {
             logits_data.len() / num_frames
         };
 
+        if logits_data.len() < num_frames * num_classes {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Runtime,
+                format!(
+                    "FSMN logits tensor truncated: expected {} elements, got {}",
+                    num_frames * num_classes,
+                    logits_data.len()
+                ),
+            ));
+        }
+
         let mut probs = Vec::with_capacity(num_frames);
         for t in 0..num_frames {
             let start_s = t * FRAME_SHIFT_SAMPLES;
@@ -358,12 +383,10 @@ impl VadModelRunner for FsmnVadRunner {
 
             let start = t * num_classes;
             let end = (t + 1) * num_classes;
-            if end <= logits_data.len() {
-                probs.push(Self::extract_prob_from_slice(
-                    &logits_data[start..end],
-                    is_silence,
-                ));
-            }
+            probs.push(Self::extract_prob_from_slice(
+                &logits_data[start..end],
+                is_silence,
+            ));
         }
 
         Ok(probs)
@@ -378,4 +401,29 @@ fn is_digital_silence(samples: &[f32]) -> bool {
     let sum_sq: f32 = samples.iter().map(|&s| s * s).sum();
     let rms = (sum_sq / samples.len() as f32).sqrt();
     rms < 1e-4
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_prob_multi_class_and_binary() {
+        // Binary softmax
+        assert!((FsmnVadRunner::extract_prob_from_slice(&[0.1, 0.9], false) - 0.9).abs() < 1e-4);
+        assert!((FsmnVadRunner::extract_prob_from_slice(&[0.9, 0.1], false) - 0.1).abs() < 1e-4);
+
+        // Digital silence override
+        assert_eq!(
+            FsmnVadRunner::extract_prob_from_slice(&[0.1, 0.9], true),
+            0.0
+        );
+
+        // Multi-class (noise score at index 0)
+        let mut multi = vec![0.0f32; 248];
+        multi[0] = 0.05; // noise score 0.05 -> speech prob 0.95
+        assert!((FsmnVadRunner::extract_prob_from_slice(&multi, false) - 0.95).abs() < 1e-4);
+
+        multi[0] = 0.95; // noise score 0.95 -> speech prob 0.05
+        assert!((FsmnVadRunner::extract_prob_from_slice(&multi, false) - 0.05).abs() < 1e-4);
+    }
 }

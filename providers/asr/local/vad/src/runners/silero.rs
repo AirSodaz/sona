@@ -7,7 +7,7 @@ use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
 use std::path::Path;
 
 pub const DEFAULT_SILERO_WINDOW_SIZE: usize = 512; // 32ms @ 16kHz
-
+pub const SILERO_CONTEXT_SIZE: usize = 64; // 4ms context @ 16kHz
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum SileroVersion {
     V4,
@@ -21,6 +21,8 @@ pub struct SileroVadRunner {
     sr_input_name: Option<String>,
     // V5 / V6 recurrent state [2, 1, 128]
     state: Array3<f32>,
+    // V5 / V6 rolling context [64]
+    context: Vec<f32>,
     // V4 recurrent states [2, 1, 64]
     h: Array3<f32>,
     c: Array3<f32>,
@@ -46,16 +48,26 @@ impl SileroVadRunner {
         let mut audio_input_name = "input".to_string();
         let mut sr_input_name = None;
         let mut has_h = false;
-        let mut _has_state = false;
+        let mut has_state = false;
 
         for input in &session.inputs {
             match input.name.as_str() {
-                "input" | "waveform" => audio_input_name = input.name.clone(),
+                "input" | "waveform" | "x" => audio_input_name = input.name.clone(),
                 "sr" => sr_input_name = Some(input.name.clone()),
-                "state" => _has_state = true,
+                "state" => has_state = true,
                 "h" => has_h = true,
                 _ => {}
             }
+        }
+
+        if !has_h && !has_state {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                format!(
+                    "Unsupported Silero model at {}: missing recurrent state inputs ('state' or 'h')",
+                    path.display()
+                ),
+            ));
         }
 
         let version = if has_h {
@@ -63,13 +75,13 @@ impl SileroVadRunner {
         } else {
             SileroVersion::V5OrV6
         };
-
         Ok(Self {
             session,
             version,
             audio_input_name,
             sr_input_name,
             state: Array3::zeros((2, 1, 128)),
+            context: vec![0.0f32; SILERO_CONTEXT_SIZE],
             h: Array3::zeros((2, 1, 64)),
             c: Array3::zeros((2, 1, 64)),
             window_size: DEFAULT_SILERO_WINDOW_SIZE,
@@ -84,6 +96,7 @@ impl VadModelRunner for SileroVadRunner {
 
     fn reset_state(&mut self) {
         self.state.fill(0.0);
+        self.context.fill(0.0);
         self.h.fill(0.0);
         self.c.fill(0.0);
     }
@@ -100,20 +113,6 @@ impl VadModelRunner for SileroVadRunner {
             ));
         }
 
-        let audio_arr =
-            Array2::from_shape_vec((1, self.window_size), chunk.to_vec()).map_err(|e| {
-                AsrPortError::new(
-                    AsrPortErrorKind::Runtime,
-                    format!("Failed to construct audio tensor: {e}"),
-                )
-            })?;
-        let audio_val = Value::from_array(audio_arr).map_err(|e| {
-            AsrPortError::new(
-                AsrPortErrorKind::Runtime,
-                format!("Failed to bind audio value: {e}"),
-            )
-        })?;
-
         let sr_val = if self.sr_input_name.is_some() {
             let sr_arr = Array1::from_vec(vec![16_000i64]);
             Some(Value::from_array(sr_arr).map_err(|e| {
@@ -128,6 +127,27 @@ impl VadModelRunner for SileroVadRunner {
 
         match self.version {
             SileroVersion::V5OrV6 => {
+                let mut audio_samples = Vec::with_capacity(SILERO_CONTEXT_SIZE + self.window_size);
+                audio_samples.extend_from_slice(&self.context);
+                audio_samples.extend_from_slice(chunk);
+
+                let audio_arr = Array2::from_shape_vec(
+                    (1, SILERO_CONTEXT_SIZE + self.window_size),
+                    audio_samples,
+                )
+                .map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to construct audio tensor: {e}"),
+                    )
+                })?;
+                let audio_val = Value::from_array(audio_arr).map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to bind audio value: {e}"),
+                    )
+                })?;
+
                 let state_val = Value::from_array(self.state.clone()).map_err(|e| {
                     AsrPortError::new(
                         AsrPortErrorKind::Runtime,
@@ -171,27 +191,56 @@ impl VadModelRunner for SileroVadRunner {
                     })?;
                 let prob = output_data.first().copied().unwrap_or(0.0);
 
-                if let Some(next_state_tensor) =
-                    outputs.get("stateN").or_else(|| outputs.get("state"))
-                {
-                    let (_shape, data) = next_state_tensor
-                        .try_extract_raw_tensor::<f32>()
-                        .map_err(|e| {
-                            AsrPortError::new(
-                                AsrPortErrorKind::Runtime,
-                                format!("Failed to extract stateN: {e}"),
-                            )
-                        })?;
-                    if data.len() == 2 * 128
-                        && let Ok(new_state) = Array3::from_shape_vec((2, 1, 128), data.to_vec())
-                    {
-                        self.state = new_state;
-                    }
+                let next_state_tensor = outputs
+                    .get("stateN")
+                    .or_else(|| outputs.get("state"))
+                    .ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Missing 'stateN' or 'state' in Silero outputs",
+                        )
+                    })?;
+                let (_, data) = next_state_tensor
+                    .try_extract_raw_tensor::<f32>()
+                    .map_err(|e| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            format!("Failed to extract state tensor: {e}"),
+                        )
+                    })?;
+                if data.len() != 2 * 128 {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Expected 256 state elements, got {}", data.len()),
+                    ));
                 }
+                if let Some(slice) = self.state.as_slice_mut() {
+                    slice.copy_from_slice(data);
+                } else {
+                    self.state = Array3::from_shape_vec((2, 1, 128), data.to_vec())
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
+                }
+
+                self.context
+                    .copy_from_slice(&chunk[self.window_size - SILERO_CONTEXT_SIZE..]);
 
                 Ok(prob)
             }
             SileroVersion::V4 => {
+                let audio_arr = Array2::from_shape_vec((1, self.window_size), chunk.to_vec())
+                    .map_err(|e| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            format!("Failed to construct audio tensor: {e}"),
+                        )
+                    })?;
+                let audio_val = Value::from_array(audio_arr).map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to bind audio value: {e}"),
+                    )
+                })?;
+
                 let h_val = Value::from_array(self.h.clone()).map_err(|e| {
                     AsrPortError::new(AsrPortErrorKind::Runtime, format!("Failed to bind h: {e}"))
                 })?;
@@ -236,17 +285,60 @@ impl VadModelRunner for SileroVadRunner {
                     })?;
                 let prob = output_data.first().copied().unwrap_or(0.0);
 
-                if let Some(hn_tensor) = outputs.get("hn")
-                    && let Ok((_, data)) = hn_tensor.try_extract_raw_tensor::<f32>()
-                    && let Ok(new_h) = Array3::from_shape_vec((2, 1, 64), data.to_vec())
-                {
-                    self.h = new_h;
+                let hn_tensor = outputs
+                    .get("hn")
+                    .or_else(|| outputs.get("new_h"))
+                    .ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Missing 'hn' or 'new_h' in Silero V4 outputs",
+                        )
+                    })?;
+                let (_, h_data) = hn_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to extract hn: {e}"),
+                    )
+                })?;
+                if h_data.len() != 2 * 64 {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Expected 128 hn elements, got {}", h_data.len()),
+                    ));
                 }
-                if let Some(cn_tensor) = outputs.get("cn")
-                    && let Ok((_, data)) = cn_tensor.try_extract_raw_tensor::<f32>()
-                    && let Ok(new_c) = Array3::from_shape_vec((2, 1, 64), data.to_vec())
-                {
-                    self.c = new_c;
+                if let Some(slice) = self.h.as_slice_mut() {
+                    slice.copy_from_slice(h_data);
+                } else {
+                    self.h = Array3::from_shape_vec((2, 1, 64), h_data.to_vec())
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
+                }
+
+                let cn_tensor = outputs
+                    .get("cn")
+                    .or_else(|| outputs.get("new_c"))
+                    .ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Missing 'cn' or 'new_c' in Silero V4 outputs",
+                        )
+                    })?;
+                let (_, c_data) = cn_tensor.try_extract_raw_tensor::<f32>().map_err(|e| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Failed to extract cn: {e}"),
+                    )
+                })?;
+                if c_data.len() != 2 * 64 {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Runtime,
+                        format!("Expected 128 cn elements, got {}", c_data.len()),
+                    ));
+                }
+                if let Some(slice) = self.c.as_slice_mut() {
+                    slice.copy_from_slice(c_data);
+                } else {
+                    self.c = Array3::from_shape_vec((2, 1, 64), c_data.to_vec())
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
                 }
 
                 Ok(prob)
@@ -257,8 +349,14 @@ impl VadModelRunner for SileroVadRunner {
     fn predict_probs_batch(&mut self, samples: &[f32]) -> Result<Vec<f32>, AsrPortError> {
         self.reset_state();
 
+        let remainder = samples.len() % self.window_size;
         let num_chunks = samples.len() / self.window_size;
-        let mut probs = Vec::with_capacity(num_chunks);
+        let total_chunks = if remainder > 0 {
+            num_chunks + 1
+        } else {
+            num_chunks
+        };
+        let mut probs = Vec::with_capacity(total_chunks);
 
         for i in 0..num_chunks {
             let start = i * self.window_size;

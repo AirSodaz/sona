@@ -219,25 +219,28 @@ impl CmvnParams {
         let mut found_rescale = false;
 
         let lines: Vec<&str> = content.lines().collect();
-        for i in 0..lines.len() {
+        let mut i = 0;
+        while i < lines.len() {
             let line = lines[i].trim();
-            if line.starts_with("<AddShift>") && i + 1 < lines.len() {
-                let data_line = lines[i + 1].trim();
-                let vals = parse_kaldi_vector(data_line)?;
+            if line.starts_with("<AddShift>") {
+                let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
                 if vals.len() >= 80 {
                     shifts.copy_from_slice(&vals[..80]);
                     found_shift = true;
                 }
-            } else if line.starts_with("<Rescale>") && i + 1 < lines.len() {
-                let data_line = lines[i + 1].trim();
-                let vals = parse_kaldi_vector(data_line)?;
+                i = next_i;
+                continue;
+            } else if line.starts_with("<Rescale>") {
+                let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
                 if vals.len() >= 80 {
                     rescales.copy_from_slice(&vals[..80]);
                     found_rescale = true;
                 }
+                i = next_i;
+                continue;
             }
+            i += 1;
         }
-
         if !found_shift || !found_rescale {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
@@ -249,20 +252,59 @@ impl CmvnParams {
     }
 }
 
-fn parse_kaldi_vector(line: &str) -> Result<Vec<f32>, AsrPortError> {
-    // Expected line format: `<LearnRateCoef> 0 [ v1 v2 ... ]` or `[ v1 v2 ... ]`
-    let start = line.find('[').ok_or_else(|| {
-        AsrPortError::new(AsrPortErrorKind::Model, "Missing '[' in Kaldi vector line")
-    })?;
-    let end = line.rfind(']').unwrap_or(line.len());
-    let sub = &line[start + 1..end];
+fn parse_kaldi_vector_multiline(
+    lines: &[&str],
+    start_idx: usize,
+) -> Result<(Vec<f32>, usize), AsrPortError> {
     let mut out = Vec::with_capacity(80);
-    for token in sub.split_whitespace() {
-        if let Ok(v) = token.parse::<f32>() {
-            out.push(v);
+    let mut collecting = false;
+    let mut current_idx = start_idx;
+
+    while current_idx < lines.len() {
+        let line = lines[current_idx].trim();
+        let start = if !collecting {
+            if let Some(pos) = line.find('[') {
+                collecting = true;
+                pos + 1
+            } else {
+                current_idx += 1;
+                continue;
+            }
+        } else {
+            0
+        };
+
+        if collecting {
+            let end = line[start..].find(']').map(|p| start + p);
+            let slice = match end {
+                Some(end_pos) => &line[start..end_pos],
+                None => &line[start..],
+            };
+
+            for token in slice.split_whitespace() {
+                if let Ok(v) = token.parse::<f32>() {
+                    out.push(v);
+                }
+            }
+
+            if end.is_some() {
+                return Ok((out, current_idx + 1));
+            }
         }
+        current_idx += 1;
     }
-    Ok(out)
+
+    if collecting {
+        Err(AsrPortError::new(
+            AsrPortErrorKind::Model,
+            "Unclosed '[' in Kaldi vector",
+        ))
+    } else {
+        Err(AsrPortError::new(
+            AsrPortErrorKind::Model,
+            "Missing '[' in Kaldi vector",
+        ))
+    }
 }
 
 /// Sparse triangular mel filter definition.
@@ -368,9 +410,8 @@ impl FbankExtractor {
 
         let mut buf = [0.0f32; FFT_SIZE];
         for i in 0..FRAME_LENGTH_SAMPLES {
-            buf[i] = window_samples[i] - mean;
+            buf[i] = (window_samples[i] - mean) * 32768.0;
         }
-
         // 2. Pre-emphasis: y[n] = x[n] - 0.97 * x[n-1]
         for i in (1..FRAME_LENGTH_SAMPLES).rev() {
             buf[i] -= PREEMPHASIS * buf[i - 1];
@@ -473,6 +514,13 @@ pub fn apply_lfr_and_cmvn(
     lfr_m: usize,
     lfr_n: usize,
 ) -> Vec<[f32; 400]> {
+    assert!(lfr_n > 0, "lfr_n must be greater than 0");
+    assert_eq!(
+        lfr_m * NUM_MEL_BINS,
+        400,
+        "lfr_m must be 5 to produce 400-dim stacked frames"
+    );
+
     if frames.is_empty() {
         return Vec::new();
     }
@@ -480,9 +528,7 @@ pub fn apply_lfr_and_cmvn(
     let t = frames.len();
     let t_lfr = t.div_ceil(lfr_n);
     let left_pad = (lfr_m - 1) / 2;
-
     let mut out = Vec::with_capacity(t_lfr);
-
     for i in 0..t_lfr {
         let mut stacked = [0.0f32; 400];
 
