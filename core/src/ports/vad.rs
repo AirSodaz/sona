@@ -8,7 +8,7 @@ use std::sync::Arc;
 pub enum VadEngineKind {
     #[default]
     SileroOnnx,
-    TenVadOnnx,
+    FsmnVadOnnx,
 }
 
 /// Tuning parameters for one voice activity detection pass.
@@ -19,8 +19,9 @@ pub struct VadDetectionOptions {
     pub threshold: f32,
     /// Negative threshold for speech offset detection hysteresis.
     ///
-    /// NOTE: Currently ignored by underlying provider implementations (Silero and TEN),
-    /// as upstream sherpa-onnx model configs do not support negative threshold tuning.
+    /// Enforced by `UniversalVadStateMachine` during speech segmentation:
+    /// `threshold` triggers speech onset, while falling below `neg_threshold`
+    /// triggers speech offset.
     pub neg_threshold: Option<f32>,
     pub min_silence_duration: f32,
     pub min_speech_duration: f32,

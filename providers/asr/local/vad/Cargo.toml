@@ -11,5 +11,7 @@ role = "provider"
 
 [dependencies]
 log = { workspace = true }
-sherpa-onnx = { workspace = true }
 sona-core = { workspace = true }
+thiserror = { workspace = true }
+ort = { version = "=2.0.0-rc.9", default-features = false, features = ["load-dynamic", "download-binaries", "copy-dylibs", "ndarray"] }
+ndarray = { version = "0.16", default-features = false }

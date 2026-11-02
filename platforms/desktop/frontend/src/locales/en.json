@@ -2021,6 +2021,8 @@
       "silero_vad": "Developed by Silero. Highly accurate Voice Activity Detection (VAD) model to segment audio into speech and silence.",
       "ten_vad": "Developed by TEN. Lightweight, high-precision Voice Activity Detection (VAD) model that segments audio into speech and silence.",
       "silero_v5_vad": "Developed by Silero. Version 5 of the highly accurate Voice Activity Detection (VAD) model that segments audio into speech and silence.",
+      "silero_v6_vad": "Developed by Silero. Version 6 of the highly accurate Voice Activity Detection (VAD) model that segments audio into speech and silence.",
+      "fsmn_vad": "Developed by Alibaba FunASR. High-accuracy FSMN Voice Activity Detection (VAD) model with integrated 80-dim log-mel frontend.",
       "speaker_segmentation": "Pyannote-based local speaker segmentation model for splitting a recording into anonymous speaker turns.",
       "speaker_embedding": "3D-Speaker embedding model for matching diarized speakers against your known speaker profile library.",
       "itn_zh": "Inverse Text Normalization model for Chinese. Converts spoken numbers (e.g., '一二三') into digits ('123').",
