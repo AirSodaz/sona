@@ -76,10 +76,12 @@ describe('Speech & AI locale coverage', () => {
         .map((path) => `${name}: ${path}`)
     );
     expect(offenders).toEqual([]);
-    expect(zh.settings.speech_ai.speakers_note).toContain('「识别」');
-    expect(zh.settings.speech_ai.speakers_note).toContain('「录音和文件使用相同设置」');
-    expect(zhTW.settings.speech_ai.speakers_note).toContain('「識別」');
-    expect(zhTW.settings.speech_ai.speakers_note).toContain('「錄音和檔案使用相同設定」');
+    expect(zh.settings.speech_ai.count_hint).toContain('「自动」');
+    expect(zh.settings.speech_ai.language_hint).toContain('「录音时」');
+    expect(zh.settings.speech_ai.language_hint).toContain('「打开文件时」');
+    expect(zhTW.settings.speech_ai.count_hint).toContain('「自動」');
+    expect(zhTW.settings.speech_ai.language_hint).toContain('「錄音時」');
+    expect(zhTW.settings.speech_ai.language_hint).toContain('「開啟檔案時」');
   });
 
   it('does not use native title tooltips in the Speech & AI source', () => {

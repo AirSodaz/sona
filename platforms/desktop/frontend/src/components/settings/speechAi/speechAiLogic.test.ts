@@ -1,15 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { addLlmModel, createLlmSettings } from '../../../services/llm/state';
 import type { AppConfig } from '../../../types/config';
 import type { ModelInfo } from '../../../types/modelCatalog';
 import {
-  buildSpeechRow,
+  assignConnectedModel,
   curatedGroupOrder,
+  GOOGLE_TRANSLATE_VALUE,
   matchesLanguageFilter,
   modesAreLinked,
   pathIsInstalled,
   recommendedVariantId,
   SENSEVOICE_STANDARD_ID,
+  setTranslationChoice,
   speakerHelpersReady,
+  speechModelsAssigned,
   WHISPER_TURBO_ID,
 } from './speechAiLogic';
 
@@ -71,6 +75,8 @@ describe('speaker helper readiness', () => {
 
   it('is not ready when speakers are on but the helper file is not installed', () => {
     const withSpeakers = config({
+      liveSpeakerDiarizationEnabled: true,
+      batchSpeakerDiarizationEnabled: true,
       liveSpeakerEmbeddingModelPath: '/models/campplus',
       batchSpeakerEmbeddingModelPath: '/models/campplus',
       batchSpeakerSegmentationModelPath: '/models/pyannote',
@@ -106,70 +112,50 @@ describe('matchesLanguageFilter', () => {
   });
 });
 
-describe('buildSpeechRow offline handling', () => {
-  const dummyT = (key: string, opts?: Record<string, unknown>) => {
-    if (opts && 'model' in opts) return `${key}:${opts.model}`;
-    return key;
-  };
+describe('speech model assignment', () => {
+  it('is ready when the linked recording model is installed', () => {
+    expect(speechModelsAssigned(config(), new Set(['a']))).toBe(true);
+  });
 
-  it('returns warn status when offline and online ASR is active', () => {
-    const onlineCfg = config({
+  it('is not ready when recording and files differ and one side is empty', () => {
+    const split = config({
+      speechModesLinked: false,
       asr: {
         selections: {
-          live: {
-            engine: 'online',
-            mode: 'streaming',
-            providerId: 'volcengine',
-            modelId: 'bigmodel',
-            modelPath: '',
-          },
-          caption: {
-            engine: 'online',
-            mode: 'streaming',
-            providerId: 'volcengine',
-            modelId: 'bigmodel',
-            modelPath: '',
-          },
-          voiceTyping: {
-            engine: 'online',
-            mode: 'streaming',
-            providerId: 'volcengine',
-            modelId: 'bigmodel',
-            modelPath: '',
-          },
-          batch: {
-            engine: 'online',
-            mode: 'batch',
-            providerId: 'volcengine',
-            modelId: 'bigmodel',
-            modelPath: '',
-          },
+          live: { engine: 'local', mode: 'streaming', modelId: 'a', modelPath: '/a' },
+          caption: { engine: 'local', mode: 'streaming', modelId: 'a', modelPath: '/a' },
+          voiceTyping: { engine: 'local', mode: 'streaming', modelId: 'a', modelPath: '/a' },
+          batch: { engine: 'local', mode: 'batch', modelId: null, modelPath: '' },
         },
       },
     });
-    const row = buildSpeechRow({
-      config: onlineCfg,
-      catalogModels: [],
-      installedIds: new Set(),
-      recommendedId: WHISPER_TURBO_ID,
-      offline: true,
-      t: dummyT,
-    });
-    expect(row.status).toBe('warn');
-    expect(row.statusLabel).toBe('settings.speech_ai.unavailable_offline');
+    expect(speechModelsAssigned(split, new Set(['a']))).toBe(false);
+  });
+});
+
+describe('first AI connection', () => {
+  it('sets polish and summary, and leaves translation alone', () => {
+    const before = createLlmSettings();
+    const withGoogle = setTranslationChoice(before, GOOGLE_TRANSLATE_VALUE);
+    const googleId = withGoogle.selections.translationModelId;
+    const added = addLlmModel(withGoogle, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    const modelId = added.modelOrder.find((id) => added.models[id]?.provider === 'open_ai');
+    const next = assignConnectedModel(withGoogle, added, modelId, false);
+    expect(next.selections.polishModelId).toBe(modelId);
+    expect(next.selections.summaryModelId).toBe(modelId);
+    expect(next.selections.translationModelId).toBe(googleId);
   });
 
-  it('stays ok when offline and local model is active', () => {
-    const row = buildSpeechRow({
-      config: config(),
-      catalogModels: [model('a', 'v1', 'sherpa-onnx')],
-      installedIds: new Set(['a']),
-      recommendedId: WHISPER_TURBO_ID,
-      offline: true,
-      t: dummyT,
-    });
-    expect(row.status).toBe('ok');
-    expect(row.statusLabel).toBe('settings.speech_ai.ready');
+  it('does not replace polish when a writing model already exists', () => {
+    let before = createLlmSettings();
+    before = addLlmModel(before, { provider: 'open_ai', model: 'gpt-4o-mini' });
+    const firstId = before.modelOrder[0];
+    before = assignConnectedModel(createLlmSettings(), before, firstId, false);
+    const added = addLlmModel(before, { provider: 'anthropic', model: 'claude' });
+    const secondId = added.modelOrder.find((id) => added.models[id]?.provider === 'anthropic');
+    const next = assignConnectedModel(before, added, secondId, false);
+    expect(next.selections.polishModelId).toBe(firstId);
+    expect(next.selections.summaryModelId).toBe(firstId);
   });
 });
 

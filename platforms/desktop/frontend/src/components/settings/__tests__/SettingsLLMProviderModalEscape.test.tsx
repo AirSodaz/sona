@@ -40,35 +40,29 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
 
     // Settings modal is open
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
-    // Click "Add model provider" button
     const addBtn = await screen.findByRole(
       'button',
-      { name: 'settings.llm.add_custom_provider' },
+      { name: 'settings.speech_ai.ai_add' },
       { timeout: 5000 }
     );
     await act(async () => {
       fireEvent.click(addBtn);
     });
-    expect(screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'settings.speech_ai.connect_title' })).toBeTruthy();
 
-    // Press Escape
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
 
-    // Add Provider modal should be closed
-    expect(screen.queryByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeNull();
-
-    // Settings modal should NOT be closed
+    expect(screen.queryByRole('dialog', { name: 'settings.speech_ai.connect_title' })).toBeNull();
     expect(onSettingsClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
 
-    // Escape leaves AI services for the Speech & AI page, then closes Settings.
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Escape' });
     });
     expect(onSettingsClose).not.toHaveBeenCalled();
-    expect(screen.getByText('settings.speech_ai.speech_title')).toBeTruthy();
+    expect(screen.getByText('settings.speech_ai.sec_speech')).toBeTruthy();
 
     await act(async () => {
       fireEvent.keyDown(window, { key: 'Escape' });
@@ -86,30 +80,28 @@ describe('Settings LLM Service Tab - Add Provider Modal Escape and Backdrop', ()
     // Click "Add model provider" button
     const addBtn = await screen.findByRole(
       'button',
-      { name: 'settings.llm.add_custom_provider' },
+      { name: 'settings.speech_ai.ai_add' },
       { timeout: 5000 }
     );
     await act(async () => {
       fireEvent.click(addBtn);
     });
     const addProviderModal = screen.getByRole('dialog', {
-      name: 'settings.llm.add_custom_provider',
+      name: 'settings.speech_ai.connect_title',
     });
-    const backdrop = addProviderModal.closest('.shared-modal-overlay') as HTMLElement;
+    const backdrop = addProviderModal.closest('.speech-ai-dialog-backdrop') as HTMLElement;
     expect(backdrop).toBeTruthy();
 
-    // Clicking inside the modal card does not close it or settings
     await act(async () => {
-      fireEvent.click(addProviderModal);
+      fireEvent.mouseDown(addProviderModal);
     });
-    expect(screen.getByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'settings.speech_ai.connect_title' })).toBeTruthy();
     expect(onSettingsClose).not.toHaveBeenCalled();
 
-    // Clicking the backdrop closes Add Provider modal, leaves Settings open
     await act(async () => {
-      fireEvent.click(backdrop);
+      fireEvent.mouseDown(backdrop);
     });
-    expect(screen.queryByRole('dialog', { name: 'settings.llm.add_custom_provider' })).toBeNull();
+    expect(screen.queryByRole('dialog', { name: 'settings.speech_ai.connect_title' })).toBeNull();
     expect(onSettingsClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'settings.title' })).toBeTruthy();
   });

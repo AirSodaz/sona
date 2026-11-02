@@ -6,7 +6,6 @@ import {
   addLlmModel,
   buildLlmConfigPatch,
   setActiveProvider,
-  setFeatureModelSelection,
   updateProviderSetting,
 } from '../../../services/llm/state';
 import { generateLlmText, listLlmModels } from '../../../services/tauri/llm';
@@ -15,6 +14,7 @@ import type { LlmProvider } from '../../../types/transcript';
 import { ProviderLogo } from '../../icons/ProviderLogos';
 import { getCurrentLlmSettings, getModelPlaceholder } from '../llm/helpers';
 import { writeLlmProbe } from './llmProbe';
+import { assignConnectedModel } from './speechAiLogic';
 
 const GRID: Array<{ id: LlmProvider; local?: boolean }> = [
   { id: 'open_ai' },
@@ -36,12 +36,20 @@ const PRESETS: Partial<Record<string, string[]>> = {
   silicon_flow: ['Qwen/Qwen2.5-7B-Instruct'],
 };
 
-export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX.Element {
+export function ConnectAiDialog({
+  onClose,
+  initialProvider = null,
+}: {
+  onClose: () => void;
+  initialProvider?: LlmProvider | null;
+}): React.JSX.Element {
   const { t } = useTranslation();
   const config = useLlmAssistantConfig();
   const updateConfig = useSetConfig();
-  const [provider, setProvider] = useState<LlmProvider | 'custom' | null>('open_ai');
-  const [step, setStep] = useState<'choose' | 'details'>('choose');
+  const [provider, setProvider] = useState<LlmProvider | 'custom' | null>(
+    initialProvider ?? 'open_ai'
+  );
+  const [step, setStep] = useState<'choose' | 'details'>(initialProvider ? 'details' : 'choose');
   const [apiKey, setApiKey] = useState('');
   const [apiHost, setApiHost] = useState('');
   const [model, setModel] = useState('gpt-4o-mini');
@@ -207,6 +215,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
       });
     }
     next = setActiveProvider(next, savedProvider);
+    const before = current;
     next = addLlmModel(next, { provider: savedProvider, model: model.trim() });
     const modelId = [...next.modelOrder]
       .reverse()
@@ -214,13 +223,7 @@ export function ConnectAiDialog({ onClose }: { onClose: () => void }): React.JSX
         (id) =>
           next.models[id]?.provider === savedProvider && next.models[id]?.model === model.trim()
       );
-    if (modelId) {
-      next = setFeatureModelSelection(next, 'polish', modelId);
-      next = setFeatureModelSelection(next, 'summary', modelId);
-      if (includeTranslation) {
-        next = setFeatureModelSelection(next, 'translation', modelId);
-      }
-    }
+    next = assignConnectedModel(before, next, modelId, includeTranslation);
     updateConfig(buildLlmConfigPatch(next));
     onClose();
   };

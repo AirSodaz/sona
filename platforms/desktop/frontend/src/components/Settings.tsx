@@ -59,20 +59,13 @@ type SettingsPendingSubTab =
   | null;
 
 function speechViewForHit(hit: SettingsSearchHit): string {
-  if (hit.tab === 'llm_service') return 'ai';
+  if (hit.tab === 'llm_service') {
+    return hit.targetId === 'settings-llm-models-config' ? 'home' : 'ai';
+  }
   if (hit.tab !== 'models') return 'home';
-  if (hit.speechView) return hit.speechView;
-  if (hit.subTab) return 'recognition';
-  if (hit.targetId === 'settings-download-mirror' || hit.targetId === 'settings-gpu-acceleration') {
-    return 'downloads';
-  }
-  if (
-    hit.targetId === 'settings-vad-path' ||
-    hit.targetId === 'settings-punctuation-path' ||
-    hit.targetId === 'settings-batch-vad'
-  ) {
-    return 'recognition';
-  }
+  if (hit.speechView === 'ai') return 'ai';
+  if (hit.speechView === 'picker') return 'live';
+  if (hit.speechView === 'downloads') return 'downloads';
   return 'home';
 }
 

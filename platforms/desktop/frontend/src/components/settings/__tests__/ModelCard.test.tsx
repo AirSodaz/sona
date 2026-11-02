@@ -165,7 +165,7 @@ describe('ModelCard mode tags', () => {
     expect(resolveUniqueModeTags(['streaming', 'live', 'batch'])).toEqual(['Live', 'Batch']);
   });
 
-  it('renders select action when onSelect is provided for installed model', () => {
+  it('applies an installed version when its row is clicked', () => {
     const onSelect = vi.fn();
     render(
       <ModelCard
@@ -179,9 +179,8 @@ describe('ModelCard mode tags', () => {
       />
     );
 
-    const selectBtn = screen.getByRole('button', { name: 'Select' });
-    expect(selectBtn).toBeTruthy();
-    fireEvent.click(selectBtn);
+    expect(screen.queryByRole('button', { name: 'Select' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'SenseVoice Int8' }));
     expect(onSelect).toHaveBeenCalledWith(mockModel);
   });
 

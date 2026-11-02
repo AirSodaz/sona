@@ -244,24 +244,14 @@ function ModelCardActions({
         className="model-actions-installed"
         style={{ display: 'flex', alignItems: 'center', gap: 6 }}
       >
-        {onSelect &&
-          (isSelected ? (
-            <span
-              className="model-status-chip model-status-installed"
-              style={{ padding: '2px 8px', fontSize: '11px' }}
-            >
-              {t('settings.speech_ai.in_use', { defaultValue: 'In use' })}
-            </span>
-          ) : (
-            <button
-              type="button"
-              className="btn btn-sm btn-primary speech-ai-select-btn"
-              onClick={() => onSelect(model)}
-              disabled={disabled}
-            >
-              {t('settings.speech_ai.select', { defaultValue: 'Select' })}
-            </button>
-          ))}
+        {onSelect && isSelected ? (
+          <span
+            className="model-status-chip model-status-installed"
+            style={{ padding: '2px 8px', fontSize: '11px' }}
+          >
+            {t('settings.speech_ai.in_use', { defaultValue: 'In use' })}
+          </span>
+        ) : null}
         <button
           type="button"
           className="model-action-icon model-action-delete"
@@ -345,6 +335,42 @@ function ModelCardActions({
     >
       <DownloadIcon />
     </button>
+  );
+}
+
+function VersionSelectTarget({
+  model,
+  enabled,
+  onSelect,
+  className,
+  children,
+}: {
+  model: ModelInfo;
+  enabled: boolean;
+  onSelect?: (model: ModelInfo) => void;
+  className: string;
+  children: React.ReactNode;
+}): React.JSX.Element {
+  const { t } = useTranslation();
+  const label = [model.name, model.versionLabel].filter(Boolean).join(' ');
+  if (!enabled || !onSelect) {
+    return <div className={className}>{children}</div>;
+  }
+  return (
+    <div
+      className={className}
+      role="button"
+      tabIndex={0}
+      aria-label={t('settings.speech_ai.use_version', { name: label, defaultValue: label })}
+      onClick={() => onSelect(model)}
+      onKeyDown={(event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        event.preventDefault();
+        onSelect(model);
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -444,10 +470,15 @@ export function ModelCard({
             />
           )}
           <div className="model-card-footer">
-            <div className="model-card-meta">
+            <VersionSelectTarget
+              model={baseModel}
+              enabled={Boolean(onSelect) && installedModels.has(baseModel.id)}
+              onSelect={onSelect}
+              className="model-card-meta"
+            >
               <ModelTags model={baseModel} showEngine />
               <RatingMeters model={baseModel} />
-            </div>
+            </VersionSelectTarget>
             <div className="model-card-side">
               <span className="model-size">{baseModel.size}</span>
               <ModelCardActions
@@ -477,7 +508,12 @@ export function ModelCard({
             return (
               <div key={model.id} className="model-version-row">
                 <div className="model-version-main">
-                  <div className="model-version-info">
+                  <VersionSelectTarget
+                    model={model}
+                    enabled={Boolean(onSelect) && isInstalled}
+                    onSelect={onSelect}
+                    className="model-version-info"
+                  >
                     <span className="model-version-label">{model.versionLabel || model.name}</span>
                     <span className="model-tag model-tag-engine">{ENGINE_LABEL[model.engine]}</span>
                     {isInstalled && <CheckIcon className="model-version-check" />}
@@ -493,7 +529,7 @@ export function ModelCard({
                             })}
                       </span>
                     )}
-                  </div>
+                  </VersionSelectTarget>
                   <div className="model-card-side">
                     <span className="model-size">{model.size}</span>
                     <ModelCardActions

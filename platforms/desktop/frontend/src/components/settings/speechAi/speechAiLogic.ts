@@ -1,5 +1,13 @@
+import {
+  addLlmModel,
+  findLlmModelId,
+  getOrderedLlmModels,
+  setFeatureModelSelection,
+} from '../../../services/llm/state';
 import type { AppConfig, AsrModelSelection } from '../../../types/config';
+import type { LlmSettings } from '../../../types/llm';
 import { type ModelInfo, PRESET_MODELS, PRESET_MODELS_MAP } from '../../../types/modelCatalog';
+import type { ScenarioModelKind } from '../../../utils/scenarioModels';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -27,11 +35,24 @@ const ASR_TYPES = new Set<ModelInfo['type']>([
 ]);
 
 export type SpeechScope = 'both' | 'live' | 'batch';
-export type SpeechAiScreen = 'home' | 'picker' | 'recognition' | 'speakers' | 'ai' | 'downloads';
+export type ModelPageScope =
+  | 'live'
+  | 'batch'
+  | 'downloaded'
+  | 'embedding-live'
+  | 'embedding-batch'
+  | 'segmentation-live'
+  | 'segmentation-batch'
+  | 'alignment-live'
+  | 'alignment-batch';
+export type SpeechAiScreen = 'home' | 'model' | 'ai';
+export type LanguageFilter = 'any' | 'zh' | 'en' | 'many' | 'installed';
 
-export type CapabilityStatus = 'idle' | 'ok' | 'busy' | 'warn' | 'err';
-export type SpeechAction = 'download' | 'use' | 'cancel' | 'retry' | 'change' | 'manage';
-export type LanguageFilter = 'any' | 'zh' | 'en' | 'many';
+const COMPANION_TYPES = new Set<ModelInfo['type']>([
+  'speaker-segmentation',
+  'speaker-embedding',
+  'alignment',
+]);
 
 export interface CuratedFamily {
   groupId: string;
@@ -120,7 +141,7 @@ function sortVersions(groupId: string, models: ModelInfo[]): ModelInfo[] {
 }
 
 export function matchesLanguageFilter(model: ModelInfo, filter: LanguageFilter): boolean {
-  if (filter === 'any') return true;
+  if (filter === 'any' || filter === 'installed') return true;
   const languages = model.languages ?? [];
   if (filter === 'zh') return languages.includes('zh') || languages.includes('yue');
   if (filter === 'en') return languages.includes('en');
@@ -199,7 +220,8 @@ export function speakerHelpersReady(
     | 'batchSpeakerEmbeddingModelPath'
     | 'liveSpeakerSegmentationModelPath'
     | 'batchSpeakerSegmentationModelPath'
-  >,
+  > &
+    Partial<Pick<AppConfig, 'liveSpeakerDiarizationEnabled' | 'batchSpeakerDiarizationEnabled'>>,
   models: InstallableModel[],
   installedIds: Set<string>
 ): boolean {
@@ -220,13 +242,36 @@ export function speakerHelpersReady(
   return readyFor('live') && readyFor('batch');
 }
 
+/** Main's diarization switches, not the presence of a helper file. */
 export function speakersEnabled(
-  config: Pick<AppConfig, 'liveSpeakerEmbeddingModelPath' | 'batchSpeakerEmbeddingModelPath'>,
+  config: Partial<
+    Pick<AppConfig, 'liveSpeakerDiarizationEnabled' | 'batchSpeakerDiarizationEnabled'>
+  >,
   scope: 'live' | 'batch'
 ): boolean {
-  const path =
-    scope === 'live' ? config.liveSpeakerEmbeddingModelPath : config.batchSpeakerEmbeddingModelPath;
-  return Boolean(path?.trim());
+  return scope === 'batch'
+    ? Boolean(config.batchSpeakerDiarizationEnabled)
+    : Boolean(config.liveSpeakerDiarizationEnabled);
+}
+
+export function scopeScenario(scope: ModelPageScope): 'live' | 'batch' | null {
+  if (scope === 'live' || scope.endsWith('-live')) return 'live';
+  if (scope === 'batch' || scope.endsWith('-batch')) return 'batch';
+  return null;
+}
+
+export function companionType(scope: ModelPageScope): ModelInfo['type'] | null {
+  if (scope.startsWith('embedding')) return 'speaker-embedding';
+  if (scope.startsWith('segmentation')) return 'speaker-segmentation';
+  if (scope.startsWith('alignment')) return 'alignment';
+  return null;
+}
+
+export function companionKind(scope: ModelPageScope): ScenarioModelKind | null {
+  if (scope.startsWith('embedding')) return 'speakerEmbeddingModelPath';
+  if (scope.startsWith('segmentation')) return 'speakerSegmentationModelPath';
+  if (scope.startsWith('alignment')) return 'alignmentModelPath';
+  return null;
 }
 
 export function speakerPathsEqual(
@@ -283,7 +328,7 @@ export function modesAreLinked(
 
 export function speakerCountLabel(count: number | null | undefined, t: Translate): string {
   if (count == null || count < 2) {
-    return t('settings.speech_ai.detect');
+    return t('settings.speech_ai.automatic');
   }
   return String(count);
 }
@@ -316,182 +361,7 @@ export function resolveModelTitle(
   return familyTitle(fromCatalog ?? preset, t);
 }
 
-export interface SpeechRowModel {
-  status: CapabilityStatus;
-  statusLabel: string;
-  detail: string;
-  lines: string[];
-  action: SpeechAction;
-  progress: number | null;
-  progressLabel: string;
-}
-
-export function buildSpeechRow(options: {
-  config: AppConfig;
-  catalogModels: ModelInfo[];
-  installedIds: Set<string>;
-  download?: {
-    status: string;
-    progress: number;
-    downloadedBytes?: number;
-    totalBytes?: number;
-    speed?: string;
-    error?: string;
-  };
-  recommendedId: string;
-  downloadName?: string;
-  offline: boolean;
-  t: Translate;
-}): SpeechRowModel {
-  const { config, catalogModels, installedIds, download, recommendedId, downloadName, offline, t } =
-    options;
-  const linked = modesAreLinked(config);
-  const liveTitle = resolveModelTitle(config, 'live', catalogModels, t);
-  const batchTitle = resolveModelTitle(config, 'batch', catalogModels, t);
-  const liveOn = speakersEnabled(config, 'live');
-  const batchOn = speakersEnabled(config, 'batch');
-  const count = speakerCountLabel(config.speakerExpectedCount, t);
-  const speakersBit = (on: boolean) =>
-    on
-      ? t('settings.speech_ai.speakers_on', {
-          number: count,
-        })
-      : t('settings.speech_ai.speakers_off');
-
-  const recommended = presetModelById(recommendedId);
-  const recommendedName = familyTitle(recommended, t);
-  const activeName = downloadName || recommendedName;
-  const recommendedSize = displaySize(recommended?.size);
-
-  if (download?.status === 'downloading') {
-    const done = formatByteLabel(download.downloadedBytes);
-    const total = formatByteLabel(download.totalBytes) || recommendedSize;
-    const amount = done && total ? t('settings.speech_ai.bytes_of', { done, total }) : '';
-    const progressLabel = [amount, download.speed ?? ''].filter(Boolean).join(' · ');
-    return {
-      status: 'busy',
-      statusLabel: t('settings.speech_ai.downloading'),
-      detail: [activeName, progressLabel].filter(Boolean).join(' · '),
-      lines: [t('settings.speech_ai.download_continues')],
-      action: 'cancel',
-      progress: download.progress ?? 0,
-      progressLabel,
-    };
-  }
-
-  if (download?.status === 'failed') {
-    return {
-      status: 'err',
-      statusLabel: t('settings.speech_ai.download_failed'),
-      detail: t('settings.speech_ai.download_failed_detail', {
-        model: activeName,
-      }),
-      lines: [],
-      action: 'retry',
-      progress: null,
-      progressLabel: '',
-    };
-  }
-
-  const liveReady = Boolean(liveTitle);
-  const batchReady = Boolean(batchTitle);
-  const assigned = linked ? liveReady : liveReady && batchReady;
-  const catalogReady = installedIds.size > 0 || catalogModels.length > 0;
-  const liveId = modelIdForSelection(selectionForScope(config, 'live'));
-  const batchId = modelIdForSelection(selectionForScope(config, 'batch'));
-  const missingInstall =
-    catalogReady &&
-    assigned &&
-    [liveId, linked ? liveId : batchId].some(
-      (id) => id && !id.includes('::') && PRESET_MODELS_MAP.has(id) && !installedIds.has(id)
-    );
-
-  if (
-    assigned &&
-    !missingInstall &&
-    (liveOn || batchOn) &&
-    !speakerHelpersReady(config, catalogModels, installedIds)
-  ) {
-    return {
-      status: 'warn',
-      statusLabel: t('settings.speech_ai.helpers_missing'),
-      detail: t('settings.speech_ai.helpers_missing_detail'),
-      lines: [],
-      action: 'manage',
-      progress: null,
-      progressLabel: '',
-    };
-  }
-
-  if (!assigned || missingInstall) {
-    const installedRecommended = installedIds.has(recommendedId);
-    return {
-      status: 'idle',
-      statusLabel: t('settings.speech_ai.not_set_up'),
-      detail: t('settings.speech_ai.speech_blurb'),
-      lines: [
-        t('settings.speech_ai.recommended_line', {
-          model: recommendedName,
-          size: recommendedSize,
-        }),
-      ],
-      action: installedRecommended ? 'use' : 'download',
-      progress: null,
-      progressLabel: '',
-    };
-  }
-
-  const onlineEngineActive =
-    config.asr?.selections.live?.engine === 'online' ||
-    (!linked && config.asr?.selections.batch?.engine === 'online');
-  const isOfflineWarn = offline && onlineEngineActive;
-
-  if (!linked) {
-    return {
-      status: isOfflineWarn ? 'warn' : 'ok',
-      statusLabel: isOfflineWarn
-        ? t('settings.speech_ai.unavailable_offline')
-        : t('settings.speech_ai.ready'),
-      detail: t('settings.speech_ai.detail_split'),
-      lines: [
-        t('settings.speech_ai.sub_recording', {
-          model: liveTitle,
-          speakers: ` · ${speakersBit(liveOn)}`,
-        }),
-        t('settings.speech_ai.sub_files', {
-          model: batchTitle,
-          speakers: ` · ${speakersBit(batchOn)}`,
-        }),
-      ],
-      action: 'manage',
-      progress: null,
-      progressLabel: '',
-    };
-  }
-
-  const lines = liveOn
-    ? [
-        t('settings.speech_ai.speakers_on', {
-          number: count,
-        }),
-      ]
-    : [];
-  return {
-    status: isOfflineWarn ? 'warn' : 'ok',
-    statusLabel: isOfflineWarn
-      ? t('settings.speech_ai.unavailable_offline')
-      : t('settings.speech_ai.ready'),
-    detail: t('settings.speech_ai.detail_mirrored', {
-      model: liveTitle,
-    }),
-    lines,
-    action: 'change',
-    progress: null,
-    progressLabel: '',
-  };
-}
-
-function formatByteLabel(bytes: number | undefined): string {
+export function formatByteLabel(bytes: number | undefined): string {
   if (!bytes || bytes <= 0) return '';
   const mb = bytes / (1024 * 1024);
   if (mb >= 1024) return `${(mb / 1024).toFixed(1)} GB`;
@@ -536,4 +406,123 @@ export function pickSpeechDownload(
     (item) => item.status === 'failed' && candidates.includes(item.modelId)
   );
   return failed;
+}
+
+export function speechModelsAssigned(
+  config: Pick<AppConfig, 'asr' | 'speechModesLinked'>,
+  installedIds: Set<string>
+): boolean {
+  const linked = modesAreLinked(config);
+  const liveId = modelIdForSelection(selectionForScope(config, 'live'));
+  const batchId = modelIdForSelection(selectionForScope(config, 'batch'));
+  const required = linked ? [liveId] : [liveId, batchId];
+  if (required.some((id) => !id)) return false;
+  return !required.some(
+    (id) => id && !id.includes('::') && PRESET_MODELS_MAP.has(id) && !installedIds.has(id)
+  );
+}
+
+type Installable = ModelInfo & { installPath?: string };
+
+export function modelForPath(
+  path: string | undefined,
+  models: Installable[]
+): Installable | undefined {
+  if (!path?.trim()) return undefined;
+  const normalized = path.replace(/\\/g, '/').toLowerCase();
+  return models.find((model) => {
+    const install = model.installPath?.replace(/\\/g, '/').toLowerCase();
+    if (install && install === normalized) return true;
+    const id = model.id.toLowerCase();
+    return normalized.includes(`/${id}`) || normalized.endsWith(id);
+  });
+}
+
+function sizeToMb(size: string | undefined): number {
+  const text = (size ?? '').replace(/^~\s*/, '').trim().toUpperCase();
+  const value = Number.parseFloat(text);
+  if (!Number.isFinite(value)) return 0;
+  if (text.includes('GB')) return value * 1024;
+  if (text.includes('KB')) return value / 1024;
+  return value;
+}
+
+export function summarizeInstalled(
+  models: Installable[],
+  installedIds: Set<string>
+): { count: number; megabytes: number } {
+  const picked = models.filter(
+    (model) =>
+      installedIds.has(model.id) && (isAsrCatalogModel(model) || COMPANION_TYPES.has(model.type))
+  );
+  return {
+    count: picked.length,
+    megabytes: picked.reduce((sum, model) => sum + sizeToMb(model.size), 0),
+  };
+}
+
+export function formatMegabytes(megabytes: number): string {
+  if (megabytes >= 1024) {
+    const gb = megabytes / 1024;
+    const text = gb >= 10 ? gb.toFixed(0) : gb.toFixed(2);
+    return `${text.replace(/0+$/, '').replace(/\.$/, '')} GB`;
+  }
+  if (megabytes <= 0) return '0 MB';
+  return `${Math.max(1, Math.round(megabytes))} MB`;
+}
+
+const GOOGLE_PROVIDERS = new Set(['google_translate', 'google_translate_free']);
+
+export function isGoogleProvider(provider: string | undefined): boolean {
+  return Boolean(provider && GOOGLE_PROVIDERS.has(provider));
+}
+
+export function isLocalLlmProvider(provider: string | undefined): boolean {
+  return provider === 'ollama' || provider === 'lm_studio';
+}
+
+export function hasWritingModel(settings: LlmSettings | undefined): boolean {
+  return getOrderedLlmModels(settings).some((entry) => !isGoogleProvider(entry.provider));
+}
+
+/** First connection fills polish and summary. Translation changes only when asked. */
+export function assignConnectedModel(
+  before: LlmSettings,
+  afterAdd: LlmSettings,
+  modelId: string | undefined,
+  includeTranslation: boolean
+): LlmSettings {
+  if (!modelId) return afterAdd;
+  let next = afterAdd;
+  if (!hasWritingModel(before)) {
+    next = setFeatureModelSelection(next, 'polish', modelId);
+    next = setFeatureModelSelection(next, 'summary', modelId);
+  }
+  if (includeTranslation) {
+    next = setFeatureModelSelection(next, 'translation', modelId);
+  }
+  return next;
+}
+
+export function setPolishAndSummary(settings: LlmSettings, modelId: string): LlmSettings {
+  return setFeatureModelSelection(
+    setFeatureModelSelection(settings, 'polish', modelId),
+    'summary',
+    modelId
+  );
+}
+
+export const GOOGLE_TRANSLATE_VALUE = 'google';
+
+export function setTranslationChoice(settings: LlmSettings, value: string): LlmSettings {
+  if (value !== GOOGLE_TRANSLATE_VALUE) {
+    return setFeatureModelSelection(settings, 'translation', value);
+  }
+  let next = settings;
+  let id = findLlmModelId(next, 'google_translate_free', 'default');
+  if (!id) {
+    next = addLlmModel(next, { provider: 'google_translate_free', model: 'default' });
+    id = findLlmModelId(next, 'google_translate_free', 'default');
+  }
+  return id ? setFeatureModelSelection(next, 'translation', id) : next;
 }

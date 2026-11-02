@@ -308,9 +308,10 @@
 }
 
 .speech-ai-section-label {
-  margin: 4px 2px 0;
-  font-size: 13px;
+  margin: 20px 2px 6px;
+  font-size: 12px;
   font-weight: 600;
+  letter-spacing: 0.01em;
   color: var(--color-text-secondary);
 }
 
@@ -559,8 +560,8 @@
 }
 
 :root[data-theme="dark"] .speech-ai .btn-primary {
-  background: var(--color-text-primary);
-  color: var(--color-bg-primary);
+  background: #e6e6e6;
+  color: #191919;
   border-color: transparent;
   font-weight: 600;
   box-shadow: none;
@@ -579,8 +580,9 @@
 :root[data-theme="dark"] .speech-ai .speech-ai-section-label,
 :root[data-theme="dark"] .speech-ai .settings-item-hint,
 :root[data-theme="dark"] .speech-ai .settings-page-description,
+:root[data-theme="dark"] .speech-ai .speech-ai-filter-note,
 :root[data-theme="dark"] .speech-ai .speech-ai-status.is-idle {
-  color: var(--color-text-primary);
+  color: #a5a4a0;
 }
 
 .speech-ai .model-card {
@@ -660,6 +662,159 @@
 .speech-ai-downloads-section .settings-section-header {
   justify-content: flex-end;
   margin-bottom: 0;
+}
+
+.speech-ai-card .settings-item-container,
+.speech-ai-card .speech-ai-drill {
+  background: transparent;
+  min-height: 52px;
+  padding: 11px 16px;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.speech-ai-card .settings-item-container:first-child,
+.speech-ai-card .speech-ai-drill:first-child {
+  border-top: none;
+}
+
+.speech-ai-card .settings-item-container.is-child,
+.speech-ai-card .speech-ai-drill.is-child {
+  padding-left: 32px;
+}
+
+.speech-ai-card .settings-item-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.speech-ai-card .settings-item-hint {
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.speech-ai-card .settings-item-hint.is-err {
+  color: #d44c47;
+}
+
+.speech-ai-card .settings-item-hint.is-warn {
+  color: #c4820e;
+}
+
+.speech-ai-card .settings-item-container:hover,
+.speech-ai-card .speech-ai-drill:hover {
+  background: var(--color-bg-hover);
+}
+
+.speech-ai-control {
+  width: 190px;
+  flex-shrink: 0;
+}
+
+.speech-ai-drill-value.is-ok {
+  color: #2f9e6b;
+}
+
+.speech-ai-drill-value.is-warn,
+.speech-ai-drill-value.is-busy {
+  color: #c4820e;
+}
+
+.speech-ai-drill-value.is-err {
+  color: #d44c47;
+}
+
+.speech-ai-setup {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-elevated);
+}
+
+.speech-ai-setup-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+  flex-shrink: 0;
+}
+
+.speech-ai-setup-copy {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.speech-ai-setup-copy strong {
+  font-size: 14px;
+}
+
+.speech-ai-setup-copy span {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  line-height: 1.45;
+}
+
+.speech-ai-setup.is-progress {
+  align-items: flex-end;
+}
+
+.speech-ai-banner {
+  align-items: center;
+}
+
+.speech-ai-banner.is-offline {
+  background: var(--color-bg-secondary);
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-banner.is-err {
+  background: color-mix(in srgb, #d44c47 12%, var(--color-bg-elevated));
+  color: #d44c47;
+}
+
+.speech-ai-banner .btn {
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+.speech-ai-filter-note {
+  margin-left: auto;
+  align-self: center;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.speech-ai-clear {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 8px 16px;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  background: var(--color-bg-elevated);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.speech-ai-clear.is-current {
+  color: #2f9e6b;
+}
+
+.model-version-info[role="button"],
+.model-card-meta[role="button"] {
+  cursor: pointer;
 }
 
 @media (prefers-reduced-motion: reduce) {

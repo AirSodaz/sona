@@ -20,7 +20,7 @@ export type SettingsSearchItem =
   | (SearchItemBase & {
       tab: 'models';
       subTab?: ModelScenario;
-      speechView?: 'home' | 'recognition' | 'speakers' | 'ai' | 'downloads' | 'picker';
+      speechView?: 'home' | 'recognition' | 'speakers' | 'ai' | 'downloads' | 'picker' | 'live';
     })
   | (SearchItemBase & {
       tab: 'vocabulary';
@@ -471,7 +471,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-vad',
     tab: 'models',
-    speechView: 'recognition',
+    speechView: 'home',
     subTab: 'live',
     targetId: 'settings-vad-path',
     fallbackTargetId: 'settings-model-hub',
@@ -494,7 +494,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-batch-vad',
     tab: 'models',
-    speechView: 'recognition',
+    speechView: 'home',
     subTab: 'batch',
     targetId: 'settings-batch-vad',
     fallbackTargetId: 'settings-model-hub',
@@ -506,7 +506,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-punctuation',
     tab: 'models',
-    speechView: 'recognition',
+    speechView: 'home',
     subTab: 'live',
     targetId: 'settings-punctuation-path',
     fallbackTargetId: 'settings-model-hub',
@@ -518,7 +518,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-mirror',
     tab: 'models',
-    speechView: 'downloads',
+    speechView: 'home',
     targetId: 'settings-download-mirror',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
@@ -538,7 +538,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-speakers',
     tab: 'models',
-    speechView: 'speakers',
+    speechView: 'home',
     targetId: 'settings-speech-speakers',
     fallbackTargetId: 'settings-model-hub',
     tabKey: 'settings.model_hub',
@@ -558,7 +558,7 @@ export const SETTINGS_SEARCH_REGISTRY: readonly SettingsSearchItem[] = [
   {
     id: 'models-gpu',
     tab: 'models',
-    speechView: 'downloads',
+    speechView: 'home',
     targetId: 'settings-gpu-acceleration',
     tabKey: 'settings.model_hub',
     titleKey: 'settings.gpu_acceleration_label',
