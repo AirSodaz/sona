@@ -53,7 +53,7 @@ fn silero_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {
             min_silence_duration: options.min_silence_duration,
             min_speech_duration: options.min_speech_duration,
             window_size: 512,
-            max_speech_duration: 30.0,
+            max_speech_duration: options.threshold_escalation_duration,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,
@@ -194,5 +194,22 @@ mod tests {
             detector.accept_samples(&chunk);
             assert!(!detector.is_speech_detected());
         }
+    }
+
+    #[test]
+    fn silero_config_maps_options_and_sets_window_size() {
+        let options = VadDetectionOptions::batch_defaults("unused");
+        let config = super::silero_config("models/silero_vad.onnx", &options);
+
+        assert_eq!(
+            config.silero_vad.model.as_deref(),
+            Some("models/silero_vad.onnx")
+        );
+        assert_eq!(config.silero_vad.threshold, 0.50);
+        assert_eq!(config.silero_vad.min_silence_duration, 1.2);
+        assert_eq!(config.silero_vad.min_speech_duration, 0.25);
+        assert_eq!(config.silero_vad.max_speech_duration, 25.0);
+        assert_eq!(config.silero_vad.window_size, 512);
+        assert_eq!(config.sample_rate, 16_000);
     }
 }

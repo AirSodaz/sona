@@ -652,6 +652,9 @@ impl OfflineState {
     pub fn push_speech_chunk(&mut self, samples: Vec<f32>) {
         self.speech_buffer.push(samples);
     }
+    pub fn finish_speech(&mut self) {
+        self.is_speaking = false;
+    }
 
     pub fn finish_speech_with_chunk(&mut self, samples: Vec<f32>) {
         self.is_speaking = false;

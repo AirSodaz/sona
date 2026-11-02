@@ -23,9 +23,11 @@ use super::buffer::PseudoStreamAudioBuffer;
 use super::decoder::{DecodeStage, PseudoStreamDecoder};
 
 const SAMPLE_RATE: f64 = 16_000.0;
-const PRE_ROLL_DURATION_SECONDS: f64 = 0.3;
+const PRE_ROLL_DURATION_SECONDS: f64 = 0.4;
 const PRE_ROLL_SAMPLES: usize = (SAMPLE_RATE * PRE_ROLL_DURATION_SECONDS) as usize;
 const RING_BUFFER_TRIM_SLACK_SAMPLES: usize = 4_000;
+const VAD_RELEASE_SECONDS: f64 = 0.10;
+const MIN_VALID_SPEECH_SECONDS: f64 = 0.10;
 
 type PendingInferenceTask = JoinHandle<Result<(), AsrPortError>>;
 
@@ -40,6 +42,8 @@ pub struct PseudoStreamingSessionConfig {
     pub postprocess_options: TranscriptPostprocessOptions,
     pub initial_refresh_rate_ms: Option<u32>,
     pub enable_partial_decoding: Option<bool>,
+    pub vad_min_silence_duration_ms: Option<u32>,
+    pub vad_max_speech_duration_ms: Option<u32>,
 }
 
 /// Generic pseudo-streaming session coordinating VAD, pre-roll ring buffers,
@@ -63,12 +67,16 @@ pub struct PseudoStreamingSession {
     last_frame_end_sample: AtomicU64,
     is_running: AtomicBool,
     enable_partial_decoding: bool,
+    vad_min_silence_duration_ms: u32,
+    vad_max_speech_duration_ms: u32,
 }
 
 impl PseudoStreamingSession {
     pub fn new(config: PseudoStreamingSessionConfig) -> Result<Self, AsrPortError> {
         let initial_refresh = config.initial_refresh_rate_ms.unwrap_or(200) as u64;
         let enable_partial_decoding = config.enable_partial_decoding.unwrap_or(true);
+        let vad_min_silence_duration_ms = config.vad_min_silence_duration_ms.unwrap_or(500);
+        let vad_max_speech_duration_ms = config.vad_max_speech_duration_ms.unwrap_or(30_000);
         let postprocessor = TranscriptPostprocessor::compile(config.postprocess_options)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
 
@@ -90,6 +98,8 @@ impl PseudoStreamingSession {
             last_frame_end_sample: AtomicU64::new(0),
             is_running: AtomicBool::new(false),
             enable_partial_decoding,
+            vad_min_silence_duration_ms,
+            vad_max_speech_duration_ms,
         })
     }
 
@@ -375,8 +385,12 @@ impl AsrStreamingSession for PseudoStreamingSession {
             // Speech onset: capture pre-roll context
             buffer.begin_speech(PRE_ROLL_SAMPLES);
         }
+        let max_speech_samples =
+            (SAMPLE_RATE * (self.vad_max_speech_duration_ms as f64 / 1000.0)) as usize;
+        let is_over_max_duration = buffer.is_speech_active()
+            && buffer.buffered_speech_sample_count() + samples.len() >= max_speech_samples;
 
-        if currently_speaking {
+        if currently_speaking && !is_over_max_duration {
             buffer.push_speech_chunk(samples.to_vec());
 
             if self.enable_partial_decoding {
@@ -432,9 +446,24 @@ impl AsrStreamingSession for PseudoStreamingSession {
             }
 
             if buffer.is_speech_active() {
+                if is_over_max_duration {
+                    buffer.push_speech_chunk(samples.to_vec());
+                }
                 // Speech offset: finalize utterance
-                buffer.finish_speech_with_chunk(samples.to_vec());
-                let audio_samples = buffer.flatten_speech_buffer();
+                buffer.finish_speech();
+                let mut audio_samples = buffer.flatten_speech_buffer();
+
+                if !is_over_max_duration {
+                    let release_samples = (SAMPLE_RATE * VAD_RELEASE_SECONDS) as usize;
+                    let expected_silence_samples =
+                        (SAMPLE_RATE * (self.vad_min_silence_duration_ms as f64 / 1000.0)) as usize;
+                    let trim_samples = expected_silence_samples.saturating_sub(release_samples);
+                    let min_valid_samples = (SAMPLE_RATE * MIN_VALID_SPEECH_SECONDS) as usize;
+                    let max_trimmable = audio_samples.len().saturating_sub(min_valid_samples);
+                    let actual_trim = trim_samples.min(max_trimmable);
+                    audio_samples.truncate(audio_samples.len() - actual_trim);
+                }
+
                 let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
                 let decoder = self.decoder.clone();
                 let punctuation = self.punctuation.clone();
@@ -464,7 +493,6 @@ impl AsrStreamingSession for PseudoStreamingSession {
                     observer.on_stream_boundary(&boundary);
                     Ok(())
                 };
-
                 *pending = Some(queue_inference_task(pending.take(), task));
 
                 buffer.on_utterance_end(true);
@@ -472,11 +500,13 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 *self.current_segment_id.lock().await = Some(uuid::Uuid::new_v4().to_string());
             }
 
-            buffer.push_ring_chunk_with_sample_limit(
-                samples.to_vec(),
-                PRE_ROLL_SAMPLES,
-                RING_BUFFER_TRIM_SLACK_SAMPLES,
-            );
+            if !currently_speaking {
+                buffer.push_ring_chunk_with_sample_limit(
+                    samples.to_vec(),
+                    PRE_ROLL_SAMPLES,
+                    RING_BUFFER_TRIM_SLACK_SAMPLES,
+                );
+            }
         }
 
         buffer.advance_total_samples(samples.len());
