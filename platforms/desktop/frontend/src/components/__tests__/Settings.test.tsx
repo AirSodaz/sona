@@ -427,7 +427,7 @@ describe('Settings', () => {
     async () => {
       render(<Settings isOpen={true} onClose={onClose} />);
       await openModelsTab();
-      fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
+      fireEvent.click(screen.getByRole('button', { name: /settings\.speech_ai\.live,/ }));
 
       // Find download button for 'Test Model'
       // Since we mock translation, label is "common.download Test Model"
@@ -479,34 +479,15 @@ describe('Settings', () => {
   it(
     'shows merged transcription settings inside the model settings tab',
     async () => {
-      render(<Settings isOpen={true} onClose={onClose} />);
+      const { container } = render(<Settings isOpen={true} onClose={onClose} />);
       await openModelsTab();
-      expect(screen.getByText('settings.speech_ai.speech_title')).toBeDefined();
-      expect(screen.getByText('settings.speech_ai.writing_title')).toBeDefined();
-      expect(screen.getByText('settings.speech_ai.translation_title')).toBeDefined();
-
-      fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
-      const vadModels = await screen.findByText('settings.vad_models');
-      const transcriptionSettings = screen.getByText('settings.transcription_settings');
-      const restoreDefaults = screen.getByText('settings.restore_defaults');
-
-      expect(vadModels).toBeDefined();
-      screen.getByText('settings.enable_itn');
-      screen.getByText('settings.max_concurrent_label');
-      screen.getByLabelText('settings.restore_defaults');
-      expect(
-        Boolean(
-          vadModels.compareDocumentPosition(transcriptionSettings) &
-            Node.DOCUMENT_POSITION_FOLLOWING
-        )
-      ).toBe(true);
-      expect(
-        Boolean(
-          transcriptionSettings.compareDocumentPosition(restoreDefaults) &
-            Node.DOCUMENT_POSITION_FOLLOWING
-        )
-      ).toBe(true);
-      expect(screen.queryByText('settings.local_path')).toBeNull();
+      expect(screen.getByText('settings.speech_ai.sec_speech')).toBeDefined();
+      expect(screen.getByText('settings.speech_ai.sec_ai')).toBeDefined();
+      expect(screen.getByText('settings.speech_ai.sec_adv')).toBeDefined();
+      expect(screen.getByText('settings.speech_ai.add_punctuation')).toBeDefined();
+      expect(screen.getByText('settings.gpu_acceleration_label')).toBeDefined();
+      expect(screen.queryByText('settings.speech_ai.more_options')).toBeNull();
+      expect(container.querySelectorAll('.btn-primary').length).toBeLessThanOrEqual(1);
     },
     MODEL_TAB_LOAD_TIMEOUT_MS + 1000
   );
@@ -520,7 +501,7 @@ describe('Settings', () => {
 
     render(<Settings isOpen={true} onClose={onClose} />);
     await openModelsTab();
-    fireEvent.click(screen.getByRole('button', { name: /settings.speech_ai.downloads/ }));
+    fireEvent.click(screen.getByRole('button', { name: /settings\.speech_ai\.downloaded,/ }));
     const initialCalls = vi.mocked(modelService.getModelCatalogSnapshot).mock.calls.length;
 
     // Find delete button
