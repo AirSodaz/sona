@@ -105,6 +105,10 @@ impl PseudoStreamAudioBuffer {
         self.speech_buffer.push(samples);
     }
 
+    pub fn finish_speech(&mut self) {
+        self.is_speaking = false;
+    }
+
     pub fn finish_speech_with_chunk(&mut self, samples: Vec<f32>) {
         self.is_speaking = false;
         self.push_speech_chunk(samples);

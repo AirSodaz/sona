@@ -5,7 +5,7 @@ use sona_core::ports::asr::{
     AsrPortError, AsrPortErrorKind, BatchSegmentationMode, BatchTranscriptionObserver,
 };
 use sona_core::ports::punctuation::{PunctuationEngineSet, PunctuationModel};
-use sona_core::ports::vad::VadEngineSet;
+use sona_core::ports::vad::{VadDetectionOptions, VadEngineSet};
 use sona_core::transcription::runtime::BatchTranscribePlan;
 use sona_core::transcription::transcript::{
     TranscriptSegment, TranscriptUpdate, ensure_transcript_segment_timing,
@@ -223,20 +223,21 @@ impl StreamTranscriptionJob {
 
         let mut vad_detector = if self.batch_segmentation_mode == BatchSegmentationMode::Vad {
             if let Some(vad_path) = self.vad_model.as_deref() {
+                let vad_batch = VadDetectionOptions::batch_defaults(vad_path);
                 let options = VadDetectorOptions {
-                    threshold: 0.5,
-                    min_silence_duration: 0.6,
-                    min_speech_duration: 0.25,
-                    max_speech_duration: 15.0,
+                    threshold: vad_batch.threshold,
+                    min_silence_duration: vad_batch.min_silence_duration,
+                    min_speech_duration: vad_batch.min_speech_duration,
+                    max_speech_duration: vad_batch.max_speech_duration,
                     window_size: 512,
                     sample_rate: 16000,
                     num_threads: 1,
                 };
-                let buffer_size = (15.0
+                let buffer_size = (options.max_speech_duration
                     + if self.vad_buffer > 0.0 {
                         self.vad_buffer
                     } else {
-                        5.0
+                        vad_batch.buffer_seconds
                     })
                 .max(30.0);
                 match create_vad_config(vad_path, options) {

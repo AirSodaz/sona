@@ -17,23 +17,44 @@ pub struct VadDetectionOptions {
     /// Model directory or file backing this detection pass.
     pub model_path: PathBuf,
     pub threshold: f32,
+    pub neg_threshold: Option<f32>,
     pub min_silence_duration: f32,
     pub min_speech_duration: f32,
     /// Detector buffer capacity in seconds; non-positive values fall back to
     /// the engine default.
     pub buffer_seconds: f32,
+    pub speech_pad_seconds: f32,
+    pub max_speech_duration: f32,
 }
 
 impl VadDetectionOptions {
-    /// Defaults used by batch speech segmentation; mirrors the historical
-    /// sherpa-onnx batch tuning.
+    /// Defaults used by batch speech segmentation; mirrors the calibrated
+    /// batch tuning to avoid false triggers and word boundary clipping.
     pub fn batch_defaults(model_path: impl Into<PathBuf>) -> Self {
         Self {
             model_path: model_path.into(),
-            threshold: 0.35,
-            min_silence_duration: 1.0,
+            threshold: 0.50,
+            neg_threshold: Some(0.35),
+            min_silence_duration: 1.2,
             min_speech_duration: 0.25,
             buffer_seconds: 5.0,
+            speech_pad_seconds: 0.25,
+            max_speech_duration: 30.0,
+        }
+    }
+
+    /// Defaults used by streaming / pseudo-streaming speech segmentation;
+    /// tighter silence duration for interactive responsiveness.
+    pub fn streaming_defaults(model_path: impl Into<PathBuf>) -> Self {
+        Self {
+            model_path: model_path.into(),
+            threshold: 0.50,
+            neg_threshold: Some(0.35),
+            min_silence_duration: 0.5,
+            min_speech_duration: 0.15,
+            buffer_seconds: 5.0,
+            speech_pad_seconds: 0.20,
+            max_speech_duration: 30.0,
         }
     }
 }
@@ -228,10 +249,27 @@ mod tests {
         let options = VadDetectionOptions::batch_defaults("models/silero-vad");
 
         assert_eq!(options.model_path, PathBuf::from("models/silero-vad"));
-        assert_eq!(options.threshold, 0.35);
-        assert_eq!(options.min_silence_duration, 1.0);
+        assert_eq!(options.threshold, 0.50);
+        assert_eq!(options.neg_threshold, Some(0.35));
+        assert_eq!(options.min_silence_duration, 1.2);
         assert_eq!(options.min_speech_duration, 0.25);
         assert_eq!(options.buffer_seconds, 5.0);
+        assert_eq!(options.speech_pad_seconds, 0.25);
+        assert_eq!(options.max_speech_duration, 30.0);
+    }
+
+    #[test]
+    fn streaming_defaults_match_expected_tuning() {
+        let options = VadDetectionOptions::streaming_defaults("models/silero-vad");
+
+        assert_eq!(options.model_path, PathBuf::from("models/silero-vad"));
+        assert_eq!(options.threshold, 0.50);
+        assert_eq!(options.neg_threshold, Some(0.35));
+        assert_eq!(options.min_silence_duration, 0.5);
+        assert_eq!(options.min_speech_duration, 0.15);
+        assert_eq!(options.buffer_seconds, 5.0);
+        assert_eq!(options.speech_pad_seconds, 0.20);
+        assert_eq!(options.max_speech_duration, 30.0);
     }
 
     #[test]

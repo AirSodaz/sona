@@ -89,6 +89,7 @@ async fn pseudo_streaming_session_end_to_end_flow() {
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
+        vad_min_silence_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -172,6 +173,7 @@ async fn pseudo_streaming_session_sentence_only_flow() {
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: Some(false),
+        vad_min_silence_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -280,6 +282,7 @@ async fn pseudo_streaming_empty_durations_falls_back_to_synthesize() {
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
+        vad_min_silence_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -336,6 +339,7 @@ async fn pseudo_streaming_explicit_durations_are_preserved() {
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
+        vad_min_silence_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -404,6 +408,7 @@ async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
         postprocess_options: TranscriptPostprocessOptions::default(),
         initial_refresh_rate_ms: Some(50),
         enable_partial_decoding: None,
+        vad_min_silence_duration_ms: None,
     };
 
     let session = PseudoStreamingSession::new(config).unwrap();
@@ -436,6 +441,128 @@ async fn pseudo_streaming_mismatched_durations_falls_back_to_synthesize() {
         assert_ne!(durs, &vec![0.99]);
         assert!(durs[0] > 0.0);
         assert!(durs[1] > 0.0);
+    }
+
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn natural_speech_offset_trims_confirmation_silence() {
+    let speech_flag = Arc::new(AtomicBool::new(false));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-trimming".to_string(),
+        decoder: Arc::new(TestDecoder),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: Some(false),
+        vad_min_silence_duration_ms: Some(500),
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    // Speech starts: 2 frames of speech (3200 samples)
+    speech_flag.store(true, Ordering::Release);
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    // VAD confirmation silence: 5 frames of silence (500ms = 8000 samples) while speech_detected is still true
+    for i in 0..5 {
+        let start = 3200 + i * 1600;
+        session
+            .feed_audio_frame(AsrAudioFrame::new(
+                3 + i as u64,
+                start as u64,
+                vec![0.0f32; 1600],
+            ))
+            .await
+            .unwrap();
+    }
+
+    // Now VAD signals speech offset (speech_detected = false)
+    speech_flag.store(false, Ordering::Release);
+    session
+        .feed_audio_frame(AsrAudioFrame::new(8, 11200, vec![0.0f32; 1600]))
+        .await
+        .unwrap();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        let last = updates.last().expect("should have emitted final update");
+        assert_eq!(last.stage, "final");
+        // Total buffered while speech was active: 3200 + 8000 = 11200 samples.
+        // Expected silence: 500ms = 8000 samples. Release kept: 100ms = 1600 samples.
+        // Trim: 8000 - 1600 = 6400 samples (400ms).
+        // Decoded samples: 11200 - 6400 = 4800 samples (3200 speech + 1600 release).
+        assert_eq!(last.update.upsert_segments[0].text, "hello final (4800)");
+    }
+
+    session.stop().await.unwrap();
+}
+
+#[tokio::test]
+async fn flush_preserves_audio_without_tail_trimming() {
+    let speech_flag = Arc::new(AtomicBool::new(false));
+    let vad = TestStreamingVad {
+        speech_detected: speech_flag.clone(),
+    };
+    let observer = Arc::new(TestObserver::default());
+
+    let config = PseudoStreamingSessionConfig {
+        instance_id: "test-flush-no-trim".to_string(),
+        decoder: Arc::new(TestDecoder),
+        vad: Box::new(vad),
+        punctuation: None,
+        observer: observer.clone(),
+        normalization_options: TranscriptNormalizationOptions::default(),
+        postprocess_options: TranscriptPostprocessOptions::default(),
+        initial_refresh_rate_ms: Some(50),
+        enable_partial_decoding: Some(false),
+        vad_min_silence_duration_ms: Some(500),
+    };
+
+    let session = PseudoStreamingSession::new(config).unwrap();
+    session.start().await.unwrap();
+
+    // Speech starts: 2 frames of speech (3200 samples)
+    speech_flag.store(true, Ordering::Release);
+    session
+        .feed_audio_frame(AsrAudioFrame::new(1, 0, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+    session
+        .feed_audio_frame(AsrAudioFrame::new(2, 1600, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    // Flush immediately during speech
+    session.flush().await.unwrap();
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        let last = updates
+            .last()
+            .expect("should have emitted final update on flush");
+        assert_eq!(last.stage, "final");
+        // All 3200 samples preserved verbatim without trimming
+        assert_eq!(last.update.upsert_segments[0].text, "hello final (3200)");
     }
 
     session.stop().await.unwrap();

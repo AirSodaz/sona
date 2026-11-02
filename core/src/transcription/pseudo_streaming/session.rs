@@ -40,6 +40,7 @@ pub struct PseudoStreamingSessionConfig {
     pub postprocess_options: TranscriptPostprocessOptions,
     pub initial_refresh_rate_ms: Option<u32>,
     pub enable_partial_decoding: Option<bool>,
+    pub vad_min_silence_duration_ms: Option<u32>,
 }
 
 /// Generic pseudo-streaming session coordinating VAD, pre-roll ring buffers,
@@ -63,12 +64,14 @@ pub struct PseudoStreamingSession {
     last_frame_end_sample: AtomicU64,
     is_running: AtomicBool,
     enable_partial_decoding: bool,
+    vad_min_silence_duration_ms: u32,
 }
 
 impl PseudoStreamingSession {
     pub fn new(config: PseudoStreamingSessionConfig) -> Result<Self, AsrPortError> {
         let initial_refresh = config.initial_refresh_rate_ms.unwrap_or(200) as u64;
         let enable_partial_decoding = config.enable_partial_decoding.unwrap_or(true);
+        let vad_min_silence_duration_ms = config.vad_min_silence_duration_ms.unwrap_or(500);
         let postprocessor = TranscriptPostprocessor::compile(config.postprocess_options)
             .map_err(|error| AsrPortError::invalid_request(error.to_string()))?;
 
@@ -90,6 +93,7 @@ impl PseudoStreamingSession {
             last_frame_end_sample: AtomicU64::new(0),
             is_running: AtomicBool::new(false),
             enable_partial_decoding,
+            vad_min_silence_duration_ms,
         })
     }
 
@@ -433,8 +437,19 @@ impl AsrStreamingSession for PseudoStreamingSession {
 
             if buffer.is_speech_active() {
                 // Speech offset: finalize utterance
-                buffer.finish_speech_with_chunk(samples.to_vec());
+                buffer.finish_speech();
                 let audio_samples = buffer.flatten_speech_buffer();
+
+                let release_samples = (SAMPLE_RATE * 0.10) as usize;
+                let expected_silence_samples =
+                    (SAMPLE_RATE * (self.vad_min_silence_duration_ms as f64 / 1000.0)) as usize;
+                let trim_samples = expected_silence_samples.saturating_sub(release_samples);
+                let min_valid_samples = (SAMPLE_RATE * 0.10) as usize;
+                let max_trimmable = audio_samples.len().saturating_sub(min_valid_samples);
+                let actual_trim = trim_samples.min(max_trimmable);
+                let final_audio_samples =
+                    audio_samples[..audio_samples.len() - actual_trim].to_vec();
+
                 let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
                 let decoder = self.decoder.clone();
                 let punctuation = self.punctuation.clone();
@@ -449,7 +464,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
                 let task = move || {
                     execute_inference_pass(
                         &decoder,
-                        &audio_samples,
+                        &final_audio_samples,
                         DecodeStage::Final,
                         punctuation.as_ref(),
                         &seg_id_copy,
@@ -464,7 +479,6 @@ impl AsrStreamingSession for PseudoStreamingSession {
                     observer.on_stream_boundary(&boundary);
                     Ok(())
                 };
-
                 *pending = Some(queue_inference_task(pending.take(), task));
 
                 buffer.on_utterance_end(true);

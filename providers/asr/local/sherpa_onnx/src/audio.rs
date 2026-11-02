@@ -29,9 +29,9 @@ pub struct VadDetectorOptions {
 impl Default for VadDetectorOptions {
     fn default() -> Self {
         Self {
-            threshold: 0.30,
+            threshold: 0.50,
             min_silence_duration: 0.5,
-            min_speech_duration: 0.25,
+            min_speech_duration: 0.15,
             window_size: 512,
             max_speech_duration: 30.0,
             sample_rate: 16000,
@@ -571,8 +571,10 @@ mod tests {
         use super::VadDetectorOptions;
         let options = VadDetectorOptions::default();
         assert_eq!(options.max_speech_duration, 30.0);
+        assert_eq!(options.threshold, 0.50);
+        assert_eq!(options.min_silence_duration, 0.5);
+        assert_eq!(options.min_speech_duration, 0.15);
     }
-
     #[test]
     fn create_vad_config_applies_max_speech_duration() {
         use super::{VadDetectorOptions, create_vad_config};

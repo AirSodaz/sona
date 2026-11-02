@@ -832,19 +832,37 @@ async fn feed_audio_samples_inner(
                         "[Sherpa] {label} detected speech end. segment_id={} total_samples={} buffered_chunks={} buffered_samples={}",
                         seg_id,
                         instance.total_samples,
-                        instance.offline_state.buffered_speech_chunk_count() + 1,
-                        instance.offline_state.buffered_speech_sample_count() + samples.len()
+                        instance.offline_state.buffered_speech_chunk_count(),
+                        instance.offline_state.buffered_speech_sample_count()
                     );
                 } else {
                     info!("[Sherpa] Instance {} detected speech end.", instance_id);
                 }
-                instance
-                    .offline_state
-                    .finish_speech_with_chunk(samples.to_vec());
+                instance.offline_state.finish_speech();
 
                 let global_start = instance.offline_state.utterance_start_seconds(16000.0);
 
-                let offline_copy = instance.offline_state.speech_chunks().to_vec();
+                let mut offline_copy = instance.offline_state.speech_chunks().to_vec();
+                let total_buffered_samples = buffered_sample_count(&offline_copy);
+                let release_samples = (16000.0 * 0.10) as usize;
+                let expected_silence_samples = (16000.0 * 0.50) as usize;
+                let trim_samples = expected_silence_samples.saturating_sub(release_samples);
+                let min_valid_samples = (16000.0 * 0.10) as usize;
+                let max_trimmable = total_buffered_samples.saturating_sub(min_valid_samples);
+                let actual_trim = trim_samples.min(max_trimmable);
+
+                let mut remaining_to_trim = actual_trim;
+                while remaining_to_trim > 0 && !offline_copy.is_empty() {
+                    let last_chunk = offline_copy.last_mut().unwrap();
+                    if last_chunk.len() <= remaining_to_trim {
+                        remaining_to_trim -= last_chunk.len();
+                        offline_copy.pop();
+                    } else {
+                        let new_len = last_chunk.len() - remaining_to_trim;
+                        last_chunk.truncate(new_len);
+                        remaining_to_trim = 0;
+                    }
+                }
                 let observer_copy = observer.clone();
                 let punct_copy = instance.punctuation_clone();
                 let seg_id_copy = seg_id.clone();

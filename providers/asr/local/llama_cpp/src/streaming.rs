@@ -420,17 +420,10 @@ impl StreamingAsrFactoryPort for LlamaCppStreamingFactory {
                     )
                 })?;
 
-            let vad_options = VadDetectionOptions {
-                model_path: vad_path,
-                threshold: 0.35,
-                min_silence_duration: 0.5,
-                min_speech_duration: 0.25,
-                buffer_seconds: if validated.vad_buffer > 0.0 {
-                    validated.vad_buffer
-                } else {
-                    5.0
-                },
-            };
+            let mut vad_options = VadDetectionOptions::streaming_defaults(vad_path);
+            if validated.vad_buffer > 0.0 {
+                vad_options.buffer_seconds = validated.vad_buffer;
+            }
             let vad = vad_engines.create_stream_detector(&vad_options)?;
 
             let punctuation = load_configured_punctuation(
@@ -457,6 +450,7 @@ impl StreamingAsrFactoryPort for LlamaCppStreamingFactory {
                 postprocess_options: validated.postprocess_options,
                 initial_refresh_rate_ms: validated.initial_refresh_rate_ms,
                 enable_partial_decoding: validated.enable_partial_decoding,
+                vad_min_silence_duration_ms: Some(500),
             })?;
 
             Ok(Arc::new(session) as Arc<dyn AsrStreamingSession>)

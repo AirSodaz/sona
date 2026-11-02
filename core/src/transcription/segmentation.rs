@@ -73,24 +73,175 @@ pub fn segment_batch_audio(
             match vad_engine
                 .and_then(|engine| engine.detect(samples, sample_rate, vad_options).ok())
             {
-                Some(spans) => audio_segments_from_spans(samples, sample_rate, spans),
+                Some(spans) => {
+                    let max_raw_seconds = (vad_options.max_speech_duration
+                        - 2.0 * vad_options.speech_pad_seconds)
+                        .max(1.0);
+                    let split_spans =
+                        split_long_spans(samples, sample_rate, spans, max_raw_seconds);
+                    pad_and_clamp_spans(
+                        samples,
+                        split_spans,
+                        sample_rate,
+                        vad_options.speech_pad_seconds,
+                    )
+                }
                 None => fixed_chunk_audio(samples, sample_rate, FIXED_CHUNK_DURATION_SECONDS),
             }
         }
     }
 }
 
-fn audio_segments_from_spans(
+/// Recursively splits speech spans exceeding `max_span_seconds` at an RMS-detected
+/// micro-pause dip, with a fallback to hard-cut if audio energy is uniform.
+pub fn split_long_spans(
     samples: &[f32],
-    _sample_rate: u32,
+    sample_rate: u32,
     spans: Vec<SpeechSpan>,
+    max_span_seconds: f32,
+) -> Vec<SpeechSpan> {
+    if sample_rate == 0 || max_span_seconds <= 0.0 {
+        return spans;
+    }
+
+    let mut result = Vec::new();
+    for span in spans {
+        if span.duration() <= max_span_seconds {
+            result.push(span);
+            continue;
+        }
+
+        let search_end_sec = max_span_seconds.min(span.duration());
+        let search_start_sec = (search_end_sec - 10.0).max(0.0);
+
+        let search_start_sample =
+            span.start_sample + (search_start_sec * sample_rate as f32).round() as usize;
+        let search_end_sample =
+            span.start_sample + (search_end_sec * sample_rate as f32).round() as usize;
+        let search_end_sample = search_end_sample.min(span.end_sample).min(samples.len());
+
+        let window_size = ((sample_rate as f32) * 0.05).round() as usize;
+        let window_size = window_size.max(1);
+        let step = window_size;
+
+        let mut candidate_windows = Vec::new();
+        let mut curr = search_start_sample;
+        while curr + window_size <= search_end_sample {
+            let slice = &samples[curr..curr + window_size];
+            let sum_sq: f64 = slice.iter().map(|&x| (x as f64) * (x as f64)).sum();
+            let rms = (sum_sq / window_size as f64).sqrt() as f32;
+            let center = curr + window_size / 2;
+            candidate_windows.push((rms, center));
+            curr += step;
+        }
+
+        let hard_cut = span.start_sample + (max_span_seconds * sample_rate as f32).round() as usize;
+
+        let split_sample = if candidate_windows.is_empty() {
+            hard_cut
+        } else {
+            let avg_rms: f32 = candidate_windows.iter().map(|(r, _)| *r).sum::<f32>()
+                / (candidate_windows.len() as f32);
+            let mut min_rms = f32::MAX;
+            let mut best_center = hard_cut;
+            for &(rms, center) in &candidate_windows {
+                if rms < min_rms {
+                    min_rms = rms;
+                    best_center = center;
+                }
+            }
+
+            if avg_rms == 0.0 || min_rms >= avg_rms * 0.95 {
+                hard_cut
+            } else {
+                best_center
+            }
+        };
+
+        let split_sample = split_sample
+            .max(span.start_sample + 1)
+            .min(span.end_sample.saturating_sub(1).max(span.start_sample + 1));
+
+        let sub_span1 = SpeechSpan {
+            start_sample: span.start_sample,
+            end_sample: split_sample,
+            sample_rate: span.sample_rate,
+        };
+        let sub_span2 = SpeechSpan {
+            start_sample: split_sample,
+            end_sample: span.end_sample,
+            sample_rate: span.sample_rate,
+        };
+
+        result.push(sub_span1);
+        result.extend(split_long_spans(
+            samples,
+            sample_rate,
+            vec![sub_span2],
+            max_span_seconds,
+        ));
+    }
+    result
+}
+
+/// Applies symmetric speech padding to spans while splitting overlapping inter-span
+/// gaps evenly at the midpoint to prevent double-transcription.
+pub fn pad_and_clamp_spans(
+    samples: &[f32],
+    spans: Vec<SpeechSpan>,
+    sample_rate: u32,
+    pad_seconds: f32,
 ) -> Vec<AudioSegment> {
+    if spans.is_empty() || sample_rate == 0 {
+        return Vec::new();
+    }
+
+    let total_samples = samples.len();
+    let pad_samples = (pad_seconds * sample_rate as f32).round() as usize;
+
+    let mut starts: Vec<usize> = spans
+        .iter()
+        .map(|s| s.start_sample.saturating_sub(pad_samples))
+        .collect();
+    let mut ends: Vec<usize> = spans
+        .iter()
+        .map(|s| (s.end_sample + pad_samples).min(total_samples))
+        .collect();
+
+    for i in 0..spans.len().saturating_sub(1) {
+        if ends[i] > starts[i + 1] {
+            let gap = spans[i + 1]
+                .start_sample
+                .saturating_sub(spans[i].end_sample);
+            let mid = spans[i].end_sample + gap / 2;
+            ends[i] = mid.min(total_samples);
+            starts[i + 1] = mid.min(total_samples);
+        }
+    }
+
     spans
-        .into_iter()
-        .map(|span| AudioSegment {
-            samples: span.slice_samples(samples).to_vec(),
-            start_time: span.start_time(),
-            duration: span.duration(),
+        .iter()
+        .enumerate()
+        .filter_map(|(i, _)| {
+            let start = starts[i];
+            let end = ends[i].max(start);
+            if end == start {
+                return None;
+            }
+            let seg_slice = if end <= total_samples {
+                &samples[start..end]
+            } else if start < total_samples {
+                &samples[start..total_samples]
+            } else {
+                &[]
+            };
+            let duration = (end - start) as f32 / sample_rate as f32;
+            let start_time = start as f32 / sample_rate as f32;
+            Some(AudioSegment {
+                samples: seg_slice.to_vec(),
+                start_time,
+                duration,
+            })
         })
         .collect()
 }
@@ -98,8 +249,8 @@ fn audio_segments_from_spans(
 #[cfg(test)]
 mod tests {
     use super::{
-        AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, fixed_chunk_audio, segment_batch_audio,
-        whole_audio_segment,
+        AudioSegment, BATCH_SEGMENTATION_SAMPLE_RATE, fixed_chunk_audio, pad_and_clamp_spans,
+        segment_batch_audio, split_long_spans, whole_audio_segment,
     };
     use crate::ports::asr::{AsrPortError, BatchSegmentationMode};
     use crate::ports::vad::{SpeechSpan, VadDetectionOptions, VadEngineKind, VadEnginePort};
@@ -230,13 +381,106 @@ mod tests {
         );
 
         assert_eq!(segments.len(), 2);
-        assert_eq!(segments[0].start_time, 1.0);
-        assert_eq!(segments[0].duration, 2.0);
-        assert_eq!(segments[0].samples[0], 16_000.0);
-        assert_eq!(*segments[0].samples.last().unwrap(), 47_999.0);
-        assert_eq!(segments[1].start_time, 6.0);
-        assert_eq!(segments[1].duration, 1.0);
-        assert_eq!(segments[1].samples[0], 96_000.0);
+        // Span 0: 16000 - 4000 = 12000 (0.75s), 48000 + 4000 = 52000 (3.25s), duration = 2.5s
+        assert_eq!(segments[0].start_time, 0.75);
+        assert_eq!(segments[0].duration, 2.5);
+        assert_eq!(segments[0].samples[0], 12_000.0);
+        assert_eq!(*segments[0].samples.last().unwrap(), 51_999.0);
+        // Span 1: 96000 - 4000 = 92000 (5.75s), 112000 + 4000 = 116000 (7.25s), duration = 1.5s
+        assert_eq!(segments[1].start_time, 5.75);
+        assert_eq!(segments[1].duration, 1.5);
+        assert_eq!(segments[1].samples[0], 92_000.0);
+        assert_eq!(*segments[1].samples.last().unwrap(), 115_999.0);
+    }
+
+    #[test]
+    fn pad_and_clamp_spans_expands_isolated_span() {
+        let sample_rate = 16_000;
+        let samples = vec![1.0; sample_rate as usize * 4];
+        let span = SpeechSpan {
+            start_sample: 16_000,
+            end_sample: 32_000,
+            sample_rate,
+        };
+        let segments = pad_and_clamp_spans(&samples, vec![span], sample_rate, 0.25);
+        assert_eq!(segments.len(), 1);
+        assert_eq!(segments[0].start_time, 0.75);
+        assert_eq!(segments[0].duration, 1.5);
+        assert_eq!(segments[0].samples.len(), 24_000);
+
+        let edge_span = SpeechSpan {
+            start_sample: 1_000,
+            end_sample: 8_000,
+            sample_rate,
+        };
+        let edge_segments = pad_and_clamp_spans(&samples, vec![edge_span], sample_rate, 0.25);
+        assert_eq!(edge_segments.len(), 1);
+        assert_eq!(edge_segments[0].start_time, 0.0);
+        assert_eq!(edge_segments[0].samples.len(), 12_000);
+    }
+
+    #[test]
+    fn pad_and_clamp_spans_halves_close_spans_without_overlap() {
+        let sample_rate = 16_000;
+        let total_samples = sample_rate as usize * 10;
+        let samples: Vec<f32> = (0..total_samples).map(|i| i as f32).collect();
+
+        let spans = vec![
+            SpeechSpan {
+                start_sample: 16_000,
+                end_sample: 32_000,
+                sample_rate,
+            },
+            SpeechSpan {
+                start_sample: 33_600,
+                end_sample: 48_000,
+                sample_rate,
+            },
+        ];
+
+        let segments = pad_and_clamp_spans(&samples, spans, sample_rate, 0.25);
+        assert_eq!(segments.len(), 2);
+        assert_eq!(segments[0].start_time, 0.75);
+        assert_eq!(segments[0].duration, (32_800 - 12_000) as f32 / 16_000.0);
+        assert_eq!(segments[0].samples.len(), 32_800 - 12_000);
+
+        assert_eq!(segments[1].start_time, 2.05);
+        assert_eq!(segments[1].duration, (52_000 - 32_800) as f32 / 16_000.0);
+        assert_eq!(segments[1].samples.len(), 52_000 - 32_800);
+
+        assert_eq!(segments[0].end_time(), segments[1].start_time);
+    }
+
+    #[test]
+    fn split_long_spans_breaks_at_rms_minimum() {
+        let sample_rate = 16_000;
+        let total_samples = sample_rate as usize * 35;
+        let mut samples = vec![0.8f32; total_samples];
+
+        // Micro-pause dip at 25s
+        let dip_start = sample_rate as usize * 25;
+        let dip_end = dip_start + 6_400; // 400ms
+        for s in &mut samples[dip_start..dip_end] {
+            *s = 0.0;
+        }
+
+        let long_span = SpeechSpan {
+            start_sample: 0,
+            end_sample: total_samples,
+            sample_rate,
+        };
+
+        let split_spans = split_long_spans(&samples, sample_rate, vec![long_span], 29.5);
+        assert_eq!(split_spans.len(), 2);
+        assert!(split_spans[0].duration() <= 29.5);
+        assert!(split_spans[1].duration() <= 29.5);
+
+        let split_sec = split_spans[0].end_time();
+        assert!(
+            (24.8..=25.4).contains(&split_sec),
+            "expected split around 25.0s dip, got {split_sec}"
+        );
+        assert_eq!(split_spans[0].end_sample, split_spans[1].start_sample);
     }
 
     #[test]

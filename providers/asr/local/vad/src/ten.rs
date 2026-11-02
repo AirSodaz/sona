@@ -5,17 +5,8 @@ use std::path::Path;
 
 use super::shared::{SUPPORTED_SAMPLE_RATE, detect_with_config, reject_unsupported_rate};
 
-/// TEN VAD tuning constants.
-///
-/// The generic [`VadDetectionOptions`] fields were calibrated for Silero and
-/// are advisory per engine family; this engine keeps the upstream defaults so
-/// sensitivity stays predictable regardless of Silero-derived inputs. Only
-/// `buffer_seconds` flows through from callers.
-const THRESHOLD: f32 = 0.5;
-const MIN_SILENCE_DURATION: f32 = 0.5;
-const MIN_SPEECH_DURATION: f32 = 0.25;
+/// TEN VAD window size constant (16ms at 16kHz).
 const WINDOW_SIZE: i32 = 256;
-
 /// TEN VAD ONNX engine backed by sherpa-onnx (k2-fsa metadata build).
 #[derive(Debug, Clone, Copy, Default)]
 pub struct TenVadOnnxEngine;
@@ -38,7 +29,7 @@ impl VadEnginePort for TenVadOnnxEngine {
         reject_unsupported_rate("TEN VAD", sample_rate)?;
 
         let model_path = super::shared::resolve_model_onnx_path(&options.model_path)?;
-        let config = ten_config(&model_path.to_string_lossy());
+        let config = ten_config(&model_path.to_string_lossy(), options);
         detect_with_config(samples, sample_rate, &config, options.buffer_seconds)
     }
 
@@ -47,20 +38,20 @@ impl VadEnginePort for TenVadOnnxEngine {
         options: &VadDetectionOptions,
     ) -> Result<Box<dyn sona_core::ports::vad::StreamingVadPort>, AsrPortError> {
         let model_path = super::shared::resolve_model_onnx_path(&options.model_path)?;
-        let config = ten_config(&model_path.to_string_lossy());
+        let config = ten_config(&model_path.to_string_lossy(), options);
         super::shared::create_streaming_detector_with_config(&config, options.buffer_seconds)
     }
 }
 
-fn ten_config(model: &str) -> VadModelConfig {
+fn ten_config(model: &str, options: &VadDetectionOptions) -> VadModelConfig {
     VadModelConfig {
         ten_vad: TenVadModelConfig {
             model: Some(model.to_string()),
-            threshold: THRESHOLD,
-            min_silence_duration: MIN_SILENCE_DURATION,
-            min_speech_duration: MIN_SPEECH_DURATION,
+            threshold: options.threshold,
+            min_silence_duration: options.min_silence_duration,
+            min_speech_duration: options.min_speech_duration,
             window_size: WINDOW_SIZE,
-            max_speech_duration: 30.0,
+            max_speech_duration: options.max_speech_duration,
         },
         sample_rate: SUPPORTED_SAMPLE_RATE as i32,
         num_threads: super::shared::NUM_THREADS,
@@ -111,13 +102,15 @@ mod tests {
     }
 
     #[test]
-    fn ten_config_pins_upstream_defaults() {
-        let config = super::ten_config("models/ten-vad.onnx");
+    fn ten_config_maps_options_and_sets_window_size() {
+        let options = VadDetectionOptions::batch_defaults("unused");
+        let config = super::ten_config("models/ten-vad.onnx", &options);
 
         assert_eq!(config.ten_vad.model.as_deref(), Some("models/ten-vad.onnx"));
-        assert_eq!(config.ten_vad.threshold, 0.5);
-        assert_eq!(config.ten_vad.min_silence_duration, 0.5);
+        assert_eq!(config.ten_vad.threshold, 0.50);
+        assert_eq!(config.ten_vad.min_silence_duration, 1.2);
         assert_eq!(config.ten_vad.min_speech_duration, 0.25);
+        assert_eq!(config.ten_vad.max_speech_duration, 30.0);
         assert_eq!(WINDOW_SIZE, 256);
         assert_eq!(config.sample_rate, 16_000);
     }
