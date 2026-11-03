@@ -217,6 +217,7 @@ impl UniversalVadStateMachine {
     /// Flushes any pending speech span at the end of an audio stream.
     pub fn flush(&mut self) -> Option<VadStreamEvent> {
         if !self.triggered {
+            self.reset();
             return None;
         }
 
@@ -424,7 +425,7 @@ mod tests {
         }
         assert!(sm.is_speech_active());
 
-        // Now past 0.5s: threshold escalated to 0.90, neg_threshold escalated to 0.75
+        // Now past 0.5s: active_neg_threshold escalated to 0.75
         // A dip to 0.60 (which is < 0.75) now counts as silence!
         for _ in 0..4 {
             assert_eq!(sm.accept_prob(0.60, frame_samples), vec![]);
@@ -698,5 +699,21 @@ mod tests {
         assert!(events.is_empty());
         assert_eq!(sm.current_sample, 0);
         assert!(!sm.is_speech_active());
+    }
+
+    #[test]
+    fn flush_resets_untriggered_candidate_onset() {
+        let opts = test_options(0.50, 0.35, 0.5, 0.2, 30.0);
+        let mut sm = UniversalVadStateMachine::new(&opts, 16_000);
+        // Sub-threshold duration: candidate onset started, but min_speech (200ms) not reached
+        let events = sm.accept_prob(0.8, 1600);
+        assert!(events.is_empty());
+        assert!(!sm.is_speech_active());
+        assert!(sm.candidate_start_sample.is_some());
+
+        // Flush while untriggered must return None and clear candidate_start_sample
+        assert_eq!(sm.flush(), None);
+        assert!(sm.candidate_start_sample.is_none());
+        assert_eq!(sm.current_sample, 0);
     }
 }

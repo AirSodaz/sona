@@ -34,7 +34,7 @@ pub struct VadDetectionOptions {
     pub speech_pad_seconds: f32,
     /// Maximum allowed speech duration in seconds for an individual segment (hard ceiling).
     pub max_speech_duration: f32,
-    /// Duration in seconds after which detector escalates speech threshold to 0.9
+    /// Duration in seconds after which detector escalates the deactivation silence threshold
     /// to encourage natural voice dip termination before the hard limit.
     pub threshold_escalation_duration: f32,
 }

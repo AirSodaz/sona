@@ -68,15 +68,39 @@ impl SileroVadRunner {
             ));
         }
 
-        if has_h && !has_c {
-            return Err(AsrPortError::new(
-                AsrPortErrorKind::Model,
-                "Unsupported Silero V4 model: found 'h' input but missing 'c' (cell state)",
-            ));
-        }
         let version = if has_h {
+            if !has_c {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Model,
+                    "Unsupported Silero V4 model: found 'h' input but missing 'c' (cell state)",
+                ));
+            }
+            let has_hn = session
+                .outputs
+                .iter()
+                .any(|o| o.name == "hn" || o.name == "new_h");
+            let has_cn = session
+                .outputs
+                .iter()
+                .any(|o| o.name == "cn" || o.name == "new_c");
+            if !has_hn || !has_cn {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Model,
+                    "Unsupported Silero V4 model: missing 'hn' or 'cn' in model outputs",
+                ));
+            }
             SileroVersion::V4
         } else {
+            let has_state_out = session
+                .outputs
+                .iter()
+                .any(|o| o.name == "stateN" || o.name == "state");
+            if !has_state_out {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Model,
+                    "Unsupported Silero V5/V6 model: missing 'stateN' or 'state' in model outputs",
+                ));
+            }
             SileroVersion::V5OrV6
         };
         Ok(Self {
@@ -93,7 +117,8 @@ impl SileroVadRunner {
     }
 
     pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
-        let session = crate::engine::get_or_create_session(path)?;
+        let onnx_path = crate::shared::resolve_model_onnx_path(path)?;
+        let session = crate::engine::get_or_create_session(&onnx_path)?;
         Self::from_session(session)
     }
 }
@@ -209,7 +234,12 @@ impl VadModelRunner for SileroVadRunner {
                                 format!("Failed to extract output probability: {e}"),
                             )
                         })?;
-                    output_data.first().copied().unwrap_or(0.0)
+                    output_data.first().copied().ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Silero 'output' tensor contains 0 elements",
+                        )
+                    })?
                 };
                 if !raw_prob.is_finite() {
                     drop(outputs);
@@ -315,7 +345,12 @@ impl VadModelRunner for SileroVadRunner {
                                 format!("Failed to extract output probability: {e}"),
                             )
                         })?;
-                    output_data.first().copied().unwrap_or(0.0)
+                    output_data.first().copied().ok_or_else(|| {
+                        AsrPortError::new(
+                            AsrPortErrorKind::Runtime,
+                            "Silero 'output' tensor contains 0 elements",
+                        )
+                    })?
                 };
                 if !raw_prob.is_finite() {
                     drop(outputs);

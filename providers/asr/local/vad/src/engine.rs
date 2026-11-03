@@ -159,10 +159,20 @@ impl VadEnginePort for FsmnVadOnnxEngine {
 pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
     let check_str = |s: &str| s.to_ascii_lowercase().contains("fsmn");
 
+    let check_silero = |s: &str| s.to_ascii_lowercase().contains("silero");
     if model_path
-        .to_string_lossy()
-        .to_ascii_lowercase()
-        .contains("silero")
+        .file_name()
+        .and_then(|f| f.to_str())
+        .is_some_and(check_silero)
+    {
+        return false;
+    }
+    let parent = model_path.parent().unwrap_or_else(|| Path::new(""));
+    if !parent.as_os_str().is_empty()
+        && parent
+            .file_name()
+            .and_then(|f| f.to_str())
+            .is_some_and(check_silero)
     {
         return false;
     }
@@ -175,7 +185,7 @@ pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
         return true;
     }
 
-    let parent = model_path.parent().unwrap_or_else(|| Path::new(""));
+    // parent already resolved above
     let parent_matches = !parent.as_os_str().is_empty()
         && parent
             .file_name()
@@ -224,6 +234,8 @@ mod tests {
         assert!(fsmn.can_handle(Path::new("speech_fsmn_vad_zh-cn-16k-common/model.onnx")));
         assert!(!fsmn.can_handle(Path::new("models/silero_vad.onnx")));
         assert!(!fsmn.can_handle(Path::new("models/silero/model.onnx")));
+        assert!(fsmn.can_handle(Path::new("/home/silero/models/fsmn_vad.onnx")));
+        assert!(fsmn.can_handle(Path::new("D:/projects/silero_experiment/fsmn/model.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad_v5.onnx")));
         assert!(silero.can_handle(Path::new("models/silero_vad_v6.onnx")));

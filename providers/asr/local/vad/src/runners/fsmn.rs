@@ -104,8 +104,9 @@ impl FsmnVadRunner {
     }
 
     pub fn from_file(path: &Path) -> Result<Self, AsrPortError> {
-        let session = crate::engine::get_or_create_session(path)?;
-        Self::from_session(session, Some(path))
+        let onnx_path = crate::shared::resolve_model_onnx_path(path)?;
+        let session = crate::engine::get_or_create_session(&onnx_path)?;
+        Self::from_session(session, Some(&onnx_path))
     }
 
     fn extract_prob_from_slice(slice: &[f32], is_silence_audio: bool) -> f32 {
@@ -139,7 +140,19 @@ impl FsmnVadRunner {
                 (1.0 / (1.0 + (-s).exp())).clamp(0.0, 1.0)
             }
         } else if !slice.is_empty() {
-            let noise_score = slice[0];
+            let noise_score = if slice.iter().all(|&v| v >= 0.0)
+                && (slice.iter().sum::<f32>() - 1.0).abs() < 1e-2
+            {
+                slice[0]
+            } else {
+                let max_l = slice.iter().copied().fold(f32::NEG_INFINITY, f32::max);
+                let sum: f32 = slice.iter().map(|&v| (v - max_l).exp()).sum();
+                if sum.is_finite() && sum > 0.0 {
+                    (slice[0] - max_l).exp() / sum
+                } else {
+                    1.0
+                }
+            };
             if noise_score.is_finite() {
                 (1.0 - noise_score.clamp(0.0, 1.0)).clamp(0.0, 1.0)
             } else {
@@ -511,9 +524,16 @@ mod tests {
         // Multi-class (noise score at index 0)
         let mut multi = vec![0.0f32; 248];
         multi[0] = 0.05; // noise score 0.05 -> speech prob 0.95
+        multi[1] = 0.95;
         assert!((FsmnVadRunner::extract_prob_from_slice(&multi, false) - 0.95).abs() < 1e-4);
 
         multi[0] = 0.95; // noise score 0.95 -> speech prob 0.05
+        multi[1] = 0.05;
         assert!((FsmnVadRunner::extract_prob_from_slice(&multi, false) - 0.05).abs() < 1e-4);
+
+        // Multi-class unnormalized logits (dominant silence logit at index 0)
+        let mut raw_logits = vec![-10.0f32; 248];
+        raw_logits[0] = -1.0;
+        assert!(FsmnVadRunner::extract_prob_from_slice(&raw_logits, false) < 0.05);
     }
 }
