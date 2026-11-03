@@ -76,7 +76,13 @@ impl VadEnginePort for SileroOnnxEngine {
 
         let probs = runner.predict_probs_batch(samples)?;
         let mut state_machine = UniversalVadStateMachine::new(options, sample_rate);
-        Ok(state_machine.batch_detect(&probs, runner.window_size()))
+        let mut spans = state_machine.batch_detect(&probs, runner.window_size());
+        for span in &mut spans {
+            span.start_sample = span.start_sample.min(samples.len());
+            span.end_sample = span.end_sample.min(samples.len());
+        }
+        spans.retain(|s| s.start_sample < s.end_sample);
+        Ok(spans)
     }
 
     fn create_stream_detector(
@@ -125,7 +131,13 @@ impl VadEnginePort for FsmnVadOnnxEngine {
 
         let probs = runner.predict_probs_batch(samples)?;
         let mut state_machine = UniversalVadStateMachine::new(options, sample_rate);
-        Ok(state_machine.batch_detect(&probs, runner.window_size()))
+        let mut spans = state_machine.batch_detect(&probs, runner.window_size());
+        for span in &mut spans {
+            span.start_sample = span.start_sample.min(samples.len());
+            span.end_sample = span.end_sample.min(samples.len());
+        }
+        spans.retain(|s| s.start_sample < s.end_sample);
+        Ok(spans)
     }
 
     fn create_stream_detector(
@@ -163,18 +175,19 @@ pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
         return true;
     }
 
-    if let Some(parent) = model_path.parent()
-        && !parent.as_os_str().is_empty()
-        && (parent
+    let parent = model_path.parent().unwrap_or_else(|| Path::new(""));
+    let parent_matches = !parent.as_os_str().is_empty()
+        && parent
             .file_name()
             .and_then(|f| f.to_str())
-            .is_some_and(check_str)
-            || (model_path
-                .file_name()
-                .and_then(|f| f.to_str())
-                .is_some_and(|name| name == "model.onnx" || name.ends_with(".onnx"))
-                && (parent.join("am.mvn").is_file() || parent.join("vad.mvn").is_file())))
-    {
+            .is_some_and(check_str);
+    let sibling_mvn = model_path
+        .file_name()
+        .and_then(|f| f.to_str())
+        .is_some_and(|name| name == "model.onnx" || name.ends_with(".onnx"))
+        && (parent.join("am.mvn").is_file() || parent.join("vad.mvn").is_file());
+
+    if parent_matches || sibling_mvn {
         return true;
     }
     if model_path.is_dir()

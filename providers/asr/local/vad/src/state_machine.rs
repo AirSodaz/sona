@@ -31,12 +31,16 @@ pub struct UniversalVadStateMachine {
 impl UniversalVadStateMachine {
     pub fn new(options: &VadDetectionOptions, sample_rate: u32) -> Self {
         let rate = sample_rate.max(1) as f32;
-        let threshold = options.threshold.clamp(0.01, 0.99);
+        let threshold = if options.threshold.is_nan() {
+            0.50
+        } else {
+            options.threshold.clamp(0.01, 0.99)
+        };
         let neg_threshold = options
             .neg_threshold
+            .filter(|n| !n.is_nan())
             .unwrap_or_else(|| (threshold - 0.15).max(0.01))
             .clamp(0.01, threshold);
-
         let min_silence_samples = (options.min_silence_duration.max(0.0) * rate).round() as usize;
         let min_speech_samples = (options.min_speech_duration.max(0.0) * rate).round() as usize;
         let max_speech_samples = ((options.max_speech_duration.max(0.1) * rate).round() as usize)
@@ -101,11 +105,7 @@ impl UniversalVadStateMachine {
             && self.current_sample.saturating_sub(self.speech_start_sample)
                 >= self.escalation_samples;
 
-        let active_threshold = if in_escalation {
-            0.90f32.max(self.threshold)
-        } else {
-            self.threshold
-        };
+        let active_threshold = self.threshold;
 
         let active_neg_threshold = if in_escalation {
             0.75f32.max(self.neg_threshold)
@@ -158,10 +158,12 @@ impl UniversalVadStateMachine {
             };
             let end_sample = self.temp_end_sample.unwrap_or(fallback_end);
 
-            events.push(VadStreamEvent::SpeechEnd {
-                start_sample: self.speech_start_sample,
-                end_sample,
-            });
+            if end_sample > self.speech_start_sample {
+                events.push(VadStreamEvent::SpeechEnd {
+                    start_sample: self.speech_start_sample,
+                    end_sample,
+                });
+            }
 
             // Reset state for subsequent segment
             let continue_speech = prob >= active_neg_threshold;
@@ -199,10 +201,12 @@ impl UniversalVadStateMachine {
                 self.candidate_start_sample = None;
                 self.sub_threshold_jitter_count = 0;
 
-                events.push(VadStreamEvent::SpeechEnd {
-                    start_sample,
-                    end_sample,
-                });
+                if end_sample.saturating_sub(start_sample) >= self.min_speech_samples {
+                    events.push(VadStreamEvent::SpeechEnd {
+                        start_sample,
+                        end_sample,
+                    });
+                }
             }
         }
 
@@ -220,10 +224,14 @@ impl UniversalVadStateMachine {
 
         self.reset();
 
-        Some(VadStreamEvent::SpeechEnd {
-            start_sample,
-            end_sample,
-        })
+        if end_sample.saturating_sub(start_sample) >= self.min_speech_samples {
+            Some(VadStreamEvent::SpeechEnd {
+                start_sample,
+                end_sample,
+            })
+        } else {
+            None
+        }
     }
 
     /// Convenience batch segmentation driver running over sequential frame probabilities.
@@ -237,6 +245,7 @@ impl UniversalVadStateMachine {
                     start_sample,
                     end_sample,
                 } = event
+                    && end_sample > start_sample
                 {
                     spans.push(SpeechSpan {
                         start_sample,
@@ -251,6 +260,7 @@ impl UniversalVadStateMachine {
             start_sample,
             end_sample,
         }) = self.flush()
+            && end_sample > start_sample
         {
             spans.push(SpeechSpan {
                 start_sample,
@@ -258,7 +268,6 @@ impl UniversalVadStateMachine {
                 sample_rate: self.sample_rate,
             });
         }
-
         spans
     }
 }
@@ -630,5 +639,46 @@ mod tests {
         // NaN should be treated as 0.0, not triggering speech
         assert_eq!(sm.accept_prob(f32::NAN, frame_samples), vec![]);
         assert!(!sm.is_speech_active());
+    }
+
+    #[test]
+    fn nan_options_thresholds_do_not_panic() {
+        let opts = test_options(f32::NAN, f32::NAN, 0.1, 0.1, 30.0);
+        let sm = UniversalVadStateMachine::new(&opts, 16_000);
+        assert!((sm.threshold - 0.50).abs() < 1e-4);
+    }
+
+    #[test]
+    fn max_duration_cut_followed_by_immediate_silence_prevents_zero_length_span() {
+        let frame_samples = 512;
+        // max_speech = 5 frames (0.16s), min_speech = 2 frames (0.064s), min_silence = 2 frames (0.064s)
+        let opts = test_options(0.50, 0.35, 0.064, 0.064, 0.16);
+        let mut sm = UniversalVadStateMachine::new(&opts, 16_000);
+
+        // 2 frames to trigger onset
+        sm.accept_prob(0.8, frame_samples);
+        sm.accept_prob(0.8, frame_samples);
+        assert!(sm.is_speech_active());
+
+        // 3 more frames to hit max speech duration (total 5 frames)
+        sm.accept_prob(0.8, frame_samples);
+        sm.accept_prob(0.8, frame_samples);
+        let cut_events = sm.accept_prob(0.8, frame_samples);
+        assert_eq!(cut_events.len(), 2);
+        assert!(matches!(cut_events[0], VadStreamEvent::SpeechEnd { .. }));
+        assert!(matches!(cut_events[1], VadStreamEvent::SpeechStart { .. }));
+
+        // Immediate silence follows: frame 6 is silence (prob 0.1)
+        let e1 = sm.accept_prob(0.1, frame_samples);
+        assert_eq!(e1, vec![]);
+
+        // Frame 7 reaches min_silence (2 frames of silence)
+        let e2 = sm.accept_prob(0.1, frame_samples);
+        // Because the continuation had duration 0 (silence started immediately at frame_start),
+        // it must NOT emit a zero-length SpeechEnd event!
+        assert_eq!(e2, vec![]);
+
+        // Flush must also return None rather than a 0-sample span
+        assert_eq!(sm.flush(), None);
     }
 }

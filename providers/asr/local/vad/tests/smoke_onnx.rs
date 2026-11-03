@@ -67,23 +67,55 @@ fn silero_onnx_real_model_smoke_test() {
         !spans.is_empty(),
         "Expected speech spans on synthetic audio"
     );
+    for span in &spans {
+        assert_eq!(span.sample_rate, 16_000);
+        assert!(
+            span.start_sample >= 14_000,
+            "Speech span should not trigger during initial silence"
+        );
+        assert!(
+            span.end_sample <= 52_000,
+            "Speech span should not extend through trailing silence"
+        );
+    }
     println!("Silero detected spans: {spans:?}");
 
     // 3. Streaming test
+    let streaming_opts = VadDetectionOptions::streaming_defaults(&model_path);
     let mut stream = engine
-        .create_stream_detector(&opts)
+        .create_stream_detector(&streaming_opts)
         .expect("creates stream");
     assert!(!stream.is_speech_detected());
 
-    // Feed silence
-    stream.accept_samples(&[0.0; 16_000]);
+    // Feed silence: verify no speech detected and no events
+    let silence_events = stream.accept_samples(&[0.0; 16_000]);
+    assert!(silence_events.is_empty());
     assert!(!stream.is_speech_detected());
 
-    // Feed speech to verify positive activation
-    stream.accept_samples(&audio[16_000..48_000]);
+    // Feed speech to verify positive activation and SpeechStart event
+    let speech_events = stream.accept_samples(&audio[16_000..48_000]);
     assert!(
         stream.is_speech_detected(),
         "Streaming should detect active speech"
+    );
+    assert!(
+        speech_events
+            .iter()
+            .any(|e| matches!(e, sona_core::ports::vad::VadStreamEvent::SpeechStart { .. })),
+        "Expected SpeechStart event on speech segment"
+    );
+
+    // Feed trailing silence to verify deactivation at silence boundary
+    let end_events = stream.accept_samples(&audio[48_000..64_000]);
+    assert!(
+        !stream.is_speech_detected(),
+        "Streaming should deactivate after trailing silence"
+    );
+    assert!(
+        end_events
+            .iter()
+            .any(|e| matches!(e, sona_core::ports::vad::VadStreamEvent::SpeechEnd { .. })),
+        "Expected SpeechEnd event after trailing silence"
     );
 
     stream.reset();
@@ -128,23 +160,55 @@ fn fsmn_onnx_real_model_smoke_test() {
         !spans.is_empty(),
         "Expected speech spans on synthetic audio"
     );
+    for span in &spans {
+        assert_eq!(span.sample_rate, 16_000);
+        assert!(
+            span.start_sample >= 14_000,
+            "Speech span should not trigger during initial silence"
+        );
+        assert!(
+            span.end_sample <= 52_000,
+            "Speech span should not extend through trailing silence"
+        );
+    }
     println!("FSMN detected spans: {spans:?}");
 
     // 3. Streaming test
+    let streaming_opts = VadDetectionOptions::streaming_defaults(&model_path);
     let mut stream = engine
-        .create_stream_detector(&opts)
+        .create_stream_detector(&streaming_opts)
         .expect("creates stream");
     assert!(!stream.is_speech_detected());
 
-    // Feed silence
-    stream.accept_samples(&[0.0; 16_000]);
+    // Feed silence: verify no speech detected and no events
+    let silence_events = stream.accept_samples(&[0.0; 16_000]);
+    assert!(silence_events.is_empty());
     assert!(!stream.is_speech_detected());
 
-    // Feed speech to verify positive activation
-    stream.accept_samples(&audio[16_000..48_000]);
+    // Feed speech to verify positive activation and SpeechStart event
+    let speech_events = stream.accept_samples(&audio[16_000..48_000]);
     assert!(
         stream.is_speech_detected(),
         "Streaming should detect active speech"
+    );
+    assert!(
+        speech_events
+            .iter()
+            .any(|e| matches!(e, sona_core::ports::vad::VadStreamEvent::SpeechStart { .. })),
+        "Expected SpeechStart event on speech segment"
+    );
+
+    // Feed trailing silence to verify deactivation at silence boundary
+    let end_events = stream.accept_samples(&audio[48_000..64_000]);
+    assert!(
+        !stream.is_speech_detected(),
+        "Streaming should deactivate after trailing silence"
+    );
+    assert!(
+        end_events
+            .iter()
+            .any(|e| matches!(e, sona_core::ports::vad::VadStreamEvent::SpeechEnd { .. })),
+        "Expected SpeechEnd event after trailing silence"
     );
 
     stream.reset();
@@ -153,11 +217,20 @@ fn fsmn_onnx_real_model_smoke_test() {
 
 #[test]
 fn real_speech_audio_file_detection_test() {
-    let wav_path = workspace_model_path("target/test-models/asr_example.wav");
-    if !wav_path.is_file() {
+    let wav_path = std::env::var_os("SONA_TEST_SAMPLE_WAV")
+        .map(PathBuf::from)
+        .or_else(|| {
+            let p = workspace_model_path("target/test-models/asr_example.wav");
+            p.is_file().then_some(p)
+        })
+        .or_else(|| {
+            let p = workspace_model_path("platforms/desktop/sample.wav");
+            p.is_file().then_some(p)
+        });
+    let Some(wav_path) = wav_path else {
         eprintln!("Skipping real_speech_audio_file_detection_test: wav not found");
         return;
-    }
+    };
 
     let samples =
         sona_core::audio::decoder::decode_audio_file(&wav_path, 16_000).expect("decodes test wav");

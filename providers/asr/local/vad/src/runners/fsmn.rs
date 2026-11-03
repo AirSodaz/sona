@@ -35,6 +35,30 @@ pub struct FsmnVadRunner {
 
 impl FsmnVadRunner {
     pub fn from_session(session: Arc<Session>, path: Option<&Path>) -> Result<Self, AsrPortError> {
+        let has_speech = session.inputs.iter().any(|i| i.name == "speech");
+        let has_caches = (0..4).all(|idx| {
+            let in_name = format!("in_cache{idx}");
+            session.inputs.iter().any(|i| i.name == in_name)
+        });
+        if !has_speech || !has_caches {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Unsupported FSMN model: missing 'speech' or 'in_cache0..3' inputs",
+            ));
+        }
+
+        let has_logits = session.outputs.iter().any(|o| o.name == "logits");
+        let has_out_caches = (0..4).all(|idx| {
+            let out_name = format!("out_cache{idx}");
+            session.outputs.iter().any(|o| o.name == out_name)
+        });
+        if !has_logits || !has_out_caches {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Unsupported FSMN model: missing 'logits' or 'out_cache0..3' outputs",
+            ));
+        }
+
         let mut cmvn = CmvnParams::default();
         if let Some(p) = path {
             let search_dir = if p.is_dir() {
@@ -53,7 +77,6 @@ impl FsmnVadRunner {
                 }
             }
         }
-
         Ok(Self {
             session,
             fbank: FbankExtractor::new(),
@@ -112,7 +135,7 @@ impl FsmnVadRunner {
         } else if !slice.is_empty() {
             let noise_score = slice[0];
             if noise_score.is_finite() {
-                (1.0 - noise_score).clamp(0.0, 1.0)
+                (1.0 - noise_score.clamp(0.0, 1.0)).clamp(0.0, 1.0)
             } else {
                 0.0
             }

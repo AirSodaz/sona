@@ -89,15 +89,15 @@ impl PseudoStreamAudioBuffer {
         result
     }
 
-    /// Transitions to speech state, anchoring start at `start_sample` and pulling pre-roll context.
-    pub fn begin_speech_at(&mut self, start_sample: usize, pre_roll_samples_to_keep: usize) {
+    /// Transitions to speech state, anchoring start at `total_samples` and pulling pre-roll context.
+    pub fn begin_speech_at(&mut self, total_samples: usize, pre_roll_samples_to_keep: usize) {
         self.is_speaking = true;
         let context = self.ring_context(pre_roll_samples_to_keep);
         let context_len = context.len();
         if !context.is_empty() {
             self.speech_buffer.push(context);
         }
-        self.utterance_start_sample = start_sample.saturating_sub(context_len);
+        self.utterance_start_sample = total_samples.saturating_sub(context_len);
         self.ring_buffer.clear();
     }
 

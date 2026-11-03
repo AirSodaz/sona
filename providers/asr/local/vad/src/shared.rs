@@ -43,15 +43,16 @@ pub fn resolve_model_onnx_path(path: &Path) -> Result<PathBuf, AsrPortError> {
         .filter(|p| p.is_file() && p.extension().is_some_and(|ext| ext == "onnx"))
         .collect();
 
-    if let Some(canonical) = onnx_files.iter().find(|p| {
-        p.file_name()
-            .and_then(|n| n.to_str())
-            .is_some_and(|name| matches!(name, "model.onnx" | "silero_vad.onnx" | "fsmn_vad.onnx"))
-    }) {
-        return Ok(canonical.clone());
+    onnx_files.sort();
+    for canonical_name in ["model.onnx", "silero_vad.onnx", "fsmn_vad.onnx"] {
+        if let Some(canonical) = onnx_files
+            .iter()
+            .find(|p| p.file_name().and_then(|n| n.to_str()) == Some(canonical_name))
+        {
+            return Ok(canonical.clone());
+        }
     }
 
-    onnx_files.sort();
     onnx_files.into_iter().next().ok_or_else(|| {
         AsrPortError::new(
             AsrPortErrorKind::Model,

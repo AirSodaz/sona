@@ -195,7 +195,7 @@ impl VadModelRunner for SileroVadRunner {
                         )
                     })?;
                 let raw_prob = output_data.first().copied().unwrap_or(0.0);
-                let prob = if raw_prob.is_nan() {
+                let prob = if !raw_prob.is_finite() {
                     0.0
                 } else {
                     raw_prob.clamp(0.0, 1.0)
@@ -293,7 +293,7 @@ impl VadModelRunner for SileroVadRunner {
                         )
                     })?;
                 let raw_prob = output_data.first().copied().unwrap_or(0.0);
-                let prob = if raw_prob.is_nan() {
+                let prob = if !raw_prob.is_finite() {
                     0.0
                 } else {
                     raw_prob.clamp(0.0, 1.0)
@@ -319,12 +319,6 @@ impl VadModelRunner for SileroVadRunner {
                         format!("Expected 128 hn elements, got {}", h_data.len()),
                     ));
                 }
-                if let Some(slice) = self.h.as_slice_mut() {
-                    slice.copy_from_slice(h_data);
-                } else {
-                    self.h = Array3::from_shape_vec((2, 1, 64), h_data.to_vec())
-                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-                }
 
                 let cn_tensor = outputs
                     .get("cn")
@@ -347,13 +341,19 @@ impl VadModelRunner for SileroVadRunner {
                         format!("Expected 128 cn elements, got {}", c_data.len()),
                     ));
                 }
+
+                if let Some(slice) = self.h.as_slice_mut() {
+                    slice.copy_from_slice(h_data);
+                } else {
+                    self.h = Array3::from_shape_vec((2, 1, 64), h_data.to_vec())
+                        .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
+                }
                 if let Some(slice) = self.c.as_slice_mut() {
                     slice.copy_from_slice(c_data);
                 } else {
                     self.c = Array3::from_shape_vec((2, 1, 64), c_data.to_vec())
                         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
                 }
-
                 Ok(prob)
             }
         }

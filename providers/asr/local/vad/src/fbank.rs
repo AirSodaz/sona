@@ -224,18 +224,36 @@ impl CmvnParams {
             let line = lines[i].trim();
             if line.starts_with("<AddShift>") {
                 let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
-                if vals.len() >= 80 {
-                    shifts.copy_from_slice(&vals[..80]);
-                    found_shift = true;
+                if vals.len() != NUM_MEL_BINS {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        format!(
+                            "Invalid <AddShift> vector dimension in {}: expected {}, got {}",
+                            path.display(),
+                            NUM_MEL_BINS,
+                            vals.len()
+                        ),
+                    ));
                 }
+                shifts.copy_from_slice(&vals);
+                found_shift = true;
                 i = next_i;
                 continue;
             } else if line.starts_with("<Rescale>") {
                 let (vals, next_i) = parse_kaldi_vector_multiline(&lines, i)?;
-                if vals.len() >= 80 {
-                    rescales.copy_from_slice(&vals[..80]);
-                    found_rescale = true;
+                if vals.len() != NUM_MEL_BINS {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        format!(
+                            "Invalid <Rescale> vector dimension in {}: expected {}, got {}",
+                            path.display(),
+                            NUM_MEL_BINS,
+                            vals.len()
+                        ),
+                    ));
                 }
+                rescales.copy_from_slice(&vals);
+                found_rescale = true;
                 i = next_i;
                 continue;
             }
@@ -263,6 +281,12 @@ fn parse_kaldi_vector_multiline(
     while current_idx < lines.len() {
         let line = lines[current_idx].trim();
         let start = if !collecting {
+            if current_idx > start_idx && line.starts_with('<') {
+                return Err(AsrPortError::new(
+                    AsrPortErrorKind::Model,
+                    format!("Unexpected tag '{line}' while searching for vector start '['"),
+                ));
+            }
             if let Some(pos) = line.find('[') {
                 collecting = true;
                 pos + 1
@@ -517,6 +541,9 @@ impl FbankExtractor {
 /// Applies Low Frame Rate (LFR) stacking and CMVN normalization for FSMN VAD.
 /// Stacks `lfr_m` (5) consecutive 80-dim frames with stride `lfr_n` (1) into 400-dim frames,
 /// then applies CMVN normalization.
+///
+/// # Panics
+/// Panics if `lfr_m * NUM_MEL_BINS != 400` (i.e. `lfr_m != 5`) or if `lfr_n == 0`.
 pub fn apply_lfr_and_cmvn(
     frames: &[[f32; NUM_MEL_BINS]],
     cmvn: &CmvnParams,
@@ -637,13 +664,62 @@ mod tests {
 
     #[test]
     fn lfr_splicing_matches_shape_and_padding() {
-        let extractor = FbankExtractor::new();
-        let samples = vec![0.1f32; 1600]; // 8 frames
-        let frames = extractor.extract_all(&samples);
-        let cmvn = CmvnParams::default();
+        // Construct 4 synthetic frames where frame k has all values equal to k as f32
+        let mut frames = Vec::new();
+        for k in 0..4 {
+            frames.push([k as f32; NUM_MEL_BINS]);
+        }
+        let identity_cmvn = CmvnParams {
+            shifts: [0.0; NUM_MEL_BINS],
+            rescales: [1.0; NUM_MEL_BINS],
+        };
 
-        let lfr = apply_lfr_and_cmvn(&frames, &cmvn, 5, 1);
-        assert_eq!(lfr.len(), frames.len());
+        let lfr = apply_lfr_and_cmvn(&frames, &identity_cmvn, 5, 1);
+        assert_eq!(lfr.len(), 4);
         assert_eq!(lfr[0].len(), 400);
+
+        // Frame 0: left_pad=2, indices are [0, 0, 0, 1, 2]
+        assert_eq!(lfr[0][0], 0.0);
+        assert_eq!(lfr[0][80], 0.0);
+        assert_eq!(lfr[0][160], 0.0);
+        assert_eq!(lfr[0][240], 1.0);
+        assert_eq!(lfr[0][320], 2.0);
+
+        // Frame 1: indices are [0, 0, 1, 2, 3]
+        assert_eq!(lfr[1][0], 0.0);
+        assert_eq!(lfr[1][80], 0.0);
+        assert_eq!(lfr[1][160], 1.0);
+        assert_eq!(lfr[1][240], 2.0);
+        assert_eq!(lfr[1][320], 3.0);
+
+        // Frame 3 (last): clamped indices are [1, 2, 3, 3, 3]
+        assert_eq!(lfr[3][0], 1.0);
+        assert_eq!(lfr[3][80], 2.0);
+        assert_eq!(lfr[3][160], 3.0);
+        assert_eq!(lfr[3][240], 3.0);
+        assert_eq!(lfr[3][320], 3.0);
+    }
+
+    #[test]
+    fn parse_kaldi_vector_valid_and_invalid() {
+        let mut valid_str = String::from("<AddShift> [\n");
+        for _ in 0..80 {
+            valid_str.push_str(" 1.5");
+        }
+        valid_str.push_str(" ]\n<Rescale> [\n");
+        for _ in 0..80 {
+            valid_str.push_str(" 2.0");
+        }
+        valid_str.push_str(" ]\n");
+
+        let lines: Vec<&str> = valid_str.lines().collect();
+        let (shifts, _) = parse_kaldi_vector_multiline(&lines, 0).expect("parses shifts");
+        assert_eq!(shifts.len(), 80);
+        assert_eq!(shifts[0], 1.5);
+
+        // Test tag without vector before next tag
+        let bad_str = "<AddShift>\n<Rescale> [ 1.0 ]";
+        let bad_lines: Vec<&str> = bad_str.lines().collect();
+        assert!(parse_kaldi_vector_multiline(&bad_lines, 0).is_err());
     }
 }

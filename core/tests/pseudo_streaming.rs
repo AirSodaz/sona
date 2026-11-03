@@ -686,6 +686,7 @@ async fn continuous_speech_exceeding_max_duration_forces_utterance_finalization(
         assert_eq!(second.stage, "final");
         let second_seg = &second.update.upsert_segments[0];
         assert_ne!(first_seg.id, second_seg.id);
+        assert_eq!(second_seg.text, "hello final (1600)");
         assert!(
             second_seg.start >= first_seg.end,
             "second segment start ({}) should be >= first segment end ({})",

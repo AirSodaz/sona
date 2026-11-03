@@ -306,9 +306,12 @@ pub async fn create_streaming_session(
     } = request;
     let mut session_instance = SherpaInstance::default();
     session_instance.enable_partial_decoding = enable_partial_decoding.unwrap_or(true);
+    let is_offline = resources.recognizer.is_offline();
     session_instance.set_recognizer(resources.recognizer);
     session_instance.set_punctuation(resources.punctuation);
-    let vad = if let Some(vad_path) = vad_model.as_deref().filter(|p| !p.trim().is_empty()) {
+    let vad = if is_offline
+        && let Some(vad_path) = vad_model.as_deref().filter(|p| !p.trim().is_empty())
+    {
         let mut opts = VadDetectionOptions::streaming_defaults(vad_path);
         if vad_buffer > 0.0 {
             opts.buffer_seconds = vad_buffer;
@@ -671,6 +674,7 @@ async fn feed_audio_samples_inner(
         };
 
         let events = vad.accept_samples(samples);
+        let is_vad_speaking = vad.is_speech_detected();
 
         if instance.current_segment_id.is_none() {
             instance.current_segment_id = Some(uuid::Uuid::new_v4().to_string());
@@ -678,6 +682,7 @@ async fn feed_audio_samples_inner(
         let seg_id = instance.current_segment_id.as_ref().unwrap().clone();
 
         let mut had_speech_end = false;
+        let stream_total = instance.total_samples.saturating_add(samples.len());
 
         for event in events {
             match event {
@@ -696,9 +701,12 @@ async fn feed_audio_samples_inner(
                         }
 
                         let samples_to_keep = PRE_ROLL_SAMPLES;
-                        instance
-                            .offline_state
-                            .begin_speech(instance.total_samples, samples_to_keep);
+                        let anchor = if had_speech_end {
+                            stream_total
+                        } else {
+                            instance.total_samples
+                        };
+                        instance.offline_state.begin_speech(anchor, samples_to_keep);
                     }
                 }
                 VadStreamEvent::SpeechEnd {
@@ -733,7 +741,6 @@ async fn feed_audio_samples_inner(
                     instance.offline_state.finish_speech();
 
                     let pad_samples = (SAMPLE_RATE * 0.10) as usize;
-                    let stream_total = instance.total_samples.saturating_add(samples.len());
                     let trailing_silence = stream_total
                         .saturating_sub(end_sample.saturating_add(pad_samples))
                         .min(instance.offline_state.buffered_speech_sample_count());
@@ -827,112 +834,123 @@ async fn feed_audio_samples_inner(
                 }
             }
         }
+        if !had_speech_end && !instance.offline_state.is_speech_active() && is_vad_speaking {
+            let samples_to_keep = PRE_ROLL_SAMPLES;
+            instance
+                .offline_state
+                .begin_speech(instance.total_samples, samples_to_keep);
+        }
 
-        if instance.offline_state.is_speech_active() {
-            instance.offline_state.push_speech_chunk(samples.to_vec());
+        if !had_speech_end {
+            if instance.offline_state.is_speech_active() {
+                instance.offline_state.push_speech_chunk(samples.to_vec());
 
-            if !had_speech_end && instance.enable_partial_decoding {
-                let previous_decode_ms = instance.last_partial_decode_ms.swap(0, Ordering::AcqRel);
-                if previous_decode_ms > 0 {
-                    let level_before = instance.offline_state.backoff().level();
-                    instance
-                        .offline_state
-                        .record_decode_duration(previous_decode_ms);
-                    let level_after = instance.offline_state.backoff().level();
-                    if level_after != level_before
-                        && let Some(label) = diagnostics_instance_label(instance_id)
-                    {
-                        info!(
-                            "[Sherpa] {label} decode duration exceeded threshold ({}ms), stepping down refresh rate. level={:?} interval={:?}",
-                            previous_decode_ms,
-                            level_after,
-                            instance.offline_state.backoff().current_interval_ms()
-                        );
-                    }
-                }
-
-                let now = std::time::Instant::now();
-                if instance.offline_state.should_run_partial(now) {
-                    let slot_available = prepare_partial_inference_slot(pending_inference).await?;
-                    if !slot_available {
-                        instance.offline_state.record_overrun();
-                        if let Some(label) = diagnostics_instance_label(instance_id) {
+                if instance.enable_partial_decoding {
+                    let previous_decode_ms =
+                        instance.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+                    if previous_decode_ms > 0 {
+                        let level_before = instance.offline_state.backoff().level();
+                        instance
+                            .offline_state
+                            .record_decode_duration(previous_decode_ms);
+                        let level_after = instance.offline_state.backoff().level();
+                        if level_after != level_before
+                            && let Some(label) = diagnostics_instance_label(instance_id)
+                        {
                             info!(
-                                "[Sherpa] {label} partial inference slot busy, stepping down refresh rate. level={:?} interval={:?}",
-                                instance.offline_state.backoff().level(),
+                                "[Sherpa] {label} decode duration exceeded threshold ({}ms), stepping down refresh rate. level={:?} interval={:?}",
+                                previous_decode_ms,
+                                level_after,
                                 instance.offline_state.backoff().current_interval_ms()
                             );
                         }
-                    } else {
-                        let global_start = instance.offline_state.utterance_start_seconds(16000.0);
+                    }
 
-                        let offline_copy = instance.offline_state.speech_chunks().to_vec();
-                        let observer_copy = observer.clone();
-                        let punct_copy = instance.punctuation_clone();
-                        let seg_id_copy = seg_id.clone();
-                        let instance_id_copy = instance_id.to_string();
-                        let recognizer_copy = recognizer.clone();
-                        let first_segment_emitted =
-                            diagnostics_instance_label(instance_id).is_some().then(|| {
-                                instance
-                                    .record_diagnostics
-                                    .first_segment_emitted_flag()
-                                    .clone()
-                            });
-                        let normalization_options = instance.normalization_options;
-                        let postprocessor = instance.postprocessor.clone();
-                        let should_record_partial_metric =
-                            instance.should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
-                        if should_record_partial_metric {
-                            instance.mark_partial_metric_sample();
-                        }
-                        let triggered_at = Instant::now();
-
-                        if let Some(label) = diagnostics_instance_label(instance_id) {
-                            info!(
-                                "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
-                                seg_id,
-                                offline_copy.len(),
-                                buffered_sample_count(&offline_copy),
-                                global_start
-                            );
-                        }
-
-                        let partial_decode_target = instance.last_partial_decode_ms.clone();
-                        let task = move || {
-                            if let Some(safe_r) = recognizer_copy.offline() {
-                                run_offline_inference(
-                                    &offline_copy,
-                                    observer_copy.as_ref(),
-                                    safe_r,
-                                    punct_copy.as_deref(),
-                                    &seg_id_copy,
-                                    global_start,
-                                    false,
-                                    &instance_id_copy,
-                                    "partial",
-                                    first_segment_emitted,
-                                    normalization_options,
-                                    postprocessor,
-                                    should_record_partial_metric,
-                                    triggered_at,
-                                    Some(partial_decode_target),
-                                    None,
+                    let now = std::time::Instant::now();
+                    if instance.offline_state.should_run_partial(now) {
+                        let slot_available =
+                            prepare_partial_inference_slot(pending_inference).await?;
+                        if !slot_available {
+                            instance.offline_state.record_overrun();
+                            if let Some(label) = diagnostics_instance_label(instance_id) {
+                                info!(
+                                    "[Sherpa] {label} partial inference slot busy, stepping down refresh rate. level={:?} interval={:?}",
+                                    instance.offline_state.backoff().level(),
+                                    instance.offline_state.backoff().current_interval_ms()
                                 );
                             }
-                        };
-                        *pending_inference = Some(queue_inference_task(None, task));
-                        instance.offline_state.mark_inference_time(now);
+                        } else {
+                            let global_start =
+                                instance.offline_state.utterance_start_seconds(16000.0);
+
+                            let offline_copy = instance.offline_state.speech_chunks().to_vec();
+                            let observer_copy = observer.clone();
+                            let punct_copy = instance.punctuation_clone();
+                            let seg_id_copy = seg_id.clone();
+                            let instance_id_copy = instance_id.to_string();
+                            let recognizer_copy = recognizer.clone();
+                            let first_segment_emitted =
+                                diagnostics_instance_label(instance_id).is_some().then(|| {
+                                    instance
+                                        .record_diagnostics
+                                        .first_segment_emitted_flag()
+                                        .clone()
+                                });
+                            let normalization_options = instance.normalization_options;
+                            let postprocessor = instance.postprocessor.clone();
+                            let should_record_partial_metric = instance
+                                .should_record_partial_metric(PARTIAL_METRIC_INTERVAL_SAMPLES);
+                            if should_record_partial_metric {
+                                instance.mark_partial_metric_sample();
+                            }
+                            let triggered_at = Instant::now();
+
+                            if let Some(label) = diagnostics_instance_label(instance_id) {
+                                info!(
+                                    "[Sherpa] {label} triggering offline inference. stage=partial segment_id={} buffered_chunks={} buffered_samples={} global_start={:.3}",
+                                    seg_id,
+                                    offline_copy.len(),
+                                    buffered_sample_count(&offline_copy),
+                                    global_start
+                                );
+                            }
+
+                            let partial_decode_target = instance.last_partial_decode_ms.clone();
+                            let task = move || {
+                                if let Some(safe_r) = recognizer_copy.offline() {
+                                    run_offline_inference(
+                                        &offline_copy,
+                                        observer_copy.as_ref(),
+                                        safe_r,
+                                        punct_copy.as_deref(),
+                                        &seg_id_copy,
+                                        global_start,
+                                        false,
+                                        &instance_id_copy,
+                                        "partial",
+                                        first_segment_emitted,
+                                        normalization_options,
+                                        postprocessor,
+                                        should_record_partial_metric,
+                                        triggered_at,
+                                        Some(partial_decode_target),
+                                        None,
+                                    );
+                                }
+                            };
+                            *pending_inference = Some(queue_inference_task(None, task));
+                            instance.offline_state.mark_inference_time(now);
+                        }
                     }
                 }
+            } else {
+                let max_ring_samples = PRE_ROLL_SAMPLES;
+                instance.offline_state.push_ring_chunk_with_sample_limit(
+                    samples.to_vec(),
+                    max_ring_samples,
+                    4_000,
+                );
             }
-        } else {
-            let max_ring_samples = PRE_ROLL_SAMPLES;
-            instance.offline_state.push_ring_chunk_with_sample_limit(
-                samples.to_vec(),
-                max_ring_samples,
-                4_000,
-            );
         }
         instance.total_samples += samples.len();
         Ok(())
