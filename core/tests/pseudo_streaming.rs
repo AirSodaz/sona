@@ -660,14 +660,38 @@ async fn continuous_speech_exceeding_max_duration_forces_utterance_finalization(
 
     tokio::time::sleep(Duration::from_millis(100)).await;
 
-    {
+    let first_seg = {
         let updates = observer.transcript_updates.lock().unwrap();
         let last = updates
             .last()
             .expect("should have emitted forced final update at max speech duration");
         assert_eq!(last.stage, "final");
-        // Forced cutoff preserves all samples (no silence trimming)
         assert_eq!(last.update.upsert_segments[0].text, "hello final (3200)");
+        last.update.upsert_segments[0].clone()
+    };
+
+    // Frame 3: 1600 samples (100ms) -> speech continues in second segment
+    session
+        .feed_audio_frame(AsrAudioFrame::new(3, 3200, vec![0.5f32; 1600]))
+        .await
+        .unwrap();
+
+    session.flush().await.unwrap();
+
+    {
+        let updates = observer.transcript_updates.lock().unwrap();
+        let second = updates
+            .last()
+            .expect("should have emitted final update for continuing segment on flush");
+        assert_eq!(second.stage, "final");
+        let second_seg = &second.update.upsert_segments[0];
+        assert_ne!(first_seg.id, second_seg.id);
+        assert!(
+            second_seg.start >= first_seg.end,
+            "second segment start ({}) should be >= first segment end ({})",
+            second_seg.start,
+            first_seg.end
+        );
     }
 
     session.stop().await.unwrap();

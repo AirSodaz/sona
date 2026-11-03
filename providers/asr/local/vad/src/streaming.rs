@@ -47,6 +47,7 @@ impl StreamingVadPort for NativeStreamingVad {
                 }
                 Err(err) => {
                     log::warn!("VAD streaming step inference failed: {err}");
+                    events.extend(self.state_machine.accept_prob(0.0, self.window_size));
                 }
             }
         }

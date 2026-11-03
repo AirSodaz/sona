@@ -504,6 +504,7 @@ async fn flush_session_impl_inner(
         let initial_refresh = instance.offline_state.backoff().initial_interval_ms();
         instance.offline_state = OfflineState::with_initial_refresh_rate(initial_refresh);
         instance.last_partial_decode_ms.store(0, Ordering::Release);
+        instance.reset_or_reload_vad();
         if let Some(label) = diagnostics_instance_label(instance_id) {
             info!("[Sherpa] flush_session({label}) complete. mode=offline");
         }
@@ -685,7 +686,7 @@ async fn feed_audio_samples_inner(
 
         for event in events {
             match event {
-                VadStreamEvent::SpeechStart { .. } => {
+                VadStreamEvent::SpeechStart { sample_offset } => {
                     if !instance.offline_state.is_speech_active() {
                         if let Some(label) = diagnostics_instance_label(instance_id) {
                             let ring_buffer_samples = instance.offline_state.ring_sample_count();
@@ -700,7 +701,7 @@ async fn feed_audio_samples_inner(
                         let samples_to_keep = PRE_ROLL_SAMPLES;
                         instance
                             .offline_state
-                            .begin_speech(instance.total_samples, samples_to_keep);
+                            .begin_speech(sample_offset, samples_to_keep);
                     }
                 }
                 VadStreamEvent::SpeechEnd {
@@ -734,8 +735,10 @@ async fn feed_audio_samples_inner(
                     }
                     instance.offline_state.finish_speech();
 
+                    let pad_samples = (SAMPLE_RATE * 0.10) as usize;
                     let stream_total = instance.total_samples.saturating_add(samples.len());
-                    let trailing_silence = stream_total.saturating_sub(end_sample);
+                    let trailing_silence =
+                        stream_total.saturating_sub(end_sample.saturating_add(pad_samples));
 
                     let mut offline_copy = instance.offline_state.speech_chunks().to_vec();
                     let mut remaining_to_trim = trailing_silence;

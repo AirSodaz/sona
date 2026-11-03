@@ -36,12 +36,15 @@ pub struct FsmnVadRunner {
 impl FsmnVadRunner {
     pub fn from_session(session: Arc<Session>, path: Option<&Path>) -> Result<Self, AsrPortError> {
         let mut cmvn = CmvnParams::default();
-        if let Some(p) = path
-            && let Some(parent) = p.parent()
-        {
+        if let Some(p) = path {
+            let search_dir = if p.is_dir() {
+                p.to_path_buf()
+            } else {
+                p.parent().unwrap_or_else(|| Path::new("")).to_path_buf()
+            };
             let candidates = ["am.mvn", "vad.mvn"];
             for candidate in &candidates {
-                let cand_path = parent.join(candidate);
+                let cand_path = search_dir.join(candidate);
                 if cand_path.is_file()
                     && let Ok(loaded) = CmvnParams::load_am_mvn(&cand_path)
                 {
@@ -79,23 +82,36 @@ impl FsmnVadRunner {
             return 0.0;
         }
 
-        if slice.len() == 2 {
+        let prob = if slice.len() == 2 {
             let l0 = slice[0];
             let l1 = slice[1];
-            if (l0 + l1 - 1.0).abs() < 1e-3 {
+            if !l0.is_finite() || !l1.is_finite() {
+                0.0
+            } else if (l0 + l1 - 1.0).abs() < 1e-3 {
                 l1.clamp(0.0, 1.0)
             } else {
                 let max_l = l0.max(l1);
                 let e0 = (l0 - max_l).exp();
                 let e1 = (l1 - max_l).exp();
-                (e1 / (e0 + e1)).clamp(0.0, 1.0)
+                let sum = e0 + e1;
+                if sum.is_finite() && sum > 0.0 {
+                    (e1 / sum).clamp(0.0, 1.0)
+                } else {
+                    0.0
+                }
             }
         } else if !slice.is_empty() {
-            let noise_score = slice[0].clamp(0.0, 1.0);
-            (1.0 - noise_score).clamp(0.0, 1.0)
+            let noise_score = slice[0];
+            if noise_score.is_finite() {
+                (1.0 - noise_score).clamp(0.0, 1.0)
+            } else {
+                0.0
+            }
         } else {
             0.0
-        }
+        };
+
+        if prob.is_nan() { 0.0 } else { prob }
     }
 }
 
@@ -164,7 +180,6 @@ impl VadModelRunner for FsmnVadRunner {
                 stacked_400[dst + b] = (frame_ref[b] + self.cmvn.shifts[b]) * self.cmvn.rescales[b];
             }
         }
-        self.fbank_history.pop_front();
         // 3. Bind ONNX inputs: speech [1, 1, 400] and in_cache0..3 [1, 128, 19, 1]
         let speech_view =
             ArrayViewD::from_shape(IxDyn(&[1, 1, 400]), &stacked_400).map_err(|e| {
@@ -277,7 +292,7 @@ impl VadModelRunner for FsmnVadRunner {
         std::mem::swap(&mut self.cache1, &mut self.out_cache1);
         std::mem::swap(&mut self.cache2, &mut self.out_cache2);
         std::mem::swap(&mut self.cache3, &mut self.out_cache3);
-
+        self.fbank_history.pop_front();
         Ok(prob)
     }
 
@@ -397,7 +412,8 @@ impl VadModelRunner for FsmnVadRunner {
                 is_silence,
             ));
         }
-
+        drop(outputs);
+        self.reset_state();
         Ok(probs)
     }
 }

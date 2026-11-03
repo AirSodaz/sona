@@ -6898,7 +6898,6 @@ dependencies = [
  "ndarray",
  "ort",
  "sona-core",
- "thiserror 2.0.21",
 ]
 
 [[package]]

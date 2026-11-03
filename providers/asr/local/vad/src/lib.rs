@@ -24,6 +24,6 @@ use std::sync::Arc;
 /// universal fallback for custom ONNX models.
 pub fn built_in_engines() -> VadEngineSet {
     VadEngineSet::empty()
-        .register(Arc::new(SileroOnnxEngine))
         .register(Arc::new(FsmnVadOnnxEngine))
+        .register(Arc::new(SileroOnnxEngine))
 }

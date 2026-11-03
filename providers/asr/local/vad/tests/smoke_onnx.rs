@@ -76,7 +76,7 @@ fn silero_onnx_real_model_smoke_test() {
     assert!(!stream.is_speech_detected());
 
     // Feed silence
-    stream.accept_samples(&vec![0.0; 16_000]);
+    stream.accept_samples(&[0.0; 16_000]);
     assert!(!stream.is_speech_detected());
 
     // Feed speech to verify positive activation
@@ -137,7 +137,7 @@ fn fsmn_onnx_real_model_smoke_test() {
     assert!(!stream.is_speech_detected());
 
     // Feed silence
-    stream.accept_samples(&vec![0.0; 16_000]);
+    stream.accept_samples(&[0.0; 16_000]);
     assert!(!stream.is_speech_detected());
 
     // Feed speech to verify positive activation
@@ -197,7 +197,6 @@ fn real_speech_audio_file_detection_test() {
     }
 
     // 2. FSMN VAD on real speech
-    let fsmn_path = workspace_model_path("target/test-models/fsmn_vad.onnx");
     if fsmn_path.is_file() {
         let engine = engine_set.resolve(Some(&fsmn_path)).unwrap();
         let opts = VadDetectionOptions::batch_defaults(&fsmn_path);

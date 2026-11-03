@@ -1,5 +1,5 @@
 use super::VadModelRunner;
-use ndarray::{Array1, Array3, ArrayView2};
+use ndarray::{Array3, ArrayView1, ArrayView2};
 use ort::session::Session;
 use ort::value::Value;
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
@@ -30,25 +30,41 @@ pub struct SileroVadRunner {
 
 impl SileroVadRunner {
     pub fn from_session(session: Arc<Session>) -> Result<Self, AsrPortError> {
-        let mut audio_input_name = "input".to_string();
+        let mut audio_input_name = None;
         let mut sr_input_name = None;
         let mut has_h = false;
+        let mut has_c = false;
         let mut has_state = false;
 
         for input in &session.inputs {
             match input.name.as_str() {
-                "input" | "waveform" | "x" => audio_input_name = input.name.clone(),
+                "input" | "waveform" | "x" => audio_input_name = Some(input.name.clone()),
                 "sr" => sr_input_name = Some(input.name.clone()),
                 "state" => has_state = true,
                 "h" => has_h = true,
+                "c" => has_c = true,
                 _ => {}
             }
         }
+
+        let audio_input_name = audio_input_name.ok_or_else(|| {
+            AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Unsupported Silero model: missing audio input node ('input', 'waveform', or 'x')",
+            )
+        })?;
 
         if !has_h && !has_state {
             return Err(AsrPortError::new(
                 AsrPortErrorKind::Model,
                 "Unsupported Silero model: missing recurrent state inputs ('state' or 'h')",
+            ));
+        }
+
+        if has_h && !has_c {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "Unsupported Silero V4 model: found 'h' input but missing 'c' (cell state)",
             ));
         }
 
@@ -101,7 +117,7 @@ impl VadModelRunner for SileroVadRunner {
         }
 
         let sr_val = if self.sr_input_name.is_some() {
-            let sr_arr = Array1::from_vec(vec![16_000i64]);
+            let sr_arr = ArrayView1::from(&[16_000i64]);
             Some(Value::from_array(sr_arr).map_err(|e| {
                 AsrPortError::new(
                     AsrPortErrorKind::Runtime,
@@ -177,8 +193,12 @@ impl VadModelRunner for SileroVadRunner {
                             format!("Failed to extract output probability: {e}"),
                         )
                     })?;
-                let prob = output_data.first().copied().unwrap_or(0.0);
-
+                let raw_prob = output_data.first().copied().unwrap_or(0.0);
+                let prob = if raw_prob.is_nan() {
+                    0.0
+                } else {
+                    raw_prob.clamp(0.0, 1.0)
+                };
                 let next_state_tensor = outputs
                     .get("stateN")
                     .or_else(|| outputs.get("state"))
@@ -271,8 +291,12 @@ impl VadModelRunner for SileroVadRunner {
                             format!("Failed to extract output probability: {e}"),
                         )
                     })?;
-                let prob = output_data.first().copied().unwrap_or(0.0);
-
+                let raw_prob = output_data.first().copied().unwrap_or(0.0);
+                let prob = if raw_prob.is_nan() {
+                    0.0
+                } else {
+                    raw_prob.clamp(0.0, 1.0)
+                };
                 let hn_tensor = outputs
                     .get("hn")
                     .or_else(|| outputs.get("new_h"))
@@ -362,7 +386,7 @@ impl VadModelRunner for SileroVadRunner {
             let prob = self.step(&padded)?;
             probs.push(prob);
         }
-
+        self.reset_state();
         Ok(probs)
     }
 }

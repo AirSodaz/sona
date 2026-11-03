@@ -145,6 +145,14 @@ pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
     let check_str = |s: &str| s.to_ascii_lowercase().contains("fsmn");
 
     if model_path
+        .to_string_lossy()
+        .to_ascii_lowercase()
+        .contains("silero")
+    {
+        return false;
+    }
+
+    if model_path
         .file_name()
         .and_then(|f| f.to_str())
         .is_some_and(check_str)
@@ -153,16 +161,19 @@ pub(crate) fn is_fsmn_vad_model_path(model_path: &Path) -> bool {
     }
 
     if let Some(parent) = model_path.parent()
+        && !parent.as_os_str().is_empty()
         && (parent
             .file_name()
             .and_then(|f| f.to_str())
             .is_some_and(check_str)
-            || parent.join("am.mvn").is_file()
-            || parent.join("vad.mvn").is_file())
+            || (model_path
+                .file_name()
+                .and_then(|f| f.to_str())
+                .is_some_and(|name| name == "model.onnx" || name.ends_with(".onnx"))
+                && (parent.join("am.mvn").is_file() || parent.join("vad.mvn").is_file())))
     {
         return true;
     }
-
     if model_path.is_dir()
         && let Ok(entries) = std::fs::read_dir(model_path)
     {

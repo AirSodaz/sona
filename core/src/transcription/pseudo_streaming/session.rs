@@ -346,6 +346,7 @@ impl AsrStreamingSession for PseudoStreamingSession {
         }
 
         *self.current_segment_id.lock().await = None;
+        self.vad.lock().await.reset();
         buffer.reset();
         self.last_partial_decode_ms.store(0, Ordering::Release);
 
@@ -362,12 +363,15 @@ impl AsrStreamingSession for PseudoStreamingSession {
         if !self.is_running.load(Ordering::Acquire) {
             return Ok(());
         }
+        if frame.samples.is_empty() {
+            return Ok(());
+        }
 
         let samples = &frame.samples;
         let mut vad = self.vad.lock().await;
         let events = vad.accept_samples(samples);
+        let is_vad_speaking = vad.is_speech_detected();
         drop(vad);
-
         let mut current_id_guard = self.current_segment_id.lock().await;
         if current_id_guard.is_none() {
             *current_id_guard = Some(uuid::Uuid::new_v4().to_string());
@@ -382,9 +386,9 @@ impl AsrStreamingSession for PseudoStreamingSession {
 
         for event in events {
             match event {
-                VadStreamEvent::SpeechStart { .. } => {
+                VadStreamEvent::SpeechStart { sample_offset } => {
                     if !buffer.is_speech_active() {
-                        buffer.begin_speech(PRE_ROLL_SAMPLES);
+                        buffer.begin_speech_at(sample_offset, PRE_ROLL_SAMPLES);
                     }
                 }
                 VadStreamEvent::SpeechEnd {
@@ -462,6 +466,11 @@ impl AsrStreamingSession for PseudoStreamingSession {
                     buffer.clear_speech_buffer();
                 }
             }
+        }
+
+        if !had_speech_end && !buffer.is_speech_active() && is_vad_speaking {
+            let total = buffer.total_samples();
+            buffer.begin_speech_at(total, PRE_ROLL_SAMPLES);
         }
 
         if !had_speech_end {

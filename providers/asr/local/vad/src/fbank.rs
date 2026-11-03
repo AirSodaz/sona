@@ -282,9 +282,13 @@ fn parse_kaldi_vector_multiline(
             };
 
             for token in slice.split_whitespace() {
-                if let Ok(v) = token.parse::<f32>() {
-                    out.push(v);
-                }
+                let v = token.parse::<f32>().map_err(|err| {
+                    AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        format!("Failed to parse CMVN float token '{token}': {err}"),
+                    )
+                })?;
+                out.push(v);
             }
 
             if end.is_some() {
@@ -437,12 +441,12 @@ impl FbankExtractor {
             let w_step_re = angle.cos();
             let w_step_im = angle.sin();
 
-            let mut k = 0;
-            while k < FFT_SIZE {
-                let mut w_re = 1.0f32;
-                let mut w_im = 0.0f32;
+            let mut w_re = 1.0f32;
+            let mut w_im = 0.0f32;
 
-                for j in 0..half_m {
+            for j in 0..half_m {
+                let mut k = 0;
+                while k < FFT_SIZE {
                     let u_re = re[k + j];
                     let u_im = im[k + j];
                     let v_re = re[k + j + half_m];
@@ -456,12 +460,12 @@ impl FbankExtractor {
                     re[k + j + half_m] = u_re - t_re;
                     im[k + j + half_m] = u_im - t_im;
 
-                    let next_w_re = w_re * w_step_re - w_im * w_step_im;
-                    let next_w_im = w_re * w_step_im + w_im * w_step_re;
-                    w_re = next_w_re;
-                    w_im = next_w_im;
+                    k += m;
                 }
-                k += m;
+                let next_w_re = w_re * w_step_re - w_im * w_step_im;
+                let next_w_im = w_re * w_step_im + w_im * w_step_re;
+                w_re = next_w_re;
+                w_im = next_w_im;
             }
             m *= 2;
         }
