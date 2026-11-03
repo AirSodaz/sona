@@ -346,6 +346,9 @@ impl SherpaInstance {
     pub fn has_vad_configuration(&self) -> bool {
         self.vad_model.is_some()
     }
+    pub fn has_active_vad(&self) -> bool {
+        self.vad.is_some()
+    }
 
     pub fn vad(&self) -> Option<&dyn StreamingVadPort> {
         self.vad.as_deref()

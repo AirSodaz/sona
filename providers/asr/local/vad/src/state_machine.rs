@@ -39,7 +39,8 @@ impl UniversalVadStateMachine {
 
         let min_silence_samples = (options.min_silence_duration.max(0.0) * rate).round() as usize;
         let min_speech_samples = (options.min_speech_duration.max(0.0) * rate).round() as usize;
-        let max_speech_samples = (options.max_speech_duration.max(0.1) * rate).round() as usize;
+        let max_speech_samples = ((options.max_speech_duration.max(0.1) * rate).round() as usize)
+            .max(min_speech_samples);
         let escalation_samples = if options.threshold_escalation_duration > 0.0 {
             (options.threshold_escalation_duration * rate).round() as usize
         } else {
@@ -128,7 +129,7 @@ impl UniversalVadStateMachine {
                 self.speech_start_sample = cand_start;
                 self.candidate_start_sample = None;
                 events.push(VadStreamEvent::SpeechStart {
-                    sample_offset: cand_start,
+                    start_sample: cand_start,
                 });
             }
         } else if self.candidate_start_sample.is_some() {
@@ -150,14 +151,17 @@ impl UniversalVadStateMachine {
             && self.current_sample.saturating_sub(self.speech_start_sample)
                 >= self.max_speech_samples
         {
-            let end_sample = self.temp_end_sample.unwrap_or(self.current_sample);
+            let fallback_end = if prob < active_neg_threshold {
+                frame_start
+            } else {
+                self.current_sample
+            };
+            let end_sample = self.temp_end_sample.unwrap_or(fallback_end);
 
-            if end_sample.saturating_sub(self.speech_start_sample) >= self.min_speech_samples {
-                events.push(VadStreamEvent::SpeechEnd {
-                    start_sample: self.speech_start_sample,
-                    end_sample,
-                });
-            }
+            events.push(VadStreamEvent::SpeechEnd {
+                start_sample: self.speech_start_sample,
+                end_sample,
+            });
 
             // Reset state for subsequent segment
             let continue_speech = prob >= active_neg_threshold;
@@ -165,7 +169,7 @@ impl UniversalVadStateMachine {
                 self.speech_start_sample = end_sample;
                 self.triggered = true;
                 events.push(VadStreamEvent::SpeechStart {
-                    sample_offset: end_sample,
+                    start_sample: end_sample,
                 });
             } else {
                 self.triggered = false;
@@ -195,12 +199,10 @@ impl UniversalVadStateMachine {
                 self.candidate_start_sample = None;
                 self.sub_threshold_jitter_count = 0;
 
-                if end_sample.saturating_sub(start_sample) >= self.min_speech_samples {
-                    events.push(VadStreamEvent::SpeechEnd {
-                        start_sample,
-                        end_sample,
-                    });
-                }
+                events.push(VadStreamEvent::SpeechEnd {
+                    start_sample,
+                    end_sample,
+                });
             }
         }
 
@@ -218,14 +220,10 @@ impl UniversalVadStateMachine {
 
         self.reset();
 
-        if end_sample.saturating_sub(start_sample) >= self.min_speech_samples {
-            Some(VadStreamEvent::SpeechEnd {
-                start_sample,
-                end_sample,
-            })
-        } else {
-            None
-        }
+        Some(VadStreamEvent::SpeechEnd {
+            start_sample,
+            end_sample,
+        })
     }
 
     /// Convenience batch segmentation driver running over sequential frame probabilities.
@@ -314,9 +312,7 @@ mod tests {
         let events = sm.accept_prob(0.65, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart {
-                sample_offset: 1024
-            }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 1024 }]
         );
         assert!(sm.is_speech_active());
 
@@ -374,9 +370,8 @@ mod tests {
         let events = sm.accept_prob(0.8, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
-
         // Frames 2..4: speech active
         for _ in 0..3 {
             assert_eq!(sm.accept_prob(0.8, frame_samples), vec![]);
@@ -392,7 +387,7 @@ mod tests {
                     end_sample: 5 * 512,
                 },
                 VadStreamEvent::SpeechStart {
-                    sample_offset: 5 * 512,
+                    start_sample: 5 * 512,
                 },
             ]
         );
@@ -410,7 +405,7 @@ mod tests {
         let events = sm.accept_prob(0.8, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
         assert!(sm.is_speech_active());
 
@@ -466,7 +461,7 @@ mod tests {
         let events = sm.accept_prob(0.80, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
         assert!(sm.is_speech_active());
     }
@@ -482,9 +477,8 @@ mod tests {
         let events = sm.accept_prob(0.8, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
-
         // Frames 2..4: speech active
         for _ in 0..3 {
             assert_eq!(sm.accept_prob(0.8, frame_samples), vec![]);
@@ -501,7 +495,7 @@ mod tests {
                     end_sample: 5 * 512,
                 },
                 VadStreamEvent::SpeechStart {
-                    sample_offset: 5 * 512,
+                    start_sample: 5 * 512,
                 },
             ]
         );
@@ -519,9 +513,8 @@ mod tests {
         assert_eq!(sm.accept_prob(0.60, frame_samples), vec![]);
         assert!(!sm.is_speech_active());
 
-        // Frame 2: prob 0.10 (< neg_threshold 0.35) - jitter count = 1 (tolerated for 1 frame)
+        // Frame 2: prob 0.10 (< neg_threshold 0.35) - hard silence immediately aborts candidate onset
         assert_eq!(sm.accept_prob(0.10, frame_samples), vec![]);
-        assert!(!sm.is_speech_active());
 
         // Frame 3: prob 0.10 (< neg_threshold 0.35) - jitter count = 2 > 1 -> candidate aborted!
         assert_eq!(sm.accept_prob(0.10, frame_samples), vec![]);
@@ -536,7 +529,7 @@ mod tests {
         assert_eq!(
             events,
             vec![VadStreamEvent::SpeechStart {
-                sample_offset: 3 * 512
+                start_sample: 3 * 512
             }]
         );
         assert!(sm.is_speech_active());
@@ -571,7 +564,7 @@ mod tests {
         assert_eq!(
             events,
             vec![VadStreamEvent::SpeechStart {
-                sample_offset: 3 * 512
+                start_sample: 3 * 512
             }]
         );
         assert!(sm.is_speech_active());
@@ -589,7 +582,7 @@ mod tests {
         let events = sm.accept_prob(0.80, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
         assert!(sm.is_speech_active());
 
@@ -619,9 +612,8 @@ mod tests {
         let events = sm.accept_prob(0.80, frame_samples);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart { sample_offset: 0 }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 0 }]
         );
-
         // Since escalation is disabled, prob of 0.60 should NOT be considered silence (0.60 > 0.35)
         for _ in 0..10 {
             assert_eq!(sm.accept_prob(0.60, frame_samples), vec![]);

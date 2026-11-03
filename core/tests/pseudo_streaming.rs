@@ -46,7 +46,7 @@ impl StreamingVadPort for TestStreamingVad {
             self.last_state = true;
             self.speech_start_sample = frame_start;
             events.push(VadStreamEvent::SpeechStart {
-                sample_offset: frame_start,
+                start_sample: frame_start,
             });
         } else if self.last_state {
             if let Some(max_samples) = self.max_speech_samples
@@ -59,7 +59,7 @@ impl StreamingVadPort for TestStreamingVad {
                 self.speech_start_sample = self.sample_cursor;
                 if current {
                     events.push(VadStreamEvent::SpeechStart {
-                        sample_offset: self.sample_cursor,
+                        start_sample: self.sample_cursor,
                     });
                 } else {
                     self.last_state = false;

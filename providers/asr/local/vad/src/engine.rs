@@ -19,9 +19,11 @@ static SESSION_CACHE: LazyLock<Mutex<HashMap<PathBuf, Arc<Session>>>> =
 
 pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPortError> {
     let canonical = path.canonicalize().unwrap_or_else(|_| path.to_path_buf());
-    let mut cache = SESSION_CACHE.lock().unwrap();
-    if let Some(session) = cache.get(&canonical) {
-        return Ok(session.clone());
+    {
+        let cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(session) = cache.get(&canonical) {
+            return Ok(session.clone());
+        }
     }
 
     let session = Session::builder()
@@ -30,7 +32,7 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPort
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
         .with_intra_threads(1)
         .map_err(|e| AsrPortError::new(AsrPortErrorKind::Model, e.to_string()))?
-        .commit_from_file(path)
+        .commit_from_file(&canonical)
         .map_err(|e| {
             AsrPortError::new(
                 AsrPortErrorKind::Model,
@@ -39,8 +41,9 @@ pub(crate) fn get_or_create_session(path: &Path) -> Result<Arc<Session>, AsrPort
         })?;
 
     let session_arc = Arc::new(session);
-    cache.insert(canonical, session_arc.clone());
-    Ok(session_arc)
+    let mut cache = SESSION_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let entry = cache.entry(canonical).or_insert(session_arc);
+    Ok(entry.clone())
 }
 
 /// Silero VAD engine running on native ONNX Runtime.

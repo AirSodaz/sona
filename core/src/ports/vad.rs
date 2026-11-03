@@ -148,9 +148,9 @@ pub trait VadEnginePort: Send + Sync {
 /// Discrete speech state transitions emitted during online VAD streaming.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VadStreamEvent {
-    /// Speech onset detected. `sample_offset` denotes the exact sample index
+    /// Speech onset detected. `start_sample` denotes the exact sample index
     /// where speech began in the continuous stream.
-    SpeechStart { sample_offset: usize },
+    SpeechStart { start_sample: usize },
     /// Speech offset detected. `start_sample` and `end_sample` bound the speech utterance.
     SpeechEnd {
         start_sample: usize,

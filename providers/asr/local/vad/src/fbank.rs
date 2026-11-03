@@ -288,9 +288,14 @@ fn parse_kaldi_vector_multiline(
                         format!("Failed to parse CMVN float token '{token}': {err}"),
                     )
                 })?;
+                if !v.is_finite() {
+                    return Err(AsrPortError::new(
+                        AsrPortErrorKind::Model,
+                        format!("Non-finite float token '{token}' in CMVN file"),
+                    ));
+                }
                 out.push(v);
             }
-
             if end.is_some() {
                 return Ok((out, current_idx + 1));
             }

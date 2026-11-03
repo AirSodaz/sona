@@ -379,16 +379,16 @@ impl AsrStreamingSession for PseudoStreamingSession {
         let seg_id = current_id_guard.as_ref().unwrap().clone();
         drop(current_id_guard);
 
-        let mut buffer = self.buffer.lock().await;
         let mut pending = self.pending_inference.lock().await;
+        let mut buffer = self.buffer.lock().await;
 
         let mut had_speech_end = false;
 
         for event in events {
             match event {
-                VadStreamEvent::SpeechStart { sample_offset } => {
+                VadStreamEvent::SpeechStart { start_sample } => {
                     if !buffer.is_speech_active() {
-                        buffer.begin_speech_at(sample_offset, PRE_ROLL_SAMPLES);
+                        buffer.begin_speech_at(start_sample, PRE_ROLL_SAMPLES);
                     }
                 }
                 VadStreamEvent::SpeechEnd {
@@ -407,8 +407,9 @@ impl AsrStreamingSession for PseudoStreamingSession {
                     }
 
                     let stream_total = buffer.total_samples().saturating_add(samples.len());
-                    let trailing_silence = stream_total.saturating_sub(end_sample);
-
+                    let trailing_silence = stream_total
+                        .saturating_sub(end_sample)
+                        .min(buffer.buffered_speech_sample_count());
                     buffer.finish_speech();
                     let mut audio_samples = buffer.flatten_speech_buffer();
                     let trailing_silence_len = trailing_silence.min(audio_samples.len());
@@ -473,65 +474,62 @@ impl AsrStreamingSession for PseudoStreamingSession {
             buffer.begin_speech_at(total, PRE_ROLL_SAMPLES);
         }
 
-        if !had_speech_end {
-            if buffer.is_speech_active() {
-                buffer.push_speech_chunk(samples.to_vec());
+        if buffer.is_speech_active() {
+            buffer.push_speech_chunk(samples.to_vec());
 
-                if self.enable_partial_decoding {
-                    let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
-                    if prev_decode_ms > 0 {
-                        buffer.record_decode_duration(prev_decode_ms);
-                    }
+            if !had_speech_end && self.enable_partial_decoding {
+                let prev_decode_ms = self.last_partial_decode_ms.swap(0, Ordering::AcqRel);
+                if prev_decode_ms > 0 {
+                    buffer.record_decode_duration(prev_decode_ms);
+                }
 
-                    let now = Instant::now();
-                    if buffer.should_run_partial(now) {
-                        let slot_available = prepare_partial_inference_slot(&mut pending).await?;
-                        if !slot_available {
-                            buffer.record_overrun();
-                        } else {
-                            let audio_samples = buffer.flatten_speech_buffer();
-                            let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
-                            let decoder = self.decoder.clone();
-                            let punctuation = self.punctuation.clone();
-                            let observer = self.observer.clone();
-                            let postprocessor = self.postprocessor.clone();
-                            let normalization_options = self.normalization_options;
-                            let instance_id = self.instance_id.clone();
-                            let triggered_at = Instant::now();
-                            let seg_id_copy = seg_id.clone();
-                            let decode_target = self.last_partial_decode_ms.clone();
+                let now = Instant::now();
+                if buffer.should_run_partial(now) {
+                    let slot_available = prepare_partial_inference_slot(&mut pending).await?;
+                    if !slot_available {
+                        buffer.record_overrun();
+                    } else {
+                        let audio_samples = buffer.flatten_speech_buffer();
+                        let global_start = buffer.utterance_start_seconds(SAMPLE_RATE);
+                        let decoder = self.decoder.clone();
+                        let punctuation = self.punctuation.clone();
+                        let observer = self.observer.clone();
+                        let postprocessor = self.postprocessor.clone();
+                        let normalization_options = self.normalization_options;
+                        let instance_id = self.instance_id.clone();
+                        let triggered_at = Instant::now();
+                        let seg_id_copy = seg_id.clone();
+                        let decode_target = self.last_partial_decode_ms.clone();
 
-                            let task = move || {
-                                execute_inference_pass(
-                                    &decoder,
-                                    &audio_samples,
-                                    DecodeStage::Partial,
-                                    punctuation.as_ref(),
-                                    &seg_id_copy,
-                                    global_start,
-                                    &instance_id,
-                                    normalization_options,
-                                    &postprocessor,
-                                    &observer,
-                                    triggered_at,
-                                    Some(&decode_target),
-                                )
-                            };
+                        let task = move || {
+                            execute_inference_pass(
+                                &decoder,
+                                &audio_samples,
+                                DecodeStage::Partial,
+                                punctuation.as_ref(),
+                                &seg_id_copy,
+                                global_start,
+                                &instance_id,
+                                normalization_options,
+                                &postprocessor,
+                                &observer,
+                                triggered_at,
+                                Some(&decode_target),
+                            )
+                        };
 
-                            *pending = Some(queue_inference_task(None, task));
-                            buffer.mark_inference_time(now);
-                        }
+                        *pending = Some(queue_inference_task(None, task));
+                        buffer.mark_inference_time(now);
                     }
                 }
-            } else {
-                buffer.push_ring_chunk_with_sample_limit(
-                    samples.to_vec(),
-                    PRE_ROLL_SAMPLES,
-                    RING_BUFFER_TRIM_SLACK_SAMPLES,
-                );
             }
+        } else {
+            buffer.push_ring_chunk_with_sample_limit(
+                samples.to_vec(),
+                PRE_ROLL_SAMPLES,
+                RING_BUFFER_TRIM_SLACK_SAMPLES,
+            );
         }
-
         buffer.advance_total_samples(samples.len());
         Ok(())
     }

@@ -117,9 +117,7 @@ mod tests {
         let events = stream.accept_samples(&vec![0.0; 2560]);
         assert_eq!(
             events,
-            vec![VadStreamEvent::SpeechStart {
-                sample_offset: 1024
-            }]
+            vec![VadStreamEvent::SpeechStart { start_sample: 1024 }]
         );
         assert!(stream.is_speech_detected());
         // Reset clears speech detection

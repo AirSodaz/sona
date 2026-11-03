@@ -99,6 +99,15 @@ impl StreamingAsrFactoryPort for SherpaOnnxStreamingFactory {
         let request = spec.engine_request();
         let request =
             LocalSherpaStreamingRequest::from_local_sherpa_request("prepare".to_string(), request)?;
+        if let Some(vad_path) = request
+            .vad_model
+            .as_deref()
+            .filter(|p| !p.trim().is_empty())
+        {
+            let _ = self.vad_engines.create_stream_detector(
+                &sona_core::ports::vad::VadDetectionOptions::streaming_defaults(vad_path),
+            );
+        }
         prepare_streaming_resources(self.recognizer_pool.clone(), &request).await
     }
 

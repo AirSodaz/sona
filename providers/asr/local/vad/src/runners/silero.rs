@@ -130,6 +130,7 @@ impl VadModelRunner for SileroVadRunner {
 
         match self.version {
             SileroVersion::V5OrV6 => {
+                debug_assert_eq!(self.window_size, DEFAULT_SILERO_WINDOW_SIZE);
                 let mut audio_buf = [0.0f32; SILERO_CONTEXT_SIZE + DEFAULT_SILERO_WINDOW_SIZE];
                 audio_buf[..SILERO_CONTEXT_SIZE].copy_from_slice(&self.context);
                 audio_buf[SILERO_CONTEXT_SIZE..SILERO_CONTEXT_SIZE + self.window_size]
@@ -373,17 +374,16 @@ impl VadModelRunner for SileroVadRunner {
         for i in 0..num_chunks {
             let start = i * self.window_size;
             let chunk = &samples[start..start + self.window_size];
-            let prob = self.step(chunk)?;
+            let prob = self.step(chunk).inspect_err(|_| self.reset_state())?;
             probs.push(prob);
         }
 
         // Process residual samples if non-empty by zero-padding to window_size
-        let remainder = samples.len() % self.window_size;
         if remainder > 0 {
             let mut padded = vec![0.0f32; self.window_size];
             let start = num_chunks * self.window_size;
             padded[..remainder].copy_from_slice(&samples[start..]);
-            let prob = self.step(&padded)?;
+            let prob = self.step(&padded).inspect_err(|_| self.reset_state())?;
             probs.push(prob);
         }
         self.reset_state();

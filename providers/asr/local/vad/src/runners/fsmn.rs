@@ -2,7 +2,7 @@ use super::VadModelRunner;
 use crate::fbank::{
     CmvnParams, FRAME_LENGTH_SAMPLES, FRAME_SHIFT_SAMPLES, FbankExtractor, apply_lfr_and_cmvn,
 };
-use ndarray::{Array4, ArrayD, ArrayView4, ArrayViewD, IxDyn};
+use ndarray::{ArrayD, ArrayView4, ArrayViewD, IxDyn};
 use ort::session::Session;
 use ort::value::Value;
 use sona_core::ports::asr::{AsrPortError, AsrPortErrorKind};
@@ -87,7 +87,7 @@ impl FsmnVadRunner {
             let l1 = slice[1];
             if !l0.is_finite() || !l1.is_finite() {
                 0.0
-            } else if (l0 + l1 - 1.0).abs() < 1e-3 {
+            } else if l0 >= 0.0 && l1 >= 0.0 && (l0 + l1 - 1.0).abs() < 1e-2 {
                 l1.clamp(0.0, 1.0)
             } else {
                 let max_l = l0.max(l1);
@@ -99,6 +99,15 @@ impl FsmnVadRunner {
                 } else {
                     0.0
                 }
+            }
+        } else if slice.len() == 1 {
+            let s = slice[0];
+            if !s.is_finite() {
+                0.0
+            } else if (0.0..=1.0).contains(&s) {
+                s
+            } else {
+                (1.0 / (1.0 + (-s).exp())).clamp(0.0, 1.0)
             }
         } else if !slice.is_empty() {
             let noise_score = slice[0];
@@ -170,7 +179,9 @@ impl VadModelRunner for FsmnVadRunner {
         if self.fbank_history.len() < 5 {
             return Ok(0.0);
         }
-
+        while self.fbank_history.len() > 5 {
+            self.fbank_history.pop_front();
+        }
         let center_is_silence = self.fbank_history[2].1;
         let mut stacked_400 = [0.0f32; 400];
         for m in 0..5 {
@@ -326,40 +337,39 @@ impl VadModelRunner for FsmnVadRunner {
             )
         })?;
 
-        // Initialize zero caches
-        let c0_arr = Array4::from_shape_vec(CACHE_SHAPE, vec![0.0f32; CACHE_LEN])
+        // Bind zero cache views (already zeroed by reset_state above)
+        let c0_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache0)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c1_arr = Array4::from_shape_vec(CACHE_SHAPE, vec![0.0f32; CACHE_LEN])
+        let c1_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache1)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c2_arr = Array4::from_shape_vec(CACHE_SHAPE, vec![0.0f32; CACHE_LEN])
+        let c2_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache2)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-        let c3_arr = Array4::from_shape_vec(CACHE_SHAPE, vec![0.0f32; CACHE_LEN])
+        let c3_view = ArrayView4::from_shape(CACHE_SHAPE, &self.cache3)
             .map_err(|e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()))?;
-
         let inputs =
             vec![
                 ("speech", ort::session::SessionInputValue::from(speech_val)),
                 (
                     "in_cache0",
-                    ort::session::SessionInputValue::from(Value::from_array(c0_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c0_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache1",
-                    ort::session::SessionInputValue::from(Value::from_array(c1_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c1_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache2",
-                    ort::session::SessionInputValue::from(Value::from_array(c2_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c2_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
                 (
                     "in_cache3",
-                    ort::session::SessionInputValue::from(Value::from_array(c3_arr).map_err(
+                    ort::session::SessionInputValue::from(Value::from_array(c3_view).map_err(
                         |e| AsrPortError::new(AsrPortErrorKind::Runtime, e.to_string()),
                     )?),
                 ),
@@ -385,8 +395,21 @@ impl VadModelRunner for FsmnVadRunner {
         let num_classes = if shape.len() >= 3 {
             shape[2] as usize
         } else {
-            logits_data.len() / num_frames
+            logits_data.len().checked_div(num_frames).unwrap_or(0)
         };
+
+        if num_classes == 0 {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                "FSMN output logits tensor has 0 classes",
+            ));
+        }
+        if shape.len() >= 3 && shape[1] as usize != num_frames {
+            return Err(AsrPortError::new(
+                AsrPortErrorKind::Model,
+                format!("Expected {num_frames} frames from FSMN, got {}", shape[1]),
+            ));
+        }
 
         if logits_data.len() < num_frames * num_classes {
             return Err(AsrPortError::new(
